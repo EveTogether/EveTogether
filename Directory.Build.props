@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- Dev-build default. The release pipeline (.github/workflows/release.yml) overrides this with the
+         git tag via -p:Version, so AppInfo.Version always matches the published release. -->
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>

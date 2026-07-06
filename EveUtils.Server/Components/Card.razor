@@ -1,0 +1,25 @@
+@* Reusable Gallente panel card: header bar (◆ title + optional count + optional action) + body (D-186). *@
+<div class="card">
+    <div class="hd">
+        <div class="t"><span class="dia">◆</span> @Title</div>
+        @if (Count is not null)
+        {
+            <span class="cnt">@Count</span>
+        }
+        @if (HeaderAction is not null)
+        {
+            <span class="hdaction">@HeaderAction</span>
+        }
+    </div>
+    <div class="bd@(Pad ? " pad" : "")">
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Count { get; set; }
+    [Parameter] public RenderFragment? HeaderAction { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public bool Pad { get; set; }
+}

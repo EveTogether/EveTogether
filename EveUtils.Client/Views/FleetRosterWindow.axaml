@@ -1,0 +1,425 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="760" d:DesignHeight="560"
+        x:Class="EveUtils.Client.Views.FleetRosterWindow"
+        x:DataType="vm:FleetRosterViewModel"
+        x:Name="RosterRoot"
+        Width="760" Height="560" MinWidth="560" MinHeight="360"
+        WindowStartupLocation="CenterOwner"
+        Title="Fleet roster">
+
+    <DockPanel>
+
+        <!-- Header: fleet name + activation + lifecycle/actions -->
+        <Border DockPanel.Dock="Top" Height="48" Background="#EA080604"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid Margin="14,0" ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding FleetName}" FontWeight="Bold" FontSize="14"
+                               Foreground="{StaticResource TextBrightBrush}"/>
+                    <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="3" Padding="6,2"
+                            VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ActivationLabel}" FontSize="10"
+                                   Foreground="{DynamicResource TextAccentBrush}"/>
+                    </Border>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Button Content="REFRESH" FontSize="10" Command="{Binding RefreshCommand}"/>
+                    <Button Content="METRICS" FontSize="10" Command="{Binding OpenMetricsCommand}"/>
+                    <Button Content="START" FontSize="10" Classes="accent"
+                            IsVisible="{Binding CanStart}" Command="{Binding StartCommand}"/>
+                    <Button Content="CONCLUDE" FontSize="10" Classes="danger"
+                            IsVisible="{Binding CanConclude}" Command="{Binding ConcludeCommand}"/>
+                    <!-- Self-leave from the roster (D-215): only shown when I'm a non-owner member here -->
+                    <Button Content="LEAVE" FontSize="10" Classes="danger"
+                            IsVisible="{Binding CanLeaveFleet}" Command="{Binding LeaveFleetCommand}"
+                            ToolTip.Tip="Leave this fleet with the character you opened it as"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- In-game fleet (ESI) coupling band — D-126. ESI has no form-fleet endpoint, so a fleet is formed in-game
+             first; this is where the owner couples it for ESI-driven management (couple action: next vertical slice). -->
+        <Border DockPanel.Dock="Top" Background="#22000000" BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1" Padding="14,8" IsVisible="{Binding IsOwner}">
+            <StackPanel Spacing="6">
+                <Grid ColumnDefinitions="Auto,8,*,Auto">
+                    <TextBlock Grid.Column="0" Text="🛰" Foreground="{DynamicResource AccentBrush}" FontSize="11" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                        <TextBlock Text="IN-GAME FLEET" FontSize="9" LetterSpacing="1.2" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextDimBrush}"/>
+                        <TextBlock Text="{Binding EsiCoupleStatus}" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextBrightBrush}"/>
+                    </StackPanel>
+                    <Button Grid.Column="3" Content="COUPLE" FontSize="9" Classes="accent"
+                            IsVisible="{Binding CanCoupleEsiFleet}" IsEnabled="{Binding EsiReadAllowed}"
+                            ToolTip.Tip="{Binding EsiReadTooltip}" ToolTip.ShowOnDisabled="True"
+                            Command="{Binding CoupleEsiFleetCommand}"/>
+                </Grid>
+                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource TextAccentBrush}"
+                           IsVisible="{Binding !HasEsiFleet}"
+                           Text="EVE Together can't create a fleet — ESI (EVE's API) has no &quot;form fleet&quot; endpoint, and a fleet only exists once formed in the client. So form it in-game first (Form Fleet); EVE Together then detects it through your character — press COUPLE to link it. From there the app drives the structure, invites and live roster."/>
+
+                <!-- ESI control row (M2 MOTD/free-move, M4 push structure, M5 invite roster). Shown once coupled; the
+                     controls disable with a tooltip explaining the missing scope when the boss lacks write_fleet, and the
+                     actions also raise a toast (on a runtime scope failure or on success/failure) — D-208. -->
+                <StackPanel Spacing="6" IsVisible="{Binding HasEsiFleet}">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <TextBox Grid.Column="0" Text="{Binding EsiMotd}" PlaceholderText="Set fleet MOTD…" FontSize="11"
+                                 IsEnabled="{Binding EsiWriteAllowed}" ToolTip.Tip="{Binding EsiWriteTooltip}" ToolTip.ShowOnDisabled="True"/>
+                        <CheckBox Grid.Column="1" Content="Free-move" FontSize="11" VerticalAlignment="Center"
+                                  IsChecked="{Binding EsiFreeMove}" IsEnabled="{Binding EsiWriteAllowed}"
+                                  ToolTip.Tip="{Binding EsiWriteTooltip}" ToolTip.ShowOnDisabled="True"/>
+                        <Button Grid.Column="2" Content="APPLY" FontSize="9" Classes="accent"
+                                IsEnabled="{Binding EsiWriteAllowed}" ToolTip.Tip="{Binding EsiWriteTooltip}"
+                                ToolTip.ShowOnDisabled="True" Command="{Binding ApplyFleetSettingsCommand}"/>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="PUSH STRUCTURE" FontSize="9" Command="{Binding PushFleetStructureCommand}"
+                                IsEnabled="{Binding EsiWriteAllowed}" ToolTip.Tip="{Binding EsiWriteTooltip}" ToolTip.ShowOnDisabled="True"/>
+                        <Button Content="INVITE ROSTER" FontSize="9" Command="{Binding InviteRosterCommand}"
+                                IsEnabled="{Binding EsiWriteAllowed}" ToolTip.Tip="{Binding EsiWriteTooltip}" ToolTip.ShowOnDisabled="True"/>
+                        <!-- UNCOUPLE clears the stored link (storage-role, no ESI write) so it isn't write_fleet-gated; the
+                             whole band is already owner-only. D-217. -->
+                        <Button Content="UNCOUPLE" FontSize="9" Classes="danger" Command="{Binding UncoupleEsiFleetCommand}"
+                                ToolTip.Tip="Clear the in-game fleet link (stops ESI-driven management for this fleet)."/>
+                    </StackPanel>
+                    <!-- Auto Apply / Auto Invite (D-218): hands-off pushing once coupled. Additive only — removing in-game
+                         units still goes through PUSH STRUCTURE's confirm. write_fleet-gated like the other ESI controls. -->
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <CheckBox Content="Auto apply structure" FontSize="11" VerticalAlignment="Center"
+                                  IsChecked="{Binding EsiAutoApplyStructure}" IsEnabled="{Binding EsiWriteAllowed}"
+                                  ToolTip.Tip="{Binding EsiWriteTooltip}" ToolTip.ShowOnDisabled="True"/>
+                        <CheckBox Content="Auto invite members" FontSize="11" VerticalAlignment="Center"
+                                  IsChecked="{Binding EsiAutoInviteMembers}" IsEnabled="{Binding EsiWriteAllowed}"
+                                  ToolTip.Tip="{Binding EsiWriteTooltip}" ToolTip.ShowOnDisabled="True"/>
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Coupled composition (doctrine) band — FC-3 -->
+        <Border DockPanel.Dock="Top" Background="#22000000" BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1" Padding="14,8">
+            <Border.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.Or}">
+                    <Binding Path="HasCoupledComposition"/>
+                    <Binding Path="CanCoupleComposition"/>
+                </MultiBinding>
+            </Border.IsVisible>
+            <StackPanel Spacing="7">
+                <Grid ColumnDefinitions="Auto,8,*,Auto,Auto">
+                    <TextBlock Grid.Column="0" Text="◆" Foreground="{DynamicResource AccentBrush}" FontSize="9" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                        <TextBlock Text="COMPOSITION" FontSize="9" LetterSpacing="1.2" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextDimBrush}"/>
+                        <TextBlock Text="{Binding CoupledCompositionName}" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextBrightBrush}"/>
+                    </StackPanel>
+                    <Button Grid.Column="3" Content="CHANGE" FontSize="9" Margin="0,0,6,0"
+                            IsVisible="{Binding CanCoupleComposition}" Command="{Binding ChangeCompositionCommand}"/>
+                    <Button Grid.Column="4" Content="UNLINK" FontSize="9" Classes="danger" Command="{Binding UnlinkCompositionCommand}">
+                        <Button.IsVisible>
+                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                <Binding Path="CanCoupleComposition"/>
+                                <Binding Path="HasCoupledComposition"/>
+                            </MultiBinding>
+                        </Button.IsVisible>
+                    </Button>
+                </Grid>
+
+                <!-- Two-level fill overview (FC-4): per role-group the group-minimum tally (e.g. "DPS 2/40") and the
+                     per-fit minima where set (e.g. "· Guardian 1/3 · Scimitar 1/2"). -->
+                <Grid ColumnDefinitions="Auto,8,*" IsVisible="{Binding HasCompositionFill}">
+                    <TextBlock Grid.Column="0" Text="FILL" FontSize="9" LetterSpacing="1.2" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextDimBrush}"/>
+                    <ItemsControl Grid.Column="2" ItemsSource="{Binding CompositionFill}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:CompositionFillRoleViewModel">
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
+                                        Background="{DynamicResource AccentSoftBrush}" Padding="7,3" Margin="0,0,6,0">
+                                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding RoleName}" FontSize="10.5" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextBrightBrush}"/>
+                                        <TextBlock Text="{Binding GroupCount}" FontSize="10.5" IsVisible="{Binding HasGroupCount}"
+                                                   Foreground="{DynamicResource TextAccentBrush}"/>
+                                        <ItemsControl ItemsSource="{Binding Entries}" IsVisible="{Binding HasEntries}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="6"/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:CompositionFillEntryViewModel">
+                                                    <TextBlock FontSize="10" Foreground="{DynamicResource TextDimBrush}">
+                                                        <Run Text="·"/><Run Text=" "/><Run Text="{Binding FitName}"/><Run Text=" "/><Run Text="{Binding Count}"/>
+                                                    </TextBlock>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- Status line -->
+        <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,1,0,0" Padding="12,7">
+            <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+        </Border>
+
+        <!-- 30 / 70 split: member list | EVE tree -->
+        <Grid Margin="10" ColumnDefinitions="3*,12,7*">
+
+            <!-- LEFT: members + pending. Composition actions live on the tree's right-click menu (E2); only the
+                 non-positional invites and join-request answers stay here. -->
+            <Border Grid.Column="0" Classes="panel">
+                <DockPanel>
+                    <Border Classes="panel-header" DockPanel.Dock="Top">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Classes="diamond" Text="◆"/>
+                            <TextBlock Classes="panel-title" Text="MEMBERS"/>
+                        </StackPanel>
+                    </Border>
+                    <StackPanel DockPanel.Dock="Bottom" Spacing="0" IsVisible="{Binding IsOwner}">
+                        <Button Content="+ INVITE" Margin="8,6,8,0" HorizontalAlignment="Stretch"
+                                FontSize="10" Command="{Binding InviteCommand}"
+                                ToolTip.Tip="Invite a connected character (right-click a node to invite straight onto a position)."/>
+                        <Button Content="+ INVITE EXTERNAL PILOT" Margin="8,6" HorizontalAlignment="Stretch"
+                                FontSize="10" Command="{Binding AddExternalCommand}"
+                                ToolTip.Tip="Add an EVE pilot who isn't on EVE Together — by character id."/>
+                    </StackPanel>
+                    <ListBox ItemsSource="{Binding Entries}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:RosterEntryViewModel">
+                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="2" Background="Transparent">
+                                    <!-- The tree's member manage menu, mirrored on the left list: an unplaced member
+                                         has no structure node, so this row is their only manage surface. -->
+                                    <Grid.ContextMenu>
+                                        <ContextMenu IsVisible="{Binding CanManage}">
+                                            <MenuItem Header="Assign fit…" Command="{Binding Node.AssignFitCommand}"/>
+                                            <MenuItem Header="Move to…" ItemsSource="{Binding Node.MoveTargets}"
+                                                      ItemContainerTheme="{StaticResource MoveMenuItemTheme}"/>
+                                            <MenuItem Header="Transfer ownership" Command="{Binding Node.TransferOwnershipCommand}"/>
+                                            <Separator/>
+                                            <MenuItem Header="Remove from squad" Command="{Binding Node.UnassignCommand}"
+                                                      ToolTip.Tip="Unassign — keeps the member in the fleet, just out of the wing/squad."/>
+                                            <MenuItem Header="Remove from fleet" Command="{Binding Node.RemoveFromFleetCommand}"/>
+                                        </ContextMenu>
+                                    </Grid.ContextMenu>
+                                    <TextBlock Grid.Column="0" Text="{Binding Name}" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextBrightBrush}"/>
+                                    <Border Grid.Column="1" Background="{DynamicResource AccentSoftBrush}"
+                                            CornerRadius="3" Padding="5,1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Badge}" FontSize="9"
+                                                   Foreground="{DynamicResource TextAccentBrush}"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
+                                                Margin="6,0,0,0" VerticalAlignment="Center"
+                                                IsVisible="{Binding IsJoinRequest}">
+                                        <Button Content="✓" FontSize="9" Padding="6,1" Classes="accent"
+                                                Command="{Binding $parent[ListBox].((vm:FleetRosterViewModel)DataContext).AcceptRequestCommand}"
+                                                CommandParameter="{Binding}"/>
+                                        <Button Content="✕" FontSize="9" Padding="6,1"
+                                                Command="{Binding $parent[ListBox].((vm:FleetRosterViewModel)DataContext).DeclineRequestCommand}"
+                                                CommandParameter="{Binding}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- RIGHT: EVE tree — commander in each node header (E1), composition via right-click (E2) -->
+            <Border Grid.Column="2" Classes="panel">
+                <DockPanel>
+                    <Border Classes="panel-header" DockPanel.Dock="Top">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Classes="diamond" Text="◆"/>
+                            <TextBlock Classes="panel-title" Text="STRUCTURE — FC › WING › SQUAD"/>
+                        </StackPanel>
+                    </Border>
+                    <!-- DragDrop.AllowDrop makes the tree a drop zone (G-3): drag/over/drop bubble to the content-root
+                         handlers in the code-behind, which resolve the dropped node and move/swap the member. -->
+                    <TreeView ItemsSource="{Binding Tree}" Margin="6" DragDrop.AllowDrop="True">
+                        <TreeView.Styles>
+                            <!-- Keep nodes expanded across reloads (R3-3): every node VM exposes IsExpanded. -->
+                            <Style Selector="TreeViewItem">
+                                <Setter Property="IsExpanded" Value="{ReflectionBinding IsExpanded}"/>
+                            </Style>
+                        </TreeView.Styles>
+                        <TreeView.DataTemplates>
+
+                            <!-- Fleet root: FC in the header; children are wings + fleet-level member rows. -->
+                            <TreeDataTemplate DataType="vm:FleetRootNodeViewModel" ItemsSource="{Binding Children}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="{Binding Label}" FontWeight="Bold" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextBrightBrush}">
+                                        <TextBlock.ContextMenu>
+                                            <ContextMenu IsVisible="{Binding IsOwner}">
+                                                <MenuItem Header="Add wing" Command="{Binding AddWingCommand}"/>
+                                                <MenuItem Header="Invite to fleet…" Command="{Binding InviteHereCommand}"/>
+                                                <MenuItem Header="Assign accepted member as FC…" Command="{Binding AssignHereCommand}"/>
+                                                <Separator IsVisible="{Binding HasCommander}"/>
+                                                <MenuItem Header="Assign fit…" IsVisible="{Binding HasCommander}" Command="{Binding Commander.AssignFitCommand}"/>
+                                                <MenuItem Header="Move fleet commander" IsVisible="{Binding HasCommander}"
+                                                          ItemsSource="{Binding Commander.MoveTargets}"
+                                                          ItemContainerTheme="{StaticResource MoveMenuItemTheme}"/>
+                                                <MenuItem Header="Unassign fleet commander" IsVisible="{Binding HasCommander}"
+                                                          Command="{Binding Commander.UnassignCommand}"/>
+                                            </ContextMenu>
+                                        </TextBlock.ContextMenu>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding Commander.AssignedFitLabel}" Classes="label" FontSize="10" VerticalAlignment="Center"
+                                               IsVisible="{Binding HasCommander}"/>
+                                    <TextBlock Text="✓" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}"
+                                               IsVisible="{Binding CommanderCanFly}" ToolTip.Tip="{Binding CommanderSkillBadgeTooltip}"/>
+                                    <TextBlock Text="⚠" FontSize="11" VerticalAlignment="Center" Foreground="#E0B341"
+                                               IsVisible="{Binding CommanderHasSkillGap}" ToolTip.Tip="{Binding CommanderSkillBadgeTooltip}"/>
+                                    <Button Content="↗" FontSize="12" Background="Transparent" BorderThickness="0" Padding="4,0"
+                                            VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}" ToolTip.Tip="Open fit detail"
+                                            IsVisible="{Binding CommanderHasFit}" Command="{Binding Commander.OpenFitCommand}"/>
+                                    <Button Content="{Binding Commander.AssignFitButtonLabel}" Classes="accent" FontSize="8" Padding="8,2"
+                                            VerticalAlignment="Center" Command="{Binding Commander.AssignFitCommand}">
+                                        <Button.IsVisible>
+                                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                <Binding Path="HasCommander"/>
+                                                <Binding Path="IsOwner"/>
+                                            </MultiBinding>
+                                        </Button.IsVisible>
+                                    </Button>
+                                </StackPanel>
+                            </TreeDataTemplate>
+
+                            <!-- Wing: WC in the header; children are squads + wing-level member rows. -->
+                            <TreeDataTemplate DataType="vm:WingNodeViewModel" ItemsSource="{Binding Children}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextBrightBrush}">
+                                        <TextBlock.ContextMenu>
+                                            <ContextMenu IsVisible="{Binding IsOwner}">
+                                                <MenuItem Header="Add squad" Command="{Binding AddSquadCommand}"/>
+                                                <MenuItem Header="Rename wing…" Command="{Binding RenameCommand}"/>
+                                                <MenuItem Header="Delete wing" IsVisible="{Binding CanDelete}" Command="{Binding DeleteCommand}"/>
+                                                <MenuItem Header="Invite to wing…" Command="{Binding InviteHereCommand}"/>
+                                                <MenuItem Header="Assign accepted member as WC…" Command="{Binding AssignHereCommand}"/>
+                                                <Separator IsVisible="{Binding HasCommander}"/>
+                                                <MenuItem Header="Assign fit…" IsVisible="{Binding HasCommander}" Command="{Binding Commander.AssignFitCommand}"/>
+                                                <MenuItem Header="Move wing commander" IsVisible="{Binding HasCommander}"
+                                                          ItemsSource="{Binding Commander.MoveTargets}"
+                                                          ItemContainerTheme="{StaticResource MoveMenuItemTheme}"/>
+                                                <MenuItem Header="Unassign wing commander" IsVisible="{Binding HasCommander}"
+                                                          Command="{Binding Commander.UnassignCommand}"/>
+                                            </ContextMenu>
+                                        </TextBlock.ContextMenu>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding Commander.AssignedFitLabel}" Classes="label" FontSize="10" VerticalAlignment="Center"
+                                               IsVisible="{Binding HasCommander}"/>
+                                    <TextBlock Text="✓" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}"
+                                               IsVisible="{Binding CommanderCanFly}" ToolTip.Tip="{Binding CommanderSkillBadgeTooltip}"/>
+                                    <TextBlock Text="⚠" FontSize="11" VerticalAlignment="Center" Foreground="#E0B341"
+                                               IsVisible="{Binding CommanderHasSkillGap}" ToolTip.Tip="{Binding CommanderSkillBadgeTooltip}"/>
+                                    <Button Content="↗" FontSize="12" Background="Transparent" BorderThickness="0" Padding="4,0"
+                                            VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}" ToolTip.Tip="Open fit detail"
+                                            IsVisible="{Binding CommanderHasFit}" Command="{Binding Commander.OpenFitCommand}"/>
+                                    <Button Content="{Binding Commander.AssignFitButtonLabel}" Classes="accent" FontSize="8" Padding="8,2"
+                                            VerticalAlignment="Center" Command="{Binding Commander.AssignFitCommand}">
+                                        <Button.IsVisible>
+                                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                <Binding Path="HasCommander"/>
+                                                <Binding Path="IsOwner"/>
+                                            </MultiBinding>
+                                        </Button.IsVisible>
+                                    </Button>
+                                </StackPanel>
+                            </TreeDataTemplate>
+
+                            <!-- Squad: SC in the header; members underneath. -->
+                            <TreeDataTemplate DataType="vm:SquadNodeViewModel" ItemsSource="{Binding Members}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextAccentBrush}">
+                                        <TextBlock.ContextMenu>
+                                            <ContextMenu IsVisible="{Binding IsOwner}">
+                                                <MenuItem Header="Invite to squad…" Command="{Binding InviteHereCommand}"/>
+                                                <MenuItem Header="Assign accepted member to squad…" Command="{Binding AssignHereCommand}"/>
+                                                <MenuItem Header="Rename squad…" Command="{Binding RenameCommand}"/>
+                                                <MenuItem Header="Delete squad" IsVisible="{Binding CanDelete}" Command="{Binding DeleteCommand}"/>
+                                                <Separator IsVisible="{Binding HasCommander}"/>
+                                                <MenuItem Header="Assign fit…" IsVisible="{Binding HasCommander}" Command="{Binding Commander.AssignFitCommand}"/>
+                                                <MenuItem Header="Move squad commander" IsVisible="{Binding HasCommander}"
+                                                          ItemsSource="{Binding Commander.MoveTargets}"
+                                                          ItemContainerTheme="{StaticResource MoveMenuItemTheme}"/>
+                                                <MenuItem Header="Unassign squad commander" IsVisible="{Binding HasCommander}"
+                                                          Command="{Binding Commander.UnassignCommand}"/>
+                                            </ContextMenu>
+                                        </TextBlock.ContextMenu>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding Commander.AssignedFitLabel}" Classes="label" FontSize="10" VerticalAlignment="Center"
+                                               IsVisible="{Binding HasCommander}"/>
+                                    <TextBlock Text="✓" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}"
+                                               IsVisible="{Binding CommanderCanFly}" ToolTip.Tip="{Binding CommanderSkillBadgeTooltip}"/>
+                                    <TextBlock Text="⚠" FontSize="11" VerticalAlignment="Center" Foreground="#E0B341"
+                                               IsVisible="{Binding CommanderHasSkillGap}" ToolTip.Tip="{Binding CommanderSkillBadgeTooltip}"/>
+                                    <Button Content="↗" FontSize="12" Background="Transparent" BorderThickness="0" Padding="4,0"
+                                            VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}" ToolTip.Tip="Open fit detail"
+                                            IsVisible="{Binding CommanderHasFit}" Command="{Binding Commander.OpenFitCommand}"/>
+                                    <Button Content="{Binding Commander.AssignFitButtonLabel}" Classes="accent" FontSize="8" Padding="8,2"
+                                            VerticalAlignment="Center" Command="{Binding Commander.AssignFitCommand}">
+                                        <Button.IsVisible>
+                                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                <Binding Path="HasCommander"/>
+                                                <Binding Path="IsOwner"/>
+                                            </MultiBinding>
+                                        </Button.IsVisible>
+                                    </Button>
+                                </StackPanel>
+                            </TreeDataTemplate>
+
+                            <!-- Member leaf: the assigned fit + EVE move-cascade + transfer + remove. -->
+                            <DataTemplate DataType="vm:MemberNodeViewModel">
+                                <StackPanel Orientation="Horizontal" Spacing="9">
+                                    <TextBlock Text="{Binding Label}" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center">
+                                        <TextBlock.ContextMenu>
+                                            <ContextMenu IsVisible="{Binding IsOwner}">
+                                                <MenuItem Header="Assign fit…" Command="{Binding AssignFitCommand}"/>
+                                                <MenuItem Header="Move to…" ItemsSource="{Binding MoveTargets}"
+                                                          ItemContainerTheme="{StaticResource MoveMenuItemTheme}"/>
+                                                <MenuItem Header="Transfer ownership" Command="{Binding TransferOwnershipCommand}"/>
+                                                <Separator/>
+                                                <MenuItem Header="Remove from squad" Command="{Binding UnassignCommand}"
+                                                          ToolTip.Tip="Unassign — keeps the member in the fleet, just out of the wing/squad."/>
+                                                <MenuItem Header="Remove from fleet" Command="{Binding RemoveFromFleetCommand}"/>
+                                            </ContextMenu>
+                                        </TextBlock.ContextMenu>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding AssignedFitLabel}" Classes="label" FontSize="10" VerticalAlignment="Center"/>
+                                    <TextBlock Text="✓" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}"
+                                               IsVisible="{Binding CanFly}" ToolTip.Tip="{Binding SkillBadgeTooltip}"/>
+                                    <TextBlock Text="⚠" FontSize="11" VerticalAlignment="Center" Foreground="#E0B341"
+                                               IsVisible="{Binding HasSkillGap}" ToolTip.Tip="{Binding SkillBadgeTooltip}"/>
+                                    <Button Content="↗" FontSize="12" Background="Transparent" BorderThickness="0" Padding="4,0"
+                                            VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}" ToolTip.Tip="Open fit detail"
+                                            IsVisible="{Binding HasAssignedFit}" Command="{Binding OpenFitCommand}"/>
+                                    <Button Content="{Binding AssignFitButtonLabel}" Classes="accent" FontSize="8" Padding="8,2"
+                                            VerticalAlignment="Center" IsVisible="{Binding IsOwner}" Command="{Binding AssignFitCommand}"/>
+                                </StackPanel>
+                            </DataTemplate>
+
+                        </TreeView.DataTemplates>
+                    </TreeView>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</v:ChromedWindow>

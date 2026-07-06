@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & community (Discord)
+    url: https://discord.gg/tPEP92TYxD
+    about: Ask questions, share ideas or chat with the community.
+  - name: Security vulnerability
+    url: https://github.com/EveTogether/EveTogether/security/advisories/new
+    about: Do not open a public issue — report security problems privately.

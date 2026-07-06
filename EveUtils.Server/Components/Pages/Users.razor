@@ -1,0 +1,153 @@
+@page "/users"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = PanelPermissions.UsersManage)]
+@using System.Security.Claims
+@using EveUtils.Server.Auth
+@using EveUtils.Shared.Modules.AdminAuth.Entities
+@using EveUtils.Shared.Modules.AdminAuth.Repositories
+@inject IAdminAuthRepository Repository
+@inject AdminManagementService Management
+
+<div class="crumb">Administration / <b>Users</b></div>
+
+@if (_message is not null)
+{
+    <p class="@(_ok ? "ok" : "stale")">@_message</p>
+}
+
+<Card Title="Admin users" Count="@_users.Count.ToString()">
+<table>
+    <thead><tr><th>Username</th><th>Roles</th><th>Status</th><th>Last login</th><th>Actions</th></tr></thead>
+    <tbody>
+        @foreach (var u in _users)
+        {
+            <tr>
+                <td class="ok">
+                    @u.Username
+                    @if (u.UserRoles.Any(r => r.Role.IsSuperAdmin)) { <span class="badge-super">SUPERADMIN</span> }
+                    @if (u.Id == _currentUserId) { <span class="dim">(you)</span> }
+                </td>
+                <td>
+                    @foreach (var role in _roles)
+                    {
+                        <label class="rolechk">
+                            <input type="checkbox"
+                                   checked="@_roleSelection[u.Id].Contains(role.Id)"
+                                   @onchange="e => ToggleRole(u.Id, role.Id, (bool)e.Value!)" />
+                            @role.Name
+                        </label>
+                    }
+                    <button @onclick="() => ApplyRoles(u.Id)">Apply</button>
+                </td>
+                <td class="@(u.IsActive ? "ok" : "stale")">@(u.IsActive ? "active" : "disabled")</td>
+                <td class="dim">@(u.LastLoginAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                <td>
+                    <input type="password" placeholder="new temp pw" @bind="_resetPw[u.Id]" style="width:130px" />
+                    <button @onclick="() => Reset(u.Id)">Reset pw</button>
+                    @if (u.IsActive)
+                    {
+                        <button @onclick="() => SetActive(u.Id, false)" disabled="@(u.Id == _currentUserId)">Deactivate</button>
+                    }
+                    else
+                    {
+                        <button @onclick="() => SetActive(u.Id, true)">Activate</button>
+                    }
+                    <button @onclick="() => Delete(u.Id)" disabled="@(u.Id == _currentUserId)">Delete</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+</Card>
+
+<h2>Create user</h2>
+<div class="createbox">
+    <input placeholder="username" @bind="_newUsername" />
+    <input type="password" placeholder="temporary password (min 8)" @bind="_newPassword" />
+    <span>Roles:</span>
+    @foreach (var role in _roles)
+    {
+        <label class="rolechk">
+            <input type="checkbox" checked="@_newRoles.Contains(role.Id)"
+                   @onchange="e => ToggleNewRole(role.Id, (bool)e.Value!)" />
+            @role.Name
+        </label>
+    }
+    <button @onclick="Create">Create</button>
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private IReadOnlyList<AdminUser> _users = [];
+    private IReadOnlyList<Role> _roles = [];
+    private readonly Dictionary<int, HashSet<int>> _roleSelection = new();
+    private readonly Dictionary<int, string> _resetPw = new();
+    private int _currentUserId;
+
+    private string _newUsername = string.Empty;
+    private string _newPassword = string.Empty;
+    private readonly HashSet<int> _newRoles = new();
+
+    private string? _message;
+    private bool _ok;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            int.TryParse(state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out _currentUserId);
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _roles = await Repository.ListRolesAsync();
+        _users = await Repository.ListUsersAsync();
+        _roleSelection.Clear();
+        _resetPw.Clear();
+        foreach (var u in _users)
+        {
+            _roleSelection[u.Id] = u.UserRoles.Select(r => r.RoleId).ToHashSet();
+            _resetPw[u.Id] = string.Empty;
+        }
+    }
+
+    private void ToggleRole(int userId, int roleId, bool on)
+    {
+        if (on) _roleSelection[userId].Add(roleId); else _roleSelection[userId].Remove(roleId);
+    }
+
+    private void ToggleNewRole(int roleId, bool on)
+    {
+        if (on) _newRoles.Add(roleId); else _newRoles.Remove(roleId);
+    }
+
+    private async Task ApplyRoles(int userId) =>
+        await RunAsync(() => Management.SetUserRolesAsync(userId, _roleSelection[userId].ToList()));
+
+    private async Task Reset(int userId) =>
+        await RunAsync(() => Management.ResetPasswordAsync(userId, _resetPw.GetValueOrDefault(userId, string.Empty)));
+
+    private async Task SetActive(int userId, bool active) =>
+        await RunAsync(() => Management.SetActiveAsync(_currentUserId, userId, active));
+
+    private async Task Delete(int userId) =>
+        await RunAsync(() => Management.DeleteUserAsync(_currentUserId, userId));
+
+    private async Task Create()
+    {
+        await RunAsync(() => Management.CreateUserAsync(_newUsername, _newPassword, _newRoles.ToList()));
+        if (_ok) { _newUsername = string.Empty; _newPassword = string.Empty; _newRoles.Clear(); }
+    }
+
+    private async Task RunAsync(Func<Task<AdminActionResult>> action)
+    {
+        var result = await action();
+        _ok = result.Ok;
+        _message = result.Ok ? "Done." : result.Error;
+        await LoadAsync();
+    }
+}

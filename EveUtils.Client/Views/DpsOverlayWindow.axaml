@@ -1,0 +1,96 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:ctl="using:EveUtils.Client.Controls"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="240"
+        x:Class="EveUtils.Client.Views.DpsOverlayWindow"
+        x:DataType="vm:DpsViewModel"
+        x:Name="OverlayRoot"
+        Title="DPS Overlay"
+        Icon="/Assets/eve-together.ico"
+        Width="420" Height="240" MinWidth="240" MinHeight="150"
+        Topmost="True" ShowInTaskbar="True"
+        WindowDecorations="None"
+        WindowStartupLocation="CenterScreen"
+        TransparencyLevelHint="Transparent"
+        Background="Transparent">
+
+    <Design.DataContext>
+        <vm:DpsViewModel/>
+    </Design.DataContext>
+
+    <!-- Backdrop fill opacity is driven from code (OverlayRoot.FillOpacity) so the chart + text stay crisp. -->
+    <Border x:Name="Backdrop" Classes="panel">
+        <DockPanel>
+            <Border Classes="panel-header" DockPanel.Dock="Top" x:Name="DragHandle"
+                    PointerPressed="OnHeaderPressed">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                    <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Classes="diamond" Text="◆"/>
+                            <TextBlock Classes="panel-title" Text="{Binding Character}"/>
+                        </StackPanel>
+                        <Grid ColumnDefinitions="Auto,Auto" RowDefinitions="Auto,Auto" Margin="0,2,0,0"
+                              ColumnSpacing="14" RowSpacing="1">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Classes="mono" FontSize="13" MinWidth="64"
+                                       Foreground="{DynamicResource AccentBrightBrush}"
+                                       Text="{Binding Dealt, StringFormat='OUT {0}'}"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Classes="mono" FontSize="13" MinWidth="64"
+                                       Foreground="{StaticResource RedBrush}"
+                                       Text="{Binding Received, StringFormat='IN {0}'}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Classes="mono" FontSize="13" MinWidth="64"
+                                       Foreground="#FF4D90FF"
+                                       Text="{Binding Cap, StringFormat='CAP {0}'}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Classes="mono" FontSize="13" MinWidth="64"
+                                       Foreground="#FFB07EE0"
+                                       Text="{Binding Neut, StringFormat='NEUT {0}'}"/>
+                        </Grid>
+                        <!-- Location + bounty, mirroring the fleet-metrics row: shown only when known/shared. -->
+                        <StackPanel Orientation="Horizontal" Spacing="14" Margin="0,2,0,0">
+                            <TextBlock FontSize="11" Foreground="{DynamicResource TextAccentBrush}"
+                                       IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                       Text="{Binding Location, StringFormat='◉ {0}'}"
+                                       ToolTip.Tip="Current solar system"/>
+                            <TextBlock FontSize="11" Foreground="#FFE0B25A"
+                                       IsVisible="{Binding HasBounty}"
+                                       Text="{Binding BountyText, StringFormat='◇ {0}'}"
+                                       ToolTip.Tip="Bounty earned this session"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Button Grid.Column="1" Content="◐" FontSize="12" Padding="7,3" ToolTip.Tip="Overlay opacity">
+                        <Button.Flyout>
+                            <Flyout Placement="Bottom">
+                                <StackPanel Width="190" Margin="6" Spacing="8">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Classes="label" Text="OVERLAY OPACITY"/>
+                                        <TextBlock Grid.Column="1" Classes="mono" FontSize="11"
+                                                   Text="{Binding #OverlayRoot.FillOpacity, StringFormat='{}{0:P0}'}"/>
+                                    </Grid>
+                                    <Slider Minimum="0.15" Maximum="1" SmallChange="0.05" LargeChange="0.1"
+                                            Value="{Binding #OverlayRoot.FillOpacity, Mode=TwoWay}"/>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+
+                    <ToggleButton Grid.Column="2" Content="PIN" FontSize="10" Padding="8,3" Margin="6,0,0,0"
+                                  IsChecked="{Binding $parent[Window].Topmost, Mode=TwoWay}"
+                                  ToolTip.Tip="Always on top"/>
+
+                    <Button Grid.Column="3" Classes="winclose" Content="✕" FontSize="12" Padding="9,3" Margin="6,0,0,0"
+                            Click="OnClose" ToolTip.Tip="Close"/>
+                </Grid>
+            </Border>
+
+            <Border Margin="6" Background="#22000000" Cursor="Hand" Tapped="OnActivateClient"
+                    ToolTip.Tip="Click to bring this character's EVE client to the front">
+                <ctl:DpsGraph Series="{Binding Series}"
+                              Revision="{Binding GraphRevision}"
+                              Markers="{Binding Markers}"/>
+            </Border>
+        </DockPanel>
+    </Border>
+</Window>

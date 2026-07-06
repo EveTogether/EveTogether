@@ -1,0 +1,34 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+
+# IDE
+.vs/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+
+# Local databases (SQLite) — regenerable via migrations
+*.db
+*.db-shm
+*.db-wal
+
+# Environment-specific settings (may contain secrets) — base appsettings.json stays in git
+appsettings.Development.json
+appsettings.Staging.json
+appsettings.Production.json
+
+# Qodana — generated scan report + cache (never commit)
+qodana.sarif.json
+.qodana/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AI-assistant local settings (per machine, may contain local paths)
+.claude/settings.local.json

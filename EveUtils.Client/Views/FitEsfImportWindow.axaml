@@ -1,0 +1,30 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="560" d:DesignHeight="220"
+        x:Class="EveUtils.Client.Views.FitEsfImportWindow"
+        Width="560" Height="220" MinWidth="420" MinHeight="200"
+        WindowStartupLocation="CenterOwner"
+        Title="Import ESF link">
+
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,10">
+            <TextBlock Text="Import ESF link" FontWeight="Bold" FontSize="14"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <TextBlock Text="Paste an eveship.fit (ESF) link. The fit is decoded straight from the link."
+                       FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Spacing="8" Margin="0,12,0,0">
+            <Button Content="Cancel" Click="OnCancel" MinWidth="80"/>
+            <Button Content="Import" Click="OnImport" Classes="accent" MinWidth="80"/>
+        </StackPanel>
+
+        <TextBox x:Name="LinkInput" AcceptsReturn="False" AcceptsTab="False"
+                 VerticalContentAlignment="Center" VerticalAlignment="Top"
+                 FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                 PlaceholderText="https://eveship.fit/?fit=…"/>
+    </DockPanel>
+</v:ChromedWindow>

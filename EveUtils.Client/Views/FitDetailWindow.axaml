@@ -1,0 +1,1260 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fb="using:EveUtils.Client.ViewModels.FitBrowser"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1260" d:DesignHeight="820"
+        x:Class="EveUtils.Client.Views.FitDetailWindow"
+        x:DataType="fb:FitDetailWindowViewModel"
+        Width="1260" Height="820"
+        WindowStartupLocation="CenterOwner"
+        Title="Fit Detail">
+
+    <v:ChromedWindow.Resources>
+        <!-- Small open-book skill icon (EVE-style) for the "Skills Required" badge + panel header (16-unit viewbox) -->
+        <StreamGeometry x:Key="SkillBookGeometry">M8,4 C6,2.7 3.2,2.7 1.5,3.2 L1.5,12.8 C3.2,12.3 6,12.3 8,13.6 C10,12.3 12.8,12.3 14.5,12.8 L14.5,3.2 C12.8,2.7 10,2.7 8,4 Z M8,4 L8,13.6</StreamGeometry>
+    </v:ChromedWindow.Resources>
+
+    <v:ChromedWindow.Styles>
+        <!-- An over-budget gauge fill pulses ~2 Hz (the in-game overload animation) -->
+        <Style Selector="Path.pulse">
+            <Style.Animations>
+                <Animation Duration="0:0:0.5" IterationCount="INFINITE">
+                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="1"/></KeyFrame>
+                    <KeyFrame Cue="50%"><Setter Property="Opacity" Value="0.46"/></KeyFrame>
+                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1"/></KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+    </v:ChromedWindow.Styles>
+
+    <DockPanel Margin="16">
+
+        <!-- Header -->
+        <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,12">
+            <!-- Fit name + validation badges (D-179): ⚠ resource overloads, ⓘ missing skills (in-game header counts) -->
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Border IsVisible="{Binding HasWarnings}" Background="#33D9443D" BorderBrush="#D9443D" BorderThickness="1" CornerRadius="3" Padding="6,1"
+                            ToolTip.Tip="Fitting alerts — resource over budget">
+                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                            <TextBlock Text="⚠" FontSize="11" FontWeight="Bold" Foreground="#FF9A92" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding WarningCount}" FontSize="11" FontWeight="Bold" Foreground="#FF9A92" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                    <Border IsVisible="{Binding HasInfo}" Background="#33E8A23A" BorderBrush="#E8A23A" BorderThickness="1" CornerRadius="3" Padding="6,1"
+                            ToolTip.Tip="Skills required — the character is missing skills to fly this fit">
+                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                            <Path Data="{StaticResource SkillBookGeometry}" Fill="#33F0C57A" Stroke="#F0C57A" StrokeThickness="1.2"
+                                  Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center"/>
+                            <TextBlock FontSize="11" FontWeight="Bold" Foreground="#F0C57A" Text="{Binding InfoCount}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                    <!-- D-188 FBX-2: export dropdown — share / push / copy eveship.fit link / open EFT window -->
+                    <TextBlock Text="{Binding ExportStatus}" IsVisible="{Binding HasExportStatus}" FontSize="11"
+                               VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{DynamicResource TextDimBrush}"/>
+                    <Button IsVisible="{Binding CanExport}" Content="⤓ EXPORT ▾" FontSize="11" Padding="11,5"
+                            Foreground="{DynamicResource TextAccentBrush}" VerticalAlignment="Center"
+                            ToolTip.Tip="Export this fit">
+                        <Button.Flyout>
+                            <MenuFlyout>
+                                <TextBlock Classes="menuHeader" Text="EXPORT FIT" IsHitTestVisible="False"/>
+                                <MenuItem Header="Share to server…" Command="{Binding ShareToServerCommand}">
+                                    <MenuItem.Icon><TextBlock Text="☁" FontSize="13"/></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Push to EVE (in-game)…" Command="{Binding PushToEveCommand}">
+                                    <MenuItem.Icon><TextBlock Text="⏵" FontSize="13"/></MenuItem.Icon>
+                                </MenuItem>
+                                <Separator/>
+                                <MenuItem Header="Copy eveship.fit link" Command="{Binding CopyEveshipLinkCommand}">
+                                    <MenuItem.Icon><TextBlock Text="🔗" FontSize="13"/></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Open EFT window…" Command="{Binding OpenEftWindowCommand}">
+                                    <MenuItem.Icon><TextBlock Text="▤" FontSize="13"/></MenuItem.Icon>
+                                </MenuItem>
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
+                </StackPanel>
+                <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="16"
+                           Foreground="{StaticResource TextBrightBrush}"/>
+            </DockPanel>
+            <TextBlock Text="{Binding ShipName}" FontSize="11" Foreground="{DynamicResource TextAccentBrush}"/>
+            <!-- Fit-metadata: the user's tags (chips) + notes, read-only; edit them from the fit-browser ⋯ menu -->
+            <ItemsControl ItemsSource="{Binding TagChips}" IsVisible="{Binding HasTags}" Margin="0,5,0,0">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1" CornerRadius="3" Padding="7,1" Margin="0,0,5,0">
+                            <TextBlock Text="{Binding}" FontSize="10" Foreground="{DynamicResource TextAccentBrush}"/>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{Binding Description}" IsVisible="{Binding HasDescription}" Margin="0,5,0,0"
+                       FontSize="11" Foreground="{DynamicResource TextDimBrush}" TextWrapping="Wrap"/>
+            <!-- In-place metadata edit: edit name/notes/tags without going back to the fit-browser ⋯ menu; local fits only -->
+            <Button Content="Edit details…" Command="{Binding EditMetadataCommand}" IsVisible="{Binding CanEditMetadata}"
+                    FontSize="11" Padding="8,2" Margin="0,6,0,0" HorizontalAlignment="Left"/>
+            <!-- Skills + implant source on one row (D-150/D-181): the character whose trained skills / actual implants drive the sim -->
+            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,5,0,0">
+                <TextBlock Text="SKILLS" Classes="label" FontSize="10" VerticalAlignment="Center"/>
+                <ComboBox ItemsSource="{Binding SkillModes}" SelectedItem="{Binding SelectedSkillMode, Mode=TwoWay}"
+                          FontSize="11" MinWidth="150" VerticalAlignment="Center">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="fb:SkillModeViewModel">
+                            <TextBlock Text="{Binding Label}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Text="IMPLANTS" Classes="label" FontSize="10" VerticalAlignment="Center" Margin="14,0,0,0"
+                           IsVisible="{Binding !IsStructure}"/>
+                <ComboBox ItemsSource="{Binding ImplantModes}" SelectedItem="{Binding SelectedImplantMode, Mode=TwoWay}"
+                          FontSize="11" MinWidth="150" VerticalAlignment="Center" IsVisible="{Binding !IsStructure}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="fb:ImplantModeViewModel">
+                            <TextBlock Text="{Binding Label}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <!-- D-198+: weather/environment selector — applies an effect beacon (wormhole/metaliminal/Triglavian) to the sim -->
+                <TextBlock Text="ENVIRONMENT" Classes="label" FontSize="10" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                <ComboBox ItemsSource="{Binding WeatherSelector.Options}" SelectedItem="{Binding WeatherSelector.SelectedOption, Mode=TwoWay}"
+                          FontSize="11" MinWidth="170" VerticalAlignment="Center">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="fb:WeatherOptionViewModel">
+                            <TextBlock Text="{Binding Label}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Footer: CPU / Power Grid / ISK like the in-game fitting sim -->
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="22" VerticalAlignment="Center"
+                        IsVisible="{Binding HasStats}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Classes="label" FontSize="10" Text="CPU" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Cpu}" Foreground="{Binding CpuBrush}"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Classes="label" FontSize="10" Text="POWER GRID" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Power}" Foreground="{Binding PowerBrush}"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Classes="label" FontSize="10" Text="CALIBRATION" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Calibration}" Foreground="{Binding CalibrationBrush}"/>
+                </StackPanel>
+                <TextBlock Text="{Binding IskValue}" FontWeight="SemiBold" Foreground="{DynamicResource TextAccentBrush}"/>
+            </StackPanel>
+            <Button Grid.Column="1" Content="Close" Click="OnClose" Classes="accent"/>
+        </Grid>
+
+        <!-- Drone Bay + Cargo Bay + Boosters: prominent panels spanning the bottom, like the in-game fitting sim / eveship.fit -->
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,12,*,12,*,12,*" Margin="0,12,0,0">
+            <!-- Column 0 stacks the bays a fighter ship needs: the drone bay / structure fuel, then the Fighter Bay below -->
+            <StackPanel Grid.Column="0" VerticalAlignment="Top" Spacing="6">
+            <!-- Drone bay pop-out: a compact bar button (EVE drone icon) opens the bay list in a flyout, freeing the window -->
+            <Button Padding="12,7" VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                    IsVisible="{Binding DroneBay.Count}" Background="#E6121A22" CornerRadius="6"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" FontSize="10" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextAccentBrush}" Text="{Binding Bandwidth}"/>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Image Source="avares://EveUtils.Client/Assets/icons/drones.png" Width="14" Height="14" VerticalAlignment="Center"/>
+                        <TextBlock Classes="panel-title" FontSize="10" Text="DRONE BAY" VerticalAlignment="Center"/>
+                        <TextBlock FontSize="10" VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}"
+                                   Text="{Binding DroneActiveLabel, StringFormat='active {0}'}"/>
+                    </StackPanel>
+                </DockPanel>
+                <Button.Flyout>
+                  <Flyout Placement="Top">
+                    <ScrollViewer MaxHeight="380" MinWidth="280" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding DroneBay}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="fb:DroneBayItemViewModel">
+                                <!-- A bay stack, in-game style: quantity + icon + name on top, a "Selected:" checkbox row
+                                     (one box per drone, the in-space drones checked) below; deployed stacks get a green dot -->
+                                <Border CornerRadius="4" Background="#73121A24" Margin="0,0,0,4" Padding="6"
+                                        BorderThickness="1" ToolTip.Tip="{Binding Tooltip}"
+                                        BorderBrush="{DynamicResource BorderBrush}">
+                                    <Border.Styles>
+                                        <Style Selector="Border:pointerover"><Setter Property="Background" Value="#8A1A2430"/></Style>
+                                    </Border.Styles>
+                                    <StackPanel Spacing="5" MinWidth="260">
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Left" Text="{Binding QuantityLabel}" FontSize="11" FontWeight="SemiBold"
+                                                       MinWidth="30" Foreground="{DynamicResource TextAccentBrush}"
+                                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                            <Panel DockPanel.Dock="Left" Width="30" Height="30" Margin="0,0,8,0">
+                                                <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Stretch="Uniform"/>
+                                                <TextBlock Text="◦" IsVisible="{Binding !HasImage}" FontSize="14"
+                                                           Foreground="{DynamicResource TextAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                <Ellipse Width="7" Height="7" Fill="#8AE04A" IsVisible="{Binding IsActive}"
+                                                         HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                                            </Panel>
+                                            <TextBlock Text="{Binding Name}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                        </DockPanel>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Left" Classes="label" FontSize="9" Text="Selected:"
+                                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                            <ItemsControl ItemsSource="{Binding Slots}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="fb:DroneSelectionSlotViewModel">
+                                                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" MinWidth="0" Padding="0" Margin="0,0,2,0"
+                                                                  ToolTip.Tip="{Binding Position, StringFormat='Drone {0} in space'}"/>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </DockPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    </ScrollViewer>
+                  </Flyout>
+                </Button.Flyout>
+            </Button>
+            <!-- Fuel: a structure's service modules draw fuel blocks per hour while online; sits where the drone bay would (D) -->
+            <Border Grid.Column="0" Classes="panel" Padding="10,8" IsVisible="{Binding HasFuel}">
+                <StackPanel Spacing="6">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" FontSize="10" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextAccentBrush}" Text="{Binding FuelConsumption}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Classes="panel-title" FontSize="10" Text="FUEL"/>
+                            <TextBlock FontSize="10" VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}"
+                                       Text="{Binding FuelRuntime}"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <ItemsControl ItemsSource="{Binding FuelRows}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="fb:FuelRowViewModel">
+                                <Border CornerRadius="4" Background="#73121A24" Margin="0,0,6,6" Padding="4" BorderThickness="1"
+                                        BorderBrush="{DynamicResource BorderBrush}" ToolTip.Tip="{Binding OnlineCostLabel}">
+                                    <DockPanel MinWidth="150">
+                                        <Ellipse DockPanel.Dock="Left" Width="7" Height="7" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                 Fill="#8AE04A" IsVisible="{Binding IsOnline}"/>
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding FuelLabel}" FontSize="11" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextAccentBrush}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                        <TextBlock Text="{Binding Name}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                   Foreground="{StaticResource TextBrightBrush}"/>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+            <!-- Fighter Bay pop-out (carriers/supercarriers/structures): the launch tubes with per-squadron active "- / +",
+                 the per-kind tube limits and the bay reserves. A simulation overlay — it never mutates the stored fit. -->
+            <Button Padding="12,7" VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                    IsVisible="{Binding HasFighterBay}" Background="#E6121A22" CornerRadius="6"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" FontSize="10" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextAccentBrush}" Text="{Binding FighterBay.TubesSummary, StringFormat='tubes {0}'}"/>
+                    <TextBlock Classes="panel-title" FontSize="10" Text="FIGHTER BAY" VerticalAlignment="Center"/>
+                    <TextBlock FontSize="10" Margin="10,0,0,0" VerticalAlignment="Center" IsVisible="{Binding HasFighterDps}"
+                               Foreground="{StaticResource TextBrightBrush}" Text="{Binding FighterDps, StringFormat='{}{0} dps'}"/>
+                </DockPanel>
+                <Button.Flyout>
+                  <Flyout Placement="Top">
+                    <StackPanel x:Name="FighterBayRoot" x:DataType="fb:FighterBayViewModel" DataContext="{Binding FighterBay}" Spacing="8" MinWidth="360">
+                        <StackPanel.Styles>
+                            <!-- Centre the glyphs/labels in the bay's compact buttons (− / + / ✕ / + / Load / Remove All) -->
+                            <Style Selector="Button">
+                                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                            </Style>
+                        </StackPanel.Styles>
+                        <!-- Tube counters: per-kind (light/support/heavy) for ships, or a single total for a structure (no per-kind limits) -->
+                        <StackPanel Orientation="Horizontal" Spacing="16">
+                            <TextBlock FontSize="11" IsVisible="{Binding ShowLight}" Foreground="{DynamicResource TextAccentBrush}"
+                                       Text="{Binding LightLabel, StringFormat='Light {0}'}"/>
+                            <TextBlock FontSize="11" IsVisible="{Binding ShowSupport}" Foreground="{DynamicResource TextAccentBrush}"
+                                       Text="{Binding SupportLabel, StringFormat='Support {0}'}"/>
+                            <TextBlock FontSize="11" IsVisible="{Binding ShowHeavy}" Foreground="{DynamicResource TextAccentBrush}"
+                                       Text="{Binding HeavyLabel, StringFormat='Heavy {0}'}"/>
+                            <TextBlock FontSize="11" IsVisible="{Binding ShowTubeTotal}" Foreground="{DynamicResource TextAccentBrush}"
+                                       Text="{Binding TubeTotalLabel}"/>
+                        </StackPanel>
+                        <!-- Launch tubes: each holds one squadron (icon + active n/size + "- / +") or shows a "+ Open" that
+                             loads the first compatible reserve. -->
+                        <ItemsControl ItemsSource="{Binding Tubes}">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="fb:FighterTubeViewModel">
+                                    <Border CornerRadius="6" Background="#73121A24" Margin="0,0,8,8" Padding="6" Width="84"
+                                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                            ToolTip.Tip="{Binding Squadron.Tooltip}">
+                                        <Grid RowDefinitions="Auto,Auto,Auto">
+                                            <!-- Top row: tube number, and a ✕ to unload a loaded squadron back to the bay -->
+                                            <DockPanel Grid.Row="0" LastChildFill="False">
+                                                <TextBlock DockPanel.Dock="Left" Text="{Binding Index}" FontSize="9"
+                                                           Foreground="{DynamicResource TextAccentBrush}"/>
+                                                <Button DockPanel.Dock="Right" Content="✕" IsVisible="{Binding !IsEmpty}" Width="15" Height="15"
+                                                        Padding="0" FontSize="8" Background="Transparent" BorderThickness="0"
+                                                        Command="{Binding #FighterBayRoot.((fb:FighterBayViewModel)DataContext).UnloadFighterCommand}"
+                                                        CommandParameter="{Binding Squadron}"/>
+                                            </DockPanel>
+                                            <!-- Centre: an open tube shows a dim ring + "+"; a loaded one shows the green active ring + the fighter -->
+                                            <Panel Grid.Row="1" Width="50" Height="50" HorizontalAlignment="Center" Margin="0,3">
+                                                <Ellipse Width="46" Height="46" Stroke="#3AFFFFFF" StrokeThickness="2" IsVisible="{Binding IsEmpty}"/>
+                                                <Button Content="+" IsVisible="{Binding IsEmpty}" Background="Transparent" BorderThickness="0" Padding="0"
+                                                        FontSize="20" Foreground="{DynamicResource TextAccentBrush}"
+                                                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                        Command="{Binding #FighterBayRoot.((fb:FighterBayViewModel)DataContext).FillTubeCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                                <Ellipse Width="46" Height="46" Stroke="#33FFFFFF" StrokeThickness="4" IsVisible="{Binding !IsEmpty}"/>
+                                                <Ellipse Width="46" Height="46" Stroke="#8AE04A" StrokeThickness="4" StrokeLineCap="Round"
+                                                         IsVisible="{Binding !IsEmpty}" StrokeDashArray="{Binding Squadron.ActiveDash}">
+                                                    <Ellipse.RenderTransform><RotateTransform Angle="-90"/></Ellipse.RenderTransform>
+                                                </Ellipse>
+                                                <Border Width="40" Height="40" CornerRadius="20" ClipToBounds="True"
+                                                        IsVisible="{Binding Squadron.HasImage}" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <Image Source="{Binding Squadron.Image}" Stretch="UniformToFill"/>
+                                                </Border>
+                                            </Panel>
+                                            <!-- Label + the active "- / +" steppers (in-game: "Simulated" over the gauge) -->
+                                            <StackPanel Grid.Row="2" Spacing="2">
+                                                <TextBlock Text="Simulated" FontSize="9" HorizontalAlignment="Center" IsVisible="{Binding !IsEmpty}"
+                                                           Foreground="{DynamicResource TextAccentBrush}"/>
+                                                <TextBlock Text="Open" FontSize="9" HorizontalAlignment="Center" IsVisible="{Binding IsEmpty}"
+                                                           Foreground="{DynamicResource TextAccentBrush}"/>
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8" IsVisible="{Binding !IsEmpty}">
+                                                    <Button Content="−" Width="22" Height="20" Padding="0" FontSize="13"
+                                                            Command="{Binding #FighterBayRoot.((fb:FighterBayViewModel)DataContext).DecreaseActiveCommand}"
+                                                            CommandParameter="{Binding Squadron}"/>
+                                                    <Button Content="+" Width="22" Height="20" Padding="0" FontSize="13"
+                                                            Command="{Binding #FighterBayRoot.((fb:FighterBayViewModel)DataContext).IncreaseActiveCommand}"
+                                                            CommandParameter="{Binding Squadron}"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <!-- Bay reserves: squadrons not in a tube. "Load" puts one in the first compatible open tube, ✕ drops it. -->
+                        <TextBlock FontSize="10" Foreground="{DynamicResource TextAccentBrush}" Text="In bay" IsVisible="{Binding Reserves.Count}"/>
+                        <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Reserves}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="fb:FighterSquadronViewModel">
+                                        <Border CornerRadius="4" Background="#73121A24" Margin="0,0,0,4" Padding="6"
+                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" ToolTip.Tip="{Binding Name}">
+                                            <DockPanel MinWidth="320">
+                                                <Button DockPanel.Dock="Right" Content="✕" FontSize="10" Padding="8,2"
+                                                        Command="{Binding #FighterBayRoot.((fb:FighterBayViewModel)DataContext).RemoveFighterCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                                <Button DockPanel.Dock="Right" Content="Load" FontSize="10" Padding="8,2" Margin="0,0,4,0"
+                                                        Command="{Binding #FighterBayRoot.((fb:FighterBayViewModel)DataContext).LoadFighterCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                                <Panel DockPanel.Dock="Left" Width="28" Height="28" Margin="0,0,8,0">
+                                                    <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Stretch="Uniform"/>
+                                                    <TextBlock Text="◦" IsVisible="{Binding !HasImage}" FontSize="13"
+                                                               Foreground="{DynamicResource TextAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Panel>
+                                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="11" TextTrimming="CharacterEllipsis"
+                                                               Foreground="{StaticResource TextBrightBrush}"/>
+                                                    <TextBlock Text="{Binding SquadronSize, StringFormat='{}{0} fighters'}" FontSize="10"
+                                                               VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}"/>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <TextBlock FontSize="10" Foreground="{DynamicResource TextAccentBrush}" Text="{Binding ReserveSummary}"
+                                   IsVisible="{Binding Reserves.Count}"/>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Remove All" FontSize="10" Padding="8,2" Command="{Binding RemoveAllCommand}"/>
+                            <TextBlock FontSize="10" VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}"
+                                       Text="{Binding BayLabel, StringFormat='Bay {0}'}"/>
+                        </DockPanel>
+                    </StackPanel>
+                  </Flyout>
+                </Button.Flyout>
+            </Button>
+            </StackPanel>
+            <!-- Cargo hold pop-out (compact bar, unchanged look). The list opens in a non-light-dismiss Popup (not a Flyout)
+                 so it stays open while a cargo row is dragged onto a module — a light-dismiss flyout closed mid-drag and
+                 killed the drag. The bar button toggles it; clicking the bar again closes it. -->
+            <ToggleButton x:Name="CargoToggle" Grid.Column="2" Padding="12,7" VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                    IsVisible="{Binding CargoItems.Count}" Background="#E6121A22" CornerRadius="6"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" FontSize="10" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextAccentBrush}" Text="{Binding CargoItems.Count, StringFormat='{}{0} items'}"/>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Image Source="avares://EveUtils.Client/Assets/icons/cargo.png" Width="14" Height="14" VerticalAlignment="Center"/>
+                        <TextBlock Classes="panel-title" FontSize="10" Text="CARGO HOLD" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </DockPanel>
+            </ToggleButton>
+            <Popup PlacementTarget="{Binding #CargoToggle}" Placement="Top" IsLightDismissEnabled="True"
+                   IsOpen="{Binding #CargoToggle.IsChecked, Mode=TwoWay}">
+                <Border Background="#F5121A22" CornerRadius="6" Padding="6"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                    <DockPanel MinWidth="260" MaxWidth="340">
+                        <TextBlock DockPanel.Dock="Top" FontSize="9" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"
+                                   Margin="2,0,2,6" Text="Click an item to load it into all compatible modules"/>
+                        <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding CargoItems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="fb:CargoItemViewModel">
+                                        <!-- Click a cargo row to load it into every compatible fitted module (incompatible = no-op). A drag
+                                             can't cross the popup→window top-level boundary, so loading is by click. -->
+                                        <DockPanel Margin="0,0,0,2" Background="Transparent" Cursor="Hand" ToolTip.Tip="{Binding Tooltip}" Tapped="OnCargoLoad">
+                                            <TextBlock DockPanel.Dock="Left" Text="{Binding QuantityLabel}" FontSize="11" FontWeight="SemiBold" MinWidth="34"
+                                                       Foreground="{DynamicResource TextAccentBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                            <Panel DockPanel.Dock="Left" Width="26" Height="26" Margin="0,0,8,0">
+                                                <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Stretch="Uniform"/>
+                                                <TextBlock Text="◦" IsVisible="{Binding !HasImage}" FontSize="13"
+                                                           Foreground="{DynamicResource TextAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Panel>
+                                            <TextBlock Text="{Binding Name}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Popup>
+            <!-- Boosters pop-out: a what-if simulator overlay (not stored in the fit); add from SDE, toggle on/off, remove.
+                 Ships only; the button stays visible even with none simulated so the picker is always reachable. -->
+            <Button Grid.Column="4" Padding="12,7" VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                    IsVisible="{Binding !IsStructure}" Background="#E6121A22" CornerRadius="6"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" FontSize="10" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextAccentBrush}" Text="{Binding Boosters.Count, StringFormat='{}{0} active'}"/>
+                    <TextBlock Classes="panel-title" FontSize="10" Text="BOOSTERS"/>
+                </DockPanel>
+                <Button.Flyout>
+                  <Flyout Placement="Top">
+                    <StackPanel Spacing="6" MinWidth="260">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="+ Add" FontSize="10" Padding="6,2" IsVisible="{Binding HasBoosterPicker}">
+                                <Button.Flyout>
+                                    <MenuFlyout ItemsSource="{Binding BoosterMenu}">
+                                        <MenuFlyout.ItemContainerTheme>
+                                            <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                                                <Setter Property="Header" Value="{Binding Label, DataType=fb:ChargeMenuOptionViewModel}"/>
+                                                <Setter Property="Command" Value="{Binding Command, DataType=fb:ChargeMenuOptionViewModel}"/>
+                                            </ControlTheme>
+                                        </MenuFlyout.ItemContainerTheme>
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                            <TextBlock Classes="panel-title" FontSize="10" Text="BOOSTERS" VerticalAlignment="Center"/>
+                        </DockPanel>
+                        <TextBlock FontSize="10" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"
+                                   Text="No boosters — add one to simulate its bonuses" IsVisible="{Binding !HasBoosters}"/>
+                        <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Boosters}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="fb:BoosterViewModel">
+                                        <Border CornerRadius="4" Background="#73121A24" Margin="0,0,0,4" Padding="4"
+                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" ToolTip.Tip="{Binding Name}">
+                                            <DockPanel MinWidth="240">
+                                                <Panel DockPanel.Dock="Left" Width="30" Height="30" Margin="0,0,6,0">
+                                                    <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Stretch="Uniform"/>
+                                                    <TextBlock Text="◦" IsVisible="{Binding !HasImage}" FontSize="14"
+                                                               Foreground="{DynamicResource TextAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <Ellipse Width="7" Height="7" Fill="{Binding StatusBrush}"
+                                                             HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                                                </Panel>
+                                                <Button DockPanel.Dock="Right" Content="✕" Command="{Binding RemoveCommand}" Width="22" Height="22"
+                                                        Padding="0" FontSize="11" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
+                                                <CheckBox DockPanel.Dock="Right" IsChecked="{Binding IsActive}" VerticalAlignment="Center"
+                                                          Margin="0,0,4,0" ToolTip.Tip="Apply / suspend this booster"/>
+                                                <TextBlock Text="{Binding Name}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                           Margin="0,0,6,0" Foreground="{StaticResource TextBrightBrush}"/>
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </StackPanel>
+                  </Flyout>
+                </Button.Flyout>
+            </Button>
+
+            <!-- IMPLANTS panel (D-181): the implants currently applied to the fit (read-only; the source is the header picker) -->
+            <Button Grid.Column="6" Padding="12,7" VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                    IsVisible="{Binding !IsStructure}" Background="#E6121A22" CornerRadius="6"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" FontSize="10" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextAccentBrush}" Text="{Binding Implants.Count, StringFormat='{}{0} active'}"/>
+                    <TextBlock Classes="panel-title" FontSize="10" Text="IMPLANTS"/>
+                </DockPanel>
+                <Button.Flyout>
+                  <Flyout Placement="Top">
+                    <StackPanel Spacing="6" MinWidth="260">
+                        <TextBlock Classes="panel-title" FontSize="10" Text="IMPLANTS"/>
+                        <TextBlock FontSize="10" Foreground="{DynamicResource TextAccentBrush}" Text="{Binding ImplantStatus}"/>
+                        <TextBlock FontSize="10" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"
+                                   Text="No implants applied — pick a character in the IMPLANTS selector above"
+                                   IsVisible="{Binding !HasImplants}"/>
+                        <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Implants}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="fb:ImplantSlotViewModel">
+                                        <Border CornerRadius="4" Background="#73121A24" Margin="0,0,0,4" Padding="4"
+                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" ToolTip.Tip="{Binding Name}">
+                                            <DockPanel MinWidth="240">
+                                                <Panel DockPanel.Dock="Left" Width="30" Height="30" Margin="0,0,6,0">
+                                                    <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Stretch="Uniform"/>
+                                                    <TextBlock Text="◦" IsVisible="{Binding !HasImage}" FontSize="14"
+                                                               Foreground="{DynamicResource TextAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Panel>
+                                                <TextBlock Text="{Binding Name}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                           Foreground="{StaticResource TextBrightBrush}"/>
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </StackPanel>
+                  </Flyout>
+                </Button.Flyout>
+            </Button>
+        </Grid>
+
+        <Grid ColumnDefinitions="1*,12,2*,16,1*">
+
+            <!-- ── Left: Charges panel (the in-game Charges tab) — master/detail: a row of charge-capable module icons at
+                 the top filters the list below to that one module's compatible charges; drag a charge onto a module (or the
+                 wheel centre) to load it — clicking a charge row does nothing (place by drag only). First module selected by
+                 default. Drag-and-drop and the right-click menu (D-174) still work. -->
+            <Border Grid.Column="0" Classes="panel" IsVisible="{Binding ChargeModuleGroups.Count}">
+                <DockPanel Margin="8">
+                    <TextBlock DockPanel.Dock="Top" Classes="panel-title" FontSize="10" Text="CHARGES"/>
+                    <!-- Top: one icon per charge-capable module TYPE (identical guns merged); click to filter the charge
+                         list to it. Shows the module icon only (never the loaded charge); the only action is filtering. -->
+                    <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding ChargeModuleGroups}" Margin="0,4,0,6">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="fb:ChargeModuleGroupViewModel" x:CompileBindings="False">
+                                <Button Width="36" Height="36" Padding="2" Margin="0,0,4,4" Cursor="Hand"
+                                        Classes.accent="{Binding IsSelected}"
+                                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4"
+                                        ToolTip.Tip="{Binding Name}"
+                                        Command="{Binding DataContext.SelectChargeModuleCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                        CommandParameter="{Binding}">
+                                    <Panel>
+                                        <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Stretch="Uniform"/>
+                                        <TextBlock Text="□" IsVisible="{Binding !HasImage}" FontSize="12" FontWeight="Bold"
+                                                   Foreground="{DynamicResource TextAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Panel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock DockPanel.Dock="Top" FontSize="9" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"
+                               Text="{Binding SelectedChargeGroup.Name, StringFormat='Charges for {0}'}" Margin="0,0,0,4"/>
+                    <!-- Below: the selected type's compatible charges. Drag a row onto a single module in the wheel (or the
+                         wheel centre) to load it there (2f); clicking a row does nothing (place by drag only). -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding SelectedModuleCharges}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="fb:DraggableChargeViewModel" x:CompileBindings="False">
+                                    <!-- A Border (not a Button): a Button captures the press and stops the drag from
+                                         starting. The only action is dragging — onto one module or the wheel centre; a
+                                         plain click does nothing. -->
+                                    <Border CornerRadius="4" Background="#E6121A22" Cursor="Hand" Margin="0,0,0,3" Padding="4"
+                                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                            ToolTip.Tip="{Binding Name}" PointerPressed="OnChargePressed">
+                                        <Border.Styles>
+                                            <Style Selector="Border:pointerover"><Setter Property="Background" Value="#8A1A2430"/></Style>
+                                        </Border.Styles>
+                                        <DockPanel>
+                                            <Panel DockPanel.Dock="Left" Width="24" Height="24" Margin="0,0,6,0">
+                                                <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Stretch="Uniform"/>
+                                                <TextBlock Text="◦" IsVisible="{Binding !HasImage}" FontSize="13"
+                                                           Foreground="{DynamicResource TextAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Panel>
+                                            <TextBlock Text="{Binding Name}" FontSize="10" VerticalAlignment="Center" TextWrapping="Wrap"
+                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                        </DockPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <!-- ── Centre: radial fitting wheel ── -->
+            <Border Grid.Column="2" Classes="panel">
+                <DockPanel Margin="10">
+                    <!-- Tactical Destroyer stance modes (D-163); only shown for a T3D. Round icon buttons stacked at the
+                         wheel's left edge like the in-game tactical-mode selector; the active stance is highlighted and
+                         each shows its stance name on hover. -->
+                    <ItemsControl DockPanel.Dock="Left" ItemsSource="{Binding TacticalModes}"
+                                  IsVisible="{Binding HasTacticalModes}" Margin="0,0,8,0" VerticalAlignment="Center">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Orientation="Vertical" Spacing="8"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="fb:TacticalModeViewModel">
+                                <Button Command="{Binding Select}" Width="38" Height="38" Padding="3" CornerRadius="19"
+                                        Classes.accent="{Binding IsSelected}" ToolTip.Tip="{Binding Label}"
+                                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                    <!-- In-game stance glyph (ref 09): a shared upward chevron, framed per stance.
+                                         Each shape is Stretch=None + centred so the ring, ticks and chevron line up. -->
+                                    <Panel Width="30" Height="30">
+                                        <Ellipse Width="22" Height="22" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                 Stroke="{StaticResource TextBrightBrush}" StrokeThickness="1.25" Opacity="0.8"
+                                                 IsVisible="{Binding ShowRing}"/>
+                                        <!-- Geometry anchored at (0,0): Avalonia centres a Stretch=None Path on its
+                                             bounds-from-origin, so a non-origin min corner would shift it off-centre. -->
+                                        <Path Stroke="{StaticResource TextBrightBrush}" StrokeThickness="1.25" Opacity="0.8"
+                                              StrokeLineCap="Round" Stretch="None"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              IsVisible="{Binding ShowCrosshair}"
+                                              Data="M 15,0 L 15,3 M 15,27 L 15,30 M 0,15 L 3,15 M 27,15 L 30,15"/>
+                                        <Path Stroke="{StaticResource TextBrightBrush}" StrokeThickness="2.5"
+                                              StrokeLineCap="Round" StrokeJoin="Round" Stretch="None"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Data="M 0,6 L 5,0 L 10,6"/>
+                                    </Panel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- The wheel — scales to fill the panel (Viewbox) so a maximised window has no dead space -->
+                    <Viewbox Stretch="Uniform" Margin="4">
+                    <Canvas Width="380" Height="380" DragDrop.AllowDrop="True">
+                        <!-- Two rings, in-game style: the ship render fills almost the whole circle; a
+                             TRANSLUCENT inner module ring overlays its outer part (the ship shows through it) and the slot
+                             tiles sit on it; a SOLID BLACK outer ring frames the wheel and carries the CPU/PG/Calibration gauges. -->
+                        <!-- Inner disc background behind the render (nebula-ish; shows when no render is loaded) -->
+                        <Ellipse Canvas.Left="12" Canvas.Top="12" Width="356" Height="356">
+                            <Ellipse.Fill>
+                                <RadialGradientBrush>
+                                    <GradientStop Offset="0" Color="#FF17252F"/>
+                                    <GradientStop Offset="1" Color="#FF080C12"/>
+                                </RadialGradientBrush>
+                            </Ellipse.Fill>
+                        </Ellipse>
+                        <!-- Subtle grid inside the disc (offline mode only; the render covers it when loaded) -->
+                        <Path Stroke="{DynamicResource TextAccentBrush}" StrokeThickness="0.5" Opacity="0.10"
+                              Data="M 96,72 L 96,308 M 120,72 L 120,308 M 144,72 L 144,308 M 168,72 L 168,308 M 192,72 L 192,308 M 216,72 L 216,308 M 240,72 L 240,308 M 264,72 L 264,308 M 288,72 L 288,308 M 72,96 L 308,96 M 72,120 L 308,120 M 72,144 L 308,144 M 72,168 L 308,168 M 72,192 L 308,192 M 72,216 L 308,216 M 72,240 L 308,240 M 72,264 L 308,264 M 72,288 L 308,288">
+                            <Path.Clip>
+                                <EllipseGeometry Center="190,190" RadiusX="178" RadiusY="178"/>
+                            </Path.Clip>
+                        </Path>
+                        <StackPanel Canvas.Left="50" Canvas.Top="212" Width="280" Spacing="2" IsVisible="{Binding !HasShipImage}">
+                            <TextBlock Text="▲" FontSize="42" HorizontalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}"/>
+                            <TextBlock Text="{Binding ShipName}" FontSize="12" TextAlignment="Center" TextWrapping="Wrap" Foreground="{StaticResource TextBrightBrush}"/>
+                        </StackPanel>
+                        <!-- CCP ship render (D-172): fills almost the whole circle so the translucent module ring shows it through -->
+                        <Image Canvas.Left="12" Canvas.Top="12" Width="356" Height="356"
+                               Source="{Binding ShipImage}" IsVisible="{Binding HasShipImage}" Stretch="UniformToFill">
+                            <Image.Clip><EllipseGeometry Center="178,178" RadiusX="178" RadiusY="178"/></Image.Clip>
+                        </Image>
+                        <!-- Vignette removed: it darkened the band's outer part (radius ~146–178) into a
+                             dark crescent that read as a gap between the module ring and the black ring, worst in the 180–270°
+                             arc where the light nebula sits behind the band. The translucent band now reads evenly to the ring. -->
+
+                        <!-- Inner module ring: a defined translucent band the ship shows through — a SOLID colour, no gradient
+                             — centred on the modules (visible part 126–178.5, mid ~152) with equal margin
+                             above/below them, its outer edge tucked under the black outer ring (~178.5+) so there is no gap. -->
+                        <Ellipse Canvas.Left="18" Canvas.Top="18" Width="344" Height="344" StrokeThickness="43"
+                                 Stroke="#80222C36" IsHitTestVisible="False"/>
+                        <!-- Solid black outer ring (radius ~179–191) that frames the wheel and carries the gauges (in-game outer ring) -->
+                        <Ellipse Canvas.Left="5" Canvas.Top="5" Width="370" Height="370" StrokeThickness="13" Stroke="#FF05080C" IsHitTestVisible="False"/>
+                        <!-- Edge lines removed: they drew visible circles over the render; the translucent
+                             band's own edge + the bare-render gap + the black ring now separate the rings. -->
+
+                        <!-- CPU / PowerGrid / Calibration tick-gauges on the ring's outer edge (research EWB / EVEShipFit layout) -->
+                        <ItemsControl ItemsSource="{Binding RingGauges}" x:CompileBindings="False"
+                                      Canvas.Left="0" Canvas.Top="0" Width="380" Height="380">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><Canvas/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="fb:RingGaugeViewModel">
+                                    <Canvas>
+                                        <!-- Gauge layers mirror the in-game / EWB ring (validated 2026-06-14). The used fraction is a
+                                             coloured fill arc (a soft blurred glow under a bright band) with a brighter core line; over it
+                                             sit white ticks, brighter on the used part and dimmer on the unused part, plus a few markers.
+                                             Fill, core and on-fill ticks pulse ~2 Hz when over budget (the in-game overload cue). -->
+                                        <!-- Glow + core are static; the bright fill band carries the over-budget pulse. The pulse
+                                             animates Opacity, so the band must NOT also set a local Opacity (a local value blocks the
+                                             animation — the regression that killed the blink). Its non-pulsing opacity comes from the
+                                             stroke brush instead. -->
+                                        <Path Data="{Binding FillPath}" Stroke="{Binding FillColor}" StrokeThickness="13"
+                                              StrokeLineCap="Flat" Opacity="0.3">
+                                            <Path.Effect><BlurEffect Radius="4"/></Path.Effect>
+                                        </Path>
+                                        <Path Data="{Binding FillPath}" Stroke="{Binding FillColor}" StrokeThickness="7.5"
+                                              StrokeLineCap="Flat" Classes.pulse="{Binding IsOverBudget}"/>
+                                        <Path Data="{Binding FillPath}" Stroke="{Binding CoreColor}" StrokeThickness="4"
+                                              StrokeLineCap="Flat" Opacity="0.55"/>
+                                        <Path Data="{Binding TicksOffFill}" Stroke="#EEF4F7" StrokeThickness="0.8" Opacity="0.62"/>
+                                        <Path Data="{Binding TicksOnFill}" Stroke="#EEF4F7" StrokeThickness="0.9" Opacity="0.9"/>
+                                        <Path Data="{Binding Markers}" Stroke="#EEF4F7" StrokeThickness="1.2" Opacity="0.92"/>
+                                        <!-- Invisible wide hover target carrying the tooltip (the ticks themselves are too thin to hover) -->
+                                        <Path Data="{Binding HitArea}" Fill="Transparent" ToolTip.Tip="{Binding Tooltip}"/>
+                                    </Canvas>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Empty slot placeholders: dim curved segments for the hull's unfilled slots, so the ring reads as a continuous band of tiles (EWB / eveship) -->
+                        <ItemsControl ItemsSource="{Binding EmptySlots}" x:CompileBindings="False"
+                                      Canvas.Left="0" Canvas.Top="0" Width="380" Height="380">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><Canvas/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="fb:FitRadialSlotViewModel">
+                                    <Path Data="{Binding Shape}" Fill="#40101720" Stroke="{Binding Color}"
+                                          StrokeThickness="1.2" Opacity="0.6" ToolTip.Tip="{Binding Tooltip}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Slot tiles on the ring: curved annular segments (EVE / EWB / eveship shape), icons upright.
+                             Each item is a full-canvas button whose hit area is only its segment path, so the tiles tile the ring without
+                             overlap and a click/drop routes to the slot under the cursor while the empty centre passes through to the wheel. -->
+                        <ItemsControl ItemsSource="{Binding RadialSlots}" x:CompileBindings="False"
+                                      Canvas.Left="0" Canvas.Top="0" Width="380" Height="380">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><Canvas/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="fb:ModuleSlotViewModel">
+                                    <Button Width="380" Height="380" Padding="0" BorderThickness="0" Cursor="Hand"
+                                            Background="{x:Null}" Command="{Binding CycleStateCommand}"
+                                            DragDrop.AllowDrop="True" ToolTip.Tip="{Binding TooltipModel}">
+                                        <!-- Right-click: load/remove a compatible charge (D-174) -->
+                                        <Button.ContextFlyout>
+                                            <MenuFlyout ItemsSource="{Binding ChargeMenu}">
+                                                <MenuFlyout.ItemContainerTheme>
+                                                    <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                                                        <Setter Property="Header" Value="{Binding Label}"/>
+                                                        <Setter Property="Command" Value="{Binding Command}"/>
+                                                        <Setter Property="ItemsSource" Value="{Binding Children}"/>
+                                                    </ControlTheme>
+                                                </MenuFlyout.ItemContainerTheme>
+                                            </MenuFlyout>
+                                        </Button.ContextFlyout>
+                                        <Button.Template>
+                                            <ControlTemplate>
+                                                <!-- Curved annular-segment tile: a glassy translucent base so the render shows through, a
+                                                     faint state-colour wash (green active / red overheated) + a thin state border, with the
+                                                     module icon upright at the segment's centre. Offline tiles dim out via TileOpacity. -->
+                                                <Canvas Width="380" Height="380" Background="{x:Null}" Opacity="{Binding TileOpacity}">
+                                                    <Path Data="{Binding Shape}" Fill="#73121A24" Stroke="{Binding Color}" StrokeThickness="1.4" StrokeJoin="Round"/>
+                                                    <Path Data="{Binding Shape}" Fill="{Binding FillBrush}"/>
+                                                    <Image Canvas.Left="{Binding IconLeft}" Canvas.Top="{Binding IconTop}" Width="22" Height="22"
+                                                           Source="{Binding Image}" IsVisible="{Binding HasImage}" Stretch="Uniform"/>
+                                                    <TextBlock Canvas.Left="{Binding IconLeft}" Canvas.Top="{Binding IconTop}" Width="22" Height="22"
+                                                               Text="{Binding Glyph}" IsVisible="{Binding !HasImage}" FontSize="13" FontWeight="Bold"
+                                                               Foreground="{Binding Color}" TextAlignment="Center"/>
+                                                </Canvas>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Turret (top-left) / launcher (top-right) hardpoint indicators above the high-slot ring (in-game
+                             wheel): a bright dot = a turret/launcher is fitted, a dim hollow dot = a free hardpoint. -->
+                        <ItemsControl ItemsSource="{Binding TurretHardpoints}" x:CompileBindings="False"
+                                      Canvas.Left="0" Canvas.Top="0" Width="380" Height="380">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><Canvas/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="fb:HardpointPipViewModel">
+                                    <Path Data="{Binding Dot}" Fill="{Binding Fill}" Stroke="#B4B8BC" StrokeThickness="0.9"
+                                          Opacity="{Binding Opacity}" ToolTip.Tip="{Binding Tooltip}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <ItemsControl ItemsSource="{Binding LauncherHardpoints}" x:CompileBindings="False"
+                                      Canvas.Left="0" Canvas.Top="0" Width="380" Height="380">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><Canvas/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="fb:HardpointPipViewModel">
+                                    <Path Data="{Binding Dot}" Fill="{Binding Fill}" Stroke="#B4B8BC" StrokeThickness="0.9"
+                                          Opacity="{Binding Opacity}" ToolTip.Tip="{Binding Tooltip}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Turret / launcher hardpoint label glyphs (in-game CCP icons), just outside each cluster's dots. -->
+                        <Image Source="avares://EveUtils.Client/Assets/icons/turret-hardpoint.png"
+                               Canvas.Left="{Binding TurretIconLeft}" Canvas.Top="{Binding TurretIconTop}"
+                               Width="11" Height="11" Opacity="0.95" IsVisible="{Binding HasTurretHardpoints}"
+                               ToolTip.Tip="Turret hardpoints"/>
+                        <Image Source="avares://EveUtils.Client/Assets/icons/launcher-hardpoint.png"
+                               Canvas.Left="{Binding LauncherIconLeft}" Canvas.Top="{Binding LauncherIconTop}"
+                               Width="11" Height="11" Opacity="0.95" IsVisible="{Binding HasLauncherHardpoints}"
+                               ToolTip.Tip="Launcher hardpoints"/>
+                    </Canvas>
+                    </Viewbox>
+                </DockPanel>
+            </Border>
+
+            <!-- ── Right: stats panels ── -->
+            <ScrollViewer Grid.Column="4">
+                <StackPanel Spacing="10">
+
+                    <!-- No-stats notice -->
+                    <Border Classes="panel" Padding="10,8" IsVisible="{Binding !HasStats}">
+                        <TextBlock Text="{Binding StatsNotice}" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextAccentBrush}"/>
+                    </Border>
+
+                    <StackPanel Spacing="10" IsVisible="{Binding HasStats}">
+
+                        <!-- Fitting-alert banner (D-179): resource over budget — the in-game red alert -->
+                        <Border IsVisible="{Binding HasFittingAlerts}" Background="#33D9443D" BorderBrush="#D9443D" BorderThickness="1" CornerRadius="4" Padding="10,7">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="⚠ FITTING ALERT" FontWeight="Bold" FontSize="11" Foreground="#FF9A92"/>
+                                <ItemsControl ItemsSource="{Binding FittingAlerts}" x:CompileBindings="False">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding}" FontSize="11" Foreground="#FFC9C4"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Skills Required (D-179): skills the selected character lacks to fly this fit; info only, no buy/train -->
+                        <Border Classes="panel" Padding="10,8" IsVisible="{Binding HasSkillGaps}">
+                            <StackPanel Spacing="5">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Path Data="{StaticResource SkillBookGeometry}" Fill="#33E8A23A" Stroke="#E8A23A" StrokeThickness="1.2"
+                                          Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/>
+                                    <TextBlock Classes="panel-title" Text="SKILLS REQUIRED"/>
+                                </StackPanel>
+                                <ItemsControl ItemsSource="{Binding VisibleSkillGaps}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="fb:SkillGapViewModel">
+                                            <StackPanel Margin="0,2">
+                                                <!-- Skill name + the trained/needed level on one line; the level docks right, the name ellipsises -->
+                                                <DockPanel>
+                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding Detail}" FontSize="10"
+                                                               Foreground="#E8A23A" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                                    <TextBlock Text="{Binding Name}" FontSize="11" TextTrimming="CharacterEllipsis"
+                                                               VerticalAlignment="Center" Foreground="{StaticResource TextBrightBrush}"/>
+                                                </DockPanel>
+                                                <!-- SP to train + Omega time at the chosen rate (D-180); full width so the time isn't clipped -->
+                                                <TextBlock Text="{Binding Estimate}" IsVisible="{Binding HasEstimate}" FontSize="9"
+                                                           Foreground="{DynamicResource TextDimBrush}"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <!-- Show 3 by default; toggle to expand/collapse the full list (it can be long on a fresh character) -->
+                                <Button Command="{Binding ToggleSkillsCommand}" Content="{Binding SkillsToggleLabel}"
+                                        IsVisible="{Binding CanToggleSkills}" FontSize="10" Cursor="Hand"
+                                        Background="Transparent" BorderThickness="0" Padding="0" Margin="0,1,0,0"
+                                        HorizontalAlignment="Left" Foreground="#E8A23A"/>
+                                <!-- Panel total (in-game footer): SP + summed Omega time to train every missing skill -->
+                                <Border IsVisible="{Binding HasSkillTrainingTotal}" Margin="0,3,0,0" Padding="0,4,0,0"
+                                        BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding SkillTrainingTotal}" FontSize="10"
+                                                   FontWeight="SemiBold" Foreground="#E8A23A"/>
+                                        <TextBlock Text="Total" Classes="label" FontSize="10"/>
+                                    </DockPanel>
+                                </Border>
+                                <!-- Toggle: estimate at EVE's generic in-game fitting-panel rate (~25 SP/min) for a 1:1 compare -->
+                                <CheckBox IsChecked="{Binding MatchInGameRate, Mode=TwoWay}" Content="Use in-game baseline values"
+                                          FontSize="10" Padding="4,0,0,0" Margin="0,2,0,0" MinHeight="0"
+                                          ToolTip.Tip="Estimates training time on EVE's generic in-game baseline (~25 SP/min) and ignores your character's own attributes and implants — for a 1:1 comparison with the in-game Skills Required panel. Off uses your character's real (faster) rate."/>
+                                <!-- Rate basis used (the character's real attributes + implants, or the in-game baseline) — transparency -->
+                                <TextBlock Text="{Binding EffectiveAttributesLabel}" IsVisible="{Binding HasEffectiveAttributes}"
+                                           FontSize="9" Foreground="{DynamicResource TextDimBrush}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Capacitor -->
+                        <Border Classes="panel" Padding="10,8">
+                            <StackPanel Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Image Source="avares://EveUtils.Client/Assets/icons/capacitor.png" Width="15" Height="15" VerticalAlignment="Center"/>
+                                    <TextBlock Classes="panel-title" Text="CAPACITOR"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding CapState}" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrightBrush}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="20">
+                                    <TextBlock Text="{Binding CapCapacity}" Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Text="{Binding CapDelta}" Foreground="{DynamicResource TextAccentBrush}"/>
+                                    <TextBlock Text="{Binding CapRecharge}" Foreground="{DynamicResource TextAccentBrush}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Offense -->
+                        <Border Classes="panel" Padding="10,8">
+                            <StackPanel Spacing="6">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Image Source="avares://EveUtils.Client/Assets/icons/swords.png" Width="15" Height="15" VerticalAlignment="Center"/>
+                                    <TextBlock Classes="panel-title" Text="OFFENSE"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding TotalDpsLabel}" FontSize="22" FontWeight="Bold"
+                                           ToolTip.Tip="{Binding DpsBreakdown}"
+                                           Foreground="{DynamicResource AccentBrightBrush}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="24">
+                                    <StackPanel><TextBlock Classes="label" FontSize="9" Text="WEAPONS"/>
+                                        <TextBlock Text="{Binding WeaponDps}" Foreground="{StaticResource TextBrightBrush}"/></StackPanel>
+                                    <StackPanel><TextBlock Classes="label" FontSize="9" Text="DRONES"/>
+                                        <TextBlock Text="{Binding DroneDps}" Foreground="{StaticResource TextBrightBrush}"/></StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Mining (only a fit with mining equipment shows this; sits next to OFFENSE like in-game) -->
+                        <Border Classes="panel" Padding="10,8" IsVisible="{Binding HasMiningYield}">
+                            <StackPanel Spacing="6">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Image Source="avares://EveUtils.Client/Assets/icons/cargo.png" Width="15" Height="15" VerticalAlignment="Center"/>
+                                    <TextBlock Classes="panel-title" Text="MINING"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding MiningYield}" FontSize="22" FontWeight="Bold"
+                                           ToolTip.Tip="{Binding MiningBreakdown}"
+                                           Foreground="{DynamicResource AccentBrightBrush}"/>
+                                <StackPanel>
+                                    <TextBlock Classes="label" FontSize="9" Text="PER MINUTE"/>
+                                    <TextBlock Text="{Binding MiningYieldPerMinute}" Foreground="{StaticResource TextBrightBrush}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Defense (EHP + per-layer resists, colour-coded by damage type) -->
+                        <Border Classes="panel" Padding="10,8">
+                            <StackPanel Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Image Source="avares://EveUtils.Client/Assets/icons/defence.png" Width="15" Height="15" VerticalAlignment="Center"/>
+                                    <TextBlock Classes="panel-title" Text="DEFENSE"/>
+                                </StackPanel>
+
+                                <!-- D-196: damage-profile selector (visible when the selector is available) -->
+                                <ContentControl Content="{Binding DamageProfileSelector}"
+                                                IsVisible="{Binding DamageProfileSelector, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                <ContentControl.ContentTemplate>
+                                <DataTemplate x:DataType="fb:DamageProfileSelectorViewModel">
+                                <StackPanel x:Name="DpRoot">
+                                    <!-- vs [ name  ratio ]  ▾  — opens a tabbed picker -->
+                                    <DockPanel Margin="0,0,0,2" LastChildFill="True">
+                                        <TextBlock DockPanel.Dock="Left" Classes="label" Text="vs" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <Button x:Name="DpButton" Command="{Binding ToggleOpenCommand}"
+                                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="9,5" FontSize="12.5">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" Foreground="{StaticResource TextBrightBrush}"/>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding PctEm}" FontSize="11" Foreground="#4F8FD6"/>
+                                                        <TextBlock Text="/" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                                        <TextBlock Text="{Binding PctTh}" FontSize="11" Foreground="#D9544E"/>
+                                                        <TextBlock Text="/" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                                        <TextBlock Text="{Binding PctKin}" FontSize="11" Foreground="#9AA7B0"/>
+                                                        <TextBlock Text="/" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                                        <TextBlock Text="{Binding PctExp}" FontSize="11" Foreground="#D9A441"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="1" Text="▾" VerticalAlignment="Center" Foreground="{StaticResource TextDimBrush}"/>
+                                            </Grid>
+                                        </Button>
+                                    </DockPanel>
+
+                                    <Popup IsOpen="{Binding IsOpen, Mode=TwoWay}" PlacementTarget="{Binding #DpButton}"
+                                           Placement="Bottom" IsLightDismissEnabled="True">
+                                        <Border Background="#101924" BorderBrush="#29384A" BorderThickness="1" CornerRadius="5"
+                                                MinWidth="250" Width="{Binding #DpButton.Bounds.Width}">
+                                            <StackPanel>
+                                                <!-- tabs: Presets | NPC types | Custom -->
+                                                <Grid ColumnDefinitions="*,*,*">
+                                                    <Button Grid.Column="0" Content="Presets" Command="{Binding SetModeCommand}" CommandParameter="0"
+                                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" FontSize="11"
+                                                            Background="Transparent" BorderThickness="0" Padding="0,7"/>
+                                                    <Button Grid.Column="1" Content="NPC types" Command="{Binding SetModeCommand}" CommandParameter="2"
+                                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" FontSize="11"
+                                                            Background="Transparent" BorderThickness="0" Padding="0,7"/>
+                                                    <Button Grid.Column="2" Content="Custom" Command="{Binding SetModeCommand}" CommandParameter="1"
+                                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" FontSize="11"
+                                                            Background="Transparent" BorderThickness="0" Padding="0,7"/>
+                                                    <Border Grid.Column="0" Height="2" VerticalAlignment="Bottom" Background="#C9A14A" IsVisible="{Binding IsPresetsMode}"/>
+                                                    <Border Grid.Column="1" Height="2" VerticalAlignment="Bottom" Background="#C9A14A" IsVisible="{Binding IsNpcMode}"/>
+                                                    <Border Grid.Column="2" Height="2" VerticalAlignment="Bottom" Background="#C9A14A" IsVisible="{Binding IsCustomMode}"/>
+                                                </Grid>
+                                                <Border Height="1" Background="#1E2A36"/>
+
+                                                <!-- Presets: zoek + groepen -->
+                                                <StackPanel IsVisible="{Binding IsPresetsMode}">
+                                                    <TextBox Text="{Binding PresetSearchText}" PlaceholderText="search profile…" Margin="8,8,8,4" FontSize="12"/>
+                                                    <ScrollViewer MaxHeight="250">
+                                                        <ItemsControl ItemsSource="{Binding PresetGroups}">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate x:DataType="fb:PresetGroup">
+                                                                    <StackPanel>
+                                                                        <TextBlock Text="{Binding Header}" Classes="label" FontSize="9" Margin="12,7,0,2"/>
+                                                                        <ItemsControl ItemsSource="{Binding Items}">
+                                                                            <ItemsControl.ItemTemplate>
+                                                                                <DataTemplate x:DataType="fb:DamageProfilePresetViewModel">
+                                                                                    <Button Command="{ReflectionBinding $parent[ItemsControl;1].DataContext.SelectPresetCommand}"
+                                                                                            CommandParameter="{Binding}"
+                                                                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                                                            Background="Transparent" BorderThickness="0" Padding="12,5" FontSize="12.5">
+                                                                                        <Grid ColumnDefinitions="*,Auto">
+                                                                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" Foreground="{StaticResource TextBrightBrush}"/>
+                                                                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                                                                <TextBlock Text="{Binding PctEm}" FontSize="10.5" Foreground="#4F8FD6"/>
+                                                                                                <TextBlock Text="/" FontSize="10.5" Foreground="{StaticResource TextDimBrush}"/>
+                                                                                                <TextBlock Text="{Binding PctTh}" FontSize="10.5" Foreground="#D9544E"/>
+                                                                                                <TextBlock Text="/" FontSize="10.5" Foreground="{StaticResource TextDimBrush}"/>
+                                                                                                <TextBlock Text="{Binding PctKin}" FontSize="10.5" Foreground="#9AA7B0"/>
+                                                                                                <TextBlock Text="/" FontSize="10.5" Foreground="{StaticResource TextDimBrush}"/>
+                                                                                                <TextBlock Text="{Binding PctExp}" FontSize="10.5" Foreground="#D9A441"/>
+                                                                                            </StackPanel>
+                                                                                        </Grid>
+                                                                                    </Button>
+                                                                                </DataTemplate>
+                                                                            </ItemsControl.ItemTemplate>
+                                                                        </ItemsControl>
+                                                                    </StackPanel>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </ScrollViewer>
+                                                </StackPanel>
+
+                                                <!-- NPC types: zoek over de 3518 -->
+                                                <StackPanel IsVisible="{Binding IsNpcMode}">
+                                                    <TextBox Text="{Binding NpcSearchText}" PlaceholderText="search NPC… (e.g. pith)" Margin="8,8,8,4" FontSize="12"/>
+                                                    <ListBox ItemsSource="{Binding NpcResults}" SelectedItem="{Binding SelectedNpc, Mode=TwoWay}"
+                                                             MaxHeight="240" Background="Transparent" FontSize="12.5">
+                                                        <ListBox.ItemTemplate>
+                                                            <DataTemplate x:DataType="fb:NpcEnemyViewModel">
+                                                                <Grid ColumnDefinitions="*,Auto">
+                                                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                                                    <TextBlock Grid.Column="1" Text="{Binding DamageHint}" Foreground="{StaticResource TextDimBrush}" FontSize="10.5" VerticalAlignment="Center"/>
+                                                                </Grid>
+                                                            </DataTemplate>
+                                                        </ListBox.ItemTemplate>
+                                                    </ListBox>
+                                                </StackPanel>
+
+                                                <!-- Custom: 4 velden -->
+                                                <StackPanel IsVisible="{Binding IsCustomMode}" Margin="0,2,0,4">
+                                                    <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="8" Margin="9,8,9,2">
+                                                        <StackPanel Grid.Column="0" Spacing="3"><TextBlock Text="EM" FontSize="8.5" FontWeight="Bold" HorizontalAlignment="Center" Foreground="#4F8FD6"/><TextBox Text="{Binding CustomEm}" TextAlignment="Center" FontSize="12.5" Padding="2,4"/></StackPanel>
+                                                        <StackPanel Grid.Column="1" Spacing="3"><TextBlock Text="TH" FontSize="8.5" FontWeight="Bold" HorizontalAlignment="Center" Foreground="#D9544E"/><TextBox Text="{Binding CustomTh}" TextAlignment="Center" FontSize="12.5" Padding="2,4"/></StackPanel>
+                                                        <StackPanel Grid.Column="2" Spacing="3"><TextBlock Text="KIN" FontSize="8.5" FontWeight="Bold" HorizontalAlignment="Center" Foreground="#9AA7B0"/><TextBox Text="{Binding CustomKin}" TextAlignment="Center" FontSize="12.5" Padding="2,4"/></StackPanel>
+                                                        <StackPanel Grid.Column="3" Spacing="3"><TextBlock Text="EXP" FontSize="8.5" FontWeight="Bold" HorizontalAlignment="Center" Foreground="#D9A441"/><TextBox Text="{Binding CustomExp}" TextAlignment="Center" FontSize="12.5" Padding="2,4"/></StackPanel>
+                                                    </Grid>
+                                                    <TextBlock Text="Values are normalised to 100%." Classes="label" FontSize="10" Margin="9,2,9,3"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </Popup>
+                                </StackPanel>
+                                </DataTemplate>
+                                </ContentControl.ContentTemplate>
+                                </ContentControl>
+
+                                <Grid ColumnDefinitions="*,*,*,*,*">
+                                    <TextBlock Grid.Column="1" Classes="label" FontSize="9" Text="EM" HorizontalAlignment="Center"/>
+                                    <TextBlock Grid.Column="2" Classes="label" FontSize="9" Text="TH" HorizontalAlignment="Center"/>
+                                    <TextBlock Grid.Column="3" Classes="label" FontSize="9" Text="KIN" HorizontalAlignment="Center"/>
+                                    <TextBlock Grid.Column="4" Classes="label" FontSize="9" Text="EXP" HorizontalAlignment="Center"/>
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding ResistRows}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="fb:ResistRowViewModel">
+                                            <Grid ColumnDefinitions="*,*,*,*,*" Margin="0,2">
+                                                <TextBlock Grid.Column="0" Text="{Binding Layer}" VerticalAlignment="Center"
+                                                           Foreground="{StaticResource TextBrightBrush}"/>
+                                                <Border Grid.Column="1" Background="#22FFFFFF" CornerRadius="3" Margin="2,0" ClipToBounds="True">
+                                                    <Grid>
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="{Binding EmFill}"/>
+                                                                <ColumnDefinition Width="{Binding EmRest}"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <Border Grid.Column="0" Background="{Binding EmBar}"/></Grid>
+                                                        <TextBlock Text="{Binding Em}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                   Foreground="{StaticResource TextBrightBrush}"/></Grid></Border>
+                                                <Border Grid.Column="2" Background="#22FFFFFF" CornerRadius="3" Margin="2,0" ClipToBounds="True">
+                                                    <Grid>
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="{Binding ThermalFill}"/>
+                                                                <ColumnDefinition Width="{Binding ThermalRest}"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <Border Grid.Column="0" Background="{Binding ThermalBar}"/></Grid>
+                                                        <TextBlock Text="{Binding Thermal}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                   Foreground="{StaticResource TextBrightBrush}"/></Grid></Border>
+                                                <Border Grid.Column="3" Background="#22FFFFFF" CornerRadius="3" Margin="2,0" ClipToBounds="True">
+                                                    <Grid>
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="{Binding KineticFill}"/>
+                                                                <ColumnDefinition Width="{Binding KineticRest}"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <Border Grid.Column="0" Background="{Binding KineticBar}"/></Grid>
+                                                        <TextBlock Text="{Binding Kinetic}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                   Foreground="{StaticResource TextBrightBrush}"/></Grid></Border>
+                                                <Border Grid.Column="4" Background="#22FFFFFF" CornerRadius="3" Margin="2,0" ClipToBounds="True">
+                                                    <Grid>
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="{Binding ExplosiveFill}"/>
+                                                                <ColumnDefinition Width="{Binding ExplosiveRest}"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <Border Grid.Column="0" Background="{Binding ExplosiveBar}"/></Grid>
+                                                        <TextBlock Text="{Binding Explosive}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                   Foreground="{StaticResource TextBrightBrush}"/></Grid></Border>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="{Binding TotalEhp}" FontWeight="SemiBold" Margin="0,4,0,0"
+                                           Foreground="{StaticResource TextBrightBrush}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Remote assistance (D-197): hidden unless the fit has at least one active remote module -->
+                        <Border Classes="panel" Padding="10,8" IsVisible="{Binding HasRemoteAssistance}">
+                            <StackPanel Spacing="4">
+                                <TextBlock Classes="panel-title" Text="REMOTE"/>
+
+                                <!-- Armor -->
+                                <Grid ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding HasRemoteArmorRep}">
+                                    <TextBlock Grid.Column="0" Classes="label" FontSize="10" Text="ARMOR" Margin="0,0,8,0" Foreground="#D9A441"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding RemoteArmorRep}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Grid.Column="2" Classes="label" FontSize="10" Text="{Binding RemoteArmorRange}" Margin="8,0,0,0"/>
+                                </Grid>
+
+                                <!-- Shield -->
+                                <Grid ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding HasRemoteShieldRep}">
+                                    <TextBlock Grid.Column="0" Classes="label" FontSize="10" Text="SHIELD" Margin="0,0,8,0" Foreground="#4F8FD6"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding RemoteShieldRep}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Grid.Column="2" Classes="label" FontSize="10" Text="{Binding RemoteShieldRange}" Margin="8,0,0,0"/>
+                                </Grid>
+
+                                <!-- Hull -->
+                                <Grid ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding HasRemoteHullRep}">
+                                    <TextBlock Grid.Column="0" Classes="label" FontSize="10" Text="HULL" Margin="0,0,8,0" Foreground="#9AA7B0"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding RemoteHullRep}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Grid.Column="2" Classes="label" FontSize="10" Text="{Binding RemoteHullRange}" Margin="8,0,0,0"/>
+                                </Grid>
+
+                                <!-- Capacitor -->
+                                <Grid ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding HasRemoteCapTransfer}">
+                                    <TextBlock Grid.Column="0" Classes="label" FontSize="10" Text="CAPACITOR" Margin="0,0,8,0" Foreground="#C9A14A"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding RemoteCapTransfer}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Grid.Column="2" Classes="label" FontSize="10" Text="{Binding RemoteCapRange}" Margin="8,0,0,0"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Targeting + Navigation stacked (the stats column is narrow at 25%, so one above the other) -->
+                        <Border Classes="panel" Padding="10,8">
+                            <StackPanel Spacing="3">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Image Source="avares://EveUtils.Client/Assets/icons/target.png" Width="15" Height="15" VerticalAlignment="Center"/>
+                                    <TextBlock Classes="panel-title" Text="TARGETING"/>
+                                </StackPanel>
+                                <Grid ColumnDefinitions="Auto,*"><TextBlock Classes="label" FontSize="10" Text="RANGE" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="{Binding TargetRange}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/></Grid>
+                                <Grid ColumnDefinitions="Auto,*"><TextBlock Classes="label" FontSize="10" Text="SCAN RES" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="{Binding ScanResolution}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/></Grid>
+                                <Grid ColumnDefinitions="Auto,*"><TextBlock Classes="label" FontSize="10" Text="MAX LOCKED" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="{Binding MaxLocked}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/></Grid>
+                                <Grid ColumnDefinitions="Auto,*"><TextBlock Classes="label" FontSize="10" Text="SENSOR" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="{Binding SensorStrength}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/></Grid>
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="panel" Padding="10,8" IsVisible="{Binding HasNavigationPanel}">
+                            <StackPanel Spacing="3">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Image Source="avares://EveUtils.Client/Assets/icons/speed.png" Width="15" Height="15" VerticalAlignment="Center"/>
+                                    <TextBlock Classes="panel-title" Text="NAVIGATION"/>
+                                </StackPanel>
+                                <Grid ColumnDefinitions="Auto,*"><TextBlock Classes="label" FontSize="10" Text="SPEED" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="{Binding Velocity}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/></Grid>
+                                <Grid ColumnDefinitions="Auto,*"><TextBlock Classes="label" FontSize="10" Text="ALIGN" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="{Binding AlignTime}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/></Grid>
+                                <Grid ColumnDefinitions="Auto,*"><TextBlock Classes="label" FontSize="10" Text="AGILITY" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="{Binding Agility}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/></Grid>
+                                <Grid ColumnDefinitions="Auto,*"><TextBlock Classes="label" FontSize="10" Text="WARP" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="{Binding WarpSpeed}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/></Grid>
+                                <Grid ColumnDefinitions="Auto,*"><TextBlock Classes="label" FontSize="10" Text="SIGNATURE" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="{Binding Signature}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/></Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Drones (ships only; a structure has no drone bay) -->
+                        <Border Classes="panel" Padding="10,8" IsVisible="{Binding !IsStructure}">
+                            <StackPanel Spacing="6">
+                                <!-- Drone DPS lives under OFFENSE (weapons/drones breakdown); this panel is the in-game
+                                     drones readout: bandwidth, bay and how many are in space. -->
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Image Source="avares://EveUtils.Client/Assets/icons/drones.png" Width="15" Height="15" VerticalAlignment="Center"/>
+                                    <TextBlock Classes="panel-title" Text="DRONES"/>
+                                </StackPanel>
+                                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto">
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="label" FontSize="10" Text="BANDWIDTH" Margin="0,0,12,2"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Bandwidth}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="label" FontSize="10" Text="BAY" Margin="0,0,12,2"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DroneBayVolume}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="label" FontSize="10" Text="ACTIVE" Margin="0,0,12,2"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding DroneCount}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Storage: every special hold the ship carries (cargo, ore, fleet hangar, …), one row per non-zero bay -->
+                        <Border Classes="panel" Padding="10,8" IsVisible="{Binding HasStorageBays}">
+                            <StackPanel Spacing="3">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Image Source="avares://EveUtils.Client/Assets/icons/cargo.png" Width="15" Height="15" VerticalAlignment="Center"/>
+                                    <TextBlock Classes="panel-title" Text="STORAGE"/>
+                                </StackPanel>
+                                <ItemsControl ItemsSource="{Binding StorageBays}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="fb:StorageBayViewModel">
+                                            <Grid ColumnDefinitions="Auto,*">
+                                                <TextBlock Classes="label" FontSize="10" Text="{Binding Name}" Margin="0,0,12,2"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding Volume}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</v:ChromedWindow>

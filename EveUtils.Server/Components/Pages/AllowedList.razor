@@ -1,0 +1,51 @@
+@page "/allowed"
+@attribute [Authorize(Policy = PanelPermissions.AllowedManage)]
+
+<div class="crumb">Access / <b>Allowed-list</b></div>
+
+<Card Title="Server mode">
+    <div class="switchrow">
+        <div class="lbl">
+            <span class="c">auth.allowedlist.enabled</span> — restrict pairing to the allowed-list
+            <span class="d">Off = public server: anyone who completes the ESI auth-flow can pair (auth still required).</span>
+        </div>
+        <label class="switch">
+            <input type="checkbox" @bind="AllowedListEnabled" />
+            <span class="track"><span class="knob"></span></span>
+        </label>
+    </div>
+</Card>
+
+<Card Title="Allowed characters" Count="@Items.Count.ToString()">
+    <HeaderAction>
+        <input @bind="NewName" placeholder="Character name" style="min-width:200px" />
+        <button class="accent" @onclick="AddAsync">+ ADD</button>
+    </HeaderAction>
+    <ChildContent>
+        @if (!AllowedListEnabled)
+        {
+            <p class="warn" style="padding:11px 14px;margin:0;border-bottom:1px solid #11160F;">The allowed-list is not enforced while public-server mode is on.</p>
+        }
+        @if (Items.Count == 0)
+        {
+            <p class="dim" style="padding:14px;margin:0;">Allowed-list is empty — no character can pair.</p>
+        }
+        else
+        {
+            <table class="@(AllowedListEnabled ? "" : "disabled")">
+                <thead><tr><th>Character</th><th>ESI id</th><th>Note</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var item in Items)
+                    {
+                        <tr>
+                            <td class="bright">@item.CharacterName</td>
+                            <td class="dim">@(item.EsiCharacterId?.ToString() ?? "—")</td>
+                            <td class="dim">@item.Note</td>
+                            <td style="text-align:right"><button class="danger" @onclick="() => RemoveAsync(item.Id)">Remove</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </ChildContent>
+</Card>

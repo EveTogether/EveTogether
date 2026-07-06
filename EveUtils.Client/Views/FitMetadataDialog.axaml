@@ -1,0 +1,45 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="520" d:DesignHeight="380"
+        x:Class="EveUtils.Client.Views.FitMetadataDialog"
+        Width="520" Height="380" MinWidth="420" MinHeight="340"
+        WindowStartupLocation="CenterOwner"
+        Title="Edit fit details">
+
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,12">
+            <TextBlock Text="Edit fit details" FontWeight="Bold" FontSize="14"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <TextBlock Text="Rename the fit and add notes or tags. This stays on your machine and does not change the fit itself."
+                       FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Spacing="8" Margin="0,12,0,0">
+            <Button Content="Cancel" Click="OnCancel" MinWidth="80"/>
+            <Button Content="Save" Click="OnSave" Classes="accent" MinWidth="80"/>
+        </StackPanel>
+
+        <!-- NAME + TAGS dock to the top; DESCRIPTION fills the space left between them and the bottom buttons, so it grows
+             or shrinks with the window instead of overflowing over the Cancel/Save buttons. -->
+        <DockPanel>
+            <StackPanel DockPanel.Dock="Top" Spacing="10">
+                <StackPanel Spacing="3">
+                    <TextBlock Text="NAME" Classes="label" FontSize="10"/>
+                    <TextBox x:Name="NameInput" AcceptsReturn="False" VerticalContentAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Spacing="3">
+                    <TextBlock Text="TAGS (comma-separated)" Classes="label" FontSize="10"/>
+                    <TextBox x:Name="TagsInput" AcceptsReturn="False" VerticalContentAlignment="Center"
+                             PlaceholderText="pvp, cheap, armor"/>
+                </StackPanel>
+                <TextBlock Text="DESCRIPTION" Classes="label" FontSize="10" Margin="0,0,0,3"/>
+            </StackPanel>
+            <TextBox x:Name="DescriptionInput" AcceptsReturn="True" AcceptsTab="False" MinHeight="80"
+                     TextWrapping="Wrap" VerticalContentAlignment="Top"
+                     PlaceholderText="Notes about how to fly this fit…"/>
+        </DockPanel>
+    </DockPanel>
+</v:ChromedWindow>

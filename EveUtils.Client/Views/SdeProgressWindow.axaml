@@ -1,0 +1,35 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:EveUtils.Client.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="440" d:DesignHeight="170"
+        x:Class="EveUtils.Client.Views.SdeProgressWindow"
+        x:DataType="vm:SdeProgressViewModel"
+        Width="440" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Title="EVE static data">
+
+    <StackPanel Margin="20" Spacing="12">
+        <TextBlock Text="{Binding StatusText}" FontWeight="Bold" FontSize="14"
+                   Foreground="{StaticResource TextBrightBrush}"/>
+
+        <ProgressBar Minimum="0" Maximum="100"
+                     Value="{Binding ProgressPercent}"
+                     IsIndeterminate="{Binding IsIndeterminate}"
+                     Height="8"/>
+
+        <TextBlock Text="{Binding DetailText}" FontSize="12"
+                   Foreground="{DynamicResource TextAccentBrush}"
+                   IsVisible="{Binding !IsError}"/>
+
+        <TextBlock Text="{Binding DetailText}" FontSize="12" TextWrapping="Wrap"
+                   Foreground="{StaticResource RedBrush}"
+                   IsVisible="{Binding IsError}"/>
+
+        <Button Content="Close" Command="{Binding CloseCommand}"
+                HorizontalAlignment="Right" MinWidth="80"
+                IsVisible="{Binding IsError}"/>
+    </StackPanel>
+</v:ChromedWindow>

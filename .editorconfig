@@ -1,0 +1,48 @@
+# EditorConfig — Qodana / ReSharper inspection tuning for EVE Together.
+#
+# Purpose: silence the categorical false-positives and idiom clashes that the
+# qodana-cdnet linter raises across the solution, so the CI gate stays meaningful
+# (it should flag genuinely new findings, not perennial noise). Each suppressed
+# inspection is documented with the reason it is a false positive here.
+#
+# This replaces the no-op `exclude:` directive in qodana.yaml: that directive does
+# not disable ReSharper inspections for qodana-cdnet, whereas these
+# `resharper_<id>_highlighting = none` keys do.
+root = true
+
+[*.cs]
+# --- Serialization / DTO / gRPC false positives (whole-program "unused") ---
+# These types and members are bound by reflection (System.Text.Json, gRPC/protobuf
+# generated contracts, Avalonia) or are part of the public/cross-assembly surface,
+# so ReSharper's whole-program analysis wrongly reports them as unused or as
+# privatizable. The build and runtime validate them. Only the .Global (cross-file /
+# public) variants are silenced; the .Local variants stay active as real signals.
+resharper_not_accessed_positional_property_global_highlighting = none
+resharper_property_can_be_made_init_only_global_highlighting = none
+resharper_unused_type_global_highlighting = none
+resharper_member_can_be_private_global_highlighting = none
+resharper_unused_member_global_highlighting = none
+resharper_unused_auto_property_accessor_global_highlighting = none
+resharper_class_never_instantiated_global_highlighting = none
+resharper_unused_method_return_value_global_highlighting = none
+resharper_unused_member_in_super_global_highlighting = none
+
+# --- Nullable API-contract defensive checks ---
+# Defensive `?? fallback` against APIs whose nullable annotations claim non-null but
+# can return null at runtime. The defensive code is intentional, not redundant.
+resharper_null_coalescing_condition_is_always_not_null_according_to_api_contract_highlighting = none
+
+[*.axaml]
+# --- Avalonia compiled-binding false positives ---
+# The compiled-binding pipeline resolves and validates these bindings at build time;
+# the XAML analyzer cannot follow the DataContext the same way and reports phantom
+# possible-null paths.
+resharper_xaml_possible_null_reference_exception_highlighting = none
+
+[{EveUtils.Client.UiTests,EveUtils.Server.Tests}/**/*.cs]
+# --- Test-only relaxations ---
+# Float equality is legitimate in tests asserting exact computed values, and
+# short-lived HttpClient instances are fine in disposable test fixtures. Production
+# instances of both deliberately stay active (they can be genuine smells).
+resharper_compare_of_floats_by_equality_operator_highlighting = none
+resharper_short_lived_http_client_highlighting = none

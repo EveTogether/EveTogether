@@ -1,0 +1,163 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="760" d:DesignHeight="520"
+        x:Class="EveUtils.Client.Views.EsiMetricsWindow"
+        x:DataType="vm:EsiMetricsViewModel"
+        Width="760" Height="520"
+        WindowStartupLocation="CenterOwner"
+        Title="ESI Metrics">
+
+    <DockPanel Margin="16">
+
+        <!-- Header -->
+        <StackPanel DockPanel.Dock="Top" Spacing="3" Margin="0,0,0,12">
+            <TextBlock Text="ESI METRICS" FontWeight="Bold" FontSize="16"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <TextBlock Text="ESI calls, rate-limit headroom and cache status per rate-limit bucket (app:characterId for authed, ip for public). Expand a bucket for its per-endpoint breakdown. CACHE shows ESI CDN hits/misses; '· Nl' = N served from the local file cache (no network). Live."
+                       FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <!-- Footer: Refresh / Close -->
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto,*,Auto" Margin="0,12,0,0">
+            <Button Grid.Column="0" Content="Refresh" Command="{Binding RefreshCommand}"/>
+            <Button Grid.Column="2" Content="Close" Click="OnClose" Classes="accent"/>
+        </Grid>
+
+        <Panel>
+            <TextBlock Text="No ESI calls observed yet." IsVisible="{Binding IsEmpty}"
+                       Foreground="{DynamicResource TextAccentBrush}"/>
+
+            <ScrollViewer IsVisible="{Binding !IsEmpty}">
+                <ItemsControl ItemsSource="{Binding Buckets}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:EsiBucketRowViewModel">
+                            <Expander Margin="0,0,0,6" HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      IsExpanded="{Binding IsExpanded, Mode=TwoWay}">
+                                <!-- Accordion header: bucket key + one-line aggregate + last-updated -->
+                                <Expander.Header>
+                                    <Grid ColumnDefinitions="Auto,*,Auto" HorizontalAlignment="Stretch">
+                                        <!-- Authed buckets show the pilot's hex portrait + name; hover for name + character:id.
+                                             The public ip bucket has no portrait, just its key. -->
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
+                                                    VerticalAlignment="Center" ToolTip.Tip="{Binding IdentityTooltip}">
+                                            <Panel Width="26" Height="30" VerticalAlignment="Center"
+                                                   IsVisible="{Binding IsCharacter}">
+                                                <Panel.Clip>
+                                                    <PathGeometry Figures="M13,0 L26,7.5 L26,22.5 L13,30 L0,22.5 L0,7.5 Z"/>
+                                                </Panel.Clip>
+                                                <Border Background="{DynamicResource AccentSoftBrush}" IsVisible="{Binding !HasPortrait}">
+                                                    <TextBlock Text="{Binding Initial}" FontSize="11" FontWeight="Bold"
+                                                               Foreground="{DynamicResource AccentBrightBrush}"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Image Source="{Binding Portrait}" Stretch="UniformToFill" IsVisible="{Binding HasPortrait}"/>
+                                            </Panel>
+                                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Text="{Binding SummaryText}" Margin="14,0,8,0"
+                                                   VerticalAlignment="Center" FontSize="11"
+                                                   Foreground="{DynamicResource TextAccentBrush}"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding UpdatedText}" FontSize="10"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextAccentBrush}"/>
+                                    </Grid>
+                                </Expander.Header>
+
+                                <StackPanel Spacing="12" Margin="2,6,2,2">
+                                    <!-- Bucket-level detail (rate-limit headroom lives per bucket, not per endpoint) -->
+                                    <StackPanel Orientation="Horizontal" Spacing="16">
+                                        <StackPanel>
+                                            <TextBlock Classes="label" FontSize="9" Text="CALLS"/>
+                                            <TextBlock Text="{Binding Calls}" Foreground="{StaticResource TextBrightBrush}"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Classes="label" FontSize="9" Text="OK / FAIL"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <TextBlock Text="{Binding Successes}" Foreground="{StaticResource TextBrightBrush}"/>
+                                                <TextBlock Text="/"/>
+                                                <TextBlock Text="{Binding Failures}"
+                                                           Foreground="{StaticResource RedBrush}" IsVisible="{Binding HasFailures}"/>
+                                                <TextBlock Text="{Binding Failures}"
+                                                           Foreground="{StaticResource TextBrightBrush}" IsVisible="{Binding !HasFailures}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Classes="label" FontSize="9" Text="ERROR RATE"/>
+                                            <TextBlock Text="{Binding ErrorRateText}" Foreground="{StaticResource TextBrightBrush}"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Classes="label" FontSize="9" Text="420/429 HITS"/>
+                                            <TextBlock Text="{Binding LimitHitsText}" Foreground="{StaticResource TextBrightBrush}"/>
+                                        </StackPanel>
+                                        <StackPanel ToolTip.Tip="{Binding CacheTooltip}">
+                                            <TextBlock Classes="label" FontSize="9" Text="ESI CACHE H/M"/>
+                                            <TextBlock Text="{Binding CacheText}" Foreground="{StaticResource TextBrightBrush}"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Classes="label" FontSize="9" Text="ERR-LIMIT LEFT"/>
+                                            <TextBlock Text="{Binding ErrorRemainingText}" Foreground="{StaticResource TextBrightBrush}"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Classes="label" FontSize="9" Text="BUCKET LEFT"/>
+                                            <TextBlock Text="{Binding BucketRemainingText}" Foreground="{StaticResource TextBrightBrush}"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Classes="label" FontSize="9" Text="LAST"/>
+                                            <TextBlock Text="{Binding LastStatus}" Foreground="{StaticResource TextBrightBrush}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <!-- Per-endpoint drill-down -->
+                                    <Border Classes="panel" Padding="10,8">
+                                        <StackPanel Spacing="4">
+                                            <Grid ColumnDefinitions="*,56,70,52,78,64,46">
+                                                <TextBlock Grid.Column="0" Classes="label" FontSize="9" Text="ENDPOINT"/>
+                                                <TextBlock Grid.Column="1" Classes="label" FontSize="9" Text="CALLS"/>
+                                                <TextBlock Grid.Column="2" Classes="label" FontSize="9" Text="OK/FAIL"/>
+                                                <TextBlock Grid.Column="3" Classes="label" FontSize="9" Text="ERR%"/>
+                                                <TextBlock Grid.Column="4" Classes="label" FontSize="9" Text="CACHE H/M"/>
+                                                <TextBlock Grid.Column="5" Classes="label" FontSize="9" Text="GROUP"/>
+                                                <TextBlock Grid.Column="6" Classes="label" FontSize="9" Text="LAST"/>
+                                            </Grid>
+                                            <ItemsControl ItemsSource="{Binding Endpoints}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:EsiEndpointRowViewModel">
+                                                        <Grid ColumnDefinitions="*,56,70,52,78,64,46" Margin="0,2,0,2">
+                                                            <TextBlock Grid.Column="0" Text="{Binding Endpoint}" FontFamily="monospace"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding Calls}"
+                                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                                            <TextBlock Grid.Column="2" Text="{Binding OkFailText}"
+                                                                       Foreground="{StaticResource RedBrush}" IsVisible="{Binding HasFailures}"/>
+                                                            <TextBlock Grid.Column="2" Text="{Binding OkFailText}"
+                                                                       Foreground="{StaticResource TextBrightBrush}" IsVisible="{Binding !HasFailures}"/>
+                                                            <TextBlock Grid.Column="3" Text="{Binding ErrorRateText}"
+                                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                                            <TextBlock Grid.Column="4" Text="{Binding CacheText}" ToolTip.Tip="{Binding CacheTooltip}"
+                                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                                            <TextBlock Grid.Column="5" Text="{Binding GroupText}"
+                                                                       Foreground="{DynamicResource TextAccentBrush}"/>
+                                                            <TextBlock Grid.Column="6" Text="{Binding LastStatus}"
+                                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Expander>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Panel>
+    </DockPanel>
+</v:ChromedWindow>

@@ -1,0 +1,43 @@
+@page "/login"
+@layout BareLayout
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@attribute [AllowAnonymous]
+
+<PageTitle>Sign in — EVE Together</PageTitle>
+
+<div class="loginpage">
+    <form method="post" action="/account/login" class="loginbox">
+        <AntiforgeryToken />
+        <div class="brandc">
+            <img class="badge" src="img/eve-together-badge.png" alt="EVE Together" />
+            <span class="nm">EVE <b>TOGETHER</b></span>
+            <span class="sub">Server administration</span>
+        </div>
+
+        @if (Error == "1")
+        {
+            <p class="loginerr">Invalid username or password.</p>
+        }
+        else if (Error == "inactive")
+        {
+            <p class="loginerr">This account is deactivated.</p>
+        }
+
+        <div class="field">
+            <label for="username">Username</label>
+            <input id="username" name="username" autocomplete="username" autofocus />
+        </div>
+        <div class="field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" />
+        </div>
+        <button type="submit" class="btn accent loginbtn">SIGN IN</button>
+        <p class="loginhint">Self-hosted · TLS pinned (TOFU) · no registration</p>
+    </form>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+}

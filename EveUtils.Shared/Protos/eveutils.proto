@@ -1,0 +1,437 @@
+syntax = "proto3";
+
+option csharp_namespace = "EveUtils.Grpc";
+package eveutils;
+
+// Tier-0 transport for the EVE-Utils foundation spike. One server host serves gRPC (HTTP/2) next to
+// Blazor/SignalR (HTTP/1.1) over a single self-signed TLS endpoint (ALPN). The client pins the cert
+// fingerprint during pairing (TOFU, D-43).
+
+// --- Pairing + a trivial Ping to prove the transport stack (F4) ---
+service Pairing {
+  rpc Ping (PingRequest) returns (PingReply);
+  rpc StartPairing (StartPairingRequest) returns (StartPairingReply);
+  rpc RelayCode (RelayCodeRequest) returns (RelayCodeReply);
+  rpc ClaimPairing (ClaimPairingRequest) returns (ClaimPairingReply);
+}
+
+// --- Session lifecycle (F5) ---
+service Session {
+  rpc Refresh (RefreshRequest) returns (SessionReply);
+  rpc Heartbeat (HeartbeatRequest) returns (HeartbeatReply);
+  // Client-initiated decouple (D-109): invalidate this server session so the character is no longer
+  // synced to this server. The client closes its own bus stream after calling this.
+  rpc Revoke (RevokeRequest) returns (RevokeReply);
+}
+
+// --- The auth-gated remote event bus (F6) ---
+service EventBusStream {
+  rpc Attach (stream ClientEnvelope) returns (stream ServerEnvelope);
+}
+
+// --- Fittings sharing (D-70/D-101): synchronous so the client gets a real accept/deny result
+// (the fit.sync app-permission is enforced server-side; a fire-and-forget event gave no feedback). ---
+service Fittings {
+  rpc ShareFit (ShareFitRequest) returns (ShareFitReply);
+  rpc GetSharedFits (GetSharedFitsRequest) returns (GetSharedFitsReply);
+  rpc DeleteSharedFit (DeleteSharedFitRequest) returns (DeleteSharedFitReply);
+}
+
+message DeleteSharedFitRequest { int32 id = 1; }
+message DeleteSharedFitReply { bool accepted = 1; string message = 2; }
+
+// --- Fleet lifecycle (F2, D-117…D-126): synchronous, reply {accepted,message} (D-102). The acting
+// character is taken from the authenticated session (bearer token), never from the request body, so a
+// client can't claim to be another creator. Enum fields carry the C# enum's int value. Times are ISO 8601
+// strings; empty = none. ---
+service Fleets {
+  rpc CreateFleet (CreateFleetRequest) returns (CreateFleetReply);
+  rpc EditFleet (EditFleetRequest) returns (FleetActionReply);
+  rpc SetFleetComposition (SetFleetCompositionRequest) returns (FleetActionReply);
+  rpc CoupleFleetToEsi (CoupleFleetToEsiRequest) returns (FleetActionReply);   // D-126 M1: link to the live in-game fleet
+  rpc UncoupleFleetFromEsi (UncoupleFleetFromEsiRequest) returns (FleetActionReply);   // D-217 item 5: clear the stored EsiFleetId once the in-game fleet is gone
+  rpc SetFleetEsiAutomation (SetFleetEsiAutomationRequest) returns (FleetActionReply);   // D-218: persist the Auto Apply / Auto Invite toggles (storage-role only; no ESI call)
+  rpc DisbandFleet (DisbandFleetRequest) returns (FleetActionReply);
+  // Start (6.5, D-137): the creator flips the fleet from Forming to Active and the roster is notified.
+  // Creator-only via the owning fleet; fleet.edit gated. Idempotent on an already-started fleet.
+  rpc StartFleet (StartFleetRequest) returns (FleetActionReply);
+  // Conclude (2026-06-04): the creator marks the fleet finished (Forming/Active → Concluded), kept for history.
+  // A concluded fleet broadcasts nothing and can no longer be joined or started. Creator-only; idempotent.
+  rpc ConcludeFleet (ConcludeFleetRequest) returns (FleetActionReply);
+  rpc GetFleet (GetFleetRequest) returns (GetFleetReply);
+  rpc ListMyFleets (ListMyFleetsRequest) returns (ListFleetsReply);
+
+  // Wing/squad structure (F2b, ESI parity D-117). Creator-only via the owning fleet; fleet.structure gated.
+  rpc CreateWing (CreateWingRequest) returns (CreateStructureReply);
+  rpc RenameWing (RenameWingRequest) returns (FleetActionReply);
+  rpc DeleteWing (DeleteWingRequest) returns (FleetActionReply);
+  rpc CreateSquad (CreateSquadRequest) returns (CreateStructureReply);
+  rpc RenameSquad (RenameSquadRequest) returns (FleetActionReply);
+  rpc DeleteSquad (DeleteSquadRequest) returns (FleetActionReply);
+  rpc ListWings (ListWingsRequest) returns (ListWingsReply);
+  rpc ListSquads (ListSquadsRequest) returns (ListSquadsReply);
+
+  // Roster (F6, D-117). Move a member to a wing/squad with a role (ESI move parity); list the roster.
+  // Creator-only via the owning fleet; fleet.structure gated.
+  rpc MoveMember (MoveMemberRequest) returns (FleetActionReply);
+  rpc SwapMembers (SwapMembersRequest) returns (FleetActionReply);
+  rpc AssignMemberFit (AssignMemberFitRequest) returns (FleetActionReply);
+  // FC-6 cross-client: the pilot's own client reports its can-fly verdict for their assigned fit (trained skills
+  // never leave that client, D-179 — only the verdict travels). Self-only; broadcast as fleet.changed on change.
+  rpc ReportMemberFitVerdict (ReportMemberFitVerdictRequest) returns (FleetActionReply);
+  rpc ReportMemberInGameFleet (ReportMemberInGameFleetRequest) returns (FleetActionReply);  // D-126 M6: self-only in-game presence
+  rpc ListMembers (ListMembersRequest) returns (ListMembersReply);
+  // Ownership transfer (P2.7): the creator hands the fleet to another member; the old owner stays a member.
+  // Creator-only via the owning fleet; fleet.edit gated.
+  rpc TransferFleetOwnership (TransferFleetOwnershipRequest) returns (FleetActionReply);
+  // Remove a member (P2.7): the owner removes any member, a member removes themselves; the creator can't be
+  // removed until ownership is transferred away.
+  rpc RemoveFleetMember (RemoveFleetMemberRequest) returns (FleetActionReply);
+  // External member (6.4, D-137). The owner adds a session-less EVE character directly on trust — no invite,
+  // immediately a default-accepted member. Creator-only via the owning fleet; fleet.invite gated.
+  rpc AddExternalMember (AddExternalMemberRequest) returns (FleetActionReply);
+
+  // Invites (F3, D-121). Create returns the invite id; the server then pushes a targeted fleet.invite event
+  // to the invitee. RespondToFleetInvite is the invitee's own action (accept/deny → roster + responded event).
+  rpc CreateFleetInvite (CreateFleetInviteRequest) returns (CreateStructureReply);
+  rpc RespondToFleetInvite (RespondToFleetInviteRequest) returns (FleetActionReply);
+  rpc ListPendingInvites (ListPendingInvitesRequest) returns (ListInvitesReply);
+  rpc ListPendingFleetInvites (ListPendingFleetInvitesRequest) returns (ListInvitesReply);
+
+  // Internal message queue (D-134). The recipient answers a queued message (a fleet invite is a message kind);
+  // the server delegates to the kind's responder. Rides the Fleets service so it reuses the same authenticated
+  // session/channel as the invite it generalizes.
+  rpc RespondToMessage (RespondToMessageRequest) returns (FleetActionReply);
+
+  // Discovery (F3, D-119). Public fleets are listable + directly joinable; the connected-characters list
+  // (server runtime presence) is the pick source for invite-only invites.
+  rpc ListOpenFleets (ListOpenFleetsRequest) returns (ListFleetsReply);
+  rpc JoinFleet (JoinFleetRequest) returns (FleetActionReply);
+  rpc ListConnectedCharacters (ListConnectedCharactersRequest) returns (ListConnectedCharactersReply);
+
+  // Request-to-join (6.2, D-137). An invite-only fleet cannot be joined directly: a character requests to
+  // join, the owner is messaged and answers via the generic RespondToMessage. The owner lists the pending
+  // requests for the fleet roster's pending-section.
+  rpc RequestToJoin (RequestToJoinRequest) returns (FleetActionReply);
+  rpc ListPendingJoinRequests (ListPendingJoinRequestsRequest) returns (ListJoinRequestsReply);
+  // The owner answers a pending request directly by its id (D-137 6.2) — the command sibling of the message path.
+  // Creator-only (verified against the fleet creator in the shared responder).
+  rpc RespondToJoinRequest (RespondToJoinRequestRequest) returns (FleetActionReply);
+
+  // Active participation (F4, D-122): a character is active on at most one fleet at a time (must be a member);
+  // entering a fleet deactivates the previous. Only the active fleet receives the character's live metrics.
+  rpc EnterFleet (EnterFleetRequest) returns (FleetActionReply);
+  rpc LeaveFleet (LeaveFleetRequest) returns (FleetActionReply);
+
+  // Fleet Compositions (D-187, FC-1): a reusable doctrine library. The acting character (from the session) is
+  // the owner for create; mutating an existing one is gated owner-or-fleet-composition.manage server-side.
+  rpc CreateFleetComposition (CreateFleetCompositionRequest) returns (CreateStructureReply);
+  rpc EditFleetComposition (EditFleetCompositionRequest) returns (FleetActionReply);
+  rpc DeleteFleetComposition (DeleteFleetCompositionRequest) returns (FleetActionReply);
+  rpc ListMyFleetCompositions (ListMyFleetCompositionsRequest) returns (ListFleetCompositionsReply);
+  rpc ListAllFleetCompositions (ListAllFleetCompositionsRequest) returns (ListFleetCompositionsReply);
+  rpc GetFleetComposition (GetFleetCompositionRequest) returns (GetFleetCompositionReply);
+  rpc AddFleetCompositionRole (AddFleetCompositionRoleRequest) returns (CreateStructureReply);
+  rpc EditFleetCompositionRole (EditFleetCompositionRoleRequest) returns (FleetActionReply);
+  rpc RemoveFleetCompositionRole (RemoveFleetCompositionRoleRequest) returns (FleetActionReply);
+  rpc ReorderFleetCompositionRoles (ReorderFleetCompositionRolesRequest) returns (FleetActionReply);
+  rpc AddFleetCompositionEntry (AddFleetCompositionEntryRequest) returns (CreateStructureReply);
+  rpc EditFleetCompositionEntry (EditFleetCompositionEntryRequest) returns (FleetActionReply);
+  rpc RemoveFleetCompositionEntry (RemoveFleetCompositionEntryRequest) returns (FleetActionReply);
+  rpc ReorderFleetCompositionEntries (ReorderFleetCompositionEntriesRequest) returns (FleetActionReply);
+}
+
+message CreateFleetRequest {
+  string name = 1;
+  string description = 2;     // empty = none
+  int32 visibility = 3;       // FleetVisibility
+  int32 offline_behavior = 4; // FleetOfflineBehavior
+  string from_time = 5;       // ISO 8601, empty = none
+  string to_time = 6;         // empty = none
+}
+message CreateFleetReply { bool accepted = 1; string message = 2; int64 fleet_id = 3; }
+
+message SetFleetCompositionRequest { int64 fleet_id = 1; optional int64 composition_id = 2; }   // composition_id absent = unlink
+message CoupleFleetToEsiRequest { int64 fleet_id = 1; int64 esi_fleet_id = 2; int32 esi_fleet_boss_id = 3; }   // D-126: link to a detected in-game fleet_id
+message UncoupleFleetFromEsiRequest { int64 fleet_id = 1; }   // D-217: clear the stored ESI link (storage-role only; no ESI call)
+message SetFleetEsiAutomationRequest { int64 fleet_id = 1; bool auto_apply_structure = 2; bool auto_invite_members = 3; }   // D-218: persist Auto Apply / Auto Invite
+message EditFleetRequest {
+  int64 fleet_id = 1;
+  string name = 2;
+  string description = 3;
+  int32 visibility = 4;
+  int32 offline_behavior = 5;
+  string from_time = 6;
+  string to_time = 7;
+}
+message FleetActionReply { bool accepted = 1; string message = 2; }
+
+message DisbandFleetRequest { int64 fleet_id = 1; }
+
+message StartFleetRequest { int64 fleet_id = 1; }
+
+message ConcludeFleetRequest { int64 fleet_id = 1; }
+
+message GetFleetRequest { int64 fleet_id = 1; }
+message FleetDto {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  int32 visibility = 4;
+  int32 offline_behavior = 5;
+  string from_time = 6;
+  string to_time = 7;
+  int32 creator_character_id = 8;
+  int32 state = 9;             // FleetState
+  string created_at = 10;
+  string last_activity_at = 11;
+  int32 activation = 12;       // FleetActivation (D-137 6.5)
+  optional int64 fleet_composition_id = 13;   // coupled doctrine (FC-3, D-187); absent = none
+  optional int64 esi_fleet_id = 14;           // coupled live in-game fleet (D-126); absent = not coupled
+  optional int32 esi_fleet_boss_id = 15;      // the in-game boss character of the coupled fleet
+  bool esi_auto_apply_structure = 16;         // Auto Apply: push new wings/squads to ESI automatically (D-218)
+  bool esi_auto_invite_members = 17;          // Auto Invite: invite joining/assigned members to ESI automatically (D-218)
+}
+message GetFleetReply { bool found = 1; string message = 2; FleetDto fleet = 3; }
+
+message ListMyFleetsRequest {} // the authenticated character's own fleets
+message ListFleetsReply { bool ok = 1; string message = 2; repeated FleetDto fleets = 3; }
+
+// --- Fleet structure: wings/squads (F2b). The acting character (from the session) must own the fleet the
+// wing/squad belongs to. Create replies carry the new id; rename/delete reuse FleetActionReply. ---
+message CreateStructureReply { bool accepted = 1; string message = 2; int64 id = 3; }
+
+message CreateWingRequest { int64 fleet_id = 1; string name = 2; }
+message RenameWingRequest { int64 wing_id = 1; string name = 2; }
+message DeleteWingRequest { int64 wing_id = 1; }
+
+message CreateSquadRequest { int64 wing_id = 1; string name = 2; }
+message RenameSquadRequest { int64 squad_id = 1; string name = 2; }
+message DeleteSquadRequest { int64 squad_id = 1; }
+
+message WingDto { int64 id = 1; int64 fleet_id = 2; string name = 3; }
+message ListWingsRequest { int64 fleet_id = 1; }
+message ListWingsReply { bool ok = 1; string message = 2; repeated WingDto wings = 3; }
+
+message SquadDto { int64 id = 1; int64 wing_id = 2; string name = 3; }
+message ListSquadsRequest { int64 wing_id = 1; }
+message ListSquadsReply { bool ok = 1; string message = 2; repeated SquadDto squads = 3; }
+
+// --- Roster (F6, D-117). role = FleetRole int; wing_id/squad_id use the ESI sentinel -1 for "none". ---
+message MoveMemberRequest { int64 member_id = 1; int32 role = 2; int64 wing_id = 3; int64 squad_id = 4; }
+message SwapMembersRequest { int64 first_member_id = 1; int64 second_member_id = 2; }  // exchange two members' exact positions (stream G)
+message AssignMemberFitRequest { int64 member_id = 1; FitReferenceDto fit = 2; optional int64 composition_entry_id = 3; }  // fit absent = clear
+
+message MemberDto { int64 id = 1; int32 character_id = 2; int64 wing_id = 3; int64 squad_id = 4; int32 role = 5; bool is_external = 6; FitReferenceDto assigned_fit = 7; optional int64 assigned_composition_entry_id = 8; int32 fit_skill_verdict = 9; }  // 9 = FitSkillVerdict (FC-6 cross-client)
+message ReportMemberFitVerdictRequest { int64 member_id = 1; int32 verdict = 2; }  // verdict = FitSkillVerdict; self-only
+message ReportMemberInGameFleetRequest { int64 member_id = 1; bool in_fleet = 2; }  // self-only in-game presence (D-126 M6)
+message ListMembersRequest { int64 fleet_id = 1; }
+message ListMembersReply { bool ok = 1; string message = 2; repeated MemberDto members = 3; }
+
+// --- External member (6.4, D-137). The owner adds a session-less character directly; no invite round-trip. ---
+message AddExternalMemberRequest { int64 fleet_id = 1; int32 character_id = 2; }
+
+// --- Ownership transfer + member removal (P2.7). Acting character is the session's; creator-gated in the handler. ---
+message TransferFleetOwnershipRequest { int64 fleet_id = 1; int32 new_owner_character_id = 2; }
+message RemoveFleetMemberRequest { int64 member_id = 1; }
+
+// --- Invites (F3, D-121). role = FleetRole int; wing_id/squad_id 0 = unspecified (role-dependent). ---
+message CreateFleetInviteRequest {
+  int64 fleet_id = 1;
+  int32 invitee_character_id = 2;
+  int32 role = 3;        // FleetRole
+  int64 wing_id = 4;     // 0 = none
+  int64 squad_id = 5;    // 0 = none
+  string message = 6;    // optional free-text note ("" = none)
+}
+message RespondToFleetInviteRequest { int64 invite_id = 1; bool accept = 2; }
+message RespondToMessageRequest { int64 message_id = 1; bool accept = 2; }
+
+message InviteDto {
+  int64 id = 1;
+  int64 fleet_id = 2;
+  int32 inviter_character_id = 3;
+  int32 invitee_character_id = 4;
+  int32 role = 5;        // FleetRole
+  int32 status = 6;      // FleetInviteStatus
+  string created_at = 7;
+}
+message ListPendingInvitesRequest {} // the authenticated character's own pending invites
+message ListPendingFleetInvitesRequest { int64 fleet_id = 1; } // a fleet's open invites (roster pending-section)
+message ListInvitesReply { bool ok = 1; string message = 2; repeated InviteDto invites = 3; }
+
+// --- Discovery (F3, D-119). ListOpenFleets reuses FleetDto/ListFleetsReply. ---
+message ListOpenFleetsRequest {}
+message JoinFleetRequest { int64 fleet_id = 1; }
+
+// --- Request-to-join (6.2, D-137). Request reuses FleetActionReply; the owner answers via RespondToMessage. ---
+message RequestToJoinRequest { int64 fleet_id = 1; }
+
+message JoinRequestDto {
+  int64 id = 1;
+  int64 fleet_id = 2;
+  int32 requester_character_id = 3;
+}
+message ListPendingJoinRequestsRequest { int64 fleet_id = 1; }
+message ListJoinRequestsReply { bool ok = 1; string message = 2; repeated JoinRequestDto requests = 3; }
+message RespondToJoinRequestRequest { int64 request_id = 1; bool accept = 2; }
+
+message ConnectedCharacterDto { int32 character_id = 1; string character_name = 2; }
+message ListConnectedCharactersRequest {}
+message ListConnectedCharactersReply { bool ok = 1; string message = 2; repeated ConnectedCharacterDto characters = 3; }
+
+// --- Active participation (F4, D-122). ---
+message EnterFleetRequest { int64 fleet_id = 1; }
+message LeaveFleetRequest { int64 fleet_id = 1; } // the specific fleet to leave (a character can be in several)
+
+message ShareFitRequest {
+  int32 esi_fitting_id = 1;
+  string name = 2;
+  int32 ship_type_id = 3;
+  string raw_json = 4;
+  string shared_by_character_name = 5;
+  int32 shared_by_character_id = 6;
+}
+message ShareFitReply { bool accepted = 1; string message = 2; }
+
+message GetSharedFitsRequest {}
+message SharedFitDto {
+  int32 esi_fitting_id = 1;
+  string name = 2;
+  int32 ship_type_id = 3;
+  string raw_json = 4;
+  string shared_by_character_name = 5;
+  int32 shared_by_character_id = 6;
+  int32 id = 7; // server DB id, used to delete a specific shared fit (D-103)
+  string shared_at = 8; // ISO-8601 (round-trip "o") when the fit was shared — drives "x ago" + "shared today"
+}
+message GetSharedFitsReply {
+  bool ok = 1;
+  string message = 2;
+  repeated SharedFitDto fits = 3;
+}
+
+message PingRequest { string message = 1; }
+message PingReply { string message = 1; string server_time = 2; string cert_fingerprint = 3; }
+
+message StartPairingRequest {
+  string pairing_challenge = 1; // b64url(SHA256(pairing_secret))
+  repeated string scopes = 2;
+}
+message StartPairingReply {
+  string pairing_id = 1;
+  string authorize_url = 2; // redirect_uri = client loopback (Tier-0 relay)
+}
+
+message RelayCodeRequest {
+  string pairing_id = 1;
+  string code = 2;
+  string state = 3;
+}
+message RelayCodeReply { bool accepted = 1; string message = 2; }
+
+message ClaimPairingRequest {
+  string pairing_id = 1;
+  string pairing_secret = 2;
+}
+message ClaimPairingReply {
+  bool completed = 1;
+  string session_token = 2;
+  string session_refresh_token = 3;
+  int32 character_id = 4;
+  string character_name = 5;
+  string message = 6;
+  string server_name = 7;
+  string corporation_name = 8;
+  string alliance_name = 9;
+}
+
+message RefreshRequest { string session_refresh_token = 1; }
+message SessionReply {
+  bool ok = 1;
+  string session_token = 2;
+  string session_refresh_token = 3;
+  string message = 4;
+}
+
+message HeartbeatRequest { string session_token = 1; }
+message HeartbeatReply { bool ok = 1; }
+
+message RevokeRequest { string session_token = 1; }
+message RevokeReply { bool ok = 1; string message = 2; }
+
+// Event-bus wire envelope (F6). payload_json carries the strongly-typed event payload.
+message EventEnvelope {
+  string event_type = 1;
+  string event_id = 2;
+  int32 character_id = 3; // 0 = system/none (source character)
+  string timestamp = 4;
+  string payload_json = 5;
+  // Optional targeted delivery (F0/D-120): when non-zero, the server reroutes this event ONLY to the
+  // connections of this character instead of broadcasting to all clients. 0 = broadcast (existing behavior).
+  int32 target_character_id = 6;
+  // Optional fleet-scoped delivery (F4/D-120/D-123): when non-zero (and no target_character_id), the server
+  // reroutes this event ONLY to the fleet's active participants. 0 = not fleet-scoped.
+  int64 fleet_id = 7;
+}
+message ClientEnvelope { EventEnvelope event = 1; }
+message ServerEnvelope { EventEnvelope event = 1; }
+
+// --- Fleet Compositions (D-187, FC-1). Nullable minima use proto3 field presence (optional). ---
+message FitReferenceDto {
+  int32 ship_type_id = 1;
+  string fit_name = 2;
+  string raw_json = 3;
+  string content_hash = 4;
+  optional int32 local_fitting_id = 5;
+  optional int32 server_shared_fit_id = 6;
+}
+message FleetCompositionDto {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  int32 owner_character_id = 4;
+  string created_at = 5;
+  string updated_at = 6;
+  bool can_edit = 7;                 // acting character may manage it (owner or fleet-composition.manage) — server-wide list
+  string owner_character_name = 8;   // resolved server-side for compositions owned by other characters
+  int32 fleet_count = 9;             // number of fleets coupled to this composition (FC-2 "N fleets" pill)
+}
+message FleetCompositionEntryDto {
+  int64 id = 1;
+  int64 role_id = 2;
+  optional int32 entry_min_count = 3;
+  int32 sort_order = 4;
+  FitReferenceDto fit = 5;
+}
+message FleetCompositionRoleDto {
+  int64 id = 1;
+  int64 composition_id = 2;
+  string role_name = 3;
+  optional int32 group_min_count = 4;
+  int32 sort_order = 5;
+  repeated FleetCompositionEntryDto entries = 6;
+}
+message FleetCompositionViewDto {
+  FleetCompositionDto composition = 1;
+  repeated FleetCompositionRoleDto roles = 2;
+}
+
+message CreateFleetCompositionRequest { string name = 1; string description = 2; bool is_client_only = 3; }
+message EditFleetCompositionRequest { int64 composition_id = 1; string name = 2; string description = 3; }
+message DeleteFleetCompositionRequest { int64 composition_id = 1; }
+message ListMyFleetCompositionsRequest {}
+message ListAllFleetCompositionsRequest {}
+message ListFleetCompositionsReply { bool ok = 1; string message = 2; repeated FleetCompositionDto compositions = 3; }
+message GetFleetCompositionRequest { int64 composition_id = 1; }
+message GetFleetCompositionReply { bool found = 1; string message = 2; FleetCompositionViewDto composition = 3; }
+
+message AddFleetCompositionRoleRequest { int64 composition_id = 1; string role_name = 2; optional int32 group_min_count = 3; }
+message EditFleetCompositionRoleRequest { int64 role_id = 1; string role_name = 2; optional int32 group_min_count = 3; }
+message RemoveFleetCompositionRoleRequest { int64 role_id = 1; }
+message ReorderFleetCompositionRolesRequest { int64 composition_id = 1; repeated int64 ordered_role_ids = 2; }
+
+message AddFleetCompositionEntryRequest { int64 role_id = 1; FitReferenceDto fit = 2; optional int32 entry_min_count = 3; }
+message EditFleetCompositionEntryRequest { int64 entry_id = 1; optional int32 entry_min_count = 2; }
+message RemoveFleetCompositionEntryRequest { int64 entry_id = 1; }
+message ReorderFleetCompositionEntriesRequest { int64 role_id = 1; repeated int64 ordered_entry_ids = 2; }

@@ -1,0 +1,85 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="460" d:DesignHeight="520"
+        x:Class="EveUtils.Client.Views.InboxWindow"
+        x:DataType="vm:InboxViewModel"
+        Width="460" Height="520"
+        WindowStartupLocation="CenterOwner"
+        Title="Inbox">
+
+    <v:ChromedWindow.Resources>
+        <StreamGeometry x:Key="IconTrash">M3,6 L21,6 M9,6 L9,4 L15,4 L15,6 M6,6 L7,20 L17,20 L18,6 M10,10 L10,17 M14,10 L14,17</StreamGeometry>
+    </v:ChromedWindow.Resources>
+
+    <DockPanel Margin="14">
+
+        <!-- Header / toolbar -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+            <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="INBOX" Classes="panel-title" FontSize="13"/>
+                <TextBlock Text="Fleet invites and messages." Classes="label"/>
+            </StackPanel>
+            <Button Grid.Column="1" Content="Clear all" Classes="danger" VerticalAlignment="Center"
+                    Command="{Binding ClearAllCommand}" IsVisible="{Binding !IsEmpty}"/>
+        </Grid>
+
+        <!-- Footer: transient status + Close -->
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,10,0,0">
+            <TextBlock Grid.Column="0" Text="{Binding Status}" FontSize="10" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+            <Button Grid.Column="1" Content="Close" Click="OnClose" Classes="accent"/>
+        </Grid>
+
+        <!-- Body: empty state or the message list -->
+        <Grid>
+            <TextBlock Text="Your inbox is empty." Classes="label"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       IsVisible="{Binding IsEmpty}"/>
+
+            <ScrollViewer IsVisible="{Binding !IsEmpty}">
+                <ItemsControl ItemsSource="{Binding Messages}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:InboxItemViewModel">
+                            <Border Classes="panel" Margin="0,0,0,6">
+                                <Grid ColumnDefinitions="3,*">
+                                    <!-- Unread accent edge -->
+                                    <Border Grid.Column="0" Background="{DynamicResource AccentBrush}"
+                                            IsVisible="{Binding !IsRead}"/>
+
+                                    <StackPanel Grid.Column="1" Spacing="5" Margin="11,9">
+                                        <Grid ColumnDefinitions="*,Auto,Auto">
+                                            <TextBlock Grid.Column="0" Text="{Binding Title}" FontWeight="SemiBold"
+                                                       TextWrapping="Wrap" VerticalAlignment="Center"
+                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding TimestampLabel}" Classes="mono"
+                                                       FontSize="10" Foreground="{StaticResource TextDimBrush}"
+                                                       VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                            <Button Grid.Column="2" Classes="trash" VerticalAlignment="Center" Margin="4,0,0,0"
+                                                    Command="{Binding DeleteCommand}" ToolTip.Tip="Delete message">
+                                                <Path Width="15" Height="15" Stretch="Uniform" Data="{StaticResource IconTrash}"
+                                                      Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.6"
+                                                      StrokeLineCap="Round" StrokeJoin="Round"/>
+                                            </Button>
+                                        </Grid>
+                                        <TextBlock Text="{Binding RecipientLabel}" FontSize="10"
+                                                   Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+                                        <TextBlock Text="{Binding Body}" FontSize="11" TextWrapping="Wrap"
+                                                   IsVisible="{Binding HasBody}" Foreground="{StaticResource TextBrush}"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0"
+                                                    IsVisible="{Binding CanRespond}">
+                                            <Button Content="Accept" FontSize="10" Classes="accent" Command="{Binding AcceptCommand}"/>
+                                            <Button Content="Decline" FontSize="10" Command="{Binding DeclineCommand}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</v:ChromedWindow>

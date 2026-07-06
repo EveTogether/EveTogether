@@ -1,0 +1,85 @@
+@page "/esi"
+@attribute [Authorize(Policy = PanelPermissions.MetricsView)]
+@using System.Linq
+@using EveUtils.Shared.Modules.Esi
+@using EveUtils.Shared.Modules.Esi.Http
+@inject IEsiRateLimitMonitor Monitor
+@rendermode InteractiveServer
+
+<PageTitle>ESI Metrics</PageTitle>
+
+<h2>ESI Metrics</h2>
+<p class="text-muted">
+    ESI calls and rate-limit headroom per bucket. The bucket key is
+    <code>app:characterId</code> for authed calls and <code>ip</code> for public ones.
+</p>
+
+<div class="mb-2">
+    <button class="btn btn-sm btn-outline-secondary" @onclick="Refresh">Refresh</button>
+</div>
+
+@if (_buckets.Count == 0)
+{
+    <p class="text-muted">No ESI calls observed yet.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-sm table-hover font-monospace small">
+            <thead>
+                <tr>
+                    <th>Bucket</th>
+                    <th>Calls</th>
+                    <th>OK</th>
+                    <th>Fail</th>
+                    <th>Error rate</th>
+                    <th>420/429 hits</th>
+                    <th>ESI cache h/m</th>
+                    <th>Err-limit left</th>
+                    <th>Bucket left</th>
+                    <th>Last</th>
+                    <th>Updated</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var b in _buckets.OrderByDescending(b => b.UpdatedAt))
+                {
+                    <tr>
+                        <td>@b.Key</td>
+                        <td>@b.Calls</td>
+                        <td class="text-success">@b.Successes</td>
+                        <td class="@(b.Failures > 0 ? "text-danger" : "")">@b.Failures</td>
+                        <td>@ErrorRate(b)</td>
+                        <td>@b.ErrorLimitHits/@b.BucketHits</td>
+                        <td title="@CacheTooltip(b)">@b.CacheHits/@b.CacheMisses</td>
+                        <td>@(b.ErrorRemaining?.ToString() ?? "—")</td>
+                        <td>@BucketLeft(b)</td>
+                        <td>@b.LastStatus</td>
+                        <td class="text-nowrap">@(b.UpdatedAt == default ? "—" : b.UpdatedAt.LocalDateTime.ToString("HH:mm:ss"))</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<EsiBucketState> _buckets = [];
+
+    protected override void OnInitialized() => Refresh();
+
+    private void Refresh() => _buckets = Monitor.Buckets.ToList();
+
+    private static string ErrorRate(EsiBucketState b) =>
+        b.Calls == 0 ? "—" : $"{100.0 * b.Failures / b.Calls:0.#}%";
+
+    private static string BucketLeft(EsiBucketState b) =>
+        b.BucketRemaining is { } remaining
+            ? b.BucketLimit is { } limit ? $"{remaining}/{limit}" : remaining.ToString()
+            : "—";
+
+    // ESI CDN cache (X-Esi-Cache-Status): hit-rate over HIT+MISS, plus the last raw value seen.
+    private static string CacheTooltip(EsiBucketState b) =>
+        (b.CacheHits + b.CacheMisses == 0 ? "no ESI cache status seen yet" : $"{100.0 * b.CacheHits / (b.CacheHits + b.CacheMisses):0.#}% HIT")
+        + (string.IsNullOrEmpty(b.LastCacheStatus) ? "" : $" · last: {b.LastCacheStatus}");
+}

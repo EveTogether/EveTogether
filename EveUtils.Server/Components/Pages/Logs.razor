@@ -1,0 +1,93 @@
+@page "/logs"
+@attribute [Authorize(Policy = PanelPermissions.LogsView)]
+@using EveUtils.Shared.Logging
+@using Microsoft.Extensions.Logging
+@inject ILogStore LogStore
+@rendermode InteractiveServer
+@implements IDisposable
+
+<PageTitle>App Logs</PageTitle>
+
+<h2>App Log</h2>
+<p class="text-muted">Captures warnings and errors. Refreshes automatically.</p>
+
+<div class="mb-2">
+    <button class="btn btn-sm btn-outline-secondary" @onclick="Refresh">Refresh</button>
+    <button class="btn btn-sm btn-outline-danger ms-2" @onclick="Clear">Clear</button>
+</div>
+
+@if (_entries.Count == 0)
+{
+    <p class="text-success">No entries logged.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-sm table-hover font-monospace small">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Level</th>
+                    <th>Category</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var entry in _entries.OrderByDescending(e => e.Timestamp))
+                {
+                    <tr>
+                        <td class="text-nowrap">@entry.Timestamp.LocalDateTime.ToString("HH:mm:ss")</td>
+                        <td><span class="badge @LevelBadge(entry.Level)">@entry.Level</span></td>
+                        <td class="text-muted">@ShortCategory(entry.Category)</td>
+                        <td>
+                            @entry.Message
+                            @if (!string.IsNullOrEmpty(entry.ExceptionText))
+                            {
+                                <details>
+                                    <summary class="text-danger small">Exception</summary>
+                                    <pre class="small">@entry.ExceptionText</pre>
+                                </details>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<LogEntry> _entries = [];
+
+    protected override void OnInitialized()
+    {
+        Refresh();
+        LogStore.EntryAdded += OnEntryAdded;
+    }
+
+    private void Refresh() => _entries = LogStore.GetAll();
+
+    private void Clear()
+    {
+        LogStore.Clear();
+        _entries = [];
+    }
+
+    private void OnEntryAdded(LogEntry _)
+    {
+        _entries = LogStore.GetAll();
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => LogStore.EntryAdded -= OnEntryAdded;
+
+    private static string LevelBadge(LogLevel level) => level switch
+    {
+        LogLevel.Critical => "bg-dark",
+        LogLevel.Error    => "bg-danger",
+        _                 => "bg-warning text-dark"
+    };
+
+    private static string ShortCategory(string cat) =>
+        cat.Length > 40 ? "…" + cat[^37..] : cat;
+}

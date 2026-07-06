@@ -1,0 +1,214 @@
+@page "/data"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = PanelPermissions.DataView)]
+@using EveUtils.Server.Auth
+@using EveUtils.Shared.Modules.Fittings.Entities
+@using EveUtils.Shared.Modules.Fleet.Composition
+@using EveUtils.Shared.Modules.Fleet.Entities
+@using EveUtils.Shared.Modules.ServerAuth.Entities
+@inject DataAdminService DataAdmin
+
+<div class="crumb">Access / <b>Data</b></div>
+
+@if (_pending is { } p)
+{
+    <div class="confirmbar">
+        <span>@p.Label</span>
+        @if (p.Kind == "synced")
+        {
+            <span class="warn">⚠ Removes the paired character + its sessions. Leaves orphan references and breaks any connected client's session.</span>
+        }
+        <button class="danger" @onclick="ConfirmAsync">Confirm</button>
+        <button @onclick="Cancel">Cancel</button>
+    </div>
+}
+@if (_message is not null)
+{
+    <p class="ok">@_message</p>
+}
+<AuthorizeView Policy="@PanelPermissions.DataDelete" Context="del">
+    <NotAuthorized>
+        <p class="dim">You can view this data but not delete it.</p>
+    </NotAuthorized>
+</AuthorizeView>
+
+<Card Title="Shared fittings" Count="@_fits.Count.ToString()">
+    @if (_fits.Count == 0)
+    {
+        <p class="dim" style="padding:14px;margin:0;">No fits shared to this server.</p>
+    }
+    else
+    {
+        <table>
+            <thead><tr><th>Name</th><th>Ship type</th><th>Shared by</th><th>Shared at</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var f in _fits)
+                {
+                    <tr>
+                        <td class="bright">@f.Name</td><td class="dim">@f.ShipTypeId</td>
+                        <td>@f.SharedByCharacterName</td><td class="dim">@f.SharedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
+                            <button class="danger" @onclick="() => AskFit(f)">Delete</button>
+                        </AuthorizeView></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</Card>
+
+<Card Title="Fleets" Count="@_fleets.Count.ToString()">
+    @if (_fleets.Count == 0)
+    {
+        <p class="dim" style="padding:14px;margin:0;">No fleets on this server.</p>
+    }
+    else
+    {
+        <table>
+            <thead><tr><th>Name</th><th>Owner (char id)</th><th>Visibility</th><th>State</th><th>Activation</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var fleet in _fleets)
+                {
+                    <tr>
+                        <td class="bright">@fleet.Name</td><td class="dim">@fleet.CreatorCharacterId</td>
+                        <td>@(fleet.Visibility == FleetVisibility.Public ? "Public" : "Invite-only")</td>
+                        <td>@fleet.State</td><td class="dim">@fleet.Activation</td>
+                        <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
+                            <button @onclick="() => AskDisband(fleet)">Disband</button>
+                            <button class="danger" @onclick="() => AskPurge(fleet)">Purge now</button>
+                        </AuthorizeView></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</Card>
+
+<Card Title="Fleet compositions" Count="@_compositions.Count.ToString()">
+    @if (_compositions.Count == 0)
+    {
+        <p class="dim" style="padding:14px;margin:0;">No compositions shared to this server.</p>
+    }
+    else
+    {
+        <table>
+            <thead><tr><th>Name</th><th>Owner (char id)</th><th>Description</th><th>Updated</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var comp in _compositions)
+                {
+                    <tr>
+                        <td class="bright">@comp.Name</td><td class="dim">@comp.OwnerCharacterId</td>
+                        <td class="dim">@(string.IsNullOrWhiteSpace(comp.Description) ? "—" : comp.Description)</td>
+                        <td class="dim">@comp.UpdatedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
+                            <button class="danger" @onclick="() => AskComposition(comp)">Delete</button>
+                        </AuthorizeView></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</Card>
+
+<Card Title="Paired characters" Count="@_synced.Count.ToString()">
+    <p class="dim" style="padding:11px 14px 2px;margin:0;">Metadata only — refresh tokens are never shown (Iron Law #8).</p>
+    @if (_synced.Count == 0)
+    {
+        <p class="dim" style="padding:0 14px 14px;margin:0;">No paired characters.</p>
+    }
+    else
+    {
+        <table>
+            <thead><tr><th>Character</th><th>ESI id</th><th>Scopes</th><th>Paired at</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var c in _synced)
+                {
+                    <tr>
+                        <td class="bright">@c.CharacterName</td><td class="dim">@c.EsiCharacterId</td>
+                        <td class="dim">@(c.GrantedScopes?.Count ?? 0) scopes</td>
+                        <td class="dim">@c.PairedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
+                            <button class="danger" @onclick="() => AskSynced(c)">Delete</button>
+                        </AuthorizeView></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</Card>
+
+<Card Title="Sessions" Count="@_sessions.Count.ToString()">
+    <p class="dim" style="padding:11px 14px 2px;margin:0;">Metadata only — token hashes are never shown (Iron Law #8).</p>
+    @if (_sessions.Count == 0)
+    {
+        <p class="dim" style="padding:0 14px 14px;margin:0;">No sessions.</p>
+    }
+    else
+    {
+        <table>
+            <thead><tr><th>Character</th><th>Issued</th><th>Expires</th><th>Heartbeat</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var s in _sessions)
+                {
+                    <tr>
+                        <td class="bright">@(s.SyncedCharacter?.CharacterName ?? "—")</td>
+                        <td class="dim">@s.IssuedAt.ToString("HH:mm")</td><td class="dim">@s.ExpiresAt.ToString("HH:mm")</td>
+                        <td class="dim">@s.LastHeartbeat.ToString("HH:mm")</td>
+                        <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
+                            <button class="danger" @onclick="() => AskSession(s)">Delete</button>
+                        </AuthorizeView></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</Card>
+
+@code {
+    private record Pending(string Kind, long Id, string Label);
+
+    private IReadOnlyList<SharedFit> _fits = [];
+    private IReadOnlyList<Fleet> _fleets = [];
+    private IReadOnlyList<FleetComposition> _compositions = [];
+    private IReadOnlyList<SyncedCharacter> _synced = [];
+    private IReadOnlyList<ServerSession> _sessions = [];
+    private Pending? _pending;
+    private string? _message;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _fits = await DataAdmin.ListSharedFitsAsync();
+        _fleets = await DataAdmin.ListFleetsAsync();
+        _compositions = await DataAdmin.ListFleetCompositionsAsync();
+        _synced = await DataAdmin.ListSyncedCharactersAsync();
+        _sessions = await DataAdmin.ListSessionsAsync();
+    }
+
+    private void AskFit(SharedFit f) => _pending = new Pending("fit", f.Id, $"Delete fit '{f.Name}'?");
+    private void AskComposition(FleetComposition c) => _pending = new Pending("composition", c.Id, $"Delete composition '{c.Name}' (its roles + fits cascade)?");
+    private void AskDisband(Fleet fleet) => _pending = new Pending("disband", fleet.Id, $"Disband fleet '{fleet.Name}' (soft-delete → Archived)?");
+    private void AskPurge(Fleet fleet) => _pending = new Pending("purge", fleet.Id, $"Purge fleet '{fleet.Name}' permanently?");
+    private void AskSynced(SyncedCharacter c) => _pending = new Pending("synced", c.Id, $"Delete paired character '{c.CharacterName}'?");
+    private void AskSession(ServerSession s) => _pending = new Pending("session", s.Id, $"Delete session for '{s.SyncedCharacter?.CharacterName ?? "?"}'?");
+    private void Cancel() => _pending = null;
+
+    private async Task ConfirmAsync()
+    {
+        if (_pending is not { } p)
+            return;
+        switch (p.Kind)
+        {
+            case "fit": await DataAdmin.DeleteSharedFitAsync((int)p.Id); break;
+            case "composition": await DataAdmin.DeleteFleetCompositionAsync(p.Id); break;
+            case "disband": await DataAdmin.DisbandFleetAsync(p.Id); break;
+            case "purge": await DataAdmin.PurgeFleetAsync(p.Id); break;
+            case "synced": await DataAdmin.DeleteSyncedCharacterAsync((int)p.Id); break;
+            case "session": await DataAdmin.DeleteSessionAsync((int)p.Id); break;
+        }
+        _message = "Done.";
+        _pending = null;
+        await LoadAsync();
+    }
+}

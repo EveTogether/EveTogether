@@ -1,0 +1,41 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dlg="using:EveUtils.Client.Dialogs"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="440" d:DesignHeight="360"
+        x:Class="EveUtils.Client.Views.ServerPickerWindow"
+        x:Name="Root"
+        Width="440" Height="360"
+        WindowStartupLocation="CenterOwner"
+        Title="Choose server">
+
+    <DockPanel Margin="16">
+        <TextBlock x:Name="PromptText" DockPanel.Dock="Top"
+                   FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,12"
+                   Foreground="{StaticResource TextBrightBrush}"/>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Spacing="8" Margin="0,12,0,0">
+            <Button Content="Cancel" Click="OnCancel"/>
+            <Button Content="Choose →" Click="OnConfirm" Classes="accent"/>
+        </StackPanel>
+
+        <Border Classes="panel">
+            <ListBox x:Name="OptionList" ItemsSource="{Binding Options, ElementName=Root}"
+                     SelectionMode="Single" Margin="6"
+                     DoubleTapped="OnConfirm">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="dlg:ServerPickOption">
+                        <StackPanel Spacing="1" Margin="2">
+                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextBrightBrush}"/>
+                            <TextBlock Text="{Binding Address}" FontSize="10"
+                                       Foreground="{DynamicResource TextAccentBrush}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+    </DockPanel>
+</v:ChromedWindow>

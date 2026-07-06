@@ -1,0 +1,282 @@
+name: Build and Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  CONFIGURATION: Release
+  # The desktop client is the cross-platform app shipped on every OS. The server is a Docker
+  # deployment build, not a binary release, so it is intentionally out of this pipeline.
+  PROJECT_PATH: EveUtils.Client/EveUtils.Client.csproj
+  APP_NAME: EveTogether
+  ICON_PNG: EveUtils.Client/Assets/eve-together-badge.png
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    env:
+      RUNTIME_ID: win-x64
+      OUTPUT_DIR: publish/win-x64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Resolve version
+        shell: bash
+        run: |
+          V="${{ github.event.release.tag_name }}"
+          V="${V#v}"
+          echo "VERSION_ARG=${V:+-p:Version=$V}" >> "$GITHUB_ENV"
+
+      - name: Publish (self-contained, single file)
+        run: >
+          dotnet publish ${{ env.PROJECT_PATH }}
+          -c ${{ env.CONFIGURATION }}
+          -r ${{ env.RUNTIME_ID }}
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=none
+          ${{ env.VERSION_ARG }}
+          -o ${{ env.OUTPUT_DIR }}
+
+      - name: Rename app host
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:OUTPUT_DIR 'EveUtils.Client.exe'
+          if (Test-Path $exe) { Rename-Item $exe "$env:APP_NAME.exe" }
+
+      - name: Create ZIP
+        shell: pwsh
+        run: Compress-Archive -Path "$env:OUTPUT_DIR/*" -DestinationPath "$env:APP_NAME-win-x64.zip" -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows
+          path: ${{ env.APP_NAME }}-win-x64.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+    env:
+      RUNTIME_ID: linux-x64
+      OUTPUT_DIR: publish/linux-x64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Resolve version
+        shell: bash
+        run: |
+          V="${{ github.event.release.tag_name }}"
+          V="${V#v}"
+          echo "VERSION_ARG=${V:+-p:Version=$V}" >> "$GITHUB_ENV"
+
+      - name: Publish (self-contained, single file)
+        run: >
+          dotnet publish ${{ env.PROJECT_PATH }}
+          -c ${{ env.CONFIGURATION }}
+          -r ${{ env.RUNTIME_ID }}
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=none
+          ${{ env.VERSION_ARG }}
+          -o ${{ env.OUTPUT_DIR }}
+
+      - name: Rename app host
+        run: |
+          if [ -f "$OUTPUT_DIR/EveUtils.Client" ]; then
+            mv "$OUTPUT_DIR/EveUtils.Client" "$OUTPUT_DIR/$APP_NAME"
+          fi
+          chmod +x "$OUTPUT_DIR/$APP_NAME"
+
+      - name: Create tarball
+        run: tar -czf "$APP_NAME-linux-x64.tar.gz" -C "$OUTPUT_DIR" .
+
+      - name: Build AppImage
+        run: |
+          set -e
+          APPDIR=AppDir
+          mkdir -p "$APPDIR/usr/bin"
+          cp -r "$OUTPUT_DIR"/. "$APPDIR/usr/bin/"
+
+          cp "$ICON_PNG" "$APPDIR/eve-together.png"
+
+          cat > "$APPDIR/eve-together.desktop" <<EOF
+          [Desktop Entry]
+          Type=Application
+          Name=EVE Together
+          Comment=EVE Online ops-sec tooling suite (fittings, fleets, live game-log)
+          Exec=$APP_NAME
+          Icon=eve-together
+          Categories=Utility;Game;
+          Terminal=false
+          EOF
+
+          cat > "$APPDIR/AppRun" <<EOF
+          #!/bin/sh
+          HERE="\$(dirname "\$(readlink -f "\$0")")"
+          exec "\$HERE/usr/bin/$APP_NAME" "\$@"
+          EOF
+          chmod +x "$APPDIR/AppRun"
+
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool
+          chmod +x appimagetool
+          ARCH=x86_64 ./appimagetool --appimage-extract-and-run "$APPDIR" "$APP_NAME-x86_64.AppImage"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux
+          path: |
+            ${{ env.APP_NAME }}-linux-x64.tar.gz
+            ${{ env.APP_NAME }}-x86_64.AppImage
+
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        rid: [osx-arm64, osx-x64]
+    env:
+      OUTPUT_DIR: publish/macos
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Resolve version
+        run: |
+          V="${{ github.event.release.tag_name }}"
+          V="${V#v}"
+          echo "VERSION_ARG=${V:+-p:Version=$V}" >> "$GITHUB_ENV"
+
+      - name: Publish (self-contained)
+        run: >
+          dotnet publish ${{ env.PROJECT_PATH }}
+          -c ${{ env.CONFIGURATION }}
+          -r ${{ matrix.rid }}
+          --self-contained true
+          -p:DebugType=none
+          ${{ env.VERSION_ARG }}
+          -o ${{ env.OUTPUT_DIR }}
+
+      - name: Assemble .app bundle
+        run: |
+          set -e
+          APP="EVE Together.app"
+          rm -rf "$APP"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+
+          cp -R "$OUTPUT_DIR"/. "$APP/Contents/MacOS/"
+          mv "$APP/Contents/MacOS/EveUtils.Client" "$APP/Contents/MacOS/$APP_NAME"
+          chmod +x "$APP/Contents/MacOS/$APP_NAME"
+
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          [ -z "$VERSION" ] && VERSION="0.0.0"
+
+          printf '%s\n' \
+          '<?xml version="1.0" encoding="UTF-8"?>' \
+          '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+          '<plist version="1.0">' \
+          '<dict>' \
+          '  <key>CFBundleName</key><string>EVE Together</string>' \
+          '  <key>CFBundleDisplayName</key><string>EVE Together</string>' \
+          '  <key>CFBundleIdentifier</key><string>com.eve-together.client</string>' \
+          "  <key>CFBundleExecutable</key><string>$APP_NAME</string>" \
+          '  <key>CFBundleIconFile</key><string>eve-together</string>' \
+          '  <key>CFBundlePackageType</key><string>APPL</string>' \
+          "  <key>CFBundleVersion</key><string>$VERSION</string>" \
+          "  <key>CFBundleShortVersionString</key><string>$VERSION</string>" \
+          '  <key>LSMinimumSystemVersion</key><string>11.0</string>' \
+          '  <key>NSHighResolutionCapable</key><true/>' \
+          '</dict>' \
+          '</plist>' > "$APP/Contents/Info.plist"
+
+          # Generate an .icns from the PNG badge (best-effort; the app still runs without it)
+          SRC="$ICON_PNG"
+          ICONSET=icon.iconset
+          mkdir -p "$ICONSET"
+          gen() { sips -z "$1" "$1" "$SRC" --out "$ICONSET/$2" >/dev/null 2>&1 || true; }
+          gen 16 icon_16x16.png
+          gen 32 icon_16x16@2x.png
+          gen 32 icon_32x32.png
+          gen 64 icon_32x32@2x.png
+          gen 128 icon_128x128.png
+          gen 256 icon_128x128@2x.png
+          gen 256 icon_256x256.png
+          gen 512 icon_256x256@2x.png
+          gen 512 icon_512x512.png
+          gen 1024 icon_512x512@2x.png
+          iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/eve-together.icns" || true
+
+          # Ad-hoc sign so the bundle launches on Apple Silicon (no Developer ID / notarization)
+          codesign --force --deep --sign - "$APP" || true
+
+          ditto -c -k --keepParent "$APP" "$APP_NAME-${{ matrix.rid }}.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-${{ matrix.rid }}
+          path: ${{ env.APP_NAME }}-${{ matrix.rid }}.zip
+
+  publish-assets:
+    needs: [build-windows, build-linux, build-macos]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          : > RELEASE_NOTES.md
+          if [ -f CHANGELOG.md ]; then
+            awk -v tag="$TAG" '
+              index($0, "## ") == 1 && index($0, tag) > 0 { flag=1; next }
+              flag && index($0, "## ") == 1 { flag=0 }
+              flag { print }
+            ' CHANGELOG.md > RELEASE_NOTES.md || true
+          fi
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "See [CHANGELOG.md](CHANGELOG.md) for details." > RELEASE_NOTES.md
+          fi
+
+      - name: Attach assets and notes to the release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          body_path: RELEASE_NOTES.md
+          files: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/*.AppImage

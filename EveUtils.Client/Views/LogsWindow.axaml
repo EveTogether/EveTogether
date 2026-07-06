@@ -1,0 +1,71 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="560"
+        x:Class="EveUtils.Client.Views.LogsWindow"
+        x:Name="LogsRoot"
+        x:DataType="vm:ClientLogViewModel"
+        Width="640" Height="560"
+        WindowStartupLocation="CenterOwner"
+        Title="App Logs">
+
+    <DockPanel Margin="16">
+
+        <!-- Header -->
+        <StackPanel DockPanel.Dock="Top" Spacing="3" Margin="0,0,0,12">
+            <TextBlock Text="APP LOGS" FontWeight="Bold" FontSize="16"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <TextBlock Text="Captured warnings and errors (newest first). Updates live."
+                       FontSize="11" Foreground="{DynamicResource TextAccentBrush}"/>
+        </StackPanel>
+
+        <!-- Footer: Refresh / Clear / Close -->
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,12,0,0">
+            <Button Grid.Column="0" Content="Refresh" Command="{Binding RefreshCommand}"/>
+            <Button Grid.Column="1" Content="Clear" Command="{Binding ClearCommand}" Classes="danger" Margin="8,0,0,0"/>
+            <Button Grid.Column="3" Content="Close" Click="OnClose" Classes="accent"/>
+        </Grid>
+
+        <Panel>
+            <TextBlock Text="No entries logged." IsVisible="{Binding IsEmpty}"
+                       Foreground="{DynamicResource TextAccentBrush}"/>
+
+            <ScrollViewer IsVisible="{Binding !IsEmpty}">
+                <ItemsControl ItemsSource="{Binding Entries}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ClientLogRowViewModel">
+                            <Border Classes="panel" Padding="10,8" Margin="0,0,0,6">
+                                <StackPanel Spacing="5">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
+                                                    VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding TimeText}" FontSize="10"
+                                                       Foreground="{DynamicResource TextAccentBrush}"/>
+                                            <TextBlock Text="{Binding LevelText}" FontSize="10" FontWeight="Bold"
+                                                       Foreground="{Binding LevelBrush}"/>
+                                            <TextBlock Text="{Binding Category}" FontSize="10"
+                                                       Foreground="{DynamicResource TextAccentBrush}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Content="Copy" FontSize="10" Padding="8,2"
+                                                VerticalAlignment="Center"
+                                                ToolTip.Tip="Copy this entry to the clipboard"
+                                                Command="{Binding #LogsRoot.((vm:ClientLogViewModel)DataContext).CopyEntryCommand}"
+                                                CommandParameter="{Binding}"/>
+                                    </Grid>
+                                    <TextBlock Text="{Binding Message}" TextWrapping="Wrap"
+                                               Foreground="{StaticResource TextBrightBrush}"/>
+                                    <Expander Header="Exception" IsVisible="{Binding HasException}">
+                                        <TextBlock Text="{Binding ExceptionText}" TextWrapping="Wrap" FontSize="10"
+                                                   Foreground="{DynamicResource TextAccentBrush}"/>
+                                    </Expander>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Panel>
+    </DockPanel>
+</v:ChromedWindow>

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>EVE Together — Local API · Connect &amp; Guides</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --border:#2a313c; --text:#c9d1d9; --dim:#8b949e; --accent:#4EC79E; --warn:#E3B341; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.65 system-ui,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:880px; margin:0 auto; padding:40px 20px 60px; }
+  a { color:var(--accent); }
+  h1 { font-size:24px; color:#fff; margin:0 0 4px; }
+  h2 { font-size:18px; color:#fff; margin:34px 0 8px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+  h3 { font-size:15px; color:#fff; margin:20px 0 6px; }
+  .sub { color:var(--dim); margin:0 0 6px; }
+  .back { font-size:13px; }
+  code { background:var(--panel); border:1px solid var(--border); border-radius:5px; padding:1px 6px; color:var(--accent); font-family:ui-monospace,monospace; font-size:13px; }
+  pre { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px 16px; overflow:auto; }
+  pre code { background:none; border:none; padding:0; color:var(--text); }
+  table { border-collapse:collapse; width:100%; margin:8px 0; font-size:14px; }
+  th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; }
+  td code { white-space:nowrap; }
+  .pill { display:inline-block; font-size:11px; border-radius:999px; padding:2px 9px; border:1px solid var(--border); color:var(--dim); }
+  .pill.planned { color:var(--warn); border-color:#5a4a1e; }
+  .note { background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:6px; padding:10px 14px; color:var(--dim); font-size:13px; margin:10px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="back"><a href="/">&larr; Local API home</a></p>
+  <h1>Connect &amp; Guides</h1>
+  <p class="sub">Everything you need to build against the EVE Together local API. Base URL <code>{{BASE_URL}}</code>.</p>
+
+  <h2>What this is</h2>
+  <p>An <strong>opt-in, read-only</strong> HTTP API that runs inside the EVE Together client and exposes your own
+     game data — live combat metrics, characters, fits, fleets and doctrines — so you can build stream overlays,
+     widgets and tooling against it. It is one component; widgets are just one use case.</p>
+
+  <h2>Security model</h2>
+  <table>
+    <tr><th>Property</th><th>Behaviour</th></tr>
+    <tr><td>Binding</td><td>Listens on <code>127.0.0.1</code> only — never on a network interface. Not reachable from other machines.</td></tr>
+    <tr><td>Access</td><td>Read-only. There are no mutating endpoints; the API can never change your fits, fleets or settings.</td></tr>
+    <tr><td>Secrets</td><td>Never exposes ESI tokens, granted scopes or credentials — only public game/fit/fleet data.</td></tr>
+    <tr><td>Default</td><td>Off by default. Enable it and pick the port in <em>Settings &rarr; Local API server</em>.</td></tr>
+    <tr><td>Hardening</td><td>Host-header validation rejects DNS-rebinding; CORS is open by default for this read-only loopback data, or restricted to a configured origin allowlist (<code>localapi.allowedorigins</code>); an optional API key (<code>localapi.apikey</code>) gates <code>/api</code>, <code>/ws</code> and <code>/hub</code> when set.</td></tr>
+  </table>
+
+  <h2>Getting started</h2>
+  <p>Confirm the server is up, then explore the interactive reference:</p>
+  <pre><code># health check
+curl {{BASE_URL}}/api/v1/health
+
+# your characters (public identity only)
+curl {{BASE_URL}}/api/v1/characters</code></pre>
+  <p>From a browser widget (e.g. an OBS browser source):</p>
+  <pre><code>const res = await fetch("{{BASE_URL}}/api/v1/metrics");
+const metrics = await res.json();
+// [{ characterId, characterName, dpsOut, dpsIn, neutPerSecond, capPerSecond, ... }]</code></pre>
+  <div class="note">Browser widgets run from a different origin — CORS is open for this read-only loopback data, so a
+     <code>fetch</code> from any origin works. Optionally set <code>localapi.apikey</code> in Settings to gate access,
+     then send it as <code>?key=…</code> or the <code>X-Api-Key</code> header.</div>
+
+  <h2>REST endpoints <span class="pill">available</span></h2>
+  <table>
+    <tr><th>Endpoint</th><th>Returns</th></tr>
+    <tr><td><code>GET /api/v1/health</code></td><td>App + API version.</td></tr>
+    <tr><td><code>GET /api/v1/metrics</code></td><td>Live combat metrics for your running character(s), from the gamelog (always-on, fleet-independent).</td></tr>
+    <tr><td><code>GET /api/v1/characters</code></td><td>Your coupled characters: identity, corp/alliance, portrait URL, running state.</td></tr>
+    <tr><td><code>GET /api/v1/fits</code></td><td>Your fit library across both sources: your local fits and each coupled server's shared fits. Each row carries a <code>scope</code> ("local"/"server"), the server name and (for server fits) who shared it.</td></tr>
+    <tr><td><code>GET /api/v1/fits/{id}</code></td><td>One fit's detail; add <code>?stats=true</code> for the computed Dogma stats. For a server fit add <code>?server=&lt;address&gt;</code> (its id is the server's shared-fit id).</td></tr>
+    <tr><td><code>GET /api/v1/fleets</code></td><td>Your fleets across both sources: client-only local fleets and, per coupled server, the active fleets you own or are in. Each row carries a <code>scope</code> ("local"/"server") and the server name.</td></tr>
+    <tr><td><code>GET /api/v1/fleet</code></td><td>The active fleet you are participating in: header, wing/squad structure and roster. <code>204 No Content</code> when you are not in a fleet.</td></tr>
+    <tr><td><code>GET /api/v1/compositions</code></td><td>Your doctrine/composition library (local + each coupled server).</td></tr>
+    <tr><td><code>GET /api/v1/compositions/{id}</code></td><td>One composition's roles + fit-entries. Add <code>?server=&lt;address&gt;</code> for a server composition (omit for the local library).</td></tr>
+    <tr><td><code>GET /api/v1/types/{id}</code></td><td>Resolve a type id to its name, group and a public icon URL — so a widget can show ship/module names + icons without its own SDE.</td></tr>
+  </table>
+  <div class="note">Live per-member fleet <em>metrics</em> are a streamed signal, not a readable snapshot — they arrive over the WebSocket stream (M3), not as a REST endpoint.</div>
+  <p>The full, interactive reference — request/response schemas and a live "try it" — is the
+     <a href="/scalar">Scalar API reference</a>, generated from <a href="/openapi/v1.json">/openapi/v1.json</a>.</p>
+
+  <h2>Realtime: WebSocket <span class="pill">available</span></h2>
+  <p>A raw WebSocket at <code>{{BASE_URL}}/ws</code> — the recommended route for browser/OBS widgets, no client
+     library needed. On connect you receive a <code>snapshot</code>, then a JSON event stream of <code>{ type, data, ts }</code>
+     (<code>ts</code> = unix ms):</p>
+  <pre><code>{ "type": "snapshot",      "data": { "metrics": [ /* your toon(s) */ ], "fleet": { /* active fleet or null */ } }, "ts": ... }
+{ "type": "metrics",       "data": [ /* your running toon(s), every second — always, fleet or not */ ],            "ts": ... }
+{ "type": "fleet.metrics", "data": { "characterId":…, "fleetId":…, "kind":"Dps", "value":…, "unixMs":… },           "ts": ... }
+{ "type": "fleet.changed", "data": { "fleetId":…, "kind":"…", "serverAddress":… },                                  "ts": ... }</code></pre>
+  <pre><code>const ws = new WebSocket("{{BASE_URL}}/ws".replace("http", "ws"));
+ws.onmessage = (e) => { const evt = JSON.parse(e.data); /* evt.type, evt.data — update your overlay */ };</code></pre>
+  <div class="note"><code>metrics</code> streams your own running character(s) every second, fleet or not.
+     <code>fleet.metrics</code> (one sample per member per tick) and <code>fleet.changed</code> only arrive while you
+     are in a fleet. There is no <code>fit.changed</code> event yet.</div>
+
+  <h2>Realtime: SignalR <span class="pill">available</span></h2>
+  <p>A SignalR hub at <code>{{BASE_URL}}/hub/fleet</code> for richer .NET/JS clients
+     (<code>@microsoft/signalr</code>), with auto-reconnect and groups. Same events as the WebSocket stream, each as a
+     named handler; you receive a <code>snapshot</code> on connect.</p>
+  <pre><code>import * as signalR from "@microsoft/signalr";
+const conn = new signalR.HubConnectionBuilder().withUrl("{{BASE_URL}}/hub/fleet").withAutomaticReconnect().build();
+conn.on("snapshot",      (s)    => { /* { metrics:[…], fleet:… } on connect */ });
+conn.on("metrics",       (rows) => { /* your toon(s), every second */ });
+conn.on("fleet.metrics", (s)    => { /* one sample per member, in a fleet */ });
+conn.on("fleet.changed", (c)    => { /* roster/state change, in a fleet */ });
+await conn.start();</code></pre>
+  <div class="note">WebSocket (the section above) covers the browser/OBS case on its own with no dependency; SignalR is for
+     richer .NET/JS clients that want auto-reconnect and a typed client library.</div>
+
+  <h2>Sample widget <span class="pill">available</span></h2>
+  <p>A ready-to-run live DPS overlay (raw WebSocket, zero dependencies) lives at <a href="/widget">/widget</a> — drop that
+     URL straight into an OBS browser source, or open it and <em>view source</em> as a starting point for your own.</p>
+
+  <h2>Roadmap</h2>
+  <table>
+    <tr><th>Milestone</th><th>Scope</th></tr>
+    <tr><td>M1 <span class="pill">done</span></td><td>REST: metrics, characters, fits (+ stats) · OpenAPI + Scalar · this index.</td></tr>
+    <tr><td>M2 <span class="pill">done</span></td><td>Fleets (local + server), the active fleet roster + wing/squad structure, and doctrines/compositions.</td></tr>
+    <tr><td>M3 <span class="pill">done</span></td><td>WebSocket realtime stream at <code>/ws</code> — snapshot + own metrics + live fleet metrics/changes.</td></tr>
+    <tr><td>M4 <span class="pill">done</span></td><td>SignalR hub at <code>/hub/fleet</code> — the same events for richer .NET/JS clients.</td></tr>
+    <tr><td>M5 <span class="pill">done</span></td><td>CORS, host-header validation, optional API key, the <code>/types/{id}</code> resolver, and a sample widget.</td></tr>
+  </table>
+</div>
+</body>
+</html>

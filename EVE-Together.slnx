@@ -1,0 +1,12 @@
+<Solution>
+  <Project Path="EveUtils.Client.UiTests/EveUtils.Client.UiTests.csproj" />
+  <Project Path="EveUtils.Client/EveUtils.Client.csproj" />
+  <Project Path="EveUtils.Migrations.Client.Sqlite/EveUtils.Migrations.Client.Sqlite.csproj" />
+  <Project Path="EveUtils.Migrations.Server.MySql/EveUtils.Migrations.Server.MySql.csproj" />
+  <Project Path="EveUtils.Migrations.Server.PostgreSql/EveUtils.Migrations.Server.PostgreSql.csproj" />
+  <Project Path="EveUtils.Migrations.Server.Sqlite/EveUtils.Migrations.Server.Sqlite.csproj" />
+  <Project Path="EveUtils.Migrations.Server.SqlServer/EveUtils.Migrations.Server.SqlServer.csproj" />
+  <Project Path="EveUtils.Server.Tests/EveUtils.Server.Tests.csproj" />
+  <Project Path="EveUtils.Server/EveUtils.Server.csproj" />
+  <Project Path="EveUtils.Shared/EveUtils.Shared.csproj" />
+</Solution>

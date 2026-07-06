@@ -1,0 +1,345 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:ctl="using:EveUtils.Client.Controls"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="640"
+        x:Class="EveUtils.Client.Views.FleetsWindow"
+        x:DataType="vm:FleetsViewModel"
+        x:Name="FleetsRoot"
+        Width="720" Height="640"
+        WindowStartupLocation="CenterOwner"
+        Title="Fleets">
+
+    <v:ChromedWindow.Resources>
+        <!-- Member leaf (stream B / B-2): one of my characters under a fleet node — role, assigned fit (FC-4),
+             can-fly badge (FC-6) and a SELECT FIT action that opens the composition-scoped picker. Shared by the
+             Participating and My Fleets tabs (one template, no duplication). -->
+        <DataTemplate x:Key="MemberLeafTemplate" x:DataType="vm:FleetMemberRowViewModel">
+            <Grid ColumnDefinitions="Auto,130,*,Auto,Auto" Margin="22,3,4,3">
+                <!-- Hex portrait (B-3): the pilot's ESI render clipped to the EVE hexagon, initial-glyph fallback -->
+                <Panel Grid.Column="0" Width="30" Height="34" VerticalAlignment="Center" Margin="0,0,9,0">
+                    <Panel.Clip>
+                        <PathGeometry Figures="M15,0 L30,8.5 L30,25.5 L15,34 L0,25.5 L0,8.5 Z"/>
+                    </Panel.Clip>
+                    <Border Background="{DynamicResource AccentSoftBrush}" IsVisible="{Binding !HasPortrait}">
+                        <TextBlock Text="{Binding Initial}" FontSize="12" FontWeight="Bold"
+                                   Foreground="{DynamicResource AccentBrightBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <Image Source="{Binding Portrait}" Stretch="UniformToFill" IsVisible="{Binding HasPortrait}"/>
+                </Panel>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding CharacterName}" FontSize="11.5" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextBrightBrush}" TextTrimming="CharacterEllipsis"/>
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <!-- Small accent role-dot (B-3), matching the mockup's role marker -->
+                        <Border Width="5" Height="5" CornerRadius="1" VerticalAlignment="Center"
+                                Background="{DynamicResource AccentBrightBrush}"/>
+                        <TextBlock Text="{Binding RoleLabel}" FontSize="9" Classes="label"/>
+                    </StackPanel>
+                </StackPanel>
+                <Button Grid.Column="2" Content="{Binding AssignedFitName}" Command="{Binding OpenFitCommand}"
+                        IsEnabled="{Binding HasAssignedFit}" VerticalAlignment="Center" Margin="10,0" Padding="0"
+                        Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Left"
+                        FontSize="11.5" Foreground="{DynamicResource TextAccentBrush}" Cursor="Hand"
+                        ToolTip.Tip="Open this fit's detail"/>
+                <TextBlock Grid.Column="3" Text="✓" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"
+                           Foreground="{DynamicResource TextAccentBrush}"
+                           IsVisible="{Binding ShowCanFly}" ToolTip.Tip="{Binding SkillTooltip}"/>
+                <TextBlock Grid.Column="3" Text="⚠" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"
+                           Foreground="#E0B341"
+                           IsVisible="{Binding ShowSkillGap}" ToolTip.Tip="{Binding SkillTooltip}"/>
+                <TextBlock Grid.Column="3" Text="?" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"
+                           Foreground="#7A8290" ToolTip.ShowOnDisabled="True"
+                           IsVisible="{Binding ShowSkillUnknown}" ToolTip.Tip="{Binding UnknownSkillTooltip}"/>
+                <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <Button Content="{Binding SelectFitButtonLabel}" Classes="accent" FontSize="9"
+                            Padding="8,2" Command="{Binding SelectFitCommand}"/>
+                    <!-- Pull just this character out of the fleet (D-215, multi-box); shown for my non-owner alts -->
+                    <Button Content="LEAVE" FontSize="9" Padding="8,2" IsVisible="{Binding CanLeave}"
+                            Command="{Binding LeaveCommand}" ToolTip.Tip="Remove this character from the fleet"/>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+    </v:ChromedWindow.Resources>
+
+    <!-- Fleet-state pill (B-3, option B): the fleet's ACTIVE / FORMING state on its own pill, accent-green by default
+         and amber while forming — separate from the participation dot (D-122). Shared over the four tabs. -->
+    <v:ChromedWindow.Styles>
+        <Style Selector="Border.statepill">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="9"/>
+            <Setter Property="Padding" Value="7,1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.statepill > TextBlock">
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="Border.statepill.forming">
+            <Setter Property="BorderBrush" Value="#80E0B341"/>
+        </Style>
+        <Style Selector="Border.statepill.forming > TextBlock">
+            <Setter Property="Foreground" Value="#E0B341"/>
+        </Style>
+        <!-- Doctrine pill (B-3): the coupled composition "◆ name" as a bordered accent pill, matching the mockup. -->
+        <Style Selector="Border.docpill">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="9"/>
+            <Setter Property="Padding" Value="8,1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.docpill > TextBlock">
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+        </Style>
+    </v:ChromedWindow.Styles>
+
+    <DockPanel>
+
+        <!-- Header: server + acting character -->
+        <Border DockPanel.Dock="Top" Height="40" Background="#EA080604"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid Margin="14,0" ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="FLEETS" FontWeight="Bold" FontSize="13" LetterSpacing="2.2"
+                               Foreground="{StaticResource TextBrightBrush}"/>
+                    <TextBlock Text="{Binding ServerLabel}" FontSize="11" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextAccentBrush}"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="REFRESH" FontSize="10" Command="{Binding RefreshCommand}"/>
+            </Grid>
+        </Border>
+
+        <!-- Status line -->
+        <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,1,0,0" Padding="12,7">
+            <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+        </Border>
+
+        <!-- Unreachable / stale servers: a coupled server that did not respond (e.g. an old dev/test server left in
+             the local DB). Listed here with DECOUPLE so it can be removed even when it has no fleet rows. -->
+        <Border DockPanel.Dock="Bottom" IsVisible="{Binding HasUnreachableServers}"
+                Background="#22EF5A5A" BorderBrush="{StaticResource RedBrush}" BorderThickness="0,1,0,0" Padding="12,7">
+            <StackPanel Spacing="5">
+                <TextBlock Text="UNREACHABLE / STALE SERVERS" Classes="label" FontSize="9"
+                           Foreground="{StaticResource RedBrush}"/>
+                <ItemsControl ItemsSource="{Binding UnreachableServers}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:FleetServerGroupViewModel">
+                            <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding ServerName}" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextBrightBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding ServerAddress}" Classes="label" FontSize="9"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="DECOUPLE" FontSize="9" Classes="danger"
+                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).DecoupleServerCommand}"
+                                        CommandParameter="{Binding}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <Grid Margin="10" RowDefinitions="*,12,Auto">
+
+            <!-- Top: one unified overview (D-105) — every fleet in a single list, grouped per coupled server with a
+                 Local fleets section at the bottom. Each card shows where it lives, its owner and only the actions
+                 my relationship allows (manage / view / join / leave). No more Browser/Participating/My Fleets tabs. -->
+            <DockPanel Grid.Row="0">
+                <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,0,0,8" Margin="0,0,0,6">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Button Content="+ NEW FLEET" FontSize="10" Command="{Binding NewFleetCommand}" IsEnabled="{Binding CanInteract}"/>
+                        <Button Content="+ NEW LOCAL FLEET" FontSize="10" Command="{Binding NewLocalFleetCommand}" IsEnabled="{Binding CanInteractLocal}"/>
+                    </StackPanel>
+                </Border>
+                <ScrollViewer>
+                    <StackPanel>
+                        <!-- Server-grouped fleets: owned + joined + discoverable, merged into one row each. -->
+                        <ItemsControl ItemsSource="{Binding ServerGroups}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:FleetServerGroupViewModel">
+                                    <StackPanel Margin="0,0,0,10">
+                                        <Border Classes="server-group-header">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0" Text="{Binding ServerName}" Classes="server-group-title"
+                                                           VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1" Content="DECOUPLE" FontSize="9" Classes="danger"
+                                                        ToolTip.Tip="Remove this server: decouple all your characters and drop it from the list"
+                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).DecoupleServerCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                            </Grid>
+                                        </Border>
+                                        <ItemsControl ItemsSource="{Binding Fleets}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:FleetViewModel">
+                                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                            Background="#10FFFFFF" Margin="2,3" Padding="10,8">
+                                                        <StackPanel Spacing="6">
+                                                            <!-- name + state/doctrine/visibility pills -->
+                                                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                                                <TextBlock Text="●" FontSize="10" VerticalAlignment="Center"
+                                                                           Foreground="{DynamicResource AccentBrightBrush}"
+                                                                           IsVisible="{Binding IsActive}" ToolTip.Tip="The fleet you're currently in"/>
+                                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"
+                                                                           VerticalAlignment="Center" Foreground="{StaticResource TextBrightBrush}"/>
+                                                                <Border Classes="docpill" IsVisible="{Binding HasComposition}">
+                                                                    <TextBlock Text="{Binding CompositionName, StringFormat='◆ {0}'}"/>
+                                                                </Border>
+                                                                <Border Classes="statepill" Classes.forming="{Binding IsForming}">
+                                                                    <TextBlock Text="{Binding StateLabel}"/>
+                                                                </Border>
+                                                                <TextBlock Text="{Binding VisibilityLabel}" Classes="label" FontSize="9" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                            <!-- owner -->
+                                                            <TextBlock Classes="label" FontSize="9"
+                                                                       Text="{Binding OwnerLabel, StringFormat='Owner: {0}'}"/>
+                                                            <!-- doctrine fill + live member count (discoverable info) -->
+                                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                <ItemsControl ItemsSource="{Binding RoleFill}">
+                                                                    <ItemsControl.ItemsPanel>
+                                                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="6"/></ItemsPanelTemplate>
+                                                                    </ItemsControl.ItemsPanel>
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate x:DataType="vm:CompositionFillRoleViewModel">
+                                                                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                                                    CornerRadius="3" Padding="7,2" IsVisible="{Binding HasGroupCount}">
+                                                                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                                                                    <TextBlock Text="{Binding RoleName}" FontSize="10" FontWeight="SemiBold"
+                                                                                               Foreground="{StaticResource TextBrightBrush}"/>
+                                                                                    <TextBlock Text="{Binding GroupCount}" FontSize="10"
+                                                                                               Foreground="{DynamicResource AccentBrightBrush}"/>
+                                                                                </StackPanel>
+                                                                            </Border>
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                                <TextBlock Text="{Binding MemberCount, StringFormat='{}{0} in fleet'}"
+                                                                           Classes="label" FontSize="9" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                            <!-- my characters in this fleet (joined) -->
+                                                            <ItemsControl ItemsSource="{Binding Members}"
+                                                                          ItemTemplate="{StaticResource MemberLeafTemplate}"
+                                                                          IsVisible="{Binding IsParticipating}" Margin="0,2,0,0"/>
+                                                            <!-- relationship-driven actions -->
+                                                            <WrapPanel Margin="0,2,0,0">
+                                                                <Button Content="JOIN" FontSize="9" Classes="accent" Margin="0,0,3,3" IsVisible="{Binding ShowJoin}"
+                                                                        IsEnabled="{Binding JoinEnabled}"
+                                                                        ToolTip.Tip="Join with one or more of your characters"
+                                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).JoinCommand}"
+                                                                        CommandParameter="{Binding}"/>
+                                                                <Button Content="REQUEST" FontSize="9" Margin="0,0,3,3" IsVisible="{Binding ShowRequest}"
+                                                                        IsEnabled="{Binding JoinEnabled}"
+                                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).RequestCommand}"
+                                                                        CommandParameter="{Binding}"/>
+                                                                <Button Content="{Binding RosterButtonLabel}" FontSize="9" Margin="0,0,3,3" IsVisible="{Binding ShowRosterButton}"
+                                                                        ToolTip.Tip="View the fleet structure and who flies which fit"
+                                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ManageCommand}"
+                                                                        CommandParameter="{Binding}"/>
+                                                                <Button Content="EDIT" FontSize="9" Margin="0,0,3,3" IsVisible="{Binding ShowOwnerActions}"
+                                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).EditFleetCommand}"
+                                                                        CommandParameter="{Binding}"/>
+                                                                <Button Content="DISBAND" FontSize="9" Margin="0,0,3,3" IsVisible="{Binding ShowOwnerActions}"
+                                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).DisbandCommand}"
+                                                                        CommandParameter="{Binding}"/>
+                                                                <Button Content="OPEN METRICS" FontSize="9" Margin="0,0,3,3" IsVisible="{Binding ShowMetricsActions}"
+                                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).OpenMetricsCommand}"
+                                                                        CommandParameter="{Binding}"/>
+                                                                <Button Content="SHARING" FontSize="9" Margin="0,0,3,3" IsVisible="{Binding ShowMetricsActions}"
+                                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).OpenSharingCommand}"
+                                                                        CommandParameter="{Binding}"/>
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Local fleets: client-only, no server. Own management set, ENTER stays local. -->
+                        <StackPanel IsVisible="{Binding HasLocalFleets}">
+                            <Border Classes="server-group-header">
+                                <TextBlock Text="Local fleets" Classes="server-group-title"/>
+                            </Border>
+                            <ItemsControl ItemsSource="{Binding LocalFleets}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:FleetViewModel">
+                                        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                Background="#10FFFFFF" Margin="2,3" Padding="10,8">
+                                            <StackPanel Spacing="6">
+                                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                                    <TextBlock Text="●" FontSize="10" VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource AccentBrightBrush}"
+                                                               IsVisible="{Binding IsActive}" ToolTip.Tip="The fleet you're currently in"/>
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"
+                                                               VerticalAlignment="Center" Foreground="{StaticResource TextBrightBrush}"/>
+                                                    <Border Classes="statepill" Classes.forming="{Binding IsForming}">
+                                                        <TextBlock Text="{Binding StateLabel}"/>
+                                                    </Border>
+                                                </StackPanel>
+                                                <TextBlock Classes="label" FontSize="9"
+                                                           Text="{Binding OwnerLabel, StringFormat='Owner: {0}'}"
+                                                           Foreground="{DynamicResource TextAccentBrush}"/>
+                                                <!-- local characters in this fleet (same leaves as server fleets, local data) -->
+                                                <ItemsControl ItemsSource="{Binding Members}"
+                                                              ItemTemplate="{StaticResource MemberLeafTemplate}"
+                                                              IsVisible="{Binding IsParticipating}" Margin="0,2,0,0"/>
+                                                <WrapPanel Margin="0,2,0,0">
+                                                    <Button Content="MANAGE" FontSize="9" Margin="0,0,3,3"
+                                                            Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ManageLocalCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                    <Button Content="ADD TOON" FontSize="9" Margin="0,0,3,3"
+                                                            Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).AddLocalCharacterCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                    <Button Content="ADD EXTERNAL" FontSize="9" Margin="0,0,3,3"
+                                                            Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).AddLocalExternalCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                    <Button Content="OPEN METRICS" FontSize="9" Classes="accent" Margin="0,0,3,3"
+                                                            Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).OpenMetricsLocalCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                    <Button Content="SHARING" FontSize="9" Margin="0,0,3,3"
+                                                            Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).OpenSharingCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                    <Button Content="DISBAND" FontSize="9" Margin="0,0,3,3"
+                                                            Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).DisbandLocalCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                </WrapPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+
+
+            <!-- Bottom: a slim status bar for the selected/active fleet — LEAVE lives here; the live member graphs
+                 are in the OPEN METRICS window. -->
+            <Border Grid.Row="2" Classes="panel">
+                <Border Classes="panel-header">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                            <TextBlock Classes="diamond" Text="◆"/>
+                            <TextBlock Classes="panel-title" Text="{Binding ActiveFleetLabel}"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="LEAVE" FontSize="10"
+                                IsVisible="{Binding IsParticipating}" Command="{Binding LeaveCommand}"/>
+                    </Grid>
+                </Border>
+            </Border>
+        </Grid>
+    </DockPanel>
+</v:ChromedWindow>

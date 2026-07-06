@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\EveUtils.Shared\EveUtils.Shared.csproj" />
+    <ProjectReference Include="..\EveUtils.Migrations.Server.Sqlite\EveUtils.Migrations.Server.Sqlite.csproj" />
+    <ProjectReference Include="..\EveUtils.Migrations.Server.MySql\EveUtils.Migrations.Server.MySql.csproj" />
+    <ProjectReference Include="..\EveUtils.Migrations.Server.SqlServer\EveUtils.Migrations.Server.SqlServer.csproj" />
+    <ProjectReference Include="..\EveUtils.Migrations.Server.PostgreSql\EveUtils.Migrations.Server.PostgreSql.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Grpc.AspNetCore" Version="2.80.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.8" />
+    <!-- Pin the native SQLite bundle to 3.0.0 to drop SQLitePCLRaw.lib.e_sqlite3 2.1.11,
+         which carries the high-severity advisory GHSA-2m69-gcr7-jv3q (NU1903). -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.8" />
+    <PackageReference Include="Microting.EntityFrameworkCore.MySql" Version="10.0.8" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EveUtils.Server.Tests" />
+  </ItemGroup>
+
+</Project>

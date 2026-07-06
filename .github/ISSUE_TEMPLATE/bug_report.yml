@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a problem with the client or the server
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Redact any tokens, secrets or character access details before posting."
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Desktop client
+        - Self-hosted server
+        - Both / unsure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: e.g. v0.1.0-alpha or a commit hash
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS (client)
+      placeholder: e.g. Windows 11 / Ubuntu 24.04 / macOS 14
+    validations:
+      required: false
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Redact tokens, secrets and character access details.
+    validations:
+      required: false

@@ -1,0 +1,56 @@
+# EVE Together server — Docker Compose deployment.
+#
+# Configuration is supplied via environment variables (the primary method). Put the secret values in a
+# .env file next to this file (see docs/server-installation.md), e.g.:
+#   ESI_CLIENT_ID=...
+#   ESI_CLIENT_SECRET=...
+#   ADMIN_SEED_PASSWORD=...
+#
+# As an alternative to environment variables you can mount a full appsettings.Production.json instead
+# (see the commented volume below and docs/server-installation.md).
+
+services:
+  eve-together-server:
+    image: ghcr.io/evetogether/eve-together-server:latest
+    # Until the image is published you can build it locally from this repo instead:
+    # build: .
+    container_name: eve-together-server
+    restart: unless-stopped
+    ports:
+      - "7443:7443"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+
+      # --- EVE SSO application (required) — register one at https://developers.eveonline.com/ ---
+      Esi__ClientId: "${ESI_CLIENT_ID}"
+      Esi__ClientSecret: "${ESI_CLIENT_SECRET}"
+      # Must match the callback URL configured on the EVE application (your public HTTPS URL).
+      Esi__CallbackUri: "https://your-server.example.com/auth/eve/callback"
+      # Requested scopes (arrays bind by index):
+      # Esi__Scopes__0: "esi-fittings.read_fittings.v1"
+      # Esi__Scopes__1: "esi-fittings.write_fittings.v1"
+
+      # --- Allowed characters (optional) — leave unset for public-server mode (anyone who completes
+      #     the EVE auth-flow can pair). Set entries to restrict pairing to specific characters: ---
+      # Esi__AllowedCharacters__0: "Your Main Character"
+
+      # --- Database (defaults to SQLite stored in the data volume) ---
+      Database__Provider: "Sqlite"
+      ConnectionStrings__Sqlite: "Data Source=/data/eve-utils-server.db"
+      # PostgreSQL example (run a db service alongside, or point at an external host):
+      # Database__Provider: "PostgreSql"
+      # ConnectionStrings__PostgreSql: "Host=db;Database=eve_together;Username=eve;Password=${DB_PASSWORD}"
+
+      # --- Server ---
+      Server__Name: "My EVE Together Server"
+      # Required outside Development: the initial admin password for the Blazor control panel.
+      Server__AdminSeedPassword: "${ADMIN_SEED_PASSWORD}"
+
+    volumes:
+      # Persists the SQLite db, TLS cert, app log, ESI cache and auth store.
+      - eve-together-data:/data
+      # Alternative to the environment variables above: mount a full appsettings file (read-only).
+      # - ./appsettings.Production.json:/app/appsettings.Production.json:ro
+
+volumes:
+  eve-together-data:

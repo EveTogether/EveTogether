@@ -1,0 +1,43 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dlg="using:EveUtils.Client.Dialogs"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="440" d:DesignHeight="380"
+        x:Class="EveUtils.Client.Views.CharacterPickerWindow"
+        x:Name="Root"
+        Width="440" Height="380"
+        WindowStartupLocation="CenterOwner"
+        Title="Choose character">
+
+    <DockPanel Margin="16">
+        <TextBlock x:Name="PromptText" DockPanel.Dock="Top"
+                   FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,12"
+                   Foreground="{StaticResource TextBrightBrush}"/>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Spacing="8" Margin="0,12,0,0">
+            <Button Content="Cancel" Click="OnCancel"/>
+            <Button Content="Choose →" Click="OnConfirm" Classes="accent"/>
+        </StackPanel>
+
+        <Border Classes="panel">
+            <ListBox x:Name="OptionList" ItemsSource="{Binding Options, ElementName=Root}"
+                     SelectionMode="Single" Margin="6"
+                     DoubleTapped="OnConfirm">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="dlg:CharacterPickOption">
+                        <Grid ColumnDefinitions="*,Auto" Margin="2" IsEnabled="{Binding Enabled}">
+                            <StackPanel Grid.Column="0" Spacing="1">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextBrightBrush}"/>
+                                <TextBlock Text="{Binding Detail}" FontSize="10"
+                                           Foreground="{DynamicResource TextAccentBrush}"/>
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+    </DockPanel>
+</v:ChromedWindow>

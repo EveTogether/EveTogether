@@ -1,0 +1,32 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="560" d:DesignHeight="420"
+        x:Class="EveUtils.Client.Views.FitTextImportWindow"
+        Width="560" Height="440" MinWidth="420" MinHeight="320"
+        WindowStartupLocation="CenterOwner"
+        Title="Import EFT / DNA">
+
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,10">
+            <TextBlock Text="Import EFT / DNA" FontWeight="Bold" FontSize="14"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <TextBlock Text="Paste an EFT block ([Ship, name] …) or a DNA string. Item names are resolved from the local SDE."
+                       FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Spacing="8" Margin="0,12,0,0">
+            <Button Content="Cancel" Click="OnCancel" MinWidth="80"/>
+            <Button Content="Import" Click="OnImport" Classes="accent" MinWidth="80"/>
+        </StackPanel>
+
+        <TextBox x:Name="TextBoxInput" AcceptsReturn="True" AcceptsTab="False"
+                 TextWrapping="NoWrap" FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                 VerticalContentAlignment="Top" VerticalAlignment="Stretch"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                 PlaceholderText="[Rifter, My Rifter]&#x0a;Damage Control II&#x0a;200mm AutoCannon II, EMP S&#x0a;…"/>
+    </DockPanel>
+</v:ChromedWindow>
