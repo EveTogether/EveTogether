@@ -1,0 +1,196 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="780" d:DesignHeight="640"
+        x:Class="EveUtils.Client.Views.CompositionsWindow"
+        x:DataType="vm:CompositionsViewModel"
+        x:Name="CompositionsRoot"
+        Width="780" Height="640"
+        WindowStartupLocation="CenterOwner"
+        Title="Compositions">
+
+    <v:ChromedWindow.Styles>
+        <Style Selector="TabControl">
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style Selector="TabItem">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+        </Style>
+        <Style Selector="TabItem:selected">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="TabItem:selected /template/ Border#PART_SelectedPipe">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+        </Style>
+    </v:ChromedWindow.Styles>
+
+    <DockPanel>
+
+        <!-- Header -->
+        <Border DockPanel.Dock="Top" Height="40" Background="#EA080604"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <StackPanel Margin="14,0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBlock Text="◆" Foreground="{DynamicResource AccentBrush}" FontSize="9" VerticalAlignment="Center"/>
+                <TextBlock Text="FLEET COMPOSITIONS" FontWeight="Bold" FontSize="13" LetterSpacing="2.2"
+                           Foreground="{StaticResource TextBrightBrush}"/>
+                <TextBlock Text="LIBRARY" FontSize="10" LetterSpacing="2" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextAccentBrush}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Status line -->
+        <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,1,0,0" Padding="12,7">
+            <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+        </Border>
+
+        <Grid Margin="12" RowDefinitions="Auto,10,*">
+
+            <!-- Tools: search + refresh + new -->
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
+                <TextBox Grid.Column="0" Text="{Binding SearchText}" PlaceholderText="Search compositions…"
+                         MaxWidth="320" HorizontalAlignment="Left" FontSize="11"/>
+                <Button Grid.Column="1" Content="REFRESH" FontSize="9" Margin="0,0,6,0" Command="{Binding RefreshCommand}"/>
+                <Button Grid.Column="2" Content="+ NEW COMPOSITION" FontSize="9" Classes="accent"
+                        Command="{Binding NewCompositionCommand}"/>
+            </Grid>
+
+            <!-- Source tabs: Local + one per coupled server -->
+            <TabControl Grid.Row="2" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}">
+                <TabControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CompositionTabViewModel">
+                        <TextBlock Text="{Binding Title}" LetterSpacing="0.5"/>
+                    </DataTemplate>
+                </TabControl.ItemTemplate>
+                <TabControl.ContentTemplate>
+                    <DataTemplate x:DataType="vm:CompositionTabViewModel">
+                        <Grid Margin="0,10,0,0">
+
+                            <!-- Status / empty state -->
+                            <TextBlock Text="{Binding Status}" IsVisible="{Binding IsEmpty}" Classes="label" FontSize="12"
+                                       TextWrapping="Wrap" MaxWidth="420"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
+
+                            <!-- Composition cards -->
+                            <ScrollViewer IsVisible="{Binding !IsEmpty}">
+                                <ItemsControl ItemsSource="{Binding Compositions}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:CompositionRowViewModel">
+                                            <!-- Opaque, lighter grey card surface. A translucent overlay let the window's
+                                                 gradient bleed through (lower rows read as near-black), and BgPanelBrush
+                                                 was nearly black; this fixed elevated-grey keeps the whole card a uniform,
+                                                 clearly-visible grey top to bottom. -->
+                                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                    Background="#FF242A28" Margin="0,0,0,10">
+                                                <StackPanel>
+                                                    <!-- card header -->
+                                                    <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="12,10">
+                                                        <Grid ColumnDefinitions="Auto,10,Auto,*,Auto">
+                                                            <TextBlock Grid.Column="0" Text="{Binding Name}" FontWeight="SemiBold" FontSize="14"
+                                                                       Foreground="{StaticResource TextBrightBrush}" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="2" Text="{Binding OwnerName, StringFormat='Owner: {0}'}"
+                                                                       Classes="label" FontSize="10" VerticalAlignment="Center"/>
+                                                            <Border Grid.Column="4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                                    CornerRadius="10" Padding="9,2">
+                                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                                    <TextBlock Text="✎ can edit" FontSize="9" IsVisible="{Binding CanEdit}"
+                                                                               Foreground="{DynamicResource AccentBrightBrush}"/>
+                                                                    <TextBlock Text="🔒 read-only" FontSize="9" IsVisible="{Binding !CanEdit}" Classes="label"/>
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </Grid>
+                                                    </Border>
+                                                    <!-- ship hulls this doctrine flies (FC-2 polish): one render per distinct hull,
+                                                         in a faction-coloured hexagon matching the character portraits. -->
+                                                    <ItemsControl ItemsSource="{Binding Hulls}" Margin="12,10,12,2"
+                                                                  IsVisible="{Binding SummaryLoaded}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate x:DataType="vm:CompositionHullViewModel">
+                                                                <Panel Width="36" Height="40" Margin="0,0,7,0">
+                                                                    <!-- faction-coloured hex ring + clipped hull render (glyph-less fallback = accent fill) -->
+                                                                    <Path Data="M18,0 L36,10 L36,30 L18,40 L0,30 L0,10 Z"
+                                                                          Fill="{DynamicResource HexBrandBrush}"/>
+                                                                    <Panel Width="32" Height="36" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                                        <Panel.Clip>
+                                                                            <PathGeometry Figures="M16,0 L32,9 L32,27 L16,36 L0,27 L0,9 Z"/>
+                                                                        </Panel.Clip>
+                                                                        <Border Background="{DynamicResource AccentSoftBrush}"/>
+                                                                        <Image Source="{Binding HullImage}" IsVisible="{Binding HasHullImage}" Stretch="UniformToFill"/>
+                                                                    </Panel>
+                                                                </Panel>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    <!-- card body: role chips + summary pills + actions -->
+                                                    <Grid ColumnDefinitions="*,Auto" Margin="12,10">
+                                                        <ItemsControl Grid.Column="0" ItemsSource="{Binding RoleChips}" VerticalAlignment="Center">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate x:DataType="vm:CompositionRoleChipViewModel">
+                                                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                                            Background="{DynamicResource AccentSoftBrush}"
+                                                                            CornerRadius="4" Padding="9,3" Margin="0,0,7,4">
+                                                                        <StackPanel Orientation="Horizontal" Spacing="7">
+                                                                            <TextBlock Text="{Binding RoleName}" FontSize="10" FontWeight="SemiBold"
+                                                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                                                            <TextBlock Text="{Binding MinLabel}" FontSize="10" FontFamily="Consolas,monospace"
+                                                                                       Foreground="{DynamicResource AccentBrightBrush}"/>
+                                                                        </StackPanel>
+                                                                    </Border>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding RoleCount, StringFormat='{}{0} roles'}" Classes="label" FontSize="10" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{Binding FitCount, StringFormat='{}{0} fits'}" Classes="label" FontSize="10" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{Binding MinPilots, StringFormat='min. {0}'}" Classes="label" FontSize="10" VerticalAlignment="Center"/>
+                                                            <!-- "N fleets" pill (FC-2): how many fleets fly this doctrine; hidden when none -->
+                                                            <Border BorderBrush="{DynamicResource AccentBrightBrush}" BorderThickness="1" CornerRadius="9"
+                                                                    Padding="8,2" VerticalAlignment="Center" IsVisible="{Binding HasFleets}">
+                                                                <TextBlock Text="{Binding FleetCountLabel}" FontSize="10"
+                                                                           Foreground="{DynamicResource AccentBrightBrush}" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                            <Button Content="OPEN" FontSize="9" Classes="accent" IsVisible="{Binding CanEdit}"
+                                                                    Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).OpenCompositionCommand}"
+                                                                    CommandParameter="{Binding}"/>
+                                                            <Button Content="VIEW" FontSize="9" IsVisible="{Binding !CanEdit}"
+                                                                    Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).OpenCompositionCommand}"
+                                                                    CommandParameter="{Binding}"/>
+                                                            <Button Content="PUSH ↑" FontSize="9" IsVisible="{Binding IsLocal}" ToolTip.Tip="Push to a server"
+                                                                    Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).PushCompositionCommand}"
+                                                                    CommandParameter="{Binding}"/>
+                                                            <Button Content="DOWNLOAD ↓" FontSize="9" IsVisible="{Binding !IsLocal}" ToolTip.Tip="Download to the local library"
+                                                                    Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).DownloadCompositionCommand}"
+                                                                    CommandParameter="{Binding}"/>
+                                                            <Button Content="DUPLICATE" FontSize="9" ToolTip.Tip="Make an editable copy you own"
+                                                                    Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).DuplicateCompositionCommand}"
+                                                                    CommandParameter="{Binding}"/>
+                                                            <Button Content="DELETE" FontSize="9" Classes="danger" IsVisible="{Binding CanEdit}"
+                                                                    Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).DeleteCompositionCommand}"
+                                                                    CommandParameter="{Binding}"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
+                    </DataTemplate>
+                </TabControl.ContentTemplate>
+            </TabControl>
+        </Grid>
+    </DockPanel>
+</v:ChromedWindow>

@@ -1,0 +1,76 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Amarr (Imperial Gold) faction palette (D-183). Swappable tokens only; derived from the mockup set. -->
+
+    <Color x:Key="SystemAccentColor">#FFE3B341</Color>
+    <Color x:Key="SystemAccentColorLight1">#FFEAC468</Color>
+    <Color x:Key="SystemAccentColorLight2">#FFF1D593</Color>
+    <Color x:Key="SystemAccentColorLight3">#FFF7E6BE</Color>
+    <Color x:Key="SystemAccentColorDark1">#FFB8902F</Color>
+    <Color x:Key="SystemAccentColorDark2">#FF8C6E24</Color>
+    <Color x:Key="SystemAccentColorDark3">#FF614C19</Color>
+
+    <SolidColorBrush x:Key="AccentBrush" Color="#FFE3B341"/>
+    <SolidColorBrush x:Key="AccentBrightBrush" Color="#FFF3D488"/>
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#24E3B341"/>
+    <SolidColorBrush x:Key="TextAccentBrush" Color="#FFE9D9A6"/>
+
+    <SolidColorBrush x:Key="BorderBrush" Color="#4DE3B341"/>
+    <SolidColorBrush x:Key="BorderStrongBrush" Color="#99E3B341"/>
+    <SolidColorBrush x:Key="DividerBrush" Color="#1FF3D488"/>
+    <SolidColorBrush x:Key="GlowBrush" Color="#6BE3B341"/>
+
+    <SolidColorBrush x:Key="BgRowHoverBrush" Color="#1FE3B341"/>
+    <SolidColorBrush x:Key="BgRowSelectedBrush" Color="#33E3B341"/>
+
+    <SolidColorBrush x:Key="RailBackgroundBrush" Color="#D1140F06"/>
+
+    <LinearGradientBrush x:Key="HexBrandBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Offset="0" Color="#FFF3D488"/>
+        <GradientStop Offset="1" Color="#FFE3B341"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="HeaderGradientBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Offset="0" Color="#26E3B341"/>
+        <GradientStop Offset="1" Color="#00000000"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="WindowBackgroundBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+        <GradientStop Offset="0" Color="#FF100B04"/>
+        <GradientStop Offset="0.5" Color="#FF0A0805"/>
+        <GradientStop Offset="1" Color="#FF0A0702"/>
+    </LinearGradientBrush>
+
+    <!-- Menu / dropdown / context-menu theming (D-188): re-tints every MenuFlyout, ContextMenu and Menu dropdown
+         live with the active faction. Neutral chrome inline; accent-tinted bits alias the faction brushes. -->
+    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#F50C100E"/>
+    <StaticResource x:Key="MenuFlyoutPresenterBorderBrush" ResourceKey="BorderStrongBrush"/>
+    <CornerRadius x:Key="OverlayCornerRadius">6</CornerRadius>
+    <Thickness x:Key="MenuFlyoutPresenterBorderThemeThickness">1</Thickness>
+    <Thickness x:Key="MenuFlyoutPresenterThemePadding">4</Thickness>
+    <SolidColorBrush x:Key="MenuFlyoutItemBackground" Color="Transparent"/>
+    <StaticResource x:Key="MenuFlyoutItemBackgroundPointerOver" ResourceKey="AccentSoftBrush"/>
+    <StaticResource x:Key="MenuFlyoutItemBackgroundPressed" ResourceKey="AccentSoftBrush"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemForeground" Color="#FFD8D0C4"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemForegroundPointerOver" Color="#FFF3ECE0"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemForegroundPressed" Color="#FFF3ECE0"/>
+    <StaticResource x:Key="MenuFlyoutSubItemChevron" ResourceKey="AccentBrush"/>
+    <StaticResource x:Key="MenuFlyoutSubItemChevronPointerOver" ResourceKey="AccentBrush"/>
+    <StaticResource x:Key="SystemControlForegroundBaseMediumLowBrush" ResourceKey="BorderBrush"/>
+
+    <!-- ComboBox dropdown popup (D-188): same dark + accent look as the menus; only the open popup + items. -->
+    <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#F50C100E"/>
+    <StaticResource x:Key="ComboBoxDropDownBorderBrush" ResourceKey="BorderStrongBrush"/>
+    <Thickness x:Key="ComboBoxDropdownBorderThickness">1</Thickness>
+    <Thickness x:Key="ComboBoxDropdownBorderPadding">2</Thickness>
+    <SolidColorBrush x:Key="ComboBoxItemBackground" Color="Transparent"/>
+    <SolidColorBrush x:Key="ComboBoxItemForeground" Color="#FFD8D0C4"/>
+    <StaticResource x:Key="ComboBoxItemBackgroundPointerOver" ResourceKey="AccentSoftBrush"/>
+    <SolidColorBrush x:Key="ComboBoxItemForegroundPointerOver" Color="#FFF3ECE0"/>
+    <StaticResource x:Key="ComboBoxItemBackgroundSelected" ResourceKey="AccentSoftBrush"/>
+    <SolidColorBrush x:Key="ComboBoxItemForegroundSelected" Color="#FFF3ECE0"/>
+    <StaticResource x:Key="ComboBoxItemBackgroundSelectedPointerOver" ResourceKey="AccentSoftBrush"/>
+    <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedPointerOver" Color="#FFF3ECE0"/>
+    <StaticResource x:Key="ComboBoxItemBackgroundPressed" ResourceKey="AccentSoftBrush"/>
+    <StaticResource x:Key="ComboBoxItemBackgroundSelectedPressed" ResourceKey="AccentSoftBrush"/>
+</ResourceDictionary>

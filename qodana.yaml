@@ -1,0 +1,20 @@
+version: "1.0"
+linter: jetbrains/qodana-cdnet:latest
+dotnet:
+  solution: EVE-Together.slnx
+# Existing findings are baselined so future scans surface only NEW findings.
+# Regenerate after a deliberate cleanup: qodana scan -i . -o <out> --clear-cache && cp <out>/qodana.sarif.json qodana.sarif.json
+# (--clear-cache is required: a stale in-container NuGet restore cache otherwise yields ~28k phantom CSharpErrors.)
+baseline: qodana.sarif.json
+
+# Profile tuning is now ACTIVE in the repo `.editorconfig` (qodana.yaml `exclude:` is a no-op for
+# qodana-cdnet, verified). It silences these categorical false-positives / idiom clashes via
+# `resharper_<id>_highlighting = none`, validated against a re-scan (all dropped to 0; -933 findings):
+#   - serialization/DTO/gRPC false-positives (read by reflection, seen as unused/make-private), .Global only:
+#     NotAccessedPositionalProperty, PropertyCanBeMadeInitOnly, UnusedAutoPropertyAccessor, MemberCanBePrivate,
+#     UnusedMember, UnusedType, ClassNeverInstantiated, UnusedMethodReturnValue, UnusedMemberInSuper
+#   - Avalonia compiled-binding false-positive (build validates it): Xaml.PossibleNullReferenceException
+#   - nullable API-contract defensive `??`: NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
+#   - test-only (path-scoped to the test projects): CompareOfFloatsByEqualityOperator, ShortLivedHttpClient
+# Deliberately NOT suppressed (stay baselined as known debt): .XAMLErrors (5, error-severity — a NEW genuine
+# XAML error should still surface) and the production CompareOfFloats/ShortLivedHttpClient instances.

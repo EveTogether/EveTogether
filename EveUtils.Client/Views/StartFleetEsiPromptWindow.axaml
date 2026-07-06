@@ -1,0 +1,33 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="440" d:DesignHeight="260"
+        x:Class="EveUtils.Client.Views.StartFleetEsiPromptWindow"
+        x:Name="Root"
+        Width="440" Height="260"
+        WindowStartupLocation="CenterOwner"
+        Title="Start fleet">
+
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,14">
+            <TextBlock Text="Start this fleet" FontWeight="Bold" FontSize="15"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <TextBlock x:Name="BodyBlock" Text="" FontSize="11"
+                       Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Spacing="8" Margin="0,14,0,0">
+            <Button Content="Cancel" Click="OnCancel"/>
+            <Button Content="Start →" Click="OnConfirm" Classes="accent"/>
+        </StackPanel>
+
+        <StackPanel Spacing="10" VerticalAlignment="Center">
+            <CheckBox x:Name="EsiInviteBox"
+                      Content="Invite members without an ESI link via in-game ESI"/>
+            <TextBlock Text="(Seam only — the in-game ESI invite is not wired up yet, so this option has no effect.)"
+                       FontSize="10" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+    </DockPanel>
+</v:ChromedWindow>

@@ -1,0 +1,137 @@
+@page "/roles"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = PanelPermissions.RolesManage)]
+@using EveUtils.Server.Auth
+@using EveUtils.Shared.Cqrs.Permissions
+@using EveUtils.Shared.Modules.AdminAuth.Entities
+@using EveUtils.Shared.Modules.AdminAuth.Repositories
+@inject IAdminAuthRepository Repository
+@inject AdminManagementService Management
+@inject IPermissionRegistry Registry
+
+<div class="crumb">Administration / <b>Roles</b></div>
+
+<h2>Roles (@_roles.Count)</h2>
+
+@if (_message is not null)
+{
+    <p class="@(_ok ? "ok" : "stale")">@_message</p>
+}
+
+@foreach (var role in _roles)
+{
+    <div class="rolecard">
+        <div class="rolehd">
+            <input @bind="_name[role.Id]" class="rolename" />
+            @if (role.IsSuperAdmin) { <span class="badge-super">SUPER-ADMIN</span> }
+            <button @onclick="() => Save(role.Id)">Save</button>
+            <button @onclick="() => Delete(role.Id)">Delete</button>
+        </div>
+        <input @bind="_desc[role.Id]" placeholder="description" class="roledesc" />
+        @if (role.IsSuperAdmin)
+        {
+            <p class="dim">A super-admin role passes every permission automatically.</p>
+        }
+        else
+        {
+            <div class="permgrid">
+                @foreach (var p in _panelCodes)
+                {
+                    <label class="permchk" title="@p.Description">
+                        <input type="checkbox" checked="@_perms[role.Id].Contains(p.Code)"
+                               @onchange="e => TogglePerm(role.Id, p.Code, (bool)e.Value!)" />
+                        <code>@p.Code</code>
+                    </label>
+                }
+            </div>
+        }
+    </div>
+}
+
+<h2>Create role</h2>
+<div class="createbox">
+    <input placeholder="role name" @bind="_newName" />
+    <input placeholder="description" @bind="_newDesc" />
+    <label class="rolechk"><input type="checkbox" @bind="_newSuper" /> super-admin</label>
+    @if (!_newSuper)
+    {
+        <div class="permgrid">
+            @foreach (var p in _panelCodes)
+            {
+                <label class="permchk" title="@p.Description">
+                    <input type="checkbox" checked="@_newPerms.Contains(p.Code)"
+                           @onchange="e => ToggleNewPerm(p.Code, (bool)e.Value!)" />
+                    <code>@p.Code</code>
+                </label>
+            }
+        </div>
+    }
+    <button @onclick="Create">Create</button>
+</div>
+
+@code {
+    private IReadOnlyList<Role> _roles = [];
+    private IReadOnlyList<PermissionDescriptor> _panelCodes = [];
+    private readonly Dictionary<int, string> _name = new();
+    private readonly Dictionary<int, string> _desc = new();
+    private readonly Dictionary<int, HashSet<string>> _perms = new();
+
+    private string _newName = string.Empty;
+    private string _newDesc = string.Empty;
+    private bool _newSuper;
+    private readonly HashSet<string> _newPerms = new();
+
+    private string? _message;
+    private bool _ok;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _panelCodes = Registry.All()
+            .Where(d => d.Module == PanelPermissions.Module)
+            .OrderBy(d => d.Code)
+            .ToList();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _roles = await Repository.ListRolesAsync();
+        _name.Clear(); _desc.Clear(); _perms.Clear();
+        foreach (var r in _roles)
+        {
+            _name[r.Id] = r.Name;
+            _desc[r.Id] = r.Description;
+            _perms[r.Id] = r.Permissions.Select(p => p.PermissionCode).ToHashSet();
+        }
+    }
+
+    private void TogglePerm(int roleId, string code, bool on)
+    {
+        if (on) _perms[roleId].Add(code); else _perms[roleId].Remove(code);
+    }
+
+    private void ToggleNewPerm(string code, bool on)
+    {
+        if (on) _newPerms.Add(code); else _newPerms.Remove(code);
+    }
+
+    private async Task Save(int roleId) =>
+        await RunAsync(() => Management.UpdateRoleAsync(roleId, _name[roleId], _desc[roleId], _perms[roleId].ToList()));
+
+    private async Task Delete(int roleId) =>
+        await RunAsync(() => Management.DeleteRoleAsync(roleId));
+
+    private async Task Create()
+    {
+        await RunAsync(() => Management.CreateRoleAsync(_newName, _newDesc, _newSuper, _newPerms.ToList()));
+        if (_ok) { _newName = string.Empty; _newDesc = string.Empty; _newSuper = false; _newPerms.Clear(); }
+    }
+
+    private async Task RunAsync(Func<Task<AdminActionResult>> action)
+    {
+        var result = await action();
+        _ok = result.Ok;
+        _message = result.Ok ? "Done." : result.Error;
+        await LoadAsync();
+    }
+}

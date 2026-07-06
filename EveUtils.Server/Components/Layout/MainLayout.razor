@@ -1,0 +1,68 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+
+<div class="appshell">
+    <header class="topbar">
+        <div class="brand">
+            <img class="badge" src="img/eve-together-badge.png" alt="EVE Together" />
+            <span class="nm">EVE <b>TOGETHER</b></span>
+            <span class="env">Server</span>
+        </div>
+        <AuthorizeView>
+            <Authorized>
+                <div class="acct">
+                    <span class="who">
+                        <span class="u">@context.User.Identity?.Name</span>
+                        <span class="r">@(context.User.IsSuperAdmin() ? "Administrator · superadmin" : "Admin")</span>
+                    </span>
+                    <a class="acctlink" href="/account/password">Password</a>
+                    <form method="post" action="/account/logout" class="navlogout">
+                        <AntiforgeryToken />
+                        <button type="submit">Sign out</button>
+                    </form>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+    </header>
+    <div class="body">
+        <AuthorizeView>
+            <Authorized>
+                <nav class="sidebar">
+                    <div class="seclbl">Overview</div>
+                    <NavLink href="/" Match="NavLinkMatch.All" ActiveClass="active">Dashboard</NavLink>
+                    <NavLink href="/esi" ActiveClass="active">ESI metrics</NavLink>
+                    <NavLink href="/logs" ActiveClass="active">Logs</NavLink>
+                    <div class="seclbl">Access</div>
+                    <NavLink href="/allowed" ActiveClass="active">Allowed-list</NavLink>
+                    <NavLink href="/data" ActiveClass="active">Data</NavLink>
+                    <div class="seclbl">Administration</div>
+                    <NavLink href="/users" ActiveClass="active">Users</NavLink>
+                    <NavLink href="/roles" ActiveClass="active">Roles</NavLink>
+                    <div class="seclbl">Live</div>
+                    <a href="/stream/dps" target="_blank">DPS stream ↗</a>
+                </nav>
+            </Authorized>
+        </AuthorizeView>
+        <main class="content">
+            @Body
+        </main>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is null)
+            return;
+
+        var user = (await AuthState).User;
+        if (user.Identity?.IsAuthenticated == true && user.HasClaim(AdminClaims.MustChangePassword, "true"))
+        {
+            var path = new Uri(Navigation.Uri).AbsolutePath;
+            if (!path.Equals("/account/password", StringComparison.OrdinalIgnoreCase))
+                Navigation.NavigateTo("/account/password");
+        }
+    }
+}

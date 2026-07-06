@@ -1,0 +1,103 @@
+@page "/"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = PanelPermissions.DashboardView)]
+
+<div class="crumb">Overview / <b>Dashboard</b></div>
+
+<Card Title="Server identity" Pad="true">
+    <p class="dim" style="margin:0 0 6px;">TLS cert fingerprint — pin this in the client during pairing (TOFU):</p>
+    <p class="fp" style="margin:0;">@Fingerprint</p>
+</Card>
+
+<Card Title="Connected clients" Count="@Connected.Count.ToString()">
+    @if (Connected.Count == 0)
+    {
+        <p class="dim" style="padding:14px;margin:0;">No clients attached to the event bus.</p>
+    }
+    else
+    {
+        <table>
+            <thead><tr><th>Character</th><th>Connected at (UTC)</th></tr></thead>
+            <tbody>
+                @foreach (var client in Connected)
+                {
+                    <tr><td class="bright"><span class="ok">●</span> @client.CharacterName</td><td class="dim">@client.ConnectedAt.ToString("HH:mm:ss")</td></tr>
+                }
+            </tbody>
+        </table>
+    }
+</Card>
+
+<Card Title="Sessions" Count="@Sessions.Count.ToString()">
+    @if (Sessions.Count == 0)
+    {
+        <p class="dim" style="padding:14px;margin:0;">No server sessions issued yet.</p>
+    }
+    else
+    {
+        <table>
+            <thead><tr><th>Character</th><th>Issued</th><th>Expires</th><th>Heartbeat</th><th>State</th></tr></thead>
+            <tbody>
+                @foreach (var session in Sessions)
+                {
+                    <tr>
+                        <td class="bright">@(session.SyncedCharacter?.CharacterName ?? "—")</td>
+                        <td class="dim">@session.IssuedAt.ToString("HH:mm:ss")</td>
+                        <td class="dim">@session.ExpiresAt.ToString("HH:mm:ss")</td>
+                        <td class="dim">@session.LastHeartbeat.ToString("HH:mm:ss")</td>
+                        <td class="@(IsStale(session.LastHeartbeat) ? "stale" : "ok")">@(IsStale(session.LastHeartbeat) ? "stale" : "live")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</Card>
+
+<Card Title="Permissions">
+    <div class="switchrow">
+        <div class="lbl"><span class="c">fit.sync</span> — allow clients to share fittings via this server</div>
+        <label class="switch"><input type="checkbox" @bind="FitSyncEnabled" /><span class="track"><span class="knob"></span></span></label>
+    </div>
+    <div class="switchrow">
+        <div class="lbl"><span class="c">fit.manage</span> — allow clients to delete fits from the shared library</div>
+        <label class="switch"><input type="checkbox" @bind="FitManageEnabled" /><span class="track"><span class="knob"></span></span></label>
+    </div>
+</Card>
+
+<Card Title="Shared fittings" Count="@SharedFits.Count.ToString()">
+    @if (SharedFits.Count == 0)
+    {
+        <p class="dim" style="padding:14px;margin:0;">No fits shared to this server yet.</p>
+    }
+    else
+    {
+        <table>
+            <thead><tr><th>Name</th><th>Ship type</th><th>Shared by</th><th>Shared at</th></tr></thead>
+            <tbody>
+                @foreach (var fit in SharedFits)
+                {
+                    <tr><td class="bright">@fit.Name</td><td class="dim">@fit.ShipTypeId</td><td>@fit.SharedByCharacterName</td><td class="dim">@fit.SharedAt.LocalDateTime.ToString("HH:mm:ss")</td></tr>
+                }
+            </tbody>
+        </table>
+    }
+</Card>
+
+<Card Title="Paired characters" Count="@Synced.Count.ToString()">
+    @if (Synced.Count == 0)
+    {
+        <p class="dim" style="padding:14px;margin:0;">No characters paired (Mode B) yet.</p>
+    }
+    else
+    {
+        <table>
+            <thead><tr><th>Character</th><th>ESI id</th><th>Paired at (UTC)</th></tr></thead>
+            <tbody>
+                @foreach (var character in Synced)
+                {
+                    <tr><td class="bright">@character.CharacterName</td><td class="dim">@character.EsiCharacterId</td><td class="dim">@character.PairedAt.ToString("yyyy-MM-dd HH:mm:ss")</td></tr>
+                }
+            </tbody>
+        </table>
+    }
+</Card>

@@ -1,0 +1,64 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        x:Class="EveUtils.Client.Views.FleetShareWindow"
+        x:CompileBindings="True" x:DataType="vm:FleetShareViewModel"
+        Width="520" SizeToContent="Height" MaxHeight="640"
+        WindowStartupLocation="CenterOwner" CanResize="False"
+        Title="Fleet sharing">
+
+    <Window.Resources>
+        <DataTemplate x:Key="MetricRow" x:DataType="vm:FleetMetricShareRowViewModel">
+            <Grid ColumnDefinitions="*,170" Margin="0,2">
+                <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center"/>
+                <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" SelectedIndex="{Binding ChoiceIndex}">
+                    <ComboBoxItem>Use global default</ComboBoxItem>
+                    <ComboBoxItem>Share</ComboBoxItem>
+                    <ComboBoxItem>Don't share</ComboBoxItem>
+                </ComboBox>
+            </Grid>
+        </DataTemplate>
+    </Window.Resources>
+
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,12">
+            <TextBlock Text="{Binding FleetName, StringFormat='Sharing — {0}'}" FontWeight="Bold" FontSize="15"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <TextBlock Text="Choose what each of your characters shares with this fleet. 'Use global default' follows your Settings; the other choices override them for this fleet only."
+                       FontSize="11" Opacity="0.7" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
+            <Button Content="Cancel" Click="OnCancel"/>
+            <Button Content="Save" Classes="accent" Click="OnSave"/>
+        </StackPanel>
+
+        <ScrollViewer>
+            <StackPanel Spacing="10">
+                <CheckBox Content="Apply to all my characters in this fleet" IsChecked="{Binding ApplyToAll}"/>
+
+                <!-- One shared set applied to every character -->
+                <ContentControl IsVisible="{Binding ApplyToAll}" Content="{Binding AllCharacters}">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:FleetShareCharacterViewModel">
+                            <ItemsControl ItemsSource="{Binding Metrics}" ItemTemplate="{StaticResource MetricRow}"/>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+
+                <!-- Per character -->
+                <ItemsControl IsVisible="{Binding !ApplyToAll}" ItemsSource="{Binding Characters}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:FleetShareCharacterViewModel">
+                            <StackPanel Spacing="3" Margin="0,0,0,10">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextBrightBrush}"/>
+                                <ItemsControl ItemsSource="{Binding Metrics}" ItemTemplate="{StaticResource MetricRow}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</v:ChromedWindow>

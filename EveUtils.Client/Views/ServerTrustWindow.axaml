@@ -1,0 +1,44 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="460" d:DesignHeight="320"
+        x:Class="EveUtils.Client.Views.ServerTrustWindow"
+        x:Name="Root"
+        Width="460" Height="320"
+        WindowStartupLocation="CenterOwner"
+        Title="Server trust">
+
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top" Spacing="3" Margin="0,0,0,12">
+            <TextBlock x:Name="DisplayNameBlock" FontWeight="Bold" FontSize="15"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <TextBlock Text="Verify this fingerprint out-of-band before you trust the server (TOFU, SEC-13)."
+                       FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Spacing="8" Margin="0,12,0,0">
+            <Button Content="Decouple" Click="OnDecouple"/>
+            <Button Content="Close" Click="OnClose" Classes="accent"/>
+        </StackPanel>
+
+        <StackPanel Spacing="12">
+            <StackPanel Spacing="2">
+                <TextBlock Text="ADDRESS" Classes="label" FontSize="9"/>
+                <TextBlock x:Name="AddressBlock" Classes="mono" FontSize="12"
+                           Foreground="{StaticResource TextBrightBrush}" TextWrapping="Wrap"/>
+            </StackPanel>
+            <StackPanel Spacing="2">
+                <TextBlock Text="STATUS" Classes="label" FontSize="9"/>
+                <TextBlock x:Name="StatusBlock" FontSize="12"
+                           Foreground="{DynamicResource TextAccentBrush}"/>
+            </StackPanel>
+            <StackPanel Spacing="2">
+                <TextBlock Text="CERT FINGERPRINT (SHA-256)" Classes="label" FontSize="9"/>
+                <SelectableTextBlock x:Name="FingerprintBlock" Classes="mono" FontSize="12"
+                                     Foreground="{StaticResource TextBrightBrush}" TextWrapping="Wrap"/>
+            </StackPanel>
+        </StackPanel>
+    </DockPanel>
+</v:ChromedWindow>

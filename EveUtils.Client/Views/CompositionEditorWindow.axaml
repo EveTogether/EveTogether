@@ -1,0 +1,194 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="640"
+        x:Class="EveUtils.Client.Views.CompositionEditorWindow"
+        x:DataType="vm:CompositionEditorViewModel"
+        x:Name="EditorRoot"
+        Width="600" Height="660" MinWidth="520" MinHeight="460" CanResize="True"
+        WindowStartupLocation="CenterOwner"
+        Title="{Binding Title}">
+
+    <v:ChromedWindow.Styles>
+        <Style Selector="TextBlock.fieldlabel">
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="LetterSpacing" Value="1.5"/>
+            <Setter Property="Margin" Value="0,0,0,5"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+        </Style>
+        <Style Selector="TextBox.num">
+            <Setter Property="Width" Value="54"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.minlabel">
+            <Setter Property="FontSize" Value="8"/>
+            <Setter Property="LetterSpacing" Value="1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+        </Style>
+        <Style Selector="Button.dashed">
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Padding" Value="8"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+        </Style>
+    </v:ChromedWindow.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- Header -->
+        <Border Grid.Row="0" Height="40" Background="#EA080604"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <StackPanel Margin="14,0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBlock Text="◆" Foreground="{DynamicResource AccentBrush}" FontSize="9" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="13" LetterSpacing="2.2"
+                           Foreground="{StaticResource TextBrightBrush}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Footer: live summary + actions -->
+        <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,1,0,0" Padding="16,11">
+            <Grid ColumnDefinitions="Auto,12,*,Auto,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding RoleCount, StringFormat='{}{0} roles'}" Classes="label" FontSize="10"/>
+                    <TextBlock Text="·" Classes="label" FontSize="10"/>
+                    <TextBlock Text="{Binding FitCount, StringFormat='{}{0} fits'}" Classes="label" FontSize="10"/>
+                    <TextBlock Text="·" Classes="label" FontSize="10"/>
+                    <TextBlock Text="{Binding MinPilots, StringFormat='min. {0} pilots'}" Classes="label" FontSize="10"/>
+                </StackPanel>
+                <TextBlock Grid.Column="2" Text="{Binding Status}" VerticalAlignment="Center" FontSize="10"
+                           TextTrimming="CharacterEllipsis" Foreground="{DynamicResource RedBrush}"/>
+                <Button Grid.Column="3" Content="{Binding CancelButtonLabel}" FontSize="11" Margin="0,0,8,0" Command="{Binding CancelCommand}"/>
+                <Button Grid.Column="4" Content="SAVE COMPOSITION" FontSize="11" Classes="accent" Command="{Binding SaveCommand}"
+                        IsVisible="{Binding IsEditable}"/>
+            </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" Padding="18,16,18,8" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="0">
+
+                <!-- Name -->
+                <StackPanel Margin="0,0,0,13">
+                    <TextBlock Classes="fieldlabel" Text="NAME"/>
+                    <TextBox Text="{Binding Name}" FontSize="13" PlaceholderText="Composition name" IsReadOnly="{Binding IsReadOnly}"/>
+                </StackPanel>
+
+                <!-- Description -->
+                <StackPanel Margin="0,0,0,4">
+                    <TextBlock Classes="fieldlabel" Text="DESCRIPTION"/>
+                    <TextBox Text="{Binding Description}" FontSize="12" AcceptsReturn="True" TextWrapping="Wrap"
+                             Height="58" PlaceholderText="Optional notes about the doctrine" IsReadOnly="{Binding IsReadOnly}"/>
+                </StackPanel>
+
+                <!-- Role groups header -->
+                <Grid ColumnDefinitions="Auto,8,Auto,*" Margin="0,16,0,10">
+                    <TextBlock Grid.Column="0" Text="◆" Foreground="{DynamicResource AccentBrush}" FontSize="9" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="2" Text="ROLE GROUPS" FontSize="10" LetterSpacing="1.5"
+                               Foreground="{StaticResource TextBrightBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="9"
+                               Classes="label" Text="group min = pilots for the role · per-fit min optional"/>
+                </Grid>
+
+                <!-- Role group cards -->
+                <ItemsControl ItemsSource="{Binding Roles}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:EditorRoleViewModel">
+                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                    Background="#08FFFFFF" Margin="0,0,0,11">
+                                <StackPanel>
+                                    <!-- role header -->
+                                    <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1"
+                                            Background="#10FFFFFF" Padding="11,9">
+                                        <Grid ColumnDefinitions="Auto,9,Auto,10,Auto,Auto,*,Auto">
+                                            <Border Grid.Column="0" Width="7" Height="7" CornerRadius="2" VerticalAlignment="Center"
+                                                    Background="{DynamicResource AccentBrush}"/>
+                                            <TextBox Grid.Column="2" Text="{Binding RoleName}" FontSize="13" FontWeight="SemiBold" Width="160"
+                                                     IsReadOnly="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsReadOnly}"/>
+                                            <TextBlock Grid.Column="4" Classes="minlabel" Text="GROUP MIN" Margin="0,0,7,0"/>
+                                            <TextBox Grid.Column="5" Classes="num" Text="{Binding GroupMinText}" PlaceholderText="—"
+                                                     IsReadOnly="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsReadOnly}"/>
+                                            <Button Grid.Column="7" Content="✕" FontSize="11" Classes="danger"
+                                                    IsVisible="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsEditable}"
+                                                    Command="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).RemoveRoleCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+                                    </Border>
+                                    <!-- entries -->
+                                    <StackPanel Margin="11,9" Spacing="6">
+                                        <ItemsControl ItemsSource="{Binding Entries}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:EditorEntryViewModel">
+                                                    <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                                                            Background="#06FFFFFF" Padding="10,6" Margin="0,0,0,6">
+                                                        <Grid ColumnDefinitions="Auto,10,*,Auto,Auto,Auto,Auto">
+                                                            <!-- hull in a faction-coloured hexagon, matching the compositions overview -->
+                                                            <Panel Grid.Column="0" Width="36" Height="40" VerticalAlignment="Center">
+                                                                <Path Data="M18,0 L36,10 L36,30 L18,40 L0,30 L0,10 Z"
+                                                                      Fill="{DynamicResource HexBrandBrush}"/>
+                                                                <Panel Width="32" Height="36" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                                    <Panel.Clip>
+                                                                        <PathGeometry Figures="M16,0 L32,9 L32,27 L16,36 L0,27 L0,9 Z"/>
+                                                                    </Panel.Clip>
+                                                                    <Border Background="{DynamicResource AccentSoftBrush}"/>
+                                                                    <Image Source="{Binding HullImage}" IsVisible="{Binding HasHullImage}" Stretch="UniformToFill"/>
+                                                                </Panel>
+                                                            </Panel>
+                                                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="1">
+                                                                <TextBlock Text="{Binding FitName}" FontSize="12" FontWeight="SemiBold"
+                                                                           Foreground="{StaticResource TextBrightBrush}"/>
+                                                                <TextBlock Text="{Binding HullName}" Classes="label" FontSize="9"/>
+                                                            </StackPanel>
+                                                            <Button Grid.Column="3" Content="DETAIL" FontSize="8" Classes="accent" Margin="0,0,10,0"
+                                                                    VerticalAlignment="Center" ToolTip.Tip="Open fit detail"
+                                                                    Command="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).OpenFitDetailCommand}"
+                                                                    CommandParameter="{Binding}"/>
+                                                            <TextBlock Grid.Column="4" Classes="minlabel" Text="MIN. NEEDED" Margin="0,0,7,0"
+                                                                       VerticalAlignment="Center"
+                                                                       ToolTip.Tip="Minimum number of this fit the composition needs"/>
+                                                            <TextBox Grid.Column="5" Classes="num" Text="{Binding MinText}" PlaceholderText="—"
+                                                                     VerticalAlignment="Center"
+                                                                     ToolTip.Tip="Minimum number of this fit the composition needs"
+                                                                     IsReadOnly="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsReadOnly}"/>
+                                                            <Button Grid.Column="6" Content="✕" FontSize="11" Classes="danger" Margin="6,0,0,0"
+                                                                    VerticalAlignment="Center"
+                                                                    IsVisible="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsEditable}"
+                                                                    Command="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).RemoveEntryCommand}"
+                                                                    CommandParameter="{Binding}"/>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <Button Classes="dashed" Content="+ ADD FIT  (pick from library or server)"
+                                                IsVisible="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsEditable}"
+                                                Command="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).AddFitCommand}"
+                                                CommandParameter="{Binding}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Add-role-group sits at the end of the form and scrolls with it (like the per-group add-fit). -->
+                <Button Classes="dashed" Content="+ ADD ROLE GROUP" Margin="0,2,0,0"
+                        Command="{Binding AddRoleGroupCommand}" IsVisible="{Binding IsEditable}"/>
+
+                <!-- Real trailing spacer. A bottom margin is not reliably counted in the ScrollViewer's scroll
+                     extent, so a sized element guarantees enough room below the form to scroll the last action
+                     clear of the footer. -->
+                <Border Height="56"/>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</v:ChromedWindow>

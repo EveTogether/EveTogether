@@ -1,0 +1,17 @@
+# Keep the build context small and free of local/secret state.
+**/bin/
+**/obj/
+.git/
+.github/
+.idea/
+.vs/
+data/
+*.db
+*.db-shm
+*.db-wal
+appsettings.Development.json
+appsettings.Staging.json
+appsettings.Production.json
+qodana.sarif.json
+.qodana/
+**/*.user

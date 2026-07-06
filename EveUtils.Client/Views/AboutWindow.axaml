@@ -1,0 +1,125 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="640"
+        x:Class="EveUtils.Client.Views.AboutWindow"
+        x:DataType="vm:AboutViewModel"
+        Width="480" Height="640" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="About">
+
+    <Design.DataContext>
+        <vm:AboutViewModel/>
+    </Design.DataContext>
+
+    <DockPanel>
+
+        <!-- Footer -->
+        <Border DockPanel.Dock="Bottom" Classes="panel-header" BorderThickness="0,1,0,0" Padding="16,10">
+            <Button Content="Close" Classes="accent" HorizontalAlignment="Right" Click="OnClose"/>
+        </Border>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="24,22,24,22" Spacing="22">
+
+                <!-- ── Identity ── -->
+                <StackPanel Spacing="8" HorizontalAlignment="Center">
+                    <Image Height="46" Source="avares://EveUtils.Client/Assets/eve-together-badge.png"
+                           RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                    <TextBlock Text="{Binding AppName}" FontSize="22" FontWeight="Bold" LetterSpacing="1.5"
+                               HorizontalAlignment="Center" Foreground="{StaticResource TextBrightBrush}"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                        <TextBlock Text="{Binding Version}" FontSize="12"
+                                   Foreground="{DynamicResource TextAccentBrush}" VerticalAlignment="Center"/>
+                        <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="2" Padding="5,1">
+                            <TextBlock Text="POC" FontSize="9" LetterSpacing="2"
+                                       Foreground="{DynamicResource AccentBrightBrush}"/>
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Text="{Binding Tagline}" FontSize="12" Opacity="0.75" TextWrapping="Wrap"
+                               TextAlignment="Center" MaxWidth="340"/>
+                </StackPanel>
+
+                <!-- ── Creators ── -->
+                <StackPanel Spacing="10">
+                    <TextBlock Text="CREATED BY" Classes="label" FontSize="9"/>
+                    <ItemsControl ItemsSource="{Binding Creators}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:CreatorRowViewModel">
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
+                                        Padding="12,10" Margin="0,0,0,8">
+                                    <Grid ColumnDefinitions="Auto,*">
+                                        <!-- Hex portrait: faction-coloured ring + ESI render (glyph fallback), matching the character list -->
+                                        <Panel Grid.Column="0" Width="52" Height="58" VerticalAlignment="Center">
+                                            <Path Data="M26,0 L52,14.5 L52,43.5 L26,58 L0,43.5 L0,14.5 Z"
+                                                  Fill="{DynamicResource HexBrandBrush}"/>
+                                            <Panel Width="46" Height="52" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Panel.Clip>
+                                                    <PathGeometry Figures="M23,0 L46,13 L46,39 L23,52 L0,39 L0,13 Z"/>
+                                                </Panel.Clip>
+                                                <Border Background="{DynamicResource AccentSoftBrush}" IsVisible="{Binding !HasPortrait}">
+                                                    <TextBlock Text="{Binding Initial}" FontSize="20" FontWeight="Bold"
+                                                               Foreground="{DynamicResource AccentBrightBrush}"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Image Source="{Binding Portrait}" Stretch="UniformToFill"
+                                                       IsVisible="{Binding HasPortrait}"/>
+                                            </Panel>
+                                        </Panel>
+
+                                        <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center" Spacing="2">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14"
+                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                            <TextBlock Text="{Binding Role}" FontSize="11" Opacity="0.7"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <!-- ── Inspiration ── -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="INSPIRED BY" Classes="label" FontSize="9"/>
+                    <TextBlock Text="Projects whose ideas and craft shaped this one. All trademarks belong to their owners."
+                               FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    <WrapPanel>
+                        <ItemsControl ItemsSource="{Binding Inspirations}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:InspirationLink">
+                                    <Button Content="{Binding Name}" Tag="{Binding Url}" Click="OnOpenLink"
+                                            Margin="0,0,8,8"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </WrapPanel>
+                </StackPanel>
+
+                <!-- ── License & source ── -->
+                <StackPanel Spacing="6">
+                    <TextBlock Text="LICENSE &amp; SOURCE" Classes="label" FontSize="9"/>
+                    <TextBlock Text="{Binding LicenseLabel}" FontSize="12" TextWrapping="Wrap"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="License ↗" Tag="{Binding LicenseUrl}" Click="OnOpenLink"/>
+                        <Button Content="Source code ↗" Tag="{Binding RepositoryUrl}" Click="OnOpenLink"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding Copyright}" FontSize="11" Opacity="0.7"/>
+                </StackPanel>
+
+                <!-- ── CCP disclaimer (mandatory) ── -->
+                <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="3" Padding="12,10">
+                    <TextBlock Text="{Binding Disclaimer}" FontSize="10" Opacity="0.85" TextWrapping="Wrap"/>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</v:ChromedWindow>

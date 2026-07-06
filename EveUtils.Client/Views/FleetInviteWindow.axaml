@@ -1,0 +1,64 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dlg="using:EveUtils.Client.Dialogs"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="460" d:DesignHeight="460"
+        x:Class="EveUtils.Client.Views.FleetInviteWindow"
+        x:Name="Root"
+        Width="460" Height="460"
+        WindowStartupLocation="CenterOwner"
+        Title="Invite to fleet">
+
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,14">
+            <TextBlock x:Name="HeaderBlock" Text="Invite a character" FontWeight="Bold" FontSize="15"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <TextBlock Text="Pick a connected character, the role they take on accept, and an optional note."
+                       FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Spacing="8" Margin="0,14,0,0">
+            <Button Content="Cancel" Click="OnCancel"/>
+            <Button Content="Send invite →" Click="OnConfirm" Classes="accent"/>
+        </StackPanel>
+
+        <StackPanel Spacing="10">
+            <StackPanel Spacing="3">
+                <TextBlock Text="CHARACTER" Classes="label" FontSize="9"/>
+                <Border Classes="panel" Height="150">
+                    <ListBox x:Name="OptionList" ItemsSource="{Binding Options, ElementName=Root}"
+                             SelectionMode="Single" Margin="6">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="dlg:CharacterPickOption">
+                                <Grid ColumnDefinitions="*,Auto" Margin="2" IsEnabled="{Binding Enabled}">
+                                    <StackPanel Grid.Column="0" Spacing="1">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextBrightBrush}"/>
+                                        <TextBlock Text="{Binding Detail}" FontSize="10"
+                                                   Foreground="{DynamicResource TextAccentBrush}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+            </StackPanel>
+            <StackPanel Spacing="3">
+                <TextBlock Text="ROLE ON ACCEPT" Classes="label" FontSize="9"/>
+                <ComboBox x:Name="RoleBox" HorizontalAlignment="Stretch" SelectedIndex="3">
+                    <ComboBoxItem>Fleet commander</ComboBoxItem>
+                    <ComboBoxItem>Wing commander</ComboBoxItem>
+                    <ComboBoxItem>Squad commander</ComboBoxItem>
+                    <ComboBoxItem>Squad member</ComboBoxItem>
+                </ComboBox>
+            </StackPanel>
+            <StackPanel Spacing="3">
+                <TextBlock Text="MESSAGE (OPTIONAL)" Classes="label" FontSize="9"/>
+                <TextBox x:Name="MessageBox" PlaceholderText="A short note for the invitee…"
+                         AcceptsReturn="True" Height="56" TextWrapping="Wrap" VerticalContentAlignment="Top"/>
+            </StackPanel>
+        </StackPanel>
+    </DockPanel>
+</v:ChromedWindow>

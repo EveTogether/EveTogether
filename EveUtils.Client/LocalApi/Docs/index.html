@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>EVE Together — Local API</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --border:#2a313c; --text:#c9d1d9; --dim:#8b949e; --accent:#4EC79E; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.6 system-ui,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:880px; margin:0 auto; padding:48px 20px; }
+  h1 { font-size:26px; margin:0 0 4px; color:#fff; }
+  .sub { color:var(--dim); margin:0 0 6px; }
+  .meta { color:var(--dim); font-size:13px; margin-bottom:28px; }
+  .meta code { background:var(--panel); border:1px solid var(--border); border-radius:5px; padding:2px 7px; color:var(--accent); }
+  .pill { display:inline-block; font-size:11px; border:1px solid var(--border); border-radius:999px; padding:2px 9px; color:var(--dim); margin-left:6px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
+  a.card { display:block; text-decoration:none; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:18px 18px 16px; color:var(--text); transition:border-color .15s,transform .15s; }
+  a.card:hover { border-color:var(--accent); transform:translateY(-2px); }
+  a.card h2 { margin:0 0 6px; font-size:16px; color:#fff; }
+  a.card p { margin:0; color:var(--dim); font-size:13px; }
+  a.card .path { display:inline-block; margin-top:10px; font-family:ui-monospace,monospace; font-size:12px; color:var(--accent); }
+  footer { margin-top:30px; color:var(--dim); font-size:12px; }
+  footer a { color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>EVE Together — Local API <span class="pill">read-only</span><span class="pill">127.0.0.1 only</span></h1>
+  <p class="sub">A local, read-only API into your own EVE Together data — for your own widgets, overlays and tooling.</p>
+  <p class="meta">Base URL <code>{{BASE_URL}}</code> · API version <code>v1</code> · this server is reachable only from this machine.</p>
+
+  <div class="grid">
+    <a class="card" href="/scalar">
+      <h2>API Reference</h2>
+      <p>Interactive OpenAPI reference (Scalar). Browse every REST endpoint and try it live.</p>
+      <span class="path">/scalar</span>
+    </a>
+    <a class="card" href="/docs">
+      <h2>Connect &amp; Guides</h2>
+      <p>How to connect, the security model, and the realtime streams (WebSocket &amp; SignalR).</p>
+      <span class="path">/docs</span>
+    </a>
+    <a class="card" href="/openapi/v1.json">
+      <h2>OpenAPI Document</h2>
+      <p>The raw OpenAPI 3 JSON — point your own client generator or tooling at it.</p>
+      <span class="path">/openapi/v1.json</span>
+    </a>
+    <a class="card" href="/widget">
+      <h2>Sample widget</h2>
+      <p>A ready-to-run live DPS overlay over the WebSocket stream — drop it into OBS or view source as a starting point.</p>
+      <span class="path">/widget</span>
+    </a>
+    <a class="card" href="/api/v1/health">
+      <h2>Health</h2>
+      <p>Liveness probe: app version and API version. Use it to confirm the server is up.</p>
+      <span class="path">/api/v1/health</span>
+    </a>
+  </div>
+
+  <footer>EVE Together · the API exposes game/fit/fleet data only — never ESI tokens or credentials. See <a href="/docs">Connect &amp; Guides</a> to get started.</footer>
+</div>
+</body>
+</html>

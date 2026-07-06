@@ -1,0 +1,56 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Folder Include="Models\" />
+    <AvaloniaResource Include="Assets\**" />
+    <Content Include="appsettings*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Local API landing/index + connect guide, served at / and /docs. -->
+    <EmbeddedResource Include="LocalApi\Docs\index.html" LogicalName="localapi.index.html" />
+    <EmbeddedResource Include="LocalApi\Docs\docs.html" LogicalName="localapi.docs.html" />
+    <EmbeddedResource Include="LocalApi\Docs\widget.html" LogicalName="localapi.widget.html" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- In-process Kestrel host for the opt-in local widget API (loopback only). Brings in minimal APIs,
+         WebSockets and SignalR; this is transitive over the ProjectReference so EveUtils.Client.UiTests
+         can host it too. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.0.4" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.4" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.4" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.0.0" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.4" />
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.1">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
+    <!-- Pin Microsoft.OpenApi above the 2.0.0 that AspNetCore.OpenApi pulls in, which carries
+         the high-severity advisory GHSA-v5pm-xwqc-g5wc (NU1903); patched from 2.7.5. -->
+    <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.16.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.8" />
+    <!-- Pin the native SQLite bundle to 3.0.0 to drop SQLitePCLRaw.lib.e_sqlite3 2.1.11,
+         which carries the high-severity advisory GHSA-2m69-gcr7-jv3q (NU1903). -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.0" />
+    <!-- Microsoft.Extensions.Configuration.* / DependencyInjection / Hosting.Abstractions are now provided by the
+         Microsoft.AspNetCore.App framework reference above, so the explicit package references were dropped (NU1510). -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EveUtils.Shared\EveUtils.Shared.csproj" />
+    <ProjectReference Include="..\EveUtils.Migrations.Client.Sqlite\EveUtils.Migrations.Client.Sqlite.csproj" />
+  </ItemGroup>
+</Project>

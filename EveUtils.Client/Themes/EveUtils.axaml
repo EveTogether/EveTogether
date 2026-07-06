@@ -1,0 +1,469 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="using:EveUtils.Client.Views">
+
+    <Styles.Resources>
+
+        <!-- EVE-Utils design tokens. The neutral text/structural tokens live here; the faction-swappable tokens
+             (accent ramp, borders, dividers, glow, row hover/select, header/window gradients, hex brand, rail bg)
+             live in Themes/Factions/*.axaml and are merged into Application.Resources by ThemeService (D-183).
+             Style setters that consume a swappable token use DynamicResource so a faction swap re-tints live. -->
+        <Color x:Key="BgDeepColor">#FF06070A</Color>
+        <Color x:Key="BgDeep1Color">#FF030806</Color>
+        <Color x:Key="BgDeep2Color">#FF060D0A</Color>
+
+        <SolidColorBrush x:Key="BgDeepBrush" Color="#FF06070A"/>
+        <SolidColorBrush x:Key="BgPanelBrush" Color="#F00C100E"/>
+        <SolidColorBrush x:Key="BgHeaderBrush" Color="#14000000"/>
+        <SolidColorBrush x:Key="BgRowBrush" Color="#05FFFFFF"/>
+        <SolidColorBrush x:Key="BgRowAltBrush" Color="#0AFFFFFF"/>
+
+        <SolidColorBrush x:Key="TextBrush" Color="#FFD8D0C4"/>
+        <SolidColorBrush x:Key="TextDimBrush" Color="#FF8A7E6B"/>
+        <SolidColorBrush x:Key="TextBrightBrush" Color="#FFF3ECE0"/>
+
+        <SolidColorBrush x:Key="ValueBrush" Color="#FFF5B042"/>
+        <SolidColorBrush x:Key="GreenBrush" Color="#FF4ADE80"/>
+        <SolidColorBrush x:Key="RedBrush" Color="#FFEF5A5A"/>
+        <SolidColorBrush x:Key="BlueBrush" Color="#FF38BDF8"/>
+        <SolidColorBrush x:Key="MagentaBrush" Color="#FFC084FC"/>
+
+        <FontFamily x:Key="MonoFont">Consolas, Cascadia Mono, monospace</FontFamily>
+    </Styles.Resources>
+
+    <!-- ── Window ── -->
+    <Style Selector="Window">
+        <Setter Property="Background" Value="{DynamicResource WindowBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="FontSize" Value="12"/>
+    </Style>
+
+
+    <!-- ── Panel (window chrome box) ── -->
+    <Style Selector="Border.panel">
+        <Setter Property="Background" Value="{StaticResource BgPanelBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BoxShadow" Value="0 12 32 0 #73000000"/>
+    </Style>
+
+    <!-- ── Panel title bar ── -->
+    <Style Selector="Border.panel-header">
+        <Setter Property="Background" Value="{DynamicResource HeaderGradientBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="Padding" Value="12,7"/>
+    </Style>
+
+    <Style Selector="TextBlock.panel-title">
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="LetterSpacing" Value="2.2"/>
+    </Style>
+
+    <Style Selector="TextBlock.diamond">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="FontSize" Value="9"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- ── Section / field labels ── -->
+    <Style Selector="TextBlock.label">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="LetterSpacing" Value="1.8"/>
+    </Style>
+
+    <Style Selector="TextBlock.metric">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="FontSize" Value="22"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <Style Selector="TextBlock.mono">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+    </Style>
+
+    <!-- ── Buttons ── -->
+    <Style Selector="Button">
+        <Setter Property="Background" Value="#22FFFFFF"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Padding" Value="14,7"/>
+        <Setter Property="FontSize" Value="11"/>
+    </Style>
+    <Style Selector="Button:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+    <Style Selector="Button:disabled /template/ ContentPresenter">
+        <Setter Property="Background" Value="#08FFFFFF"/>
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+    </Style>
+    <!-- Destructive / terminal action (e.g. CONCLUDE) — red so it stands out from neutral/accent buttons. -->
+    <Style Selector="Button.danger">
+        <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
+    </Style>
+    <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#22EF5A5A"/>
+        <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+    <!-- Affirmative action (e.g. an invite Accept) — green so it reads as the positive choice next to a red Decline. -->
+    <Style Selector="Button.good">
+        <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource GreenBrush}"/>
+    </Style>
+    <Style Selector="Button.good:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#224ADE80"/>
+        <Setter Property="BorderBrush" Value="{StaticResource GreenBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+    <!-- Inside an action toast the affirmative/destructive buttons are FILLED (not just outlined) so the choice
+         reads at a glance; scoped to .toast-action so the shared .danger button (e.g. CONCLUDE) stays outline-only. -->
+    <Style Selector="Button.toast-action.good">
+        <Setter Property="Background" Value="{StaticResource GreenBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource GreenBrush}"/>
+        <Setter Property="Foreground" Value="#FF06070A"/>
+    </Style>
+    <Style Selector="Button.toast-action.good:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#FF6BE89B"/>
+        <Setter Property="Foreground" Value="#FF06070A"/>
+    </Style>
+    <Style Selector="Button.toast-action.danger">
+        <Setter Property="Background" Value="{StaticResource RedBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
+        <Setter Property="Foreground" Value="#FF06070A"/>
+    </Style>
+    <Style Selector="Button.toast-action.danger:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#FFF47A7A"/>
+        <Setter Property="Foreground" Value="#FF06070A"/>
+    </Style>
+    <!-- Accent (primary) action, e.g. Settings Save -->
+    <Style Selector="Button.accent">
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+    </Style>
+
+    <!-- Compact icon-only destructive button (e.g. inbox delete). Borderless line-icon that reads clearly at rest
+         (accent text) and turns red with a soft fill on hover. A child Path bound to the button Foreground re-tints
+         with the state. -->
+    <Style Selector="Button.trash">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="3"/>
+        <Setter Property="Padding" Value="6,4"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+    </Style>
+    <Style Selector="Button.trash:pointerover">
+        <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+    </Style>
+    <Style Selector="Button.trash:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#22EF5A5A"/>
+    </Style>
+
+    <!-- Server-group header (D-105 multi-server aggregation): a section header above each coupled server's fleets. -->
+    <Style Selector="Border.server-group-header">
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="Padding" Value="6,3"/>
+        <Setter Property="Margin" Value="0,2,0,3"/>
+    </Style>
+    <Style Selector="TextBlock.server-group-title">
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="FontSize" Value="9"/>
+        <Setter Property="LetterSpacing" Value="1.5"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+    </Style>
+
+    <!-- ── TextBox ── -->
+    <Style Selector="TextBox">
+        <Setter Property="Background" Value="#0AFFFFFF"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="FontSize" Value="12"/>
+    </Style>
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+    </Style>
+
+    <!-- ── ListBox ── -->
+    <Style Selector="ListBox">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+    </Style>
+    <Style Selector="ListBoxItem">
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="Padding" Value="10,7"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="FontSize" Value="12"/>
+    </Style>
+    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+    </Style>
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+
+    <!-- ── TabControl ── -->
+    <Style Selector="TabControl">
+        <Setter Property="Padding" Value="0"/>
+    </Style>
+    <!-- Tint only the tab STRIP (the TabControl's own header panel, inside its template), not every WrapPanel that
+         happens to live in tab CONTENT — a bare "TabControl WrapPanel" descendant selector also matched content
+         WrapPanels (e.g. the composition cards' hull thumbnails + role chips), painting a 25% black band over them. -->
+    <Style Selector="TabControl /template/ WrapPanel">
+        <Setter Property="Background" Value="#40000000"/>
+    </Style>
+    <Style Selector="TabItem">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="Padding" Value="16,8"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,1,0"/>
+    </Style>
+    <Style Selector="TabItem:selected">
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+    </Style>
+    <Style Selector="TabItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+
+    <!-- ── ProgressBar (fleet bars) ── -->
+    <Style Selector="ProgressBar">
+        <Setter Property="MinHeight" Value="9"/>
+        <Setter Property="Height" Value="9"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Background" Value="#14FFFFFF"/>
+    </Style>
+
+    <!-- ── Status chips (module-shell mockup): small rounded pills for the character card's ESI / server /
+         implant badges. Variants: .ok = healthy accent (mockup .chip.esi), .warn = needs attention (amber),
+         .dim = inert ("not signed in"). Faction-swappable colours via DynamicResource. ── -->
+    <Style Selector="Border.chip">
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="7,1,7,2"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Border.chip > TextBlock">
+        <Setter Property="FontSize" Value="9.5"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Border.chip.ok">
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    </Style>
+    <Style Selector="Border.chip.ok > TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+    </Style>
+    <Style Selector="Border.chip.warn">
+        <Setter Property="BorderBrush" Value="#8CE0B341"/>
+    </Style>
+    <Style Selector="Border.chip.warn > TextBlock">
+        <Setter Property="Foreground" Value="#FFE0B341"/>
+    </Style>
+    <Style Selector="Border.chip.dim > TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+    </Style>
+
+    <!-- ── Borderless window chrome (D-143): custom title bar + window buttons ── -->
+    <Style Selector="Border.titlebar">
+        <Setter Property="Background" Value="#EA080604"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+    </Style>
+    <Style Selector="Button.winbtn">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Width" Value="46"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="VerticalAlignment" Value="Stretch"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.winbtn:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+    <Style Selector="Button.winclose:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#FFCC4444"/>
+        <Setter Property="Foreground" Value="White"/>
+    </Style>
+
+    <!-- ── Module-shell rail (D-182): monochrome icon launcher + per-module item ── -->
+    <Style Selector="Border.rail">
+        <Setter Property="Background" Value="{DynamicResource RailBackgroundBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,1,0"/>
+    </Style>
+    <Style Selector="Button.railitem">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="BorderThickness" Value="3,0,0,0"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Padding" Value="4,11"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.railitem:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+    </Style>
+    <!-- Active module: accent text + soft fill + an inset accent edge (mockup box-shadow:inset 3px). -->
+    <Style Selector="Button.railitem.active">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    </Style>
+    <Style Selector="Button.railitem.active /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+    </Style>
+    <Style Selector="Border.rail-divider">
+        <Setter Property="Height" Value="1"/>
+        <Setter Property="Background" Value="{DynamicResource DividerBrush}"/>
+        <Setter Property="Margin" Value="14,5"/>
+    </Style>
+
+    <!-- ── Docked module host tab strip (D-182) ── -->
+    <Style Selector="ListBox.hosttabs">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="VerticalAlignment" Value="Stretch"/>
+    </Style>
+    <Style Selector="ListBox.hosttabs ListBoxItem">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="BorderThickness" Value="0,0,1,0"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="CornerRadius" Value="0"/>
+    </Style>
+    <Style Selector="ListBox.hosttabs ListBoxItem:selected">
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+    <Style Selector="ListBox.hosttabs ListBoxItem:selected /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+    </Style>
+    <Style Selector="Button.tabclose">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Padding" Value="3,1"/>
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+    </Style>
+    <Style Selector="Button.tabclose:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+    </Style>
+
+    <!-- DataGrid (Avalonia.Controls.DataGrid, added for the FITS fit-browser, D-148). The Fluent DataGrid
+         theme is included in App.axaml; these tweaks blend it into the dark EVE panel look. -->
+    <Style Selector="DataGrid">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+        <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="RowBackground" Value="Transparent"/>
+    </Style>
+    <Style Selector="DataGridColumnHeader">
+        <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="DataGridCell">
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="FontSize" Value="11"/>
+    </Style>
+
+    <!-- ── Menu / dropdown / context-menu polish (D-188) ── -->
+    <!-- The popup chrome (dark background, accent border, corner radius) + item hover/text colours come from the
+         per-faction MenuFlyout* resource keys in Themes/Factions/*.axaml, so they re-tint live with the faction.
+         These selectors add what has no resource key: item spacing, a rounded hover highlight, accent-tinted icon
+         glyphs, and a non-interactive section header (TextBlock.menuHeader) for menus that want one. Applies app-wide
+         to every MenuFlyout, ContextMenu and Menu dropdown. -->
+    <Style Selector="MenuItem">
+        <Setter Property="Padding" Value="6,4"/>
+    </Style>
+    <Style Selector="MenuItem:selected /template/ Border#PART_LayoutRoot">
+        <Setter Property="CornerRadius" Value="3"/>
+    </Style>
+    <Style Selector="MenuItem /template/ ContentControl#PART_IconPresenter TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+    </Style>
+    <Style Selector="MenuItem /template/ ContentControl#PART_IconPresenter PathIcon">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+    </Style>
+    <Style Selector="MenuFlyoutPresenter TextBlock.menuHeader, ContextMenu TextBlock.menuHeader">
+        <Setter Property="Margin" Value="10,7,10,3"/>
+        <Setter Property="FontSize" Value="9"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="LetterSpacing" Value="1.6"/>
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+    </Style>
+
+    <!-- ── Tooltips (D-188) ── dark themed card with an accent border + breathing room, matching the menus. -->
+    <Style Selector="ToolTip">
+        <Setter Property="Background" Value="{DynamicResource BgPanelBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="11,9"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="MaxWidth" Value="420"/>
+    </Style>
+
+    <!-- ── Toast notifications ── dark card with the faction gold border + a faction-accent severity strip, matching
+         the menus/tooltips. Per the Avalonia 12.0.4 NotificationCard template the background/border have no named
+         template part (they bind the control's own Background/BorderBrush), so they're set on the control itself; the
+         thin severity strip is Panel#PART_HeaderBar — recoloured to the faction accent for success/info so toasts read
+         as "ours", while errors/warnings keep their semantic red/amber. Live re-tint via DynamicResource. -->
+    <Style Selector="NotificationCard">
+        <Setter Property="Background" Value="{DynamicResource BgPanelBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+        <Setter Property="MaxWidth" Value="360"/>
+    </Style>
+    <!-- Compact action-toast buttons (Button.toast-action): the default form-button sizing overflows the card. The
+         height floor lives on the ContentPresenter inside the button template, so it is cleared there; content inset +
+         card width are handled in ToastActionContent itself (the card gives custom content no padding). -->
+    <Style Selector="Button.toast-action">
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Padding" Value="12,3"/>
+        <Setter Property="FontSize" Value="11"/>
+    </Style>
+    <Style Selector="Button.toast-action /template/ ContentPresenter">
+        <Setter Property="MinHeight" Value="0"/>
+    </Style>
+    <Style Selector="NotificationCard:success /template/ Panel#PART_HeaderBar">
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    </Style>
+    <Style Selector="NotificationCard:information /template/ Panel#PART_HeaderBar">
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    </Style>
+
+</Styles>

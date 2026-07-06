@@ -1,0 +1,55 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="460" d:DesignHeight="380"
+        x:Class="EveUtils.Client.Views.FleetEditWindow"
+        x:Name="Root"
+        Width="460" Height="380"
+        WindowStartupLocation="CenterOwner"
+        Title="New fleet">
+
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,14">
+            <TextBlock x:Name="HeaderBlock" Text="Compose a fleet" FontWeight="Bold" FontSize="15"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <TextBlock Text="A fleet is a plan you own — publish it Public (anyone can join) or Invite-only."
+                       FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Spacing="8" Margin="0,14,0,0">
+            <Button Content="Cancel" Click="OnCancel"/>
+            <Button x:Name="ConfirmButton" Content="Create →" Click="OnConfirm" Classes="accent"/>
+        </StackPanel>
+
+        <StackPanel Spacing="10">
+            <StackPanel Spacing="3">
+                <TextBlock Text="NAME" Classes="label" FontSize="9"/>
+                <TextBox x:Name="NameBox" PlaceholderText="e.g. Op Alpha" VerticalContentAlignment="Center"/>
+            </StackPanel>
+            <StackPanel Spacing="3">
+                <TextBlock Text="DESCRIPTION (OPTIONAL)" Classes="label" FontSize="9"/>
+                <TextBox x:Name="DescriptionBox" PlaceholderText="What's this fleet for?"
+                         AcceptsReturn="True" Height="56" TextWrapping="Wrap" VerticalContentAlignment="Top"/>
+            </StackPanel>
+            <StackPanel Spacing="3">
+                <TextBlock Text="VISIBILITY" Classes="label" FontSize="9"/>
+                <ComboBox x:Name="VisibilityBox" HorizontalAlignment="Stretch" SelectedIndex="0">
+                    <ComboBoxItem>Invite-only</ComboBoxItem>
+                    <ComboBoxItem>Public</ComboBoxItem>
+                </ComboBox>
+            </StackPanel>
+            <Grid ColumnDefinitions="*,12,*">
+                <StackPanel Grid.Column="0" Spacing="3">
+                    <TextBlock Text="FROM (OPTIONAL)" Classes="label" FontSize="9"/>
+                    <CalendarDatePicker x:Name="FromDate" HorizontalAlignment="Stretch"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="3">
+                    <TextBlock Text="TO (OPTIONAL)" Classes="label" FontSize="9"/>
+                    <CalendarDatePicker x:Name="ToDate" HorizontalAlignment="Stretch"/>
+                </StackPanel>
+            </Grid>
+        </StackPanel>
+    </DockPanel>
+</v:ChromedWindow>

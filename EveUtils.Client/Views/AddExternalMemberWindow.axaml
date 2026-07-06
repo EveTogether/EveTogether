@@ -1,0 +1,42 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="440" d:DesignHeight="320"
+        x:Class="EveUtils.Client.Views.AddExternalMemberWindow"
+        x:Name="Root"
+        Width="440" Height="320"
+        WindowStartupLocation="CenterOwner"
+        Title="Add external member">
+
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,14">
+            <TextBlock Text="Add external character" FontWeight="Bold" FontSize="15"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <TextBlock Text="Enter an EVE character id. We verify it via public ESI before adding it on trust — no invite round-trip."
+                       FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Spacing="8" Margin="0,14,0,0">
+            <Button Content="Cancel" Click="OnCancel"/>
+            <Button x:Name="ConfirmButton" Content="Add member →" Click="OnConfirm" Classes="accent" IsEnabled="False"/>
+        </StackPanel>
+
+        <StackPanel Spacing="10">
+            <StackPanel Spacing="3">
+                <TextBlock Text="CHARACTER ID" Classes="label" FontSize="9"/>
+                <TextBox x:Name="CharacterIdBox" PlaceholderText="e.g. 90000001"
+                         VerticalContentAlignment="Center" LostFocus="OnIdLostFocus"/>
+            </StackPanel>
+            <Border Classes="panel" Padding="12">
+                <StackPanel Spacing="3">
+                    <TextBlock x:Name="PreviewName" Text="Enter an id to preview." FontWeight="SemiBold"
+                               Foreground="{StaticResource TextBrightBrush}"/>
+                    <TextBlock x:Name="PreviewAffiliation" Text="" FontSize="11"
+                               Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </DockPanel>
+</v:ChromedWindow>

@@ -1,0 +1,56 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fb="using:EveUtils.Client.ViewModels.FitBrowser"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="360" d:DesignHeight="220"
+        x:Class="EveUtils.Client.Views.TypeInfoWindow"
+        x:DataType="fb:TypeInfoWindowViewModel"
+        Width="360" SizeToContent="Height" MaxHeight="500"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Title="Information">
+
+    <StackPanel Margin="16" Spacing="12">
+        <TabControl>
+            <!-- Info: the in-app card (name · group/category · estimated value · icon) -->
+            <TabItem Header="Info">
+                <StackPanel Spacing="12" Margin="0,10,0,0">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Border Width="64" Height="64" CornerRadius="4" Background="#E6121A22"
+                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                            <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Stretch="Uniform" Margin="2"/>
+                        </Border>
+                        <StackPanel VerticalAlignment="Center" Spacing="2" MaxWidth="250">
+                            <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="15"
+                                       Foreground="{StaticResource TextBrightBrush}" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding Category}" FontSize="11" Foreground="{DynamicResource TextAccentBrush}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Border Classes="panel" Padding="10,8">
+                        <StackPanel Spacing="2">
+                            <TextBlock Classes="label" FontSize="9" Text="ESTIMATED VALUE"/>
+                            <TextBlock Text="{Binding Price}" Foreground="{StaticResource TextBrightBrush}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </TabItem>
+
+            <!-- Links: external deep-links opened in the system browser (2g) -->
+            <TabItem Header="Links">
+                <StackPanel Spacing="8" Margin="0,10,0,0">
+                    <TextBlock Classes="label" FontSize="9" Text="OPEN IN BROWSER"/>
+                    <Button Content="everef.net — item info" Tag="{Binding EverefUrl}" Click="OnOpenLink"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
+                    <Button Content="EVE Market Browser — prices" Tag="{Binding MarketBrowserUrl}" Click="OnOpenLink"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
+                    <Button Content="EVE Workbench — market" Tag="{Binding WorkbenchUrl}" Click="OnOpenLink"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+
+        <Button Content="Close" Click="OnClose" Classes="accent" HorizontalAlignment="Right"/>
+    </StackPanel>
+</v:ChromedWindow>

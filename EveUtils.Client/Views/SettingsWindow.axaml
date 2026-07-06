@@ -1,0 +1,201 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="560"
+        x:Class="EveUtils.Client.Views.SettingsWindow"
+        x:Name="Root"
+        Width="720" Height="560" MinWidth="560" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Title="Settings">
+
+    <DockPanel>
+
+        <!-- Footer: Save / Cancel (applies everything on Save; cancel/close applies nothing) -->
+        <Border DockPanel.Dock="Bottom" Classes="panel-header" BorderThickness="0,1,0,0" Padding="16,10">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Content="Cancel" Click="OnCancel"/>
+                <Button Content="Save" Click="OnSave" Classes="accent"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Left: category navigation. Add a category by adding a ListBoxItem here + a matching panel on the right. -->
+        <Border DockPanel.Dock="Left" Width="172" BorderThickness="0,0,1,0"
+                BorderBrush="{DynamicResource BorderBrush}">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="16,16,16,12">
+                    <TextBlock Text="SETTINGS" Classes="panel-title" FontSize="13"/>
+                    <TextBlock Text="Configure EVE Together." Classes="label" FontSize="9"/>
+                </StackPanel>
+                <ListBox x:Name="CategoryNav" SelectionChanged="OnCategoryChanged" Margin="6,0,6,8">
+                    <ListBoxItem Content="General"/>
+                    <ListBoxItem Content="Interface"/>
+                    <ListBoxItem Content="Privacy &amp; Sharing"/>
+                    <ListBoxItem Content="Integrations"/>
+                </ListBox>
+            </DockPanel>
+        </Border>
+
+        <!-- Right: the selected category's content. Each category is a panel; only the selected one is visible.
+             HorizontalScrollBarVisibility=Disabled constrains the content to the viewport width so descriptions wrap
+             and the button rows reflow instead of running off the right edge. -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <!-- Inner margin (not ScrollViewer.Padding) so the right gutter is part of the measured content and the
+                 widest button rows reflow within it instead of being clipped at the right edge. -->
+            <Panel Margin="20,18,22,18">
+
+                <!-- ── General ── -->
+                <StackPanel x:Name="GeneralPanel" Spacing="18">
+                    <TextBlock Text="General" FontWeight="Bold" FontSize="16"
+                               Foreground="{StaticResource TextBrightBrush}"/>
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="GAMELOG DIRECTORY" Classes="label" FontSize="9"/>
+                        <Grid ColumnDefinitions="*,Auto,Auto">
+                            <TextBox x:Name="GamelogDirBox" Grid.Column="0" VerticalContentAlignment="Center"
+                                     PlaceholderText="Path to EVE/logs/Gamelogs"/>
+                            <Button Grid.Column="1" Content="Browse…" Click="OnBrowse" Margin="6,0,0,0"/>
+                            <Button Grid.Column="2" Content="Auto-detect" Click="OnAutoDetect" Margin="6,0,0,0"/>
+                        </Grid>
+                        <TextBlock x:Name="HintBlock" FontSize="10" Opacity="0.7" TextWrapping="Wrap"/>
+                        <TextBlock Text="On Linux these logs live inside the Steam Proton / Wine prefix. Auto-detect probes the usual locations; Browse to pick another."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="EVE STATIC DATA (SDE)" Classes="label" FontSize="9"/>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock x:Name="SdeVersionBlock" Grid.Column="0" VerticalAlignment="Center"
+                                       FontSize="12" Foreground="{DynamicResource TextAccentBrush}"/>
+                            <Button Grid.Column="1" Content="Re-download &amp; re-import" Click="OnReimportSde" Margin="6,0,0,0"/>
+                        </Grid>
+                        <TextBlock Text="Item names, fittings and dogma come from this local copy. Re-import as a fallback if it looks wrong, or to force the latest build."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="DATA FOLDER" Classes="label" FontSize="9"/>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock x:Name="DataFolderBlock" Grid.Column="0" VerticalAlignment="Center"
+                                       FontSize="12" Foreground="{DynamicResource TextAccentBrush}" TextTrimming="CharacterEllipsis"/>
+                            <Button Grid.Column="1" Content="Show Data Folder" Click="OnShowDataFolder" Margin="6,0,0,0"/>
+                        </Grid>
+                        <TextBlock Text="The local database, SDE store and caches live here. Opens the folder in your file browser."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- ── Interface ── -->
+                <StackPanel x:Name="InterfacePanel" Spacing="18" IsVisible="False">
+                    <TextBlock Text="Interface" FontWeight="Bold" FontSize="16"
+                               Foreground="{StaticResource TextBrightBrush}"/>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="FACTION THEME" Classes="label" FontSize="9"/>
+                        <WrapPanel>
+                            <RadioButton x:Name="FactionGallente" GroupName="faction" Margin="0,0,16,4">
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <Border Width="12" Height="12" Background="#4EC79E" CornerRadius="2"/>
+                                    <TextBlock Text="Gallente" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton x:Name="FactionAmarr" GroupName="faction" Margin="0,0,16,4">
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <Border Width="12" Height="12" Background="#E3B341" CornerRadius="2"/>
+                                    <TextBlock Text="Amarr" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton x:Name="FactionCaldari" GroupName="faction" Margin="0,0,16,4">
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <Border Width="12" Height="12" Background="#4F9BD9" CornerRadius="2"/>
+                                    <TextBlock Text="Caldari" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton x:Name="FactionMinmatar" GroupName="faction" Margin="0,0,0,4">
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <Border Width="12" Height="12" Background="#CB4D3E" CornerRadius="2"/>
+                                    <TextBlock Text="Minmatar" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+                        </WrapPanel>
+                        <TextBlock Text="Re-tints the whole interface — accent, borders, glows, header gradient and the window background hue. Applied on Save and remembered. Default Gallente."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="TOAST NOTIFICATIONS" Classes="label" FontSize="9"/>
+                        <ComboBox x:Name="ToastPositionBox" HorizontalAlignment="Left" MinWidth="200">
+                            <ComboBoxItem Content="Top left"/>
+                            <ComboBoxItem Content="Top center"/>
+                            <ComboBoxItem Content="Top right"/>
+                            <ComboBoxItem Content="Bottom left"/>
+                            <ComboBoxItem Content="Bottom center"/>
+                            <ComboBoxItem Content="Bottom right"/>
+                        </ComboBox>
+                        <TextBlock Text="Where in-app toasts (join confirmations, errors) appear within the active window. Default top right."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="FITTINGS" Classes="label" FontSize="9"/>
+                        <CheckBox x:Name="OpenFitDetailAfterImportBox" Content="Open the fit detail right after importing a fit"/>
+                        <TextBlock Text="On by default. After importing from EFT/DNA text or an eveship.fit link, the full radial detail opens so you can check the import. Uncheck if you'd rather stay in the browser."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="FIT IMAGES" Classes="label" FontSize="9"/>
+                        <CheckBox x:Name="LoadTypeImagesBox" Content="Load ship/module/charge images from the CCP image server"/>
+                        <TextBlock Text="On by default. The fit-detail wheel fetches type icons and the ship render from images.evetech.net and caches them on disk, so a fit you have opened renders offline. Uncheck to stay fully offline."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- ── Privacy & Sharing ── -->
+                <StackPanel x:Name="PrivacyPanel" Spacing="18" IsVisible="False">
+                    <TextBlock Text="Privacy &amp; Sharing" FontWeight="Bold" FontSize="16"
+                               Foreground="{StaticResource TextBrightBrush}"/>
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="FLEET METRICS SHARING" Classes="label" FontSize="9"/>
+                        <CheckBox x:Name="ShareCombatBox" Content="Share my live combat data with fleet members (DPS, neut, cap)"/>
+                        <CheckBox x:Name="ShareBountyBox" Content="Share my bounty earnings with fleet members"/>
+                        <CheckBox x:Name="ShareLocationBox" Content="Share my location with fleet members"/>
+                        <TextBlock Text="These are your global defaults for every fleet. Combat metrics are shared by default; location is off by default. You can override any of these per fleet from its SHARING button."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- ── Integrations ── -->
+                <StackPanel x:Name="IntegrationsPanel" Spacing="18" IsVisible="False">
+                    <TextBlock Text="Integrations" FontWeight="Bold" FontSize="16"
+                               Foreground="{StaticResource TextBrightBrush}"/>
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="LOCAL API SERVER" Classes="label" FontSize="9"/>
+                        <CheckBox x:Name="EnableLocalApiBox" Content="Enable the local API server (starts automatically on launch)"/>
+                        <!-- WrapPanel so the port + buttons reflow onto the next line in a narrow (docked) panel
+                             instead of running off the edge; the live status sits on its own line below. -->
+                        <WrapPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,8,6">
+                                <TextBlock Text="Port" VerticalAlignment="Center"/>
+                                <TextBox x:Name="LocalApiPortBox" Width="90" VerticalContentAlignment="Center"/>
+                            </StackPanel>
+                            <Button x:Name="LocalApiStartStopButton" Content="Start" Click="OnToggleLocalApi" Margin="0,0,6,6"/>
+                            <Button x:Name="LocalApiDocsButton" Content="API docs" Click="OnOpenApiDocs" Margin="0,0,6,6" IsEnabled="False"/>
+                            <Button x:Name="LocalApiWidgetButton" Content="Widget" Click="OnOpenWidget" Margin="0,0,0,6" IsEnabled="False"/>
+                        </WrapPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <Ellipse x:Name="LocalApiStatusDot" Width="9" Height="9" Fill="#6B7280"/>
+                            <TextBlock x:Name="LocalApiStatusBlock" VerticalAlignment="Center" FontSize="11"
+                                       Foreground="{DynamicResource TextAccentBrush}" Text="Stopped" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <TextBlock Text="Off by default. A read-only server bound to 127.0.0.1 only (never your network) — for example to feed your own stream overlays or widgets (Twitch/OBS). Start or stop it here; the interactive API reference (Scalar) opens via API docs. Default port 8001."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </StackPanel>
+
+            </Panel>
+        </ScrollViewer>
+    </DockPanel>
+</v:ChromedWindow>

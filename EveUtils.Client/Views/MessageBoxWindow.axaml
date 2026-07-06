@@ -1,0 +1,30 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="460" d:DesignHeight="240"
+        x:Class="EveUtils.Client.Views.MessageBoxWindow"
+        x:Name="Root"
+        Width="460" SizeToContent="Height" MaxHeight="400"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Title="EVE Together">
+
+    <DockPanel Margin="18">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,14,0,0">
+            <Button x:Name="CancelButton" Content="Cancel" Click="OnCancel" MinWidth="80" IsVisible="False"/>
+            <Button x:Name="OkButton" Content="OK" Click="OnOk" Classes="accent" MinWidth="80"/>
+        </StackPanel>
+
+        <StackPanel Spacing="8">
+            <TextBlock x:Name="TitleBlock" FontWeight="Bold" FontSize="14"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <ScrollViewer MaxHeight="280">
+                <TextBlock x:Name="MessageBlock" TextWrapping="Wrap"
+                           FontSize="12" Foreground="{DynamicResource TextAccentBrush}"/>
+            </ScrollViewer>
+            <CheckBox x:Name="OptOutCheck" IsVisible="False" FontSize="11" Margin="0,4,0,0"
+                      Foreground="{DynamicResource TextAccentBrush}"/>
+        </StackPanel>
+    </DockPanel>
+</v:ChromedWindow>

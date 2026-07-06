@@ -1,0 +1,128 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:ctl="using:EveUtils.Client.Controls"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="560"
+        x:Class="EveUtils.Client.Views.FleetMetricsWindow"
+        x:DataType="vm:FleetMetricsViewModel"
+        x:Name="Root"
+        Width="720" Height="560" MinWidth="520" MinHeight="320"
+        WindowStartupLocation="CenterOwner"
+        Title="Fleet metrics">
+
+    <DockPanel Margin="14">
+
+        <!-- Header: fleet name + roll-up totals -->
+        <Border DockPanel.Dock="Top" Classes="panel" Padding="14,12" Margin="0,0,0,12">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="FLEET METRICS" Classes="label" FontSize="9"/>
+                    <TextBlock Text="{Binding FleetName}" FontWeight="Bold" FontSize="15"
+                               Foreground="{StaticResource TextBrightBrush}"/>
+                </StackPanel>
+                <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto" VerticalAlignment="Center">
+                    <StackPanel Grid.Column="0" Spacing="1" Margin="0,0,18,0" HorizontalAlignment="Right">
+                        <TextBlock Text="DEALT" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
+                        <TextBlock Text="{Binding DealtTotal}" Classes="mono" FontSize="18"
+                                   Foreground="{DynamicResource AccentBrightBrush}" HorizontalAlignment="Right"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="1" Margin="0,0,18,0" HorizontalAlignment="Right">
+                        <TextBlock Text="RECEIVED" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
+                        <TextBlock Text="{Binding ReceivedTotal}" Classes="mono" FontSize="18"
+                                   Foreground="{DynamicResource TextAccentBrush}" HorizontalAlignment="Right"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Spacing="1" Margin="0,0,18,0" HorizontalAlignment="Right">
+                        <TextBlock Text="MINING" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
+                        <TextBlock Text="{Binding MiningTotal}" Classes="mono" FontSize="18"
+                                   Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Right"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="3" Spacing="1" Margin="0,0,18,0" HorizontalAlignment="Right">
+                        <TextBlock Text="BOUNTY" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
+                        <TextBlock Text="{Binding BountyTotal}" Classes="mono" FontSize="18"
+                                   Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Right"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="4" Spacing="1" HorizontalAlignment="Right">
+                        <TextBlock Text="NEUT" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
+                        <TextBlock Text="{Binding NeutTotal}" Classes="mono" FontSize="18"
+                                   Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Right"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <TextBlock DockPanel.Dock="Top" Margin="2,0,0,6"
+                   Text="One live graph per active member; location shows when shared."
+                   FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+
+        <!-- Legend for the live combat lines (colours match DpsViewModel's series). -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="16" Margin="2,0,0,10">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+                <Border Width="14" Height="3" VerticalAlignment="Center" Background="{DynamicResource AccentBrightBrush}"/>
+                <TextBlock Text="DPS out" FontSize="10" Foreground="{StaticResource TextDimBrush}"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="5">
+                <Border Width="14" Height="3" VerticalAlignment="Center" Background="#FFEF5A5A"/>
+                <TextBlock Text="DPS in" FontSize="10" Foreground="{StaticResource TextDimBrush}"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="5">
+                <Border Width="14" Height="3" VerticalAlignment="Center" Background="#FFB07EE0"/>
+                <TextBlock Text="Neut" FontSize="10" Foreground="{StaticResource TextDimBrush}"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="5">
+                <Border Width="14" Height="3" VerticalAlignment="Center" Background="#FF4D90FF"/>
+                <TextBlock Text="Cap" FontSize="10" Foreground="{StaticResource TextDimBrush}"/>
+            </StackPanel>
+        </StackPanel>
+
+        <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Members}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DpsViewModel">
+                        <Border Classes="panel" Margin="0,0,0,8" Height="116">
+                            <Grid ColumnDefinitions="174,*,Auto" Margin="12">
+                                <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Character}" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextBrightBrush}"/>
+                                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Classes="mono" FontSize="15"
+                                                   Foreground="{DynamicResource AccentBrightBrush}"
+                                                   Text="{Binding Dealt, StringFormat='OUT {0}'}"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Classes="mono" FontSize="15"
+                                                   Foreground="{StaticResource RedBrush}"
+                                                   Text="{Binding Received, StringFormat='IN {0}'}"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Classes="mono" FontSize="15"
+                                                   Foreground="#FF4D90FF"
+                                                   Text="{Binding Cap, StringFormat='CAP {0}'}"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="mono" FontSize="15"
+                                                   Foreground="#FFB07EE0"
+                                                   Text="{Binding Neut, StringFormat='NEUT {0}'}"/>
+                                    </Grid>
+                                    <StackPanel Orientation="Horizontal" Spacing="14">
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextAccentBrush}"
+                                                   IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                   Text="{Binding Location, StringFormat='◉ {0}'}"
+                                                   ToolTip.Tip="Current solar system (location sharing)"/>
+                                        <TextBlock FontSize="11" Foreground="#FFE0B25A"
+                                                   IsVisible="{Binding HasBounty}"
+                                                   Text="{Binding BountyText, StringFormat='◇ {0}'}"
+                                                   ToolTip.Tip="Bounty earned this session (bounty sharing)"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <ctl:DpsGraph Grid.Column="1" Margin="10,0,0,0"
+                                              Series="{Binding Series}"
+                                              Revision="{Binding GraphRevision}"
+                                              Markers="{Binding Markers}"/>
+                                <Button Grid.Column="2" Content="⧉" FontSize="13" Padding="8,3" Margin="10,0,0,0"
+                                        VerticalAlignment="Top" ToolTip.Tip="Pop out this graph"
+                                        Command="{Binding #Root.((vm:FleetMetricsViewModel)DataContext).PopOutCommand}"
+                                        CommandParameter="{Binding}"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</v:ChromedWindow>

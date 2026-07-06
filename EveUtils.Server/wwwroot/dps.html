@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EVE Together — Live DPS stream</title>
+    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
+    <style>
+        body { margin: 0; font-family: Consolas, 'Cascadia Mono', monospace; background: #06070a; color: #d8d0c4; padding: 28px; }
+        h1 { color: #7ee0bb; letter-spacing: 3px; font-weight: 600; display: flex; align-items: center; gap: 14px; }
+        h1 img { height: 34px; }
+        #status { color: #8a7e6b; font-size: 13px; margin-bottom: 20px; }
+        .meters { display: flex; gap: 40px; margin-bottom: 16px; }
+        .label { color: #8a7e6b; font-size: 11px; letter-spacing: 2px; }
+        .val { font-size: 42px; font-weight: 600; }
+        .dealt { color: #7ee0bb; } .recv { color: #ef5a5a; }
+        canvas { background: #0c100e; border: 1px solid #2e6ec8a0; }
+        #legend { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 14px; font-size: 12px; }
+        .pilot { display: flex; align-items: center; gap: 8px; }
+        .swatch { width: 11px; height: 11px; border-radius: 2px; }
+        .pilot .name { color: #d8d0c4; min-width: 110px; }
+        .pilot .nums { color: #8a7e6b; font-variant-numeric: tabular-nums; }
+        .pilot .nums b.d { color: #7ee0bb; } .pilot .nums b.r { color: #ef5a5a; }
+    </style>
+</head>
+<body>
+    <h1><img src="img/eve-together-badge.png" alt="" />LIVE DPS · FLEET</h1>
+    <div id="status">connecting…</div>
+    <div class="meters">
+        <div><div class="label">FLEET DPS DEALT</div><div id="dealt" class="val dealt">0</div></div>
+        <div><div class="label">FLEET DPS RECEIVED</div><div id="recv" class="val recv">0</div></div>
+        <div><div class="label">PILOTS</div><div id="count" class="val" style="font-size:22px;color:#9be8c9">0</div></div>
+    </div>
+    <canvas id="graph" width="640" height="180"></canvas>
+    <div id="legend"></div>
+
+    <script>
+        // Each coupled client streams a steady ~6.7Hz decaying DPS sample per character. We interpolate those to a
+        // smooth ~30fps graph here (EMA rounds the steps) and keep ONE series pair per character, so a multi-pilot
+        // fleet shows every pilot — not just whoever sent the last event. A pilot idle past IDLE_MS gently decays
+        // toward zero (covers a dropped tail) and is dropped entirely after REMOVE_MS so the legend stays clean.
+        const FPS = 30, CAP = 600;          // ~20s window, same as the client
+        const SMOOTHING = 0.15;             // EMA coefficient, same as the client
+        const IDLE_MS = 700;                // no sample for this long → start decaying toward zero
+        const DECAY = 0.97;                 // per-frame idle decay (~5s back to zero)
+        const REMOVE_MS = 30000;            // drop a fully-idle pilot from the graph/legend after this long
+
+        // name -> { dealt:[], recv:[], emaD, emaR, tgtD, tgtR, last, hue }
+        const pilots = new Map();
+
+        const canvas = document.getElementById('graph');
+        const ctx = canvas.getContext('2d');
+
+        function hueFor(name) {
+            let h = 0;
+            for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+            return h;
+        }
+        function getPilot(name) {
+            let p = pilots.get(name);
+            if (!p) {
+                p = { dealt: [], recv: [], emaD: 0, emaR: 0, tgtD: 0, tgtR: 0, last: 0, hue: hueFor(name) };
+                pilots.set(name, p);
+            }
+            return p;
+        }
+
+        function series(values, max, color, dashed) {
+            if (values.length < 2) return;
+            ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.lineJoin = 'round';
+            ctx.setLineDash(dashed ? [4, 4] : []); ctx.beginPath();
+            const stepX = canvas.width / (CAP - 1);
+            for (let i = 0; i < values.length; i++) {
+                const x = canvas.width - (values.length - 1 - i) * stepX;
+                const y = canvas.height - Math.min(1, values[i] / max) * (canvas.height - 8) - 4;
+                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+            ctx.stroke(); ctx.setLineDash([]);
+        }
+
+        function frame() {
+            const now = performance.now();
+            let max = 100, fleetD = 0, fleetR = 0;
+
+            for (const [name, p] of pilots) {
+                if (now - p.last > REMOVE_MS) { pilots.delete(name); continue; }
+                if (now - p.last > IDLE_MS) { p.tgtD *= DECAY; p.tgtR *= DECAY; }
+                p.emaD += SMOOTHING * (p.tgtD - p.emaD);
+                p.emaR += SMOOTHING * (p.tgtR - p.emaR);
+                p.dealt.push(p.emaD); p.recv.push(p.emaR);
+                if (p.dealt.length > CAP) { p.dealt.shift(); p.recv.shift(); }
+                max = Math.max(max, p.emaD, p.emaR);
+                fleetD += p.emaD; fleetR += p.emaR;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (const p of pilots.values()) {
+                const color = `hsl(${p.hue} 70% 62%)`;
+                series(p.dealt, max, color, false);
+                series(p.recv, max, color, true);
+            }
+
+            document.getElementById('dealt').textContent = Math.round(fleetD);
+            document.getElementById('recv').textContent = Math.round(fleetR);
+            document.getElementById('count').textContent = pilots.size;
+            renderLegend();
+        }
+
+        function renderLegend() {
+            const legend = document.getElementById('legend');
+            const rows = [...pilots.entries()].sort((a, b) => b[1].emaD - a[1].emaD);
+            legend.innerHTML = rows.map(([name, p]) =>
+                `<div class="pilot">
+                    <span class="swatch" style="background:hsl(${p.hue} 70% 62%)"></span>
+                    <span class="name">${name}</span>
+                    <span class="nums"><b class="d">${Math.round(p.emaD)}</b> / <b class="r">${Math.round(p.emaR)}</b></span>
+                 </div>`).join('');
+        }
+
+        setInterval(frame, 1000 / FPS);
+
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl('/hubs/dps').withAutomaticReconnect().build();
+
+        connection.on('dps', d => {
+            const name = d.characterName || 'Unknown';
+            const p = getPilot(name);
+            p.tgtD = d.dealt; p.tgtR = d.received; p.last = performance.now();
+            document.getElementById('status').textContent = 'streaming live — ' + pilots.size + ' pilot(s)';
+        });
+
+        connection.start()
+            .then(() => document.getElementById('status').textContent = 'connected — waiting for DPS data…')
+            .catch(err => document.getElementById('status').textContent = 'connection error: ' + err);
+    </script>
+</body>
+</html>

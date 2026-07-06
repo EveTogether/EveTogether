@@ -1,0 +1,87 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="470" d:DesignHeight="460"
+        x:Class="EveUtils.Client.Views.CharacterWindow"
+        x:DataType="vm:CharacterDialogViewModel"
+        x:Name="Root"
+        Width="470" Height="460"
+        WindowStartupLocation="CenterOwner"
+        Title="Character">
+
+    <DockPanel Margin="16">
+
+        <!-- Header: identity + ESI status -->
+        <StackPanel DockPanel.Dock="Top" Spacing="3" Margin="0,0,0,12">
+            <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="16"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <TextBlock Text="{Binding EsiStatus}" FontSize="11"
+                       Foreground="{DynamicResource TextAccentBrush}"/>
+        </StackPanel>
+
+        <!-- Footer: transient status + Close -->
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
+            <TextBlock Grid.Column="0" Text="{Binding Status}" FontSize="10" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+            <Button Grid.Column="1" Content="Close" Click="OnClose" Classes="accent"/>
+        </Grid>
+
+        <StackPanel Spacing="14">
+
+            <!-- Local-only (no ESI, D-129): DPS is visible, but server features need an ESI sign-in first. -->
+            <Border Classes="panel" Padding="10,8" IsVisible="{Binding IsLocalOnly}">
+                <TextBlock Text="Local-only character — seen in a gamelog. Its DPS is tracked locally. Sign in with ESI from the main window to couple it to a server."
+                           FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextAccentBrush}"/>
+            </Border>
+
+            <!-- ESI scopes — re-authenticate via the same scope-selection popup as sign-in (D-88); the user picks
+                 which scopes to grant. Data-driven from the scope registry, so it scales as new scopes are added
+                 (replaces the former per-scope "+ ADD" buttons). -->
+            <StackPanel Spacing="5" IsVisible="{Binding CanCouple}">
+                <TextBlock Text="ESI SCOPES" Classes="label" FontSize="9"/>
+                <TextBlock Text="Choose which ESI data this character shares." FontSize="11"
+                           TextWrapping="Wrap" Foreground="{DynamicResource TextAccentBrush}"/>
+                <Button Content="Re-authenticate…" FontSize="10"
+                        Command="{Binding ReAuthenticateCommand}"/>
+            </StackPanel>
+
+            <Separator IsVisible="{Binding CanCouple}"/>
+
+            <!-- Coupled servers (D-105/D-109/D-114) -->
+            <StackPanel Spacing="6" IsVisible="{Binding CanCouple}">
+                <TextBlock Text="COUPLED SERVERS" Classes="label" FontSize="9"/>
+                <ItemsControl ItemsSource="{Binding ServerLinks}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ServerLinkViewModel">
+                            <Border Classes="panel" Padding="8,5" Margin="0,0,0,4">
+                                <Grid ColumnDefinitions="*,Auto,Auto">
+                                    <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextBrightBrush}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding StatusLabel}" FontSize="10"
+                                                   Foreground="{DynamicResource TextAccentBrush}"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="⚙" FontSize="12" Padding="8,2" Margin="6,0,0,0"
+                                            VerticalAlignment="Center"
+                                            Command="{Binding ViewTrustCommand}"
+                                            ToolTip.Tip="Server info + cert fingerprint (out-of-band trust check, SEC-13)."/>
+                                    <Button Grid.Column="2" Content="DECOUPLE" FontSize="9" Padding="6,2" Margin="4,0,0,0"
+                                            VerticalAlignment="Center"
+                                            Command="{Binding DecoupleCommand}"
+                                            ToolTip.Tip="Revoke this character's session on the server and disconnect (D-109)."/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Content="+ Couple to server ☁️" HorizontalAlignment="Left"
+                        Command="{Binding CoupleCommand}"
+                        ToolTip.Tip="Couple this character to a server: enter the address + an optional label, then log in via EVE SSO."/>
+            </StackPanel>
+
+        </StackPanel>
+    </DockPanel>
+</v:ChromedWindow>

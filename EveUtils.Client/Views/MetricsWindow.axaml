@@ -1,0 +1,147 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:ctl="using:EveUtils.Client.Controls"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="940" d:DesignHeight="680"
+        x:Class="EveUtils.Client.Views.MetricsWindow"
+        x:DataType="vm:MetricsWindowViewModel"
+        x:Name="Root"
+        Width="940" Height="680" MinWidth="680" MinHeight="380"
+        WindowStartupLocation="CenterOwner"
+        Title="Metrics">
+
+    <DockPanel Margin="16">
+
+        <!-- Top: character selection + running totals -->
+        <Border DockPanel.Dock="Top" Classes="panel" Padding="14,12" Margin="0,0,0,12">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="SHOW CHARACTERS" Classes="label" FontSize="9"/>
+                    <ItemsControl ItemsSource="{Binding Available}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MetricsCharacterOption">
+                                <CheckBox Content="{Binding Name}" IsChecked="{Binding IsSelected}" Margin="0,0,16,0"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <TextBlock Text="BOUNTY TOTAL" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
+                    <TextBlock Text="{Binding BountyTotal}" Classes="mono" FontSize="22"
+                               Foreground="{DynamicResource AccentBrightBrush}" HorizontalAlignment="Right"/>
+                    <TextBlock Text="{Binding MinedTotal}" Classes="mono" FontSize="11"
+                               Foreground="{DynamicResource TextAccentBrush}" HorizontalAlignment="Right"
+                               IsVisible="{Binding MinedTotal, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- One card per selected character -->
+        <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CharacterMetricsRowViewModel">
+                        <Border Classes="panel" Margin="0,0,0,12" Padding="16">
+                            <DockPanel>
+
+                                <!-- Header -->
+                                <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,12">
+                                    <TextBlock Text="{Binding Character}" FontWeight="Bold" FontSize="17"
+                                               Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Text="{Binding Affiliation}" FontSize="11"
+                                               Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+                                </StackPanel>
+
+                                <Grid ColumnDefinitions="340,*">
+
+                                    <!-- Left: grouped stats -->
+                                    <StackPanel Grid.Column="0" Spacing="3">
+
+                                        <TextBlock Text="COMBAT" Classes="label" FontSize="9" Margin="0,0,0,2"/>
+                                        <Grid ColumnDefinitions="92,*">
+                                            <TextBlock Grid.Column="0" Text="Hit rate" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding HitRate}" FontSize="11"/>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="92,*">
+                                            <TextBlock Grid.Column="0" Text="Damage" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Damage}" FontSize="11"/>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="92,*">
+                                            <TextBlock Grid.Column="0" Text="Quality" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Qualities}" FontSize="11" TextWrapping="Wrap"/>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="92,*" IsVisible="{Binding HasReps}">
+                                            <TextBlock Grid.Column="0" Text="Reps" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Reps}" FontSize="11"/>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="92,*" IsVisible="{Binding HasNeut}">
+                                            <TextBlock Grid.Column="0" Text="Neut" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Neut}" FontSize="11"/>
+                                        </Grid>
+
+                                        <TextBlock Text="ECONOMY" Classes="label" FontSize="9" Margin="0,8,0,2"/>
+                                        <Grid ColumnDefinitions="92,*">
+                                            <TextBlock Grid.Column="0" Text="Bounty" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Bounty}" Classes="mono"
+                                                       Foreground="{DynamicResource AccentBrightBrush}" FontSize="12"/>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="92,*">
+                                            <TextBlock Grid.Column="0" Text="Kills · ISK/h" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                                                <TextBlock Text="{Binding Kills}" Classes="mono" FontSize="11"/>
+                                                <TextBlock Text="{Binding IskPerHour}" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="92,*" IsVisible="{Binding HasMining}">
+                                            <TextBlock Grid.Column="0" Text="Mined" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Mined}" FontSize="11" TextWrapping="Wrap"/>
+                                        </Grid>
+
+                                        <TextBlock Text="ACTIVITY" Classes="label" FontSize="9" Margin="0,8,0,2"/>
+                                        <Grid ColumnDefinitions="92,*">
+                                            <TextBlock Grid.Column="0" Text="Location" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Location}" FontSize="11"/>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="92,*">
+                                            <TextBlock Grid.Column="0" Text="Enemies" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Enemies}" FontSize="11" TextWrapping="Wrap"/>
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <!-- Right: live DPS graph + recent events -->
+                                    <DockPanel Grid.Column="1" Margin="16,0,0,0">
+                                        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto">
+                                            <TextBlock Grid.Column="0" Classes="label" Text="DPS — DEALT / RECEIVED"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding PeakDps}" Classes="label"/>
+                                        </Grid>
+                                        <Border DockPanel.Dock="Bottom" Margin="0,8,0,0" MaxHeight="96">
+                                            <ScrollViewer>
+                                                <ItemsControl ItemsSource="{Binding RecentEvents}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding}" FontSize="10"
+                                                                       Foreground="{DynamicResource TextAccentBrush}"/>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </ScrollViewer>
+                                        </Border>
+                                        <ctl:DpsGraph MinHeight="160" Margin="0,4,0,0"
+                                                      Series="{Binding Dps.Series}"
+                                                      Markers="{Binding Dps.Markers}"
+                                                      Revision="{Binding Dps.GraphRevision}"/>
+                                    </DockPanel>
+                                </Grid>
+                            </DockPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</v:ChromedWindow>

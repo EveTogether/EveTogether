@@ -1,0 +1,84 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Gallente (Federation Green) — the default faction palette (D-183). These values match the original
+         pre-theming theme exactly, so the default appearance is unchanged. Only the swappable tokens live here;
+         neutral text/structural tokens stay in EveUtils.axaml. -->
+
+    <!-- Fluent accent ramp (pins the default-button / :pressed / :focus colours, D-177) -->
+    <Color x:Key="SystemAccentColor">#FF4EC79E</Color>
+    <Color x:Key="SystemAccentColorLight1">#FF6FD3B0</Color>
+    <Color x:Key="SystemAccentColorLight2">#FF8FDFC4</Color>
+    <Color x:Key="SystemAccentColorLight3">#FFB0EBD8</Color>
+    <Color x:Key="SystemAccentColorDark1">#FF3FA683</Color>
+    <Color x:Key="SystemAccentColorDark2">#FF318567</Color>
+    <Color x:Key="SystemAccentColorDark3">#FF24634C</Color>
+
+    <SolidColorBrush x:Key="AccentBrush" Color="#FF4EC79E"/>
+    <SolidColorBrush x:Key="AccentBrightBrush" Color="#FF7EE0BB"/>
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#1F4EC79E"/>
+    <SolidColorBrush x:Key="TextAccentBrush" Color="#FF9BE8C9"/>
+
+    <SolidColorBrush x:Key="BorderBrush" Color="#2E6EC8A0"/>
+    <SolidColorBrush x:Key="BorderStrongBrush" Color="#8C4EC79E"/>
+    <SolidColorBrush x:Key="DividerBrush" Color="#0FFFFFFF"/>
+    <SolidColorBrush x:Key="GlowBrush" Color="#594EC79E"/>
+
+    <SolidColorBrush x:Key="BgRowHoverBrush" Color="#144EC79E"/>
+    <SolidColorBrush x:Key="BgRowSelectedBrush" Color="#244EC79E"/>
+
+    <!-- Semi-transparent rail backdrop (faction-tinted corners, D-183) -->
+    <SolidColorBrush x:Key="RailBackgroundBrush" Color="#CC0A0D0B"/>
+
+    <!-- Hex brand (titlebar logo + portrait ring), bright → accent -->
+    <LinearGradientBrush x:Key="HexBrandBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Offset="0" Color="#FF7EE0BB"/>
+        <GradientStop Offset="1" Color="#FF4EC79E"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="HeaderGradientBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Offset="0" Color="#1A4EC79E"/>
+        <GradientStop Offset="1" Color="#00000000"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="WindowBackgroundBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+        <GradientStop Offset="0" Color="#FF060D0A"/>
+        <GradientStop Offset="0.5" Color="#FF06070A"/>
+        <GradientStop Offset="1" Color="#FF030806"/>
+    </LinearGradientBrush>
+
+    <!-- Menu / dropdown / context-menu theming (D-188): the Fluent menu stack reads these keys via DynamicResource,
+         so this per-faction set re-tints every MenuFlyout, ContextMenu and Menu dropdown live with the active faction.
+         Neutral chrome (popup background, idle item text) is inline; accent-tinted bits alias the faction brushes. -->
+    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#F50C100E"/>
+    <StaticResource x:Key="MenuFlyoutPresenterBorderBrush" ResourceKey="BorderStrongBrush"/>
+    <CornerRadius x:Key="OverlayCornerRadius">6</CornerRadius>
+    <Thickness x:Key="MenuFlyoutPresenterBorderThemeThickness">1</Thickness>
+    <Thickness x:Key="MenuFlyoutPresenterThemePadding">4</Thickness>
+    <SolidColorBrush x:Key="MenuFlyoutItemBackground" Color="Transparent"/>
+    <StaticResource x:Key="MenuFlyoutItemBackgroundPointerOver" ResourceKey="AccentSoftBrush"/>
+    <StaticResource x:Key="MenuFlyoutItemBackgroundPressed" ResourceKey="AccentSoftBrush"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemForeground" Color="#FFD8D0C4"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemForegroundPointerOver" Color="#FFF3ECE0"/>
+    <SolidColorBrush x:Key="MenuFlyoutItemForegroundPressed" Color="#FFF3ECE0"/>
+    <StaticResource x:Key="MenuFlyoutSubItemChevron" ResourceKey="AccentBrush"/>
+    <StaticResource x:Key="MenuFlyoutSubItemChevronPointerOver" ResourceKey="AccentBrush"/>
+    <StaticResource x:Key="SystemControlForegroundBaseMediumLowBrush" ResourceKey="BorderBrush"/>
+
+    <!-- ComboBox dropdown popup (D-188): same dark + accent-border + accent-soft hover/selected as the menus, so all
+         dropdowns read as one. Only the OPEN popup + items are restyled (ComboBoxDropDown*/ComboBoxItem*); the closed
+         box keeps its own keys. Corner radius comes from the shared OverlayCornerRadius above (= menus). -->
+    <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#F50C100E"/>
+    <StaticResource x:Key="ComboBoxDropDownBorderBrush" ResourceKey="BorderStrongBrush"/>
+    <Thickness x:Key="ComboBoxDropdownBorderThickness">1</Thickness>
+    <Thickness x:Key="ComboBoxDropdownBorderPadding">2</Thickness>
+    <SolidColorBrush x:Key="ComboBoxItemBackground" Color="Transparent"/>
+    <SolidColorBrush x:Key="ComboBoxItemForeground" Color="#FFD8D0C4"/>
+    <StaticResource x:Key="ComboBoxItemBackgroundPointerOver" ResourceKey="AccentSoftBrush"/>
+    <SolidColorBrush x:Key="ComboBoxItemForegroundPointerOver" Color="#FFF3ECE0"/>
+    <StaticResource x:Key="ComboBoxItemBackgroundSelected" ResourceKey="AccentSoftBrush"/>
+    <SolidColorBrush x:Key="ComboBoxItemForegroundSelected" Color="#FFF3ECE0"/>
+    <StaticResource x:Key="ComboBoxItemBackgroundSelectedPointerOver" ResourceKey="AccentSoftBrush"/>
+    <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedPointerOver" Color="#FFF3ECE0"/>
+    <StaticResource x:Key="ComboBoxItemBackgroundPressed" ResourceKey="AccentSoftBrush"/>
+    <StaticResource x:Key="ComboBoxItemBackgroundSelectedPressed" ResourceKey="AccentSoftBrush"/>
+</ResourceDictionary>

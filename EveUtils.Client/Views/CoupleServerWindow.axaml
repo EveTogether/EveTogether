@@ -1,0 +1,44 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="440" d:DesignHeight="290"
+        x:Class="EveUtils.Client.Views.CoupleServerWindow"
+        x:Name="Root"
+        Width="440" Height="290"
+        WindowStartupLocation="CenterOwner"
+        Title="Couple to server">
+
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,14">
+            <TextBlock Text="Couple a character to a server" FontWeight="Bold" FontSize="15"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <TextBlock Text="Enter the server address, then sign in as the character you want synced."
+                       FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Spacing="8" Margin="0,14,0,0">
+            <Button Content="Cancel" Click="OnCancel"/>
+            <Button Content="Couple →" Click="OnConfirm" Classes="accent"/>
+        </StackPanel>
+
+        <StackPanel Spacing="10">
+            <StackPanel Spacing="3">
+                <TextBlock Text="SERVER ADDRESS" Classes="label" FontSize="9"/>
+                <TextBox x:Name="AddressBox" Text="https://localhost:7443"
+                         VerticalContentAlignment="Center"/>
+                <!-- Live server name (D-116): unauthenticated probe on open + on change; display-only. -->
+                <TextBlock x:Name="ServerNameBlock" FontSize="10" Margin="0,2,0,0"
+                           Foreground="{DynamicResource TextAccentBrush}"/>
+            </StackPanel>
+            <StackPanel Spacing="3">
+                <TextBlock Text="LABEL (OPTIONAL)" Classes="label" FontSize="9"/>
+                <TextBox x:Name="LabelBox" PlaceholderText="e.g. Corp HQ"
+                         VerticalContentAlignment="Center"/>
+                <TextBlock Text="Shown instead of the URL. Falls back to the server's own name, then the address."
+                           FontSize="10" Opacity="0.7" TextWrapping="Wrap"/>
+            </StackPanel>
+        </StackPanel>
+    </DockPanel>
+</v:ChromedWindow>
