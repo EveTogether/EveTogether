@@ -10,6 +10,11 @@ release are taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+## v0.2.0-beta — 2026-07-06
+
+First beta of the EVE Together desktop client, and the first release from the public
+repository. **Beta:** more stable than the alpha, but expect occasional rough edges.
+
 ### Added
 - A Copy button on each row of the App Logs window puts that entry on the clipboard — the full
   timestamp, level, logger category, message and (when present) the exception — so an error can be
@@ -92,6 +97,9 @@ release are taken from the matching `## vX.Y.Z` section below.
   character out while your others stay in — useful when you've multiboxed several into the same fleet.
 
 ### Fixed
+- Saving an ESI token no longer fails intermittently on Windows when two saves for the same
+  character overlap, or a save lands while the token file is being read — the file replace now
+  retries briefly instead of giving up.
 - A local (client-only) fleet now feeds the live graphs of every one of your characters in it, not
   just the one that created it. When multiboxing several characters into a local fleet, the metrics
   window showed DPS, cap, bounty and location for the fleet leader alone while the rest stayed blank;
