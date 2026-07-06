@@ -38,7 +38,7 @@ public sealed class EncryptedPerCharacterTokenStore(string dataDirectory) : IPer
         try
         {
             await File.WriteAllBytesAsync(tempPath, blob, cancellationToken);
-            File.Move(tempPath, tokenPath, overwrite: true);
+            await MoveWithRetryAsync(tempPath, tokenPath, cancellationToken);
         }
         catch
         {
@@ -130,6 +130,24 @@ public sealed class EncryptedPerCharacterTokenStore(string dataDirectory) : IPer
             catch (IOException)
             {
                 return File.ReadAllBytes(keyPath);
+            }
+        }
+    }
+
+    // On Windows, replacing the destination fails transiently (ACCESS_DENIED) while a concurrent save is
+    // replacing the same file or a reader still has it open — retry briefly instead of failing the save.
+    private static async Task MoveWithRetryAsync(string sourcePath, string destinationPath, CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(sourcePath, destinationPath, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && attempt < 5)
+            {
+                await Task.Delay(10 * attempt, cancellationToken);
             }
         }
     }
