@@ -5,10 +5,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 Releases are built by the GitHub Actions release pipeline (`.github/workflows/release.yml`):
 publishing a GitHub Release tagged `vX.Y.Z` attaches self-contained binaries for Windows
-(`.zip`), Linux (`.tar.gz` + `.AppImage`) and macOS (`.zip`, arm64 + x64). The notes for a
-release are taken from the matching `## vX.Y.Z` section below.
+(`.zip`), Linux (`.tar.gz` + `.AppImage`) and macOS (`.zip`, arm64 + x64), and publishes the
+server as a Docker image to `ghcr.io/evetogether/eve-together-server` — tagged both `:latest`
+(always the newest build) and with the release version (`:X.Y.Z`). The notes for a release are
+taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
+
+### Added
+- The release pipeline now builds and publishes the server as a Docker image to
+  `ghcr.io/evetogether/eve-together-server` on each GitHub Release — tagged `:latest` (always the
+  newest build) and with the release version (`:X.Y.Z`) — so self-hosters can pull the image that
+  `docker-compose.yml` already references instead of building it from source.
 
 ## v0.2.0-beta — 2026-07-06
 

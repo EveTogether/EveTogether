@@ -11,8 +11,8 @@ permissions:
 env:
   DOTNET_VERSION: '10.0.x'
   CONFIGURATION: Release
-  # The desktop client is the cross-platform app shipped on every OS. The server is a Docker
-  # deployment build, not a binary release, so it is intentionally out of this pipeline.
+  # The desktop client is the cross-platform app shipped on every OS, built as a binary release
+  # below. The server ships as a Docker image (publish-server-image job) pushed to GHCR on release.
   PROJECT_PATH: EveUtils.Client/EveUtils.Client.csproj
   APP_NAME: EveTogether
   ICON_PNG: EveUtils.Client/Assets/eve-together-badge.png
@@ -280,3 +280,40 @@ jobs:
             dist/*.zip
             dist/*.tar.gz
             dist/*.AppImage
+
+  publish-server-image:
+    name: Publish server image to GHCR
+    # Only on a real release: workflow_dispatch is for building the client artifacts on demand,
+    # not for publishing an image without a version tag to hang it on.
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image tags
+        id: tags
+        shell: bash
+        run: |
+          IMAGE=ghcr.io/evetogether/eve-together-server
+          V="${{ github.event.release.tag_name }}"
+          V="${V#v}"
+          echo "tags=$IMAGE:latest,$IMAGE:$V" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
