@@ -36,7 +36,7 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
     <!-- Pin Microsoft.OpenApi above the 2.0.0 that AspNetCore.OpenApi pulls in, which carries
          the high-severity advisory GHSA-v5pm-xwqc-g5wc (NU1903); patched from 2.7.5. -->
     <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
