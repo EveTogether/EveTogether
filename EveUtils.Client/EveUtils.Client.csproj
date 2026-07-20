@@ -39,7 +39,7 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
     <!-- Pin Microsoft.OpenApi above the 2.0.0 that AspNetCore.OpenApi pulls in, which carries
          the high-severity advisory GHSA-v5pm-xwqc-g5wc (NU1903); patched from 2.7.5. -->
-    <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
+    <PackageReference Include="Microsoft.OpenApi" Version="3.9.0" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.16.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.8" />
     <!-- Pin the native SQLite bundle to 3.0.0 to drop SQLitePCLRaw.lib.e_sqlite3 2.1.11,
