@@ -26,21 +26,23 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.0.4" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.0.4" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.4" />
-    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.0.0" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.4" />
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.0" />
     <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.1">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
     <!-- Pin Microsoft.OpenApi above the 2.0.0 that AspNetCore.OpenApi pulls in, which carries
-         the high-severity advisory GHSA-v5pm-xwqc-g5wc (NU1903); patched from 2.7.5. -->
+         the high-severity advisory GHSA-v5pm-xwqc-g5wc (NU1903); patched from 2.7.5.
+         Held at 2.x: the AspNetCore.OpenApi 10.0.x source generator writes IOpenApiMediaType.Example,
+         which became read-only in Microsoft.OpenApi 3.x (CS0200) — 3.9.0 breaks the build. -->
     <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
-    <PackageReference Include="Scalar.AspNetCore" Version="2.16.3" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.16.15" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.8" />
     <!-- Pin the native SQLite bundle to 3.0.0 to drop SQLitePCLRaw.lib.e_sqlite3 2.1.11,
          which carries the high-severity advisory GHSA-2m69-gcr7-jv3q (NU1903). -->
