@@ -18,6 +18,16 @@ taken from the matching `## vX.Y.Z` section below.
   newest build) and with the release version (`:X.Y.Z`) — so self-hosters can pull the image that
   `docker-compose.yml` already references instead of building it from source.
 
+### Changed
+- Dependency maintenance (Dependabot): Avalonia and its companion packages
+  (`Avalonia.Desktop`, `Avalonia.Themes.Fluent`, `Avalonia.Controls.DataGrid`, `Avalonia.Fonts.Inter`,
+  `Avalonia.Headless.XUnit`) to 12.1.0; `Microsoft.AspNetCore.OpenApi` to 10.0.10,
+  `Scalar.AspNetCore` to 2.16.15, `Microsoft.AspNetCore.SignalR.Client` to 10.0.10,
+  `Npgsql.EntityFrameworkCore.PostgreSQL` to 10.0.3; and the release-workflow actions
+  `actions/setup-dotnet` (v6), `docker/login-action` (v4) and `docker/build-push-action` (v7).
+  `Microsoft.OpenApi` is held at 2.7.5 — the 3.x major is incompatible with the
+  `Microsoft.AspNetCore.OpenApi` 10.0.x source generator.
+
 ## v0.2.0-beta — 2026-07-06
 
 First beta of the EVE Together desktop client, and the first release from the public
