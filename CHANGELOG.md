@@ -27,6 +27,10 @@ taken from the matching `## vX.Y.Z` section below.
   `actions/setup-dotnet` (v6), `docker/login-action` (v4) and `docker/build-push-action` (v7).
   `Microsoft.OpenApi` is held at 2.7.5 — the 3.x major is incompatible with the
   `Microsoft.AspNetCore.OpenApi` 10.0.x source generator.
+- Dependency maintenance (Dependabot): Avalonia and its companion packages
+  (`Avalonia.Desktop`, `Avalonia.Themes.Fluent`, `Avalonia.Fonts.Inter`, `Avalonia.Headless.XUnit`)
+  to 12.1.1, kept in lockstep in one batch; `Avalonia.Controls.DataGrid` to 12.1.2 (its own release
+  line runs ahead of the rest of the Avalonia packages).
 
 ## v0.2.0-beta — 2026-07-06
 
