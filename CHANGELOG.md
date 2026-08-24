@@ -13,6 +13,13 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- Fits can now be imported from an EVE Workbench link. Paste a fit URL (or just its fit id) into
+  **Fits → Import → From fit link…** and the published fit is fetched from EVE Workbench's public
+  API and stored in your Local library, exactly like a pasted EFT block — including duplicate
+  detection. Tech III cruisers keep their subsystems. A link that is not an EVE Workbench fit, a
+  fit that does not exist or is not published, and an unreachable or slow EVE Workbench all report
+  what went wrong instead of failing silently. Nothing is sent to EVE Workbench beyond the fit id
+  you pasted, and the rest of the app keeps working when the site is unavailable.
 - The release pipeline now builds and publishes the server as a Docker image to
   `ghcr.io/evetogether/eve-together-server` on each GitHub Release — tagged `:latest` (always the
   newest build) and with the release version (`:X.Y.Z`) — so self-hosters can pull the image that

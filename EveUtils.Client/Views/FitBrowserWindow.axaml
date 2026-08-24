@@ -36,7 +36,7 @@
                                       ToolTip.Tip="Paste an EFT block or DNA string to import a fit (D-47).">
                                 <MenuItem.Icon><TextBlock Text="▤" FontSize="13"/></MenuItem.Icon>
                             </MenuItem>
-                            <MenuItem Header="From ESF link…" Command="{Binding ImportEsfLinkCommand}"
+                            <MenuItem Header="From fit link…" Command="{Binding ImportEsfLinkCommand}"
                                       ToolTip.Tip="Paste an eveship.fit link to import a fit (D-188).">
                                 <MenuItem.Icon><TextBlock Text="🔗" FontSize="13"/></MenuItem.Icon>
                             </MenuItem>

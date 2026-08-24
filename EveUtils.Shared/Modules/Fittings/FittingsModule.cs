@@ -7,7 +7,10 @@ using EveUtils.Shared.Modules.Fittings.Commands;
 using EveUtils.Shared.Modules.Fittings.Entities;
 using EveUtils.Shared.Modules.Fittings.Queries;
 using EveUtils.Shared.Modules.Fittings.Repositories;
+using EveUtils.Shared.App;
 using EveUtils.Shared.Modules.Fittings.Services;
+using EveUtils.Shared.Modules.Fittings.Services.Implementations;
+using EveUtils.Shared.Runtime;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -34,6 +37,7 @@ public static class FittingsModule
         services.AddModulePermissions(FittingsPermissions.Catalog);
         services.AddModuleEsiScopes(FittingsScopeCatalog.Catalog);
         services.AddSingleton<IWireEventCatalog, FittingsWireEvents>();
+        _AddEveWorkbenchFitClient(services);
         return services;
     }
 
@@ -44,6 +48,18 @@ public static class FittingsModule
     {
         services.AddModulePermissions(FittingsPermissions.Catalog);
         services.AddSingleton<IWireEventCatalog, FittingsWireEvents>();
+        _AddEveWorkbenchFitClient(services);
         return services;
     }
+
+    // Both hosts register it because the fittings handlers are shared. Read-only and user-initiated: the call
+    // only happens when someone pastes an EVE Workbench link, and nothing else in the app waits on it.
+    private static void _AddEveWorkbenchFitClient(IServiceCollection services) =>
+        services.AddHttpClient(EveWorkbenchFitClient.HttpClientName, (sp, client) =>
+        {
+            client.BaseAddress = new Uri(EveWorkbenchFitClient.BaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(15);
+            client.DefaultRequestHeaders.TryAddWithoutValidation(
+                "User-Agent", AppInfo.UserAgent(sp.GetRequiredService<IRuntimeContext>().Host));
+        });
 }

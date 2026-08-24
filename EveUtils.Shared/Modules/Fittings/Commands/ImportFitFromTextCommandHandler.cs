@@ -4,13 +4,14 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fittings.Entities;
 using EveUtils.Shared.Modules.Fittings.Repositories;
+using EveUtils.Shared.Modules.Fittings.Services;
 using EveUtils.Shared.Modules.Fittings.Services.Parsers;
 
 namespace EveUtils.Shared.Modules.Fittings.Commands;
 
 // Local-only, no character/scope: parsing + storing a pasted fit needs neither ESI nor a permission.
 internal sealed class ImportFitFromTextCommandHandler(
-    IFitTextImporter importer, IFittingRepository repository)
+    IFitTextImporter importer, IEveWorkbenchFitClient eveWorkbench, IFittingRepository repository)
     : ICommandHandler<ImportFitFromTextCommand, Result<string>>
 {
     // Text imports aren't tied to a character — they live in an owner-agnostic local library. ESI-imported
@@ -19,7 +20,25 @@ internal sealed class ImportFitFromTextCommandHandler(
 
     public async Task<Result<string>> Handle(ImportFitFromTextCommand command, CancellationToken cancellationToken = default)
     {
-        var parsed = importer.Import(command.Text);
+        var text = command.Text;
+
+        // An EVE Workbench link is resolved to its EFT block first, so everything after this point — SDE
+        // resolution, dedup, storage, messages — is the exact path a pasted EFT already takes.
+        if (EveWorkbenchFitUrl.TryParseFitId(text, out var fitId))
+        {
+            var fetched = await eveWorkbench.FetchEftAsync(fitId, cancellationToken);
+            if (fetched.Value is not { } eft)
+                return Result<string>.Failure([.. fetched.Messages]);
+            text = eft;
+        }
+        else if (EveWorkbenchFitUrl.IsEveWorkbenchLink(text))
+        {
+            return Result<string>.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
+                "That EVE Workbench link carries no fit id — open the fit and copy the URL from the address bar.",
+                "Fittings"));
+        }
+
+        var parsed = importer.Import(text);
         if (!parsed.Success)
             return Result<string>.Failure(
                 new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed, parsed.Error!, "Fittings"));

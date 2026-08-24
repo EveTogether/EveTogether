@@ -4,7 +4,8 @@ namespace EveUtils.Shared.Modules.Fittings.Services.Parsers;
 
 /// <summary>
 /// Parses a pasted community fit (EFT or DNA, auto-detected) into the internal <see cref="EsiFitting"/> model,
-/// resolving names↔typeIds and slot flags via the SDE. Pure read; storing the result is the command's job.
+/// resolving names↔typeIds and slot flags via the SDE. Pure and network-free; fetching a fit behind a link and
+/// storing the result are the command handler's job.
 /// </summary>
 public interface IFitTextImporter
 {
