@@ -34,6 +34,15 @@ taken from the matching `## vX.Y.Z` section below.
 - Dependency maintenance (Dependabot): `Microsoft.Data.Sqlite`, `Microsoft.AspNetCore.SignalR.Client`
   and `Microsoft.AspNetCore.OpenApi` to 10.0.11; `Grpc.Net.Client` and `Grpc.AspNetCore` to 2.83.0
   (2.81/2.82 were never published, so this is a direct step with no skipped versions).
+- Dependency maintenance (rest of what `dotnet list package --outdated` flagged, beyond
+  Dependabot's open-PR cap): `Microsoft.NET.Test.Sdk` to 18.9.0, `AvaloniaUI.DiagnosticsSupport`
+  to 2.2.3, `CommunityToolkit.Mvvm` to 8.4.2, `Scalar.AspNetCore` to 2.17.1,
+  `SQLitePCLRaw.bundle_e_sqlite3` to 3.0.5, the `Microsoft.EntityFrameworkCore*` family and
+  `Microsoft.Extensions.DependencyInjection.Abstractions`/`Hosting.Abstractions`/`Http` to
+  10.0.11, `Microting.EntityFrameworkCore.MySql` to 10.0.10,
+  `Microsoft.IdentityModel.Protocols.OpenIdConnect`/`System.IdentityModel.Tokens.Jwt` to 8.22.0,
+  and `Google.Protobuf` to 3.36.0. `xunit.v3`/`xunit.runner.visualstudio` 4.0.0 (major) held back
+  pending review.
 
 ## v0.2.0-beta — 2026-07-06
 
