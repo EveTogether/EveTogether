@@ -31,6 +31,9 @@ taken from the matching `## vX.Y.Z` section below.
   (`Avalonia.Desktop`, `Avalonia.Themes.Fluent`, `Avalonia.Fonts.Inter`, `Avalonia.Headless.XUnit`)
   to 12.1.1, kept in lockstep in one batch; `Avalonia.Controls.DataGrid` to 12.1.2 (its own release
   line runs ahead of the rest of the Avalonia packages).
+- Dependency maintenance (Dependabot): `Microsoft.Data.Sqlite`, `Microsoft.AspNetCore.SignalR.Client`
+  and `Microsoft.AspNetCore.OpenApi` to 10.0.11; `Grpc.Net.Client` and `Grpc.AspNetCore` to 2.83.0
+  (2.81/2.82 were never published, so this is a direct step with no skipped versions).
 
 ## v0.2.0-beta — 2026-07-06
 
