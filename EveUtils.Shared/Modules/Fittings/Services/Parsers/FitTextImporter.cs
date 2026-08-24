@@ -33,7 +33,7 @@ public sealed partial class FitTextImporter(ISdeAccessor sde) : IFitTextImporter
     public FitImportResult Import(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
-            return FitImportResult.Failed("Nothing to import — paste an EFT block or a DNA string.");
+            return FitImportResult.Failed("Nothing to import — paste an EFT block, a DNA string or a fit link.");
 
         var format = Detect(text);
         if (format == FitTextFormat.Eveship)
@@ -46,7 +46,7 @@ public sealed partial class FitTextImporter(ISdeAccessor sde) : IFitTextImporter
             _ => null
         };
         if (raw is null)
-            return FitImportResult.Failed("Unrecognised fit format. Paste an EFT block ([Ship, name] …), a DNA string or an eveship.fit link.");
+            return FitImportResult.Failed("Unrecognised fit format. Paste an EFT block ([Ship, name] …), a DNA string, an eveship.fit link or an EVE Workbench fit link.");
 
         if (!sde.IsAvailable)
             return FitImportResult.Failed("EVE static data is not loaded yet — download it from Settings first.");

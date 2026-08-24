@@ -6,13 +6,13 @@
         x:Class="EveUtils.Client.Views.FitEsfImportWindow"
         Width="560" Height="220" MinWidth="420" MinHeight="200"
         WindowStartupLocation="CenterOwner"
-        Title="Import ESF link">
+        Title="Import fit link">
 
     <DockPanel Margin="16">
         <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,10">
-            <TextBlock Text="Import ESF link" FontWeight="Bold" FontSize="14"
+            <TextBlock Text="Import fit link" FontWeight="Bold" FontSize="14"
                        Foreground="{StaticResource TextBrightBrush}"/>
-            <TextBlock Text="Paste an eveship.fit (ESF) link. The fit is decoded straight from the link."
+            <TextBlock Text="Paste an eveship.fit (ESF) or EVE Workbench link. An ESF link decodes on the spot; an EVE Workbench fit is fetched from their public API."
                        FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
         </StackPanel>
 
@@ -25,6 +25,6 @@
         <TextBox x:Name="LinkInput" AcceptsReturn="False" AcceptsTab="False"
                  VerticalContentAlignment="Center" VerticalAlignment="Top"
                  FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                 PlaceholderText="https://eveship.fit/?fit=…"/>
+                 PlaceholderText="https://eveship.fit/?fit=…   or   https://eveworkbench.com/fit/…"/>
     </DockPanel>
 </v:ChromedWindow>
