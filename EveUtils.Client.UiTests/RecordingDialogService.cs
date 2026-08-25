@@ -114,7 +114,19 @@ public sealed class RecordingDialogService : IDialogService
     public void ShowMetrics(MetricsWindowViewModel viewModel) => throw NotUsed();
     public Task ShowAboutAsync(AboutViewModel viewModel) => throw NotUsed();
     public void ShowDpsOverlay(DpsViewModel tracker) => throw NotUsed();
-    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, EveUtils.Client.Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, EveUtils.Client.Notifications.ToastPosition toastPosition = EveUtils.Client.Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = EveUtils.Client.LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", EveUtils.Client.LocalApi.ILocalApiServer? localApiServer = null) => throw NotUsed();
+    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, EveUtils.Client.Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, EveUtils.Client.Notifications.ToastPosition toastPosition = EveUtils.Client.Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = EveUtils.Client.LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", EveUtils.Client.LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true) => throw NotUsed();
+
+    /// <summary>Answers the update offer (true = download and install). Default: Later.</summary>
+    public Func<Updates.AppRelease, bool> OnShowUpdateAvailable { get; set; } = _ => false;
+
+    /// <summary>The offers shown, in order, as (installed version, release) — empty if the dialog never opened.</summary>
+    public List<(string InstalledVersion, Updates.AppRelease Release)> UpdateOffers { get; } = new();
+
+    public Task<bool> ShowUpdateAvailableAsync(string installedVersion, Updates.AppRelease release)
+    {
+        UpdateOffers.Add((installedVersion, release));
+        return Task.FromResult(OnShowUpdateAvailable(release));
+    }
     public Task<bool> ShowFleetSharingAsync(FleetShareViewModel viewModel) => throw NotUsed();
     public Task<FleetEditResult?> EditFleetAsync(FleetInfo? existing) => throw NotUsed();
     public Task<bool> ShowCompositionEditorAsync(CompositionEditorViewModel viewModel)

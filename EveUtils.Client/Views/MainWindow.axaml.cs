@@ -137,6 +137,7 @@ public partial class MainWindow : Window
         // The window is shown now (so the modal has an owner): run the SDE update check independently of the
         // startup load chain, which can hang/fail on unrelated network steps.
         (DataContext as MainWindowViewModel)?.StartSdeUpdateCheck();
+        (DataContext as MainWindowViewModel)?.StartUpdateCheck();
     }
 
     // The module shell has two responsive axes — DockMode (docked host vs. floating narrow shell) and the

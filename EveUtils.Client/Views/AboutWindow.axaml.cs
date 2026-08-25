@@ -18,6 +18,7 @@ public partial class AboutWindow : ChromedWindow
     public AboutWindow(AboutViewModel viewModel) : this()
     {
         DataContext = viewModel;
+        viewModel.CloseRequested += Close; // starting an install hands off to the main window, so this dialog steps aside
     }
 
     private void OnClose(object? sender, RoutedEventArgs e) => Close();

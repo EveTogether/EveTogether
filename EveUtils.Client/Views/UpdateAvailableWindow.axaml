@@ -1,0 +1,49 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="520" d:DesignHeight="420"
+        x:Class="EveUtils.Client.Views.UpdateAvailableWindow"
+        Width="520" Height="420"
+        WindowStartupLocation="CenterOwner"
+        Title="Update available">
+
+    <DockPanel Margin="16">
+
+        <!-- Versions: what you run, what is on offer, and what it costs to fetch -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="34" Margin="0,0,0,14">
+            <StackPanel Spacing="2">
+                <TextBlock Text="INSTALLED" Classes="label" FontSize="9"/>
+                <TextBlock x:Name="InstalledBlock" FontFamily="Cascadia Code,Consolas,Menlo,monospace" FontSize="12"/>
+            </StackPanel>
+            <StackPanel Spacing="2">
+                <TextBlock Text="AVAILABLE" Classes="label" FontSize="9"/>
+                <TextBlock x:Name="AvailableBlock" FontFamily="Cascadia Code,Consolas,Menlo,monospace" FontSize="12"
+                           Foreground="{DynamicResource AccentBrightBrush}" FontWeight="SemiBold"/>
+            </StackPanel>
+            <StackPanel x:Name="DownloadSizePanel" Spacing="2">
+                <TextBlock Text="DOWNLOAD" Classes="label" FontSize="9"/>
+                <TextBlock x:Name="SizeBlock" FontFamily="Cascadia Code,Consolas,Menlo,monospace" FontSize="12"/>
+            </StackPanel>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Spacing="12" Margin="0,12,0,0">
+            <TextBlock Text="Your characters, fittings and static data are stored outside the install folder and are not touched by an update."
+                       FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Content="Later" Click="OnLater"/>
+                <Button Content="Download and install" Click="OnDownload" Classes="accent"/>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- The feed's own notes, shown as the plain text the release carries -->
+        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3" Padding="12,10">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="WHAT'S NEW" Classes="label" FontSize="9" Margin="0,0,0,8"/>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <SelectableTextBlock x:Name="NotesBlock" FontSize="12" TextWrapping="Wrap"/>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </DockPanel>
+</v:ChromedWindow>

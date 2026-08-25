@@ -96,6 +96,12 @@ public interface IDialogService
     /// the AGPLv3 license and the mandatory CCP attribution. Modal and purely informational.</summary>
     Task ShowAboutAsync(AboutViewModel viewModel);
 
+    /// <summary>
+    /// The update offer: both version numbers, the download size and the feed's release notes. Returns true if the
+    /// user chose to download and install, false on Later — nothing is fetched before that.
+    /// </summary>
+    Task<bool> ShowUpdateAvailableAsync(string installedVersion, Updates.AppRelease release);
+
     /// <summary>Pops a character's live DPS into a borderless overlay: pinnable, opacity-adjustable,
     /// resizable, smoothed graph. Non-modal; one overlay per character (re-opening focuses the existing one).</summary>
     void ShowDpsOverlay(DpsViewModel tracker);
@@ -106,7 +112,7 @@ public interface IDialogService
     /// none), <paramref name="detectedDefault"/> the platform-probed fallback (Auto-detect). On Save the view invokes
     /// <paramref name="onApply"/> with the chosen values (the caller persists + applies live); Cancel/close does nothing.
     /// </summary>
-    void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null);
+    void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true);
 
     /// <summary>Per-fleet sharing dialog: per character a three-way override per metric. Returns true if the user saved.</summary>
     Task<bool> ShowFleetSharingAsync(ViewModels.FleetShareViewModel viewModel);

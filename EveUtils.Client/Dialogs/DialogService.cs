@@ -188,9 +188,9 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void ShowFleets(FleetsViewModel viewModel) =>
         Route(new FleetsWindow(viewModel), "FLEETS", "fleet");
 
-    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null)
+    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true)
     {
-        var window = new SettingsWindow(currentDirectory, detectedDefault, shareLocation, shareBounty, shareCombat, loadTypeImages, currentFaction, sdeVersionLabel, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, localApiStatusLabel, localApiServer, onApply);
+        var window = new SettingsWindow(currentDirectory, detectedDefault, shareLocation, shareBounty, shareCombat, loadTypeImages, currentFaction, sdeVersionLabel, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, localApiStatusLabel, localApiServer, checkUpdatesOnStartup, onApply);
         Route(window, "SETTINGS", "settings"); // docked tab in docked mode, floating window otherwise
     }
 
@@ -207,6 +207,12 @@ public sealed class DialogService : IDialogService, ISingletonService
     {
         if (_owner is null) return;
         await new AboutWindow(viewModel).ShowDialog(_owner);
+    }
+
+    public async Task<bool> ShowUpdateAvailableAsync(string installedVersion, Updates.AppRelease release)
+    {
+        if (_owner is null) return false;
+        return await new UpdateAvailableWindow(installedVersion, release).ShowDialog<bool>(_owner);
     }
 
     public async Task<Fleet.FleetEditResult?> EditFleetAsync(Fleet.FleetInfo? existing)

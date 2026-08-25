@@ -34,6 +34,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private TextBlock _hintBlock = null!;
     private CheckBox _shareLocationBox = null!, _shareBountyBox = null!, _shareCombatBox = null!;
     private CheckBox _loadTypeImagesBox = null!, _openFitDetailAfterImportBox = null!, _enableLocalApiBox = null!;
+    private CheckBox _checkUpdatesOnStartupBox = null!;
     private ComboBox _toastPositionBox = null!;
     private TextBox _localApiPortBox = null!;
     private Ellipse _localApiStatusDot = null!;
@@ -50,7 +51,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         AvaloniaXamlLoader.Load(this);
     }
 
-    public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, Func<SettingsResult, Task>? onApply = null) : this()
+    public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Func<SettingsResult, Task>? onApply = null) : this()
     {
         _detectedDefault = detectedDefault;
         _localApi = localApiServer;
@@ -63,6 +64,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _shareCombatBox = this.FindControl<CheckBox>("ShareCombatBox")!;
         _loadTypeImagesBox = this.FindControl<CheckBox>("LoadTypeImagesBox")!;
         _openFitDetailAfterImportBox = this.FindControl<CheckBox>("OpenFitDetailAfterImportBox")!;
+        _checkUpdatesOnStartupBox = this.FindControl<CheckBox>("CheckUpdatesOnStartupBox")!;
         _enableLocalApiBox = this.FindControl<CheckBox>("EnableLocalApiBox")!;
         _toastPositionBox = this.FindControl<ComboBox>("ToastPositionBox")!;
         _localApiPortBox = this.FindControl<TextBox>("LocalApiPortBox")!;
@@ -88,6 +90,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _shareCombatBox.IsChecked = shareCombat;
         _loadTypeImagesBox.IsChecked = loadTypeImages;
         _openFitDetailAfterImportBox.IsChecked = openFitDetailAfterImport;
+        _checkUpdatesOnStartupBox.IsChecked = checkUpdatesOnStartup;
         this.FindControl<TextBlock>("SdeVersionBlock")!.Text = sdeVersionLabel;
         this.FindControl<TextBlock>("DataFolderBlock")!.Text = Composition.ClientServices.DataDirectory();
         _toastPositionBox.SelectedIndex = (int)toastPosition;
@@ -272,6 +275,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         var localApiPort = int.TryParse(_localApiPortBox.Text, out var port) && port is > 0 and <= 65535
             ? port
             : LocalApi.LocalApiServer.DefaultPort;
-        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort);
+        var checkUpdatesOnStartup = _checkUpdatesOnStartupBox.IsChecked ?? true;
+        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup);
     }
 }
