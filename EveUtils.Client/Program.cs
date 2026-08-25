@@ -5,6 +5,7 @@ using EveUtils.Shared.Modules.Fittings.Repositories;
 using Avalonia;
 using EveUtils.Client.Composition;
 using EveUtils.Client.Esi;
+using EveUtils.Client.Formatting;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Esi.Status;
@@ -26,6 +27,11 @@ sealed class Program
         // arguments Velopack handles here and then exits on. Anything above it runs the EF migration and the
         // background services against the user's data during an installation step.
         VelopackApp.Build().Run();
+
+        // The UI is English-only (§2) and the client's formatting helpers already pass InvariantCulture, so pin
+        // the process instead of letting numbers follow the OS locale — that is the one element that would
+        // silently differ per machine ("9,0 m³/s" next to an invariant "1.5B ISK" in the same window).
+        ClientCulture.Apply();
 
         Services = ClientServices.Build();
 

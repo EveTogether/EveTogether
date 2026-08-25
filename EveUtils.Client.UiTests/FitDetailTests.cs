@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,6 +10,7 @@ using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Shared.Modules.Sde.Enums;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Formatting;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Skills;
@@ -345,6 +347,33 @@ public class FitDetailTests
         var brush = Assert.IsType<SolidColorBrush>(cpu.FillColor);
         Assert.Equal(Color.Parse("#7BACC3"), brush.Color);   // stays CPU blue, not the old red recolour
         Assert.Contains("CPU", cpu.Tooltip);
+    }
+
+    [Fact]
+    public async Task DetailWindowVm_ReadoutsStayDotted_UnderACommaDecimalCulture()
+    {
+        // Guards the start-up pin itself, not the machine it runs on: the separator is forced onto a clone of the
+        // invariant culture so the hostile culture exists even in globalization-invariant mode, where a real
+        // "nl-NL" would silently collapse back to dots and the test would pass without proving anything.
+        var commaDecimal = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+        commaDecimal.NumberFormat.NumberDecimalSeparator = ",";
+        var restore = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = commaDecimal;
+            ClientCulture.Apply();
+
+            var fit = Fit("Venture", 32880, (1, "HiSlot0", 1));
+            var vm = new FitDetailWindowViewModel(fit, FallbackNameResolver.Instance,
+                new StubStatsProvider(_ => SampleStats() with { MiningYield = 9.0 }), sde: null, data: null);
+            await vm.InitializeAsync();
+
+            Assert.Equal("9.0 m³/s", vm.MiningYield);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = restore;
+        }
     }
 
     [Fact]

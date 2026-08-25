@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace EveUtils.Shared.Modules.Fittings.Services.Parsers;
@@ -65,7 +66,9 @@ internal static partial class EftFitParser
             var match = QuantitySuffix().Match(line);
             if (match.Success)
             {
-                quantity = int.Parse(match.Groups[1].Value);
+                // EFT text comes from outside the app, so its quantity is invariant regardless of the thread's
+                // culture — this must not depend on the process-wide culture the client happens to pin.
+                quantity = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
                 explicitQuantity = true;
                 line = line[..match.Index].Trim();
             }
