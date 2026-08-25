@@ -17,4 +17,6 @@ public static class MessageCodes
     public const string Timeout = "TIMEOUT";
     public const string ParseError = "PARSE_ERROR";
     public const string Duplicate = "DUPLICATE";
+    public const string UpdateNotInstalled = "UPDATE_NOT_INSTALLED";
+    public const string UpdateFailed = "UPDATE_FAILED";
 }

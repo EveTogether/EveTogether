@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="EveUtils.Client.UiTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Folder Include="Models\" />
     <AvaloniaResource Include="Assets\**" />
     <Content Include="appsettings*.json" CopyToOutputDirectory="PreserveNewest" />
@@ -36,6 +40,9 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- Auto-updater. Pinned as a pair with the `vpk` tool version in .github/workflows/release.yml: the tool
+         writes the feed this package reads, and a version skew between them is a feed the app cannot parse. -->
+    <PackageReference Include="Velopack" Version="1.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
     <!-- Pin Microsoft.OpenApi above the 2.0.0 that AspNetCore.OpenApi pulls in, which carries
          the high-severity advisory GHSA-v5pm-xwqc-g5wc (NU1903); patched from 2.7.5.
