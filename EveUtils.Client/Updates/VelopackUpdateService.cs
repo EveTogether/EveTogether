@@ -162,6 +162,7 @@ internal sealed class VelopackUpdateService(ILogger<VelopackUpdateService> logge
     {
         var version = release.Version.ToFullString();
 
-        return new AppRelease(version, release.NotesMarkdown ?? string.Empty, $"{RepositoryUrl}/releases/tag/v{version}");
+        return new AppRelease(
+            version, release.NotesMarkdown ?? string.Empty, $"{RepositoryUrl}/releases/tag/v{version}", release.Size);
     }
 }

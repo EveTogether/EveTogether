@@ -15,4 +15,5 @@ public sealed record SettingsResult(
     string GamelogDirectory, bool ShareLocation, bool ShareBounty, bool ShareCombat, bool LoadTypeImages,
     FactionTheme Faction, bool ReimportSde = false, bool OpenFitDetailAfterImport = true,
     ToastPosition ToastPosition = ToastPosition.TopRight,
-    bool EnableLocalApi = false, int LocalApiPort = LocalApiServer.DefaultPort);
+    bool EnableLocalApi = false, int LocalApiPort = LocalApiServer.DefaultPort,
+    bool CheckUpdatesOnStartup = true);

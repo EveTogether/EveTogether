@@ -28,6 +28,7 @@ using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Client.Pairing;
 using EveUtils.Client.Theming;
 using EveUtils.Client.Transport;
+using EveUtils.Client.Updates;
 using EveUtils.Shared.Transport;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
@@ -772,6 +773,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         Notifications.ToastPosition toastPosition;
         bool localApiEnabled;
         int localApiPort;
+        bool checkUpdatesOnStartup;
         using (var scope = _services.CreateScope())
         {
             var settings = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Query(new GetSettingsQuery());
@@ -786,6 +788,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             localApiEnabled = settings.FirstOrDefault(s => s.Key == LocalApi.LocalApiServer.EnabledSettingKey)?.Value == "true"; // default off
             localApiPort = int.TryParse(settings.FirstOrDefault(s => s.Key == LocalApi.LocalApiServer.PortSettingKey)?.Value, out var lp)
                 ? lp : LocalApi.LocalApiServer.DefaultPort;
+            checkUpdatesOnStartup = settings.FirstOrDefault(s => s.Key == CheckUpdatesOnStartupSettingKey)?.Value != "false"; // default on
         }
 
         var localApi = _services.GetService<LocalApi.ILocalApiServer>();
@@ -794,7 +797,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             current, GameLogLocations.Default(),
             shares.IsShared(MetricKind.Location), shares.IsShared(MetricKind.Bounty), shares.IsShared(MetricKind.Dps),
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
-            localApiEnabled, localApiPort, localApiStatusLabel, localApi);
+            localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup);
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,
@@ -804,7 +807,15 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     {
         if (_dialogs is null) return;
         var characterInfo = _services?.GetService<ICharacterInfoService>();
-        await _dialogs.ShowAboutAsync(new AboutViewModel(_portraits, characterInfo));
+
+        // About checks and reports; the offer, the download and the restart banner stay here, so there is one
+        // install path whether the offer arrived at startup or from that button.
+        await _dialogs.ShowAboutAsync(new AboutViewModel(
+            _portraits,
+            characterInfo,
+            _services?.GetService<IUpdateService>(),
+            _services?.GetService<IUpdateSupportProbe>(),
+            ShowUpdateOfferAsync));
     }
 
     /// <summary>Persist + apply the settings chosen in the settings module (invoked on Save; Cancel/close never calls
@@ -841,6 +852,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 LocalApi.LocalApiServer.EnabledSettingKey, result.EnableLocalApi ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(
                 LocalApi.LocalApiServer.PortSettingKey, result.LocalApiPort.ToString()));
+            await dispatcher.Send(new SetSettingCommand(
+                CheckUpdatesOnStartupSettingKey, result.CheckUpdatesOnStartup ? "true" : "false"));
         }
 
         // Apply the toast position live so the next toast uses it without a restart.
@@ -1783,6 +1796,113 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             ActivityStatus = $"SDE update check failed: {ex.Message}";
         }
     }
+
+    // ── Application updates (ET-32) ─────────────────────────────────────────────────────────────────
+    private const string CheckUpdatesOnStartupSettingKey = "updates.check-on-startup";   // default on
+
+    /// <summary>
+    /// The restart banner: a package is downloaded and waiting, and stays waiting until it is applied.
+    /// </summary>
+    [ObservableProperty] private bool _isUpdateReady;
+
+    [ObservableProperty] private string _updateReadyMessage = "";
+
+    /// <summary>
+    /// Kicks off the update check the way <see cref="StartSdeUpdateCheck"/> does: after the window is up and off the
+    /// startup chain, so a feed that never answers holds nothing up.
+    /// </summary>
+    public void StartUpdateCheck() => _ = RunUpdateCheckResilientAsync();
+
+    private async Task RunUpdateCheckResilientAsync()
+    {
+        try
+        {
+            await CheckForUpdateAsync();
+        }
+        catch (Exception ex)
+        {
+            ActivityStatus = $"Update check failed: {ex.Message}";
+        }
+    }
+
+    private async Task CheckForUpdateAsync()
+    {
+        if (_services is null || !await IsStartupUpdateCheckEnabledAsync()) return;
+
+        var check = await _services.GetRequiredService<IUpdateService>().CheckAsync();
+
+        if (UpdateNotice.StartupStatus(check, InstalledVersion) is { } status)
+            ActivityStatus = status;
+
+        if (UpdateNotice.Classify(check) is UpdateNoticeKind.Available)
+            OfferUpdate(check.Value!);
+    }
+
+    // Read straight from the store rather than from the loaded Settings collection: this runs off the startup chain,
+    // so LoadAsync may not have filled that collection yet.
+    private async Task<bool> IsStartupUpdateCheckEnabledAsync()
+    {
+        using var scope = _services!.CreateScope();
+        var settings = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Query(new GetSettingsQuery());
+
+        return settings.FirstOrDefault(s => s.Key == CheckUpdatesOnStartupSettingKey)?.Value != "false";
+    }
+
+    // Bottom right and with no expiry, both deliberate: there is no periodic re-check, so this offer is made exactly
+    // once per session and a toast that walks away on a timer takes that one chance with it.
+    private void OfferUpdate(AppRelease release) =>
+        _services?.GetService<IToastService>()?.Show(
+            "Update available",
+            $"EVE Together v{release.Version} is ready to download. You're on {InstalledVersion}.",
+            ToastKind.Information,
+            [
+                new ToastAction("Later", () => { }),
+                new ToastAction("What's new", () => _ = ShowUpdateOfferAsync(release), ToastActionStyle.Affirmative),
+            ],
+            ToastPosition.BottomRight);
+
+    /// <summary>
+    /// Shows the offer and, only if the user accepts it there, fetches the package. Nothing is downloaded before that.
+    /// </summary>
+    public async Task ShowUpdateOfferAsync(AppRelease release)
+    {
+        if (_dialogs is null || !await _dialogs.ShowUpdateAvailableAsync(InstalledVersion, release)) return;
+
+        await DownloadUpdateAsync(release);
+    }
+
+    private async Task DownloadUpdateAsync(AppRelease release)
+    {
+        if (_services is null) return;
+
+        ActivityStatus =
+            $"Downloading v{release.Version}… the app stays usable, you'll be asked to restart when it's ready.";
+
+        var download = await _services.GetRequiredService<IUpdateService>().DownloadAsync();
+        if (!download.IsSuccess)
+        {
+            ActivityStatus = UpdateNotice.Reason(download);
+            return;
+        }
+
+        ActivityStatus = $"Update v{release.Version} downloaded — restart to finish updating.";
+        UpdateReadyMessage = $"v{release.Version} is ready. Restart to finish updating.";
+        IsUpdateReady = true;
+    }
+
+    /// <summary>
+    /// Applies the downloaded package and comes back on the new build.
+    /// </summary>
+    [RelayCommand]
+    private void RestartForUpdate() => _services?.GetRequiredService<IUpdateService>().ApplyDownloadedUpdateAndRestart();
+
+    /// <summary>
+    /// Hides the banner. The package stays on disk but nothing applies it, so this promises nothing beyond quiet.
+    /// </summary>
+    [RelayCommand]
+    private void DismissUpdateReady() => IsUpdateReady = false;
+
+    private static string InstalledVersion => $"v{EveUtils.Shared.App.AppInfo.Version}";
 
     /// <summary>
     /// On startup, if a newer (or missing) SDE build is available, ask the user once and — on accept — run the

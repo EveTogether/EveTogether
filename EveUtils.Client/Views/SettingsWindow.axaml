@@ -74,6 +74,13 @@
                     </StackPanel>
 
                     <StackPanel Spacing="3">
+                        <TextBlock Text="APPLICATION UPDATES" Classes="label" FontSize="9"/>
+                        <CheckBox x:Name="CheckUpdatesOnStartupBox" Content="Check for updates on startup"/>
+                        <TextBlock Text="Runs in the background right after the window opens and never delays startup. You can always check manually from About. Turning this off does not stop you from updating — it only stops the check."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="3">
                         <TextBlock Text="DATA FOLDER" Classes="label" FontSize="9"/>
                         <Grid ColumnDefinitions="*,Auto">
                             <TextBlock x:Name="DataFolderBlock" Grid.Column="0" VerticalAlignment="Center"
