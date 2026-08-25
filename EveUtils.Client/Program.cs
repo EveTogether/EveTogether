@@ -10,6 +10,7 @@ using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Esi.Status;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Velopack;
 
 namespace EveUtils.Client;
 
@@ -21,6 +22,11 @@ sealed class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // Must stay the first statement: installing, updating and uninstalling all re-run this executable with
+        // arguments Velopack handles here and then exits on. Anything above it runs the EF migration and the
+        // background services against the user's data during an installation step.
+        VelopackApp.Build().Run();
+
         Services = ClientServices.Build();
 
         // Apply the client migration stack via the factory (short-lived context).
