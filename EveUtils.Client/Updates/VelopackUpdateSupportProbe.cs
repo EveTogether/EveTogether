@@ -14,7 +14,9 @@ internal sealed class VelopackUpdateSupportProbe : IUpdateSupportProbe, ISinglet
     internal static bool IsInstalledCopy() =>
         IsInstalledCopy(VelopackLocator.IsCurrentSet, static () => VelopackLocator.Current.CurrentlyInstalledVersion);
 
-    /// <summary>The rule with both readings handed in — Velopack's locator is a process-wide singleton a test cannot stand up.</summary>
+    /// <summary>
+    /// The rule with both readings handed in — Velopack's locator is a process-wide singleton a test cannot stand up.
+    /// </summary>
     internal static bool IsInstalledCopy(bool locatorIsSet, Func<SemanticVersion?> installedVersion) =>
         locatorIsSet && installedVersion() is not null;
 

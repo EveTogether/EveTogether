@@ -45,7 +45,9 @@ public class VelopackBootstrapTests
         Assert.Equal(expected, VelopackUpdateSupportProbe.IsInstalledCopy(locatorIsSet, () => version));
     }
 
-    /// <summary>Reading the version is exactly what throws without a locator, so the order of the two halves is the guard.</summary>
+    /// <summary>
+    /// Reading the version is exactly what throws without a locator, so the order of the two halves is the guard.
+    /// </summary>
     [Fact]
     public void IsInstalledCopy_WithoutALocator_DoesNotReachForTheVersion() =>
         Assert.False(VelopackUpdateSupportProbe.IsInstalledCopy(

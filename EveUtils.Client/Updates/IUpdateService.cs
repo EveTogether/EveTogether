@@ -13,9 +13,13 @@ public interface IUpdateService
     /// </summary>
     Task<Result<AppRelease?>> CheckAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Fetches the build currently on offer and keeps it for <see cref="ApplyDownloadedUpdateAndRestart"/>.</summary>
+    /// <summary>
+    /// Fetches the build currently on offer and keeps it for <see cref="ApplyDownloadedUpdateAndRestart"/>.
+    /// </summary>
     Task<Result> DownloadAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Applies what <see cref="DownloadAsync"/> fetched and restarts; a no-op when nothing was downloaded.</summary>
+    /// <summary>
+    /// Applies what <see cref="DownloadAsync"/> fetched and restarts; a no-op when nothing was downloaded.
+    /// </summary>
     void ApplyDownloadedUpdateAndRestart();
 }

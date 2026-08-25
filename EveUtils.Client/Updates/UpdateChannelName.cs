@@ -13,7 +13,9 @@ public static class UpdateChannelName
     // named for the platform alone would offer an Apple Silicon install the x64 package.
     public static string Current => For(Platform(), RuntimeInformation.ProcessArchitecture);
 
-    /// <summary>The name for a given platform/architecture — the seam that lets all four be asked for from one machine.</summary>
+    /// <summary>
+    /// The name for a given platform/architecture — the seam that lets all four be asked for from one machine.
+    /// </summary>
     internal static string For(string platform, Architecture architecture) =>
         $"{platform}-{_Architecture(architecture)}";
 

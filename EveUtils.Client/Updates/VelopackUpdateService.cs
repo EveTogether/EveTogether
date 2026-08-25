@@ -28,7 +28,9 @@ internal sealed class VelopackUpdateService(ILogger<VelopackUpdateService> logge
     public Task<Result<AppRelease?>> CheckAsync(CancellationToken cancellationToken = default) =>
         CheckAsync(Feed(), locator: null, Patience, logger, cancellationToken);
 
-    /// <summary>The check with the feed and the installation handed in, so a test needs neither the network nor an installed copy.</summary>
+    /// <summary>
+    /// The check with the feed and the installation handed in, so a test needs neither the network nor an installed copy.
+    /// </summary>
     internal static async Task<Result<AppRelease?>> CheckAsync(
         IUpdateSource source,
         IVelopackLocator? locator,
@@ -70,7 +72,8 @@ internal sealed class VelopackUpdateService(ILogger<VelopackUpdateService> logge
         {
             await lookup.Value.Manager.DownloadUpdatesAsync(info, cancelToken: cancellationToken);
         }
-        catch (Exception exception)
+        // A cancelled call is the caller's own doing, not a failed update: it propagates instead of being reported.
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogError(exception, "The update download failed.");
 
@@ -133,7 +136,8 @@ internal sealed class VelopackUpdateService(ILogger<VelopackUpdateService> logge
             // Velopack also calls an installation with no application id uninstalled — same answer, from one place.
             return Result<(UpdateManager, UpdateInfo?)>.Failure(_NotInstalled());
         }
-        catch (Exception exception)
+        // Same here: the ThrowIfCancellationRequested above is only a distinction if it is allowed to leave.
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogError(exception, "The update check failed.");
 

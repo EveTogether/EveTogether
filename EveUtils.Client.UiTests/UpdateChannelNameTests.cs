@@ -23,7 +23,9 @@ public class UpdateChannelNameTests
     public void Current_IsOneOfThePublishedChannels() =>
         Assert.Contains(UpdateChannelName.Current, new[] { "win-x64", "linux-x64", "osx-arm64", "osx-x64" });
 
-    /// <summary>An architecture nothing was published for is a refusal, not a channel that silently reads someone else's feed.</summary>
+    /// <summary>
+    /// An architecture nothing was published for is a refusal, not a channel that silently reads someone else's feed.
+    /// </summary>
     [Fact]
     public void For_AnArchitectureThatIsNotPublished_Refuses() =>
         Assert.Throws<PlatformNotSupportedException>(() => UpdateChannelName.For("win", Architecture.X86));

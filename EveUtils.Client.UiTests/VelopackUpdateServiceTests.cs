@@ -42,7 +42,9 @@ public class VelopackUpdateServiceTests : IDisposable
         Assert.Equal(MessageCodes.UpdateNotInstalled, result.Messages.Single().Code);
     }
 
-    /// <summary>A feed that cannot be reached is a failure with a reason; "you are up to date" would be a lie the user believes.</summary>
+    /// <summary>
+    /// A feed that cannot be reached is a failure with a reason; "you are up to date" would be a lie the user believes.
+    /// </summary>
     [Fact]
     public async Task CheckAsync_WhenTheFeedFails_ReportsFailureRatherThanUpToDate()
     {
@@ -73,6 +75,36 @@ public class VelopackUpdateServiceTests : IDisposable
         Assert.True(started.Elapsed < TimeSpan.FromSeconds(2), $"gave up after {started.Elapsed}, which is the built-in wait rather than the one it was given");
     }
 
+    /// <summary>
+    /// A cancelled check is the caller's own doing, not a failed update. Reported as a failure it would reach the
+    /// user as "the update check failed: a task was canceled" for something they asked for themselves.
+    /// </summary>
+    [Fact]
+    public async Task CheckAsync_WhenTheCallerCancels_PropagatesTheCancellationRatherThanReportingAFailure()
+    {
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => VelopackUpdateService.CheckAsync(
+            new Feed { Hangs = true }, _Locator(), TimeSpan.FromSeconds(30), NullLogger.Instance, cancellation.Token));
+    }
+
+    /// <summary>
+    /// The same for a transfer the user stops halfway — its own catch, and its own way of losing the distinction.
+    /// </summary>
+    [Fact]
+    public async Task DownloadAsync_WhenTheCallerCancels_PropagatesTheCancellationRatherThanReportingAFailure()
+    {
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new VelopackUpdateService(NullLogger<VelopackUpdateService>.Instance).DownloadAsync(
+                new Feed(_Package("0.9.0")) { DownloadHangs = true },
+                _Locator(),
+                TimeSpan.FromSeconds(30),
+                NullLogger.Instance,
+                cancellation.Token));
+    }
+
     [Fact]
     public async Task CheckAsync_WithANewerBuildOnTheChannel_OffersItWithItsNotesAndReleasePage()
     {
@@ -93,7 +125,9 @@ public class VelopackUpdateServiceTests : IDisposable
         Assert.Null(result.Value);
     }
 
-    /// <summary>The channel that reaches the feed is what keeps a Windows install away from the macOS package in the same release.</summary>
+    /// <summary>
+    /// The channel that reaches the feed is what keeps a Windows install away from the macOS package in the same release.
+    /// </summary>
     [Fact]
     public async Task CheckAsync_AsksTheFeed_ForThisBuildsPlatformAndArchitecture()
     {
@@ -127,7 +161,9 @@ public class VelopackUpdateServiceTests : IDisposable
         Assert.Equal(MessageCodes.UpdateNotInstalled, result.Messages.Single().Code);
     }
 
-    /// <summary>A download with nothing to fetch is a failure — a check finding nothing is "up to date", a download finding nothing is not.</summary>
+    /// <summary>
+    /// A download with nothing to fetch is a failure — a check finding nothing is "up to date", a download finding nothing is not.
+    /// </summary>
     [Fact]
     public async Task DownloadAsync_WithNothingNewerToFetch_Fails()
     {
@@ -138,7 +174,9 @@ public class VelopackUpdateServiceTests : IDisposable
         Assert.Equal(MessageCodes.NotFound, result.Messages.Single().Code);
     }
 
-    /// <summary>Applying without a download must do nothing: the alternative restarts into whatever the installer last left on disk.</summary>
+    /// <summary>
+    /// Applying without a download must do nothing: the alternative restarts into whatever the installer last left on disk.
+    /// </summary>
     [Fact]
     public void ApplyDownloadedUpdateAndRestart_BeforeAnyDownload_IsANoOp() =>
         new VelopackUpdateService(NullLogger<VelopackUpdateService>.Instance).ApplyDownloadedUpdateAndRestart();
@@ -158,7 +196,9 @@ public class VelopackUpdateServiceTests : IDisposable
         NotesMarkdown = notes,
     };
 
-    /// <summary>Stands in for the release feed, and remembers the channel it was asked for — which is one of the assertions.</summary>
+    /// <summary>
+    /// Stands in for the release feed, and remembers the channel it was asked for — which is one of the assertions.
+    /// </summary>
     private sealed class Feed(params VelopackAsset[] assets) : IUpdateSource
     {
         public string? AskedFor { get; private set; }
@@ -166,6 +206,11 @@ public class VelopackUpdateServiceTests : IDisposable
         public bool Fails { get; init; }
 
         public bool Hangs { get; init; }
+
+        /// <summary>
+        /// Stalls the transfer itself rather than the feed lookup that happens before it.
+        /// </summary>
+        public bool DownloadHangs { get; init; }
 
         public async Task<VelopackAssetFeed> GetReleaseFeed(
             IVelopackLogger logger,
@@ -184,12 +229,17 @@ public class VelopackUpdateServiceTests : IDisposable
                 : new VelopackAssetFeed { Assets = assets };
         }
 
-        public Task DownloadReleaseEntry(
+        public async Task DownloadReleaseEntry(
             IVelopackLogger logger,
             VelopackAsset releaseEntry,
             string localFile,
             Action<int> progress,
-            CancellationToken cancelToken = default) =>
-            throw new NotSupportedException("the real transfer is verified against a published release, not here");
+            CancellationToken cancelToken = default)
+        {
+            if (!DownloadHangs)
+                throw new NotSupportedException("a completed transfer is verified against a published release, not here");
+
+            await Task.Delay(Timeout.Infinite, cancelToken);
+        }
     }
 }
