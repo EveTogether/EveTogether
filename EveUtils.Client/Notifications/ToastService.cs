@@ -24,9 +24,9 @@ public sealed class ToastService : IToastService, ISingletonService
     /// <summary>Setting key for the in-window corner toasts appear in (persisted enum name, default TopRight).</summary>
     public const string PositionSettingKey = "toasts.position";
 
-    // Weak keys so a closed window's managers are collected with the window. One manager per corner, not per window:
-    // a manager stacks all its cards in a single panel, so sharing one across corners would drag a toast that is still
-    // standing (an update offer waits for a click) along to wherever the next toast asked to appear.
+    // Weak keys so a closed window's managers are collected with the window, and one manager per corner rather than
+    // per window: a manager stacks every card it owns in a single panel, so corners sharing one would move each
+    // other's toasts.
     private readonly ConditionalWeakTable<TopLevel, Dictionary<ToastPosition, WindowNotificationManager>> _managers = new();
 
     /// <summary>Where toasts appear within the window. Settable live (Settings); applied on the next toast.</summary>
@@ -55,10 +55,8 @@ public sealed class ToastService : IToastService, ISingletonService
         ShowOnActiveWindow(position, manager => manager.Show(ToastActionContent.Build(title, message, kind, actions)));
     }
 
-    // Resolves the window the user is looking at, lazily keeps one notification manager per window and corner, and
-    // hands the right one to <paramref name="show"/>. A freshly created manager hasn't been laid out yet, so its very
-    // first Show is dropped (the symptom was "first Join click shows no toast, the second does"): defer the first toast
-    // one cycle so the manager attaches to the overlay layer; later toasts in the same corner show immediately.
+    // Resolves the window the user is looking at and hands it the manager for the requested corner. A fresh manager
+    // has not attached to the overlay layer yet and drops its very first Show, so that one is deferred a cycle.
     // Nothing open (headless tests / no desktop lifetime) → silent no-op.
     private void ShowOnActiveWindow(ToastPosition? requested, Action<WindowNotificationManager> show)
     {

@@ -1800,7 +1800,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     // ── Application updates (ET-32) ─────────────────────────────────────────────────────────────────
     private const string CheckUpdatesOnStartupSettingKey = "updates.check-on-startup";   // default on
 
-    /// <summary>The restart banner: a package is downloaded and waiting, and stays waiting until it is applied.</summary>
+    /// <summary>
+    /// The restart banner: a package is downloaded and waiting, and stays waiting until it is applied.
+    /// </summary>
     [ObservableProperty] private bool _isUpdateReady;
 
     [ObservableProperty] private string _updateReadyMessage = "";
@@ -1888,7 +1890,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         IsUpdateReady = true;
     }
 
-    /// <summary>Applies the downloaded package and comes back on the new build.</summary>
+    /// <summary>
+    /// Applies the downloaded package and comes back on the new build.
+    /// </summary>
     [RelayCommand]
     private void RestartForUpdate() => _services?.GetRequiredService<IUpdateService>().ApplyDownloadedUpdateAndRestart();
 

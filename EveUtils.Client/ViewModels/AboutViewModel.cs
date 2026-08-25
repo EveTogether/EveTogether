@@ -48,14 +48,18 @@ public sealed partial class AboutViewModel : ViewModelBase
     private readonly Func<AppRelease, Task>? _onInstallRequested;
     private AppRelease? _offered;
 
-    /// <summary>Raised when the user starts an install from here, so the window closes before the offer opens.</summary>
+    /// <summary>
+    /// Raised when the user starts an install from here, so the window closes before the offer opens.
+    /// </summary>
     public event Action? CloseRequested;
 
     [ObservableProperty] private string _updateHeadline = "";
     [ObservableProperty] private string _updateDetail = "Updates are downloaded from the project's GitHub releases.";
     [ObservableProperty] private bool _isCheckingForUpdates;
 
-    /// <summary>False for a copy the installer never placed: a button that can never do anything is not a button.</summary>
+    /// <summary>
+    /// False for a copy the installer never placed: a button that can never do anything is not a button.
+    /// </summary>
     [ObservableProperty] private bool _canCheckForUpdates;
 
     [ObservableProperty] private string _checkForUpdatesLabel = "Check for updates";
@@ -118,7 +122,9 @@ public sealed partial class AboutViewModel : ViewModelBase
         CanCheckForUpdates = true;
     }
 
-    /// <summary>Asks the feed directly, whatever the startup setting says — the user asked, so they get an answer.</summary>
+    /// <summary>
+    /// Asks the feed directly, whatever the startup setting says — the user asked, so they get an answer.
+    /// </summary>
     [RelayCommand]
     private async Task CheckForUpdates()
     {

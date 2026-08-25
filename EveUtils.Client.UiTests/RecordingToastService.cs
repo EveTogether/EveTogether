@@ -17,7 +17,9 @@ public sealed class RecordingToastService : IToastService
     /// <summary>The action toasts shown, in order, with their buttons — so a test can assert the offered choices.</summary>
     public List<(string Title, string? Message, ToastKind Kind, IReadOnlyList<ToastAction> Actions)> ActionToasts { get; } = new();
 
-    /// <summary>The corner each toast asked for, in the order of <see cref="Toasts"/>; null means "follow the setting".</summary>
+    /// <summary>
+    /// The corner each toast asked for, in the order of <see cref="Toasts"/>; null means "follow the setting".
+    /// </summary>
     public List<ToastPosition?> Positions { get; } = new();
 
     public void Show(string title, string? message = null, ToastKind kind = ToastKind.Success, TimeSpan? expiration = null,
