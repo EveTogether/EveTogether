@@ -11,11 +11,25 @@ permissions:
 env:
   DOTNET_VERSION: '10.0.x'
   CONFIGURATION: Release
-  # The desktop client is the cross-platform app shipped on every OS, built as a binary release
-  # below. The server ships as a Docker image (publish-server-image job) pushed to GHCR on release.
+  # The desktop client is the cross-platform app shipped on every OS, built as a Velopack release below.
+  # The server ships as a Docker image (publish-server-image job) pushed to GHCR on release.
   PROJECT_PATH: EveUtils.Client/EveUtils.Client.csproj
   APP_NAME: EveTogether
   ICON_PNG: EveUtils.Client/Assets/eve-together-badge.png
+  ICON_ICO: EveUtils.Client/Assets/eve-together.ico
+
+  # Pinned to the Velopack package version in EveUtils.Client.csproj. The tool writes the feed the library
+  # reads, so the two are one matched pair rather than two independent dependencies — bump them together or
+  # not at all. Velopack's own compatibility guarantee runs between a reader and a writer of the same version.
+  VPK_VERSION: '1.2.0'
+
+  # vpk pack --channel writes releases.{channel}.json, and the installed app asks for exactly that file by the
+  # name UpdateChannelName builds from its own platform and architecture (EveUtils.Client/Updates/
+  # UpdateChannelName.cs). The four names below ARE those four names, and they are also the .NET RIDs the
+  # matrix builds — which is why each job passes its own RUNTIME_ID straight through as the channel instead of
+  # mapping one onto the other. Nothing at runtime fails when these drift apart: the updater simply asks for a
+  # file that is not there and goes quiet forever, so the publish-assets job asserts all four exist.
+  CHANNELS: win-x64 linux-x64 osx-arm64 osx-x64
 
 jobs:
   build-windows:
@@ -37,18 +51,22 @@ jobs:
         run: |
           V="${{ github.event.release.tag_name }}"
           V="${V#v}"
-          echo "VERSION_ARG=${V:+-p:Version=$V}" >> "$GITHUB_ENV"
+          # A release takes its version from the tag. workflow_dispatch has no tag: dotnet would fall back to
+          # Directory.Build.props, but vpk --packVersion has no such fallback and refuses anything below 0.0.1
+          # outright, so a dispatch build is handed an explicit throwaway version — the same one to dotnet, so
+          # the assembly and the package can never disagree about what this build is. A prerelease of 0.0.1
+          # sorts below every real release, so a dispatch build someone installs by hand is offered the next
+          # real version rather than the other way round.
+          echo "VERSION=${V:-0.0.1-dispatch.${{ github.run_number }}}" >> "$GITHUB_ENV"
 
-      - name: Publish (self-contained, single file)
+      - name: Publish (self-contained)
         run: >
           dotnet publish ${{ env.PROJECT_PATH }}
           -c ${{ env.CONFIGURATION }}
           -r ${{ env.RUNTIME_ID }}
           --self-contained true
-          -p:PublishSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
           -p:DebugType=none
-          ${{ env.VERSION_ARG }}
+          -p:Version=${{ env.VERSION }}
           -o ${{ env.OUTPUT_DIR }}
 
       - name: Rename app host
@@ -57,15 +75,31 @@ jobs:
           $exe = Join-Path $env:OUTPUT_DIR 'EveUtils.Client.exe'
           if (Test-Path $exe) { Rename-Item $exe "$env:APP_NAME.exe" }
 
-      - name: Create ZIP
-        shell: pwsh
-        run: Compress-Archive -Path "$env:OUTPUT_DIR/*" -DestinationPath "$env:APP_NAME-win-x64.zip" -Force
+      - name: Install vpk
+        shell: bash
+        run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
+
+      # Signing is deliberately absent: it has not been decided on yet, and every artifact here ships unsigned,
+      # which the release notes say out loud. When it is decided, it arrives as --signTemplate (or --signParams)
+      # on this call and a secret on the workflow — no other step changes.
+      - name: Pack the Velopack release
+        shell: bash
+        run: >
+          vpk pack
+          --packId ${{ env.APP_NAME }}
+          --packTitle "EVE Together"
+          --packVersion "${{ env.VERSION }}"
+          --packDir ${{ env.OUTPUT_DIR }}
+          --mainExe ${{ env.APP_NAME }}.exe
+          --icon ${{ env.ICON_ICO }}
+          --channel ${{ env.RUNTIME_ID }}
+          --outputDir artifacts-velopack
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: windows
-          path: ${{ env.APP_NAME }}-win-x64.zip
+          path: artifacts-velopack/*
 
   build-linux:
     runs-on: ubuntu-latest
@@ -82,22 +116,25 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Resolve version
-        shell: bash
         run: |
           V="${{ github.event.release.tag_name }}"
           V="${V#v}"
-          echo "VERSION_ARG=${V:+-p:Version=$V}" >> "$GITHUB_ENV"
+          # A release takes its version from the tag. workflow_dispatch has no tag: dotnet would fall back to
+          # Directory.Build.props, but vpk --packVersion has no such fallback and refuses anything below 0.0.1
+          # outright, so a dispatch build is handed an explicit throwaway version — the same one to dotnet, so
+          # the assembly and the package can never disagree about what this build is. A prerelease of 0.0.1
+          # sorts below every real release, so a dispatch build someone installs by hand is offered the next
+          # real version rather than the other way round.
+          echo "VERSION=${V:-0.0.1-dispatch.${{ github.run_number }}}" >> "$GITHUB_ENV"
 
-      - name: Publish (self-contained, single file)
+      - name: Publish (self-contained)
         run: >
           dotnet publish ${{ env.PROJECT_PATH }}
           -c ${{ env.CONFIGURATION }}
           -r ${{ env.RUNTIME_ID }}
           --self-contained true
-          -p:PublishSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
           -p:DebugType=none
-          ${{ env.VERSION_ARG }}
+          -p:Version=${{ env.VERSION }}
           -o ${{ env.OUTPUT_DIR }}
 
       - name: Rename app host
@@ -107,47 +144,32 @@ jobs:
           fi
           chmod +x "$OUTPUT_DIR/$APP_NAME"
 
-      - name: Create tarball
-        run: tar -czf "$APP_NAME-linux-x64.tar.gz" -C "$OUTPUT_DIR" .
+      - name: Install vpk
+        run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
 
-      - name: Build AppImage
-        run: |
-          set -e
-          APPDIR=AppDir
-          mkdir -p "$APPDIR/usr/bin"
-          cp -r "$OUTPUT_DIR"/. "$APPDIR/usr/bin/"
-
-          cp "$ICON_PNG" "$APPDIR/eve-together.png"
-
-          cat > "$APPDIR/eve-together.desktop" <<EOF
-          [Desktop Entry]
-          Type=Application
-          Name=EVE Together
-          Comment=EVE Online ops-sec tooling suite (fittings, fleets, live game-log)
-          Exec=$APP_NAME
-          Icon=eve-together
-          Categories=Utility;Game;
-          Terminal=false
-          EOF
-
-          cat > "$APPDIR/AppRun" <<EOF
-          #!/bin/sh
-          HERE="\$(dirname "\$(readlink -f "\$0")")"
-          exec "\$HERE/usr/bin/$APP_NAME" "\$@"
-          EOF
-          chmod +x "$APPDIR/AppRun"
-
-          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool
-          chmod +x appimagetool
-          ARCH=x86_64 ./appimagetool --appimage-extract-and-run "$APPDIR" "$APP_NAME-x86_64.AppImage"
+      # An AppImage is Velopack's only Linux format — there is no installer, and this AppImage is the
+      # self-updating one, which is why the hand-built AppDir/appimagetool leg that used to live here is gone.
+      # Two near-identically named AppImages, one of which silently never updates, is a trap for whoever picks
+      # the wrong one. --categories keeps the desktop-menu placement the hand-written .desktop entry had;
+      # Velopack generates that file itself and takes the entry point from it rather than from --mainExe.
+      - name: Pack the Velopack release
+        run: >
+          vpk pack
+          --packId ${{ env.APP_NAME }}
+          --packTitle "EVE Together"
+          --packVersion "${{ env.VERSION }}"
+          --packDir ${{ env.OUTPUT_DIR }}
+          --mainExe ${{ env.APP_NAME }}
+          --icon ${{ env.ICON_PNG }}
+          --channel ${{ env.RUNTIME_ID }}
+          --categories "Utility;Game"
+          --outputDir artifacts-velopack
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: linux
-          path: |
-            ${{ env.APP_NAME }}-linux-x64.tar.gz
-            ${{ env.APP_NAME }}-x86_64.AppImage
+          path: artifacts-velopack/*
 
   build-macos:
     runs-on: macos-latest
@@ -155,7 +177,8 @@ jobs:
       matrix:
         rid: [osx-arm64, osx-x64]
     env:
-      OUTPUT_DIR: publish/macos
+      RUNTIME_ID: ${{ matrix.rid }}
+      OUTPUT_DIR: publish/${{ matrix.rid }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -169,56 +192,38 @@ jobs:
         run: |
           V="${{ github.event.release.tag_name }}"
           V="${V#v}"
-          echo "VERSION_ARG=${V:+-p:Version=$V}" >> "$GITHUB_ENV"
+          # A release takes its version from the tag. workflow_dispatch has no tag: dotnet would fall back to
+          # Directory.Build.props, but vpk --packVersion has no such fallback and refuses anything below 0.0.1
+          # outright, so a dispatch build is handed an explicit throwaway version — the same one to dotnet, so
+          # the assembly and the package can never disagree about what this build is. A prerelease of 0.0.1
+          # sorts below every real release, so a dispatch build someone installs by hand is offered the next
+          # real version rather than the other way round.
+          echo "VERSION=${V:-0.0.1-dispatch.${{ github.run_number }}}" >> "$GITHUB_ENV"
 
       - name: Publish (self-contained)
         run: >
           dotnet publish ${{ env.PROJECT_PATH }}
           -c ${{ env.CONFIGURATION }}
-          -r ${{ matrix.rid }}
+          -r ${{ env.RUNTIME_ID }}
           --self-contained true
           -p:DebugType=none
-          ${{ env.VERSION_ARG }}
+          -p:Version=${{ env.VERSION }}
           -o ${{ env.OUTPUT_DIR }}
 
-      - name: Assemble .app bundle
+      - name: Rename app host
         run: |
-          set -e
-          APP="EVE Together.app"
-          rm -rf "$APP"
-          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          if [ -f "$OUTPUT_DIR/EveUtils.Client" ]; then
+            mv "$OUTPUT_DIR/EveUtils.Client" "$OUTPUT_DIR/$APP_NAME"
+          fi
+          chmod +x "$OUTPUT_DIR/$APP_NAME"
 
-          cp -R "$OUTPUT_DIR"/. "$APP/Contents/MacOS/"
-          mv "$APP/Contents/MacOS/EveUtils.Client" "$APP/Contents/MacOS/$APP_NAME"
-          chmod +x "$APP/Contents/MacOS/$APP_NAME"
-
-          VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"
-          [ -z "$VERSION" ] && VERSION="0.0.0"
-
-          printf '%s\n' \
-          '<?xml version="1.0" encoding="UTF-8"?>' \
-          '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
-          '<plist version="1.0">' \
-          '<dict>' \
-          '  <key>CFBundleName</key><string>EVE Together</string>' \
-          '  <key>CFBundleDisplayName</key><string>EVE Together</string>' \
-          '  <key>CFBundleIdentifier</key><string>com.eve-together.client</string>' \
-          "  <key>CFBundleExecutable</key><string>$APP_NAME</string>" \
-          '  <key>CFBundleIconFile</key><string>eve-together</string>' \
-          '  <key>CFBundlePackageType</key><string>APPL</string>' \
-          "  <key>CFBundleVersion</key><string>$VERSION</string>" \
-          "  <key>CFBundleShortVersionString</key><string>$VERSION</string>" \
-          '  <key>LSMinimumSystemVersion</key><string>11.0</string>' \
-          '  <key>NSHighResolutionCapable</key><true/>' \
-          '</dict>' \
-          '</plist>' > "$APP/Contents/Info.plist"
-
-          # Generate an .icns from the PNG badge (best-effort; the app still runs without it)
-          SRC="$ICON_PNG"
+      # macOS wants an .icns and the repository has only the .ico Windows uses and the .png everything else
+      # does. Generated here rather than committed, so the badge stays the single source for the icon.
+      - name: Build the macOS icon
+        run: |
           ICONSET=icon.iconset
           mkdir -p "$ICONSET"
-          gen() { sips -z "$1" "$1" "$SRC" --out "$ICONSET/$2" >/dev/null 2>&1 || true; }
+          gen() { sips -z "$1" "$1" "$ICON_PNG" --out "$ICONSET/$2" >/dev/null 2>&1 || true; }
           gen 16 icon_16x16.png
           gen 32 icon_16x16@2x.png
           gen 32 icon_32x32.png
@@ -229,18 +234,34 @@ jobs:
           gen 512 icon_256x256@2x.png
           gen 512 icon_512x512.png
           gen 1024 icon_512x512@2x.png
-          iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/eve-together.icns" || true
+          iconutil -c icns "$ICONSET" -o eve-together.icns
 
-          # Ad-hoc sign so the bundle launches on Apple Silicon (no Developer ID / notarization)
-          codesign --force --deep --sign - "$APP" || true
+      - name: Install vpk
+        run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
 
-          ditto -c -k --keepParent "$APP" "$APP_NAME-${{ matrix.rid }}.zip"
+      # Two architectures, two channels, two feeds — an Apple Silicon install asks for releases.osx-arm64.json
+      # and finds only arm64 builds in it. vpk builds the .app bundle itself from this plain publish directory,
+      # which is why the hand-assembled bundle and its Info.plist that used to live here are gone: two bundles
+      # for one app would be two identities, and the one Velopack installs is the one that can update itself.
+      # Signing and notarization are absent by decision, not by oversight; they arrive as --signAppIdentity and
+      # --notaryProfile on this call when that decision is made.
+      - name: Pack the Velopack release
+        run: >
+          vpk pack
+          --packId ${{ env.APP_NAME }}
+          --packTitle "EVE Together"
+          --packVersion "${{ env.VERSION }}"
+          --packDir ${{ env.OUTPUT_DIR }}
+          --mainExe ${{ env.APP_NAME }}
+          --icon eve-together.icns
+          --channel ${{ env.RUNTIME_ID }}
+          --outputDir artifacts-velopack
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: macos-${{ matrix.rid }}
-          path: ${{ env.APP_NAME }}-${{ matrix.rid }}.zip
+          path: artifacts-velopack/*
 
   publish-assets:
     needs: [build-windows, build-linux, build-macos]
@@ -255,6 +276,33 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+
+      # The one failure in this pipeline that is otherwise completely silent. An installed copy asks its feed
+      # for releases.{channel}.json by the name UpdateChannelName builds; a release missing that file does not
+      # error anywhere — the check just finds nothing, reports "up to date", and that installation never hears
+      # about another version again. So the names are asserted here, against the same four in CHANNELS, before
+      # anything is attached. The installer is asserted beside it because the release notes below name these
+      # files by hand: a rename in a future vpk should fail this job rather than leave the notes pointing at a
+      # download that is not on the page.
+      - name: Check the update feed is complete
+        run: |
+          echo "Attached files:"
+          ls -1 dist
+          missing=0
+          for channel in $CHANNELS; do
+            case "$channel" in
+              win-*)   installer="$APP_NAME-$channel-Setup.exe" ;;
+              linux-*) installer="$APP_NAME-$channel.AppImage" ;;
+              osx-*)   installer="$APP_NAME-$channel-Setup.pkg" ;;
+            esac
+            for file in "releases.$channel.json" "$installer"; do
+              if [ ! -f "dist/$file" ]; then
+                echo "::error::dist/$file is missing — $channel installs would never be offered an update."
+                missing=1
+              fi
+            done
+          done
+          [ "$missing" = 0 ]
 
       - name: Extract release notes from CHANGELOG.md
         run: |
@@ -271,15 +319,65 @@ jobs:
             echo "See [CHANGELOG.md](CHANGELOG.md) for details." > RELEASE_NOTES.md
           fi
 
+      # A release page now carries the update feed as well as the downloads, and the two look alike to anyone
+      # scrolling it. Nothing here is code-signed either, and each platform refuses an unsigned download in its
+      # own way without saying what to do about it. Both are answered here, on the page where people actually
+      # are, rather than only in the README.
+      #
+      # A quoted heredoc: the body contains backticks and quotes, and none of it is meant for the shell.
+      - name: Append which file to download
+        run: |
+          cat >> RELEASE_NOTES.md <<'NOTES'
+
+          ---
+
+          ### Which file do I download?
+
+          **Windows** — `EveTogether-win-x64-Setup.exe`. It installs EVE Together for your user account, and that
+          copy can update itself from this release on. Nothing here is code-signed, so SmartScreen will say the
+          publisher is unknown: choose **More info → Run anyway**. `EveTogether-win-x64-Portable.zip` is the same
+          build as a folder you unpack yourself — it runs, but a portable copy cannot update itself, and it says so
+          rather than pretending.
+
+          **macOS** — `EveTogether-osx-arm64-Setup.pkg` on Apple Silicon, `EveTogether-osx-x64-Setup.pkg` on Intel.
+          Take the one for your Mac: they are separate builds, and neither is offered the other's updates. The
+          download is not notarized, so Gatekeeper refuses a copy your browser fetched and reports that it is
+          damaged. It is not — the flag is written by the downloader. Clear just that flag after installing, with
+          `xattr -dr com.apple.quarantine "/Applications/EVE Together.app"`.
+
+          **Linux** — `EveTogether-linux-x64.AppImage`, which is both the download and the installed app. It arrives
+          without its executable bit: `chmod +x` it, then run it. It mounts itself with FUSE; on a distribution that
+          ships only fuse3, either install `libfuse2` or run it with `--appimage-extract-and-run`.
+
+          ### Already running EVE Together? Switch over once, by hand.
+
+          Earlier releases shipped a `.zip`, a `.tar.gz` and a hand-built `.AppImage`. Those are gone, replaced by
+          the files above. A copy unpacked from one of the old archives has no update path and cannot be given one
+          after the fact, so this one switch is manual: install from the file above once, and every version after
+          this one can be installed by EVE Together itself.
+
+          Nothing of yours moves. Your database, tokens and SDE store live in your user data directory, beside the
+          installation rather than inside it, and a new install finds them there untouched. One exception:
+          `appsettings.json` sits *in* the installation directory, so an update overwrites it — if you have edited
+          it by hand, keep a copy.
+
+          ### Everything else on this page
+
+          `RELEASES-*`, `releases.*.json`, `assets.*.json` and `*-full.nupkg` are the Velopack update feed, not
+          download options — they are what the updater reads to find and verify the next version. They have to be
+          on this release for updating to work at all, but nobody downloads them by hand: pick one of the files
+          above instead.
+          NOTES
+
       - name: Attach assets and notes to the release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.release.tag_name }}
           body_path: RELEASE_NOTES.md
-          files: |
-            dist/*.zip
-            dist/*.tar.gz
-            dist/*.AppImage
+          # Every downloaded artifact lands directly in dist/ (merge-multiple), feed files included — and the
+          # feed's index files have no extension in common with anything else, so listing globs by extension
+          # here is what would quietly drop them.
+          files: dist/*
 
   publish-server-image:
     name: Publish server image to GHCR

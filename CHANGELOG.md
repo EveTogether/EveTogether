@@ -4,8 +4,9 @@ All notable changes to the EVE Together desktop client are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 Releases are built by the GitHub Actions release pipeline (`.github/workflows/release.yml`):
-publishing a GitHub Release tagged `vX.Y.Z` attaches self-contained binaries for Windows
-(`.zip`), Linux (`.tar.gz` + `.AppImage`) and macOS (`.zip`, arm64 + x64), and publishes the
+publishing a GitHub Release tagged `vX.Y.Z` attaches a self-contained Velopack build for Windows
+(`-Setup.exe` + `-Portable.zip`), Linux (`.AppImage`) and macOS (`-Setup.pkg`, arm64 + x64) along
+with the update feed those installs read, and publishes the
 server as a Docker image to `ghcr.io/evetogether/eve-together-server` — tagged both `:latest`
 (always the newest build) and with the release version (`:X.Y.Z`). The notes for a release are
 taken from the matching `## vX.Y.Z` section below.
