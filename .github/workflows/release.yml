@@ -295,12 +295,14 @@ jobs:
               linux-*) installer="$APP_NAME-$channel.AppImage" ;;
               osx-*)   installer="$APP_NAME-$channel-Setup.pkg" ;;
             esac
-            for file in "releases.$channel.json" "$installer"; do
-              if [ ! -f "dist/$file" ]; then
-                echo "::error::dist/$file is missing — $channel installs would never be offered an update."
-                missing=1
-              fi
-            done
+            if [ ! -f "dist/releases.$channel.json" ]; then
+              echo "::error::dist/releases.$channel.json is missing — a $channel install asks for exactly that name, would find nothing, and would never be offered a version again."
+              missing=1
+            fi
+            if [ ! -f "dist/$installer" ]; then
+              echo "::error::dist/$installer is missing — the release notes on this page tell $channel users to download it by that name."
+              missing=1
+            fi
           done
           [ "$missing" = 0 ]
 
