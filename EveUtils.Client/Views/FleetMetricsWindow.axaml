@@ -13,165 +13,169 @@
         WindowStartupLocation="CenterOwner"
         Title="Fleet metrics">
 
-    <v:ChromedWindow.Styles>
-        <Style Selector="Button.viewtab">
-            <Setter Property="FontSize" Value="9.5"/>
-            <Setter Property="LetterSpacing" Value="1.4"/>
-            <Setter Property="Padding" Value="11,4"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-        </Style>
-        <Style Selector="Button.viewtab.active">
-            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-        </Style>
+    <DockPanel Margin="14">
 
-        <!-- One materialised member list, three densities: the layout picks the item template (and, for the grid,
-             the panel) so only the chosen one is ever built. Each template's field set is deliberate — see the
-             hint line, which names what the current density drops. -->
-        <Style Selector="ItemsControl.list">
-            <Setter Property="ItemTemplate">
-                <Setter.Value>
-                    <DataTemplate x:DataType="vm:DpsViewModel">
-                        <Border Classes="panel" Margin="0,0,0,8" Height="116">
-                            <Grid ColumnDefinitions="174,*,Auto" Margin="12">
-                                <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Character}" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextBrightBrush}"/>
-                                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
-                                        <TextBlock Grid.Row="0" Grid.Column="0" Classes="mono" FontSize="15"
-                                                   Foreground="{DynamicResource AccentBrightBrush}"
-                                                   Text="{Binding Dealt, StringFormat='OUT {0}'}"/>
-                                        <TextBlock Grid.Row="0" Grid.Column="1" Classes="mono" FontSize="15"
-                                                   Foreground="{StaticResource RedBrush}"
-                                                   Text="{Binding Received, StringFormat='IN {0}'}"/>
-                                        <TextBlock Grid.Row="1" Grid.Column="0" Classes="mono" FontSize="15"
-                                                   Foreground="#FF4D90FF"
-                                                   Text="{Binding Cap, StringFormat='CAP {0}'}"/>
-                                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="mono" FontSize="15"
-                                                   Foreground="#FFB07EE0"
-                                                   Text="{Binding Neut, StringFormat='NEUT {0}'}"/>
-                                    </Grid>
-                                    <StackPanel Orientation="Horizontal" Spacing="14">
-                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextAccentBrush}"
-                                                   IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                                   Text="{Binding Location, StringFormat='◉ {0}'}"
-                                                   ToolTip.Tip="Current solar system (location sharing)"/>
-                                        <TextBlock FontSize="11" Foreground="#FFE0B25A"
-                                                   IsVisible="{Binding HasBounty}"
-                                                   Text="{Binding BountyText, StringFormat='◇ {0}'}"
-                                                   ToolTip.Tip="Bounty earned this session (bounty sharing)"/>
-                                    </StackPanel>
-                                </StackPanel>
-                                <ctl:DpsGraph Grid.Column="1" Margin="10,0,0,0"
-                                              Series="{Binding Series}"
-                                              Revision="{Binding GraphRevision}"
-                                              Markers="{Binding Markers}"/>
-                                <Button Grid.Column="2" Content="⧉" FontSize="13" Padding="8,3" Margin="10,0,0,0"
-                                        VerticalAlignment="Top" ToolTip.Tip="Pop out this graph"
-                                        Command="{Binding $parent[ItemsControl].((vm:FleetMetricsViewModel)DataContext).PopOutCommand}"
-                                        CommandParameter="{Binding}"/>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        <!-- These styles belong to the CONTENT, not to the window. Docked is the default shell: ModuleHostService
+             does not show this window, it lifts this DockPanel out and reparents it into a tab in the main window.
+             Anything left on the window is dropped there — and an ItemTemplate that goes missing sends every member
+             row to the app-wide ViewLocator, which renders "Not Found: …DpsView" instead of the row. -->
+        <DockPanel.Styles>
+            <Style Selector="Button.viewtab">
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="LetterSpacing" Value="1.4"/>
+                <Setter Property="Padding" Value="11,4"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+            </Style>
+            <Style Selector="Button.viewtab.active">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
 
-        <!-- Grid: two-up cards. Drops the cap/neut/bounty figures — their lines stay in the graph, so the card keeps
-             the shape of the fight while giving up the exact numbers. -->
-        <Style Selector="ItemsControl.grid">
-            <Setter Property="ItemsPanel">
-                <Setter.Value>
-                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
-                </Setter.Value>
-            </Setter>
-            <Setter Property="ItemTemplate">
-                <Setter.Value>
-                    <DataTemplate x:DataType="vm:DpsViewModel">
-                        <!-- Narrow enough that the default 720-wide window still fits two cards and a wider one
-                             gains a third column instead of a dead gutter. -->
-                        <Border Classes="panel" Width="264" Height="106" Margin="0,0,8,8">
-                            <Grid RowDefinitions="Auto,*" Margin="10,8">
-                                <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
-                                    <StackPanel Grid.Column="0" Spacing="1">
-                                        <TextBlock Text="{Binding Character}" FontWeight="SemiBold" FontSize="12"
-                                                   TextTrimming="CharacterEllipsis"
+            <!-- One materialised member list, three densities: the layout picks the item template (and, for the grid,
+                 the panel) so only the chosen one is ever built. Each template's field set is deliberate — see the
+                 hint line, which names what the current density drops. -->
+            <Style Selector="ItemsControl.list">
+                <Setter Property="ItemTemplate">
+                    <Setter.Value>
+                        <DataTemplate x:DataType="vm:DpsViewModel">
+                            <Border Classes="panel" Margin="0,0,0,8" Height="116">
+                                <Grid ColumnDefinitions="174,*,Auto" Margin="12">
+                                    <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Character}" FontWeight="SemiBold"
                                                    Foreground="{StaticResource TextBrightBrush}"/>
-                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextAccentBrush}"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                                   Text="{Binding Location, StringFormat='◉ {0}'}"
-                                                   ToolTip.Tip="Current solar system (location sharing)"/>
+                                        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Classes="mono" FontSize="15"
+                                                       Foreground="{DynamicResource AccentBrightBrush}"
+                                                       Text="{Binding Dealt, StringFormat='OUT {0}'}"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Classes="mono" FontSize="15"
+                                                       Foreground="{StaticResource RedBrush}"
+                                                       Text="{Binding Received, StringFormat='IN {0}'}"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Classes="mono" FontSize="15"
+                                                       Foreground="#FF4D90FF"
+                                                       Text="{Binding Cap, StringFormat='CAP {0}'}"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Classes="mono" FontSize="15"
+                                                       Foreground="#FFB07EE0"
+                                                       Text="{Binding Neut, StringFormat='NEUT {0}'}"/>
+                                        </Grid>
+                                        <StackPanel Orientation="Horizontal" Spacing="14">
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextAccentBrush}"
+                                                       IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                       Text="{Binding Location, StringFormat='◉ {0}'}"
+                                                       ToolTip.Tip="Current solar system (location sharing)"/>
+                                            <TextBlock FontSize="11" Foreground="#FFE0B25A"
+                                                       IsVisible="{Binding HasBounty}"
+                                                       Text="{Binding BountyText, StringFormat='◇ {0}'}"
+                                                       ToolTip.Tip="Bounty earned this session (bounty sharing)"/>
+                                        </StackPanel>
                                     </StackPanel>
-                                    <Button Grid.Column="1" Content="⧉" FontSize="11" Padding="6,1" Margin="8,0,0,0"
+                                    <ctl:DpsGraph Grid.Column="1" Margin="10,0,0,0"
+                                                  Series="{Binding Series}"
+                                                  Revision="{Binding GraphRevision}"
+                                                  Markers="{Binding Markers}"/>
+                                    <Button Grid.Column="2" Content="⧉" FontSize="13" Padding="8,3" Margin="10,0,0,0"
                                             VerticalAlignment="Top" ToolTip.Tip="Pop out this graph"
                                             Command="{Binding $parent[ItemsControl].((vm:FleetMetricsViewModel)DataContext).PopOutCommand}"
                                             CommandParameter="{Binding}"/>
                                 </Grid>
-                                <Grid Grid.Row="1" ColumnDefinitions="80,*" Margin="0,6,0,0">
-                                    <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
-                                        <TextBlock Classes="mono" FontSize="14"
-                                                   Foreground="{DynamicResource AccentBrightBrush}"
-                                                   Text="{Binding Dealt, StringFormat='OUT {0}'}"/>
-                                        <TextBlock Classes="mono" FontSize="14"
-                                                   Foreground="{StaticResource RedBrush}"
-                                                   Text="{Binding Received, StringFormat='IN {0}'}"/>
-                                    </StackPanel>
-                                    <ctl:DpsGraph Grid.Column="1" Margin="8,0,0,0"
-                                                  Series="{Binding Series}"
-                                                  Revision="{Binding GraphRevision}"
-                                                  Markers="{Binding Markers}"/>
+                            </Border>
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Grid: two-up cards. Drops the cap/neut/bounty figures — their lines stay in the graph, so the card keeps
+                 the shape of the fight while giving up the exact numbers. -->
+            <Style Selector="ItemsControl.grid">
+                <Setter Property="ItemsPanel">
+                    <Setter.Value>
+                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="ItemTemplate">
+                    <Setter.Value>
+                        <DataTemplate x:DataType="vm:DpsViewModel">
+                            <!-- Narrow enough that the default 720-wide window still fits two cards and a wider one
+                                 gains a third column instead of a dead gutter. -->
+                            <Border Classes="panel" Width="264" Height="106" Margin="0,0,8,8">
+                                <Grid RowDefinitions="Auto,*" Margin="10,8">
+                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                                        <StackPanel Grid.Column="0" Spacing="1">
+                                            <TextBlock Text="{Binding Character}" FontWeight="SemiBold" FontSize="12"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextAccentBrush}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                       Text="{Binding Location, StringFormat='◉ {0}'}"
+                                                       ToolTip.Tip="Current solar system (location sharing)"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Content="⧉" FontSize="11" Padding="6,1" Margin="8,0,0,0"
+                                                VerticalAlignment="Top" ToolTip.Tip="Pop out this graph"
+                                                Command="{Binding $parent[ItemsControl].((vm:FleetMetricsViewModel)DataContext).PopOutCommand}"
+                                                CommandParameter="{Binding}"/>
+                                    </Grid>
+                                    <Grid Grid.Row="1" ColumnDefinitions="80,*" Margin="0,6,0,0">
+                                        <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
+                                            <TextBlock Classes="mono" FontSize="14"
+                                                       Foreground="{DynamicResource AccentBrightBrush}"
+                                                       Text="{Binding Dealt, StringFormat='OUT {0}'}"/>
+                                            <TextBlock Classes="mono" FontSize="14"
+                                                       Foreground="{StaticResource RedBrush}"
+                                                       Text="{Binding Received, StringFormat='IN {0}'}"/>
+                                        </StackPanel>
+                                        <ctl:DpsGraph Grid.Column="1" Margin="8,0,0,0"
+                                                      Series="{Binding Series}"
+                                                      Revision="{Binding GraphRevision}"
+                                                      Markers="{Binding Markers}"/>
+                                    </Grid>
                                 </Grid>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+                            </Border>
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
 
-        <!-- Compact: one line per member, for a fleet you scan rather than read. Keeps identity plus the three
-             figures an FC steers on (DPS out, DPS in, where they stand); drops the graph and the cap/neut/bounty
-             figures. The pop-out stays — it is the way back to one member's graph without leaving this density. -->
-        <Style Selector="ItemsControl.compact">
-            <Setter Property="ItemTemplate">
-                <Setter.Value>
-                    <DataTemplate x:DataType="vm:DpsViewModel">
-                        <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="10,4">
-                            <!-- Identity and figures stay one tight block on the left however wide the window gets:
-                                 a row you scan is a row your eye should not have to travel. -->
-                            <Grid ColumnDefinitions="170,130,90,78,*,Auto">
-                                <TextBlock Grid.Column="0" Text="{Binding Character}" FontWeight="SemiBold"
-                                           FontSize="12" VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           Foreground="{StaticResource TextBrightBrush}"/>
-                                <TextBlock Grid.Column="1" FontSize="11" VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           Foreground="{DynamicResource TextAccentBrush}"
-                                           IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                           Text="{Binding Location, StringFormat='◉ {0}'}"
-                                           ToolTip.Tip="Current solar system (location sharing)"/>
-                                <TextBlock Grid.Column="2" Classes="mono" FontSize="12" VerticalAlignment="Center"
-                                           HorizontalAlignment="Right"
-                                           Foreground="{DynamicResource AccentBrightBrush}"
-                                           Text="{Binding Dealt, StringFormat='OUT {0}'}"/>
-                                <TextBlock Grid.Column="3" Classes="mono" FontSize="12" VerticalAlignment="Center"
-                                           HorizontalAlignment="Right"
-                                           Foreground="{StaticResource RedBrush}"
-                                           Text="{Binding Received, StringFormat='IN {0}'}"/>
-                                <Button Grid.Column="5" Content="⧉" FontSize="10" Padding="6,0" Margin="10,0,0,0"
-                                        VerticalAlignment="Center" ToolTip.Tip="Pop out this graph"
-                                        Command="{Binding $parent[ItemsControl].((vm:FleetMetricsViewModel)DataContext).PopOutCommand}"
-                                        CommandParameter="{Binding}"/>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </v:ChromedWindow.Styles>
-
-    <DockPanel Margin="14">
+            <!-- Compact: one line per member, for a fleet you scan rather than read. Keeps identity plus the three
+                 figures an FC steers on (DPS out, DPS in, where they stand); drops the graph and the cap/neut/bounty
+                 figures. The pop-out stays — it is the way back to one member's graph without leaving this density. -->
+            <Style Selector="ItemsControl.compact">
+                <Setter Property="ItemTemplate">
+                    <Setter.Value>
+                        <DataTemplate x:DataType="vm:DpsViewModel">
+                            <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="10,4">
+                                <!-- Identity and figures stay one tight block on the left however wide the window gets:
+                                     a row you scan is a row your eye should not have to travel. -->
+                                <Grid ColumnDefinitions="170,130,90,78,*,Auto">
+                                    <TextBlock Grid.Column="0" Text="{Binding Character}" FontWeight="SemiBold"
+                                               FontSize="12" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Grid.Column="1" FontSize="11" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource TextAccentBrush}"
+                                               IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                               Text="{Binding Location, StringFormat='◉ {0}'}"
+                                               ToolTip.Tip="Current solar system (location sharing)"/>
+                                    <TextBlock Grid.Column="2" Classes="mono" FontSize="12" VerticalAlignment="Center"
+                                               HorizontalAlignment="Right"
+                                               Foreground="{DynamicResource AccentBrightBrush}"
+                                               Text="{Binding Dealt, StringFormat='OUT {0}'}"/>
+                                    <TextBlock Grid.Column="3" Classes="mono" FontSize="12" VerticalAlignment="Center"
+                                               HorizontalAlignment="Right"
+                                               Foreground="{StaticResource RedBrush}"
+                                               Text="{Binding Received, StringFormat='IN {0}'}"/>
+                                    <Button Grid.Column="5" Content="⧉" FontSize="10" Padding="6,0" Margin="10,0,0,0"
+                                            VerticalAlignment="Center" ToolTip.Tip="Pop out this graph"
+                                            Command="{Binding $parent[ItemsControl].((vm:FleetMetricsViewModel)DataContext).PopOutCommand}"
+                                            CommandParameter="{Binding}"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </DockPanel.Styles>
 
         <!-- Header: fleet name + roll-up totals -->
         <Border DockPanel.Dock="Top" Classes="panel" Padding="14,12" Margin="0,0,0,12">
