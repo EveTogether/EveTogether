@@ -5,7 +5,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -19,6 +21,7 @@ using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Dtos;
 using EveUtils.Shared.Modules.Settings.Queries;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,6 +40,8 @@ public class FleetMetricsLayoutTests
 {
     private const int Commander = 90250177;
     private const int Member = 90250178;
+    private const int Latecomer = 90250179;   // not on the roster: turns up through a sample, as a real straggler does
+    private const int Stranger = 90250180;    // never in this fleet at all
     private const long FleetId = 100;
 
     private static readonly FleetInfo Op = new(FleetId, "Op", null, FleetVisibility.Public, FleetState.Active, 1,
@@ -47,6 +52,7 @@ public class FleetMetricsLayoutTests
         {
             [Commander] = "RaymondKrah",
             [Member] = "Lionear",
+            [Latecomer] = "Tarek",
         }));
 
     private static FakeFleetClient Roster() => new()
@@ -89,7 +95,7 @@ public class FleetMetricsLayoutTests
 
     // A screen on a fleet whose members share a location and a bounty, so every field the list shows has something to
     // show and its absence in a denser layout means the layout dropped it, not that the data was missing.
-    private static async Task<(Control Root, FleetMetricsViewModel Vm)> ShowAsync(
+    private static async Task<(Window Root, FleetMetricsViewModel Vm)> ShowAsync(
         TestClientInstance instance, FleetMetricsLayout layout, Shell shell)
     {
         var vm = await BuildViewModelAsync(instance, Roster());
@@ -167,6 +173,51 @@ public class FleetMetricsLayoutTests
 
         return overlay.GetVisualDescendants().OfType<TextBlock>()
             .Single(t => t.Classes.Contains("location"));
+    }
+
+    // A real drag through the headless input pipeline: press on one row, cross the threshold, travel to another and
+    // release — the same events the window's handlers see from a mouse.
+    private static void DragRow(Window root, FleetMetricsViewModel vm, int from, int to)
+    {
+        ItemsControl host = MemberHost(root, vm);
+        Point start = CentreOf(host, root, from);
+        Point finish = CentreOf(host, root, to);
+
+        root.MouseDown(start, MouseButton.Left);
+        root.MouseMove(new Point(start.X + 6, start.Y));   // past the drag threshold, still over the same row
+        root.MouseMove(finish);
+        root.MouseUp(finish, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static Point CentreOf(ItemsControl host, Visual root, int index)
+    {
+        Control container = Assert.IsAssignableFrom<Control>(host.ContainerFromIndex(index));
+        return container.TranslatePoint(new Point(container.Bounds.Width / 2, container.Bounds.Height / 2), root)
+            ?? throw new InvalidOperationException($"member row {index} is not in the tree");
+    }
+
+    private static async Task SeedOrderAsync(TestClientInstance instance, params int[] characterIds)
+    {
+        using var scope = instance.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ICqrsDispatcher>().Send(new SetSettingCommand(
+            FleetMetricsViewModel.OrderSettingKeyPrefix + FleetId,
+            string.Join(",", characterIds)));
+    }
+
+    private static async Task<string?> ReadSettingAsync(TestClientInstance instance, string key)
+    {
+        using var scope = instance.Services.CreateScope();
+        IReadOnlyList<SettingDto> settings = await scope.ServiceProvider
+            .GetRequiredService<ICqrsDispatcher>().Query(new GetSettingsQuery());
+        return settings.FirstOrDefault(s => s.Key == key)?.Value;
+    }
+
+    // The stored order is read asynchronously, so a freshly built view-model shows the roster order for a moment.
+    private static async Task WaitForOrderAsync(FleetMetricsViewModel vm, params string[] names)
+    {
+        for (var i = 0; i < 100 && !vm.Members.Select(m => m.Character).SequenceEqual(names); i++)
+            await Task.Delay(20);
     }
 
     // The badge's green, read from the live theme rather than pinned to a hex here: one place decides the colour.
@@ -563,6 +614,89 @@ public class FleetMetricsLayoutTests
         AssertRowsAreTemplated(window, vm, FleetMetricsLayout.List);
         Assert.All(LocationBlocks(window, vm), block => Assert.Contains("withfc", block.Classes));
         window.Close();
+    }
+
+    // ET-28: dragging is wired once on the shared ItemsControl, so it has to work identically whichever template
+    // drew the rows — and in the docked tab, where the handlers travel with the reparented content.
+    [AvaloniaTheory]
+    [InlineData(FleetMetricsLayout.List, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.List, Shell.DockedTab)]
+    [InlineData(FleetMetricsLayout.Grid, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.Grid, Shell.DockedTab)]
+    [InlineData(FleetMetricsLayout.Compact, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.Compact, Shell.DockedTab)]
+    public async Task Drag_ReordersMembers_InEveryLayoutAndShell(FleetMetricsLayout layout, Shell shell)
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, layout, shell);
+        Assert.Equal(["RaymondKrah", "Lionear"], vm.Members.Select(m => m.Character));
+
+        DragRow(root, vm, from: 1, to: 0);
+
+        Assert.Equal(["Lionear", "RaymondKrah"], vm.Members.Select(m => m.Character));
+    }
+
+    [AvaloniaFact]
+    public async Task Drag_PersistsTheOrder_ForTheNextViewModelOnTheSameFleet()
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.List, Shell.OwnWindow);
+
+        DragRow(root, vm, from: 1, to: 0);
+        for (var i = 0; i < 100 && await ReadSettingAsync(instance, vm.OrderSettingKey) is null; i++)
+            await Task.Delay(20);
+        Assert.Equal($"{Member},{Commander}", await ReadSettingAsync(instance, vm.OrderSettingKey));
+        vm.Dispose();
+
+        // A second view-model is what the next session — or a roster refresh — sees.
+        var next = await BuildViewModelAsync(instance, Roster());
+        await WaitForOrderAsync(next, "Lionear", "RaymondKrah");
+        Assert.Equal(["Lionear", "RaymondKrah"], next.Members.Select(m => m.Character));
+        next.Dispose();
+    }
+
+    // A character the stored order has never seen joins at the back, which is where an unarranged fleet grows.
+    [AvaloniaFact]
+    public async Task Order_PutsACharacterItDoesNotKnow_AtTheBack()
+    {
+        using var instance = CreateInstance();
+        await SeedOrderAsync(instance, Member, Commander);
+
+        var vm = await BuildViewModelAsync(instance, Roster());
+        await WaitForOrderAsync(vm, "Lionear", "RaymondKrah");
+
+        // A straggler who is not on the roster turns up through a sample.
+        await MoveAsync(instance, vm, Latecomer, "Jita");
+
+        Assert.Equal(["Lionear", "RaymondKrah", "Tarek"], vm.Members.Select(m => m.Character));
+        vm.Dispose();
+    }
+
+    // A stored id whose character has left the fleet matches no row, so it costs nothing: no gap, no error, and the
+    // members that are still here keep the sequence the order gives them.
+    [AvaloniaFact]
+    public async Task Order_IgnoresAStoredIdThatIsNoLongerInTheFleet()
+    {
+        using var instance = CreateInstance();
+        await SeedOrderAsync(instance, Stranger, Member, Stranger + 1, Commander);
+
+        var vm = await BuildViewModelAsync(instance, Roster());
+        await WaitForOrderAsync(vm, "Lionear", "RaymondKrah");
+
+        Assert.Equal(["Lionear", "RaymondKrah"], vm.Members.Select(m => m.Character));
+        Assert.DoesNotContain(vm.Members, m => m.CharacterId == Stranger);
+        vm.Dispose();
+    }
+
+    [AvaloniaFact]
+    public void Order_DropsTheTailRatherThanHalfAnId_WhenItOutgrowsTheSettingValue()
+    {
+        int[] order = Enumerable.Range(90_000_000, 120).ToArray();
+
+        string value = FleetMetricsViewModel.JoinOrder(order);
+
+        Assert.True(value.Length <= 512, $"a setting value holds 512 characters, got {value.Length}");
+        Assert.Equal(order.Take(FleetMetricsViewModel.ParseOrder(value).Count), FleetMetricsViewModel.ParseOrder(value));
     }
 
     [AvaloniaTheory]

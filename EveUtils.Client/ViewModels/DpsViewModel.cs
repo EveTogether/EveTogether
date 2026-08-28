@@ -55,6 +55,10 @@ public partial class DpsViewModel : ViewModelBase
     [ObservableProperty] private long _neut;
     [ObservableProperty] private long _cap;
     [ObservableProperty] private string _character = "—";
+
+    /// <summary>The EVE character this meter belongs to, or 0 where there is none to name (the design-time meter,
+    /// the own-meter placeholders). Fleet metrics persists its member order as a list of these.</summary>
+    [ObservableProperty] private int _characterId;
     [ObservableProperty] private bool _isSelf;
     [ObservableProperty] private int _graphRevision;
 

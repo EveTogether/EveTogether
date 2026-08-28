@@ -22,6 +22,11 @@ taken from the matching `## vX.Y.Z` section below.
   every live figure and no graph. Both denser views leave out only the session bounty; the line
   under the header always names what the current density leaves out. The chosen density is
   remembered for the next session (one setting for the whole install, not per fleet).
+- Fleet members can now be dragged into the order you want them in, in all three densities. The
+  order is remembered per fleet on this machine — it survives a roster refresh and a restart, is
+  the same whichever density you switch to, and is never sent anywhere. Members the saved order
+  does not know join at the back, and a saved member who has since left the fleet is simply
+  ignored.
 - A fleet member's solar system now reads green when they are standing in the fleet commander's
   system, in all three densities — the same green the header's `WITH FC` badge turns at full
   presence, off the same count, so you can see who is with the FC without reading and comparing

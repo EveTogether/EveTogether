@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -37,6 +39,13 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     /// preferences — the density that suits an FC does not change from fleet to fleet.</summary>
     public const string LayoutSettingKey = "ui.fleet-metrics.layout";
 
+    /// <summary>Where a fleet's dragged member order is kept, one key per fleet. Unlike the layout this is keyed per
+    /// fleet: an order over character ids only means anything inside the fleet those characters are in, and one
+    /// shared list would grow past the value limit as every fleet appended its own members to it.</summary>
+    public const string OrderSettingKeyPrefix = "ui.fleet-metrics.order.";
+
+    private const int MaxOrderValueLength = 512;   // ClientSettingConfiguration caps a setting value at 512
+
     private readonly long _fleetId;
     private readonly IServiceProvider _services;
     private readonly IDisposable _subscription;
@@ -46,9 +55,13 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     private readonly Dictionary<int, DpsViewModel> _trackers = new();
     private readonly Dictionary<int, string> _nameById = new();
     private readonly List<IDisposable> _registrations = [];
+    private List<int> _storedOrder = [];
     private int? _commanderCharacterId;
     private bool _layoutChosen;
     private bool _disposed;
+
+    /// <summary>This fleet's order key. Public so a test can read back what a drag stored.</summary>
+    public string OrderSettingKey => OrderSettingKeyPrefix + _fleetId.ToString(CultureInfo.InvariantCulture);
 
     public FleetMetricsViewModel(IServiceProvider services, IFleetClient fleets, FleetInfo fleet)
     {
@@ -62,6 +75,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
 
         _ = InitializeAsync(fleets);
         _ = LoadLayoutAsync();
+        _ = LoadOrderAsync();
         _subscription = bus.Subscribe<FleetMetricEvent>(OnFleetMetric);
     }
 
@@ -146,6 +160,126 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
             .Send(new SetSettingCommand(LayoutSettingKey, layout.ToString().ToLowerInvariant()));
     }
 
+    /// <summary>Move a dragged member to another member's place. The drag gesture's one entry point: the view
+    /// decides when, this decides what — so all three layouts reorder through the same code.</summary>
+    public void MoveMember(DpsViewModel dragged, DpsViewModel target)
+    {
+        int from = Members.IndexOf(dragged);
+        int to = Members.IndexOf(target);
+        if (from < 0 || to < 0 || from == to)
+            return;
+
+        Members.Move(from, to);
+    }
+
+    /// <summary>Remember the order as it now stands — called when a drag finishes, not on every step of it.</summary>
+    public void CommitOrder()
+    {
+        _storedOrder = Members.Select(m => m.CharacterId).Where(id => id > 0).ToList();
+        _ = PersistOrderAsync(_storedOrder);
+    }
+
+    private async System.Threading.Tasks.Task LoadOrderAsync()
+    {
+        IReadOnlyList<SettingDto> settings;
+        using (var scope = _services.CreateScope())
+            settings = await scope.ServiceProvider.GetRequiredService<ICqrsDispatcher>().Query(new GetSettingsQuery());
+
+        List<int> stored = ParseOrder(settings.FirstOrDefault(s => s.Key == OrderSettingKey)?.Value);
+        if (stored.Count == 0)
+            return;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_disposed)
+                return;
+
+            // Rows can already be standing here — the roster pre-fill and the first samples do not wait for a
+            // settings read — so adopting the order means re-sorting what is here, not just guiding what comes next.
+            _storedOrder = stored;
+            ApplyStoredOrder();
+        });
+    }
+
+    private async System.Threading.Tasks.Task PersistOrderAsync(IReadOnlyList<int> order)
+    {
+        using var scope = _services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ICqrsDispatcher>()
+            .Send(new SetSettingCommand(OrderSettingKey, JoinOrder(order)));
+    }
+
+    // Stable: members the stored order knows keep its sequence, the rest keep the sequence they arrived in, behind.
+    private void ApplyStoredOrder()
+    {
+        List<DpsViewModel> desired = Members
+            .Select((member, index) => (Member: member, Rank: RankOf(member.CharacterId), Index: index))
+            .OrderBy(entry => entry.Rank)
+            .ThenBy(entry => entry.Index)
+            .Select(entry => entry.Member)
+            .ToList();
+
+        for (int target = 0; target < desired.Count; target++)
+        {
+            int current = Members.IndexOf(desired[target]);
+            if (current != target)
+                Members.Move(current, target);
+        }
+    }
+
+    // A member the stored order names goes to its place among the members already standing there; anyone else joins
+    // at the back, which is where an undragged fleet grows anyway.
+    private void InsertInOrder(DpsViewModel tracker)
+    {
+        int rank = RankOf(tracker.CharacterId);
+        if (rank == int.MaxValue)
+        {
+            Members.Add(tracker);
+            return;
+        }
+
+        int index = 0;
+        while (index < Members.Count && RankOf(Members[index].CharacterId) <= rank)
+            index++;
+        Members.Insert(index, tracker);
+    }
+
+    // Unranked sorts last, which is also what happens to a stored id whose character has left the fleet: it simply
+    // never matches a row, so it costs nothing and leaves no gap.
+    private int RankOf(int characterId)
+    {
+        int rank = _storedOrder.IndexOf(characterId);
+        return rank < 0 ? int.MaxValue : rank;
+    }
+
+    internal static List<int> ParseOrder(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(part => int.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out int id) ? id : 0)
+                .Where(id => id > 0)
+                .ToList();
+
+    /// <summary>
+    /// The stored order as one setting value. A setting value holds 512 characters and a character id plus its comma
+    /// is nine, so beyond roughly the first 56 members the tail is dropped rather than truncated mid-id — and the
+    /// tail is the part nobody dragged, since new members join at the back and stay there until they are moved.
+    /// </summary>
+    internal static string JoinOrder(IEnumerable<int> order)
+    {
+        var value = new StringBuilder();
+        foreach (int characterId in order)
+        {
+            string next = value.Length == 0
+                ? characterId.ToString(CultureInfo.InvariantCulture)
+                : "," + characterId.ToString(CultureInfo.InvariantCulture);
+            if (value.Length + next.Length > MaxOrderValueLength)
+                break;
+            value.Append(next);
+        }
+
+        return value.ToString();
+    }
+
     // Warm the name cache AND pre-fill a row per roster member up front, so the window shows the whole fleet
     // deterministically instead of discovering members lazily one incoming sample at a time — which used to leave
     // members missing until they happened to publish (the "first only theirs, after reboot only mine, fills in after
@@ -217,9 +351,12 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
             return tracker;
 
         var known = _nameById.TryGetValue(characterId, out var resolved);
-        tracker = new DpsViewModel(known ? resolved! : $"Char {characterId}", isSelf: false);
+        tracker = new DpsViewModel(known ? resolved! : $"Char {characterId}", isSelf: false)
+        {
+            CharacterId = characterId,
+        };
         _trackers[characterId] = tracker;
-        Members.Add(tracker);
+        InsertInOrder(tracker);
 
         // Render through the shared 30fps driver (the same path the own meters use), so a fleet graph scrolls,
         // smooths and decays identically instead of stepping at the 1 Hz sample rate. Disposed with the window.

@@ -42,7 +42,7 @@
                 <Setter Property="ItemTemplate">
                     <Setter.Value>
                         <DataTemplate x:DataType="vm:DpsViewModel">
-                            <Border Classes="panel" Margin="0,0,0,8" Height="116">
+                            <Border Classes="panel" Margin="0,0,0,8" Height="116" Cursor="SizeAll">
                                 <Grid ColumnDefinitions="174,*,Auto" Margin="12">
                                     <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Character}" FontWeight="SemiBold"
@@ -104,7 +104,7 @@
                         <DataTemplate x:DataType="vm:DpsViewModel">
                             <!-- Sized so the default 720-wide window still fits two cards per row, and the graph below
                                  keeps roughly the list graph's proportions instead of a flattened band. -->
-                            <Border Classes="panel" Width="318" Height="176" Margin="0,0,8,8">
+                            <Border Classes="panel" Width="318" Height="176" Margin="0,0,8,8" Cursor="SizeAll">
                                 <Grid RowDefinitions="Auto,Auto,*" Margin="10,8">
                                     <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
                                         <StackPanel Grid.Column="0" Spacing="1">
@@ -157,7 +157,7 @@
                 <Setter Property="ItemTemplate">
                     <Setter.Value>
                         <DataTemplate x:DataType="vm:DpsViewModel">
-                            <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="10,4">
+                            <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="10,4" Cursor="SizeAll">
                                 <!-- Identity and figures stay one tight block on the left however wide the window gets:
                                      a row you scan is a row your eye should not have to travel. -->
                                 <Grid ColumnDefinitions="156,116,82,74,74,82,*,Auto">
@@ -290,7 +290,7 @@
         </StackPanel>
 
         <ScrollViewer>
-            <ItemsControl ItemsSource="{Binding Members}"
+            <ItemsControl x:Name="MemberList" ItemsSource="{Binding Members}"
                           Classes.list="{Binding IsListLayout}"
                           Classes.grid="{Binding IsGridLayout}"
                           Classes.compact="{Binding IsCompactLayout}"/>
