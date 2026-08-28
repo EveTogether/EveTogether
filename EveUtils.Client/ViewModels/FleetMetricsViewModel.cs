@@ -13,7 +13,13 @@ using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Settings.Commands;
+using EveUtils.Shared.Modules.Settings.Dtos;
+using EveUtils.Shared.Modules.Settings.Queries;
 using Microsoft.Extensions.DependencyInjection;
+// Avalonia's own Dispatcher (the UI thread) is all over this file; alias the CQRS one so neither name has to be
+// spelled out at every call site.
+using ICqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
 namespace EveUtils.Client.ViewModels;
 
@@ -22,11 +28,17 @@ namespace EveUtils.Client.ViewModels;
 /// <see cref="DpsViewModel"/>/<c>DpsGraph</c>, the same controls the ACTIVE header uses) plus the fleet roll-ups
 /// (dealt + received DPS now, mining/bounty/neut reserved) via <see cref="FleetMetricCatalog.Aggregate"/>. Reads
 /// live samples off the local bus for this fleet only; rows with no source yet show "—". Non-modal + disposable so
-/// it keeps updating beside the main + fleets windows.
+/// it keeps updating beside the main + fleets windows. <see cref="Layout"/> trades detail per member for members
+/// per screen so the window stays readable as a fleet grows; the choice is remembered across sessions.
 /// </summary>
 public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposable
 {
+    /// <summary>Where the chosen member layout is kept. One setting for the whole install, like the other shell
+    /// preferences — the density that suits an FC does not change from fleet to fleet.</summary>
+    public const string LayoutSettingKey = "ui.fleet-metrics.layout";
+
     private readonly long _fleetId;
+    private readonly IServiceProvider _services;
     private readonly IDisposable _subscription;
     private readonly IExternalCharacterLookup _lookup;
     private readonly DpsRenderDriver? _driver;
@@ -35,11 +47,13 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     private readonly Dictionary<int, string> _nameById = new();
     private readonly List<IDisposable> _registrations = [];
     private int? _commanderCharacterId;
+    private bool _layoutChosen;
     private bool _disposed;
 
     public FleetMetricsViewModel(IServiceProvider services, IFleetClient fleets, FleetInfo fleet)
     {
         var bus = services.GetRequiredService<IEventBus>();
+        _services = services;
         _lookup = services.GetRequiredService<IExternalCharacterLookup>();
         _driver = services.GetRequiredService<DpsRenderDriver>();
         _dialogs = services.GetRequiredService<IDialogService>();
@@ -47,6 +61,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         FleetName = fleet.Name;
 
         _ = InitializeAsync(fleets);
+        _ = LoadLayoutAsync();
         _subscription = bus.Subscribe<FleetMetricEvent>(OnFleetMetric);
     }
 
@@ -62,6 +77,76 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     /// <summary>The header badge: how many tracked members stand in the fleet commander's system. Lives in the
     /// header, so it stays on screen whichever member layout the screen shows.</summary>
     [ObservableProperty] private FleetCommanderPresence _commanderPresence = FleetCommanderPresence.Unknown;
+
+    /// <summary>How the member rows are laid out. The view maps this onto an item template + panel; nothing else
+    /// in this screen changes with it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsListLayout))]
+    [NotifyPropertyChangedFor(nameof(IsGridLayout))]
+    [NotifyPropertyChangedFor(nameof(IsCompactLayout))]
+    [NotifyPropertyChangedFor(nameof(ShowsGraphs))]
+    [NotifyPropertyChangedFor(nameof(LayoutHint))]
+    private FleetMetricsLayout _layout = FleetMetricsLayout.List;
+
+    public bool IsListLayout => Layout is FleetMetricsLayout.List;
+    public bool IsGridLayout => Layout is FleetMetricsLayout.Grid;
+    public bool IsCompactLayout => Layout is FleetMetricsLayout.Compact;
+
+    /// <summary>Whether the member rows still carry a graph — the line legend is meaningless without one.</summary>
+    public bool ShowsGraphs => Layout is not FleetMetricsLayout.Compact;
+
+    /// <summary>Spells out what the current layout drops against the list, so trading detail for density is never a
+    /// silent trade.</summary>
+    public string LayoutHint => Layout switch
+    {
+        FleetMetricsLayout.Grid =>
+            "Grid: name, DPS out/in, location and the live graph per card. The cap, neut and bounty figures show " +
+            "in the list view.",
+        FleetMetricsLayout.Compact =>
+            "Compact: name, DPS out/in and location per line. Graphs and the cap, neut and bounty figures show " +
+            "in the list view.",
+        _ => "One live graph per active member; location shows when shared.",
+    };
+
+    /// <summary>Switch the member layout and remember it for the next session.</summary>
+    [RelayCommand]
+    private void SetLayout(FleetMetricsLayout layout)
+    {
+        _layoutChosen = true;
+        if (layout == Layout)
+            return;
+
+        Layout = layout;
+        _ = PersistLayoutAsync(layout);
+    }
+
+    private async System.Threading.Tasks.Task LoadLayoutAsync()
+    {
+        IReadOnlyList<SettingDto> settings;
+        using (var scope = _services.CreateScope())
+            settings = await scope.ServiceProvider.GetRequiredService<ICqrsDispatcher>().Query(new GetSettingsQuery());
+
+        // Never set, or a value only a newer client knows — the List default already stands.
+        if (!Enum.TryParse(settings.FirstOrDefault(s => s.Key == LayoutSettingKey)?.Value, ignoreCase: true,
+                out FleetMetricsLayout stored))
+            return;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            // The stored layout lands asynchronously, so a click that beat it wins: restoring must never overwrite
+            // the choice the user just made with the value that choice replaced.
+            if (_disposed || _layoutChosen)
+                return;
+            Layout = stored;
+        });
+    }
+
+    private async System.Threading.Tasks.Task PersistLayoutAsync(FleetMetricsLayout layout)
+    {
+        using var scope = _services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ICqrsDispatcher>()
+            .Send(new SetSettingCommand(LayoutSettingKey, layout.ToString().ToLowerInvariant()));
+    }
 
     // Warm the name cache AND pre-fill a row per roster member up front, so the window shows the whole fleet
     // deterministically instead of discovering members lazily one incoming sample at a time — which used to leave

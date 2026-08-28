@@ -14,6 +14,13 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- The fleet metrics window can now be switched between three densities with the **LIST / GRID /
+  COMPACT** buttons above the member list, so the screen stays readable as a fleet grows past ten
+  or thirty members. **List** is unchanged and remains the default: every figure plus the live
+  graph. **Grid** puts members in cards side by side with the name, DPS out/in, location and the
+  graph. **Compact** gives each member one line with the name, DPS out/in and location. The line
+  under the header always names what the current density leaves out, and the chosen density is
+  remembered for the next session (one setting for the whole install, not per fleet).
 - Fits can now be imported from an EVE Workbench link. Paste a fit URL (or just its fit id) into
   **Fits → Import → From fit link…** and the published fit is fetched from EVE Workbench's public
   API and stored in your Local library, exactly like a pasted EFT block — including duplicate
