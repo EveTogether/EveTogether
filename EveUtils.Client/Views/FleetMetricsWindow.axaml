@@ -21,6 +21,14 @@
                     <TextBlock Text="FLEET METRICS" Classes="label" FontSize="9"/>
                     <TextBlock Text="{Binding FleetName}" FontWeight="Bold" FontSize="15"
                                Foreground="{StaticResource TextBrightBrush}"/>
+                    <!-- How much of the fleet stands with the FC. Header-level on purpose: it stays put whichever
+                         layout the member list below takes. -->
+                    <Border Classes="chip" Classes.good="{Binding CommanderPresence.IsComplete}"
+                            Classes.dim="{Binding CommanderPresence.IsUnknown}"
+                            HorizontalAlignment="Left" Margin="0,4,0,0"
+                            ToolTip.Tip="{Binding CommanderPresence.Tooltip}">
+                        <TextBlock Text="{Binding CommanderPresence.BadgeText}"/>
+                    </Border>
                 </StackPanel>
                 <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto" VerticalAlignment="Center">
                     <StackPanel Grid.Column="0" Spacing="1" Margin="0,0,18,0" HorizontalAlignment="Right">

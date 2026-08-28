@@ -34,6 +34,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     private readonly Dictionary<int, DpsViewModel> _trackers = new();
     private readonly Dictionary<int, string> _nameById = new();
     private readonly List<IDisposable> _registrations = [];
+    private int? _commanderCharacterId;
     private bool _disposed;
 
     public FleetMetricsViewModel(IServiceProvider services, IFleetClient fleets, FleetInfo fleet)
@@ -58,6 +59,10 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     [ObservableProperty] private string _bountyTotal = "—";
     [ObservableProperty] private string _neutTotal = "—";
 
+    /// <summary>The header badge: how many tracked members stand in the fleet commander's system. Lives in the
+    /// header, so it stays on screen whichever member layout the screen shows.</summary>
+    [ObservableProperty] private FleetCommanderPresence _commanderPresence = FleetCommanderPresence.Unknown;
+
     // Warm the name cache AND pre-fill a row per roster member up front, so the window shows the whole fleet
     // deterministically instead of discovering members lazily one incoming sample at a time — which used to leave
     // members missing until they happened to publish (the "first only theirs, after reboot only mine, fills in after
@@ -77,6 +82,9 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
             return; // transport hiccup — fall back to lazy discovery via incoming samples
         }
 
+        // The FC is the roster's fleet-level commander — the same member the roster tree crowns.
+        var commander = members.FirstOrDefault(m => m.WingId < 0 && m.Role == FleetRole.FleetCommander);
+
         // Mutate the cache + the Members collection on the UI thread, in lockstep with the sample router.
         Dispatcher.UIThread.Post(() =>
         {
@@ -86,6 +94,8 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
                 _nameById[character.CharacterId] = character.CharacterName;
             foreach (var member in members)
                 Track(member.CharacterId);
+            _commanderCharacterId = commander?.CharacterId;
+            RefreshCommanderPresence();
         });
     }
 
@@ -113,6 +123,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         }
 
         RefreshTotals();
+        RefreshCommanderPresence();
     }
 
     // The one member row per character: created (graphed, name-resolved) on first sample of any kind, so DPS and
@@ -176,6 +187,16 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         var bounty = FleetMetricCatalog.Aggregate(MetricKind.Bounty, _trackers.Values.Select(t => (double)t.Bounty));
         BountyTotal = bounty is { } total ? DpsViewModel.CompactIsk((long)total) : "—";
         // Mining descriptor exists but has no live source yet — keep the "—" placeholder.
+    }
+
+    // Rides the sample stream the totals already ride, so the badge moves with the rest of the screen instead of
+    // polling for locations of its own.
+    private void RefreshCommanderPresence()
+    {
+        var commanderSystem = _commanderCharacterId is { } characterId && _trackers.TryGetValue(characterId, out var commander)
+            ? commander.Location
+            : null;
+        CommanderPresence = FleetCommanderPresence.From(commanderSystem, _trackers.Values.Select(t => t.Location));
     }
 
     private static string Format(double? total, string unit) =>

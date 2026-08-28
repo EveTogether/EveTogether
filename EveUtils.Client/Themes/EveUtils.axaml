@@ -253,7 +253,7 @@
 
     <!-- ── Status chips (module-shell mockup): small rounded pills for the character card's ESI / server /
          implant badges. Variants: .ok = healthy accent (mockup .chip.esi), .warn = needs attention (amber),
-         .dim = inert ("not signed in"). Faction-swappable colours via DynamicResource. ── -->
+         .good = target reached (green), .dim = inert ("not signed in"). Faction-swappable colours via DynamicResource. ── -->
     <Style Selector="Border.chip">
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
@@ -277,6 +277,12 @@
     </Style>
     <Style Selector="Border.chip.warn > TextBlock">
         <Setter Property="Foreground" Value="#FFE0B341"/>
+    </Style>
+    <Style Selector="Border.chip.good">
+        <Setter Property="BorderBrush" Value="{StaticResource GreenBrush}"/>
+    </Style>
+    <Style Selector="Border.chip.good > TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
     </Style>
     <Style Selector="Border.chip.dim > TextBlock">
         <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
