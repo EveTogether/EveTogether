@@ -32,16 +32,8 @@
                 <Setter Property="FontWeight" Value="SemiBold"/>
             </Style>
 
-            <!-- ET-43: a member's solar system, and the one place that decides what "standing with the FC" looks
-                 like — the same green the header badge turns at full presence, so both readouts speak one language.
-                 All three layouts wear these classes; none of them sets Foreground itself (a local value would beat
-                 the style and the row would never turn green). -->
-            <Style Selector="TextBlock.location">
-                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
-            </Style>
-            <Style Selector="TextBlock.location.withfc">
-                <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
-            </Style>
+            <!-- ET-43's TextBlock.location / .withfc pair lives in Themes/EveUtils.axaml, not here: the DPS pop-out
+                 shows the same readout from its own window and would never see a rule scoped to this screen. -->
 
             <!-- One materialised member list, three densities: the layout picks the item template (and, for the grid,
                  the panel) so only the chosen one is ever built. Each template's field set is deliberate — see the

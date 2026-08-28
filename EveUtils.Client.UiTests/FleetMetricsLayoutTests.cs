@@ -156,6 +156,19 @@ public class FleetMetricsLayoutTests
             .Where(t => t.Classes.Contains("location") && t.IsVisible)
             .ToList();
 
+    // The pop-out's own location readout, opened the way the row's button opens it — a separate window, so this is
+    // the check that the colour rule reaches beyond the fleet-metrics screen.
+    private static TextBlock OverlayLocation(DpsViewModel tracker)
+    {
+        var overlay = new DpsOverlayWindow(tracker) { Width = 320, Height = 200 };
+        overlay.Show();
+        Dispatcher.UIThread.RunJobs();
+        overlay.UpdateLayout();
+
+        return overlay.GetVisualDescendants().OfType<TextBlock>()
+            .Single(t => t.Classes.Contains("location"));
+    }
+
     // The badge's green, read from the live theme rather than pinned to a hex here: one place decides the colour.
     private static Color GreenBrush() =>
         Assert.IsAssignableFrom<ISolidColorBrush>(
@@ -462,6 +475,94 @@ public class FleetMetricsLayoutTests
         TextBlock block = Assert.Single(LocationBlocks(root, vm));
         Assert.Equal("◉ Jita", block.Text);
         Assert.DoesNotContain("withfc", block.Classes);
+    }
+
+    // The pop-out is its own window, so it inherits nothing from the screen that opened it — but it shows the same
+    // tracker, and must therefore read the same. The colour rule is application-level for exactly this reason.
+    [AvaloniaFact]
+    public async Task PopOut_ShowsTheSameLocationColour_AsTheRowItWasOpenedFrom()
+    {
+        using var instance = CreateInstance();
+        var (_, vm) = await ShowAsync(instance, FleetMetricsLayout.List, Shell.OwnWindow);
+
+        await MoveAsync(instance, vm, Member, "Perimeter");
+        Dispatcher.UIThread.RunJobs();
+
+        TextBlock withCommander = OverlayLocation(vm.Members.First(m => m.Character == "RaymondKrah"));
+        TextBlock away = OverlayLocation(vm.Members.First(m => m.Character == "Lionear"));
+
+        Assert.Contains("withfc", withCommander.Classes);
+        Assert.DoesNotContain("withfc", away.Classes);
+        Assert.Equal(GreenBrush(), Assert.IsAssignableFrom<ISolidColorBrush>(withCommander.Foreground).Color);
+        Assert.NotEqual(GreenBrush(), Assert.IsAssignableFrom<ISolidColorBrush>(away.Foreground).Color);
+    }
+
+    // An open pop-out is a live readout, not a snapshot: when the member or the FC jumps, its colour moves too.
+    [AvaloniaFact]
+    public async Task PopOut_FollowsTheCommander_WhileItStaysOpen()
+    {
+        using var instance = CreateInstance();
+        var (_, vm) = await ShowAsync(instance, FleetMetricsLayout.List, Shell.OwnWindow);
+
+        DpsViewModel member = vm.Members.First(m => m.Character == "Lionear");
+        TextBlock location = OverlayLocation(member);
+        Assert.Contains("withfc", location.Classes);
+
+        // The member leaves the commander's system…
+        await MoveAsync(instance, vm, Member, "Perimeter");
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain("withfc", location.Classes);
+
+        // …and then the commander follows them there.
+        await MoveAsync(instance, vm, Commander, "Perimeter");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains("withfc", location.Classes);
+        Assert.Equal(GreenBrush(), Assert.IsAssignableFrom<ISolidColorBrush>(location.Foreground).Color);
+    }
+
+    [AvaloniaFact]
+    public async Task PopOut_StaysNeutral_WhenTheCommanderSharesNoLocation()
+    {
+        using var instance = CreateInstance();
+        var vm = await BuildViewModelAsync(instance, Roster());
+
+        // Location sharing is opt-in: the member reports, the commander does not.
+        await MoveAsync(instance, vm, Member, "Jita");
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(vm.CommanderPresence.IsUnknown);
+        TextBlock location = OverlayLocation(vm.Members.First(m => m.Character == "Lionear"));
+        Assert.Equal("◉ Jita", location.Text);
+        Assert.DoesNotContain("withfc", location.Classes);
+        vm.Dispose();
+    }
+
+    // The third way this screen is presented: a module opened docked and then floated (or back) hands its content
+    // between a tab and its own window. The rows have to survive the migration, templates and colours intact.
+    [AvaloniaFact]
+    public async Task MemberRows_SurviveADockToFloatMigration()
+    {
+        using var instance = CreateInstance();
+        var vm = await BuildViewModelAsync(instance, Roster());
+        var bus = instance.Services.GetRequiredService<IEventBus>();
+        await PublishAsync(bus, vm, MetricKind.Location, "Jita");
+
+        var display = new FakeDisplay { IsFloating = false };
+        var host = new ModuleHostService();
+        host.SetOwner(new Window());
+        host.SetHost(display);
+        var window = new FleetMetricsWindow(vm) { Width = 900, Height = 620 };
+        host.Open(window, "FLEET METRICS", "fleet");
+
+        // Docked → floating: the service hands the content back to the module's own window and shows it.
+        display.IsFloating = true;
+        host.SwitchMode();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        AssertRowsAreTemplated(window, vm, FleetMetricsLayout.List);
+        Assert.All(LocationBlocks(window, vm), block => Assert.Contains("withfc", block.Classes));
+        window.Close();
     }
 
     [AvaloniaTheory]
