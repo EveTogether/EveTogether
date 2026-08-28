@@ -160,13 +160,22 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
             .Send(new SetSettingCommand(LayoutSettingKey, layout.ToString().ToLowerInvariant()));
     }
 
-    /// <summary>Move a dragged member to another member's place. The drag gesture's one entry point: the view
-    /// decides when, this decides what — so all three layouts reorder through the same code.</summary>
-    public void MoveMember(DpsViewModel dragged, DpsViewModel target)
+    /// <summary>
+    /// Drop a dragged member in front of the member currently at <paramref name="insertionIndex"/> — the collection
+    /// changes once, when the drag ends, not on every step of it. The drag gesture's one entry point: the view
+    /// decides when and where, this decides what, so all three layouts reorder through the same code.
+    /// </summary>
+    public void MoveMemberTo(DpsViewModel dragged, int insertionIndex)
     {
         int from = Members.IndexOf(dragged);
-        int to = Members.IndexOf(target);
-        if (from < 0 || to < 0 || from == to)
+        if (from < 0)
+            return;
+
+        // The insertion index counts the dragged member itself, which is about to leave its old place.
+        int to = Math.Clamp(insertionIndex, 0, Members.Count);
+        if (to > from)
+            to--;
+        if (to == from)
             return;
 
         Members.Move(from, to);

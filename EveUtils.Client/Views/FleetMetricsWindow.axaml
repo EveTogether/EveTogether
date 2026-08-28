@@ -35,6 +35,21 @@
             <!-- ET-43's TextBlock.location / .withfc pair lives in Themes/EveUtils.axaml, not here: the DPS pop-out
                  shows the same readout from its own window and would never see a rule scoped to this screen. -->
 
+            <!-- The place a dragged member came from stays visible, faded, for as long as you hold it: you can see
+                 what you picked up, and what letting go right here would mean. The row keeps its size, so nothing
+                 else on the screen shifts while you drag. Eased, so picking up and putting down read as gestures
+                 rather than as the list blinking. -->
+            <Style Selector="Border.memberrow">
+                <Setter Property="Transitions">
+                    <Transitions>
+                        <DoubleTransition Property="Opacity" Duration="0:0:0.12"/>
+                    </Transitions>
+                </Setter>
+            </Style>
+            <Style Selector="Border.memberrow.dragging">
+                <Setter Property="Opacity" Value="0.25"/>
+            </Style>
+
             <!-- One materialised member list, three densities: the layout picks the item template (and, for the grid,
                  the panel) so only the chosen one is ever built. Each template's field set is deliberate — see the
                  hint line, which names what the current density drops. -->
@@ -42,7 +57,7 @@
                 <Setter Property="ItemTemplate">
                     <Setter.Value>
                         <DataTemplate x:DataType="vm:DpsViewModel">
-                            <Border Classes="panel" Margin="0,0,0,8" Height="116" Cursor="SizeAll">
+                            <Border Classes="panel memberrow" Classes.dragging="{Binding IsDragging}" Margin="0,0,0,8" Height="116" Cursor="SizeAll">
                                 <Grid ColumnDefinitions="174,*,Auto" Margin="12">
                                     <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Character}" FontWeight="SemiBold"
@@ -104,7 +119,7 @@
                         <DataTemplate x:DataType="vm:DpsViewModel">
                             <!-- Sized so the default 720-wide window still fits two cards per row, and the graph below
                                  keeps roughly the list graph's proportions instead of a flattened band. -->
-                            <Border Classes="panel" Width="318" Height="176" Margin="0,0,8,8" Cursor="SizeAll">
+                            <Border Classes="panel memberrow" Classes.dragging="{Binding IsDragging}" Width="318" Height="176" Margin="0,0,8,8" Cursor="SizeAll">
                                 <Grid RowDefinitions="Auto,Auto,*" Margin="10,8">
                                     <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
                                         <StackPanel Grid.Column="0" Spacing="1">
@@ -157,7 +172,7 @@
                 <Setter Property="ItemTemplate">
                     <Setter.Value>
                         <DataTemplate x:DataType="vm:DpsViewModel">
-                            <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="10,4" Cursor="SizeAll">
+                            <Border Classes="memberrow" Classes.dragging="{Binding IsDragging}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="10,4" Cursor="SizeAll">
                                 <!-- Identity and figures stay one tight block on the left however wide the window gets:
                                      a row you scan is a row your eye should not have to travel. -->
                                 <Grid ColumnDefinitions="156,116,82,74,74,82,*,Auto">
@@ -289,11 +304,37 @@
             </StackPanel>
         </StackPanel>
 
-        <ScrollViewer>
-            <ItemsControl x:Name="MemberList" ItemsSource="{Binding Members}"
-                          Classes.list="{Binding IsListLayout}"
-                          Classes.grid="{Binding IsGridLayout}"
-                          Classes.compact="{Binding IsCompactLayout}"/>
-        </ScrollViewer>
+        <!-- The member list, with the drag layer floating over it. The layer never takes a hit, so a drag still
+             sees the rows underneath it. -->
+        <Panel ClipToBounds="True">
+            <ScrollViewer>
+                <ItemsControl x:Name="MemberList" ItemsSource="{Binding Members}"
+                              Classes.list="{Binding IsListLayout}"
+                              Classes.grid="{Binding IsGridLayout}"
+                              Classes.compact="{Binding IsCompactLayout}"/>
+            </ScrollViewer>
+
+            <Canvas x:Name="DragLayer" IsHitTestVisible="False">
+                <!-- What you are holding. It borrows the list's own item template, so the thing under the cursor is
+                     the row or card you picked up, in whichever density is showing — and it sits on its own opaque
+                     backdrop with an accent edge and a shadow, so it reads as a card lifted off the list rather than
+                     as a smear over the one underneath. -->
+                <Border x:Name="DragGhost" IsVisible="False" Opacity="0.93"
+                        Background="{DynamicResource BgDeepBrush}"
+                        BorderBrush="{DynamicResource AccentBrightBrush}" BorderThickness="1"
+                        BoxShadow="0 10 26 0 #C0000000">
+                    <Border.RenderTransform>
+                        <ScaleTransform ScaleX="1.03" ScaleY="1.03"/>
+                    </Border.RenderTransform>
+                    <ContentControl x:Name="DragGhostContent"
+                                    ContentTemplate="{Binding #MemberList.ItemTemplate}"/>
+                </Border>
+                <!-- Where the member lands if you let go now: a line between two rows, or between two cards. Drawn
+                     last, so it stays readable across the ghost — the card in your hand must never hide the answer
+                     to "where does this end up". -->
+                <Border x:Name="DropMarker" IsVisible="False" CornerRadius="1.5"
+                        Background="{DynamicResource AccentBrightBrush}"/>
+            </Canvas>
+        </Panel>
     </DockPanel>
 </v:ChromedWindow>

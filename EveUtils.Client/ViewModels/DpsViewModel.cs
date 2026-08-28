@@ -59,6 +59,10 @@ public partial class DpsViewModel : ViewModelBase
     /// <summary>The EVE character this meter belongs to, or 0 where there is none to name (the design-time meter,
     /// the own-meter placeholders). Fleet metrics persists its member order as a list of these.</summary>
     [ObservableProperty] private int _characterId;
+
+    /// <summary>This member is being dragged to a new place in the fleet-metrics list, so its row is showing as the
+    /// spot it came from while a ghost follows the cursor. Only that screen's templates read it.</summary>
+    [ObservableProperty] private bool _isDragging;
     [ObservableProperty] private bool _isSelf;
     [ObservableProperty] private int _graphRevision;
 

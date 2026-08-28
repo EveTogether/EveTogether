@@ -176,18 +176,36 @@ public class FleetMetricsLayoutTests
     }
 
     // A real drag through the headless input pipeline: press on one row, cross the threshold, travel to another and
-    // release — the same events the window's handlers see from a mouse.
+    // release — the same events the window's handlers see from a mouse. Aims just past the target row's leading
+    // edge, which is where the member is asked to land in front of it.
     private static void DragRow(Window root, FleetMetricsViewModel vm, int from, int to)
+    {
+        HoldRow(root, vm, from, to);
+        root.MouseUp(LeadingEdgeOf(MemberHost(root, vm), root, to), MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    // The same drag, stopped mid-gesture and still held, so a test can look at what the screen is showing.
+    private static void HoldRow(Window root, FleetMetricsViewModel vm, int from, int to)
     {
         ItemsControl host = MemberHost(root, vm);
         Point start = CentreOf(host, root, from);
-        Point finish = CentreOf(host, root, to);
 
         root.MouseDown(start, MouseButton.Left);
         root.MouseMove(new Point(start.X + 6, start.Y));   // past the drag threshold, still over the same row
-        root.MouseMove(finish);
-        root.MouseUp(finish, MouseButton.Left);
+        root.MouseMove(LeadingEdgeOf(host, root, to));
         Dispatcher.UIThread.RunJobs();
+    }
+
+    // A point just inside a row's leading edge — above its middle in a stacked layout, left of it in the grid — so
+    // the drop lands in front of that row rather than behind it.
+    private static Point LeadingEdgeOf(ItemsControl host, Visual root, int index)
+    {
+        Control container = Assert.IsAssignableFrom<Control>(host.ContainerFromIndex(index));
+        Point centre = CentreOf(host, root, index);
+        return host.ItemsPanelRoot is WrapPanel
+            ? new Point(centre.X - container.Bounds.Width / 4, centre.Y)
+            : new Point(centre.X, centre.Y - container.Bounds.Height / 4);
     }
 
     private static Point CentreOf(ItemsControl host, Visual root, int index)
@@ -196,6 +214,16 @@ public class FleetMetricsLayoutTests
         return container.TranslatePoint(new Point(container.Bounds.Width / 2, container.Bounds.Height / 2), root)
             ?? throw new InvalidOperationException($"member row {index} is not in the tree");
     }
+
+    // The drag layer's parts, found by name so a test reads them the way the window builds them.
+    private static Border Ghost(Control root) =>
+        root.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DragGhost");
+
+    private static ContentControl GhostContent(Control root) =>
+        root.GetVisualDescendants().OfType<ContentControl>().Single(c => c.Name == "DragGhostContent");
+
+    private static Border Marker(Control root) =>
+        root.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DropMarker");
 
     private static async Task SeedOrderAsync(TestClientInstance instance, params int[] characterIds)
     {
@@ -632,6 +660,77 @@ public class FleetMetricsLayoutTests
         Assert.Equal(["RaymondKrah", "Lionear"], vm.Members.Select(m => m.Character));
 
         DragRow(root, vm, from: 1, to: 0);
+
+        Assert.Equal(["Lionear", "RaymondKrah"], vm.Members.Select(m => m.Character));
+    }
+
+    // While a member is held the list must stand still and say what is happening: a ghost of the row under the
+    // cursor, the row it came from faded in place, and a marker on the spot it would land.
+    [AvaloniaTheory]
+    [InlineData(FleetMetricsLayout.List, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.List, Shell.DockedTab)]
+    [InlineData(FleetMetricsLayout.Grid, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.Grid, Shell.DockedTab)]
+    [InlineData(FleetMetricsLayout.Compact, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.Compact, Shell.DockedTab)]
+    public async Task Drag_ShowsAGhostAndAMarker_AndLeavesTheListStill(FleetMetricsLayout layout, Shell shell)
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, layout, shell);
+        DpsViewModel held = vm.Members[1];
+
+        HoldRow(root, vm, from: 1, to: 0);
+
+        Border ghost = Ghost(root);
+        Assert.True(ghost.IsVisible, "nothing is following the cursor to show what is being held");
+        Assert.Same(held, GhostContent(root).Content);
+        Assert.True(ghost.Bounds.Width > 0 && ghost.Bounds.Height > 0, "the ghost rendered with no size");
+        Assert.True(Marker(root).IsVisible, "nothing shows where the member would land");
+        Assert.True(held.IsDragging, "the row it came from is not marked as the place it left");
+
+        // Nothing has actually moved yet — that is the whole point of holding it.
+        Assert.Equal(["RaymondKrah", "Lionear"], vm.Members.Select(m => m.Character));
+
+        root.MouseUp(new Point(10, 10), MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    [AvaloniaTheory]
+    [InlineData(Shell.OwnWindow)]
+    [InlineData(Shell.DockedTab)]
+    public async Task Drag_LeavesNothingBehind_AndKeepsTheOldOrder_WhenEscapeCancelsIt(Shell shell)
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.List, shell);
+        DpsViewModel held = vm.Members[1];
+
+        HoldRow(root, vm, from: 1, to: 0);
+        root.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, keySymbol: null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(["RaymondKrah", "Lionear"], vm.Members.Select(m => m.Character));
+        Assert.False(Ghost(root).IsVisible, "the ghost outlived the drag");
+        Assert.False(Marker(root).IsVisible, "the drop marker outlived the drag");
+        Assert.False(held.IsDragging, "the row stayed faded after the drag was cancelled");
+        Assert.Null(await ReadSettingAsync(instance, vm.OrderSettingKey));
+    }
+
+    // Dropping past the last member sends it to the end — the marker sits after the last row for exactly this.
+    [AvaloniaFact]
+    public async Task Drag_SendsAMemberToTheEnd_WhenItIsDroppedPastTheLastRow()
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.List, Shell.OwnWindow);
+        ItemsControl host = MemberHost(root, vm);
+        Point start = CentreOf(host, root, 0);
+
+        root.MouseDown(start, MouseButton.Left);
+        root.MouseMove(new Point(start.X + 6, start.Y));
+        root.MouseMove(new Point(start.X, CentreOf(host, root, 1).Y + 400));   // empty space below the list
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(Marker(root).IsVisible);
+        root.MouseUp(new Point(start.X, CentreOf(host, root, 1).Y + 400), MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(["Lionear", "RaymondKrah"], vm.Members.Select(m => m.Character));
     }
