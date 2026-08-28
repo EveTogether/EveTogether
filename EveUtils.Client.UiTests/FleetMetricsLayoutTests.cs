@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Controls;
@@ -116,6 +118,48 @@ public class FleetMetricsLayoutTests
         Dispatcher.UIThread.RunJobs();
         return (root, vm);
     }
+
+    // Same presentation step for a view-model a test has already set up itself.
+    private static async Task<Control> ShowExistingAsync(FleetMetricsViewModel vm, Shell shell)
+    {
+        var window = new FleetMetricsWindow(vm) { Width = 900, Height = 620 };
+        Window root = window;
+        if (shell is Shell.DockedTab)
+        {
+            var display = new FakeDisplay { IsFloating = false };
+            var host = new ModuleHostService();
+            host.SetOwner(new Window());
+            host.SetHost(display);
+            host.Open(window, "FLEET METRICS", "fleet");
+            root = new Window { Width = 900, Height = 620, Content = Assert.Single(display.HostTabs).Content };
+        }
+
+        root.Show();
+        Dispatcher.UIThread.RunJobs();
+        await Task.Yield();
+        Dispatcher.UIThread.RunJobs();
+        return root;
+    }
+
+    private static async Task MoveAsync(TestClientInstance instance, FleetMetricsViewModel vm, int characterId, string system)
+    {
+        var bus = instance.Services.GetRequiredService<IEventBus>();
+        await bus.PublishAsync(new FleetMetricEvent(
+            new MetricSample(characterId, FleetId, MetricKind.Location, 0, 0, system)));
+        for (var i = 0; i < 100 && !vm.Members.Any(m => m.Location == system); i++)
+            await Task.Delay(20);
+    }
+
+    // The rendered location readouts (a member sharing no location renders none, so these are only the coloured ones).
+    private static IReadOnlyList<TextBlock> LocationBlocks(Control root, FleetMetricsViewModel vm) =>
+        MemberHost(root, vm).GetVisualDescendants().OfType<TextBlock>()
+            .Where(t => t.Classes.Contains("location") && t.IsVisible)
+            .ToList();
+
+    // The badge's green, read from the live theme rather than pinned to a hex here: one place decides the colour.
+    private static Color GreenBrush() =>
+        Assert.IsAssignableFrom<ISolidColorBrush>(
+            Application.Current?.FindResource("GreenBrush") ?? throw new InvalidOperationException("no GreenBrush")).Color;
 
     private static async Task PublishAsync(
         IEventBus bus, FleetMetricsViewModel vm, MetricKind kind, string? text, double value = 0)
@@ -248,10 +292,11 @@ public class FleetMetricsLayoutTests
         AssertRowsAreTemplated(root, vm, FleetMetricsLayout.List);
     }
 
+    // Grid gives up the bounty only: every live combat figure survives, one size down, and the graph comes along.
     [AvaloniaTheory]
     [InlineData(Shell.OwnWindow)]
     [InlineData(Shell.DockedTab)]
-    public async Task GridLayout_DropsCapNeutAndBounty_ButKeepsIdentityDpsLocationAndTheGraph(Shell shell)
+    public async Task GridLayout_DropsOnlyTheBounty_AndKeepsEveryLiveFigureBesideTheGraph(Shell shell)
     {
         using var instance = CreateInstance();
         var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Grid, shell);
@@ -260,20 +305,39 @@ public class FleetMetricsLayoutTests
         Assert.Contains("Lionear", texts);
         Assert.True(HasFigure(texts, "OUT"));
         Assert.True(HasFigure(texts, "IN"));
+        Assert.True(HasFigure(texts, "CAP"));
+        Assert.True(HasFigure(texts, "NEUT"));
         Assert.Contains(texts, t => t.StartsWith("◉ Jita", StringComparison.Ordinal));
-        Assert.False(HasFigure(texts, "CAP"));
-        Assert.False(HasFigure(texts, "NEUT"));
         Assert.DoesNotContain(texts, t => t.Contains("ISK", StringComparison.Ordinal));
 
-        // The graph carries the cap/neut lines the figures gave up, and the cards sit side by side.
         AssertRowsAreTemplated(root, vm, FleetMetricsLayout.Grid);
         Assert.Single(MemberHost(root, vm).GetVisualDescendants().OfType<WrapPanel>());
     }
 
+    // A squeezed graph reads as nothing at all, so the grid card owes its graph real vertical range — the reason the
+    // figures sit above it rather than in a column beside it.
     [AvaloniaTheory]
     [InlineData(Shell.OwnWindow)]
     [InlineData(Shell.DockedTab)]
-    public async Task CompactLayout_DropsTheGraph_ButKeepsIdentityDpsAndLocation(Shell shell)
+    public async Task GridLayout_GivesTheGraphAReadableShape(Shell shell)
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Grid, shell);
+
+        DpsGraph graph = MemberHost(root, vm).GetVisualDescendants().OfType<DpsGraph>().First();
+
+        Assert.True(graph.Bounds.Height >= 70,
+            $"a grid graph needs vertical range to be read at all, got {graph.Bounds.Height}");
+        Assert.True(graph.Bounds.Width / graph.Bounds.Height < 6,
+            $"a grid graph flatter than 6:1 is a band, not a graph (got {graph.Bounds.Width}x{graph.Bounds.Height})");
+    }
+
+    // Compact gives up the graph — that is what buys the density — and the bounty. Every live figure stays: a full
+    // row has the width for all four.
+    [AvaloniaTheory]
+    [InlineData(Shell.OwnWindow)]
+    [InlineData(Shell.DockedTab)]
+    public async Task CompactLayout_DropsTheGraphAndTheBounty_ButKeepsEveryLiveFigure(Shell shell)
     {
         using var instance = CreateInstance();
         var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Compact, shell);
@@ -283,9 +347,9 @@ public class FleetMetricsLayoutTests
         Assert.Contains("RaymondKrah", texts);
         Assert.True(HasFigure(texts, "OUT"));
         Assert.True(HasFigure(texts, "IN"));
+        Assert.True(HasFigure(texts, "CAP"));
+        Assert.True(HasFigure(texts, "NEUT"));
         Assert.Contains(texts, t => t.StartsWith("◉ Jita", StringComparison.Ordinal));
-        Assert.False(HasFigure(texts, "CAP"));
-        Assert.False(HasFigure(texts, "NEUT"));
         Assert.DoesNotContain(texts, t => t.Contains("ISK", StringComparison.Ordinal));
         AssertRowsAreTemplated(root, vm, FleetMetricsLayout.Compact);
 
@@ -330,9 +394,79 @@ public class FleetMetricsLayoutTests
         Assert.True(vm.CommanderPresence.IsComplete);
     }
 
+    // ET-43: standing with the FC is a colour, not a name you have to read and compare. The commander counts as
+    // standing with themselves, exactly as the header badge counts them.
     [AvaloniaTheory]
-    [InlineData(FleetMetricsLayout.Grid, "cap, neut and bounty")]
-    [InlineData(FleetMetricsLayout.Compact, "Graphs and the cap, neut and bounty")]
+    [InlineData(FleetMetricsLayout.List, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.List, Shell.DockedTab)]
+    [InlineData(FleetMetricsLayout.Grid, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.Grid, Shell.DockedTab)]
+    [InlineData(FleetMetricsLayout.Compact, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.Compact, Shell.DockedTab)]
+    public async Task Location_TurnsGreen_ForMembersStandingWithTheCommander(FleetMetricsLayout layout, Shell shell)
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, layout, shell);
+
+        // Both members share Jita, the commander's own system, so both readouts carry the badge's green.
+        Assert.All(LocationBlocks(root, vm), block => Assert.Contains("withfc", block.Classes));
+        Assert.Equal(GreenBrush(), Assert.IsAssignableFrom<ISolidColorBrush>(
+            LocationBlocks(root, vm).First().Foreground).Color);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(FleetMetricsLayout.List, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.Grid, Shell.DockedTab)]
+    [InlineData(FleetMetricsLayout.Compact, Shell.DockedTab)]
+    public async Task Location_StaysNeutral_ForAMemberAwayFromTheCommander(FleetMetricsLayout layout, Shell shell)
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, layout, shell);
+
+        await MoveAsync(instance, vm, Member, "Perimeter");
+        Dispatcher.UIThread.RunJobs();
+        root.UpdateLayout();
+
+        var blocks = LocationBlocks(root, vm);
+        Assert.Contains(blocks, b => b.Classes.Contains("withfc"));       // the commander, in their own system
+        Assert.Contains(blocks, b => !b.Classes.Contains("withfc"));      // the straggler in Perimeter
+        Assert.NotEqual(GreenBrush(), Assert.IsAssignableFrom<ISolidColorBrush>(
+            blocks.First(b => !b.Classes.Contains("withfc")).Foreground).Color);
+    }
+
+    // No commander system to compare against is not a reason to mark anybody present — the badge reads unknown and
+    // every location stays neutral rather than showing half a signal.
+    [AvaloniaTheory]
+    [InlineData(FleetMetricsLayout.List, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.Compact, Shell.DockedTab)]
+    public async Task Location_StaysNeutralEverywhere_WhenTheCommanderSharesNoLocation(
+        FleetMetricsLayout layout, Shell shell)
+    {
+        using var instance = CreateInstance();
+        var vm = await BuildViewModelAsync(instance, Roster());
+        var bus = instance.Services.GetRequiredService<IEventBus>();
+
+        // Location sharing is opt-in: the member reports, the commander does not.
+        await bus.PublishAsync(new FleetMetricEvent(
+            new MetricSample(Member, FleetId, MetricKind.Location, 0, 0, "Jita")));
+        for (var i = 0; i < 100 && !vm.Members.Any(m => m.Location == "Jita"); i++)
+            await Task.Delay(20);
+
+        vm.SetLayoutCommand.Execute(layout);
+        Control root = await ShowExistingAsync(vm, shell);
+
+        Assert.True(vm.CommanderPresence.IsUnknown);
+
+        // Exactly the one member who shares a location renders one — asserting "none are green" over an empty set
+        // would pass for the wrong reason.
+        TextBlock block = Assert.Single(LocationBlocks(root, vm));
+        Assert.Equal("◉ Jita", block.Text);
+        Assert.DoesNotContain("withfc", block.Classes);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(FleetMetricsLayout.Grid, "The bounty figure shows in the list view")]
+    [InlineData(FleetMetricsLayout.Compact, "Graphs and the bounty figure show in the list view")]
     public async Task LayoutHint_NamesWhatTheDensityDrops(FleetMetricsLayout layout, string dropped)
     {
         using var instance = CreateInstance();

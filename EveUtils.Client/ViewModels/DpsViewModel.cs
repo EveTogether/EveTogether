@@ -87,6 +87,11 @@ public partial class DpsViewModel : ViewModelBase
     /// <summary>The member's current solar system (fleet metrics, when location is shared); null = unknown/not shared.</summary>
     [ObservableProperty] private string? _location;
 
+    /// <summary>The member stands in the fleet commander's solar system (fleet metrics), which colours their location
+    /// readout. Set from <see cref="EveUtils.Client.Fleet.FleetCommanderPresence"/> — the same source the header badge
+    /// counts with — and false wherever there is no commander to stand with, e.g. the home dashboard's own meters.</summary>
+    [ObservableProperty] private bool _isWithCommander;
+
     /// <summary>The member's cumulative session bounty (fleet metrics, when bounty is shared). 0 = none/not shared.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(BountyText))]

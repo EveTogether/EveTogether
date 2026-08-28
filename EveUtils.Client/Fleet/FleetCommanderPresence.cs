@@ -32,9 +32,19 @@ public readonly record struct FleetCommanderPresence(int InSystem, int Total, st
         if (systems.Count == 0)
             return Unknown;
 
-        int inSystem = systems.Count(system => string.Equals(system, commanderSystem, StringComparison.OrdinalIgnoreCase));
+        int inSystem = systems.Count(system => IsCommanderSystem(system, commanderSystem));
         return new FleetCommanderPresence(inSystem, systems.Count, commanderSystem);
     }
+
+    /// <summary>
+    /// Whether one member stands with the commander — the same test the ratio is counted with, so a member's own
+    /// readout and the header badge can never tell different stories. False whenever there is no commander system
+    /// to compare against: no commander, or one who shares no location, is not a reason to mark anybody present.
+    /// </summary>
+    public bool IsWith(string? memberSystem) => IsCommanderSystem(memberSystem, CommanderSystem);
+
+    private static bool IsCommanderSystem(string? memberSystem, string? commanderSystem) =>
+        commanderSystem is not null && string.Equals(memberSystem, commanderSystem, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The one place the badge's reading is decided; the view maps it onto a style, nothing more.</summary>
     public FleetCommanderPresenceLevel Level

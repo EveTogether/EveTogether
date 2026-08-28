@@ -32,6 +32,17 @@
                 <Setter Property="FontWeight" Value="SemiBold"/>
             </Style>
 
+            <!-- ET-43: a member's solar system, and the one place that decides what "standing with the FC" looks
+                 like — the same green the header badge turns at full presence, so both readouts speak one language.
+                 All three layouts wear these classes; none of them sets Foreground itself (a local value would beat
+                 the style and the row would never turn green). -->
+            <Style Selector="TextBlock.location">
+                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.location.withfc">
+                <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
+            </Style>
+
             <!-- One materialised member list, three densities: the layout picks the item template (and, for the grid,
                  the panel) so only the chosen one is ever built. Each template's field set is deliberate — see the
                  hint line, which names what the current density drops. -->
@@ -59,7 +70,8 @@
                                                        Text="{Binding Neut, StringFormat='NEUT {0}'}"/>
                                         </Grid>
                                         <StackPanel Orientation="Horizontal" Spacing="14">
-                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextAccentBrush}"
+                                            <TextBlock Classes="location" Classes.withfc="{Binding IsWithCommander}"
+                                                       FontSize="11"
                                                        IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                                        Text="{Binding Location, StringFormat='◉ {0}'}"
                                                        ToolTip.Tip="Current solar system (location sharing)"/>
@@ -84,8 +96,11 @@
                 </Setter>
             </Style>
 
-            <!-- Grid: two-up cards. Drops the cap/neut/bounty figures — their lines stay in the graph, so the card keeps
-                 the shape of the fight while giving up the exact numbers. -->
+            <!-- Grid: cards side by side, every live figure the list carries. Only the bounty goes — it is a session
+                 roll-up, not a live combat signal, and the header already totals it. The figures sit ABOVE the graph
+                 rather than beside it: squeezed into a side column the graph loses the vertical range that makes four
+                 lines readable, and an unreadable graph is worth less than the members it costs. Fewer cards per
+                 screen than a figures-only card is the deliberate price. -->
             <Style Selector="ItemsControl.grid">
                 <Setter Property="ItemsPanel">
                     <Setter.Value>
@@ -95,16 +110,17 @@
                 <Setter Property="ItemTemplate">
                     <Setter.Value>
                         <DataTemplate x:DataType="vm:DpsViewModel">
-                            <!-- Narrow enough that the default 720-wide window still fits two cards and a wider one
-                                 gains a third column instead of a dead gutter. -->
-                            <Border Classes="panel" Width="264" Height="106" Margin="0,0,8,8">
-                                <Grid RowDefinitions="Auto,*" Margin="10,8">
+                            <!-- Sized so the default 720-wide window still fits two cards per row, and the graph below
+                                 keeps roughly the list graph's proportions instead of a flattened band. -->
+                            <Border Classes="panel" Width="318" Height="176" Margin="0,0,8,8">
+                                <Grid RowDefinitions="Auto,Auto,*" Margin="10,8">
                                     <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
                                         <StackPanel Grid.Column="0" Spacing="1">
-                                            <TextBlock Text="{Binding Character}" FontWeight="SemiBold" FontSize="12"
+                                            <TextBlock Text="{Binding Character}" FontWeight="SemiBold" FontSize="11.5"
                                                        TextTrimming="CharacterEllipsis"
                                                        Foreground="{StaticResource TextBrightBrush}"/>
-                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextAccentBrush}"
+                                            <TextBlock Classes="location" Classes.withfc="{Binding IsWithCommander}"
+                                                       FontSize="10.5"
                                                        TextTrimming="CharacterEllipsis"
                                                        IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                                        Text="{Binding Location, StringFormat='◉ {0}'}"
@@ -115,20 +131,25 @@
                                                 Command="{Binding $parent[ItemsControl].((vm:FleetMetricsViewModel)DataContext).PopOutCommand}"
                                                 CommandParameter="{Binding}"/>
                                     </Grid>
-                                    <Grid Grid.Row="1" ColumnDefinitions="80,*" Margin="0,6,0,0">
-                                        <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
-                                            <TextBlock Classes="mono" FontSize="14"
-                                                       Foreground="{DynamicResource AccentBrightBrush}"
-                                                       Text="{Binding Dealt, StringFormat='OUT {0}'}"/>
-                                            <TextBlock Classes="mono" FontSize="14"
-                                                       Foreground="{StaticResource RedBrush}"
-                                                       Text="{Binding Received, StringFormat='IN {0}'}"/>
-                                        </StackPanel>
-                                        <ctl:DpsGraph Grid.Column="1" Margin="8,0,0,0"
-                                                      Series="{Binding Series}"
-                                                      Revision="{Binding GraphRevision}"
-                                                      Markers="{Binding Markers}"/>
+                                    <!-- Same four figures as the list, one size down so all four fit the card width. -->
+                                    <Grid Grid.Row="1" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" Margin="0,6,0,0">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Classes="mono" FontSize="12"
+                                                   Foreground="{DynamicResource AccentBrightBrush}"
+                                                   Text="{Binding Dealt, StringFormat='OUT {0}'}"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Classes="mono" FontSize="12"
+                                                   Foreground="{StaticResource RedBrush}"
+                                                   Text="{Binding Received, StringFormat='IN {0}'}"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Classes="mono" FontSize="12"
+                                                   Foreground="#FF4D90FF"
+                                                   Text="{Binding Cap, StringFormat='CAP {0}'}"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="mono" FontSize="12"
+                                                   Foreground="#FFB07EE0"
+                                                   Text="{Binding Neut, StringFormat='NEUT {0}'}"/>
                                     </Grid>
+                                    <ctl:DpsGraph Grid.Row="2" Margin="0,6,0,0" MinHeight="74"
+                                                  Series="{Binding Series}"
+                                                  Revision="{Binding GraphRevision}"
+                                                  Markers="{Binding Markers}"/>
                                 </Grid>
                             </Border>
                         </DataTemplate>
@@ -136,9 +157,10 @@
                 </Setter>
             </Style>
 
-            <!-- Compact: one line per member, for a fleet you scan rather than read. Keeps identity plus the three
-                 figures an FC steers on (DPS out, DPS in, where they stand); drops the graph and the cap/neut/bounty
-                 figures. The pop-out stays — it is the way back to one member's graph without leaving this density. -->
+            <!-- Compact: one line per member, for a fleet you scan rather than read. Carries every live figure the
+                 list does — a line has the width for all four — and gives up only the graph (below this row height a
+                 graph reads as noise, and it is what buys the density) and the bounty. The pop-out stays: it is the
+                 way back to one member's graph without leaving this density. -->
             <Style Selector="ItemsControl.compact">
                 <Setter Property="ItemTemplate">
                     <Setter.Value>
@@ -146,14 +168,14 @@
                             <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="10,4">
                                 <!-- Identity and figures stay one tight block on the left however wide the window gets:
                                      a row you scan is a row your eye should not have to travel. -->
-                                <Grid ColumnDefinitions="170,130,90,78,*,Auto">
+                                <Grid ColumnDefinitions="156,116,82,74,74,82,*,Auto">
                                     <TextBlock Grid.Column="0" Text="{Binding Character}" FontWeight="SemiBold"
                                                FontSize="12" VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis"
                                                Foreground="{StaticResource TextBrightBrush}"/>
-                                    <TextBlock Grid.Column="1" FontSize="11" VerticalAlignment="Center"
+                                    <TextBlock Grid.Column="1" Classes="location" Classes.withfc="{Binding IsWithCommander}"
+                                               FontSize="11" VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis"
-                                               Foreground="{DynamicResource TextAccentBrush}"
                                                IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                                Text="{Binding Location, StringFormat='◉ {0}'}"
                                                ToolTip.Tip="Current solar system (location sharing)"/>
@@ -165,7 +187,15 @@
                                                HorizontalAlignment="Right"
                                                Foreground="{StaticResource RedBrush}"
                                                Text="{Binding Received, StringFormat='IN {0}'}"/>
-                                    <Button Grid.Column="5" Content="⧉" FontSize="10" Padding="6,0" Margin="10,0,0,0"
+                                    <TextBlock Grid.Column="4" Classes="mono" FontSize="12" VerticalAlignment="Center"
+                                               HorizontalAlignment="Right"
+                                               Foreground="#FF4D90FF"
+                                               Text="{Binding Cap, StringFormat='CAP {0}'}"/>
+                                    <TextBlock Grid.Column="5" Classes="mono" FontSize="12" VerticalAlignment="Center"
+                                               HorizontalAlignment="Right"
+                                               Foreground="#FFB07EE0"
+                                               Text="{Binding Neut, StringFormat='NEUT {0}'}"/>
+                                    <Button Grid.Column="7" Content="⧉" FontSize="10" Padding="6,0" Margin="10,0,0,0"
                                             VerticalAlignment="Center" ToolTip.Tip="Pop out this graph"
                                             Command="{Binding $parent[ItemsControl].((vm:FleetMetricsViewModel)DataContext).PopOutCommand}"
                                             CommandParameter="{Binding}"/>

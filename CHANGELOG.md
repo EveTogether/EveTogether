@@ -17,10 +17,16 @@ taken from the matching `## vX.Y.Z` section below.
 - The fleet metrics window can now be switched between three densities with the **LIST / GRID /
   COMPACT** buttons above the member list, so the screen stays readable as a fleet grows past ten
   or thirty members. **List** is unchanged and remains the default: every figure plus the live
-  graph. **Grid** puts members in cards side by side with the name, DPS out/in, location and the
-  graph. **Compact** gives each member one line with the name, DPS out/in and location. The line
-  under the header always names what the current density leaves out, and the chosen density is
+  graph. **Grid** puts members in cards side by side, carrying every live figure (DPS out/in, cap,
+  neut) one size down with the graph below them. **Compact** gives each member a single line with
+  every live figure and no graph. Both denser views leave out only the session bounty; the line
+  under the header always names what the current density leaves out. The chosen density is
   remembered for the next session (one setting for the whole install, not per fleet).
+- A fleet member's solar system now reads green when they are standing in the fleet commander's
+  system, in all three densities — the same green the header's `WITH FC` badge turns at full
+  presence, off the same count, so you can see who is with the FC without reading and comparing
+  system names. Members elsewhere keep the neutral colour, and when there is no fleet commander or
+  the commander shares no location every location stays neutral rather than showing half a signal.
 - Fits can now be imported from an EVE Workbench link. Paste a fit URL (or just its fit id) into
   **Fits → Import → From fit link…** and the published fit is fetched from EVE Workbench's public
   API and stored in your Local library, exactly like a pasted EFT block — including duplicate

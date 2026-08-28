@@ -100,11 +100,9 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     public string LayoutHint => Layout switch
     {
         FleetMetricsLayout.Grid =>
-            "Grid: name, DPS out/in, location and the live graph per card. The cap, neut and bounty figures show " +
-            "in the list view.",
+            "Grid: every live figure plus the graph, per card. The bounty figure shows in the list view.",
         FleetMetricsLayout.Compact =>
-            "Compact: name, DPS out/in and location per line. Graphs and the cap, neut and bounty figures show " +
-            "in the list view.",
+            "Compact: every live figure on one line per member. Graphs and the bounty figure show in the list view.",
         _ => "One live graph per active member; location shows when shared.",
     };
 
@@ -282,6 +280,13 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
             ? commander.Location
             : null;
         CommanderPresence = FleetCommanderPresence.From(commanderSystem, _trackers.Values.Select(t => t.Location));
+
+        // Colour each member's own location off the badge that was just computed, rather than comparing systems a
+        // second time — one verdict, so a green row and the badge's ratio can never disagree. The commander's own row
+        // turns green too: they are a member, and they are trivially in their own system, exactly as the ratio counts
+        // them.
+        foreach (var tracker in _trackers.Values)
+            tracker.IsWithCommander = CommanderPresence.IsWith(tracker.Location);
     }
 
     private static string Format(double? total, string unit) =>
