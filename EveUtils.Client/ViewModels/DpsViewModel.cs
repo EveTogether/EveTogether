@@ -55,6 +55,14 @@ public partial class DpsViewModel : ViewModelBase
     [ObservableProperty] private long _neut;
     [ObservableProperty] private long _cap;
     [ObservableProperty] private string _character = "—";
+
+    /// <summary>The EVE character this meter belongs to, or 0 where there is none to name (the design-time meter,
+    /// the own-meter placeholders). Fleet metrics persists its member order as a list of these.</summary>
+    [ObservableProperty] private int _characterId;
+
+    /// <summary>This member is being dragged to a new place in the fleet-metrics list, so its row is showing as the
+    /// spot it came from while a ghost follows the cursor. Only that screen's templates read it.</summary>
+    [ObservableProperty] private bool _isDragging;
     [ObservableProperty] private bool _isSelf;
     [ObservableProperty] private int _graphRevision;
 
@@ -86,6 +94,11 @@ public partial class DpsViewModel : ViewModelBase
 
     /// <summary>The member's current solar system (fleet metrics, when location is shared); null = unknown/not shared.</summary>
     [ObservableProperty] private string? _location;
+
+    /// <summary>The member stands in the fleet commander's solar system (fleet metrics), which colours their location
+    /// readout. Set from <see cref="EveUtils.Client.Fleet.FleetCommanderPresence"/> — the same source the header badge
+    /// counts with — and false wherever there is no commander to stand with, e.g. the home dashboard's own meters.</summary>
+    [ObservableProperty] private bool _isWithCommander;
 
     /// <summary>The member's cumulative session bounty (fleet metrics, when bounty is shared). 0 = none/not shared.</summary>
     [ObservableProperty]

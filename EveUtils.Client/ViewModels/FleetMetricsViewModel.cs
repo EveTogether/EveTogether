@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -13,7 +15,13 @@ using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Settings.Commands;
+using EveUtils.Shared.Modules.Settings.Dtos;
+using EveUtils.Shared.Modules.Settings.Queries;
 using Microsoft.Extensions.DependencyInjection;
+// Avalonia's own Dispatcher (the UI thread) is all over this file; alias the CQRS one so neither name has to be
+// spelled out at every call site.
+using ICqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
 namespace EveUtils.Client.ViewModels;
 
@@ -22,11 +30,24 @@ namespace EveUtils.Client.ViewModels;
 /// <see cref="DpsViewModel"/>/<c>DpsGraph</c>, the same controls the ACTIVE header uses) plus the fleet roll-ups
 /// (dealt + received DPS now, mining/bounty/neut reserved) via <see cref="FleetMetricCatalog.Aggregate"/>. Reads
 /// live samples off the local bus for this fleet only; rows with no source yet show "—". Non-modal + disposable so
-/// it keeps updating beside the main + fleets windows.
+/// it keeps updating beside the main + fleets windows. <see cref="Layout"/> trades detail per member for members
+/// per screen so the window stays readable as a fleet grows; the choice is remembered across sessions.
 /// </summary>
 public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposable
 {
+    /// <summary>Where the chosen member layout is kept. One setting for the whole install, like the other shell
+    /// preferences — the density that suits an FC does not change from fleet to fleet.</summary>
+    public const string LayoutSettingKey = "ui.fleet-metrics.layout";
+
+    /// <summary>Where a fleet's dragged member order is kept, one key per fleet. Unlike the layout this is keyed per
+    /// fleet: an order over character ids only means anything inside the fleet those characters are in, and one
+    /// shared list would grow past the value limit as every fleet appended its own members to it.</summary>
+    public const string OrderSettingKeyPrefix = "ui.fleet-metrics.order.";
+
+    private const int MaxOrderValueLength = 512;   // ClientSettingConfiguration caps a setting value at 512
+
     private readonly long _fleetId;
+    private readonly IServiceProvider _services;
     private readonly IDisposable _subscription;
     private readonly IExternalCharacterLookup _lookup;
     private readonly DpsRenderDriver? _driver;
@@ -34,12 +55,18 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     private readonly Dictionary<int, DpsViewModel> _trackers = new();
     private readonly Dictionary<int, string> _nameById = new();
     private readonly List<IDisposable> _registrations = [];
+    private List<int> _storedOrder = [];
     private int? _commanderCharacterId;
+    private bool _layoutChosen;
     private bool _disposed;
+
+    /// <summary>This fleet's order key. Public so a test can read back what a drag stored.</summary>
+    public string OrderSettingKey => OrderSettingKeyPrefix + _fleetId.ToString(CultureInfo.InvariantCulture);
 
     public FleetMetricsViewModel(IServiceProvider services, IFleetClient fleets, FleetInfo fleet)
     {
         var bus = services.GetRequiredService<IEventBus>();
+        _services = services;
         _lookup = services.GetRequiredService<IExternalCharacterLookup>();
         _driver = services.GetRequiredService<DpsRenderDriver>();
         _dialogs = services.GetRequiredService<IDialogService>();
@@ -47,6 +74,8 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         FleetName = fleet.Name;
 
         _ = InitializeAsync(fleets);
+        _ = LoadLayoutAsync();
+        _ = LoadOrderAsync();
         _subscription = bus.Subscribe<FleetMetricEvent>(OnFleetMetric);
     }
 
@@ -62,6 +91,203 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     /// <summary>The header badge: how many tracked members stand in the fleet commander's system. Lives in the
     /// header, so it stays on screen whichever member layout the screen shows.</summary>
     [ObservableProperty] private FleetCommanderPresence _commanderPresence = FleetCommanderPresence.Unknown;
+
+    /// <summary>How the member rows are laid out. The view maps this onto an item template + panel; nothing else
+    /// in this screen changes with it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsListLayout))]
+    [NotifyPropertyChangedFor(nameof(IsGridLayout))]
+    [NotifyPropertyChangedFor(nameof(IsCompactLayout))]
+    [NotifyPropertyChangedFor(nameof(ShowsGraphs))]
+    [NotifyPropertyChangedFor(nameof(LayoutHint))]
+    private FleetMetricsLayout _layout = FleetMetricsLayout.List;
+
+    public bool IsListLayout => Layout is FleetMetricsLayout.List;
+    public bool IsGridLayout => Layout is FleetMetricsLayout.Grid;
+    public bool IsCompactLayout => Layout is FleetMetricsLayout.Compact;
+
+    /// <summary>Whether the member rows still carry a graph — the line legend is meaningless without one.</summary>
+    public bool ShowsGraphs => Layout is not FleetMetricsLayout.Compact;
+
+    /// <summary>Spells out what the current layout drops against the list, so trading detail for density is never a
+    /// silent trade.</summary>
+    public string LayoutHint => Layout switch
+    {
+        FleetMetricsLayout.Grid =>
+            "Grid: every live figure plus the graph, per card. The bounty figure shows in the list view.",
+        FleetMetricsLayout.Compact =>
+            "Compact: every live figure on one line per member. Graphs and the bounty figure show in the list view.",
+        _ => "One live graph per active member; location shows when shared.",
+    };
+
+    /// <summary>Switch the member layout and remember it for the next session.</summary>
+    [RelayCommand]
+    private void SetLayout(FleetMetricsLayout layout)
+    {
+        _layoutChosen = true;
+        if (layout == Layout)
+            return;
+
+        Layout = layout;
+        _ = PersistLayoutAsync(layout);
+    }
+
+    private async System.Threading.Tasks.Task LoadLayoutAsync()
+    {
+        IReadOnlyList<SettingDto> settings;
+        using (var scope = _services.CreateScope())
+            settings = await scope.ServiceProvider.GetRequiredService<ICqrsDispatcher>().Query(new GetSettingsQuery());
+
+        // Never set, or a value only a newer client knows — the List default already stands.
+        if (!Enum.TryParse(settings.FirstOrDefault(s => s.Key == LayoutSettingKey)?.Value, ignoreCase: true,
+                out FleetMetricsLayout stored))
+            return;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            // The stored layout lands asynchronously, so a click that beat it wins: restoring must never overwrite
+            // the choice the user just made with the value that choice replaced.
+            if (_disposed || _layoutChosen)
+                return;
+            Layout = stored;
+        });
+    }
+
+    private async System.Threading.Tasks.Task PersistLayoutAsync(FleetMetricsLayout layout)
+    {
+        using var scope = _services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ICqrsDispatcher>()
+            .Send(new SetSettingCommand(LayoutSettingKey, layout.ToString().ToLowerInvariant()));
+    }
+
+    /// <summary>
+    /// Drop a dragged member in front of the member currently at <paramref name="insertionIndex"/> — the collection
+    /// changes once, when the drag ends, not on every step of it. The drag gesture's one entry point: the view
+    /// decides when and where, this decides what, so all three layouts reorder through the same code.
+    /// </summary>
+    public void MoveMemberTo(DpsViewModel dragged, int insertionIndex)
+    {
+        int from = Members.IndexOf(dragged);
+        if (from < 0)
+            return;
+
+        // The insertion index counts the dragged member itself, which is about to leave its old place.
+        int to = Math.Clamp(insertionIndex, 0, Members.Count);
+        if (to > from)
+            to--;
+        if (to == from)
+            return;
+
+        Members.Move(from, to);
+    }
+
+    /// <summary>Remember the order as it now stands — called when a drag finishes, not on every step of it.</summary>
+    public void CommitOrder()
+    {
+        _storedOrder = Members.Select(m => m.CharacterId).Where(id => id > 0).ToList();
+        _ = PersistOrderAsync(_storedOrder);
+    }
+
+    private async System.Threading.Tasks.Task LoadOrderAsync()
+    {
+        IReadOnlyList<SettingDto> settings;
+        using (var scope = _services.CreateScope())
+            settings = await scope.ServiceProvider.GetRequiredService<ICqrsDispatcher>().Query(new GetSettingsQuery());
+
+        List<int> stored = ParseOrder(settings.FirstOrDefault(s => s.Key == OrderSettingKey)?.Value);
+        if (stored.Count == 0)
+            return;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_disposed)
+                return;
+
+            // Rows can already be standing here — the roster pre-fill and the first samples do not wait for a
+            // settings read — so adopting the order means re-sorting what is here, not just guiding what comes next.
+            _storedOrder = stored;
+            ApplyStoredOrder();
+        });
+    }
+
+    private async System.Threading.Tasks.Task PersistOrderAsync(IReadOnlyList<int> order)
+    {
+        using var scope = _services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ICqrsDispatcher>()
+            .Send(new SetSettingCommand(OrderSettingKey, JoinOrder(order)));
+    }
+
+    // Stable: members the stored order knows keep its sequence, the rest keep the sequence they arrived in, behind.
+    private void ApplyStoredOrder()
+    {
+        List<DpsViewModel> desired = Members
+            .Select((member, index) => (Member: member, Rank: RankOf(member.CharacterId), Index: index))
+            .OrderBy(entry => entry.Rank)
+            .ThenBy(entry => entry.Index)
+            .Select(entry => entry.Member)
+            .ToList();
+
+        for (int target = 0; target < desired.Count; target++)
+        {
+            int current = Members.IndexOf(desired[target]);
+            if (current != target)
+                Members.Move(current, target);
+        }
+    }
+
+    // A member the stored order names goes to its place among the members already standing there; anyone else joins
+    // at the back, which is where an undragged fleet grows anyway.
+    private void InsertInOrder(DpsViewModel tracker)
+    {
+        int rank = RankOf(tracker.CharacterId);
+        if (rank == int.MaxValue)
+        {
+            Members.Add(tracker);
+            return;
+        }
+
+        int index = 0;
+        while (index < Members.Count && RankOf(Members[index].CharacterId) <= rank)
+            index++;
+        Members.Insert(index, tracker);
+    }
+
+    // Unranked sorts last, which is also what happens to a stored id whose character has left the fleet: it simply
+    // never matches a row, so it costs nothing and leaves no gap.
+    private int RankOf(int characterId)
+    {
+        int rank = _storedOrder.IndexOf(characterId);
+        return rank < 0 ? int.MaxValue : rank;
+    }
+
+    internal static List<int> ParseOrder(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(part => int.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out int id) ? id : 0)
+                .Where(id => id > 0)
+                .ToList();
+
+    /// <summary>
+    /// The stored order as one setting value. A setting value holds 512 characters and a character id plus its comma
+    /// is nine, so beyond roughly the first 56 members the tail is dropped rather than truncated mid-id — and the
+    /// tail is the part nobody dragged, since new members join at the back and stay there until they are moved.
+    /// </summary>
+    internal static string JoinOrder(IEnumerable<int> order)
+    {
+        var value = new StringBuilder();
+        foreach (int characterId in order)
+        {
+            string next = value.Length == 0
+                ? characterId.ToString(CultureInfo.InvariantCulture)
+                : "," + characterId.ToString(CultureInfo.InvariantCulture);
+            if (value.Length + next.Length > MaxOrderValueLength)
+                break;
+            value.Append(next);
+        }
+
+        return value.ToString();
+    }
 
     // Warm the name cache AND pre-fill a row per roster member up front, so the window shows the whole fleet
     // deterministically instead of discovering members lazily one incoming sample at a time — which used to leave
@@ -134,9 +360,12 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
             return tracker;
 
         var known = _nameById.TryGetValue(characterId, out var resolved);
-        tracker = new DpsViewModel(known ? resolved! : $"Char {characterId}", isSelf: false);
+        tracker = new DpsViewModel(known ? resolved! : $"Char {characterId}", isSelf: false)
+        {
+            CharacterId = characterId,
+        };
         _trackers[characterId] = tracker;
-        Members.Add(tracker);
+        InsertInOrder(tracker);
 
         // Render through the shared 30fps driver (the same path the own meters use), so a fleet graph scrolls,
         // smooths and decays identically instead of stepping at the 1 Hz sample rate. Disposed with the window.
@@ -197,6 +426,13 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
             ? commander.Location
             : null;
         CommanderPresence = FleetCommanderPresence.From(commanderSystem, _trackers.Values.Select(t => t.Location));
+
+        // Colour each member's own location off the badge that was just computed, rather than comparing systems a
+        // second time — one verdict, so a green row and the badge's ratio can never disagree. The commander's own row
+        // turns green too: they are a member, and they are trivially in their own system, exactly as the ratio counts
+        // them.
+        foreach (var tracker in _trackers.Values)
+            tracker.IsWithCommander = CommanderPresence.IsWith(tracker.Location);
     }
 
     private static string Format(double? total, string unit) =>

@@ -288,6 +288,18 @@
         <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
     </Style>
 
+    <!-- ── A fleet member's solar system (ET-43) ──
+         Application-level on purpose: this readout appears in the fleet-metrics rows AND in the DPS pop-out, which
+         is its own window and inherits nothing from the screen that opened it. One rule here means one colour, and
+         .withfc reuses the badge's green above so "standing with the FC" reads the same wherever it is shown.
+         Wearers must not set Foreground themselves — a local value beats a style setter and would never turn green. -->
+    <Style Selector="TextBlock.location">
+        <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+    </Style>
+    <Style Selector="TextBlock.location.withfc">
+        <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
+    </Style>
+
     <!-- ── Borderless window chrome (D-143): custom title bar + window buttons ── -->
     <Style Selector="Border.titlebar">
         <Setter Property="Background" Value="#EA080604"/>
