@@ -86,6 +86,61 @@ public class ModuleNavigationTests
         Assert.Equal(2, fake.HostTabs.Count);
     }
 
+    /// <summary>A module view-model that records the two things re-opening has to do to it (ET-46).</summary>
+    private sealed class ProbeModule : IRefreshableModule, IDisposable
+    {
+        public int Refreshed { get; private set; }
+        public bool Disposed { get; private set; }
+        public void RefreshModule() => Refreshed++;
+        public void Dispose() => Disposed = true;
+    }
+
+    /// <summary>
+    /// Re-opening an already-open module must not silently hand back the state it was built with: the standing
+    /// module is told to refresh, and the freshly built duplicate the caller handed us — which nothing will ever
+    /// show, close or dispose — is disposed here instead of leaking its subscriptions (ET-46).
+    /// </summary>
+    [AvaloniaFact]
+    public void ModuleHost_ReopeningAModule_RefreshesTheStandingOne_AndDisposesTheDuplicate()
+    {
+        var fake = new FakeDisplay { IsFloating = false };
+        var host = new ModuleHostService();
+        host.SetOwner(new Window());
+        host.SetHost(fake);
+
+        var standing = new ProbeModule();
+        host.Open(new Window { Content = new Border(), DataContext = standing }, "PROBE", moduleId: "probe:1");
+        Assert.Equal(0, standing.Refreshed);
+
+        var duplicate = new ProbeModule();
+        host.Open(new Window { Content = new Border(), DataContext = duplicate }, "PROBE", moduleId: "probe:1");
+
+        Assert.Single(fake.HostTabs);
+        Assert.Equal(1, standing.Refreshed);
+        Assert.False(standing.Disposed);   // the module the user is looking at survives
+        Assert.True(duplicate.Disposed);   // the one nobody will ever see does not linger
+        Assert.Equal(0, duplicate.Refreshed);
+    }
+
+    /// <summary>The guard on that dispose: some modules are re-opened with the SAME long-lived view-model (the
+    /// inbox and the log window are properties of the main view-model), and disposing those would kill a live
+    /// screen.</summary>
+    [AvaloniaFact]
+    public void ModuleHost_ReopeningWithTheSameViewModel_DoesNotDisposeIt()
+    {
+        var fake = new FakeDisplay { IsFloating = false };
+        var host = new ModuleHostService();
+        host.SetOwner(new Window());
+        host.SetHost(fake);
+
+        var shared = new ProbeModule();
+        host.Open(new Window { Content = new Border(), DataContext = shared }, "PROBE", moduleId: "probe:1");
+        host.Open(new Window { Content = new Border(), DataContext = shared }, "PROBE", moduleId: "probe:1");
+
+        Assert.False(shared.Disposed);
+        Assert.Equal(1, shared.Refreshed);
+    }
+
     [AvaloniaFact]
     public void DialogService_Floating_ShowsWindow_NotTab()
     {

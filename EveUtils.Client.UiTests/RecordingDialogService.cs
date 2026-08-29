@@ -154,7 +154,11 @@ public sealed class RecordingDialogService : IDialogService
     public void ShowFitDetail(FitDetailWindowViewModel viewModel) => LastFitDetail = viewModel;
     public void ShowTypeInfo(TypeInfoWindowViewModel viewModel) => throw NotUsed();
     public Task<FleetInviteResult?> PickFleetInviteAsync(string fleetName, IReadOnlyList<CharacterPickOption> options) => throw NotUsed();
-    public Task<int?> AddExternalMemberAsync(IExternalCharacterLookup lookup) => throw NotUsed();
+    /// <summary>Answers the add-external-pilot search dialog with a character id (or null to cancel). Default: cancel.</summary>
+    public Func<IExternalCharacterLookup, Task<int?>> OnAddExternalMember { get; set; } =
+        _ => Task.FromResult<int?>(null);
+
+    public Task<int?> AddExternalMemberAsync(IExternalCharacterLookup lookup) => OnAddExternalMember(lookup);
     /// <summary>Answers a text prompt (e.g. the add-wing/add-squad name). Default: cancel (null).</summary>
     public Func<string, string, string?, Task<string?>> OnPromptText { get; set; } =
         (_, _, _) => Task.FromResult<string?>(null);

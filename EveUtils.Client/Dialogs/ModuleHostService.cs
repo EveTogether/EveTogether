@@ -51,7 +51,18 @@ public sealed class ModuleHostService
         if (_host is null) { window.Show(_owner); return; }   // no host wired (e.g. some tests)
 
         var existing = _modules.FirstOrDefault(m => moduleId is not null ? m.Id == moduleId : m.Title == title);
-        if (existing is not null) { Render(select: existing); return; }
+        if (existing is not null)
+        {
+            // The module is already open, so the caller's freshly built window and view-model are surplus. Give the
+            // standing module the chance to re-read what it snapshotted when it was built — otherwise re-opening a
+            // screen silently shows the state it had when it first opened (ET-46) — and dispose the duplicate we are
+            // dropping, which would otherwise keep its bus subscriptions and render registrations alive unseen.
+            (existing.Content.DataContext as IRefreshableModule)?.RefreshModule();
+            if (!ReferenceEquals(window.DataContext, existing.Content.DataContext))
+                (window.DataContext as System.IDisposable)?.Dispose();
+            Render(select: existing);
+            return;
+        }
 
         var content = window.Content as Control;
         if (content is null) return;

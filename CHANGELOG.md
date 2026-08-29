@@ -157,6 +157,15 @@ repository. **Beta:** more stable than the alpha, but expect occasional rough ed
   character out while your others stay in — useful when you've multiboxed several into the same fleet.
 
 ### Fixed
+- A pilot added to a local (client-only) fleet now shows up everywhere that fleet is shown, instead
+  of only in fleet manage. The fleet's card in the Fleets window listed only the characters signed
+  in on this machine, so an **external** pilot — the only way to add someone who isn't signed in
+  here — never appeared on it, and adding anyone at all did not refresh the card. The fleet metrics
+  window, meanwhile, read its roster once when it opened: opening it again handed back the screen
+  built before the pilot joined, and an external pilot sends no live data of their own, so nothing
+  could ever fill the gap. That also quietly shrank the roll-up totals and the `WITH FC` badge's
+  count, which showed as a complete figure. Metrics also gets its own window per fleet now, so
+  opening metrics for a second fleet no longer re-shows the first fleet's.
 - Saving an ESI token no longer fails intermittently on Windows when two saves for the same
   character overlap, or a save lands while the token file is being read — the file replace now
   retries briefly instead of giving up.

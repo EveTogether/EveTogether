@@ -47,6 +47,11 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     private readonly ICharacterRegistry _characters;
     private readonly IToastService _toasts;
     private readonly IFleetMetricsLauncher _metricsLauncher;
+
+    /// <summary>The characters coupled on THIS client, as of the last local-fleet load. A local fleet's card lists
+    /// its whole roster, externals included, but only these can ever publish a metric sample — so this, not the
+    /// leaf list, decides the publish set. Refreshed by <see cref="LoadLocalFleetsAsync"/>.</summary>
+    private IReadOnlySet<int> _localCharacterIds = new HashSet<int>();
     private readonly IDisposable _fleetChangedSubscription;
     private readonly IRemoteBusConnector _busConnector;
     private readonly ICharacterInfoService? _characterInfo; // resolves owner names for fleets I don't own (best-effort)
@@ -311,7 +316,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
 
     /// <summary>Builds the member leaf rows for a fleet node: each of my characters in the fleet with their role, the
     /// fit they fly, a can-fly badge and a SELECT FIT action scoped to the coupled doctrine. The fit
-    /// picker assigns the pilot's OWN fit (master-plan §5; the server authorizes owner-or-self).</summary>
+    /// picker assigns the pilot's OWN fit (master-plan §5; the server authorizes owner-or-self).
+    /// A client-only fleet is the exception: its card is the whole roster (see <paramref name="server"/> below).</summary>
     private async Task PopulateMembersAsync(FleetViewModel row, FleetInfo fleet, IReadOnlyList<(int Id, string Name)> myChars, string? server, IReadOnlySet<int>? coupledIds = null)
     {
         var names = myChars.ToDictionary(c => c.Id, c => c.Name);
@@ -333,8 +339,18 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
 
         var evaluator = _services.GetService<IMemberFitSkillEvaluator>();
         var portraits = _services.GetService<ICharacterPortraitProvider>();
-        foreach (var member in members.Where(m => names.ContainsKey(m.CharacterId)))
+
+        // Which members the card lists. A SERVER fleet's card is the "my characters in this fleet" list it was
+        // designed as — that roster belongs to someone else and its other members have their own screens. A
+        // CLIENT-ONLY fleet's card is the fleet itself: ADD TOON and ADD EXTERNAL sit on it, and an external pilot
+        // is by definition not coupled here, so filtering on `names` dropped exactly the members you can add no
+        // other way (ET-46). Every member belongs on that card, and their name comes from the same day-cached
+        // public lookup the roster and the metrics screen use.
+        foreach (var member in server is null ? members : members.Where(m => names.ContainsKey(m.CharacterId)))
         {
+            var characterName = names.TryGetValue(member.CharacterId, out var known)
+                ? known
+                : await ExternalNameAsync(member.CharacterId);
             var badge = evaluator is null ? null : await evaluator.EvaluateAsync(member.CharacterId, member.AssignedFit);
             await ReportOwnVerdictAsync(member, badge, server);
             // Skills this client doesn't know locally (no read_skills scope / not imported) still get a badge from the
@@ -345,11 +361,11 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             // owner — and any other of my characters in the fleet — stays. The owner's own character never leaves.
             var canLeave = server is not null && member.CharacterId != fleet.CreatorCharacterId;
             var leaf = new FleetMemberRowViewModel(
-                member.Id, member.CharacterId, names[member.CharacterId], RoleLabel(member.Role),
+                member.Id, member.CharacterId, characterName, RoleLabel(member.Role),
                 assignedFit, badge,
                 new AsyncRelayCommand(() => SelectMemberFitAsync(member, composition, server)),
                 assignedFit is null ? null : new AsyncRelayCommand(() => FitDetailLauncher.OpenAsync(_services, _dialogs, assignedFit)),
-                canLeave ? new AsyncRelayCommand(() => LeaveMemberAsync(server!, fleet.Id, member.CharacterId, names[member.CharacterId], fleet.Name)) : null,
+                canLeave ? new AsyncRelayCommand(() => LeaveMemberAsync(server!, fleet.Id, member.CharacterId, characterName, fleet.Name)) : null,
                 canLeave);
             row.Members.Add(leaf);
             if (portraits is not null)
@@ -397,6 +413,15 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         server is null
             ? new LocalFleetClient(_localFleets, _fleetRepository, _characters, actingCharacterId)
             : new ServerFleetClient(_fleets, server, actingCharacterId);
+
+    /// <summary>Name of a member who is not coupled on this client (an external pilot), best-effort via the same
+    /// day-cached public lookup the roster and the metrics screen use. Falls back to the shared "Char {id}"
+    /// placeholder rather than dropping the row — a member the FC cannot name still has to be a member they see.</summary>
+    private async Task<string> ExternalNameAsync(int characterId)
+    {
+        var info = await _services.GetRequiredService<IExternalCharacterLookup>().LookupAsync(characterId);
+        return info.Exists ? info.Name : $"Char {characterId}";
+    }
 
     private IFleetCompositionClient CompositionClientFor(string? server, int actingCharacterId) =>
         server is null
@@ -456,14 +481,19 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
                     participants.Add(new FleetParticipant(row.ActingCharacterId, row.Id, ClientOnly: false));
             }
         foreach (var row in LocalFleets)
+        {
             // Same per-fleet aggregation as server fleets: a local fleet multi-boxing several of my characters must
             // feed every member's graph, not only the acting one — otherwise the metrics window shows data for the
-            // acting character alone and the rest flatline.
-            if (row.Members.Count > 0)
-                foreach (var leaf in row.Members)
+            // acting character alone and the rest flatline. Only MY characters, though: a local fleet's card lists
+            // its externals too (ET-46), and this client can no more publish for someone else's pilot than it can
+            // read their game log.
+            var mine = row.Members.Where(m => _localCharacterIds.Contains(m.CharacterId)).ToList();
+            if (mine.Count > 0)
+                foreach (var leaf in mine)
                     participants.Add(new FleetParticipant(leaf.CharacterId, row.Id, ClientOnly: true));
             else
                 participants.Add(new FleetParticipant(row.ActingCharacterId, row.Id, ClientOnly: true));
+        }
         _participation.Set(participants);
     }
 
@@ -505,6 +535,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             .Where(c => c.EsiCharacterId is not null)
             .Select(c => (Id: c.EsiCharacterId!.Value, c.Name))
             .ToList();
+        _localCharacterIds = localChars.Select(c => c.Id).ToHashSet();
 
         foreach (var character in characters)
         {
@@ -599,6 +630,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         StatusMessage = lastError is null
             ? $"Added {added} character{(added == 1 ? "" : "s")}."
             : $"Added {added}; failed: {lastError}";
+        if (added > 0)
+            await LoadLocalFleetsAsync(); // the card is this fleet's roster — a member added to it has to appear on it.
     }
 
     /// <summary>Adds an external EVE pilot (no local session) to a client-only fleet on trust.</summary>
@@ -615,6 +648,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
 
         var added = await _localFleets.AddExternalAsync(row.Id, characterId.Value, row.Info.CreatorCharacterId);
         StatusMessage = added.IsSuccess ? "Added external pilot." : $"Failed: {added.Messages.FirstOrDefault()?.Text}";
+        if (added.IsSuccess)
+            await LoadLocalFleetsAsync(); // same as ADD TOON: the pilot has to land on the card, not just in the status line.
     }
 
     /// <summary>Opens the live metrics for a client-only fleet (formerly "Enter local"): selects it for the inline
