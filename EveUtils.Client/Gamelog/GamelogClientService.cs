@@ -249,6 +249,7 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         var dps = new DpsSample(0, 0);
         double neut = 0, cap = 0;
         string? system = null;
+        DateTime? abyssalAnchor = null;
         if (_nameById.TryGetValue(characterId, out var name))
         {
             if (_trackers.TryGetValue(name, out var tracker))
@@ -258,7 +259,10 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
             if (_capRate.TryGetValue(name, out var capRate))
                 cap = capRate.Sample(now);
             if (_metrics.TryGetValue(name, out var metrics))
+            {
                 system = metrics.Location; // last known solar system from the gamelog jump/undock
+                abyssalAnchor = metrics.AbyssalAnchor;
+            }
         }
 
         // Bounty is per fleet RUN: only ISK earned since this character started participating in this fleet (the
@@ -276,7 +280,9 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         // The participating character's current system as a State sample — the share-gate (Location opt-in) decides
         // whether it leaves this client. Only emitted once a position is actually known (no fabricated "—").
         if (!string.IsNullOrEmpty(system))
-            yield return new MetricSample(characterId, fleetId, MetricKind.Location, 0, unixMs, system);
+            yield return new MetricSample(
+                characterId, fleetId, MetricKind.Location, 0, unixMs, system,
+                abyssalAnchor is { } anchor ? new DateTimeOffset(anchor, TimeSpan.Zero).ToUnixTimeMilliseconds() : 0);
     }
 
     /// <summary>The local character's full set of live combat rates (DPS out/in + neut + cap GJ/s) without publishing —
@@ -397,10 +403,11 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         }
     }
 
-    /// <summary>Update a character's current solar system from a gamelog jump/undock.</summary>
-    public void SetLocation(string characterName, string system)
+    /// <summary>Update a character's current solar system from a gamelog jump/undock, at the log line's own time —
+    /// that timestamp is what the abyssal countdown anchors on.</summary>
+    public void SetLocation(string characterName, string system, DateTime at)
     {
-        Metrics(Resolve(characterName)).SetLocation(system);
+        Metrics(Resolve(characterName)).SetLocation(system, at);
         MetricsChanged?.Invoke();
     }
 

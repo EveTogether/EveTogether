@@ -9,5 +9,16 @@ namespace EveUtils.Shared.Modules.Fleet.Dtos;
 /// store holds no universe data to resolve an id, so the name travels as-is (serialized as JSON over the wire, so an
 /// optional field is backward-compatible). <see cref="FleetId"/> scopes delivery to that fleet's active participants
 /// <see cref="UnixMs"/> orders samples on the receiver's live graph.
+///
+/// <see cref="AbyssalAnchorMs"/> rides along with a <see cref="MetricKind.Location"/> sample rather than reusing
+/// <see cref="Value"/>: that field already carries a solar-system id when the sample comes from
+/// <c>LocationMetricSource</c>, and one field meaning two things is how a stray number gets read as the wrong one.
 /// </summary>
-public sealed record MetricSample(int CharacterId, long FleetId, MetricKind Kind, double Value, long UnixMs, string? Text = null);
+public sealed record MetricSample(
+    int CharacterId,
+    long FleetId,
+    MetricKind Kind,
+    double Value,
+    long UnixMs,
+    string? Text = null,
+    long AbyssalAnchorMs = 0);

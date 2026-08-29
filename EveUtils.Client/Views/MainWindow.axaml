@@ -533,8 +533,8 @@
                                                                          Fill="#6B7280" IsVisible="{Binding !InEve}"/>
                                                                 <TextBlock Classes="label" Text="In EVE" IsVisible="{Binding InEve}"/>
                                                                 <TextBlock Classes="label" Text="Offline" IsVisible="{Binding !InEve}"/>
-                                                                <TextBlock Classes="label" Text="{Binding Location, StringFormat='· {0}'}"
-                                                                           IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                                                <TextBlock Classes="label" Text="{Binding LocationDisplay, StringFormat='· {0}'}"
+                                                                           IsVisible="{Binding LocationDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                                                             </StackPanel>
                                                             <TextBlock Classes="label" Text="DEALT / RECEIVED" Margin="0,2,0,0"
                                                                        IsVisible="{Binding IsLive}"/>

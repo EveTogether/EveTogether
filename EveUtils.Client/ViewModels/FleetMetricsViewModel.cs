@@ -17,6 +17,7 @@ using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Dtos;
 using EveUtils.Shared.Modules.Settings.Queries;
@@ -439,7 +440,11 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
                 Track(sample.CharacterId).SetRate(sample.Kind, sample.Value);
                 break;
             case MetricKind.Location:
-                Track(sample.CharacterId).Location = sample.Text;
+                var row = Track(sample.CharacterId);
+                row.Location = sample.Text;
+                // The anchor is stamped on the sender's clock; re-base it onto ours before it feeds a countdown.
+                row.AbyssalAnchorUtc = AbyssalSpace.AnchorFromWire(sample.AbyssalAnchorMs, sample.UnixMs, DateTime.UtcNow);
+                row.RefreshLocationDisplay(); // 1 Hz path: the countdown moves even when system and anchor do not
                 break;
             case MetricKind.Bounty:
                 Track(sample.CharacterId).Bounty = (long)sample.Value;

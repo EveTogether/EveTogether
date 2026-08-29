@@ -47,6 +47,7 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
     private readonly ITypeImageProvider? _typeImages;
     private readonly GamelogClientService? _gamelog;     // per-character location, even without combat (jump/undock)
     private readonly GamelogWatcherService? _watcher;    // raises CharacterObserved on every parsed line (incl. jumps)
+    private readonly Avalonia.Threading.DispatcherTimer _clock; // 1 Hz, drives the abyssal countdown on the cards
 
     /// <summary>Design-time / fallback constructor (no services).</summary>
     public HomeDashboardViewModel()
@@ -99,6 +100,16 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
         // raises CharacterObserved, so we refresh that character's location from the gamelog snapshot.
         if (_watcher is not null)
             _watcher.CharacterObserved += name => Avalonia.Threading.Dispatcher.UIThread.Post(() => OnCharacterObserved(name));
+
+        // The abyssal countdown moves with the wall clock, and this card has no other tick: gamelog lines dry up
+        // between rooms, and a readout left standing shows MORE time than the pilot has — the one error that matters.
+        _clock = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _clock.Tick += (_, _) =>
+        {
+            foreach (var tracker in MyCharacters)
+                tracker.RefreshLocationDisplay();
+        };
+        _clock.Start();
     }
 
     private void OnCharacterObserved(string name)
@@ -109,8 +120,12 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
             _ = RebuildRosterAsync(); // a character we don't list yet became active → fold it in
             return;
         }
-        if (_gamelog is not null && _gamelog.Snapshot(name).Location is { } location && !string.IsNullOrWhiteSpace(location))
+        if (_gamelog is null)
+            return;
+        var snapshot = _gamelog.Snapshot(name);
+        if (snapshot.Location is { } location && !string.IsNullOrWhiteSpace(location))
             row.Location = location;
+        row.AbyssalAnchorUtc = snapshot.AbyssalAnchor;
     }
 
     /// <summary>Your own characters with live DPS — the self trackers only. The home no longer shows the DPS of every
@@ -234,8 +249,13 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
             if (_portraits is not null && id > 0 && tracker.Portrait is null)
                 tracker.Portrait = await _portraits.GetPortraitAsync(id, 64);
             // Location from the gamelog (jump/undock), so an online character shows its system even without combat.
-            if (_gamelog is not null && _gamelog.Snapshot(tracker.Character).Location is { } location && !string.IsNullOrWhiteSpace(location))
-                tracker.Location = location;
+            if (_gamelog is not null)
+            {
+                var snapshot = _gamelog.Snapshot(tracker.Character);
+                if (snapshot.Location is { } location && !string.IsNullOrWhiteSpace(location))
+                    tracker.Location = location;
+                tracker.AbyssalAnchorUtc = snapshot.AbyssalAnchor;
+            }
         }
     }
 

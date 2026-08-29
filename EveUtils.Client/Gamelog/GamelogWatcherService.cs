@@ -136,7 +136,7 @@ public sealed class GamelogWatcherService : ISingletonService
                             // CharacterObserved subscriber reads it — every jump refreshes the row, not just the
                             // first detection. Without this, only characters whose location was seeded by an earlier
                             // roster rebuild ever show a system.
-                            _gamelog.SetLocation(item.Character, l.System);
+                            _gamelog.SetLocation(item.Character, l.System, l.Timestamp);
                             CharacterObserved?.Invoke(item.Character);
                             break;
                         case NotifyEvent n:
