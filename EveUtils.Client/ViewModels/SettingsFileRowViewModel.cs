@@ -14,11 +14,16 @@ namespace EveUtils.Client.ViewModels;
 /// </summary>
 public partial class SettingsFileRowViewModel : ViewModelBase
 {
-    public SettingsFileRowViewModel(EveSettingsFile file, string displayName, IReadOnlyList<string> accountHint)
+    public SettingsFileRowViewModel(
+        EveSettingsFile file,
+        string displayName,
+        IReadOnlyList<string> accountCharacters,
+        AccountLinkOrigin? linkOrigin = null)
     {
         File = file;
         _displayName = displayName;
-        AccountHint = accountHint;
+        _accountCharacters = accountCharacters;
+        _linkOrigin = linkOrigin;
     }
 
     public EveSettingsFile File { get; }
@@ -27,9 +32,13 @@ public partial class SettingsFileRowViewModel : ViewModelBase
 
     public SettingsFileKind Kind => File.Kind;
 
-    /// <summary>Characters last written in the same session as this account — the only recognisable thing EVE
-    /// leaves behind about an account. Empty for characters and for accounts we could not tell apart.</summary>
-    public IReadOnlyList<string> AccountHint { get; }
+    /// <summary>The characters on this account, by name (ET-64) — what makes an account with no name yet
+    /// recognisable at all. Empty for characters, and for accounts nothing could be established about.</summary>
+    [ObservableProperty] private IReadOnlyList<string> _accountCharacters;
+
+    /// <summary>Whether that list was worked out from EVE's write times or stated by the user — an inference and a
+    /// fact are not the same thing, and the row says which it is.</summary>
+    [ObservableProperty] private AccountLinkOrigin? _linkOrigin;
 
     [ObservableProperty] private string _displayName;
 
@@ -57,12 +66,38 @@ public partial class SettingsFileRowViewModel : ViewModelBase
         ? $"{File.SizeBytes} B"
         : $"{File.SizeBytes / 1024d:0} KB";
 
-    public string HintDisplay => AccountHint.Count == 0
+    /// <summary>The account's characters on one line, with where the answer came from — "derived" and "set by you"
+    /// are shown apart on purpose, because the user overwrites files on the strength of this.</summary>
+    public string HintDisplay => AccountCharacters.Count == 0
         ? string.Empty
-        : "last saved with " + string.Join(", ", AccountHint.Take(3)) +
-          (AccountHint.Count > 3 ? $" +{AccountHint.Count - 3}" : string.Empty);
+        : string.Join(", ", AccountCharacters.Take(3)) +
+          (AccountCharacters.Count > 3 ? $" +{AccountCharacters.Count - 3}" : string.Empty) +
+          (LinkOrigin == AccountLinkOrigin.UserSet ? " · set by you" : " · from EVE's write times");
 
-    public bool HasHint => AccountHint.Count > 0;
+    public string HintTooltip => AccountCharacters.Count == 0
+        ? string.Empty
+        : (LinkOrigin == AccountLinkOrigin.UserSet
+              ? "You said this account holds: "
+              : "EVE wrote these characters' settings in the same moment as this account's, so they are on it: ") +
+          string.Join(", ", AccountCharacters);
+
+    public bool HasHint => AccountCharacters.Count > 0;
+
+    /// <summary>What an account row says when nothing could be established — an invitation to say so yourself,
+    /// rather than a blank that looks like an oversight.</summary>
+    public bool NeedsLink => Kind == SettingsFileKind.Account && AccountCharacters.Count == 0;
+
+    partial void OnAccountCharactersChanged(IReadOnlyList<string> value) => _NotifyHint();
+
+    partial void OnLinkOriginChanged(AccountLinkOrigin? value) => _NotifyHint();
+
+    private void _NotifyHint()
+    {
+        OnPropertyChanged(nameof(HintDisplay));
+        OnPropertyChanged(nameof(HintTooltip));
+        OnPropertyChanged(nameof(HasHint));
+        OnPropertyChanged(nameof(NeedsLink));
+    }
 
     partial void OnDisplayNameChanged(string value) => OnPropertyChanged(nameof(ShowId));
 

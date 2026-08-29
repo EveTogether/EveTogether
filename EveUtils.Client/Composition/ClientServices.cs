@@ -96,6 +96,9 @@ public static class ClientServices
         // EVE settings sync (ET-59): the backup store needs the per-instance data dir, so it is wired by hand;
         // SettingsSyncService / EveSettingsNameResolver / EveSettingsPreferences carry lifetime markers.
         services.AddSingleton(new EveSettings.SettingsBackupService(DataDirectory()));
+        // The automatic sync (ET-60) is a background loop like the presence sweep: started by hand in Program,
+        // since the client has no generic host.
+        services.AddSingleton<EveSettings.AutoSettingsSyncService>();
         // Market prices, character skills, training queue + attributes and
         // implants repositories live in Shared and auto-register via AddSharedServices.
         services.AddSingleton<IEsiSkillImporter>(sp =>

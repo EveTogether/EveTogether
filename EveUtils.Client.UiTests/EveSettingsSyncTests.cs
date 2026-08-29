@@ -86,12 +86,12 @@ public sealed class EveSettingsSyncTests : IDisposable
     }
 
     /// <summary>
-    /// The account hint: EVE writes a session's character and account file together on logout, so a lone account in
-    /// a write window belongs to the characters written with it. Two accounts in one window prove nothing — that
-    /// bucket is dropped rather than guessed at, because a wrong hint is worse than none.
+    /// The account link: EVE writes a session's character and account file together on logout, so the account written
+    /// beside a character is the one it is on. Several accounts equally close prove nothing — that character is left
+    /// out rather than guessed at, because a wrong link is worse than none.
     /// </summary>
     [Fact]
-    public void AccountCharacterHints_LinkALoneAccountToItsSession_AndSkipAmbiguousOnes()
+    public void DeriveAccountLinks_LinksACharacterToTheAccountWrittenWithIt_AndSkipsAmbiguousOnes()
     {
         var profileDirectory = _NewProfile("settings_Default");
         var evening = new DateTime(2026, 8, 29, 22, 11, 0, DateTimeKind.Utc);
@@ -100,17 +100,109 @@ public sealed class EveSettingsSyncTests : IDisposable
         _WriteFile(profileDirectory, "core_char_90000001.dat", "alice", evening);
         _WriteFile(profileDirectory, "core_user_1001.dat", "account one", evening.AddSeconds(12));
 
-        // Two clients closed together: three characters and two accounts share one window.
+        // Two clients closed together: three characters and two accounts share one moment.
         _WriteFile(profileDirectory, "core_char_90000002.dat", "bob", earlier);
         _WriteFile(profileDirectory, "core_char_90000003.dat", "carol", earlier);
         _WriteFile(profileDirectory, "core_user_1002.dat", "account two", earlier);
         _WriteFile(profileDirectory, "core_user_1003.dat", "account three", earlier);
 
-        var hints = EveSettingsLocator.AccountCharacterHints(EveSettingsLocator.LoadProfile(profileDirectory));
+        var links = EveSettingsLocator.DeriveAccountLinks([EveSettingsLocator.LoadProfile(profileDirectory)]);
 
-        Assert.Equal([90000001L], hints[1001]);
-        Assert.False(hints.ContainsKey(1002));
-        Assert.False(hints.ContainsKey(1003));
+        Assert.Equal([90000001L], links[1001]);
+        Assert.False(links.ContainsKey(1002));
+        Assert.False(links.ContainsKey(1003));
+    }
+
+    /// <summary>
+    /// The case the operator actually has (ET-64): the profile he multiboxes in has six clients closed at once and
+    /// says nothing, while a quieter profile beside it holds a clean one-by-one login — pairs on the same second,
+    /// seconds between the pairs. Read together, every account is placed.
+    /// </summary>
+    [Fact]
+    public void DeriveAccountLinks_ReadsTheTraceFromAnotherProfile_WhenTheOneInFrontOfYouSaysNothing()
+    {
+        // settings_Default: everything closed in the same second — nothing to conclude here.
+        var multibox = _NewProfile("settings_Default");
+        var together = new DateTime(2026, 8, 29, 23, 34, 0, DateTimeKind.Utc);
+        foreach (var id in new[] { 90250177L, 2123169375L, 2122696898L })
+            _WriteFile(multibox, $"core_char_{id}.dat", "x", together);
+        foreach (var id in new[] { 7417348L, 31203498L, 30514680L })
+            _WriteFile(multibox, $"core_user_{id}.dat", "x", together);
+
+        // settings_minimal: logged in one after another, pairs on the same second, a few seconds apart.
+        var minimal = _NewProfile("settings_minimal");
+        var start = new DateTime(2025, 11, 18, 19, 0, 0, DateTimeKind.Utc);
+        var pairs = new[] { (7417348L, 90250177L), (31203498L, 2123169375L), (30514680L, 2122696898L) };
+        for (var index = 0; index < pairs.Length; index++)
+        {
+            var moment = start.AddSeconds(index * 5);
+            _WriteFile(minimal, $"core_user_{pairs[index].Item1}.dat", "x", moment);
+            _WriteFile(minimal, $"core_char_{pairs[index].Item2}.dat", "x", moment);
+        }
+
+        var links = EveSettingsLocator.DeriveAccountLinks(
+            EveSettingsLocator.LoadProfiles(Path.Combine(_root, "install")));
+
+        Assert.Equal([90250177L], links[7417348]);
+        Assert.Equal([2123169375L], links[31203498]);
+        Assert.Equal([2122696898L], links[30514680]);
+    }
+
+    /// <summary>An account can hold several characters, and two sessions on different evenings both count.</summary>
+    [Fact]
+    public void DeriveAccountLinks_PutsSeveralCharactersOnOneAccount()
+    {
+        var profileDirectory = _NewProfile("settings_Default");
+        var monday = new DateTime(2026, 8, 24, 21, 0, 0, DateTimeKind.Utc);
+        var tuesday = new DateTime(2026, 8, 25, 21, 0, 0, DateTimeKind.Utc);
+
+        _WriteFile(profileDirectory, "core_user_1001.dat", "one", monday);
+        _WriteFile(profileDirectory, "core_char_90000001.dat", "alice", monday);
+        _WriteFile(profileDirectory, "core_char_90000002.dat", "bob", tuesday);
+
+        var links = EveSettingsLocator.DeriveAccountLinks([EveSettingsLocator.LoadProfile(profileDirectory)]);
+
+        // Only the character written in the same session counts; a day later is nobody's session.
+        Assert.Equal([90000001L], links[1001]);
+
+        File.SetLastWriteTimeUtc(Path.Combine(profileDirectory, "core_char_90000002.dat"), monday.AddSeconds(1));
+        links = EveSettingsLocator.DeriveAccountLinks([EveSettingsLocator.LoadProfile(profileDirectory)]);
+        Assert.Equal([90000001L, 90000002L], links[1001]);
+    }
+
+    /// <summary>
+    /// What is remembered outranks what is inferred, and a link the user stated is never rewritten by a later guess —
+    /// which is the whole reason for remembering: one evening of multiboxing must not undo what a quiet one proved.
+    /// </summary>
+    [Fact]
+    public void Merge_KeepsWhatIsKnown_AndNeverLetsAGuessOverruleTheUser()
+    {
+        var now = new DateTimeOffset(2026, 8, 30, 12, 0, 0, TimeSpan.Zero);
+        var stored = new Dictionary<long, AccountCharacterLink>
+        {
+            [1001] = new() { AccountId = 1001, CharacterIds = [90000001L], Origin = AccountLinkOrigin.UserSet },
+            [1002] = new() { AccountId = 1002, CharacterIds = [90000002L], Origin = AccountLinkOrigin.Derived }
+        };
+
+        var (merged, changed) = AccountLinkStore.Merge(stored, new Dictionary<long, IReadOnlyList<long>>
+        {
+            [1003] = [90000001L],              // contradicts what the user said: dropped
+            [1002] = [90000002L, 90000003L],   // adds a second character to a derived link: kept
+            [1004] = [90000004L]               // new: kept
+        }, now);
+
+        Assert.True(changed);
+        Assert.Equal([90000001L], merged[1001].CharacterIds);
+        Assert.Equal(AccountLinkOrigin.UserSet, merged[1001].Origin);
+        Assert.Equal([90000002L, 90000003L], merged[1002].CharacterIds);
+        Assert.False(merged.ContainsKey(1003));
+        Assert.Equal([90000004L], merged[1004].CharacterIds);
+
+        // Nothing new to say → nothing written back.
+        Assert.False(AccountLinkStore.Merge(merged, new Dictionary<long, IReadOnlyList<long>>
+        {
+            [1002] = [90000002L]
+        }, now).Changed);
     }
 
     // ── Syncing ──────────────────────────────────────────────────────────────────────────────────

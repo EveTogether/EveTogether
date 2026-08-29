@@ -12,9 +12,16 @@ namespace EveUtils.Client.EveSettings;
 public static partial class EveSettingsLocator
 {
     /// <summary>How close two write times must be to count as "written by the same client session" (see
-    /// <see cref="AccountCharacterHints"/>). EVE flushes a session's character and account file back to back on
+    /// <see cref="DeriveAccountLinks"/>). EVE flushes a session's character and account file back to back on
     /// logout, well inside a minute; anything wider starts pulling unrelated sessions together.</summary>
     private static readonly TimeSpan SessionWriteWindow = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// How much further away the runner-up account must be before the nearest one counts as the answer. Logging in
+    /// one character after another leaves pairs seconds apart, so this cannot be wide; closing six clients at once
+    /// stamps every file the same second, and then the gap is zero and nothing is concluded — which is the point.
+    /// </summary>
+    private static readonly TimeSpan LinkSeparation = TimeSpan.FromSeconds(1.5);
 
     [GeneratedRegex(@"^core_char_(?<id>\d+)\.dat$", RegexOptions.IgnoreCase)]
     private static partial Regex CharacterFile();
@@ -104,36 +111,103 @@ public static partial class EveSettingsLocator
     }
 
     /// <summary>
-    /// Best guess at which characters live on which account, from the write times of the files. EVE exposes no link
-    /// between an account id and its characters, but it does write a session's character file and its account file
-    /// within seconds of each other when the client closes. So: bucket the files by write time, and when a bucket
-    /// holds exactly one account, the characters in it were on that account. Buckets with several accounts (two
-    /// clients closed together) prove nothing and are dropped rather than guessed at — this is a hint the user sees
-    /// while naming an account, never a fact the sync acts on.
+    /// Which characters sit on which account, read out of the write times across <em>every</em> profile (ET-64).
+    ///
+    /// EVE exposes the link nowhere: it is not in <c>core_user_&lt;id&gt;.dat</c> (searched, as text and as a 32-bit
+    /// number, with nothing to find — and the files are marshalled, not compressed, so there is nothing to unpack
+    /// either), and there is no launcher database beside them. What EVE does do is write a session's character file
+    /// and its account file within the same second when the client closes. That is the whole signal.
+    ///
+    /// Per character: take the account written closest to it. It counts as the answer only when it is inside
+    /// <see cref="SessionWriteWindow"/> <em>and</em> the next-closest account is at least <see cref="LinkSeparation"/>
+    /// further away. Logging characters in one at a time leaves pairs on the same second with seconds between the
+    /// pairs, which passes easily; closing six clients at once stamps all twelve files identically, every account is
+    /// equally close, and nothing is concluded. A wrong link is worse than none here — the user overwrites settings
+    /// files on the strength of it.
+    ///
+    /// Looking at all profiles at once is what makes this work in practice: the operator's multiboxing profile
+    /// carries no usable trace, while a quieter profile beside it holds a clean one-by-one login for the same
+    /// accounts. An account belongs to a character regardless of which profile made that visible.
     /// </summary>
-    public static IReadOnlyDictionary<long, IReadOnlyList<long>> AccountCharacterHints(EveSettingsProfile profile)
+    public static IReadOnlyDictionary<long, IReadOnlyList<long>> DeriveAccountLinks(
+        IEnumerable<EveSettingsProfile> profiles)
     {
-        var hints = new Dictionary<long, IReadOnlyList<long>>();
+        var perCharacter = new Dictionary<long, long>();       // character → the account it was written beside
+        var contradicted = new HashSet<long>();                // characters two profiles disagree about
 
-        foreach (var account in profile.Accounts)
+        foreach (var profile in profiles)
         {
-            if (profile.Accounts.Any(other => other.Id != account.Id && _WrittenTogether(other, account)))
-                continue;   // two accounts written at once — no way to tell whose characters are whose
+            foreach (var character in profile.Characters)
+            {
+                if (_NearestAccount(profile, character) is not { } accountId)
+                    continue;
 
-            var characters = profile.Characters
-                .Where(character => _WrittenTogether(character, account))
-                .Select(character => character.Id)
-                .ToList();
+                if (perCharacter.TryGetValue(character.Id, out var already) && already != accountId)
+                {
+                    contradicted.Add(character.Id);   // two profiles, two answers: keep neither
+                    continue;
+                }
 
-            if (characters.Count > 0)
-                hints[account.Id] = characters;
+                perCharacter[character.Id] = accountId;
+            }
         }
 
-        return hints;
+        var links = new Dictionary<long, List<long>>();
+        foreach (var (characterId, accountId) in perCharacter.Where(pair => !contradicted.Contains(pair.Key)))
+        {
+            if (!links.TryGetValue(accountId, out var characters))
+                links[accountId] = characters = [];
+            characters.Add(characterId);
+        }
+
+        return links.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<long>)pair.Value.OrderBy(id => id).ToList());
     }
 
-    private static bool _WrittenTogether(EveSettingsFile left, EveSettingsFile right) =>
-        (left.LastModifiedUtc - right.LastModifiedUtc).Duration() <= SessionWriteWindow;
+    /// <summary>The account this character was unmistakably written beside, or null when the write times cannot
+    /// tell — no account close enough, or two of them equally close.</summary>
+    private static long? _NearestAccount(EveSettingsProfile profile, EveSettingsFile character)
+    {
+        var byDistance = profile.Accounts
+            .Select(account => (account.Id, Distance: (account.LastModifiedUtc - character.LastModifiedUtc).Duration()))
+            .OrderBy(candidate => candidate.Distance)
+            .ToList();
+
+        if (byDistance.Count == 0 || byDistance[0].Distance > SessionWriteWindow)
+            return null;
+
+        if (byDistance.Count > 1 && byDistance[1].Distance - byDistance[0].Distance < LinkSeparation)
+            return null;   // two clients closed together — nothing here says which account is whose
+
+        return byDistance[0].Id;
+    }
+
+    /// <summary>
+    /// Reads an EVE settings file name (<c>core_char_&lt;id&gt;.dat</c> / <c>core_user_&lt;id&gt;.dat</c>). False for
+    /// anything else — the stubs EVE leaves behind, and, when a preset from another machine is opened, any name that
+    /// is not one of these two shapes (ET-61): only files we recognise are ever unpacked over a profile.
+    /// </summary>
+    public static bool TryReadSettingsFileName(string fileName, out SettingsFileKind kind, out long id)
+    {
+        var characterMatch = CharacterFile().Match(fileName);
+        if (characterMatch.Success && _TryReadId(characterMatch, out id))
+        {
+            kind = SettingsFileKind.Character;
+            return true;
+        }
+
+        var accountMatch = AccountFile().Match(fileName);
+        if (accountMatch.Success && _TryReadId(accountMatch, out id))
+        {
+            kind = SettingsFileKind.Account;
+            return true;
+        }
+
+        kind = SettingsFileKind.Character;
+        id = 0;
+        return false;
+    }
 
     private static bool _TryReadId(Match match, out long id) =>
         long.TryParse(match.Groups["id"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out id);

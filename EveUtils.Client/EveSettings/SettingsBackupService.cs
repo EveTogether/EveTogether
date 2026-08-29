@@ -40,15 +40,22 @@ public sealed class SettingsBackupService
     /// Snapshots every character and account file of <paramref name="profile"/>. <paramref name="names"/> supplies
     /// the display name per file id so the manifest reads in names rather than ids.
     /// </summary>
+    /// <param name="allowEmpty">
+    /// Normally a profile with nothing in it is a mistake worth refusing. Importing a preset onto a fresh machine is
+    /// the one case where it is not: EVE has written no <c>core_*.dat</c> there yet, and refusing would mean the most
+    /// far-reaching action in the tool is the only one running without a backup. Then an empty snapshot is written
+    /// instead — a truthful record that there was nothing to keep.
+    /// </param>
     public Result<SettingsBackup> Create(
         EveSettingsProfile profile,
         string installRoot,
         IReadOnlyDictionary<long, string> names,
         BackupReason reason,
-        string note)
+        string note,
+        bool allowEmpty = false)
     {
         var files = profile.Characters.Concat(profile.Accounts).ToList();
-        if (files.Count == 0)
+        if (files.Count == 0 && !allowEmpty)
             return Result<SettingsBackup>.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound,
                 $"Profile {profile.Name} holds no character or account settings to back up."));
 
@@ -128,6 +135,8 @@ public sealed class SettingsBackupService
             return Result<SettingsRestoreOutcome>.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound,
                 $"The profile this backup came from is gone: {profileDirectory}"));
 
+        using var gate = EveSettingsWriteGate.Acquire();   // a restore and an automatic sync must not interleave
+
         var safety = Create(
             EveSettingsLocator.LoadProfile(profileDirectory),
             backup.Manifest.InstallRoot,
@@ -161,6 +170,34 @@ public sealed class SettingsBackupService
 
         return Result<SettingsRestoreOutcome>.Success(
             new SettingsRestoreOutcome(restored, failures, safety.Value?.DirectoryPath ?? string.Empty));
+    }
+
+    /// <summary>
+    /// Keeps the newest <paramref name="keep"/> backups of the given <paramref name="reasons"/> and deletes the rest.
+    /// Returns the ids that were removed.
+    ///
+    /// Two rules make this safe to run unattended (ET-60). Only the reasons the caller names are ever considered —
+    /// the automatic sync passes <see cref="BackupReason.BeforeAutoSync"/>, so a backup the user asked for by hand,
+    /// or one taken before a copy they pressed, is never touched. And <paramref name="keep"/> is floored at one, so
+    /// the last known-good snapshot of that kind always survives, however the caller is configured.
+    /// </summary>
+    public IReadOnlyList<string> Prune(int keep, params BackupReason[] reasons)
+    {
+        if (reasons.Length == 0)
+            return [];
+
+        var prunable = List()
+            .Where(backup => reasons.Contains(backup.Manifest.Reason))
+            .ToList();   // List() is newest first, so Skip() below drops the oldest
+
+        var deleted = new List<string>();
+        foreach (var backup in prunable.Skip(Math.Max(1, keep)))
+        {
+            if (Delete(backup).IsSuccess)
+                deleted.Add(backup.Id);
+        }
+
+        return deleted;
     }
 
     public Result Delete(SettingsBackup backup)

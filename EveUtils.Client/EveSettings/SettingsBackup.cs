@@ -12,7 +12,15 @@ public enum BackupReason
     BeforeSync,
 
     /// <summary>Taken automatically right before an older backup was restored over the profile.</summary>
-    BeforeRestore
+    BeforeRestore,
+
+    /// <summary>Taken by the automatic sync (ET-60) before it overwrote anything. The only kind
+    /// <see cref="SettingsBackupService.Prune"/> is allowed to remove: nobody asked for it by hand, and an unattended
+    /// automaton would otherwise fill the disk one snapshot at a time.</summary>
+    BeforeAutoSync,
+
+    /// <summary>Taken right before a preset from another machine was written over the profile (ET-61).</summary>
+    BeforeImport
 }
 
 /// <summary>One file inside a backup, described by name rather than by id so the list stays readable.</summary>

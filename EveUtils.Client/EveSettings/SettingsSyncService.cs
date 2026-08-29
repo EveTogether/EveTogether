@@ -6,7 +6,7 @@ namespace EveUtils.Client.EveSettings;
 /// <summary>
 /// One intended copy, complete enough to show the user before anything is written: which profile, from whom, to
 /// whom, and how many files that is. Built and inspected first, then handed to <see cref="SettingsSyncService"/> —
-/// the same plan a scheduled sync would build (ET-60), which is why nothing here knows about the UI.
+/// the same plan the scheduled sync builds (ET-60), which is why nothing here knows about the UI.
 /// </summary>
 public sealed record SettingsSyncPlan(
     EveSettingsProfile Profile,
@@ -26,7 +26,8 @@ public sealed record SettingsSyncPlan(
 public sealed record SettingsSyncOutcome(
     IReadOnlyList<string> Copied,
     IReadOnlyList<string> Failed,
-    SettingsBackup Backup);
+    SettingsBackup Backup,
+    bool Aborted = false);
 
 /// <summary>
 /// Copies one character's or one account's EVE settings over other files of the same kind, after backing the whole
@@ -39,8 +40,8 @@ public sealed record SettingsSyncOutcome(
 /// the target's name would make EVE load one character's settings under another's identity.</item>
 /// </list>
 ///
-/// Deliberately free of UI and of any "ask the user" step: the backup is not a choice, and the same call is what a
-/// later automatic sync (ET-60) will make once it has decided the clients are closed.
+/// Deliberately free of UI and of any "ask the user" step: the backup is not a choice, and the same call is what the
+/// automatic sync (ET-60) makes once it has decided the clients are closed.
 /// </summary>
 public sealed class SettingsSyncService(SettingsBackupService backups) : ISingletonService
 {
@@ -48,55 +49,144 @@ public sealed class SettingsSyncService(SettingsBackupService backups) : ISingle
     /// Validates the plan, snapshots the profile, then overwrites each target's contents. Returns a failure without
     /// touching a single file when the plan does not hold up or the backup cannot be written.
     /// </summary>
-    public Result<SettingsSyncOutcome> Apply(SettingsSyncPlan plan, IReadOnlyDictionary<long, string> names)
+    public Result<SettingsSyncOutcome> Apply(
+        SettingsSyncPlan plan, IReadOnlyDictionary<long, string> names, Func<bool>? abortWhen = null) =>
+        ApplyAll([plan], names, BackupReason.BeforeSync, null, abortWhen);
+
+    /// <summary>
+    /// Several plans in one go — a character rule and an account rule together — against one profile and behind
+    /// <em>one</em> backup. The automatic sync uses this: two separate calls would leave two snapshots per run, the
+    /// second of them already half-synced and therefore no longer a picture of where the user was.
+    /// </summary>
+    /// <param name="abortWhen">
+    /// Checked before the backup and again before every single file. The automatic sync passes "is an EVE client
+    /// running?" here: a client that starts mid-run would rewrite whatever we put down when it closes, so stopping
+    /// part-way and saying so beats finishing into a client that will undo it.
+    /// </param>
+    public Result<SettingsSyncOutcome> ApplyAll(
+        IReadOnlyList<SettingsSyncPlan> plans,
+        IReadOnlyDictionary<long, string> names,
+        BackupReason reason = BackupReason.BeforeSync,
+        string? note = null,
+        Func<bool>? abortWhen = null)
     {
-        if (plan.Targets.Count == 0)
-            return Result<SettingsSyncOutcome>.Failure(new ResultMessage(MessageSeverity.Error,
-                MessageCodes.ValidationFailed, "Pick at least one target to copy to."));
+        if (plans.Count == 0)
+            return _Refuse("There is nothing to copy.");
 
-        if (plan.Targets.Any(target => target.Kind != plan.Source.Kind))
-            return Result<SettingsSyncOutcome>.Failure(new ResultMessage(MessageSeverity.Error,
-                MessageCodes.ValidationFailed, "Character settings and account settings cannot be copied onto each other."));
-
-        if (plan.Targets.Any(target => target.Id == plan.Source.Id))
-            return Result<SettingsSyncOutcome>.Failure(new ResultMessage(MessageSeverity.Error,
-                MessageCodes.ValidationFailed, "The source cannot also be a target."));
-
-        byte[] payload;
-        try
+        foreach (var plan in plans)
         {
-            payload = File.ReadAllBytes(plan.Source.FullPath);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return Result<SettingsSyncOutcome>.Failure(new ResultMessage(MessageSeverity.Error,
-                MessageCodes.FileIoFailed, $"Could not read {plan.SourceName}'s settings: {ex.Message}"));
+            if (plan.Targets.Count == 0)
+                return _Refuse("Pick at least one target to copy to.");
+
+            if (plan.Targets.Any(target => target.Kind != plan.Source.Kind))
+                return _Refuse("Character settings and account settings cannot be copied onto each other.");
+
+            if (plan.Targets.Any(target => target.Id == plan.Source.Id))
+                return _Refuse("The source cannot also be a target.");
         }
 
-        var backup = backups.Create(plan.Profile, plan.InstallRoot, names, BackupReason.BeforeSync,
-            $"before copying {plan.SourceName} to {plan.FileCount} {_KindLabel(plan.Kind, plan.FileCount)}");
+        if (plans.Select(plan => plan.Profile.DirectoryPath).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
+            return _Refuse("Every copy in one run has to be inside the same profile.");
+
+        var payloads = new List<byte[]>(plans.Count);
+        foreach (var plan in plans)
+        {
+            try
+            {
+                payloads.Add(File.ReadAllBytes(plan.Source.FullPath));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return Result<SettingsSyncOutcome>.Failure(new ResultMessage(MessageSeverity.Error,
+                    MessageCodes.FileIoFailed, $"Could not read {plan.SourceName}'s settings: {ex.Message}"));
+            }
+        }
+
+        if (abortWhen?.Invoke() == true)
+            return _Refuse("An EVE client is running, so nothing was copied.");
+
+        // From here on files change: the automatic sync and a button press must not interleave their backup and
+        // their writes.
+        using var gate = EveSettingsWriteGate.Acquire();
+
+        var first = plans[0];
+        var backup = backups.Create(first.Profile, first.InstallRoot, names, reason, note ?? _Note(plans));
         if (!backup.IsSuccess || backup.Value is null)
             return Result<SettingsSyncOutcome>.Failure(backup.Messages.ToArray());
 
         var copied = new List<string>();
         var failed = new List<string>();
-        for (var index = 0; index < plan.Targets.Count; index++)
+        var aborted = false;
+        foreach (var (plan, payload) in plans.Zip(payloads))
         {
-            var target = plan.Targets[index];
-            var name = index < plan.TargetNames.Count ? plan.TargetNames[index] : target.FileName;
-            try
+            for (var index = 0; index < plan.Targets.Count; index++)
             {
-                File.WriteAllBytes(target.FullPath, payload);
-                copied.Add(name);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                failed.Add($"{name}: {ex.Message}");
+                var target = plan.Targets[index];
+                var name = index < plan.TargetNames.Count ? plan.TargetNames[index] : target.FileName;
+
+                if (aborted || abortWhen?.Invoke() == true)
+                {
+                    aborted = true;
+                    failed.Add($"{name}: not copied, an EVE client started");
+                    continue;
+                }
+
+                try
+                {
+                    File.WriteAllBytes(target.FullPath, payload);
+                    copied.Add(name);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    failed.Add($"{name}: {ex.Message}");
+                }
             }
         }
 
-        return Result<SettingsSyncOutcome>.Success(new SettingsSyncOutcome(copied, failed, backup.Value));
+        return Result<SettingsSyncOutcome>.Success(new SettingsSyncOutcome(copied, failed, backup.Value, aborted));
     }
+
+    /// <summary>
+    /// The targets whose contents differ from the source — the ones a copy would actually change. The automatic sync
+    /// asks this before doing anything: running on a timer and copying regardless would leave a pile of backups that
+    /// all say the same thing, and each one would push a real one further out of reach. A file that cannot be read
+    /// counts as different, so an unreadable target is attempted (and reported) rather than silently skipped forever.
+    /// </summary>
+    public static IReadOnlyList<EveSettingsFile> OutOfSync(EveSettingsFile source, IEnumerable<EveSettingsFile> targets)
+    {
+        byte[] payload;
+        try
+        {
+            payload = File.ReadAllBytes(source.FullPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];   // unreadable source: nothing to copy from, and the caller reports the miss
+        }
+
+        return targets.Where(target => !_SameContent(target, payload)).ToList();
+    }
+
+    private static bool _SameContent(EveSettingsFile target, byte[] payload)
+    {
+        try
+        {
+            if (target.SizeBytes != payload.LongLength)
+                return false;
+            return File.ReadAllBytes(target.FullPath).AsSpan().SequenceEqual(payload);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static Result<SettingsSyncOutcome> _Refuse(string message) =>
+        Result<SettingsSyncOutcome>.Failure(new ResultMessage(MessageSeverity.Error,
+            MessageCodes.ValidationFailed, message));
+
+    private static string _Note(IReadOnlyList<SettingsSyncPlan> plans) => string.Join("; ", plans.Select(plan =>
+        $"before copying {plan.SourceName} to {plan.FileCount} {_KindLabel(plan.Kind, plan.FileCount)}"));
 
     private static string _KindLabel(SettingsFileKind kind, int count) => kind switch
     {
