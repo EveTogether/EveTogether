@@ -9,6 +9,7 @@ using EveUtils.Client.Platform;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Modules.Esi;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -137,7 +138,7 @@ public class EveClientPresenceTests
         var vm = new MainWindowViewModel();
         var jithran = new CharacterViewModel(new Character("Jithran", 96000001))
         {
-            Affiliation = "Imperial Academy [IAC]", HasActiveClient = true, IsLocal = true
+            Affiliation = "Imperial Academy [IAC]", HasActiveClient = true, EsiTokenStatus = TokenStatus.Valid
         };
         jithran.ServerLinks.Add(new ServerLinkViewModel(
             96000001, "localhost:7443", "ET", Client.Messaging.ServerConnectionState.Connected, _ => Task.CompletedTask));

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Esi;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -18,6 +19,10 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public class ClientTokenRefreshServiceTests
 {
+    // Every outcome is recorded on a tracker; these tests are about the outcome itself, so a fresh throwaway
+    // tracker on a bare in-process bus is enough. EsiTokenStatusTrackerTests covers what it does with them.
+    private static EsiTokenStatusTracker Tracker() => new(new InProcessEventBus());
+
     [Fact]
     public async Task EnsureValid_WhenRefreshedTokenFailsValidation_ReportsTemporarilyUnavailable_AndBacksOff()
     {
@@ -29,7 +34,7 @@ public class ClientTokenRefreshServiceTests
         var store = new FakeTokenStore(new EsiTokenSet("stale", "refresh-token", DateTimeOffset.UtcNow - TimeSpan.FromMinutes(1)));
         var auth = new CountingAuthClient(new EsiTokenSet("refreshed", "refresh-token", DateTimeOffset.UtcNow + TimeSpan.FromMinutes(20)));
         var service = new ClientTokenRefreshService(new EmptyRegistry(), store, auth, new ThrowingJwtValidator(),
-            new EsiOptions { ClientId = "test" }, NullLogger<ClientTokenRefreshService>.Instance);
+            new EsiOptions { ClientId = "test" }, Tracker(), NullLogger<ClientTokenRefreshService>.Instance);
 
         var first = await service.EnsureValidAsync(charId, ct);
         var second = await service.EnsureValidAsync(charId, ct); // immediately again — must hit the back-off, not SSO
@@ -46,7 +51,7 @@ public class ClientTokenRefreshServiceTests
         var store = new FakeTokenStore(new EsiTokenSet("good", "refresh-token", DateTimeOffset.UtcNow + TimeSpan.FromHours(1)));
         var auth = new CountingAuthClient(new EsiTokenSet("x", "y", DateTimeOffset.UtcNow));
         var service = new ClientTokenRefreshService(new EmptyRegistry(), store, auth, new ThrowingJwtValidator(),
-            new EsiOptions { ClientId = "test" }, NullLogger<ClientTokenRefreshService>.Instance);
+            new EsiOptions { ClientId = "test" }, Tracker(), NullLogger<ClientTokenRefreshService>.Instance);
 
         var status = await service.EnsureValidAsync(100, ct);
 
@@ -61,7 +66,7 @@ public class ClientTokenRefreshServiceTests
         var store = new FakeTokenStore(new EsiTokenSet("stale", "refresh-token", DateTimeOffset.UtcNow - TimeSpan.FromMinutes(1)));
         var auth = new RevokingAuthClient(); // EVE SSO rejects the refresh token (invalid_grant) — re-auth is the only fix
         var service = new ClientTokenRefreshService(new EmptyRegistry(), store, auth, new ThrowingJwtValidator(),
-            new EsiOptions { ClientId = "test" }, NullLogger<ClientTokenRefreshService>.Instance);
+            new EsiOptions { ClientId = "test" }, Tracker(), NullLogger<ClientTokenRefreshService>.Instance);
 
         var status = await service.EnsureValidAsync(100, ct);
 
@@ -75,7 +80,7 @@ public class ClientTokenRefreshServiceTests
         var store = new FakeTokenStore(new EsiTokenSet("stale", "", DateTimeOffset.UtcNow - TimeSpan.FromMinutes(1)));
         var auth = new CountingAuthClient(new EsiTokenSet("x", "y", DateTimeOffset.UtcNow));
         var service = new ClientTokenRefreshService(new EmptyRegistry(), store, auth, new ThrowingJwtValidator(),
-            new EsiOptions { ClientId = "test" }, NullLogger<ClientTokenRefreshService>.Instance);
+            new EsiOptions { ClientId = "test" }, Tracker(), NullLogger<ClientTokenRefreshService>.Instance);
 
         var status = await service.EnsureValidAsync(100, ct);
 
