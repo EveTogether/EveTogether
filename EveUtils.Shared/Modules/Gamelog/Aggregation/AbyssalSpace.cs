@@ -1,17 +1,9 @@
 namespace EveUtils.Shared.Modules.Gamelog.Aggregation;
 
 /// <summary>
-/// Abyssal deadspace, read from the two sources that can see it.
-///
-/// The gamelog sees the way IN and nothing else: no jump, no undock, no notice is written when a filament pulls you
-/// in (measured on ET-55's run of 2026-08-29), so the system name never changes and a run is recognised only by what
-/// shoots back. It cannot see the way OUT at all — you leave where you fired the filament, so there is no line there
-/// either, and silence is not a substitute: a four-minute gap can fall inside a run as easily as between two
-/// (measured 2026-08-29, one such gap contained an entry), so no threshold separates them.
-///
-/// ESI sees both, and is what ends a run: <c>/characters/{id}/location/</c> answers with a solar system id, and
-/// <see cref="IsAbyssalSystem"/> is the whole test. The log stays the trigger so nothing is polled until a run looks
-/// like it started.
+/// Abyssal deadspace, read from the one source that can see it. The gamelog sees neither end of a run — nothing is
+/// written when a filament pulls you in, and you leave where you fired it — so ET-62 moved both ends to ESI, where
+/// <see cref="IsAbyssalSystem"/> over a closed id range leaves nothing to guess.
 ///
 /// The readout this feeds is a countdown, not a label, because the only number that matters in the abyss is how
 /// long you have left: at <see cref="RunLimit"/> the ship and the pod are destroyed outright.
@@ -29,26 +21,6 @@ public static class AbyssalSpace
     /// through 32000200, no gaps, nothing outside; 32000000 and 32000201 both 404.]
     /// </summary>
     public static bool IsAbyssalSystem(int solarSystemId) => solarSystemId is >= 32000001 and <= 32000200;
-
-    // Deliberately short: enough to see the clock work, not a complete vocabulary. The full two-layer list (and why
-    // hulls beat adjective prefixes) is in the ET-56 comments. Names that double as normal-space ships — Sentinel,
-    // Warden, Escort, Lancer, Aegis, Upholder, Preserver — are left out on purpose: a false clock in Aphend would
-    // discredit the very readout this exists to check.
-    private static readonly string[] AbyssalNames =
-    [
-        "Tessella", "Tyrannos", "Deepwatcher", "Overmind", "Spearfisher", "Watchman", "Firewatcher",
-        "Obfuscator", "Illuminator", "Confuser", "Dissipator", "Marshal Disparu", "Enforcer Disparu",
-        "Biocombinative Cache", "Bioadaptive Cache", "Extraction SubNode",
-    ];
-
-    // Triglavian hulls that fly in normal space too: a bare "Damavik" proves nothing, "Striking Damavik" does.
-    private static readonly string[] PrefixedHulls = ["Damavik", "Vedmak", "Leshak"];
-
-    /// <summary>Whether a combat target's name says the character is inside the abyss.</summary>
-    public static bool IsAbyssalContact(string? target) =>
-        !string.IsNullOrWhiteSpace(target) &&
-        (AbyssalNames.Any(name => target.Contains(name, StringComparison.OrdinalIgnoreCase)) ||
-         PrefixedHulls.Any(hull => target.IndexOf(hull, StringComparison.OrdinalIgnoreCase) > 0));
 
     /// <summary>
     /// Re-base a fleet mate's anchor onto our own clock. Their anchor and their sample timestamp come from the

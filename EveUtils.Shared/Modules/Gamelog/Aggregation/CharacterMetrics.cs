@@ -67,10 +67,6 @@ public sealed class CharacterMetrics
     {
         lock (_gate)
         {
-            // First abyssal name of this run: the pilot has been inside since the last place we could see them.
-            if (_abyssalAnchor is null && _lastKnownOutsideAt is { } anchor && AbyssalSpace.IsAbyssalContact(target))
-                _abyssalAnchor = anchor;
-
             var miss = quality == HitQuality.Misses || amount <= 0;
             if (miss)
             {
@@ -143,35 +139,52 @@ public sealed class CharacterMetrics
     }
 
     /// <summary>
-    /// A jump or undock: the character is somewhere new, so any abyssal run is over. This is the certain exit, but
-    /// not the usual one — you leave the abyss where you fired the filament, and no line is written there.
-    /// <see cref="EndAbyssalRun"/> is what closes an ordinary run.
+    /// The character's solar system as named by a gamelog jump/undock. Display only: the abyssal clock is driven
+    /// entirely by <see cref="SeenOutside"/> / <see cref="SeenInside"/>, because a log line carries its own age and
+    /// the watcher replays the last one at start-up — an undock from hours ago would otherwise anchor a live run
+    /// (ET-62, measured: a 20:54:17 undock anchored a 21:40:18 run and the clock was born expired).
     /// </summary>
     public void SetLocation(string system, DateTime at)
     {
+        _ = at;
+        lock (_gate)
+            _location = system;
+    }
+
+    /// <summary>
+    /// ESI placed the character outside abyssal space at <paramref name="atUtc"/>. Any run is over, and — just as
+    /// important — this is the moment the NEXT run anchors on: you fire a second filament in space, so nothing is
+    /// written anywhere when you go back in. Polling continuously is what keeps this fresh (ET-62).
+    /// </summary>
+    public void SeenOutside(DateTime atUtc)
+    {
         lock (_gate)
         {
-            _location = system;
-            _lastKnownOutsideAt = at;
             _abyssalAnchor = null;
+            _lastKnownOutsideAt = atUtc;
         }
     }
 
     /// <summary>
-    /// Ends the countdown because ESI placed the character outside the abyss — or, with a null
-    /// <paramref name="seenOutsideUtc"/>, because we stopped watching and no longer know.
-    ///
-    /// Recording the sighting matters as much as clearing the clock: a second filament is fired in space, so a
-    /// follow-up run has no location line to anchor on. See ET-56.
+    /// ESI placed the character inside abyssal space. Opens the countdown at the last moment we could prove they
+    /// were outside, which is at most one poll interval before the real entry — the entry itself is written nowhere.
+    /// Without such a proof there is no run to time, and the readout says so rather than inventing a start.
     /// </summary>
-    public void EndAbyssalRun(DateTime? seenOutsideUtc)
+    public void SeenInside(DateTime atUtc)
     {
+        _ = atUtc;
         lock (_gate)
         {
-            _abyssalAnchor = null;
-            if (seenOutsideUtc is { } outside)
-                _lastKnownOutsideAt = outside;
+            if (_abyssalAnchor is null && _lastKnownOutsideAt is { } anchor)
+                _abyssalAnchor = anchor;
         }
+    }
+
+    /// <summary>Stopped watching (no scope, no token, ESI unreachable): clear the clock rather than let it run on.</summary>
+    public void AbyssalWatchLost()
+    {
+        lock (_gate)
+            _abyssalAnchor = null;
     }
 
     /// <summary>The character's last known solar system (gamelog jump/undock), or null until one is seen.</summary>

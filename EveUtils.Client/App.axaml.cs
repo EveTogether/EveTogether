@@ -43,6 +43,9 @@ public partial class App : Application
             // Global safety net: surface unhandled UI-thread errors as a message box instead of crashing.
             InstallGlobalErrorHandler();
 
+            // Its first reading can raise a toast, which must not touch the dispatcher before this point (ET-62).
+            Program.Services.GetRequiredService<Esi.IAbyssalLocationMonitor>().UiReady();
+
             desktop.MainWindow = mainWindow;
             // Pop-outs (DPS overlays / floating modules / info cards) are shown ownerless so they survive a main-window
             // minimize. Tie app lifetime to the main window so closing it exits even if an ownerless pop-out lingers
