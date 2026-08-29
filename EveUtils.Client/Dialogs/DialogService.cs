@@ -274,6 +274,9 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void ShowEsiMetrics(EsiMetricsViewModel viewModel) =>
         Route(new EsiMetricsWindow(viewModel), "ESI METRICS", "esi");
 
+    public void ShowSettingsSync(SettingsSyncViewModel viewModel) =>
+        Route(new SettingsSyncWindow(viewModel), "EVE SETTINGS SYNC", "tools");
+
     public void ShowFitBrowser(FitBrowserViewModel viewModel) =>
         Route(new FitBrowserWindow(viewModel), "FIT BROWSER", "fits");
 

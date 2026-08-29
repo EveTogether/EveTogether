@@ -60,6 +60,13 @@ public sealed class EveClientPresenceService(ILogger<EveClientPresenceService> l
         }
     }
 
+    /// <summary>
+    /// How many EVE clients are running right now, counted fresh rather than read from the 5 s sweep — a caller
+    /// about to overwrite settings files needs the state of this second, and unlike <see cref="Current"/> this also
+    /// counts a client sitting on the login screen with nobody logged in (ET-59).
+    /// </summary>
+    public int RunningClientCount() => _probe.RunningClientCount();
+
     /// <summary>One probe sweep + the change gate. Normally driven by the poll loop; public so a test (or a
     /// future "refresh now" action) can drive sweeps without the timer.</summary>
     public void PollOnce()

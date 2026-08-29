@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.Versioning;
 
 namespace EveUtils.Client.Platform;
@@ -17,6 +18,18 @@ public sealed class MacEveClientProbe : IEveClientProbe
     public EveClientEvidence Probe()
     {
         var ids = new HashSet<int>();
+        foreach (var line in _CommandLines())
+            if (EveClientTitleParser.CharacterIdFromCommandLine(line) is { } id)
+                ids.Add(id);
+
+        return new EveClientEvidence(new HashSet<string>(StringComparer.OrdinalIgnoreCase), ids);
+    }
+
+    public int RunningClientCount() =>
+        _CommandLines().Count(EveClientTitleParser.IsEveClientCommandLine);
+
+    private static IReadOnlyList<string> _CommandLines()
+    {
         try
         {
             using var process = Process.Start(new ProcessStartInfo("ps", "-axo command=")
@@ -26,21 +39,17 @@ public sealed class MacEveClientProbe : IEveClientProbe
                 CreateNoWindow = true
             });
             if (process is null)
-                return EveClientEvidence.Empty;
+                return [];
 
             var output = process.StandardOutput.ReadToEnd();
             process.WaitForExit(2000);
-
-            foreach (var line in output.Split('\n'))
-                if (EveClientTitleParser.CharacterIdFromCommandLine(line) is { } id)
-                    ids.Add(id);
+            return output.Split('\n');
         }
         catch
         {
             // Best-effort: no ps output reads as "no client detected".
+            return [];
         }
-
-        return new EveClientEvidence(new HashSet<string>(StringComparer.OrdinalIgnoreCase), ids);
     }
 
     // Focusing a specific client window would need AppleScript + the Accessibility permission, too fragile to wire

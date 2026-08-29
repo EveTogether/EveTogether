@@ -34,6 +34,22 @@ public sealed class WindowsEveClientProbe : IEveClientProbe
         return new EveClientEvidence(names, new HashSet<int>());
     }
 
+    public int RunningClientCount()
+    {
+        try
+        {
+            var processes = Process.GetProcessesByName(ClientProcessName);
+            foreach (var process in processes)
+                process.Dispose();
+            return processes.Length;
+        }
+        catch
+        {
+            // Best-effort like Probe(): an unreadable process list reads as "saw none".
+            return 0;
+        }
+    }
+
     public bool Activate(string characterName)
     {
         try

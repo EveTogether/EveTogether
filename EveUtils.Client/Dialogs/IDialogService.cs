@@ -158,6 +158,10 @@ public interface IDialogService
     /// updating live while it is open.</summary>
     void ShowEsiMetrics(EsiMetricsViewModel viewModel);
 
+    /// <summary>Opens the EVE Settings Sync tool as a hosted module — a docked tab or a floating window, like the
+    /// other feature modules. Non-modal: the tool re-reads the folder itself when the user reloads.</summary>
+    void ShowSettingsSync(SettingsSyncViewModel viewModel);
+
     /// <summary>Shows the FITS fit-browser window non-modally so the Local library and server tabs stay
     /// usable alongside it.</summary>
     void ShowFitBrowser(FitBrowserViewModel viewModel);

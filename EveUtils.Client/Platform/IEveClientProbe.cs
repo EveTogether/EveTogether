@@ -33,6 +33,14 @@ public interface IEveClientProbe
 {
     EveClientEvidence Probe();
 
+    /// <summary>
+    /// How many EVE client processes are running right now, whether or not anyone is logged in on them. The
+    /// evidence above only sees clients with a character in-game; a client parked on the login or character-select
+    /// screen is invisible to it and still rewrites its settings files on exit. Anything that overwrites those
+    /// files has to ask this instead (ET-59). Best-effort like the rest: 0 means "saw none".
+    /// </summary>
+    int RunningClientCount();
+
     /// <summary>Bring the running EVE client for the given character to the foreground (eve-o-preview style:
     /// restore if minimized, then focus). Returns true if a matching window was found and focused. Best-effort —
     /// never throws, and returns false on platforms/states where the window can't be targeted.</summary>
@@ -43,5 +51,6 @@ public interface IEveClientProbe
 public sealed class NullEveClientProbe : IEveClientProbe
 {
     public EveClientEvidence Probe() => EveClientEvidence.Empty;
+    public int RunningClientCount() => 0;
     public bool Activate(string characterName) => false;
 }
