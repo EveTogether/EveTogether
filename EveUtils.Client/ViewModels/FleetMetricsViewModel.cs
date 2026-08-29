@@ -439,7 +439,12 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
                 Track(sample.CharacterId).SetRate(sample.Kind, sample.Value);
                 break;
             case MetricKind.Location:
-                Track(sample.CharacterId).Location = sample.Text;
+                var row = Track(sample.CharacterId);
+                row.Location = sample.Text;
+                row.AbyssalAnchorUtc = sample.Value > 0
+                    ? DateTimeOffset.FromUnixTimeMilliseconds((long)sample.Value).UtcDateTime
+                    : null;
+                row.RefreshLocationDisplay(); // 1 Hz path: the countdown moves even when system and anchor do not
                 break;
             case MetricKind.Bounty:
                 Track(sample.CharacterId).Bounty = (long)sample.Value;

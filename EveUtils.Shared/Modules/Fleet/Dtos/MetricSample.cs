@@ -7,7 +7,9 @@ namespace EveUtils.Shared.Modules.Fleet.Dtos;
 /// is the numeric figure for a Rate/Cumulative kind. A State kind (e.g. <see cref="MetricKind.Location"/>) instead
 /// carries its label directly in <see cref="Text"/> — the gamelog reports the solar-system <i>name</i>, and the SDE
 /// store holds no universe data to resolve an id, so the name travels as-is (serialized as JSON over the wire, so an
-/// optional field is backward-compatible). <see cref="FleetId"/> scopes delivery to that fleet's active participants
+/// optional field is backward-compatible). For <see cref="MetricKind.Location"/> the otherwise unused
+/// <see cref="Value"/> carries the abyssal countdown's anchor as unix milliseconds, or 0 when no run is under way.
+/// <see cref="FleetId"/> scopes delivery to that fleet's active participants
 /// <see cref="UnixMs"/> orders samples on the receiver's live graph.
 /// </summary>
 public sealed record MetricSample(int CharacterId, long FleetId, MetricKind Kind, double Value, long UnixMs, string? Text = null);

@@ -23,8 +23,14 @@ public partial class CharacterMetricsRowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(LocationDisplay))]
     private string _location = "—";
 
+    /// <summary>When this character's abyssal countdown started, or null when they are not in one.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LocationDisplay))]
+    private DateTime? _abyssalAnchorUtc;
+
     /// <summary>The one text this row's location readout binds to — same seam as <see cref="DpsViewModel.LocationDisplay"/>.</summary>
-    public string LocationDisplay => Location;
+    public string LocationDisplay =>
+        AbyssalSpace.Describe(Location, AbyssalAnchorUtc, DateTime.UtcNow) ?? Location;
     [ObservableProperty] private string _bounty = "0 ISK";
     [ObservableProperty] private string _kills = "0";
     [ObservableProperty] private string _iskPerHour = "—";
@@ -79,6 +85,8 @@ public partial class CharacterMetricsRowViewModel : ViewModelBase
         Bounty = $"{s.BountyTotal:N0} ISK";
         Kills = s.Kills.ToString();
         Location = s.Location ?? "—";
+        AbyssalAnchorUtc = s.AbyssalAnchor;
+        OnPropertyChanged(nameof(LocationDisplay)); // 1 Hz path: the countdown moves even when nothing else does
         IskPerHour = s.Duration.TotalMinutes < 1 ? "—" : $"{s.IskPerHour:N0} ISK/h";
         HitRate = s.Shots == 0 ? "—" : $"{s.HitRate * 100:0}%  ({s.Hits}/{s.Shots})";
         Damage = $"dealt {s.TotalDealt:N0} · received {s.TotalReceived:N0}";

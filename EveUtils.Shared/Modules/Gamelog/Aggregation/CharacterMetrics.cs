@@ -29,7 +29,8 @@ public sealed record CharacterMetricsSnapshot(
     long RepairedOut,
     long RepairedIn,
     long NeutOut,
-    long NeutIn)
+    long NeutIn,
+    DateTime? AbyssalAnchor)
 {
     public int Shots => Hits + Misses;
     public double HitRate => Shots == 0 ? 0 : (double)Hits / Shots;
@@ -56,12 +57,18 @@ public sealed class CharacterMetrics
     private long _dealt, _received, _bounty, _repairedOut, _repairedIn, _neutOut, _neutIn;
     private int _hits, _misses, _kills;
     private string? _location;
+    private DateTime? _lastLocationAt;
+    private DateTime? _abyssalAnchor;
     private double _peakDealtDps;
 
     public void RecordCombat(DamageDirection direction, int amount, string target, HitQuality quality)
     {
         lock (_gate)
         {
+            // First abyssal name of this run: the pilot has been inside since the last place we could see them.
+            if (_abyssalAnchor is null && _lastLocationAt is { } anchor && AbyssalSpace.IsAbyssalContact(target))
+                _abyssalAnchor = anchor;
+
             var miss = quality == HitQuality.Misses || amount <= 0;
             if (miss)
             {
@@ -133,16 +140,34 @@ public sealed class CharacterMetrics
         }
     }
 
-    public void SetLocation(string system)
+    /// <summary>
+    /// A jump or undock: the character is somewhere new, so any abyssal run is over. Docking is not covered — the
+    /// log has no dock line — but a run that outlives its 20 minutes reads as "--:--" rather than as a live clock.
+    /// </summary>
+    public void SetLocation(string system, DateTime at)
     {
         lock (_gate)
+        {
             _location = system;
+            _lastLocationAt = at;
+            _abyssalAnchor = null;
+        }
     }
 
     /// <summary>The character's last known solar system (gamelog jump/undock), or null until one is seen.</summary>
     public string? Location
     {
         get { lock (_gate) return _location; }
+    }
+
+    /// <summary>
+    /// When the abyssal countdown started, or null when no run is under way. This is the last location the log
+    /// placed the character at, never the first abyssal shot: the shot is minutes into a run that already started,
+    /// and anchoring there would show more time left than the pilot has.
+    /// </summary>
+    public DateTime? AbyssalAnchor
+    {
+        get { lock (_gate) return _abyssalAnchor; }
     }
 
     public void RecordNotify(DateTime at, string message)
@@ -177,7 +202,7 @@ public sealed class CharacterMetrics
                 new Dictionary<HitQuality, int>(_qualities), enemies,
                 _bounty, _kills, _location, _peakDealtDps,
                 DateTime.UtcNow - _sessionStart, recent,
-                _mining.Totals(), _mining.TotalUnits, _repairedOut, _repairedIn, _neutOut, _neutIn);
+                _mining.Totals(), _mining.TotalUnits, _repairedOut, _repairedIn, _neutOut, _neutIn, _abyssalAnchor);
         }
     }
 }
