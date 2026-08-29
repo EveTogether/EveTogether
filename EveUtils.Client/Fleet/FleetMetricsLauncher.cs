@@ -22,6 +22,6 @@ internal sealed class FleetMetricsLauncher(
             return;
 
         var client = new ServerFleetClient(fleets, serverAddress, actingCharacterId);
-        dialogs.ShowFleetMetrics(new FleetMetricsViewModel(services, client, fleet));
+        dialogs.ShowFleetMetrics(new FleetMetricsViewModel(services, client, fleet, actingCharacterId));
     }
 }

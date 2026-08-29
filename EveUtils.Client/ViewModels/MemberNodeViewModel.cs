@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Fleet;
@@ -12,7 +13,7 @@ namespace EveUtils.Client.ViewModels;
 /// directly on this member. The same instance also backs a level commander shown in a node header, so the node menu
 /// can reuse its move/unassign/cascade.
 /// </summary>
-public sealed class MemberNodeViewModel
+public sealed class MemberNodeViewModel : IFleetMemberMenuHost
 {
     private readonly MemberSkillBadge? _skillBadge;
 
@@ -21,7 +22,8 @@ public sealed class MemberNodeViewModel
         IReadOnlyList<MoveTargetViewModel> moveTargets,
         IAsyncRelayCommand unassignCommand, IAsyncRelayCommand removeFromFleetCommand,
         IAsyncRelayCommand transferOwnershipCommand, IAsyncRelayCommand assignFitCommand,
-        IAsyncRelayCommand openFitCommand, MemberSkillBadge? skillBadge = null)
+        IAsyncRelayCommand openFitCommand, MemberSkillBadge? skillBadge = null,
+        string? shipName = null)
     {
         Member = member;
         IsOwner = isOwner;
@@ -50,7 +52,17 @@ public sealed class MemberNodeViewModel
         };
         var externalSuffix = member.IsExternal ? " (extern)" : string.Empty;
         Label = $"{displayName} — {roleLabel}{externalSuffix}";
+
+        // The same pilot summary fleet metrics shows, built from the same place — here it hangs under a "Pilot
+        // details" submenu because this menu already carries the roster's own structure actions. No remove action:
+        // the roster menu has had its own "Remove from fleet" since E2, and it runs the same shared flow.
+        MemberMenu = FleetMemberMenu.Build(
+            new FleetMemberFacts(displayName, member.Role, member.IsExternal, shipName, member.AssignedFit?.FitName),
+            DateTimeOffset.UtcNow);
     }
+
+    /// <summary>The shared fleet-member information block (ET-44) — the roster's facts, no live metrics.</summary>
+    public IReadOnlyList<FleetMemberMenuItemViewModel> MemberMenu { get; }
 
     public FleetMemberInfo Member { get; }
     public string Label { get; }

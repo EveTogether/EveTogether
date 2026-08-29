@@ -69,7 +69,20 @@ internal sealed class FakeFleetClient : IFleetClient
     public Task<(bool Ok, string Message)> AddExternalMemberAsync(long fleetId, int characterId) => Ok();
     public Task<(bool Ok, string Message, long InviteId)> CreateInviteAsync(long fleetId, int inviteeCharacterId, FleetRole role, long wingId, long squadId, string? message) => OkId();
     public Task<(bool Ok, string Message)> TransferFleetOwnershipAsync(long fleetId, int newOwnerCharacterId) => Ok();
-    public Task<(bool Ok, string Message)> RemoveFleetMemberAsync(long memberId) => Ok();
+
+    /// <summary>The member ids a screen asked to remove, so a test can assert the removal reached the transport.</summary>
+    public List<long> RemovedMemberIds { get; } = [];
+
+    /// <summary>Set to make the removal fail, standing in for the server refusing it (a non-owner, the creator).</summary>
+    public string? RemoveFailure { get; set; }
+
+    public Task<(bool Ok, string Message)> RemoveFleetMemberAsync(long memberId)
+    {
+        if (RemoveFailure is { } failure)
+            return Task.FromResult((false, failure));
+        RemovedMemberIds.Add(memberId);
+        return Ok();
+    }
 
     /// <summary>The (fleet, character) pairs the window asked to leave, so a test can assert which of my
     /// characters left.</summary>

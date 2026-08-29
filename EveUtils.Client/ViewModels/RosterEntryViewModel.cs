@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using EveUtils.Client.Fleet;
 using EveUtils.Shared.Modules.Fleet.Entities;
 
@@ -8,7 +9,7 @@ namespace EveUtils.Client.ViewModels;
 /// join-request, each with a status badge. Accepted members carry their <see cref="Member"/> so the move action can
 /// target them; pending rows are informational (answered via invite flow / inbox).
 /// </summary>
-public sealed class RosterEntryViewModel
+public sealed class RosterEntryViewModel : IFleetMemberMenuHost
 {
     private RosterEntryViewModel(
         string name, string badge, bool isAccepted, FleetMemberInfo? member, long? joinRequestId,
@@ -45,6 +46,10 @@ public sealed class RosterEntryViewModel
 
     /// <summary>True when this row carries the owner's manage menu (accepted member, viewed by the owner).</summary>
     public bool CanManage => Node is { IsOwner: true };
+
+    /// <summary>The shared fleet-member information block, mirrored from the node so the left list's menu carries
+    /// the same pilot summary as the tree's (ET-44). Empty for a pending invite/request row.</summary>
+    public IReadOnlyList<FleetMemberMenuItemViewModel> MemberMenu => Node?.MemberMenu ?? [];
 
     public static RosterEntryViewModel Accepted(FleetMemberInfo member, string name, MemberNodeViewModel node) =>
         new(name, PositionBadge(member), isAccepted: true, member, null, node);

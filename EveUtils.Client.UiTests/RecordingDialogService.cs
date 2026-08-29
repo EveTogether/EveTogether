@@ -102,10 +102,16 @@ public sealed class RecordingDialogService : IDialogService
     public Func<string, string, Task<bool>>? OnConfirm { get; set; }
     public string? LastConfirmTitle { get; private set; }
     public string? LastConfirmMessage { get; private set; }
+
+    /// <summary>Every confirm asked for, in order — a flow that asks a second question (remove here, then kick
+    /// in-game) is only pinned down by the sequence, not by the last one.</summary>
+    public List<(string Title, string Message)> ConfirmPrompts { get; } = [];
+
     public Task<bool> ConfirmAsync(string title, string message, string okText = "Delete")
     {
         LastConfirmTitle = title;
         LastConfirmMessage = message;
+        ConfirmPrompts.Add((title, message));
         return OnConfirm is null ? throw NotUsed() : OnConfirm(title, message);
     }
     public Task ShowCharacterAsync(CharacterDialogViewModel viewModel) => throw NotUsed();

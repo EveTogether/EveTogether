@@ -206,6 +206,10 @@
                                          has no structure node, so this row is their only manage surface. -->
                                     <Grid.ContextMenu>
                                         <ContextMenu IsVisible="{Binding CanManage}">
+                                            <!-- The shared pilot summary (ET-44). A submenu here rather than inline:
+                                                 this menu already carries the roster's structure actions. -->
+                                            <MenuItem Header="Pilot details" ItemsSource="{Binding MemberMenu}"
+                                                      ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>
                                             <MenuItem Header="Assign fit…" Command="{Binding Node.AssignFitCommand}"/>
                                             <MenuItem Header="Move to…" ItemsSource="{Binding Node.MoveTargets}"
                                                       ItemContainerTheme="{StaticResource MoveMenuItemTheme}"/>
@@ -392,6 +396,8 @@
                                     <TextBlock Text="{Binding Label}" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center">
                                         <TextBlock.ContextMenu>
                                             <ContextMenu IsVisible="{Binding IsOwner}">
+                                                <MenuItem Header="Pilot details" ItemsSource="{Binding MemberMenu}"
+                                                          ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>
                                                 <MenuItem Header="Assign fit…" Command="{Binding AssignFitCommand}"/>
                                                 <MenuItem Header="Move to…" ItemsSource="{Binding MoveTargets}"
                                                           ItemContainerTheme="{StaticResource MoveMenuItemTheme}"/>
