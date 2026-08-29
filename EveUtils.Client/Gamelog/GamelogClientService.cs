@@ -109,6 +109,19 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
             return;
         _nameById[characterId] = name;
         _idByName[name] = characterId;
+
+        // ESI is the only source that can see either end of an abyssal run, so the watch runs for the whole session
+        // rather than being triggered by a run the gamelog cannot reliably recognise (ET-62). Idempotent per character.
+        var metrics = Metrics(name);
+        _services.GetService<IAbyssalLocationMonitor>()?.Watch(characterId, (inside, at) =>
+        {
+            if (inside is null)
+                metrics.AbyssalWatchLost();
+            else if (inside.Value)
+                metrics.SeenInside(at);
+            else
+                metrics.SeenOutside(at);
+        });
     }
 
     private async Task RefreshRegistryMapAsync()
@@ -146,15 +159,10 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         var at = occurredAt ?? DateTime.UtcNow;
         Tracker(name).Add(at, direction, amount);
         var metrics = Metrics(name);
-        var wasInAbyss = metrics.AbyssalAnchor is not null;
         metrics.RecordCombat(direction, amount, target, quality);
 
         var ownerId = _idByName.TryGetValue(name, out var id) ? id : (int?)null;
 
-        // A run just opened. The log can see the way in but never the way out, so hand the ending to ESI — and only
-        // from here, so nothing is polled between runs.
-        if (!wasInAbyss && metrics.AbyssalAnchor is not null && ownerId is { } abyssalCharacter)
-            _services.GetService<IAbyssalLocationMonitor>()?.Start(abyssalCharacter, metrics.EndAbyssalRun);
         using (var scope = _services.CreateScope())
         {
             var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
@@ -411,15 +419,11 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         }
     }
 
-    /// <summary>Update a character's current solar system from a gamelog jump/undock, at the log line's own time —
-    /// that timestamp is what the abyssal countdown anchors on.</summary>
+    /// <summary>Update a character's current solar system from a gamelog jump/undock. The name only: the abyssal
+    /// clock is driven by the ESI watch, which sees both ends of a run and cannot be handed a stale timestamp.</summary>
     public void SetLocation(string characterName, string system, DateTime at)
     {
-        var name = Resolve(characterName);
-        Metrics(name).SetLocation(system, at);
-        // A jump or undock already proves the pilot is out, so there is nothing left for the monitor to find.
-        if (_idByName.TryGetValue(name, out var characterId))
-            _services.GetService<IAbyssalLocationMonitor>()?.Stop(characterId);
+        Metrics(Resolve(characterName)).SetLocation(system, at);
         MetricsChanged?.Invoke();
     }
 

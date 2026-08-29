@@ -13,9 +13,9 @@ using Xunit;
 namespace EveUtils.Client.UiTests;
 
 /// <summary>
-/// ET-56: the gamelog sees a pilot enter the abyss but never leave — you come out where you fired the filament and
-/// nothing is written there. ESI is what ends a run, and these cover the endings: seen outside, a false start taken
-/// back, and the two refusals no retry can fix.
+/// ET-62: ESI is the only source that can see either end of an abyssal run — a filament writes nothing when it pulls
+/// you in, and you leave where you fired it. So the watch runs for the whole session and reports every reading, and
+/// these cover what it reports: inside, outside, and the refusals that mean it can report nothing at all.
 /// </summary>
 public class AbyssalLocationMonitorTests
 {
@@ -40,59 +40,59 @@ public class AbyssalLocationMonitorTests
         Assert.False(AbyssalSpace.IsAbyssalSystem(Aphend));
     }
 
+    /// <summary>Every reading is reported, so the entry and the exit are both observed rather than inferred.</summary>
     [Fact]
-    public async Task SeenOutside_EndsTheRun_AndRecordsWhenWeSawIt()
-    {
-        var locations = new FakeLocationClient(AbyssalRoom, AbyssalRoom, Aphend);
-        var monitor = Build(locations, out _);
-
-        DateTime? endedWith = null;
-        var ended = false;
-        var before = DateTime.UtcNow;
-
-        await monitor.WatchAsync(1, seen => { endedWith = seen; ended = true; }, CancellationToken.None);
-
-        Assert.True(ended);
-        Assert.Equal(3, locations.Calls);
-        // Not just "cleared": the sighting is the anchor a follow-up run has to use, since a second filament is fired
-        // in space and writes no location line.
-        Assert.NotNull(endedWith);
-        Assert.InRange(endedWith!.Value, before, DateTime.UtcNow);
-    }
-
-    /// <summary>
-    /// The gamelog's name list is deliberately short, so a normal-space fight can open a run that never happened.
-    /// Before ESI there was no way to notice; now the first poll takes it back.
-    /// </summary>
-    [Fact]
-    public async Task AFalseStartFromTheGamelog_IsTakenBackByTheFirstPoll()
-    {
-        var locations = new FakeLocationClient(Aphend);
-        var monitor = Build(locations, out _);
-
-        var ended = false;
-        await monitor.WatchAsync(1, _ => ended = true, CancellationToken.None);
-
-        Assert.True(ended);
-        Assert.Equal(1, locations.Calls);
-    }
-
-    [Fact]
-    public async Task WhileStillInside_TheRunIsLeftAlone()
+    public async Task BothEndsOfARun_AreReported()
     {
         using var cts = new CancellationTokenSource();
-        var locations = new FakeLocationClient(AbyssalRoom, AbyssalRoom) { CancelAfter = (2, cts) };
+        var locations = new FakeLocationClient(Aphend, AbyssalRoom, AbyssalRoom, Aphend) { CancelAfter = (4, cts) };
         var monitor = Build(locations, out _);
 
-        var ended = false;
-        await monitor.WatchAsync(1, _ => ended = true, cts.Token);
+        var seen = new List<bool?>();
+        await monitor.WatchAsync(1, (inside, _) => seen.Add(inside), cts.Token);
 
-        Assert.False(ended);
+        Assert.Equal([false, true, true, false], seen);
     }
 
     /// <summary>
-    /// No scope means no way to see the pilot come out, so the countdown will run to its end. That is worth saying out
-    /// loud, and the toast carries the one action that fixes it — which is also why it must not auto-dismiss.
+    /// The regression ET-62 exists for. The old watch stopped the moment it saw the pilot outside, so nothing looked
+    /// at them again until a run was already under way — and the countdown then anchored on however long ago that
+    /// was. Measured 2026-08-29: 46 minutes, and the clock read "--:--" for the whole run.
+    /// </summary>
+    [Fact]
+    public async Task SeeingThemOutside_DoesNotStopTheWatch()
+    {
+        using var cts = new CancellationTokenSource();
+        var locations = new FakeLocationClient(Aphend, Aphend, Aphend, AbyssalRoom) { CancelAfter = (4, cts) };
+        var monitor = Build(locations, out _);
+
+        var seen = new List<bool?>();
+        await monitor.WatchAsync(1, (inside, _) => seen.Add(inside), cts.Token);
+
+        // The old behaviour ended here after one call, with `seen` holding a single entry.
+        Assert.Equal(4, locations.Calls);
+        Assert.Equal(true, seen[^1]);
+    }
+
+    /// <summary>The sighting time is what the next run anchors on, so it has to be the moment of the reading.</summary>
+    [Fact]
+    public async Task EachReading_IsStampedWhenItWasTaken()
+    {
+        using var cts = new CancellationTokenSource();
+        var locations = new FakeLocationClient(Aphend, AbyssalRoom) { CancelAfter = (2, cts) };
+        var monitor = Build(locations, out _);
+
+        var before = DateTime.UtcNow;
+        var stamps = new List<DateTime>();
+        await monitor.WatchAsync(1, (_, at) => stamps.Add(at), cts.Token);
+
+        Assert.Equal(2, stamps.Count);
+        Assert.All(stamps, at => Assert.InRange(at, before, DateTime.UtcNow));
+    }
+
+    /// <summary>
+    /// No scope means no abyssal detection at all now — there is no gamelog fallback left. That is worth saying out
+    /// loud, and the toast carries the one action that fixes it, which is also why it must not auto-dismiss.
     /// </summary>
     [Fact]
     public async Task WithoutTheLocationScope_ItStopsAndOffersToFixIt()
@@ -100,7 +100,8 @@ public class AbyssalLocationMonitorTests
         var locations = new FakeLocationClient { Error = EsiErrorKind.ScopeMissing };
         var monitor = Build(locations, out var toasts);
 
-        await monitor.WatchAsync(1, _ => { }, CancellationToken.None);
+        var seen = new List<bool?>();
+        await monitor.WatchAsync(1, (inside, _) => seen.Add(inside), CancellationToken.None);
 
         var toast = Assert.Single(toasts.ActionToasts);
         Assert.Equal("No abyssal detection", toast.Title);
@@ -108,8 +109,9 @@ public class AbyssalLocationMonitorTests
         Assert.Contains(toast.Actions, a => a.Style == ToastActionStyle.Affirmative);
 
         // One call, not a poll loop: the pre-flight refuses a missing scope without sending anything, and repeating it
-        // would only burn ESI budget.
+        // would only burn ESI budget. And the clock is cleared rather than left frozen on its last anchor.
         Assert.Equal(1, locations.Calls);
+        Assert.Equal([null], seen);
     }
 
     [Fact]
@@ -119,38 +121,83 @@ public class AbyssalLocationMonitorTests
         var monitor = Build(locations, out var toasts);
 
         for (var run = 0; run < 3; run++)
-            await monitor.WatchAsync(1, _ => { }, CancellationToken.None);
+            await monitor.WatchAsync(1, (_, _) => { }, CancellationToken.None);
 
         Assert.Single(toasts.ActionToasts);
     }
 
     /// <summary>
     /// A 5xx or a timeout says nothing about where the pilot is, and dropping the clock on one is the failure that
-    /// costs a ship. Only a refusal no retry can fix stops the watch.
+    /// costs a ship. Only a refusal no retry can fix stops the watch immediately.
     /// </summary>
     [Fact]
     public async Task ATransientFailure_DoesNotStopTheWatch()
     {
-        var locations = new FakeLocationClient(AbyssalRoom, Aphend) { FailFirst = EsiErrorKind.ServerError };
+        using var cts = new CancellationTokenSource();
+        var locations = new FakeLocationClient(AbyssalRoom, Aphend) { FailFirst = EsiErrorKind.ServerError, CancelAfter = (3, cts) };
         var monitor = Build(locations, out var toasts);
 
-        var ended = false;
-        await monitor.WatchAsync(1, _ => ended = true, CancellationToken.None);
+        var seen = new List<bool?>();
+        await monitor.WatchAsync(1, (inside, _) => seen.Add(inside), cts.Token);
 
-        Assert.True(ended);
+        Assert.Equal([true, false], seen);
         Assert.Empty(toasts.Toasts);
+    }
+
+    /// <summary>Unbroken failure is different: a watch that can read nothing must not leave a clock standing.</summary>
+    [Fact]
+    public async Task UnbrokenFailure_GivesUpAndClearsTheClock()
+    {
+        var locations = new FakeLocationClient { Error = EsiErrorKind.ServerError };
+        var monitor = Build(locations, out _);
+
+        var seen = new List<bool?>();
+        await monitor.WatchAsync(1, (inside, _) => seen.Add(inside), CancellationToken.None);
+
+        Assert.Equal([null], seen);
+        Assert.InRange(locations.Calls, 20, 22);
     }
 
     private static AbyssalLocationMonitor Build(FakeLocationClient locations, out RecordingToastService toasts)
     {
         toasts = new RecordingToastService();
-        return new AbyssalLocationMonitor(locations, toasts, new ServiceCollection().BuildServiceProvider(),
+        var monitor = new AbyssalLocationMonitor(locations, toasts, new ServiceCollection().BuildServiceProvider(),
             NullLogger<AbyssalLocationMonitor>.Instance)
         {
-            // The real values are 6 s and 20 minutes; the logic under test is the same at these.
+            // The real value is 6 s; the logic under test is the same at this one.
             PollInterval = TimeSpan.FromMilliseconds(1),
-            WatchTimeout = TimeSpan.FromMilliseconds(200),
         };
+        monitor.UiReady();
+        return monitor;
+    }
+
+    /// <summary>
+    /// Regression: the watch starts while the app is still booting, and a character without the scope refuses on its
+    /// first poll and raises a toast. Reading Avalonia's dispatcher before the UI thread owns it binds it to the
+    /// wrong thread, and the app's own start-up then dies on VerifyAccess — measured 2026-08-30, no window at all.
+    /// </summary>
+    [Fact]
+    public async Task NoPollHappens_BeforeTheUiIsReady()
+    {
+        var locations = new FakeLocationClient(Aphend);
+        var monitor = new AbyssalLocationMonitor(locations, new RecordingToastService(),
+            new ServiceCollection().BuildServiceProvider(), NullLogger<AbyssalLocationMonitor>.Instance)
+        {
+            PollInterval = TimeSpan.FromMilliseconds(1),
+        };
+
+        using var cts = new CancellationTokenSource();
+        var watching = monitor.WatchAsync(1, (_, _) => { }, cts.Token);
+
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        Assert.Equal(0, locations.Calls);   // still gated
+
+        monitor.UiReady();
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        await cts.CancelAsync();
+        await watching;
+
+        Assert.True(locations.Calls > 0, "the watch must start once the UI is ready");
     }
 
     private sealed class FakeLocationClient(params int[] systems) : IEsiLocationClient

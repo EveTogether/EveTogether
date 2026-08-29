@@ -13,11 +13,18 @@ using Microsoft.Extensions.Logging;
 namespace EveUtils.Client.Esi;
 
 /// <summary>
-/// Watches <c>/characters/{id}/location/</c> for one abyssal run, and only then.
+/// Watches <c>/characters/{id}/location/</c> for as long as the app is running, for every character that granted the
+/// location scope.
 ///
-/// The gamelog can see a pilot go in but never come out — you leave where you fired the filament, so nothing is
-/// written there. ESI can: the first poll outside <see cref="AbyssalSpace.IsAbyssalSystem"/> ends the run. Starting
-/// on the log keeps this to one run's worth of calls instead of polling all evening. See ET-56.
+/// ET-62 moved abyssal detection here wholesale. The gamelog cannot see the way in OR the way out — a filament writes
+/// nothing, and you leave where you fired it — so the log could only ever guess at a run from the names that shot
+/// back, and could only ever anchor the clock on the last place it happened to see the pilot. Measured 2026-08-29:
+/// an undock at 20:54:17 was still anchoring a run that started at 21:40:18, so the countdown was born 25:51 past its
+/// own end and read "--:--" for the whole run.
+///
+/// Polling continuously removes the guess on both sides. <see cref="AbyssalSpace.IsAbyssalSystem"/> is a closed,
+/// enumerated id range, so entry and exit are observed rather than inferred, and the anchor is never older than one
+/// <see cref="PollInterval"/> — the floor the "+" promises becomes tight instead of unbounded.
 /// </summary>
 public sealed class AbyssalLocationMonitor(
     IEsiLocationClient locations,
@@ -25,22 +32,12 @@ public sealed class AbyssalLocationMonitor(
     IServiceProvider services,
     ILogger<AbyssalLocationMonitor> logger) : IAbyssalLocationMonitor, ISingletonService, IDisposable
 {
-    // Both are init-only so tests can shrink them; a suite cannot wait on real abyssal timings.
-
     /// <summary>
     /// 6 s, not the 5 s ESI caches this endpoint for: polling on the TTL re-serves the same cached body about half
     /// the time, so a hair over it makes every call a fresh reading. Same figure EVE Workbench's tracker settled on.
+    /// Init-only so tests can shrink it; a suite cannot wait on real abyssal timings.
     /// </summary>
     internal TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(6);
-
-    /// <summary>
-    /// How long to keep watching before giving up. NOT the countdown: that is <see cref="AbyssalSpace.RunLimit"/>,
-    /// counted from the last moment the pilot was proven outside. This one is counted from when the watch STARTS,
-    /// which is the first abyssal shot in the log — up to 3.5 minutes into the run (measured 2026-08-29). The exit
-    /// therefore always falls inside 20 minutes of here, usually well inside, so the same number is a roomy net
-    /// rather than a deadline.
-    /// </summary>
-    internal TimeSpan WatchTimeout { get; init; } = TimeSpan.FromMinutes(20);
 
     // ~2 minutes of unbroken failure at the poll interval. Transient trouble must not drop a clock mid-run, but a
     // monitor that cannot read anything is only burning ESI budget. (EVE Workbench uses 20 at 6 s for the same call.)
@@ -48,16 +45,25 @@ public sealed class AbyssalLocationMonitor(
 
     private readonly ConcurrentDictionary<int, CancellationTokenSource> _running = new();
 
-    // One warning per character per session. Runs come in threes on an evening and the toast persists until it is
-    // answered, so repeating it would nag rather than inform; a restart is a fair moment to mention it again.
+    // The watch now starts while the app is still booting, and a character without the scope refuses on its very
+    // first poll — which raises a toast. Touching Avalonia's dispatcher before the UI thread owns it binds it to
+    // whatever thread got there first, and the real startup then dies on VerifyAccess. So every watch waits here.
+    private readonly TaskCompletionSource _uiReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>The UI exists; watches may start polling (and may raise a toast). Idempotent.</summary>
+    public void UiReady() => _uiReady.TrySetResult();
+
+    // One warning per character per session. The watch runs all evening now, so without this the same toast would
+    // return every time the failure counter trips; a restart is a fair moment to mention it again.
     private readonly ConcurrentDictionary<int, byte> _warned = new();
 
     /// <summary>
-    /// Starts watching <paramref name="characterId"/> until it is seen outside the abyss, at which point
-    /// <paramref name="onRunEnded"/> is called with the moment of that sighting — or with null when the monitor gives
-    /// up, so a stale countdown is cleared either way. Starting a character that is already watched does nothing.
+    /// Starts watching <paramref name="characterId"/> for the rest of the session. <paramref name="onPresence"/> is
+    /// called after every reading: <c>true</c> = inside abyssal space, <c>false</c> = outside (which is also the
+    /// anchor the next run will use), <c>null</c> = the watch was lost and no clock can be trusted. Watching a
+    /// character that is already watched does nothing.
     /// </summary>
-    public void Start(int characterId, Action<DateTime?> onRunEnded)
+    public void Watch(int characterId, Action<bool?, DateTime> onPresence)
     {
         var cts = new CancellationTokenSource();
         if (!_running.TryAdd(characterId, cts))
@@ -66,7 +72,7 @@ public sealed class AbyssalLocationMonitor(
             return;
         }
 
-        _ = Task.Run(() => WatchAsync(characterId, onRunEnded, cts.Token), CancellationToken.None);
+        _ = Task.Run(() => WatchAsync(characterId, onPresence, cts.Token), CancellationToken.None);
     }
 
     public void Stop(int characterId)
@@ -77,51 +83,40 @@ public sealed class AbyssalLocationMonitor(
         cts.Dispose();
     }
 
-    /// <summary>The watch itself. <see cref="Start"/> is only the fire-and-forget wrapper; tests drive this.</summary>
-    internal async Task WatchAsync(int characterId, Action<DateTime?> onRunEnded, CancellationToken cancellationToken)
+    /// <summary>The watch itself. <see cref="Watch"/> is only the fire-and-forget wrapper; tests drive this.</summary>
+    internal async Task WatchAsync(int characterId, Action<bool?, DateTime> onPresence, CancellationToken cancellationToken)
     {
-        var giveUpAt = DateTime.UtcNow + WatchTimeout;
         var failures = 0;
 
         try
         {
-            while (!cancellationToken.IsCancellationRequested && DateTime.UtcNow < giveUpAt)
+            await _uiReady.Task.WaitAsync(cancellationToken);
+
+            while (!cancellationToken.IsCancellationRequested)
             {
                 var result = await locations.GetLocationAsync(characterId, cancellationToken);
 
                 if (result is { IsSuccess: true, Value: { } location })
                 {
                     failures = 0;
-                    if (!AbyssalSpace.IsAbyssalSystem(location.SolarSystemId))
-                    {
-                        // Also the correction for a false start: the gamelog's name list is short, so a normal-space
-                        // fight can open a run that was never real. One poll takes it back.
-                        Finish(characterId, onRunEnded, DateTime.UtcNow);
-                        return;
-                    }
+                    onPresence(AbyssalSpace.IsAbyssalSystem(location.SolarSystemId), DateTime.UtcNow);
                 }
                 else if (Fatal(result.Error?.Kind))
                 {
                     Warn(characterId, result.Error?.Kind);
-                    // Stop calling, but let the timeout still clear the countdown — we cannot see the pilot leave,
-                    // and a clock nobody can end is worse than one that expires.
-                    break;
+                    Lost(characterId, onPresence);
+                    return;
                 }
                 else if (++failures > MaxConsecutiveFailures)
                 {
                     logger.LogWarning("Abyssal monitor for {CharacterId} gave up after {Failures} failed location reads.",
                         characterId, failures);
-                    break;
+                    Lost(characterId, onPresence);
+                    return;
                 }
 
                 await Task.Delay(PollInterval, cancellationToken);
             }
-
-            var remaining = giveUpAt - DateTime.UtcNow;
-            if (remaining > TimeSpan.Zero)
-                await Task.Delay(remaining, cancellationToken);
-
-            Finish(characterId, onRunEnded, null);
         }
         catch (OperationCanceledException)
         {
@@ -130,7 +125,7 @@ public sealed class AbyssalLocationMonitor(
         catch (Exception ex)
         {
             logger.LogError(ex, "Abyssal monitor for {CharacterId} stopped on an unexpected error.", characterId);
-            Finish(characterId, onRunEnded, null);
+            Lost(characterId, onPresence);
         }
     }
 
@@ -146,12 +141,12 @@ public sealed class AbyssalLocationMonitor(
             return;
 
         var why = kind == EsiErrorKind.ScopeMissing
-            ? "EVE Together may not read this character's location, so it cannot tell when you leave the abyss — the "
-              + "countdown will run to the end instead of stopping when you are out."
-            : "This character's ESI sign-in no longer works, so the countdown cannot tell when you leave the abyss.";
+            ? "EVE Together may not read this character's location, so it cannot see abyssal runs at all — no "
+              + "countdown will appear."
+            : "This character's ESI sign-in no longer works, so EVE Together cannot see abyssal runs.";
 
-        // Actions keep the toast on screen until it is answered, which is the point: this arrives mid-run and the
-        // one thing that fixes it is a sign-in the pilot has to start.
+        // Actions keep the toast on screen until it is answered, which is the point: the one thing that fixes this is
+        // a sign-in the pilot has to start.
         toasts.Show("No abyssal detection", why, ToastKind.Warning,
         [
             new ToastAction("Not now", () => { }),
@@ -175,11 +170,11 @@ public sealed class AbyssalLocationMonitor(
         }
     }
 
-    private void Finish(int characterId, Action<DateTime?> onRunEnded, DateTime? seenOutsideUtc)
+    private void Lost(int characterId, Action<bool?, DateTime> onPresence)
     {
         if (_running.TryRemove(characterId, out var cts))
             cts.Dispose();
-        onRunEnded(seenOutsideUtc);
+        onPresence(null, DateTime.UtcNow);
     }
 
     public void Dispose()

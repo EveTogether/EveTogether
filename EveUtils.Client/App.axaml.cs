@@ -43,6 +43,10 @@ public partial class App : Application
             // Global safety net: surface unhandled UI-thread errors as a message box instead of crashing.
             InstallGlobalErrorHandler();
 
+            // The abyssal watch polls from a background thread and can raise a toast on its first reading, so it may
+            // not run until the UI thread owns Avalonia's dispatcher (ET-62).
+            Program.Services.GetRequiredService<Esi.IAbyssalLocationMonitor>().UiReady();
+
             desktop.MainWindow = mainWindow;
             // Pop-outs (DPS overlays / floating modules / info cards) are shown ownerless so they survive a main-window
             // minimize. Tie app lifetime to the main window so closing it exits even if an ownerless pop-out lingers
