@@ -320,7 +320,12 @@ public sealed class DialogService : IDialogService, ISingletonService
             moduleId: $"fleet-roster:{viewModel.FleetId}");
 
     public void ShowFleetMetrics(FleetMetricsViewModel viewModel) =>
-        Route(new FleetMetricsWindow(viewModel), "FLEET METRICS", "fleet");
+        // One metrics module per fleet, same as the roster above: the title alone used to identify it, so METRICS on
+        // a second fleet re-selected the first fleet's screen. Re-opening the SAME fleet's metrics re-selects its
+        // module and refreshes its roster — the host calls IRefreshableModule — so a member who joined while the
+        // screen stood open is not missing from the totals and the WITH FC badge (ET-46).
+        Route(new FleetMetricsWindow(viewModel), $"FLEET METRICS · {viewModel.FleetName}", "fleet",
+            moduleId: $"fleet-metrics:{viewModel.FleetId}");
 
     public async Task ShowSdeUpdateAsync(SdeProgressViewModel viewModel)
     {

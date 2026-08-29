@@ -33,7 +33,7 @@ namespace EveUtils.Client.ViewModels;
 /// it keeps updating beside the main + fleets windows. <see cref="Layout"/> trades detail per member for members
 /// per screen so the window stays readable as a fleet grows; the choice is remembered across sessions.
 /// </summary>
-public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposable
+public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposable, IRefreshableModule
 {
     /// <summary>Where the chosen member layout is kept. One setting for the whole install, like the other shell
     /// preferences — the density that suits an FC does not change from fleet to fleet.</summary>
@@ -47,6 +47,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     private const int MaxOrderValueLength = 512;   // ClientSettingConfiguration caps a setting value at 512
 
     private readonly long _fleetId;
+    private readonly IFleetClient _fleets;
     private readonly IServiceProvider _services;
     private readonly IDisposable _subscription;
     private readonly IExternalCharacterLookup _lookup;
@@ -70,6 +71,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         _lookup = services.GetRequiredService<IExternalCharacterLookup>();
         _driver = services.GetRequiredService<DpsRenderDriver>();
         _dialogs = services.GetRequiredService<IDialogService>();
+        _fleets = fleets;
         _fleetId = fleet.Id;
         FleetName = fleet.Name;
 
@@ -80,6 +82,11 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     }
 
     public string FleetName { get; }
+
+    /// <summary>The fleet this screen reports on. Its module identity in the host is keyed on it, so metrics for a
+    /// second fleet is a second module instead of a re-selection of the first one's screen.</summary>
+    public long FleetId => _fleetId;
+
     public ObservableCollection<DpsViewModel> Members { get; } = [];
 
     [ObservableProperty] private string _dealtTotal = "—";
@@ -288,6 +295,18 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
 
         return value.ToString();
     }
+
+    /// <summary>
+    /// Re-read the roster because the user opened this screen again. The pre-fill is the ONLY thing that can put a
+    /// member here who publishes nothing — an external pilot has no client of their own, so no sample of theirs is
+    /// ever coming — and it used to run once, at construction. Someone who joined after that stayed off the screen,
+    /// and with it out of the roll-up totals and the WITH FC badge's denominator (ET-46).
+    ///
+    /// Additive on purpose: a member the roster no longer names keeps their row. Rows also legitimately come from
+    /// samples alone (a straggler who is in the fleet in-game but not on the roster), and dropping those on every
+    /// re-open would lose live data the FC is watching.
+    /// </summary>
+    public void RefreshModule() => _ = InitializeAsync(_fleets);
 
     // Warm the name cache AND pre-fill a row per roster member up front, so the window shows the whole fleet
     // deterministically instead of discovering members lazily one incoming sample at a time — which used to leave
