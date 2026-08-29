@@ -112,6 +112,8 @@ public sealed class FakeSdeAccessor : ISdeAccessor
 
     public DamageProfile? GetNpcDamageProfile(int typeId) => null;
 
+    public IReadOnlyList<SdeSite> SearchSites(string? nameQuery = null, int? archetypeId = null, int? factionId = null) => [];
+
     public void Close() { }
     public void Reopen() { }
 

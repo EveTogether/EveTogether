@@ -1,3 +1,4 @@
+using System.Text.Json;
 using EveUtils.Shared.Modules.Sde.Enums;
 using EveUtils.Shared.Modules.Dogma;
 using EveUtils.Shared.Modules.Sde.Dtos;
@@ -461,6 +462,74 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
         // Reject types with no positive damage — Normalized() falls back to Uniform when sum <= 0, but we want null
         // in that case so callers know the type has no meaningful damage profile.
         return (em + th + kin + exp) <= 0 ? null : normalised;
+    }
+
+    public IReadOnlyList<SdeSite> SearchSites(string? nameQuery = null, int? archetypeId = null, int? factionId = null)
+    {
+        using var connection = Open();
+        if (connection is null)
+            return [];
+        using var command = connection.CreateCommand();
+        // Each filter is skipped by passing NULL for it, so one statement covers every combination.
+        command.CommandText =
+            """
+            SELECT dungeonId, nameEn, archetypeId, archetypeName, factionId, factionName, description, dedRating,
+                   shipGroupIdsJson
+            FROM Site
+            WHERE ($pattern IS NULL OR nameEn LIKE $pattern ESCAPE '\')
+              AND ($archetypeId IS NULL OR archetypeId = $archetypeId)
+              AND ($factionId IS NULL OR factionId = $factionId)
+            ORDER BY nameEn;
+            """;
+        command.Parameters.AddWithValue("$pattern", string.IsNullOrWhiteSpace(nameQuery)
+            ? DBNull.Value
+            : "%" + nameQuery.Replace("%", "\\%").Replace("_", "\\_") + "%");
+        command.Parameters.AddWithValue("$archetypeId", (object?)archetypeId ?? DBNull.Value);
+        command.Parameters.AddWithValue("$factionId", (object?)factionId ?? DBNull.Value);
+
+        var rows = new List<(SdeSite Site, int[] GroupIds)>();
+        using (var reader = command.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                var groupIds = reader.IsDBNull(8) ? null : JsonSerializer.Deserialize<int[]>(reader.GetString(8)) ?? [];
+                rows.Add((new SdeSite(
+                    reader.GetInt32(0),
+                    reader.GetString(1),
+                    reader.IsDBNull(2) ? null : reader.GetInt32(2),
+                    reader.IsDBNull(3) ? null : reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetInt32(4),
+                    reader.IsDBNull(5) ? null : reader.GetString(5),
+                    reader.IsDBNull(6) ? null : reader.GetString(6),
+                    reader.IsDBNull(7) ? null : reader.GetInt32(7),
+                    IsShipRestricted: groupIds is not null,
+                    AllowedShipGroups: []), groupIds ?? []));
+            }
+        }
+
+        // The group names live in InvGroup, so resolve them once for the whole result rather than per row.
+        var names = ReadGroups(connection, rows.SelectMany(r => r.GroupIds).ToHashSet());
+        return [.. rows.Select(r => r.GroupIds.Length == 0
+            ? r.Site
+            : r.Site with { AllowedShipGroups = [.. r.GroupIds.Select(names.GetValueOrDefault).OfType<SdeGroup>()] })];
+    }
+
+    private static Dictionary<int, SdeGroup> ReadGroups(SqliteConnection connection, HashSet<int> groupIds)
+    {
+        var result = new Dictionary<int, SdeGroup>();
+        if (groupIds.Count == 0)
+            return result;
+        using var command = connection.CreateCommand();
+        // The ids come from the store's own JSON column (integers written by the importer), so interpolating them
+        // into the IN-list carries no user input.
+        command.CommandText =
+            "SELECT groupId, categoryId, nameEn, published FROM InvGroup WHERE groupId IN (" +
+            string.Join(",", groupIds) + ");";
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+            result[reader.GetInt32(0)] =
+                new SdeGroup(reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2), reader.GetInt64(3) != 0);
+        return result;
     }
 
     internal static string NameKey(string name) => name.Trim().ToLowerInvariant();
