@@ -6,12 +6,9 @@ using Xunit;
 namespace EveUtils.Client.UiTests;
 
 /// <summary>
-/// ET-56: the abyssal run has a hard 20:00 deadline, after which ship and pod are destroyed. The countdown may
-/// therefore never claim more time than the pilot has. The log gives no entry event — the first thing we see is a
-/// shot fired, well into the run — so the clock anchors on the last place the log put the pilot, not on that shot.
-///
-/// That anchor sits before the real entry, so the number is a lower bound and the readout says so with a trailing
-/// "+" — the blind window was 72 s, 84 s and 3.5 minutes on three measured runs, which is too much to call exact.
+/// ET-56: an abyssal run has a hard 20:00 deadline, so the countdown may never claim more time than the pilot has.
+/// The log gives no entry event, so it anchors on the last place the pilot was proven outside and never on the first
+/// abyssal shot — and since that sits before the real entry, the readout marks the number a floor with a "+".
 ///
 /// Timestamps are Raymond's measured run of 2026-08-29 (ET-55): undock 17:34:34, first contact 17:35:46.
 /// </summary>

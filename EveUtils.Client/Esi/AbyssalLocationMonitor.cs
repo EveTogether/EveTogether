@@ -13,14 +13,11 @@ using Microsoft.Extensions.Logging;
 namespace EveUtils.Client.Esi;
 
 /// <summary>
-/// Watches <c>/characters/{id}/location/</c> for the length of one abyssal run, and only then.
+/// Watches <c>/characters/{id}/location/</c> for one abyssal run, and only then.
 ///
 /// The gamelog can see a pilot go in but never come out — you leave where you fired the filament, so nothing is
-/// written — which left the countdown standing for minutes after the pilot was home. ESI can see it: the first poll
-/// that reports a system outside <see cref="AbyssalSpace.IsAbyssalSystem"/> ends the run.
-///
-/// Starting on the log rather than polling all evening is what keeps this cheap: ~200 calls during a run and none
-/// between runs, against ~720 per character per hour for a permanent poller.
+/// written there. ESI can: the first poll outside <see cref="AbyssalSpace.IsAbyssalSystem"/> ends the run. Starting
+/// on the log keeps this to one run's worth of calls instead of polling all evening. See ET-56.
 /// </summary>
 public sealed class AbyssalLocationMonitor(
     IEsiLocationClient locations,
