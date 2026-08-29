@@ -1,0 +1,394 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:sys="using:System"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1180" d:DesignHeight="760"
+        x:Class="EveUtils.Client.Views.SettingsSyncWindow"
+        x:DataType="vm:SettingsSyncViewModel"
+        x:Name="SyncRoot"
+        Width="1180" Height="760"
+        WindowStartupLocation="CenterOwner"
+        Title="EVE Settings Sync">
+
+    <DockPanel Margin="14" x:Name="SyncRootPanel">
+
+        <!-- On the content root, not on the window: the module host re-parents this content into the main window's
+             tab when docked, and Window.Styles would stay behind with the (never shown) window. -->
+        <DockPanel.Styles>
+            <!-- The outcome line borders red when part of a copy did not land. -->
+            <Style Selector="Border.statusline">
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            </Style>
+            <Style Selector="Border.statusline.failed">
+                <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
+            </Style>
+
+            <!-- One file per line, compact enough that a profile with a dozen pilots reads without scrolling. -->
+            <Style Selector="Border.filerow">
+                <Setter Property="Background" Value="{StaticResource BgRowBrush}"/>
+                <Setter Property="Padding" Value="8,0"/>
+                <Setter Property="Margin" Value="0,0,0,2"/>
+                <Setter Property="Height" Value="26"/>
+            </Style>
+            <Style Selector="Border.filerow TextBlock.stamp">
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="Opacity" Value="0.6"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.blockhint">
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Opacity" Value="0.7"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <!-- The id beside a name: there to check which file you have, deliberately quieter than the name. -->
+            <Style Selector="TextBlock.rowid">
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="Opacity" Value="0.45"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <!-- Short host (the docked tab is a good 130px shorter than this tool's own window): the standing
+                 explanations give their room back to the file lists. Their text stays on the titles' tooltips. -->
+            <Style Selector="DockPanel.compact TextBlock.intro">
+                <Setter Property="IsVisible" Value="False"/>
+            </Style>
+            <Style Selector="DockPanel.compact TextBlock.blockhint">
+                <Setter Property="IsVisible" Value="False"/>
+            </Style>
+            <Style Selector="TextBlock.empty">
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Opacity" Value="0.5"/>
+                <Setter Property="Margin" Value="2,10"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
+        </DockPanel.Styles>
+
+        <!-- Header: what this tool does, said once, before anything is clicked. -->
+        <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,10">
+            <TextBlock Text="EVE SETTINGS SYNC" FontWeight="Bold" FontSize="15"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <TextBlock Classes="intro" FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"
+                       Text="Copy one character's window layout, overview and tabs onto your other characters — or one account's settings onto your other accounts. The two never mix, and the whole profile is backed up before every copy."/>
+        </StackPanel>
+
+        <!-- Running clients: the one thing that makes a sync pointless. Blocks rather than warns. -->
+        <Border DockPanel.Dock="Top" IsVisible="{Binding ClientsRunning}" Margin="0,0,0,10" Padding="12,8"
+                Background="#33CC4444" BorderBrush="{StaticResource RedBrush}" BorderThickness="1">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <TextBlock Grid.Column="0" Text="⚠" FontSize="15" VerticalAlignment="Center"
+                           Foreground="{StaticResource RedBrush}"/>
+                <TextBlock Grid.Column="1" Text="{Binding ClientWarning}" Margin="10,0" TextWrapping="Wrap"
+                           FontSize="12" VerticalAlignment="Center" Foreground="{StaticResource TextBrightBrush}"/>
+                <Button Grid.Column="2" Content="CHECK AGAIN" FontSize="10" VerticalAlignment="Center"
+                        Command="{Binding CheckClientsCommand}"/>
+            </Grid>
+        </Border>
+
+        <!-- Where the settings live. Two lines so it survives the docked shell's narrower host: the folder never
+             squeezes the profile picker out of view, and the profile is never implicit — several settings_*
+             profiles side by side is normal, and picking the wrong one is how you overwrite the wrong thing. -->
+        <Border DockPanel.Dock="Top" Classes="panel" Padding="11,9" Margin="0,0,0,10">
+            <Grid RowDefinitions="Auto,6,Auto" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="7">
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="label" Text="EVE FOLDER" VerticalAlignment="Center"/>
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding InstallRoot}" FontSize="11"
+                         VerticalContentAlignment="Center" MinWidth="180"
+                         PlaceholderText="The folder that holds the settings_* directories"
+                         ToolTip.Tip="Normally %LOCALAPPDATA%\CCP\EVE\&lt;install&gt;. Detected automatically on Windows; point at it yourself if nothing was found."/>
+                <Button Grid.Row="0" Grid.Column="2" Content="BROWSE…" FontSize="10" Click="OnBrowse"/>
+                <Button Grid.Row="0" Grid.Column="3" Content="RELOAD" FontSize="10"
+                        Command="{Binding ReloadProfilesCommand}"
+                        ToolTip.Tip="Re-read the folder — EVE rewrites these files whenever a client closes."/>
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Classes="label" Text="PROFILE" VerticalAlignment="Center"/>
+                <ComboBox Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" MinWidth="220" FontSize="11"
+                          ItemsSource="{Binding ProfileNames}" SelectedItem="{Binding SelectedProfileName}"/>
+                <TextBlock Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" Text="{Binding ProfileSummary}"
+                           VerticalAlignment="Center" FontSize="11" TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextAccentBrush}"/>
+            </Grid>
+        </Border>
+
+        <!-- Outcome line: what was copied, what was not, where the backup went. -->
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="0,10,0,0">
+            <Border Grid.Column="0" Padding="11,7" Classes="statusline"
+                    Classes.failed="{Binding StatusIsError}" Background="#22000000" BorderThickness="1">
+                <TextBlock Text="{Binding Status}" FontSize="11" TextWrapping="Wrap"
+                           Foreground="{StaticResource TextBrightBrush}"/>
+            </Border>
+            <Button Grid.Column="1" Content="Close" Click="OnClose" VerticalAlignment="Center"/>
+        </Grid>
+
+        <!-- Body: the two sync blocks share the height evenly and each list scrolls on its own, so both blocks stay
+             visible at once however short the host is. -->
+        <Grid x:Name="SyncBodyGrid" ColumnDefinitions="*,12,340" RowDefinitions="*">
+
+            <!-- ── The two sync blocks. Deliberately stacked and separately labelled rather than two tabs that look
+                 alike: mistaking one for the other is the mistake this screen must not allow. ── -->
+            <Grid x:Name="SyncColumn" Grid.Column="0" RowDefinitions="*,10,*">
+
+                <Border Grid.Row="0" Classes="panel" Padding="11,9">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Spacing="5" Margin="0,0,0,6">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
+                                <TextBlock Grid.Column="1" Classes="panel-title" Text="CHARACTER SETTINGS"
+                                           VerticalAlignment="Center"
+                                           ToolTip.Tip="Per character: window layout, overview settings, tabs. Applies to that pilot only."/>
+                            </Grid>
+                            <TextBlock Classes="blockhint"
+                                       Text="Per character: window layout, overview settings, tabs. Applies to that pilot only."/>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="7">
+                                <TextBlock Grid.Column="0" Classes="label" Text="COPY FROM" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" FontSize="11"
+                                          ItemsSource="{Binding Characters}" SelectedItem="{Binding CharacterSource}"
+                                          PlaceholderText="Pick the character to copy from">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:SettingsFileRowViewModel">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{Binding DisplayName}"/>
+                                                <TextBlock Text="{Binding LastModifiedDisplay}" Opacity="0.6"
+                                                           FontSize="10" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
+                                <TextBlock Grid.Column="0" Classes="label" Text="COPY TO" VerticalAlignment="Center"/>
+                                <Button Grid.Column="2" Content="ALL" FontSize="10"
+                                        Command="{Binding SelectAllCharactersCommand}"/>
+                                <Button Grid.Column="3" Content="NONE" FontSize="10"
+                                        Command="{Binding ClearCharactersCommand}"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Preview + action: what this button is about to do, in names, before it does it. -->
+                        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,7,0,0" ColumnSpacing="10">
+                            <TextBlock Grid.Column="0" Text="{Binding CharacterPlanSummary}" FontSize="11"
+                                       TextWrapping="Wrap" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextAccentBrush}"/>
+                            <Button Grid.Column="1" Classes="accent" Content="COPY CHARACTER SETTINGS…"
+                                    FontSize="11" VerticalAlignment="Center"
+                                    IsEnabled="{Binding CanSyncCharacters}"
+                                    Command="{Binding SyncCharactersCommand}"
+                                    ToolTip.Tip="Asks for confirmation first, backs the profile up, then overwrites the ticked characters."/>
+                        </Grid>
+
+                        <ScrollViewer>
+                            <Panel>
+                                <TextBlock Classes="empty" IsVisible="{Binding !Characters.Count}"
+                                           Text="No character settings in this profile."/>
+                                <ItemsControl ItemsSource="{Binding Characters}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:SettingsFileRowViewModel">
+                                            <Border Classes="filerow">
+                                                <Grid ColumnDefinitions="Auto,*,Auto,Auto,60">
+                                                    <CheckBox Grid.Column="0" IsChecked="{Binding IsTarget}"
+                                                              IsEnabled="{Binding CanBeTarget}" Margin="0,0,4,0"
+                                                              MinHeight="0" MinWidth="0" Padding="0"/>
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                                                VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding DisplayName}" FontSize="12"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   Foreground="{StaticResource TextBrightBrush}"/>
+                                                        <TextBlock Classes="rowid" Text="{Binding IdDisplay}" IsVisible="{Binding ShowId}"/>
+                                                    </StackPanel>
+                                                    <Border Grid.Column="2" Classes="chip ok" Margin="6,0"
+                                                            VerticalAlignment="Center" IsVisible="{Binding IsSource}">
+                                                        <TextBlock Text="SOURCE"/>
+                                                    </Border>
+                                                    <TextBlock Grid.Column="3" Classes="stamp"
+                                                               Text="{Binding LastModifiedDisplay}"
+                                                               ToolTip.Tip="When EVE last wrote this file"/>
+                                                    <TextBlock Grid.Column="4" Classes="stamp" Opacity="0.45"
+                                                               Text="{Binding SizeDisplay}" HorizontalAlignment="Right"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Panel>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Row="2" Classes="panel" Padding="11,9">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Spacing="5" Margin="0,0,0,6">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
+                                <TextBlock Grid.Column="1" Classes="panel-title" Text="ACCOUNT SETTINGS"
+                                           VerticalAlignment="Center"
+                                           ToolTip.Tip="Per account: applies to every character on that login. EVE publishes no account names — name them yourself and EVE Together remembers."/>
+                            </Grid>
+                            <TextBlock Classes="blockhint"
+                                       Text="Per account: applies to every character on that login. EVE publishes no account names — name them yourself and EVE Together remembers."/>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="7">
+                                <TextBlock Grid.Column="0" Classes="label" Text="COPY FROM" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" FontSize="11"
+                                          ItemsSource="{Binding Accounts}" SelectedItem="{Binding AccountSource}"
+                                          PlaceholderText="Pick the account to copy from">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:SettingsFileRowViewModel">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{Binding DisplayName}"/>
+                                                <TextBlock Text="{Binding LastModifiedDisplay}" Opacity="0.6"
+                                                           FontSize="10" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
+                                <TextBlock Grid.Column="0" Classes="label" Text="COPY TO" VerticalAlignment="Center"/>
+                                <Button Grid.Column="2" Content="ALL" FontSize="10"
+                                        Command="{Binding SelectAllAccountsCommand}"/>
+                                <Button Grid.Column="3" Content="NONE" FontSize="10"
+                                        Command="{Binding ClearAccountsCommand}"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,7,0,0" ColumnSpacing="10">
+                            <TextBlock Grid.Column="0" Text="{Binding AccountPlanSummary}" FontSize="11"
+                                       TextWrapping="Wrap" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextAccentBrush}"/>
+                            <Button Grid.Column="1" Classes="accent" Content="COPY ACCOUNT SETTINGS…"
+                                    FontSize="11" VerticalAlignment="Center"
+                                    IsEnabled="{Binding CanSyncAccounts}"
+                                    Command="{Binding SyncAccountsCommand}"
+                                    ToolTip.Tip="Asks for confirmation first, backs the profile up, then overwrites the ticked accounts."/>
+                        </Grid>
+
+                        <ScrollViewer>
+                            <Panel>
+                                <TextBlock Classes="empty" IsVisible="{Binding !Accounts.Count}"
+                                           Text="No account settings in this profile."/>
+                                <ItemsControl ItemsSource="{Binding Accounts}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:SettingsFileRowViewModel">
+                                            <Border Classes="filerow">
+                                                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,60">
+                                                    <CheckBox Grid.Column="0" IsChecked="{Binding IsTarget}"
+                                                              IsEnabled="{Binding CanBeTarget}" Margin="0,0,4,0"
+                                                              MinHeight="0" MinWidth="0" Padding="0"/>
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <TextBlock Text="{Binding DisplayName}" FontSize="12"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                                            <TextBlock Classes="rowid" Text="{Binding IdDisplay}" IsVisible="{Binding ShowId}"/>
+                                                        </StackPanel>
+                                                        <!-- The only recognisable trace EVE leaves of an account:
+                                                             who was saved with it. A hint while naming, not a fact. -->
+                                                        <TextBlock Text="{Binding HintDisplay}" FontSize="10"
+                                                                   Opacity="0.5" IsVisible="{Binding HasHint}"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                    <Button Grid.Column="2" Content="NAME…" FontSize="10" Padding="6,1"
+                                                            Margin="6,0" VerticalAlignment="Center"
+                                                            Command="{Binding #SyncRoot.((vm:SettingsSyncViewModel)DataContext).NameAccountCommand}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip.Tip="Give this account a name you recognise. Remembered on this machine."/>
+                                                    <Border Grid.Column="3" Classes="chip ok" Margin="0,0,6,0"
+                                                            VerticalAlignment="Center" IsVisible="{Binding IsSource}">
+                                                        <TextBlock Text="SOURCE"/>
+                                                    </Border>
+                                                    <TextBlock Grid.Column="4" Classes="stamp"
+                                                               Text="{Binding LastModifiedDisplay}"
+                                                               ToolTip.Tip="When EVE last wrote this file"/>
+                                                    <TextBlock Grid.Column="5" Classes="stamp" Opacity="0.45"
+                                                               Text="{Binding SizeDisplay}" HorizontalAlignment="Right"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Panel>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+
+            <!-- ── Backups: taken automatically before every copy, and on demand. A backup you cannot put back is
+                 only a feeling, so restore lives here beside the list. ── -->
+            <Border x:Name="BackupsPanel" Grid.Column="2" Classes="panel" Padding="11,9">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Spacing="5" Margin="0,0,0,6">
+                        <Grid ColumnDefinitions="Auto,*">
+                            <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
+                            <TextBlock Grid.Column="1" Classes="panel-title" Text="BACKUPS" VerticalAlignment="Center"/>
+                        </Grid>
+                        <TextBlock Classes="blockhint"
+                                   Text="A full copy of the profile is taken before every sync — always, not as an option."/>
+                        <TextBlock Text="{Binding BackupRoot}" FontSize="10" Opacity="0.5"
+                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding BackupRoot}"/>
+                        <Button Content="BACK UP THIS PROFILE NOW" FontSize="10" HorizontalAlignment="Stretch"
+                                IsEnabled="{Binding CanBackup}" Command="{Binding BackupNowCommand}"/>
+                    </StackPanel>
+
+                    <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,7,0,0" IsVisible="{Binding HasBackups}">
+                        <!-- Both kinds, each under its own count: a backup covers the whole profile, and the list
+                             used to show characters first and simply clip the accounts off the bottom. -->
+                        <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="3">
+                                <TextBlock Classes="label" Text="{Binding SelectedBackup.CharacterHeader}"/>
+                                <ItemsControl ItemsSource="{Binding SelectedBackup.CharacterContents}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="sys:String">
+                                            <TextBlock Text="{Binding}" FontSize="10" Opacity="0.65"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Classes="label" Text="{Binding SelectedBackup.AccountHeader}"
+                                           Margin="0,4,0,0"/>
+                                <ItemsControl ItemsSource="{Binding SelectedBackup.AccountContents}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="sys:String">
+                                            <TextBlock Text="{Binding}" FontSize="10" Opacity="0.65"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                            <Button Grid.Column="0" Classes="accent" Content="RESTORE THIS BACKUP…" FontSize="10"
+                                    HorizontalAlignment="Stretch" IsEnabled="{Binding CanRestore}"
+                                    Command="{Binding RestoreBackupCommand}"
+                                    ToolTip.Tip="Writes these files back over the profile they came from. The profile's current state is backed up first."/>
+                            <Button Grid.Column="1" Classes="danger" Content="DELETE" FontSize="10"
+                                    Command="{Binding DeleteBackupCommand}"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <Panel>
+                        <TextBlock Classes="empty" IsVisible="{Binding !HasBackups}"
+                                   Text="No backups yet. One is taken automatically before your first copy — or press the button above to take one now."/>
+                        <ListBox ItemsSource="{Binding Backups}" SelectedItem="{Binding SelectedBackup}"
+                                 IsVisible="{Binding HasBackups}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SettingsBackupRowViewModel">
+                                    <StackPanel Spacing="1" Margin="0,1">
+                                        <TextBlock Text="{Binding TakenAtDisplay}" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextBrightBrush}"/>
+                                        <TextBlock Text="{Binding ProfileName}" FontSize="10" Opacity="0.7"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding ReasonDisplay}" FontSize="10" Opacity="0.5"/>
+                                        <TextBlock Text="{Binding Note}" FontSize="10" Opacity="0.5"
+                                                   TextWrapping="Wrap"/>
+                                        <TextBlock Text="{Binding ContentsDisplay}" FontSize="10" Opacity="0.5"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Panel>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</v:ChromedWindow>

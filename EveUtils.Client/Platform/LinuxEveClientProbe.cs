@@ -64,6 +64,36 @@ public sealed class LinuxEveClientProbe : IEveClientProbe
         return new EveClientEvidence(names, ids);
     }
 
+    public int RunningClientCount()
+    {
+        var count = 0;
+        try
+        {
+            foreach (var procDir in Directory.GetDirectories("/proc"))
+            {
+                if (!int.TryParse(Path.GetFileName(procDir), out _))
+                    continue;
+                try
+                {
+                    var cmdlinePath = Path.Combine(procDir, "cmdline");
+                    if (File.Exists(cmdlinePath) &&
+                        EveClientTitleParser.IsEveClientCommandLine(File.ReadAllText(cmdlinePath)))
+                        count++;
+                }
+                catch
+                {
+                    // Skip processes we can't read (permission denied, exited mid-sweep).
+                }
+            }
+        }
+        catch
+        {
+            // /proc unreadable — reads as "saw none", same as Probe().
+        }
+
+        return count;
+    }
+
     public bool Activate(string characterName)
     {
         // wmctrl -F -a matches the full window title exactly and activates that window. X11-only and silently

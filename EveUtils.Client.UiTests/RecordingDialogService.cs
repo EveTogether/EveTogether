@@ -161,6 +161,12 @@ public sealed class RecordingDialogService : IDialogService
     public void ShowInbox(InboxViewModel viewModel) => throw NotUsed();
     public void ShowLogs(ClientLogViewModel viewModel) => throw NotUsed();
     public void ShowEsiMetrics(EsiMetricsViewModel viewModel) => throw NotUsed();
+
+    /// <summary>The settings-sync tool the shell was asked to open, or null — how a test asserts the Tools menu
+    /// actually reached the module without standing up the real window.</summary>
+    public SettingsSyncViewModel? LastSettingsSync { get; private set; }
+
+    public void ShowSettingsSync(SettingsSyncViewModel viewModel) => LastSettingsSync = viewModel;
     public void ShowFitBrowser(FitBrowserViewModel viewModel) => throw NotUsed();
     public void ShowCompositions(CompositionsViewModel viewModel) => throw NotUsed();
     public FitDetailWindowViewModel? LastFitDetail { get; private set; }

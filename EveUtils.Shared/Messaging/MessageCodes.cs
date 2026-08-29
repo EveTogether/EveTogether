@@ -19,4 +19,5 @@ public static class MessageCodes
     public const string Duplicate = "DUPLICATE";
     public const string UpdateNotInstalled = "UPDATE_NOT_INSTALLED";
     public const string UpdateFailed = "UPDATE_FAILED";
+    public const string FileIoFailed = "FILE_IO_FAILED";
 }

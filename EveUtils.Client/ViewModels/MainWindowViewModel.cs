@@ -15,6 +15,8 @@ using EveUtils.Client.Fittings;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.Esi;
+using EveUtils.Client.EveSettings;
+using EveUtils.Client.Platform;
 using EveUtils.Client.Skills;
 using EveUtils.Client.Implants;
 using EveUtils.Shared.Modules.Skills.Repositories;
@@ -186,6 +188,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     public bool IsInboxActive => ActiveModule == "inbox";
     public bool IsLogsActive => ActiveModule == "logs";
     public bool IsCompositionsActive => ActiveModule == "compositions";
+    public bool IsToolsActive => ActiveModule == "tools";
 
     partial void OnIsFloatingChanged(bool value)
     {
@@ -227,6 +230,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         OnPropertyChanged(nameof(IsInboxActive));
         OnPropertyChanged(nameof(IsLogsActive));
         OnPropertyChanged(nameof(IsCompositionsActive));
+        OnPropertyChanged(nameof(IsToolsActive));
     }
 
     [RelayCommand] private void ToggleDockMode() => IsFloating = !IsFloating;
@@ -245,6 +249,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             case "fleet": OpenFleets(); break;
             case "compositions": OpenCompositions(); break;
             case "esi": OpenEsiMetrics(); break;
+            case "settings-sync": OpenSettingsSync(); break;
             case "inbox": OpenInbox(); break;
             case "logs": OpenLogs(); break;
             case "settings": await OpenSettings(); break;
@@ -502,6 +507,22 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             _services.GetRequiredService<IEsiRateLimitMonitor>(),
             _services.GetRequiredService<ICharacterRegistry>(),
             _services.GetRequiredService<ICharacterPortraitProvider>()));
+    }
+
+    /// <summary>Opens the EVE Settings Sync tool (the first entry under Tools) — non-modal, like the other
+    /// modules. A fresh view-model per open so it reads the settings folder as it is right now.</summary>
+    [RelayCommand]
+    private void OpenSettingsSync()
+    {
+        if (_dialogs is null || _services is null)
+            return;
+        _dialogs.ShowSettingsSync(new SettingsSyncViewModel(
+            _services.GetRequiredService<SettingsSyncService>(),
+            _services.GetRequiredService<SettingsBackupService>(),
+            _services.GetRequiredService<EveSettingsNameResolver>(),
+            _services.GetRequiredService<EveSettingsPreferences>(),
+            _services.GetRequiredService<EveClientPresenceService>(),
+            _dialogs));
     }
 
     /// <summary>Open the FITS fit-browser window: the Local library plus a tab per coupled server, each a

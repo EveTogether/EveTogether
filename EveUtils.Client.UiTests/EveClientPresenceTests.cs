@@ -71,7 +71,9 @@ public class EveClientPresenceTests
     private sealed class QueuedProbe : IEveClientProbe
     {
         public Queue<EveClientEvidence> Results { get; } = new();
+        public int Processes { get; set; }
         public EveClientEvidence Probe() => Results.Count > 0 ? Results.Dequeue() : EveClientEvidence.Empty;
+        public int RunningClientCount() => Processes;
         public bool Activate(string characterName) => false;
     }
 

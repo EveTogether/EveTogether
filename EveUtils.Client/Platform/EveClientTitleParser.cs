@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 
 namespace EveUtils.Client.Platform;
@@ -26,11 +27,18 @@ public static partial class EveClientTitleParser
         return name.Length > 0 ? name : null;
     }
 
+    /// <summary>Whether a command line belongs to an EVE client at all — logged in or still on the login screen.
+    /// The wine/Proton clients run the Windows binary, so the executable name is the signal on every platform.</summary>
+    public static bool IsEveClientCommandLine([NotNullWhen(true)] string? commandLine) =>
+        commandLine is not null && commandLine.Contains(ClientExecutable, StringComparison.OrdinalIgnoreCase);
+
+    private const string ClientExecutable = "exefile.exe";
+
     /// <summary>The character id from an EVE client command line (<c>exefile.exe … /autoSelectCharacter:&lt;id&gt;</c>),
     /// or null when the command line is not an EVE client or carries no selection.</summary>
     public static int? CharacterIdFromCommandLine(string? commandLine)
     {
-        if (commandLine is null || !commandLine.Contains("exefile.exe", StringComparison.OrdinalIgnoreCase))
+        if (!IsEveClientCommandLine(commandLine))
             return null;
         var match = AutoSelectCharacter().Match(commandLine);
         return match.Success && int.TryParse(match.Groups[1].Value, out var id) ? id : null;

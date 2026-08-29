@@ -93,6 +93,9 @@ public static class ClientServices
             sp.GetRequiredService<IHttpClientFactory>(),
             sp.GetRequiredService<ISettingRepository>(),
             DataDirectory())); // hex character portraits in the shell, per-instance disk cache
+        // EVE settings sync (ET-59): the backup store needs the per-instance data dir, so it is wired by hand;
+        // SettingsSyncService / EveSettingsNameResolver / EveSettingsPreferences carry lifetime markers.
+        services.AddSingleton(new EveSettings.SettingsBackupService(DataDirectory()));
         // Market prices, character skills, training queue + attributes and
         // implants repositories live in Shared and auto-register via AddSharedServices.
         services.AddSingleton<IEsiSkillImporter>(sp =>
