@@ -13,18 +13,10 @@ using Microsoft.Extensions.Logging;
 namespace EveUtils.Client.Esi;
 
 /// <summary>
-/// Watches <c>/characters/{id}/location/</c> for as long as the app is running, for every character that granted the
-/// location scope.
-///
-/// ET-62 moved abyssal detection here wholesale. The gamelog cannot see the way in OR the way out — a filament writes
-/// nothing, and you leave where you fired it — so the log could only ever guess at a run from the names that shot
-/// back, and could only ever anchor the clock on the last place it happened to see the pilot. Measured 2026-08-29:
-/// an undock at 20:54:17 was still anchoring a run that started at 21:40:18, so the countdown was born 25:51 past its
-/// own end and read "--:--" for the whole run.
-///
-/// Polling continuously removes the guess on both sides. <see cref="AbyssalSpace.IsAbyssalSystem"/> is a closed,
-/// enumerated id range, so entry and exit are observed rather than inferred, and the anchor is never older than one
-/// <see cref="PollInterval"/> — the floor the "+" promises becomes tight instead of unbounded.
+/// Watches <c>/characters/{id}/location/</c> all session, for every character with the location scope. Continuous
+/// rather than per-run (ET-62) because the countdown anchors on the last moment the pilot was proven outside, and
+/// only these polls can prove it — the gamelog writes nothing on the way in or out. Stop between runs and that anchor
+/// ages without bound; polling keeps it within one <see cref="PollInterval"/>.
 /// </summary>
 public sealed class AbyssalLocationMonitor(
     IEsiLocationClient locations,

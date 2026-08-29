@@ -1,20 +1,9 @@
 namespace EveUtils.Shared.Modules.Gamelog.Aggregation;
 
 /// <summary>
-/// Abyssal deadspace, read from the one source that can see it.
-///
-/// The gamelog sees neither end of a run. Nothing is written when a filament pulls you in (measured on ET-55's run of
-/// 2026-08-29) and nothing is written when you leave, because you leave where you fired it. Silence is no substitute
-/// either: a four-minute gap can fall inside a run as easily as between two. Recognising a run from the names that
-/// shot back was the stand-in, and it was wrong twice over — the list can only ever be partial (a filament whose NPCs
-/// are all absent is simply never seen), and the first shot lands minutes after the entry, so it could never be the
-/// clock's zero anyway.
-///
-/// ESI sees both ends: <c>/characters/{id}/location/</c> answers with a solar system id, and
-/// <see cref="IsAbyssalSystem"/> is the whole test — a closed, enumerated range, so there is nothing to guess.
-/// Polling it for the whole session (ET-62) makes entry and exit observed rather than inferred, and keeps the
-/// countdown's anchor within one poll interval of the truth instead of hours (measured 2026-08-29: an undock at
-/// 20:54:17 was anchoring a run that began at 21:40:18).
+/// Abyssal deadspace, read from the one source that can see it. The gamelog sees neither end of a run — nothing is
+/// written when a filament pulls you in, and you leave where you fired it — so ET-62 moved both ends to ESI, where
+/// <see cref="IsAbyssalSystem"/> over a closed id range leaves nothing to guess.
 ///
 /// The readout this feeds is a countdown, not a label, because the only number that matters in the abyss is how
 /// long you have left: at <see cref="RunLimit"/> the ship and the pod are destroyed outright.

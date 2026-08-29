@@ -7,14 +7,9 @@ using Xunit;
 namespace EveUtils.Client.UiTests;
 
 /// <summary>
-/// An abyssal run has a hard 20:00 deadline, so the countdown may never claim more time than the pilot has. Nothing
-/// is written anywhere when a filament pulls you in, so the clock cannot read the entry — it can only bound it from
-/// below with the last moment ESI proved the pilot was outside, and marks that a floor with a "+".
-///
-/// ET-62 made ESI the only source. The gamelog used to open a run on the names that shot back and anchor it on the
-/// last location line, and both halves were wrong: the name list can only ever be partial, and a location line
-/// carries its own age. Measured 2026-08-29 — an undock at 20:54:17 was still anchoring a run that began at
-/// 21:40:18, so the clock was born 25:51 past its own end and read "--:--" for a run with 19:50 left.
+/// The run's 20:00 deadline is hard, so the countdown may never claim more time than the pilot has. Nothing is
+/// written when a filament pulls you in, so the entry cannot be read — only bounded from below by the last moment
+/// ESI proved the pilot was outside, which the "+" marks as a floor. ET-62 made ESI the only source of that moment.
 /// </summary>
 public class AbyssalCountdownTests
 {
@@ -38,12 +33,9 @@ public class AbyssalCountdownTests
     }
 
     /// <summary>
-    /// The invariant the whole ticket turns on: the readout may never show more time than the pilot has. Claiming
-    /// time nobody has is what costs a ship and a pod, so this asserts the DIRECTION and never a number of seconds.
-    ///
-    /// A seconds bound would be a false guarantee. Measured 2026-08-29: the poll interval is 6.042-6.096 s (57 of 57
-    /// above 6.000), and the readout truncates to whole seconds on top of that — live reading EVE 18:42 against
-    /// EveTogether 18:35+, seven seconds low. A "≤ 6 s" assertion goes red on a slow day; "never higher" cannot.
+    /// Asserts the DIRECTION, never a number of seconds: showing more time than the pilot has is what costs a ship.
+    /// A seconds bound would be a false guarantee — the anchor comes from a poll, so the gap is at least the interval's
+    /// own spread (measured 6.042-6.096 s) plus truncation, and any fixed bound goes red on a slow day.
     /// </summary>
     [Theory]
     [InlineData(0)]       // sighting and entry coincide
