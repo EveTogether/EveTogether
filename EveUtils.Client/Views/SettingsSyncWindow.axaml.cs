@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -23,7 +24,12 @@ public partial class SettingsSyncWindow : ChromedWindow, IHostableModuleWindow
     /// sync blocks need to stay readable.</summary>
     private const double WideLayoutWidth = 940;
 
+    /// <summary>Below this body height the standing explanations cost more than they are worth: the two file lists
+    /// are down to a single row, which is the one thing this screen cannot afford to lose.</summary>
+    private const double CompactLayoutHeight = 430;
+
     private Grid? _bodyGrid;
+    private Panel? _rootPanel;
     private bool? _isWide;
 
     public SettingsSyncWindow()
@@ -31,8 +37,9 @@ public partial class SettingsSyncWindow : ChromedWindow, IHostableModuleWindow
         AvaloniaXamlLoader.Load(this);
 
         _bodyGrid = this.FindControl<Grid>("SyncBodyGrid");
+        _rootPanel = this.FindControl<DockPanel>("SyncRootPanel");
         if (_bodyGrid is not null)
-            _bodyGrid.SizeChanged += (_, e) => _ApplyWidth(e.NewSize.Width);
+            _bodyGrid.SizeChanged += (_, e) => _ApplyViewport(e.NewSize);
     }
 
     public SettingsSyncWindow(SettingsSyncViewModel viewModel) : this()
@@ -40,18 +47,21 @@ public partial class SettingsSyncWindow : ChromedWindow, IHostableModuleWindow
         DataContext = viewModel;
     }
 
-    // Two shells, two widths: the tool's own window has room for a full backup column, the docked tab does not.
-    private void _ApplyWidth(double width)
+    // Two shells, two sizes: the tool's own window has room for a full backup column and the standing
+    // explanations, the docked tab has neither and would rather spend that room on the file lists.
+    private void _ApplyViewport(Size size)
     {
         if (_bodyGrid is null)
             return;
 
-        var wide = width >= WideLayoutWidth;
-        if (wide == _isWide)
-            return;
+        var wide = size.Width >= WideLayoutWidth;
+        if (wide != _isWide)
+        {
+            _isWide = wide;
+            _bodyGrid.ColumnDefinitions = new ColumnDefinitions(wide ? "*,12,340" : "*,10,250");
+        }
 
-        _isWide = wide;
-        _bodyGrid.ColumnDefinitions = new ColumnDefinitions(wide ? "*,12,340" : "*,10,250");
+        _rootPanel?.Classes.Set("compact", size.Height < CompactLayoutHeight);
     }
 
     private async void OnBrowse(object? sender, RoutedEventArgs e)

@@ -283,10 +283,62 @@ public sealed class SettingsSyncToolTests : IDisposable
 
         Assert.Equal("alice-layout", File.ReadAllText(Path.Combine(profileDirectory, "core_char_90000002.dat")));
         Assert.False(tool.StatusIsError);
-        Assert.Contains("Backup of settings_Default", tool.Status);
+        // The outcome names what the backup covers, both kinds — not just where it went.
+        Assert.Contains("Backed up settings_Default (2 characters and 1 account)", tool.Status);
         var backup = Assert.Single(tool.Backups);
         Assert.Equal("before a sync", backup.ReasonDisplay);
-        Assert.Contains("Account", backup.Contents[^1]);   // the backup covers the whole profile, accounts included
+        Assert.Equal("ACCOUNTS (1)", backup.AccountHeader);
+        Assert.Single(backup.AccountContents);   // the backup covers the whole profile, accounts included
+    }
+
+    /// <summary>
+    /// A backup covers the whole profile, and every place that summarises one has to say so in both kinds. The
+    /// account files used to be listed behind a long character list and simply clipped off the bottom, which left
+    /// "was my account data backed up too?" a question you could only answer by reading the code.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Backup_NamesItsCharactersAndItsAccounts_Separately()
+    {
+        _WriteProfile("settings_Default",
+            [(90000001, "a"), (90000002, "b"), (90000003, "c")], [(1001, "one"), (1002, "two")]);
+        using var instance = _NewInstance();
+        await instance.Services.GetRequiredService<EveSettingsPreferences>().SaveAccountNameAsync(1001, "Main account");
+        var tool = await _BuildToolAsync(instance);
+
+        await tool.BackupNowCommand.ExecuteAsync(null);
+
+        Assert.Contains("3 characters and 2 accounts", tool.Status);
+
+        var backup = Assert.Single(tool.Backups);
+        Assert.Equal("3 characters and 2 accounts", backup.Backup.Manifest.ContentsSummary);
+        Assert.Contains("3 characters and 2 accounts", backup.ContentsDisplay);
+        Assert.Equal("CHARACTERS (3)", backup.CharacterHeader);
+        Assert.Equal("ACCOUNTS (2)", backup.AccountHeader);
+        Assert.Equal(3, backup.CharacterContents.Count);
+        Assert.Equal(2, backup.AccountContents.Count);
+        Assert.Contains("Main account · 1001", backup.AccountContents);   // named account, id beside it
+        // A character that resolved to no name is still labelled, never a bare number.
+        Assert.Contains("Character 90000001", backup.CharacterContents);
+        Assert.Contains("Account 1002", backup.AccountContents);
+    }
+
+    /// <summary>The id rides along beside the name as a reference, for characters and accounts alike, so the user
+    /// can check which file a row actually is.</summary>
+    [AvaloniaFact]
+    public async Task Rows_CarryTheirIdBesideTheName()
+    {
+        _WriteProfile("settings_Default", [(90000001, "a")], [(1001, "one")]);
+        using var instance = _NewInstance();
+        await instance.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character("Jithran", 90000001));
+        var tool = await _BuildToolAsync(instance);
+
+        var character = Assert.Single(tool.Characters);
+        Assert.Equal("Jithran", character.DisplayName);
+        Assert.Equal("90000001", character.IdDisplay);
+
+        var account = Assert.Single(tool.Accounts);
+        Assert.Equal("1001", account.IdDisplay);
     }
 
     /// <summary>Cancelling the confirmation writes nothing at all — not even a backup.</summary>
@@ -389,6 +441,48 @@ public sealed class SettingsSyncToolTests : IDisposable
         Assert.Contains("CHARACTER SETTINGS", texts);
         Assert.Contains("ACCOUNT SETTINGS", texts);
         Assert.Contains("BACKUPS", texts);
+
+        // Names lead, ids ride along beside them — both actually rendered, not merely bound.
+        if (profiles > 0)
+        {
+            Assert.Contains("Jithran", texts);
+            Assert.Contains("90000001", texts);
+            Assert.Contains("1001", texts);
+        }
+        window.Close();
+    }
+
+    /// <summary>
+    /// The backups panel with a backup actually in it: both groups named and counted, the account files listed as
+    /// plainly as the character ones. This is the view that made "was my account data backed up too?" a question.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task BackupsPanel_ShowsCharactersAndAccounts_Renders()
+    {
+        _WriteProfile("settings_Default",
+            [(90000001, "a"), (90000002, "b"), (90000003, "c"), (90000004, "d")], [(1001, "one"), (1002, "two")]);
+        using var instance = _NewInstance();
+        var registry = instance.Services.GetRequiredService<ICharacterRegistry>();
+        foreach (var (name, id) in new[] { ("Jithran", 90000001), ("Lyra Custos", 90000002) })
+            await registry.AddOrUpdateAsync(new Character(name, id));
+        await instance.Services.GetRequiredService<EveSettingsPreferences>().SaveAccountNameAsync(1001, "Main account");
+        instance.Services.GetRequiredService<IThemeService>().Apply(FactionTheme.Gallente);
+
+        var tool = await _BuildToolAsync(instance);
+        await tool.BackupNowCommand.ExecuteAsync(null);
+
+        var window = new SettingsSyncWindow(tool) { Width = 1180, Height = 760 };
+        window.Show();
+        await _WaitForAsync(() => false, tries: 12);
+
+        window.CaptureRenderedFrame()!.Save(
+            Path.Combine(_ShotDirectory(), "eveutils-settings-sync-backups.png"), new PngBitmapEncoderOptions());
+
+        var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(block => block.Text).ToList();
+        Assert.Contains("CHARACTERS (4)", texts);
+        Assert.Contains("ACCOUNTS (2)", texts);
+        Assert.Contains("Main account · 1001", texts);   // the accounts are on screen, not clipped below the fold
+        Assert.Contains("Account 1002", texts);
         window.Close();
     }
 

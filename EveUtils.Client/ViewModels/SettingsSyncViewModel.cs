@@ -363,7 +363,7 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
                 $"{plan.SourceName}'s {_KindWord(kind)} settings will overwrite {plan.FileCount} " +
                 $"{_KindWord(kind, plan.FileCount)} in {plan.Profile.Name}:\n\n" +
                 $"{string.Join("\n", plan.TargetNames.Select(name => "  • " + name))}\n\n" +
-                $"The whole profile is backed up first, to {_backups.RootDirectory}.",
+                $"The whole profile — {_ProfileContents()} — is backed up first, to {_backups.RootDirectory}.",
                 okText: "Copy");
             if (!confirmed)
                 return;
@@ -422,7 +422,8 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
             ? string.Empty
             : $" Not copied: {string.Join("; ", value.Failed)}.";
 
-        Status = copied + failed + $" Backup of {plan.Profile.Name} in {value.BackupDirectory}.";
+        Status = copied + failed +
+                 $" Backed up {plan.Profile.Name} ({value.Backup.Manifest.ContentsSummary}) to {value.Backup.DirectoryPath}.";
         StatusIsError = value.Failed.Count > 0;
     }
 
@@ -445,7 +446,8 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
 
             if (result.IsSuccess && result.Value is not null)
             {
-                Status = $"Backed up {profile.Name} ({result.Value.Manifest.Entries.Count} files) to {result.Value.DirectoryPath}.";
+                Status = $"Backed up {profile.Name}: {result.Value.Manifest.ContentsSummary} " +
+                         $"({result.Value.Manifest.Entries.Count} files) to {result.Value.DirectoryPath}.";
                 StatusIsError = false;
             }
             else
@@ -480,8 +482,9 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
         {
             var confirmed = await _dialogs.ConfirmAsync(
                 "Restore this backup?",
-                $"The {row.Backup.Manifest.Entries.Count} files in the backup of {row.TakenAtDisplay} will overwrite " +
-                $"{row.ProfileName}. The profile's current state is backed up first, so this is undoable too.",
+                $"The backup of {row.TakenAtDisplay} — {row.Backup.Manifest.ContentsSummary}, " +
+                $"{row.Backup.Manifest.Entries.Count} files — will overwrite {row.ProfileName}. The profile's " +
+                "current state is backed up first, so this is undoable too.",
                 okText: "Restore");
             if (!confirmed)
                 return;
@@ -575,8 +578,15 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
             return $"Tick the {_KindWord(kind, 2)} that should take {source.DisplayName}'s settings.";
 
         return $"{source.DisplayName} → {string.Join(", ", targets.Select(row => row.DisplayName))} " +
-               $"({targets.Count} files). The whole profile is backed up first.";
+               $"({targets.Count} files). The whole profile — {_ProfileContents()} — is backed up first.";
     }
+
+    // What a backup of the selected profile would cover, in both kinds — the answer to "did it back up my
+    // account data too?", given before the question is asked.
+    private string _ProfileContents() => _SelectedProfile() is { } profile
+        ? $"{profile.Characters.Count} {_KindWord(SettingsFileKind.Character, profile.Characters.Count)} " +
+          $"and {profile.Accounts.Count} {_KindWord(SettingsFileKind.Account, profile.Accounts.Count)}"
+        : "every character and account in it";
 
     private static string _KindWord(SettingsFileKind kind, int count = 1) => kind switch
     {

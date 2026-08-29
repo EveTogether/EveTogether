@@ -56,6 +56,13 @@ public sealed record SettingsBackupManifest
 
     [JsonIgnore]
     public int AccountCount => Entries.Count(entry => entry.Kind == SettingsFileKind.Account);
+
+    /// <summary>"6 characters and 3 accounts" — always names both kinds, so a backup that covers the whole profile
+    /// never reads as if it only kept the characters.</summary>
+    [JsonIgnore]
+    public string ContentsSummary =>
+        $"{CharacterCount} {(CharacterCount == 1 ? "character" : "characters")} and " +
+        $"{AccountCount} {(AccountCount == 1 ? "account" : "accounts")}";
 }
 
 /// <summary>A backup on disk: its manifest plus where it lives, so it can be shown, restored or deleted.</summary>

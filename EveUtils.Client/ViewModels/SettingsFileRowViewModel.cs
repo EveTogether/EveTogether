@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -41,6 +42,14 @@ public partial class SettingsFileRowViewModel : ViewModelBase
 
     public bool CanBeTarget => !IsSource;
 
+    /// <summary>The id beside the name: subordinate reference, not something to read instead of the name — it is
+    /// how you check you have the file you think you have (and for an account it is all EVE itself offers).</summary>
+    public string IdDisplay => File.Id.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>False when the name is the "Character &lt;id&gt;" fallback, which already ends in the id — printing it
+    /// twice on one row is noise, not reference.</summary>
+    public bool ShowId => !DisplayName.EndsWith(IdDisplay, StringComparison.Ordinal);
+
     public string LastModifiedDisplay =>
         File.LastModifiedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 
@@ -54,6 +63,8 @@ public partial class SettingsFileRowViewModel : ViewModelBase
           (AccountHint.Count > 3 ? $" +{AccountHint.Count - 3}" : string.Empty);
 
     public bool HasHint => AccountHint.Count > 0;
+
+    partial void OnDisplayNameChanged(string value) => OnPropertyChanged(nameof(ShowId));
 
     partial void OnIsSourceChanged(bool value)
     {

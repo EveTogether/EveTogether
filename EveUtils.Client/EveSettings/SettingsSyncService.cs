@@ -21,11 +21,12 @@ public sealed record SettingsSyncPlan(
     public int FileCount => Targets.Count;
 }
 
-/// <summary>What a sync did: which targets took the new settings, which did not and why, and where the backup is.</summary>
+/// <summary>What a sync did: which targets took the new settings, which did not and why, and the backup taken
+/// beforehand — the whole snapshot, so the caller can say what is in it rather than only where it is.</summary>
 public sealed record SettingsSyncOutcome(
     IReadOnlyList<string> Copied,
     IReadOnlyList<string> Failed,
-    string BackupDirectory);
+    SettingsBackup Backup);
 
 /// <summary>
 /// Copies one character's or one account's EVE settings over other files of the same kind, after backing the whole
@@ -94,8 +95,7 @@ public sealed class SettingsSyncService(SettingsBackupService backups) : ISingle
             }
         }
 
-        return Result<SettingsSyncOutcome>.Success(
-            new SettingsSyncOutcome(copied, failed, backup.Value.DirectoryPath));
+        return Result<SettingsSyncOutcome>.Success(new SettingsSyncOutcome(copied, failed, backup.Value));
     }
 
     private static string _KindLabel(SettingsFileKind kind, int count) => kind switch

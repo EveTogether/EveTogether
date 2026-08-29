@@ -12,7 +12,7 @@
         WindowStartupLocation="CenterOwner"
         Title="EVE Settings Sync">
 
-    <DockPanel Margin="14">
+    <DockPanel Margin="14" x:Name="SyncRootPanel">
 
         <!-- On the content root, not on the window: the module host re-parents this content into the main window's
              tab when docked, and Window.Styles would stay behind with the (never shown) window. -->
@@ -43,6 +43,21 @@
                 <Setter Property="TextWrapping" Value="Wrap"/>
                 <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
             </Style>
+            <!-- The id beside a name: there to check which file you have, deliberately quieter than the name. -->
+            <Style Selector="TextBlock.rowid">
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="Opacity" Value="0.45"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <!-- Short host (the docked tab is a good 130px shorter than this tool's own window): the standing
+                 explanations give their room back to the file lists. Their text stays on the titles' tooltips. -->
+            <Style Selector="DockPanel.compact TextBlock.intro">
+                <Setter Property="IsVisible" Value="False"/>
+            </Style>
+            <Style Selector="DockPanel.compact TextBlock.blockhint">
+                <Setter Property="IsVisible" Value="False"/>
+            </Style>
             <Style Selector="TextBlock.empty">
                 <Setter Property="FontSize" Value="11"/>
                 <Setter Property="Opacity" Value="0.5"/>
@@ -55,7 +70,7 @@
         <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,10">
             <TextBlock Text="EVE SETTINGS SYNC" FontWeight="Bold" FontSize="15"
                        Foreground="{StaticResource TextBrightBrush}"/>
-            <TextBlock FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"
+            <TextBlock Classes="intro" FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"
                        Text="Copy one character's window layout, overview and tabs onto your other characters — or one account's settings onto your other accounts. The two never mix, and the whole profile is backed up before every copy."/>
         </StackPanel>
 
@@ -120,7 +135,8 @@
                             <Grid ColumnDefinitions="Auto,*">
                                 <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
                                 <TextBlock Grid.Column="1" Classes="panel-title" Text="CHARACTER SETTINGS"
-                                           VerticalAlignment="Center"/>
+                                           VerticalAlignment="Center"
+                                           ToolTip.Tip="Per character: window layout, overview settings, tabs. Applies to that pilot only."/>
                             </Grid>
                             <TextBlock Classes="blockhint"
                                        Text="Per character: window layout, overview settings, tabs. Applies to that pilot only."/>
@@ -173,9 +189,13 @@
                                                     <CheckBox Grid.Column="0" IsChecked="{Binding IsTarget}"
                                                               IsEnabled="{Binding CanBeTarget}" Margin="0,0,4,0"
                                                               MinHeight="0" MinWidth="0" Padding="0"/>
-                                                    <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontSize="12"
-                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                                               Foreground="{StaticResource TextBrightBrush}"/>
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                                                VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding DisplayName}" FontSize="12"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   Foreground="{StaticResource TextBrightBrush}"/>
+                                                        <TextBlock Classes="rowid" Text="{Binding IdDisplay}" IsVisible="{Binding ShowId}"/>
+                                                    </StackPanel>
                                                     <Border Grid.Column="2" Classes="chip ok" Margin="6,0"
                                                             VerticalAlignment="Center" IsVisible="{Binding IsSource}">
                                                         <TextBlock Text="SOURCE"/>
@@ -201,7 +221,8 @@
                             <Grid ColumnDefinitions="Auto,*">
                                 <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
                                 <TextBlock Grid.Column="1" Classes="panel-title" Text="ACCOUNT SETTINGS"
-                                           VerticalAlignment="Center"/>
+                                           VerticalAlignment="Center"
+                                           ToolTip.Tip="Per account: applies to every character on that login. EVE publishes no account names — name them yourself and EVE Together remembers."/>
                             </Grid>
                             <TextBlock Classes="blockhint"
                                        Text="Per account: applies to every character on that login. EVE publishes no account names — name them yourself and EVE Together remembers."/>
@@ -254,9 +275,12 @@
                                                               IsEnabled="{Binding CanBeTarget}" Margin="0,0,4,0"
                                                               MinHeight="0" MinWidth="0" Padding="0"/>
                                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding DisplayName}" FontSize="12"
-                                                                   TextTrimming="CharacterEllipsis"
-                                                                   Foreground="{StaticResource TextBrightBrush}"/>
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <TextBlock Text="{Binding DisplayName}" FontSize="12"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                                            <TextBlock Classes="rowid" Text="{Binding IdDisplay}" IsVisible="{Binding ShowId}"/>
+                                                        </StackPanel>
                                                         <!-- The only recognisable trace EVE leaves of an account:
                                                              who was saved with it. A hint while naming, not a fact. -->
                                                         <TextBlock Text="{Binding HintDisplay}" FontSize="10"
@@ -306,14 +330,31 @@
                     </StackPanel>
 
                     <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,7,0,0" IsVisible="{Binding HasBackups}">
-                        <ItemsControl ItemsSource="{Binding SelectedBackup.Contents}" MaxHeight="132">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="sys:String">
-                                    <TextBlock Text="{Binding}" FontSize="10" Opacity="0.65"
-                                               TextTrimming="CharacterEllipsis"/>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <!-- Both kinds, each under its own count: a backup covers the whole profile, and the list
+                             used to show characters first and simply clip the accounts off the bottom. -->
+                        <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="3">
+                                <TextBlock Classes="label" Text="{Binding SelectedBackup.CharacterHeader}"/>
+                                <ItemsControl ItemsSource="{Binding SelectedBackup.CharacterContents}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="sys:String">
+                                            <TextBlock Text="{Binding}" FontSize="10" Opacity="0.65"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Classes="label" Text="{Binding SelectedBackup.AccountHeader}"
+                                           Margin="0,4,0,0"/>
+                                <ItemsControl ItemsSource="{Binding SelectedBackup.AccountContents}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="sys:String">
+                                            <TextBlock Text="{Binding}" FontSize="10" Opacity="0.65"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
                             <Button Grid.Column="0" Classes="accent" Content="RESTORE THIS BACKUP…" FontSize="10"
                                     HorizontalAlignment="Stretch" IsEnabled="{Binding CanRestore}"
