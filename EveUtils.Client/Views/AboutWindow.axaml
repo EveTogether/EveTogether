@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:app="using:EveUtils.Client"
         xmlns:vm="using:EveUtils.Client.ViewModels"
         mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="640"
         x:Class="EveUtils.Client.Views.AboutWindow"
@@ -34,7 +35,7 @@
                         <TextBlock Text="{Binding Version}" FontSize="12"
                                    Foreground="{DynamicResource TextAccentBrush}" VerticalAlignment="Center"/>
                         <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="2" Padding="5,1">
-                            <TextBlock Text="POC" FontSize="9" LetterSpacing="2"
+                            <TextBlock Text="{x:Static app:AppBranding.ReleaseStage}" FontSize="9" LetterSpacing="2"
                                        Foreground="{DynamicResource AccentBrightBrush}"/>
                         </Border>
                     </StackPanel>

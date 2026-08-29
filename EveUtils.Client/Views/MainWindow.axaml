@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:EveUtils.Client"
         xmlns:vm="using:EveUtils.Client.ViewModels"
         xmlns:dlg="using:EveUtils.Client.Dialogs"
         xmlns:ctl="using:EveUtils.Client.Controls"
@@ -58,7 +59,7 @@
                     <TextBlock Text="EVE TOGETHER" FontWeight="Bold" FontSize="13" LetterSpacing="2.2"
                                IsVisible="{Binding ShowBrandText}"
                                Foreground="{StaticResource TextBrightBrush}" VerticalAlignment="Center"/>
-                    <TextBlock Text="POC" FontSize="9" LetterSpacing="2.5" Opacity="0.8"
+                    <TextBlock Text="{x:Static app:AppBranding.ReleaseStage}" FontSize="9" LetterSpacing="2.5" Opacity="0.8"
                                IsVisible="{Binding ShowBrandText}"
                                Foreground="{DynamicResource TextAccentBrush}" VerticalAlignment="Center"/>
                 </StackPanel>
