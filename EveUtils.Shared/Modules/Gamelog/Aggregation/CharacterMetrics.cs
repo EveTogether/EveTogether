@@ -57,7 +57,9 @@ public sealed class CharacterMetrics
     private long _dealt, _received, _bounty, _repairedOut, _repairedIn, _neutOut, _neutIn;
     private int _hits, _misses, _kills;
     private string? _location;
-    private DateTime? _lastLocationAt;
+    // The last moment we could PROVE the character was outside the abyss — a jump/undock line, or the ESI poll that
+    // saw them leave. Only such a moment may anchor a countdown, because only it is certainly before the entry.
+    private DateTime? _lastKnownOutsideAt;
     private DateTime? _abyssalAnchor;
     private double _peakDealtDps;
 
@@ -66,7 +68,7 @@ public sealed class CharacterMetrics
         lock (_gate)
         {
             // First abyssal name of this run: the pilot has been inside since the last place we could see them.
-            if (_abyssalAnchor is null && _lastLocationAt is { } anchor && AbyssalSpace.IsAbyssalContact(target))
+            if (_abyssalAnchor is null && _lastKnownOutsideAt is { } anchor && AbyssalSpace.IsAbyssalContact(target))
                 _abyssalAnchor = anchor;
 
             var miss = quality == HitQuality.Misses || amount <= 0;
@@ -141,16 +143,34 @@ public sealed class CharacterMetrics
     }
 
     /// <summary>
-    /// A jump or undock: the character is somewhere new, so any abyssal run is over. Docking is not covered — the
-    /// log has no dock line — but a run that outlives its 20 minutes reads as "--:--" rather than as a live clock.
+    /// A jump or undock: the character is somewhere new, so any abyssal run is over. This is the certain exit, but
+    /// not the usual one — you leave the abyss where you fired the filament, and no line is written there.
+    /// <see cref="EndAbyssalRun"/> is what closes an ordinary run.
     /// </summary>
     public void SetLocation(string system, DateTime at)
     {
         lock (_gate)
         {
             _location = system;
-            _lastLocationAt = at;
+            _lastKnownOutsideAt = at;
             _abyssalAnchor = null;
+        }
+    }
+
+    /// <summary>
+    /// Ends the countdown because ESI placed the character outside the abyss — or, with a null
+    /// <paramref name="seenOutsideUtc"/>, because we stopped watching and no longer know.
+    ///
+    /// Recording the sighting matters as much as clearing the clock: a second filament is fired in space, so a
+    /// follow-up run has no location line to anchor on. See ET-56.
+    /// </summary>
+    public void EndAbyssalRun(DateTime? seenOutsideUtc)
+    {
+        lock (_gate)
+        {
+            _abyssalAnchor = null;
+            if (seenOutsideUtc is { } outside)
+                _lastKnownOutsideAt = outside;
         }
     }
 
@@ -161,8 +181,8 @@ public sealed class CharacterMetrics
     }
 
     /// <summary>
-    /// When the abyssal countdown started, or null when no run is under way. This is the last location the log
-    /// placed the character at, never the first abyssal shot: the shot is minutes into a run that already started,
+    /// When the abyssal countdown started, or null when no run is under way. This is the last moment we could prove
+    /// the character was outside, never the first abyssal shot: the shot is minutes into a run that already started,
     /// and anchoring there would show more time left than the pilot has.
     /// </summary>
     public DateTime? AbyssalAnchor
