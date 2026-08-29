@@ -158,12 +158,11 @@ public sealed class CharacterMetrics
     }
 
     /// <summary>
-    /// Ends the countdown because ESI placed the character outside the abyss (or, with <paramref name="seenOutsideUtc"/>
-    /// null, because the deadline passed and we stopped watching).
+    /// Ends the countdown because ESI placed the character outside the abyss — or, with a null
+    /// <paramref name="seenOutsideUtc"/>, because we stopped watching and no longer know.
     ///
     /// Recording the sighting matters as much as clearing the clock: a second filament is fired in space, so a
-    /// follow-up run has no location line to anchor on and would otherwise fall back on an undock from three runs
-    /// ago and read "--:--" from arrival (measured 2026-08-29: one undock at 19:19:50 covered three runs).
+    /// follow-up run has no location line to anchor on. See ET-56.
     /// </summary>
     public void EndAbyssalRun(DateTime? seenOutsideUtc)
     {
