@@ -92,6 +92,22 @@
         <Style Selector="Border.statepill.forming > TextBlock">
             <Setter Property="Foreground" Value="#E0B341"/>
         </Style>
+        <!-- The member list's fold line (ET-53): "▾ + 45 more" / "▴ SHOW FEWER". Deliberately quiet and inset to the
+             member leaves' own indent — it reads as the tail of the list rather than a fifth action on the card. -->
+        <Style Selector="Button.morelink">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="22,1,0,0"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+        </Style>
+        <Style Selector="Button.morelink:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="TextBlock.Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
         <!-- Doctrine pill (B-3): the coupled composition "◆ name" as a bordered accent pill, matching the mockup. -->
         <Style Selector="Border.docpill">
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
@@ -232,10 +248,15 @@
                                                                 <TextBlock Text="{Binding MemberCount, StringFormat='{}{0} in fleet'}"
                                                                            Classes="label" FontSize="9" VerticalAlignment="Center"/>
                                                             </StackPanel>
-                                                            <!-- my characters in this fleet (joined) -->
-                                                            <ItemsControl ItemsSource="{Binding Members}"
+                                                            <!-- my characters in this fleet (joined), shortened past a
+                                                                 handful (ET-53) — the fold line below opens the rest -->
+                                                            <ItemsControl ItemsSource="{Binding VisibleMembers}"
                                                                           ItemTemplate="{StaticResource MemberLeafTemplate}"
                                                                           IsVisible="{Binding IsParticipating}" Margin="0,2,0,0"/>
+                                                            <Button Classes="morelink" Content="{Binding MoreMembersLabel}"
+                                                                    IsVisible="{Binding CanShortenMembers}"
+                                                                    Command="{Binding ToggleMembersCommand}"
+                                                                    ToolTip.Tip="Show every member of this fleet on the card"/>
                                                             <!-- relationship-driven actions -->
                                                             <WrapPanel Margin="0,2,0,0">
                                                                 <Button Content="JOIN" FontSize="9" Classes="accent" Margin="0,0,3,3" IsVisible="{Binding ShowJoin}"
@@ -295,13 +316,23 @@
                                                         <TextBlock Text="{Binding StateLabel}"/>
                                                     </Border>
                                                 </StackPanel>
-                                                <TextBlock Classes="label" FontSize="9"
-                                                           Text="{Binding OwnerLabel, StringFormat='Owner: {0}'}"
-                                                           Foreground="{DynamicResource TextAccentBrush}"/>
-                                                <!-- local characters in this fleet (same leaves as server fleets, local data) -->
-                                                <ItemsControl ItemsSource="{Binding Members}"
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <TextBlock Classes="label" FontSize="9"
+                                                               Text="{Binding OwnerLabel, StringFormat='Owner: {0}'}"
+                                                               Foreground="{DynamicResource TextAccentBrush}"/>
+                                                    <!-- How many pilots are in the fleet, folded list or not (ET-53) -->
+                                                    <TextBlock Classes="label" FontSize="9" VerticalAlignment="Center"
+                                                               Text="{Binding MemberCountLabel}"/>
+                                                </StackPanel>
+                                                <!-- the whole roster since ET-46 (externals included), shortened past a
+                                                     handful by ET-53; the fold line below opens the rest inline -->
+                                                <ItemsControl ItemsSource="{Binding VisibleMembers}"
                                                               ItemTemplate="{StaticResource MemberLeafTemplate}"
                                                               IsVisible="{Binding IsParticipating}" Margin="0,2,0,0"/>
+                                                <Button Classes="morelink" Content="{Binding MoreMembersLabel}"
+                                                        IsVisible="{Binding CanShortenMembers}"
+                                                        Command="{Binding ToggleMembersCommand}"
+                                                        ToolTip.Tip="Show every member of this fleet on the card"/>
                                                 <WrapPanel Margin="0,2,0,0">
                                                     <Button Content="MANAGE" FontSize="9" Margin="0,0,3,3"
                                                             Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ManageLocalCommand}"

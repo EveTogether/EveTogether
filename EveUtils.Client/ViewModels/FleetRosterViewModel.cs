@@ -11,10 +11,9 @@ using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Transport;
 using EveUtils.Client.ViewModels.FitBrowser;
-using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Messaging;   // Result / ResultMessage, used by the ESI mirror helpers below
 using EveUtils.Shared.Modules.Fleet;
 using EveUtils.Shared.Modules.Fleet.Entities;
-using EveUtils.Shared.Modules.Fleet.Events;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.ViewModels;
@@ -43,7 +42,13 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
     private readonly IServiceProvider _services;
     private readonly IToastService _toasts;
     private readonly ISdeNameResolver _shipNames;
-    private readonly IDisposable _fleetChangedSubscription;
+    private readonly IFleetRosterWatch _rosterWatch;
+    private readonly IDisposable _rosterSubscription;
+
+    // The announcements this window made for its own mutations, so it does not reload a second time for news it is
+    // already showing. Matched on identity, never on value: two changes that describe the same pilot are still two
+    // pieces of news, and only the one this window raised itself may be skipped.
+    private readonly List<FleetRosterChange> _ownAnnouncements = [];
 
     // The can-fly verdict per member id, recomputed each reload from the member's assigned fit + cached skills.
     private IReadOnlyDictionary<long, MemberSkillBadge> _skillBadges = new Dictionary<long, MemberSkillBadge>();
@@ -95,20 +100,46 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         IsOwner = isOwner;
         UpdateActivationLabel(fleet.Activation);
 
-        // Someone else joining/leaving (or the fleet starting/concluding) is pushed as fleet.changed: reload this
-        // open roster live so a join shows up without reopening the window. Disposed when the window closes.
-        _fleetChangedSubscription = services.GetRequiredService<IEventBus>().Subscribe<FleetChangedEvent>(_OnFleetChanged);
+        // Any change to this fleet's roster — someone else joining or leaving, the fleet starting, a pilot removed in
+        // fleet metrics or on the browser card — arrives on the one shared watch, which folds in the server's
+        // fleet.changed as well (ET-52). Reload so this window shows it without being reopened. Disposed on close.
+        _rosterWatch = services.GetRequiredService<IFleetRosterWatch>();
+        _rosterSubscription = _rosterWatch.Subscribe(_OnRosterChanged);
 
         _ = ReloadAsync();
     }
 
-    private void _OnFleetChanged(FleetChangedEvent integrationEvent)
+    private void _OnRosterChanged(FleetRosterChange change)
     {
-        if (integrationEvent.FleetId == _fleet.Id)
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = ReloadAsync());
+        // The echo of what this window just did and has already redrawn.
+        int own = _ownAnnouncements.FindIndex(c => ReferenceEquals(c, change));
+        if (own >= 0)
+        {
+            _ownAnnouncements.RemoveAt(own);
+            return;
+        }
+
+        if (change.FleetId == _fleet.Id)
+            _ = ReloadAsync();
     }
 
-    public void Dispose() => _fleetChangedSubscription.Dispose();
+    public void Dispose() => _rosterSubscription.Dispose();
+
+    /// <summary>Tell every other open screen that this fleet's roster moved. Announcing is not "also refresh the
+    /// neighbours" — it is the one route a roster change travels, the same one the fleet browser and fleet metrics
+    /// listen on, so this window never has to know which of them happens to be open (ET-52).</summary>
+    private void _Announce(FleetRosterChange change)
+    {
+        _ownAnnouncements.Add(change);
+        _rosterWatch.Announce(change);
+    }
+
+    // Every mutation this window makes to the roster ends here: redraw what is on screen, then announce it.
+    private async Task _RosterChangedAsync(FleetRosterChange change)
+    {
+        await ReloadAsync();
+        _Announce(change);
+    }
 
     /// <summary>The fleet this window manages — its identity for the module host so each fleet's roster is its own
     /// module (a second fleet's MANAGE opens its own window rather than re-selecting the first one's).</summary>
@@ -584,12 +615,16 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
 
         var nameById = leavable.ToDictionary(c => c.Id, c => c.Name);
         var leftNames = new List<string>();
+        var leftIds = new List<int>();
         string? lastError = null;
         foreach (var characterId in toLeave)
         {
             var left = await _fleets.LeaveFleetAsync(_fleet.Id, characterId);
             if (left.Ok)
+            {
                 leftNames.Add(nameById.GetValueOrDefault(characterId, $"char {characterId}"));
+                leftIds.Add(characterId);
+            }
             else
                 lastError = left.Message;
         }
@@ -600,6 +635,11 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
             if (_onActivationChanged is not null)
                 await _onActivationChanged();   // membership changed → refresh the parent overview
             await ReloadAsync();                 // the roster reflects the leave (candidates shrink; LEAVE hides at zero)
+
+            // A character leaving is that character removed from the fleet, so it travels the same route as a kick:
+            // their row goes off fleet metrics and the browser card too, one announcement per character that left.
+            foreach (int characterId in leftIds)
+                _Announce(FleetRosterChange.Removed(_fleet.Id, characterId));
         }
         if (lastError is not null)
             _toasts.Show("Leave failed",
@@ -885,7 +925,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
             return;
 
         await _SyncMemberPositionToEsiAsync(member.CharacterId, role, wingId, squadId, EsiAutoInviteMembers);
-        await ReloadAsync();
+        await _RosterChangedAsync(FleetRosterChange.Changed(_fleet.Id, member.CharacterId));
     }
 
     // --- G-3: roster drag-and-drop. The drop target is the node VM under the cursor; resolving it decides whether the
@@ -912,7 +952,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
                 if (moved.Ok)
                 {
                     await _SyncMemberPositionToEsiAsync(dragged.CharacterId, resolution.Role, resolution.WingId, resolution.SquadId, EsiAutoInviteMembers);
-                    await ReloadAsync();
+                    await _RosterChangedAsync(FleetRosterChange.Changed(_fleet.Id, dragged.CharacterId));
                 }
                 break;
             case RosterDropAction.Swap:
@@ -921,7 +961,8 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
                 var swapped = await _fleets.SwapMembersAsync(draggedMemberId, resolution.OtherMemberId);
                 StatusMessage = swapped.Ok ? "Members swapped." : $"Swap failed: {swapped.Message}";
                 if (swapped.Ok)
-                    await ReloadAsync();
+                    // Two members moved at once, so this names neither: everything showing this roster re-reads it.
+                    await _RosterChangedAsync(FleetRosterChange.Reloaded(_fleet.Id));
                 break;
         }
     }
@@ -950,7 +991,9 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         var assigned = await _fleets.AssignMemberFitAsync(member.Id, fit, entryId);
         StatusMessage = assigned.Ok ? $"Assigned {fit.FitName}." : $"Assign failed: {assigned.Message}";
         if (assigned.Ok)
-            await ReloadAsync();
+            // The ship and fit a pilot flies show on the browser card's leaf and in the shared member menu on every
+            // screen, so an assignment is a change to that member wherever they are drawn.
+            await _RosterChangedAsync(FleetRosterChange.Changed(_fleet.Id, member.CharacterId));
     }
 
     /// <summary>Opens the read-only radial fit-detail of a member's assigned fit — for everyone, not
@@ -971,7 +1014,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         var moved = await _fleets.MoveMemberAsync(member.Id, FleetRole.Unassigned, -1, -1);
         StatusMessage = moved.Ok ? "Member removed from squad (unassigned)." : $"Unassign failed: {moved.Message}";
         if (moved.Ok)
-            await ReloadAsync();
+            await _RosterChangedAsync(FleetRosterChange.Changed(_fleet.Id, member.CharacterId));
     }
 
     /// <summary>"Remove from fleet": out of the EVE Together roster, and only then the separate question whether to
@@ -993,8 +1036,10 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         StatusMessage = message;
         if (status is FleetMemberRemovalStatus.RemovedFromFleetInGameFailed)
             _toasts.Show("Removed here, not in-game", message, ToastKind.Warning);
-        if (status is not FleetMemberRemovalStatus.Failed)
-            await ReloadAsync();
+
+        // No reload here: the removal service announces the removal on the shared watch and this window's own
+        // listener redraws on it — the same route by which a removal made in fleet metrics or on the browser card
+        // reaches this window. One route in, whoever made the change (ET-52).
     }
 
     private async Task TransferOwnershipAsync(FleetMemberInfo member)
@@ -1015,7 +1060,8 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         var transferred = await _fleets.TransferFleetOwnershipAsync(_fleet.Id, member.CharacterId);
         StatusMessage = transferred.Ok ? "Ownership transferred." : $"Transfer failed: {transferred.Message}";
         if (transferred.Ok)
-            await ReloadAsync();
+            // Two members change hands at once (old owner and new), and so does who may remove whom on every screen.
+            await _RosterChangedAsync(FleetRosterChange.Reloaded(_fleet.Id));
     }
 
     private async Task AddWingAsync()
@@ -1212,7 +1258,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         var added = await _fleets.AddExternalMemberAsync(_fleet.Id, characterId.Value);
         StatusMessage = added.Ok ? "External member added." : $"Add failed: {added.Message}";
         if (added.Ok)
-            await ReloadAsync();
+            await _RosterChangedAsync(FleetRosterChange.Added(_fleet.Id, characterId.Value));
     }
 
     /// <summary>General invite (no position) from the panel header; positional invites run from the tree menu.</summary>
@@ -1234,7 +1280,14 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         StatusMessage = responded.Ok
             ? accept ? "Join request accepted." : "Join request declined."
             : $"Response failed: {responded.Message}";
-        if (responded.Ok)
+        if (!responded.Ok)
+            return;
+
+        // Only an accept changes the roster; a decline just clears a pending request, which lives on this window
+        // alone. A request row carries its request id, not the requester's character id, so this names no pilot.
+        if (accept)
+            await _RosterChangedAsync(FleetRosterChange.Reloaded(_fleet.Id));
+        else
             await ReloadAsync();
     }
 

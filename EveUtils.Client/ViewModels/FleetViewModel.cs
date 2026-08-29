@@ -1,5 +1,9 @@
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Fleet;
 using EveUtils.Shared.Modules.Fleet.Entities;
 
@@ -89,8 +93,97 @@ public sealed partial class FleetViewModel : ObservableObject
 
     /// <summary>My characters that are members of this fleet, shown as leaf rows under the fleet node (stream B / B-2):
     /// each with their role, assigned fit, can-fly badge and a SELECT FIT action. Empty for browser rows
-    /// (discoverable ≠ joined). The same fleet is listed once and aggregates all my coupled characters in it.</summary>
+    /// (discoverable ≠ joined). The same fleet is listed once and aggregates all my coupled characters in it.
+    /// A client-only fleet's card carries the WHOLE roster instead, externals included (ET-46) — which is why this
+    /// list needs shortening at all. The card binds <see cref="VisibleMembers"/>, not this.</summary>
     public ObservableCollection<FleetMemberRowViewModel> Members { get; } = [];
+
+    // --- The shortened member list (ET-53) ---
+
+    /// <summary>
+    /// How many member leaves a card shows before it shortens the list. Six rather than the five first suggested:
+    /// the ranking below puts the fleet commander first and this client's own characters next, and a multiboxer
+    /// flying four alts plus the FC already fills five — with six there is still a slot left for the first pilot who
+    /// is neither, which is the whole reason a shortened list is worth looking at. Beyond that the card stops being
+    /// an overview: at ~40px a leaf, six is roughly a third of the window's height for one of possibly several cards.
+    /// </summary>
+    public const int CollapsedMemberLimit = 6;
+
+    /// <summary>What the card actually draws: <see cref="Members"/> in full when unfolded, otherwise the first
+    /// <see cref="CollapsedMemberLimit"/> of them — which the loader has ordered fleet commander first, then this
+    /// client's own characters, then external pilots, then the rest.</summary>
+    public ObservableCollection<FleetMemberRowViewModel> VisibleMembers { get; } = [];
+
+    /// <summary>The member list is unfolded. Kept across reloads by the fleets window, so removing a pilot from an
+    /// unfolded 50-man list does not snap it shut (ET-52 meets ET-53).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MoreMembersLabel))]
+    private bool _membersExpanded;
+
+    /// <summary>Raised when the user folds or unfolds this card, so the window can remember it across a reload.</summary>
+    public Action<long, bool>? MembersExpansionChanged { get; set; }
+
+    /// <summary>There are more members than a folded card shows — drives the "+ n more" line. False for a small
+    /// fleet, which then has no extra line and no extra click at all.</summary>
+    public bool CanShortenMembers => Members.Count > CollapsedMemberLimit;
+
+    /// <summary>How many members the folded card leaves out, and how many of those are external pilots. An external
+    /// has a row on this card and nowhere else in the client (ET-46), so a hidden one is worth naming rather than
+    /// counting silently — it is what tells the FC there is something under the line they cannot see elsewhere.</summary>
+    private int HiddenMemberCount => Math.Max(0, Members.Count - CollapsedMemberLimit);
+
+    private int _hiddenExternalCount;
+
+    /// <summary>The fold line's label. "+ 45 more" on a client-only card, whose list is the whole roster; "+ 2 more of
+    /// yours" on a server card, whose list is only my own characters, so the number never reads as the fleet's size.</summary>
+    public string MoreMembersLabel
+    {
+        get
+        {
+            if (MembersExpanded)
+                return "▴ SHOW FEWER";
+
+            string subject = IsLocal ? "more" : "more of yours";
+            return _hiddenExternalCount > 0
+                ? $"▾ + {HiddenMemberCount} {subject} · {_hiddenExternalCount} external"
+                : $"▾ + {HiddenMemberCount} {subject}";
+        }
+    }
+
+    /// <summary>"24 in fleet" — how many pilots the fleet holds, which is information in itself and therefore stays
+    /// on the card whether the member list is folded or not.</summary>
+    public string MemberCountLabel => $"{MemberCount} in fleet";
+
+    /// <summary>Fold or unfold the member list. Inline rather than a jump to the roster window: the question "who
+    /// else is in this fleet" is one the overview should answer where it is asked, and the card is the only place an
+    /// external pilot appears at all. MANAGE/VIEW remains the route to the structure itself.</summary>
+    [RelayCommand]
+    private void ToggleMembers()
+    {
+        if (!CanShortenMembers)
+            return;
+
+        MembersExpanded = !MembersExpanded;
+        RefreshVisibleMembers();
+        MembersExpansionChanged?.Invoke(Id, MembersExpanded);
+    }
+
+    /// <summary>Rebuilds <see cref="VisibleMembers"/> from <see cref="Members"/>. Called by the loader once the leaves
+    /// are in, and by the fold toggle.</summary>
+    public void RefreshVisibleMembers()
+    {
+        var shown = MembersExpanded || !CanShortenMembers
+            ? (IReadOnlyList<FleetMemberRowViewModel>)Members
+            : Members.Take(CollapsedMemberLimit).ToList();
+
+        VisibleMembers.Clear();
+        foreach (var member in shown)
+            VisibleMembers.Add(member);
+
+        _hiddenExternalCount = Members.Skip(CollapsedMemberLimit).Count(m => m.IsExternal);
+        OnPropertyChanged(nameof(CanShortenMembers));
+        OnPropertyChanged(nameof(MoreMembersLabel));
+    }
 
     /// <summary>The doctrine coupled to this fleet, shown as a pill on the node; null when none is coupled.</summary>
     [ObservableProperty] private string? _compositionName;
@@ -105,8 +198,11 @@ public sealed partial class FleetViewModel : ObservableObject
     /// has no coupled composition (fill, computed via <see cref="CompositionFillBuilder"/>).</summary>
     public ObservableCollection<CompositionFillRoleViewModel> RoleFill { get; } = [];
 
-    /// <summary>Live member count for the browser card ("24 in fleet").</summary>
-    [ObservableProperty] private int _memberCount;
+    /// <summary>Live member count for the browser card ("24 in fleet") — the whole fleet, not the leaves the card
+    /// happens to list, so the total stays visible however short the list is (ET-53).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MemberCountLabel))]
+    private int _memberCount;
 
     // ── Unified-overview state: set by the loader after the per-server merge so one fleet row
     // carries every relationship at once — owned, joined, and/or discoverable — instead of living in three tabs. ──
