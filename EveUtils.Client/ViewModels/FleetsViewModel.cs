@@ -12,6 +12,7 @@ using EveUtils.Client.Imaging;
 using EveUtils.Client.Messaging;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Transport;
+using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Transport;
 using EveUtils.Shared.Identity;
@@ -360,17 +361,62 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             // A non-owner character on a server fleet gets a per-leaf LEAVE (multi-box): pull this alt out while the
             // owner — and any other of my characters in the fleet — stays. The owner's own character never leaves.
             var canLeave = server is not null && member.CharacterId != fleet.CreatorCharacterId;
+
+            // The shared member menu (ET-44). This card has no live metric stream of its own, so it carries the
+            // roster facts only. Removal is the fleet owner's, which on this card means a client-only fleet: a
+            // server fleet's card lists my own characters, where leaving is what a pilot does and LEAVE already
+            // does it. Never on the creator's row — a fleet keeps its owner until ownership is handed on.
+            var canRemove = server is null
+                && row.ActingCharacterId == fleet.CreatorCharacterId
+                && member.CharacterId != fleet.CreatorCharacterId;
+            var facts = new FleetMemberFacts(
+                characterName, member.Role, member.IsExternal,
+                ShipName: assignedFit is null ? null : FitNameResolverFactory.For(_services).TypeName(assignedFit.ShipTypeId),
+                FitName: assignedFit?.FitName);
+
             var leaf = new FleetMemberRowViewModel(
                 member.Id, member.CharacterId, characterName, RoleLabel(member.Role),
                 assignedFit, badge,
                 new AsyncRelayCommand(() => SelectMemberFitAsync(member, composition, server)),
                 assignedFit is null ? null : new AsyncRelayCommand(() => FitDetailLauncher.OpenAsync(_services, _dialogs, assignedFit)),
                 canLeave ? new AsyncRelayCommand(() => LeaveMemberAsync(server!, fleet.Id, member.CharacterId, characterName, fleet.Name)) : null,
-                canLeave);
+                canLeave,
+                facts,
+                canRemove
+                    ? new AsyncRelayCommand(() => RemoveMemberFromCardAsync(row, fleet, member, characterName, server))
+                    : null);
             row.Members.Add(leaf);
             if (portraits is not null)
                 _ = leaf.LoadPortraitAsync(portraits);   // B-3 hex portrait, best-effort (opt-in images)
         }
+    }
+
+    /// <summary>
+    /// "Remove … from the fleet" on a member leaf of the fleet browser card, through the one shared flow
+    /// (<see cref="FleetMemberRemovalService"/>) — so removing a pilot here asks exactly what removing them in fleet
+    /// metrics or the roster asks, including the separate in-game question for a coupled fleet. Reloads afterwards,
+    /// the same as ADD TOON and ADD EXTERNAL do (ET-46): this card is the fleet's roster, so it has to show the
+    /// roster it now has.
+    /// </summary>
+    private async Task RemoveMemberFromCardAsync(
+        FleetViewModel row, FleetInfo fleet, FleetMemberInfo member, string characterName, string? server)
+    {
+        if (_services.GetService<FleetMemberRemovalService>() is not { } removal)
+            return;
+
+        var (status, message) = await removal.RemoveAsync(
+            ServerOrLocalClient(server, row.ActingCharacterId),
+            new FleetMemberRemovalRequest(member.Id, member.CharacterId, characterName, fleet.Name,
+                fleet.EsiFleetId, fleet.EsiFleetBossId));
+
+        if (status is FleetMemberRemovalStatus.Cancelled)
+            return;
+
+        StatusMessage = message;
+        if (status is FleetMemberRemovalStatus.RemovedFromFleetInGameFailed)
+            _toasts.Show("Removed here, not in-game", message, ToastKind.Warning);
+        if (status is not FleetMemberRemovalStatus.Failed)
+            await LoadLocalFleetsAsync();
     }
 
     /// <summary>cross-client: this client is the skill authority for its own characters, so it pushes
@@ -664,7 +710,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         SetActive(row.Id, row.Name);
 
         var client = new LocalFleetClient(_localFleets, _fleetRepository, _characters, row.Info.CreatorCharacterId);
-        _dialogs.ShowFleetMetrics(new FleetMetricsViewModel(_services, client, row.Info));
+        _dialogs.ShowFleetMetrics(new FleetMetricsViewModel(_services, client, row.Info, row.Info.CreatorCharacterId));
         StatusMessage = $"Metrics for local fleet '{row.Name}'.";
     }
 

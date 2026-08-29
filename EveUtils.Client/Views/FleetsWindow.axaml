@@ -17,7 +17,14 @@
              can-fly badge (FC-6) and a SELECT FIT action that opens the composition-scoped picker. Shared by the
              Participating and My Fleets tabs (one template, no duplication). -->
         <DataTemplate x:Key="MemberLeafTemplate" x:DataType="vm:FleetMemberRowViewModel">
-            <Grid ColumnDefinitions="Auto,130,*,Auto,Auto" Margin="22,3,4,3">
+            <Grid ColumnDefinitions="Auto,130,*,Auto,Auto" Margin="22,3,4,3" Background="Transparent">
+                <!-- The shared fleet-member menu (ET-44), the same one fleet metrics and the roster mount. Since
+                     ET-46 this card is a client-only fleet's whole roster, so an external pilot has no other row
+                     anywhere in this window — this is their only manage surface. -->
+                <Grid.ContextMenu>
+                    <ContextMenu ItemsSource="{Binding MemberMenu}"
+                                 ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>
+                </Grid.ContextMenu>
                 <!-- Hex portrait (B-3): the pilot's ESI render clipped to the EVE hexagon, initial-glyph fallback -->
                 <Panel Grid.Column="0" Width="30" Height="34" VerticalAlignment="Center" Margin="0,0,9,0">
                     <Panel.Clip>

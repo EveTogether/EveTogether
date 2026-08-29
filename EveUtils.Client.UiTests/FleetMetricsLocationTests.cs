@@ -59,6 +59,11 @@ public class FleetMetricsLocationTests
         Assert.Equal("Jita", member!.Location);
     }
 
+    // Every row is there AND carries a looked-up name rather than its "Char <id>" placeholder.
+    private static bool HasResolvedNames(FleetMetricsViewModel vm, int expected) =>
+        vm.Members.Count >= expected
+        && vm.Members.All(m => !m.Character.StartsWith("Char ", StringComparison.Ordinal));
+
     [AvaloniaFact]
     public async Task RosterMembers_ArePrefilled_WithoutAnySample()
     {
@@ -79,8 +84,10 @@ public class FleetMetricsLocationTests
             null, null, DateTimeOffset.UnixEpoch, FleetActivation.Active);
         var vm = new FleetMetricsViewModel(instance.Services, fleets, fleet);
 
-        // No FleetMetricEvent published at all — the roster pre-fill alone must surface both members.
-        for (var i = 0; i < 100 && vm.Members.Count < 2; i++)
+        // No FleetMetricEvent published at all — the roster pre-fill alone must surface both members. A row appears
+        // with a "Char <id>" placeholder first and its real name lands one lookup later, so wait for the names this
+        // test actually asserts: waiting on the row count alone left the names a coin toss.
+        for (var i = 0; i < 100 && !HasResolvedNames(vm, 2); i++)
             await Task.Delay(20);
 
         Assert.Equal(2, vm.Members.Count);

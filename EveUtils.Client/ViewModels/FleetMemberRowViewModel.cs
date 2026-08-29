@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
@@ -14,12 +16,13 @@ namespace EveUtils.Client.ViewModels;
 /// composition-scoped picker so the pilot picks their OWN fit (master-plan §5; the server authorizes owner-or-self).
 /// The command is supplied by <see cref="FleetsViewModel"/>, which owns the (server, character, composition) context.
 /// </summary>
-public sealed partial class FleetMemberRowViewModel : ObservableObject
+public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMemberMenuHost
 {
     public FleetMemberRowViewModel(
         long memberId, int characterId, string characterName, string roleLabel,
         FitReferenceInfo? assignedFit, MemberSkillBadge? skillBadge, IAsyncRelayCommand selectFitCommand,
-        IAsyncRelayCommand? openFitCommand = null, IAsyncRelayCommand? leaveCommand = null, bool canLeave = false)
+        IAsyncRelayCommand? openFitCommand = null, IAsyncRelayCommand? leaveCommand = null, bool canLeave = false,
+        FleetMemberFacts? menuFacts = null, IRelayCommand? removeCommand = null)
     {
         MemberId = memberId;
         CharacterId = characterId;
@@ -36,7 +39,16 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject
             CanFly = skillBadge.CanFly;
             SkillTooltip = skillBadge.Tooltip;
         }
+
+        // The shared fleet-member menu (ET-44). This card carries a client-only fleet's WHOLE roster since ET-46 —
+        // externals included, and an external pilot has no card of their own anywhere else in this window — so the
+        // pilot summary and the owner's removal belong here too. No facts supplied = no menu (a caller that has not
+        // been taught them shows nothing rather than a menu of blanks).
+        MemberMenu = menuFacts is null ? [] : FleetMemberMenu.Build(menuFacts, DateTimeOffset.UtcNow, removeCommand);
     }
+
+    /// <summary>The shared fleet-member information block, plus the removal when this viewer owns the fleet.</summary>
+    public IReadOnlyList<FleetMemberMenuItemViewModel> MemberMenu { get; }
 
     public long MemberId { get; }
     public int CharacterId { get; }

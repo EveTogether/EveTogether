@@ -63,6 +63,23 @@
                 <Setter Property="Command" Value="{ReflectionBinding Command}"/>
                 <Setter Property="ItemContainerTheme" Value="{DynamicResource MoveMenuItemTheme}"/>
             </ControlTheme>
+
+            <!-- The shared fleet-member menu (ET-44). Lives here, next to the move cascade and for the same reasons:
+                 a menu popup is its own resource scope, and a screen's own resources do not survive the module host
+                 reparenting that screen's content into a docked tab. This maps one FleetMemberMenuItemViewModel onto
+                 one MenuItem — an information line carries no command, which is what greys it out. A member row then
+                 mounts the whole menu with ItemsSource="{Binding MemberMenu}" + this theme, and the menu's content
+                 is decided in exactly one place (FleetMemberMenu) rather than once per screen.
+                 Deliberately NOT a ControlTheme on the ContextMenu itself: a context menu that has never been opened
+                 is not in the visual tree, so its control theme has not been applied yet and neither its items nor
+                 this theme can be verified before the popup shows — which headless tests cannot do. -->
+            <ControlTheme x:Key="FleetMemberMenuItemTheme" TargetType="MenuItem"
+                          BasedOn="{StaticResource {x:Type MenuItem}}">
+                <Setter Property="Header" Value="{ReflectionBinding Label}"/>
+                <Setter Property="Command" Value="{ReflectionBinding Command}"/>
+                <Setter Property="IsEnabled" Value="{ReflectionBinding IsEnabled}"/>
+                <Setter Property="ToolTip.Tip" Value="{ReflectionBinding Tooltip}"/>
+            </ControlTheme>
         </ResourceDictionary>
     </Application.Resources>
 

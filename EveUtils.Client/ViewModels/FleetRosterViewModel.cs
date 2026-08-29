@@ -10,6 +10,7 @@ using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Transport;
+using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet;
 using EveUtils.Shared.Modules.Fleet.Entities;
@@ -41,6 +42,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
     private readonly IMemberFitSkillEvaluator? _skillEvaluator;
     private readonly IServiceProvider _services;
     private readonly IToastService _toasts;
+    private readonly ISdeNameResolver _shipNames;
     private readonly IDisposable _fleetChangedSubscription;
 
     // The can-fly verdict per member id, recomputed each reload from the member's assigned fit + cached skills.
@@ -74,6 +76,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         _toasts = services.GetRequiredService<IToastService>();
         _lookup = services.GetRequiredService<IExternalCharacterLookup>();
         _skillEvaluator = services.GetRequiredService<IMemberFitSkillEvaluator>();
+        _shipNames = FitNameResolverFactory.For(services);
 
         _fleet = fleet;
         _isOwner = isOwner;
@@ -822,7 +825,8 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
             transferOwnershipCommand: Cmd(() => TransferOwnershipAsync(member)),
             assignFitCommand: Cmd(() => AssignFitAsync(member)),
             openFitCommand: Cmd(() => OpenMemberFitAsync(member)),
-            skillBadge: _skillBadges.GetValueOrDefault(member.Id));
+            skillBadge: _skillBadges.GetValueOrDefault(member.Id),
+            shipName: member.AssignedFit is { } fit ? _shipNames.TypeName(fit.ShipTypeId) : null);
 
     /// <summary>
     /// Builds the EVE move-cascade for one member: Fleet Commander · per wing → Wing Commander · per squad → Squad
@@ -970,23 +974,26 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
             await ReloadAsync();
     }
 
+    /// <summary>"Remove from fleet": out of the EVE Together roster, and only then the separate question whether to
+    /// kick the pilot in-game as well. Both steps live in <see cref="FleetMemberRemovalService"/> so this window and
+    /// fleet metrics remove a member in exactly the same way — including the case where the in-game kick fails after
+    /// the FC agreed to it, which leaves the pilot off the roster and still in the live fleet.</summary>
     private async Task RemoveMemberAsync(FleetMemberInfo member)
     {
-        if (!_isOwner)
+        if (!_isOwner || _services.GetService<FleetMemberRemovalService>() is not { } removal)
             return;
 
-        if (!await _dialogs.ConfirmAsync(
-                "Remove from fleet", $"Remove {NameFor(member.CharacterId)} from '{_fleet.Name}' entirely?", okText: "Remove"))
+        var (status, message) = await removal.RemoveAsync(_fleets, new FleetMemberRemovalRequest(
+            member.Id, member.CharacterId, NameFor(member.CharacterId), _fleet.Name, _esiFleetId, _esiFleetBossId));
+
+        if (status is FleetMemberRemovalStatus.Cancelled)
             return;
 
-        var removed = await _fleets.RemoveFleetMemberAsync(member.Id);
-        StatusMessage = removed.Ok ? "Member removed." : $"Remove failed: {removed.Message}";
-        if (!removed.Ok)
-            return;
-
-        await _MirrorRosterChangeToEsiAsync((control, esiFleetId, bossCharacterId) =>
-            control.KickMemberAsync(esiFleetId, bossCharacterId, member.CharacterId));
-        await ReloadAsync();
+        StatusMessage = message;
+        if (status is FleetMemberRemovalStatus.RemovedFromFleetInGameFailed)
+            _toasts.Show("Removed here, not in-game", message, ToastKind.Warning);
+        if (status is not FleetMemberRemovalStatus.Failed)
+            await ReloadAsync();
     }
 
     private async Task TransferOwnershipAsync(FleetMemberInfo member)
@@ -1304,5 +1311,5 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
 
     [RelayCommand]
     private void OpenMetrics() =>
-        _dialogs.ShowFleetMetrics(new FleetMetricsViewModel(_services, _fleets, _fleet));
+        _dialogs.ShowFleetMetrics(new FleetMetricsViewModel(_services, _fleets, _fleet, _actingCharacterId));
 }

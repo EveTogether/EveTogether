@@ -9,7 +9,9 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Notifications;
 using EveUtils.Client.Transport;
+using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
@@ -50,12 +52,27 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     private readonly IFleetClient _fleets;
     private readonly IServiceProvider _services;
     private readonly IDisposable _subscription;
+    private readonly IDisposable _fleetChangedSubscription;
     private readonly IExternalCharacterLookup _lookup;
     private readonly DpsRenderDriver? _driver;
     private readonly IDialogService? _dialogs;
+    private readonly IToastService? _toasts;
+    private readonly ISdeNameResolver _shipNames;
     private readonly Dictionary<int, DpsViewModel> _trackers = new();
     private readonly Dictionary<int, string> _nameById = new();
-    private readonly List<IDisposable> _registrations = [];
+
+    // Keyed per character so one member's row can be torn down on its own when they are removed from the fleet.
+    private readonly Dictionary<int, IDisposable> _registrations = [];
+
+    // The roster facts behind each row (position, external, assigned fit) — what the member menu shows beyond the
+    // live figures, and where the member id an actual removal needs comes from.
+    private readonly Dictionary<int, FleetMemberInfo> _rosterByCharacter = [];
+
+    private readonly bool _isOwner;
+    private readonly int _creatorCharacterId;
+    private readonly long? _esiFleetId;
+    private readonly int? _esiFleetBossId;
+
     private List<int> _storedOrder = [];
     private int? _commanderCharacterId;
     private bool _layoutChosen;
@@ -64,21 +81,35 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     /// <summary>This fleet's order key. Public so a test can read back what a drag stored.</summary>
     public string OrderSettingKey => OrderSettingKeyPrefix + _fleetId.ToString(CultureInfo.InvariantCulture);
 
-    public FleetMetricsViewModel(IServiceProvider services, IFleetClient fleets, FleetInfo fleet)
+    public FleetMetricsViewModel(IServiceProvider services, IFleetClient fleets, FleetInfo fleet, int actingCharacterId = 0)
     {
         var bus = services.GetRequiredService<IEventBus>();
         _services = services;
+        _fleets = fleets;
         _lookup = services.GetRequiredService<IExternalCharacterLookup>();
         _driver = services.GetRequiredService<DpsRenderDriver>();
         _dialogs = services.GetRequiredService<IDialogService>();
+        _toasts = services.GetService<IToastService>();
+        _shipNames = FitNameResolverFactory.For(services);
         _fleets = fleets;
         _fleetId = fleet.Id;
         FleetName = fleet.Name;
+
+        // Who is looking. The removal action is the owner's alone — the server enforces that against the
+        // authenticated character anyway, so this only keeps the option off a screen that could never use it.
+        _creatorCharacterId = fleet.CreatorCharacterId;
+        _isOwner = actingCharacterId != 0 && actingCharacterId == fleet.CreatorCharacterId;
+        _esiFleetId = fleet.EsiFleetId;
+        _esiFleetBossId = fleet.EsiFleetBossId;
 
         _ = InitializeAsync(fleets);
         _ = LoadLayoutAsync();
         _ = LoadOrderAsync();
         _subscription = bus.Subscribe<FleetMetricEvent>(OnFleetMetric);
+
+        // A roster change made anywhere (this screen, the roster window, another client) is pushed as fleet.changed;
+        // adopt it so a removed pilot's card leaves this screen too rather than lingering until it is reopened.
+        _fleetChangedSubscription = bus.Subscribe<FleetChangedEvent>(OnFleetChanged);
     }
 
     public string FleetName { get; }
@@ -337,11 +368,34 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
                 return;
             foreach (var character in connected)
                 _nameById[character.CharacterId] = character.CharacterName;
+
+            // Additive, per ET-46's RefreshModule contract: a re-read refreshes the facts behind the rows that are
+            // here and adds the members it did not know, and removes nobody. A row this read does not name is not
+            // necessarily gone — it may be a straggler who only ever arrived through a sample. Taking a member off
+            // this screen is the removal action's job (_DropRow), where a human said so.
+            _rosterByCharacter.Clear();
             foreach (var member in members)
+            {
+                _rosterByCharacter[member.CharacterId] = member;
                 Track(member.CharacterId);
+            }
+
             _commanderCharacterId = commander?.CharacterId;
             RefreshCommanderPresence();
         });
+    }
+
+    // A roster change pushed by the server reaches a screen that is already standing open, where ET-46's
+    // RefreshModule only fires when the user opens the module again. Same seam, same additive re-read: a pilot who
+    // joins turns up here without the FC reopening anything.
+    private void OnFleetChanged(FleetChangedEvent integrationEvent)
+    {
+        if (integrationEvent.FleetId == _fleetId)
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_disposed)
+                    RefreshModule();
+            });
     }
 
     private void OnFleetMetric(FleetMetricEvent integrationEvent) =>
@@ -367,6 +421,11 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
                 break;
         }
 
+        // Stamped after the switch, on the row a handled sample just created or updated: "when did we last hear from
+        // this pilot" rides the same kinds the screen already draws, so a kind it ignores raises no row of its own.
+        if (_trackers.TryGetValue(sample.CharacterId, out var tracker))
+            tracker.LastSampleAt = DateTimeOffset.UtcNow;
+
         RefreshTotals();
         RefreshCommanderPresence();
     }
@@ -389,7 +448,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         // Render through the shared 30fps driver (the same path the own meters use), so a fleet graph scrolls,
         // smooths and decays identically instead of stepping at the 1 Hz sample rate. Disposed with the window.
         if (_driver is not null)
-            _registrations.Add(_driver.Register(tracker));
+            _registrations[characterId] = _driver.Register(tracker);
 
         // A fleet member not coupled on this client is unknown to the connected-set warmup. Show the placeholder
         // now (samples arrive faster than a network call) and resolve the real name best-effort via public ESI —
@@ -408,6 +467,89 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     {
         if (tracker is not null)
             _dialogs?.ShowDpsOverlay(tracker);
+    }
+
+    // --- The shared member menu (ET-44) ---
+
+    /// <summary>
+    /// Rebuilds one member's right-click menu with the facts as they stand right now. Called by the view the moment
+    /// the menu is requested, on the one member ItemsControl, so all three densities get a current "last update"
+    /// line without 40 rows re-rendering a relative time every second.
+    /// </summary>
+    public void RefreshMemberMenu(DpsViewModel tracker) =>
+        tracker.MemberMenu = FleetMemberMenu.Build(_FactsFor(tracker), DateTimeOffset.UtcNow, _RemoveCommandFor(tracker));
+
+    private FleetMemberFacts _FactsFor(DpsViewModel tracker)
+    {
+        var member = _rosterByCharacter.GetValueOrDefault(tracker.CharacterId);
+        var fit = member?.AssignedFit;
+        return new FleetMemberFacts(
+            tracker.Character,
+            member?.Role ?? FleetRole.Unassigned,
+            member?.IsExternal ?? false,
+            ShipName: fit is null ? null : _shipNames.TypeName(fit.ShipTypeId),
+            FitName: fit?.FitName,
+            Location: tracker.Location,
+            IsWithCommander: tracker.IsWithCommander,
+            LastSampleAt: tracker.LastSampleAt,
+            TracksLiveMetrics: true);
+    }
+
+    // No member id means no roster row to remove (a pilot seen only through samples), and the creator can never be
+    // removed — ownership has to move first, so offering it would only ever produce the server's refusal.
+    private IRelayCommand? _RemoveCommandFor(DpsViewModel tracker) =>
+        _isOwner
+        && _rosterByCharacter.TryGetValue(tracker.CharacterId, out var member)
+        && member.CharacterId != _creatorCharacterId
+            ? new AsyncRelayCommand(() => RemoveMemberAsync(tracker, member))
+            : null;
+
+    /// <summary>
+    /// Removes one member: out of the EVE Together fleet, and only then — and only when this fleet is coupled to an
+    /// in-game one — the separate question whether to kick them in-game too. The whole flow lives in
+    /// <see cref="FleetMemberRemovalService"/> so this screen and the roster ask it in exactly the same way. The card
+    /// goes as soon as the removal is confirmed rather than at some later roster read: a client-only fleet pushes no
+    /// roster event, so waiting for one would leave a ghost card on this screen.
+    /// </summary>
+    private async System.Threading.Tasks.Task RemoveMemberAsync(DpsViewModel tracker, FleetMemberInfo member)
+    {
+        if (_services.GetService<FleetMemberRemovalService>() is not { } removal)
+            return;
+
+        var (status, message) = await removal.RemoveAsync(_fleets, new FleetMemberRemovalRequest(
+            member.Id, member.CharacterId, tracker.Character, FleetName, _esiFleetId, _esiFleetBossId));
+
+        if (status is FleetMemberRemovalStatus.Cancelled)
+            return;
+
+        if (status is not FleetMemberRemovalStatus.Failed)
+            _DropRow(tracker.CharacterId);
+
+        _toasts?.Show("Remove from fleet", message, status switch
+        {
+            FleetMemberRemovalStatus.Failed => ToastKind.Error,
+            // Off the roster but still in the in-game fleet is not what the FC asked for — say so loudly.
+            FleetMemberRemovalStatus.RemovedFromFleetInGameFailed => ToastKind.Warning,
+            _ => ToastKind.Success
+        });
+    }
+
+    // Tears a member's row down completely: the collection, the tracker cache, the roster facts and the render
+    // registration — a graph left registered would keep being driven for a pilot who is no longer in the fleet.
+    // Re-committing the order afterwards is what keeps the stored drag order free of the departed id (ET-28).
+    private void _DropRow(int characterId)
+    {
+        if (!_trackers.Remove(characterId, out var tracker))
+            return;
+
+        Members.Remove(tracker);
+        _rosterByCharacter.Remove(characterId);
+        if (_registrations.Remove(characterId, out var registration))
+            registration.Dispose();
+
+        CommitOrder();
+        RefreshTotals();
+        RefreshCommanderPresence();
     }
 
     private async System.Threading.Tasks.Task ResolveNameAsync(int characterId, DpsViewModel tracker)
@@ -463,7 +605,8 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
             return;
         _disposed = true;
         _subscription.Dispose();
-        foreach (var registration in _registrations)
+        _fleetChangedSubscription.Dispose();
+        foreach (var registration in _registrations.Values)
             registration.Dispose();
         _registrations.Clear();
     }

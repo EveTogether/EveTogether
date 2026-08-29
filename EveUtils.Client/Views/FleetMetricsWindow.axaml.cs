@@ -62,6 +62,33 @@ public partial class FleetMetricsWindow : ChromedWindow
         _members.PointerMoved += OnMemberPointerMoved;
         _members.PointerReleased += OnMemberPointerReleased;
         _members.PointerCaptureLost += OnMemberPointerCaptureLost;
+
+        // Same reasoning as the drag handlers: wired once on the one ItemsControl, so all three densities show the
+        // same member menu and it survives the module host reparenting this content into a docked tab. Tunnelling, so
+        // the menu's lines are rebuilt with the current facts before the popup is put together.
+        _members.AddHandler(ContextRequestedEvent, OnMemberContextRequested, RoutingStrategies.Tunnel);
+    }
+
+    // A relative "last update" line is only true at the moment it is read, so the menu is rebuilt on each request
+    // rather than kept up to date by 40 rows re-rendering a clock.
+    private void OnMemberContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (_members is null || ViewModel is not { } viewModel)
+            return;
+
+        if (e.Source is Visual source && FindMember(source) is { } tracker)
+            viewModel.RefreshMemberMenu(tracker);
+    }
+
+    // The member behind whatever was right-clicked: keyboard-invoked menus and clicks on inner controls both start
+    // deeper in the tree than the row itself, so walk up to the first element carrying a member.
+    private static DpsViewModel? FindMember(Visual source)
+    {
+        for (Visual? visual = source; visual is not null; visual = visual.GetVisualParent())
+            if (visual is Control { DataContext: DpsViewModel tracker })
+                return tracker;
+
+        return null;
     }
 
     public FleetMetricsWindow(FleetMetricsViewModel viewModel) : this()

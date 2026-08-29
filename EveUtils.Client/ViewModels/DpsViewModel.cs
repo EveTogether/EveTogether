@@ -17,7 +17,7 @@ namespace EveUtils.Client.ViewModels;
 /// . Every line renders through the same shared path (<see cref="DpsRenderDriver"/> → <see cref="StepEma"/>), so
 /// the own meters and the fleet-member meters stay identical.
 /// </summary>
-public partial class DpsViewModel : ViewModelBase
+public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
 {
     private const int GraphCapacityValue = 9000;  // ~5min at 30fps — max retained history; the graph draws a fixed
                                                    // pixels-per-second slice of it anchored right, so a wider graph
@@ -63,6 +63,15 @@ public partial class DpsViewModel : ViewModelBase
     /// <summary>This member is being dragged to a new place in the fleet-metrics list, so its row is showing as the
     /// spot it came from while a ghost follows the cursor. Only that screen's templates read it.</summary>
     [ObservableProperty] private bool _isDragging;
+
+    /// <summary>When this member's last metric sample of any kind arrived (fleet metrics); null = none yet. Read
+    /// only when the member menu is built, so it stays a plain property — an FC asking "is this pilot still
+    /// publishing" wants the answer at the moment they ask, not a value that ticks 40 rows a second.</summary>
+    public DateTimeOffset? LastSampleAt { get; set; }
+
+    /// <summary>The shared right-click menu for this member (ET-44), rebuilt as the menu opens so its live lines are
+    /// current. Empty off the fleet-metrics screen — the own meters and the DPS pop-out are not roster rows.</summary>
+    [ObservableProperty] private IReadOnlyList<FleetMemberMenuItemViewModel> _memberMenu = [];
     [ObservableProperty] private bool _isSelf;
     [ObservableProperty] private int _graphRevision;
 
