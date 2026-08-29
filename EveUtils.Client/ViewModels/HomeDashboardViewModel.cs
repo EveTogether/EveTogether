@@ -47,7 +47,9 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
     private readonly ITypeImageProvider? _typeImages;
     private readonly GamelogClientService? _gamelog;     // per-character location, even without combat (jump/undock)
     private readonly GamelogWatcherService? _watcher;    // raises CharacterObserved on every parsed line (incl. jumps)
-    private readonly Avalonia.Threading.DispatcherTimer _clock; // 1 Hz, drives the abyssal countdown on the cards
+    // 1 Hz, drives the abyssal countdown on the cards. Null in the design-time constructor, which has no services
+    // to tick for — and leaving that honest is what keeps the Release build warning-free.
+    private readonly Avalonia.Threading.DispatcherTimer? _clock;
 
     /// <summary>Design-time / fallback constructor (no services).</summary>
     public HomeDashboardViewModel()
