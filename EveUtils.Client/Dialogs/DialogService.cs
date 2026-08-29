@@ -59,6 +59,15 @@ public sealed class DialogService : IDialogService, ISingletonService
         overlay.Show();
     }
 
+    public void CloseDpsOverlay(DpsViewModel tracker)
+    {
+        // Keyed by name like the open path, but only closed when the window really holds THIS tracker: two screens can
+        // each pop out a same-named pilot, and only the one whose member was removed should go.
+        if (_dpsOverlays.TryGetValue(tracker.Character, out var overlay)
+            && ReferenceEquals(overlay.DataContext, tracker))
+            overlay.Close();   // fires Closed → drops itself from _dpsOverlays
+    }
+
     /// <summary>Open pop-out windows independent of the main window: floating modules + DPS overlays + info cards.
     /// Used by the main window's close handler to decide whether to confirm before quitting.</summary>
     public int OpenPopoutCount => _dpsOverlays.Count + _moduleHost.FloatingWindowCount + _infoPopouts.Count;

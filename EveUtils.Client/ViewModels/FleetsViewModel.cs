@@ -16,9 +16,7 @@ using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Transport;
 using EveUtils.Shared.Identity;
-using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
-using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Queries;
 using EveUtils.Shared.Modules.Fleet.Entities;
@@ -53,7 +51,16 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     /// its whole roster, externals included, but only these can ever publish a metric sample — so this, not the
     /// leaf list, decides the publish set. Refreshed by <see cref="LoadLocalFleetsAsync"/>.</summary>
     private IReadOnlySet<int> _localCharacterIds = new HashSet<int>();
-    private readonly IDisposable _fleetChangedSubscription;
+    private readonly IFleetRosterWatch _rosterWatch;
+    private readonly IDisposable _rosterSubscription;
+
+    // Announcements this window raised itself, so it does not reload twice for news it has already redrawn. Matched
+    // on identity, never on value: two changes about the same pilot are still two pieces of news.
+    private readonly List<FleetRosterChange> _ownAnnouncements = [];
+
+    // The cards whose member list the user unfolded. A reload rebuilds every row from scratch, and a removal is a
+    // reload (ET-52), so without this an expanded 50-man list snapped shut the moment the FC removed someone from it.
+    private readonly HashSet<long> _expandedCards = [];
     private readonly IRemoteBusConnector _busConnector;
     private readonly ICharacterInfoService? _characterInfo; // resolves owner names for fleets I don't own (best-effort)
 
@@ -73,10 +80,13 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         _metricsLauncher = services.GetRequiredService<IFleetMetricsLauncher>();
         _characterInfo = services.GetRequiredService<ICharacterInfoService>();
 
-        // A fleet's lifecycle/roster changed on a server (start/conclude/join/leave is pushed as fleet.changed):
-        // reload so the lists AND the membership-driven participation set refresh live — that is what makes a member
-        // start publishing metrics to a just-started fleet, and the roster reflect a join, without a reconnect/restart.
-        _fleetChangedSubscription = services.GetRequiredService<IEventBus>().Subscribe<FleetChangedEvent>(_OnFleetChanged);
+        // Any change to a fleet's roster reaches this window on the one shared watch: a server's fleet.changed
+        // (start/conclude/join/leave), and equally a pilot removed in fleet metrics or in the roster window — including
+        // on a client-only fleet, which pushes no server event at all and is exactly where this card kept showing a
+        // pilot who had just been removed one screen over (ET-52). Reloading also refreshes the membership-driven
+        // participation set, which is what makes a member start publishing to a just-started fleet.
+        _rosterWatch = services.GetRequiredService<IFleetRosterWatch>();
+        _rosterSubscription = _rosterWatch.Subscribe(_OnRosterChanged);
 
         // A server's bus connection can still be establishing when this window opens, so the construction-time load
         // below can come back empty. Reload when a server reaches Connected so already-existing fleets appear without
@@ -87,8 +97,32 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         _ = InitializeAsync();
     }
 
-    private void _OnFleetChanged(FleetChangedEvent integrationEvent) =>
-        Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = ReloadAsync());
+    private void _OnRosterChanged(FleetRosterChange change)
+    {
+        int own = _ownAnnouncements.FindIndex(c => ReferenceEquals(c, change));
+        if (own >= 0)
+        {
+            _ownAnnouncements.RemoveAt(own);
+            return;
+        }
+
+        // Both halves of the list, not just the server one: the fleet the change is about may well be a client-only
+        // fleet, whose cards LoadLocalFleetsAsync builds and ReloadAsync never touches.
+        _ = _ReloadEverythingAsync();
+    }
+
+    /// <summary>Tell every other open screen that a roster moved, the one route such news travels (ET-52).</summary>
+    private void _Announce(FleetRosterChange change)
+    {
+        _ownAnnouncements.Add(change);
+        _rosterWatch.Announce(change);
+    }
+
+    private async Task _ReloadEverythingAsync()
+    {
+        await LoadLocalFleetsAsync();
+        await ReloadAsync();
+    }
 
     private void _OnServerConnectionStateChanged(string serverAddress, ServerConnectionState state)
     {
@@ -100,7 +134,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     // (and the whole VM graph they capture) outlive the window, leaking and adding a duplicate ReloadAsync per event.
     public void Dispose()
     {
-        _fleetChangedSubscription.Dispose();
+        _rosterSubscription.Dispose();
         _busConnector.StateChanged -= _OnServerConnectionStateChanged;
     }
 
@@ -324,6 +358,10 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         var names = myChars.ToDictionary(c => c.Id, c => c.Name);
         var members = await ServerOrLocalClient(server, row.ActingCharacterId).ListMembersAsync(fleet.Id);
 
+        // How big the fleet is, always — it is information in its own right, and the shortened list below shows only
+        // part of it (ET-53). This is the whole roster even on a server card, whose leaves are my characters alone.
+        row.MemberCount = members.Count;
+
         // Join eligibility for the unified row: a coupled character that isn't a member yet can still join/request,
         // even when another of my characters is already in this fleet — and even when I own it.
         if (coupledIds is not null)
@@ -347,7 +385,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         // is by definition not coupled here, so filtering on `names` dropped exactly the members you can add no
         // other way (ET-46). Every member belongs on that card, and their name comes from the same day-cached
         // public lookup the roster and the metrics screen use.
-        foreach (var member in server is null ? members : members.Where(m => names.ContainsKey(m.CharacterId)))
+        var listed = server is null ? members : members.Where(m => names.ContainsKey(m.CharacterId));
+        foreach (var member in listed.OrderBy(m => CardRank(m, names)))   // stable: roster order survives inside a rank
         {
             var characterName = names.TryGetValue(member.CharacterId, out var known)
                 ? known
@@ -377,7 +416,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             var leaf = new FleetMemberRowViewModel(
                 member.Id, member.CharacterId, characterName, RoleLabel(member.Role),
                 assignedFit, badge,
-                new AsyncRelayCommand(() => SelectMemberFitAsync(member, composition, server)),
+                new AsyncRelayCommand(() => SelectMemberFitAsync(fleet.Id, member, composition, server)),
                 assignedFit is null ? null : new AsyncRelayCommand(() => FitDetailLauncher.OpenAsync(_services, _dialogs, assignedFit)),
                 canLeave ? new AsyncRelayCommand(() => LeaveMemberAsync(server!, fleet.Id, member.CharacterId, characterName, fleet.Name)) : null,
                 canLeave,
@@ -389,6 +428,38 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             if (portraits is not null)
                 _ = leaf.LoadPortraitAsync(portraits);   // B-3 hex portrait, best-effort (opt-in images)
         }
+
+        // The card draws VisibleMembers, which is this list folded down to its first few unless the user unfolded it.
+        row.MembersExpanded = _expandedCards.Contains(fleet.Id);
+        row.MembersExpansionChanged = _RememberCardExpansion;
+        row.RefreshVisibleMembers();
+    }
+
+    /// <summary>
+    /// Who a shortened card shows first (ET-53). Listing the first five off the roster is the one ordering that
+    /// answers nobody's question; whoever opens this screen wants at least the fleet commander and themselves.
+    /// <list type="number">
+    /// <item>the fleet commander — the one member every viewer needs, and the anchor the metrics screen's WITH FC
+    /// badge is measured against;</item>
+    /// <item>this client's own characters — this is my client, and my alts are what I act on here;</item>
+    /// <item>external pilots — since ET-46 this card is the only place in the whole client where an external has a
+    /// row at all, so they are the members a fold can genuinely put out of reach;</item>
+    /// <item>everyone else, in the order the roster returned them.</item>
+    /// </list>
+    /// </summary>
+    private static int CardRank(FleetMemberInfo member, Dictionary<int, string> mine) =>
+        member.WingId < 0 && member.Role == FleetRole.FleetCommander ? 0
+        : mine.ContainsKey(member.CharacterId) ? 1
+        : member.IsExternal ? 2
+        : 3;
+
+    // A reload rebuilds every card from scratch, so the fold state has to live here rather than on the row.
+    private void _RememberCardExpansion(long fleetId, bool expanded)
+    {
+        if (expanded)
+            _expandedCards.Add(fleetId);
+        else
+            _expandedCards.Remove(fleetId);
     }
 
     /// <summary>
@@ -415,8 +486,9 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         StatusMessage = message;
         if (status is FleetMemberRemovalStatus.RemovedFromFleetInGameFailed)
             _toasts.Show("Removed here, not in-game", message, ToastKind.Warning);
-        if (status is not FleetMemberRemovalStatus.Failed)
-            await LoadLocalFleetsAsync();
+
+        // No reload here: the removal service announced the removal on the shared watch, and this window's own
+        // listener reloads on it — the same route by which a removal made in fleet metrics reaches this card (ET-52).
     }
 
     /// <summary>cross-client: this client is the skill authority for its own characters, so it pushes
@@ -488,7 +560,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     /// <summary>SELECT FIT on a member leaf (stream B / B-2): the pilot picks their OWN fit from the composition-scoped
     /// single picker; the assignment acts as the member's character, which the server authorizes as owner-or-self
     /// (master-plan §5). Tags the entry the fit fills when it comes from the doctrine, then reloads.</summary>
-    private async Task SelectMemberFitAsync(FleetMemberInfo member, FleetCompositionDetail? composition, string? server)
+    private async Task SelectMemberFitAsync(
+        long fleetId, FleetMemberInfo member, FleetCompositionDetail? composition, string? server)
     {
         var picker = new FitPickerViewModel(_services, FitPickerMode.Single, alreadyAdded: null,
             composition: composition, currentFitHash: member.AssignedFit?.ContentHash,
@@ -503,8 +576,13 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
 
         var assigned = await ServerOrLocalClient(server, member.CharacterId).AssignMemberFitAsync(member.Id, fit, entryId);
         StatusMessage = assigned.Ok ? $"Assigned {fit.FitName}." : $"Assign failed: {assigned.Message}";
-        if (assigned.Ok)
-            await ReloadAsync();
+        if (!assigned.Ok)
+            return;
+
+        await _ReloadEverythingAsync();
+        // The ship and fit a pilot flies show in the shared member menu on every screen, so an assignment is a change
+        // to that member wherever they are drawn — the roster window and fleet metrics included.
+        _Announce(FleetRosterChange.Changed(fleetId, member.CharacterId));
     }
 
     // The publisher shares metrics for the fleets the client is in — but only once a server fleet is
@@ -664,20 +742,27 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         if (characterIds is null || characterIds.Count == 0)
             return;
 
-        var added = 0;
+        var addedIds = new List<int>();
         string? lastError = null;
         foreach (var characterId in characterIds)
         {
             var result = await _localFleets.AddLocalCharacterAsync(row.Id, characterId, row.Info.CreatorCharacterId);
-            if (result.IsSuccess) added++;
+            if (result.IsSuccess) addedIds.Add(characterId);
             else lastError = result.Messages.FirstOrDefault()?.Text;
         }
+
+        int added = addedIds.Count;
 
         StatusMessage = lastError is null
             ? $"Added {added} character{(added == 1 ? "" : "s")}."
             : $"Added {added}; failed: {lastError}";
-        if (added > 0)
-            await LoadLocalFleetsAsync(); // the card is this fleet's roster — a member added to it has to appear on it.
+        if (added == 0)
+            return;
+
+        await LoadLocalFleetsAsync(); // the card is this fleet's roster — a member added to it has to appear on it.
+        // …and on fleet metrics and the roster window, if either stands open. An add is a roster change like any other.
+        foreach (int characterId in addedIds)
+            _Announce(FleetRosterChange.Added(row.Id, characterId));
     }
 
     /// <summary>Adds an external EVE pilot (no local session) to a client-only fleet on trust.</summary>
@@ -694,8 +779,11 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
 
         var added = await _localFleets.AddExternalAsync(row.Id, characterId.Value, row.Info.CreatorCharacterId);
         StatusMessage = added.IsSuccess ? "Added external pilot." : $"Failed: {added.Messages.FirstOrDefault()?.Text}";
-        if (added.IsSuccess)
-            await LoadLocalFleetsAsync(); // same as ADD TOON: the pilot has to land on the card, not just in the status line.
+        if (!added.IsSuccess)
+            return;
+
+        await LoadLocalFleetsAsync(); // same as ADD TOON: the pilot has to land on the card, not just in the status line.
+        _Announce(FleetRosterChange.Added(row.Id, characterId.Value));
     }
 
     /// <summary>Opens the live metrics for a client-only fleet (formerly "Enter local"): selects it for the inline
@@ -1064,10 +1152,13 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         // several of my characters can be in this fleet — leave each, from THIS fleet specifically.
         var ok = true;
         string? lastError = null;
+        var leftIds = new List<int>();
         foreach (var characterId in _activeFleet.ActiveCharacterIds.ToList())
         {
             var left = await _fleets.LeaveFleetAsync(server, fleetId, characterId);
-            if (!left.Ok)
+            if (left.Ok)
+                leftIds.Add(characterId);
+            else
             {
                 ok = false;
                 lastError = left.Message;
@@ -1077,6 +1168,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         _activeFleet.Leave();
         SetActive(null, null);
         await ReloadAsync(); // membership changed → refresh the listing + the publish participation set
+        foreach (int characterId in leftIds)
+            _Announce(FleetRosterChange.Removed(fleetId, characterId));
         StatusMessage = ok ? "Left the fleet." : $"Leave failed: {lastError}";
     }
 
@@ -1104,6 +1197,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         }
 
         await ReloadAsync();
+        _Announce(FleetRosterChange.Removed(fleetId, characterId));   // one character out of one fleet: a removal
         StatusMessage = $"{characterName} left '{fleetName}'.";
         _toasts.Show($"Left '{fleetName}'", characterName);
     }

@@ -155,8 +155,23 @@ repository. **Beta:** more stable than the alpha, but expect occasional rough ed
   another of your characters along — they used to be hidden the moment you were involved.
 - Each of your characters in a fleet now has its own LEAVE on the fleet overview, so you can pull one
   character out while your others stay in — useful when you've multiboxed several into the same fleet.
+- A fleet card on the fleet overview now shortens its member list once there are more than six
+  members, so a fifty-man fleet no longer turns the overview into one long scroll. The six it shows
+  are the ones you are looking for: the fleet commander first, then your own characters, then
+  external pilots, then the rest. Under them a line reads `+ 44 more` — with how many of those are
+  external, since an external pilot has a row nowhere else in the client — and clicking it opens the
+  rest right there on the card. How many pilots the fleet holds is always on the card, folded or not,
+  and unfolding survives a refresh. A small fleet is unchanged: no extra line, no extra click.
 
 ### Fixed
+- Removing, adding or repositioning a fleet member now updates **every** open screen showing that
+  pilot, not only the screen you did it in. Removing someone in fleet metrics with the fleet
+  overview open beside it used to clear the metrics card and leave the pilot sitting on the
+  overview's; the same held between the roster window and the other two, and for a local
+  (client-only) fleet nothing would ever have corrected it, since such a fleet sends no roster
+  update. Fleet metrics, the fleet overview, the roster window and a member's popped-out DPS
+  window now all follow the same change, wherever it was made — the pop-out of a removed member
+  closes with their row rather than freezing on its last frame.
 - A pilot added to a local (client-only) fleet now shows up everywhere that fleet is shown, instead
   of only in fleet manage. The fleet's card in the Fleets window listed only the characters signed
   in on this machine, so an **external** pilot — the only way to add someone who isn't signed in

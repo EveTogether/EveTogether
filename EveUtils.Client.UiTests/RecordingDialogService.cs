@@ -120,6 +120,13 @@ public sealed class RecordingDialogService : IDialogService
     public void ShowMetrics(MetricsWindowViewModel viewModel) => throw NotUsed();
     public Task ShowAboutAsync(AboutViewModel viewModel) => throw NotUsed();
     public void ShowDpsOverlay(DpsViewModel tracker) => throw NotUsed();
+
+    /// <summary>The trackers whose pop-out a screen asked to close — how a test asserts that a removed member's
+    /// pop-out follows their row off the screen (ET-52). Closing what was never popped out is a no-op in the real
+    /// service, so this records rather than throws.</summary>
+    public List<DpsViewModel> ClosedDpsOverlays { get; } = [];
+
+    public void CloseDpsOverlay(DpsViewModel tracker) => ClosedDpsOverlays.Add(tracker);
     public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, EveUtils.Client.Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, EveUtils.Client.Notifications.ToastPosition toastPosition = EveUtils.Client.Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = EveUtils.Client.LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", EveUtils.Client.LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true) => throw NotUsed();
 
     /// <summary>

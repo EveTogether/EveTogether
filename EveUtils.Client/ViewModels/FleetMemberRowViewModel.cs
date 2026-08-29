@@ -45,7 +45,13 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
         // pilot summary and the owner's removal belong here too. No facts supplied = no menu (a caller that has not
         // been taught them shows nothing rather than a menu of blanks).
         MemberMenu = menuFacts is null ? [] : FleetMemberMenu.Build(menuFacts, DateTimeOffset.UtcNow, removeCommand);
+        IsExternal = menuFacts?.IsExternal ?? false;
     }
+
+    /// <summary>This pilot is an external — not coupled on this client, and so with no row anywhere but on this card
+    /// (ET-46). The card counts them separately when it shortens its list, because a hidden external is the one thing
+    /// a fold can put out of reach (ET-53).</summary>
+    public bool IsExternal { get; }
 
     /// <summary>The shared fleet-member information block, plus the removal when this viewer owns the fleet.</summary>
     public IReadOnlyList<FleetMemberMenuItemViewModel> MemberMenu { get; }

@@ -52,7 +52,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     private readonly IFleetClient _fleets;
     private readonly IServiceProvider _services;
     private readonly IDisposable _subscription;
-    private readonly IDisposable _fleetChangedSubscription;
+    private readonly IDisposable _rosterSubscription;
     private readonly IExternalCharacterLookup _lookup;
     private readonly DpsRenderDriver? _driver;
     private readonly IDialogService? _dialogs;
@@ -118,9 +118,10 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         _ = LoadOrderAsync();
         _subscription = bus.Subscribe<FleetMetricEvent>(OnFleetMetric);
 
-        // A roster change made anywhere (this screen, the roster window, another client) is pushed as fleet.changed;
-        // adopt it so a removed pilot's card leaves this screen too rather than lingering until it is reopened.
-        _fleetChangedSubscription = bus.Subscribe<FleetChangedEvent>(OnFleetChanged);
+        // A roster change made anywhere — this screen, the roster window, the fleet browser's card, another client —
+        // arrives on the one shared watch (ET-52). It carries the client-only fleets too, which push no fleet.changed
+        // and are precisely where a removal used to reach no other screen at all.
+        _rosterSubscription = services.GetRequiredService<IFleetRosterWatch>().Subscribe(OnRosterChanged);
     }
 
     public string FleetName { get; }
@@ -405,17 +406,19 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         });
     }
 
-    // A roster change pushed by the server reaches a screen that is already standing open, where ET-46's
-    // RefreshModule only fires when the user opens the module again. Same seam, same additive re-read: a pilot who
-    // joins turns up here without the FC reopening anything.
-    private void OnFleetChanged(FleetChangedEvent integrationEvent)
+    // A roster change reaches a screen that is already standing open, where ET-46's RefreshModule only fires when the
+    // user opens the module again. A removal is acted on directly as well as re-read: the row goes the moment the
+    // removal is announced, without waiting on a transport round trip, which is what keeps the card from being on
+    // screen for the instant a late sample could still raise it (ET-49). Everything else is the additive re-read.
+    private void OnRosterChanged(FleetRosterChange change)
     {
-        if (integrationEvent.FleetId == _fleetId)
-            Dispatcher.UIThread.Post(() =>
-            {
-                if (!_disposed)
-                    RefreshModule();
-            });
+        if (_disposed || change.FleetId != _fleetId)
+            return;
+
+        if (change.Kind is FleetRosterChangeKind.MemberRemoved)
+            _DropRow(change.CharacterId);
+
+        RefreshModule();
     }
 
     private void OnFleetMetric(FleetMetricEvent integrationEvent) =>
@@ -529,9 +532,10 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     /// <summary>
     /// Removes one member: out of the EVE Together fleet, and only then — and only when this fleet is coupled to an
     /// in-game one — the separate question whether to kick them in-game too. The whole flow lives in
-    /// <see cref="FleetMemberRemovalService"/> so this screen and the roster ask it in exactly the same way. The card
-    /// goes as soon as the removal is confirmed rather than at some later roster read: a client-only fleet pushes no
-    /// roster event, so waiting for one would leave a ghost card on this screen.
+    /// <see cref="FleetMemberRemovalService"/> so this screen and the roster ask it in exactly the same way, and the
+    /// card goes because that service announces the removal on <see cref="IFleetRosterWatch"/> — the same route by
+    /// which a removal made on the roster or the browser card reaches this screen. Dropping the row here as well
+    /// would be the fourth private hand-off between two screens, which is the thing ET-52 is about.
     /// </summary>
     private async System.Threading.Tasks.Task RemoveMemberAsync(DpsViewModel tracker, FleetMemberInfo member)
     {
@@ -543,9 +547,6 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
 
         if (status is FleetMemberRemovalStatus.Cancelled)
             return;
-
-        if (status is not FleetMemberRemovalStatus.Failed)
-            _DropRow(tracker.CharacterId);
 
         _toasts?.Show("Remove from fleet", message, status switch
         {
@@ -573,6 +574,11 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         _rosterByCharacter.Remove(characterId);
         if (_registrations.Remove(characterId, out var registration))
             registration.Dispose();
+
+        // The pop-out is a window of its own onto this very tracker, so it is a screen showing the removed pilot like
+        // any other and closes with their row (ET-52). Left open it would stand there for good: its graph is fed by
+        // samples this screen now drops, so it can only ever show the last frame from before the removal.
+        _dialogs?.CloseDpsOverlay(tracker);
 
         CommitOrder();
         RefreshTotals();
@@ -632,7 +638,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
             return;
         _disposed = true;
         _subscription.Dispose();
-        _fleetChangedSubscription.Dispose();
+        _rosterSubscription.Dispose();
         foreach (var registration in _registrations.Values)
             registration.Dispose();
         _registrations.Clear();

@@ -106,6 +106,12 @@ public interface IDialogService
     /// resizable, smoothed graph. Non-modal; one overlay per character (re-opening focuses the existing one).</summary>
     void ShowDpsOverlay(DpsViewModel tracker);
 
+    /// <summary>Closes the pop-out showing exactly this tracker, if one is open — the pop-out's half of "an action on
+    /// a fleet member updates every screen showing them" (ET-52). Matched on the tracker instance, not the character
+    /// name, so a removed fleet member's pop-out closes while an own-meter pop-out for a same-named pilot does not.
+    /// A no-op when nothing is popped out for them.</summary>
+    void CloseDpsOverlay(DpsViewModel tracker);
+
     /// <summary>
     /// Opens the settings module: a docked tab in docked mode, a floating window otherwise — non-modal so it
     /// matches the rest of the module shell. <paramref name="currentDirectory"/> is the saved gamelog path (empty if
