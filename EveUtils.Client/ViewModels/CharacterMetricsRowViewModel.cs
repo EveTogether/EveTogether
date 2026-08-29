@@ -19,7 +19,12 @@ public partial class CharacterMetricsRowViewModel : ViewModelBase
     public DpsViewModel Dps { get; }
 
     [ObservableProperty] private string _affiliation = "—";
-    [ObservableProperty] private string _location = "—";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LocationDisplay))]
+    private string _location = "—";
+
+    /// <summary>The one text this row's location readout binds to — same seam as <see cref="DpsViewModel.LocationDisplay"/>.</summary>
+    public string LocationDisplay => Location;
     [ObservableProperty] private string _bounty = "0 ISK";
     [ObservableProperty] private string _kills = "0";
     [ObservableProperty] private string _iskPerHour = "—";

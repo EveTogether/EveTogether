@@ -102,7 +102,13 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     public string Initial => string.IsNullOrWhiteSpace(Character) || Character == "—" ? "?" : Character[..1].ToUpperInvariant();
 
     /// <summary>The member's current solar system (fleet metrics, when location is shared); null = unknown/not shared.</summary>
-    [ObservableProperty] private string? _location;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LocationDisplay))]
+    private string? _location;
+
+    /// <summary>The one text every location readout binds to, so the five screens showing a location cannot drift
+    /// apart on what follows the system name.</summary>
+    public string? LocationDisplay => Location;
 
     /// <summary>The member stands in the fleet commander's solar system (fleet metrics), which colours their location
     /// readout. Set from <see cref="EveUtils.Client.Fleet.FleetCommanderPresence"/> — the same source the header badge

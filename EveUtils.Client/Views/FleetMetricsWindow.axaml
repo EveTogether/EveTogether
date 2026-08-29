@@ -86,8 +86,8 @@
                                         <StackPanel Orientation="Horizontal" Spacing="14">
                                             <TextBlock Classes="location" Classes.withfc="{Binding IsWithCommander}"
                                                        FontSize="11"
-                                                       IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                                       Text="{Binding Location, StringFormat='◉ {0}'}"
+                                                       IsVisible="{Binding LocationDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                       Text="{Binding LocationDisplay, StringFormat='◉ {0}'}"
                                                        ToolTip.Tip="Current solar system (location sharing)"/>
                                             <TextBlock FontSize="11" Foreground="#FFE0B25A"
                                                        IsVisible="{Binding HasBounty}"
@@ -140,8 +140,8 @@
                                             <TextBlock Classes="location" Classes.withfc="{Binding IsWithCommander}"
                                                        FontSize="10.5"
                                                        TextTrimming="CharacterEllipsis"
-                                                       IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                                       Text="{Binding Location, StringFormat='◉ {0}'}"
+                                                       IsVisible="{Binding LocationDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                       Text="{Binding LocationDisplay, StringFormat='◉ {0}'}"
                                                        ToolTip.Tip="Current solar system (location sharing)"/>
                                         </StackPanel>
                                         <Button Grid.Column="1" Content="⧉" FontSize="11" Padding="6,1" Margin="8,0,0,0"
@@ -198,8 +198,8 @@
                                     <TextBlock Grid.Column="1" Classes="location" Classes.withfc="{Binding IsWithCommander}"
                                                FontSize="11" VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis"
-                                               IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                               Text="{Binding Location, StringFormat='◉ {0}'}"
+                                               IsVisible="{Binding LocationDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                               Text="{Binding LocationDisplay, StringFormat='◉ {0}'}"
                                                ToolTip.Tip="Current solar system (location sharing)"/>
                                     <TextBlock Grid.Column="2" Classes="mono" FontSize="12" VerticalAlignment="Center"
                                                HorizontalAlignment="Right"

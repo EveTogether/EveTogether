@@ -53,8 +53,8 @@
                                  member stands in the FC's system — and moves along when either of them jumps. -->
                             <TextBlock Classes="location" Classes.withfc="{Binding IsWithCommander}"
                                        FontSize="11"
-                                       IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                       Text="{Binding Location, StringFormat='◉ {0}'}"
+                                       IsVisible="{Binding LocationDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                       Text="{Binding LocationDisplay, StringFormat='◉ {0}'}"
                                        ToolTip.Tip="Current solar system"/>
                             <TextBlock FontSize="11" Foreground="#FFE0B25A"
                                        IsVisible="{Binding HasBounty}"
