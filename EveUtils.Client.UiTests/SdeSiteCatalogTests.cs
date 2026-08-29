@@ -12,10 +12,8 @@ using Xunit;
 namespace EveUtils.Client.UiTests;
 
 /// <summary>
-/// The SDE import builds a site catalogue from dungeons.jsonl, denormalising the archetype and faction names and
-/// resolving allowedShipsList into the ship groups a site admits. The empty case is the normal case: most sites carry
-/// no description, no DED rating and no ship restriction, and none of those may be filled with a placeholder. Built
-/// end-to-end through the real <see cref="SdeSqliteBuilder"/> + <see cref="SqliteSdeAccessor"/>, no network.
+/// The SDE import builds a site catalogue from dungeons.jsonl (ET-36), end-to-end through the real
+/// <see cref="SdeSqliteBuilder"/> + <see cref="SqliteSdeAccessor"/> against an in-test zip, no network.
 /// </summary>
 public sealed class SdeSiteCatalogTests : IDisposable
 {

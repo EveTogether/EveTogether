@@ -1,9 +1,8 @@
 namespace EveUtils.Shared.Modules.Sde.Dtos;
 
 /// <summary>
-/// A site (dungeon) from the SDE catalogue, with its archetype and faction already resolved. Every field beyond
-/// the id and the name is optional because the empty case is the normal one — most sites carry no description,
-/// no DED rating and no ship restriction. Present an absent value as absent; do not substitute a placeholder.
+/// A site (dungeon) from the SDE catalogue with its archetype and faction resolved (ET-36). Everything but the id
+/// and the name is optional: the empty case is the normal one, so present an absent value as absent.
 /// </summary>
 /// <param name="ArchetypeId">CCP's own categorisation ("what kind of site is this"), the only reliable such axis.</param>
 /// <param name="ArchetypeName">Null for archetype 43, which the SDE defines without a title.</param>
