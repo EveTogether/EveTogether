@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
@@ -144,9 +145,16 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         // The sliding-window decay still samples against wall-clock "now"; only the event placement uses the log time.
         var at = occurredAt ?? DateTime.UtcNow;
         Tracker(name).Add(at, direction, amount);
-        Metrics(name).RecordCombat(direction, amount, target, quality);
+        var metrics = Metrics(name);
+        var wasInAbyss = metrics.AbyssalAnchor is not null;
+        metrics.RecordCombat(direction, amount, target, quality);
 
         var ownerId = _idByName.TryGetValue(name, out var id) ? id : (int?)null;
+
+        // A run just opened. The log can see the way in but never the way out, so hand the ending to ESI — and only
+        // from here, so nothing is polled between runs.
+        if (!wasInAbyss && metrics.AbyssalAnchor is not null && ownerId is { } abyssalCharacter)
+            _services.GetService<IAbyssalLocationMonitor>()?.Start(abyssalCharacter, metrics.EndAbyssalRun);
         using (var scope = _services.CreateScope())
         {
             var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
@@ -407,7 +415,11 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     /// that timestamp is what the abyssal countdown anchors on.</summary>
     public void SetLocation(string characterName, string system, DateTime at)
     {
-        Metrics(Resolve(characterName)).SetLocation(system, at);
+        var name = Resolve(characterName);
+        Metrics(name).SetLocation(system, at);
+        // A jump or undock already proves the pilot is out, so there is nothing left for the monitor to find.
+        if (_idByName.TryGetValue(name, out var characterId))
+            _services.GetService<IAbyssalLocationMonitor>()?.Stop(characterId);
         MetricsChanged?.Invoke();
     }
 

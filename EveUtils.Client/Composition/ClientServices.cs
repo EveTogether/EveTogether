@@ -24,6 +24,7 @@ using EveUtils.Shared.Logging;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Messaging.Wire;
 using EveUtils.Shared.Modules.Fleet;
+using EveUtils.Shared.Modules.Location;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Messaging;
 using EveUtils.Shared.Modules.Settings.Repositories;
@@ -143,6 +144,7 @@ public static class ClientServices
         services.AddModuleEsiScopes(SkillsScopeCatalog.Catalog); // esi-skills read_skills + read_skillqueue
         services.AddModuleEsiScopes(ImplantsScopeCatalog.Catalog); // esi-clones read_implants
         services.AddModuleEsiScopes(FleetsScopeCatalog.Catalog); // esi-fleets read/write (opt-in, Q1) for in-game fleet coupling
+        services.AddModuleEsiScopes(LocationScopeCatalog.Catalog); // esi-location read_location (opt-in) for the abyssal countdown
         services.AddEsiScopeRegistry(); // built from all IEsiScopeCatalog registrations (modules)
         services.AddEsiPipeline(DataDirectory()); // pivot + handler chain + file cache (ClientEsiTokenProvider auto-registered)
         // BackgroundService started manually (the client has no generic host); the other ESI services
