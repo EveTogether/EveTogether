@@ -81,6 +81,10 @@ internal sealed class FakeFleetClient : IFleetClient
         if (RemoveFailure is { } failure)
             return Task.FromResult((false, failure));
         RemovedMemberIds.Add(memberId);
+
+        // A removal that leaves the member on the roster is not a removal: the next ListMembersAsync has to agree with
+        // it, or a screen that re-reads the roster looks correct here while it re-adds the pilot in production.
+        Members = [.. Members.Where(m => m.Id != memberId)];
         return Ok();
     }
 

@@ -406,7 +406,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
 
         var (status, message) = await removal.RemoveAsync(
             ServerOrLocalClient(server, row.ActingCharacterId),
-            new FleetMemberRemovalRequest(member.Id, member.CharacterId, characterName, fleet.Name,
+            new FleetMemberRemovalRequest(fleet.Id, member.Id, member.CharacterId, characterName, fleet.Name,
                 fleet.EsiFleetId, fleet.EsiFleetBossId));
 
         if (status is FleetMemberRemovalStatus.Cancelled)

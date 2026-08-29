@@ -68,6 +68,17 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     // live figures, and where the member id an actual removal needs comes from.
     private readonly Dictionary<int, FleetMemberInfo> _rosterByCharacter = [];
 
+    // Every character a roster read has ever named on this screen. This is what separates the two ways a row can be
+    // missing from the roster: a pilot it has NEVER named only ever arrived through a sample and is a straggler who
+    // legitimately keeps their row (ET-46), while a pilot it named before and does not name now has been taken off —
+    // a removal, which is an event and not an absence (ET-49).
+    private readonly HashSet<int> _everOnRoster = [];
+
+    // Characters this screen has seen removed. Their samples are dropped, so one still in flight — or a publisher
+    // that has not caught up with the kick yet — cannot raise the row again a second later through lazy discovery.
+    // Lifted the moment a roster read names them again: a pilot who rejoins is news, not an echo.
+    private readonly HashSet<int> _removed = [];
+
     private readonly bool _isOwner;
     private readonly int _creatorCharacterId;
     private readonly long? _esiFleetId;
@@ -333,9 +344,10 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     /// ever coming — and it used to run once, at construction. Someone who joined after that stayed off the screen,
     /// and with it out of the roll-up totals and the WITH FC badge's denominator (ET-46).
     ///
-    /// Additive on purpose: a member the roster no longer names keeps their row. Rows also legitimately come from
-    /// samples alone (a straggler who is in the fleet in-game but not on the roster), and dropping those on every
-    /// re-open would lose live data the FC is watching.
+    /// Additive for anyone the roster has never named: rows legitimately come from samples alone (a straggler who is
+    /// in the fleet in-game but not on the roster), and dropping those on every re-open would lose live data the FC is
+    /// watching. A member the roster HAS named and no longer names is the other case entirely — they were taken off
+    /// the fleet, so their row goes with them (ET-49).
     /// </summary>
     public void RefreshModule() => _ = InitializeAsync(_fleets);
 
@@ -370,15 +382,23 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
                 _nameById[character.CharacterId] = character.CharacterName;
 
             // Additive, per ET-46's RefreshModule contract: a re-read refreshes the facts behind the rows that are
-            // here and adds the members it did not know, and removes nobody. A row this read does not name is not
-            // necessarily gone — it may be a straggler who only ever arrived through a sample. Taking a member off
-            // this screen is the removal action's job (_DropRow), where a human said so.
+            // here and adds the members it did not know. A row this read does not name is not necessarily gone — it
+            // may be a straggler who only ever arrived through a sample.
             _rosterByCharacter.Clear();
             foreach (var member in members)
             {
                 _rosterByCharacter[member.CharacterId] = member;
+                _everOnRoster.Add(member.CharacterId);
+                _removed.Remove(member.CharacterId);   // named again: they are back, so nothing about them is stale
                 Track(member.CharacterId);
             }
+
+            // …and the one thing a re-read does take away (ET-49). A pilot this roster HAS named before and does not
+            // name now has been removed from the fleet, wherever that removal was made — the roster screen, another
+            // client, this screen a moment ago. That is a fact about them, not a gap in this read, so their row goes.
+            // A pilot the roster has never named is untouched: nothing removed them, they were simply never on it.
+            foreach (int characterId in _everOnRoster.Where(id => !_rosterByCharacter.ContainsKey(id)).ToList())
+                _DropRow(characterId);
 
             _commanderCharacterId = commander?.CharacterId;
             RefreshCommanderPresence();
@@ -403,7 +423,9 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
 
     private void RouteMetric(MetricSample sample)
     {
-        if (_disposed || sample.FleetId != _fleetId)
+        // A sample for a pilot this screen has seen removed is an echo of a fleet they are no longer in: it may not
+        // raise their row again through lazy discovery below, and it may not count towards the fleet's totals either.
+        if (_disposed || sample.FleetId != _fleetId || _removed.Contains(sample.CharacterId))
             return;
 
         switch (sample.Kind)
@@ -517,7 +539,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
             return;
 
         var (status, message) = await removal.RemoveAsync(_fleets, new FleetMemberRemovalRequest(
-            member.Id, member.CharacterId, tracker.Character, FleetName, _esiFleetId, _esiFleetBossId));
+            _fleetId, member.Id, member.CharacterId, tracker.Character, FleetName, _esiFleetId, _esiFleetBossId));
 
         if (status is FleetMemberRemovalStatus.Cancelled)
             return;
@@ -539,6 +561,11 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     // Re-committing the order afterwards is what keeps the stored drag order free of the departed id (ET-28).
     private void _DropRow(int characterId)
     {
+        // Recorded before anything else, and whether or not there is a row to tear down: this is the "they were
+        // removed" fact the sample router reads, and a removal confirmed before the pilot's first sample arrived
+        // still has to keep that sample from raising a row.
+        _removed.Add(characterId);
+
         if (!_trackers.Remove(characterId, out var tracker))
             return;
 

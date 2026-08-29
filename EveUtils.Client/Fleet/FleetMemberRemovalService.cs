@@ -39,6 +39,13 @@ public sealed class FleetMemberRemovalService(IServiceProvider services, IDialog
         if (!removed.Ok)
             return (FleetMemberRemovalStatus.Failed, $"Remove failed: {removed.Message}");
 
+        // Stop publishing for them straight away. The participation set is otherwise only rewritten by the fleets
+        // listing, which sweeps while its window is open and never while it is closed — so without this the client
+        // kept pushing the removed pilot's samples at 1 Hz, and lazy discovery put their card back on the metrics
+        // screen a second after the FC removed it (ET-49). A client-only fleet pushes no roster event at all, so
+        // there is nothing else that would ever have corrected it there.
+        services.GetService<IFleetParticipation>()?.Remove(request.FleetId, request.CharacterId);
+
         return await _OfferInGameKickAsync(request, cancellationToken);
     }
 
