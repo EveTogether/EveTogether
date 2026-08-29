@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
@@ -90,6 +93,12 @@ public class EsiPerAccountStatusTests
             var window = new MainWindow { DataContext = vm, Width = 1100, Height = 900 };
             window.Show();
             Dispatcher.UIThread.RunJobs();
+
+            // Iron Law #9: leave the frame behind so the chips can be looked at, not only asserted about.
+            var frame = window.CaptureRenderedFrame();
+            Assert.NotNull(frame);
+            frame.Save(Path.Combine(Path.GetTempPath(), "eveutils-esi-chips-per-account.png"),
+                new PngBitmapEncoderOptions());
 
             var chips = EsiChips(window);
             Assert.Equal(Roster.Length, chips.Count); // one ESI chip per character row, no more
