@@ -281,9 +281,8 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         // whether it leaves this client. Only emitted once a position is actually known (no fabricated "—").
         if (!string.IsNullOrEmpty(system))
             yield return new MetricSample(
-                characterId, fleetId, MetricKind.Location,
-                abyssalAnchor is { } anchor ? new DateTimeOffset(anchor, TimeSpan.Zero).ToUnixTimeMilliseconds() : 0,
-                unixMs, system);
+                characterId, fleetId, MetricKind.Location, 0, unixMs, system,
+                abyssalAnchor is { } anchor ? new DateTimeOffset(anchor, TimeSpan.Zero).ToUnixTimeMilliseconds() : 0);
     }
 
     /// <summary>The local character's full set of live combat rates (DPS out/in + neut + cap GJ/s) without publishing —

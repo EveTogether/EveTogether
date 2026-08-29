@@ -16,19 +16,24 @@ public static class AbyssalSpace
     public static readonly TimeSpan RunLimit = TimeSpan.FromMinutes(20);
 
     // Deliberately short: enough to see the clock work, not a complete vocabulary. The full two-layer list (and why
-    // hulls beat adjective prefixes) is in the ET-56 comments.
+    // hulls beat adjective prefixes) is in the ET-56 comments. Names that double as normal-space ships — Sentinel,
+    // Warden, Escort, Lancer, Aegis, Upholder, Preserver — are left out on purpose: a false clock in Aphend would
+    // discredit the very readout this exists to check.
     private static readonly string[] AbyssalNames =
     [
         "Tessella", "Tyrannos", "Deepwatcher", "Overmind", "Spearfisher", "Watchman", "Firewatcher",
-        "Obfuscator", "Illuminator", "Confuser", "Dissipator", "Upholder", "Preserver", "Sentinel",
-        "Aegis", "Entangler", "Swarmer", "Escort", "Lancer", "Warden",
-        "Biocombinative Cache", "Bioadaptive Cache",
+        "Obfuscator", "Illuminator", "Confuser", "Dissipator", "Marshal Disparu", "Enforcer Disparu",
+        "Biocombinative Cache", "Bioadaptive Cache", "Extraction SubNode",
     ];
+
+    // Triglavian hulls that fly in normal space too: a bare "Damavik" proves nothing, "Striking Damavik" does.
+    private static readonly string[] PrefixedHulls = ["Damavik", "Vedmak", "Leshak"];
 
     /// <summary>Whether a combat target's name says the character is inside the abyss.</summary>
     public static bool IsAbyssalContact(string? target) =>
         !string.IsNullOrWhiteSpace(target) &&
-        AbyssalNames.Any(name => target.Contains(name, StringComparison.OrdinalIgnoreCase));
+        (AbyssalNames.Any(name => target.Contains(name, StringComparison.OrdinalIgnoreCase)) ||
+         PrefixedHulls.Any(hull => target.IndexOf(hull, StringComparison.OrdinalIgnoreCase) > 0));
 
     /// <summary>
     /// The text a location readout shows. Without a run this is the system name, untouched. With one it is the

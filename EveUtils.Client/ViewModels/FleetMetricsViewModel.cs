@@ -441,8 +441,8 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
             case MetricKind.Location:
                 var row = Track(sample.CharacterId);
                 row.Location = sample.Text;
-                row.AbyssalAnchorUtc = sample.Value > 0
-                    ? DateTimeOffset.FromUnixTimeMilliseconds((long)sample.Value).UtcDateTime
+                row.AbyssalAnchorUtc = sample.AbyssalAnchorMs > 0
+                    ? DateTimeOffset.FromUnixTimeMilliseconds(sample.AbyssalAnchorMs).UtcDateTime
                     : null;
                 row.RefreshLocationDisplay(); // 1 Hz path: the countdown moves even when system and anchor do not
                 break;

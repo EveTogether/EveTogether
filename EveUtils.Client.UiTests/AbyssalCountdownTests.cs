@@ -10,14 +10,12 @@ namespace EveUtils.Client.UiTests;
 /// therefore never claim more time than the pilot has. The log gives no entry event — the first thing we see is a
 /// shot fired, well into the run — so the clock anchors on the last place the log put the pilot, not on that shot.
 ///
-/// Timestamps are Raymond's measured run of 2026-08-29 (ET-55): undock 17:34:34, first abyssal name the short
-/// vocabulary catches 17:39:07. A later detection only moves when the clock appears, never what it says — the
-/// anchor is the undock either way.
+/// Timestamps are Raymond's measured run of 2026-08-29 (ET-55): undock 17:34:34, first contact 17:35:46.
 /// </summary>
 public class AbyssalCountdownTests
 {
     private static readonly DateTime Undock = new(2026, 8, 29, 17, 34, 34, DateTimeKind.Utc);
-    private static readonly DateTime FirstContact = new(2026, 8, 29, 17, 39, 7, DateTimeKind.Utc);
+    private static readonly DateTime FirstContact = new(2026, 8, 29, 17, 35, 46, DateTimeKind.Utc);
     private static readonly DateTime At1740 = new(2026, 8, 29, 17, 40, 0, DateTimeKind.Utc);
 
     [Fact]
@@ -25,14 +23,14 @@ public class AbyssalCountdownTests
     {
         var metrics = new CharacterMetrics();
         metrics.SetLocation("Aphend", Undock);
-        metrics.RecordCombat(DamageDirection.Outgoing, 120, "Triglavian Biocombinative Cache", HitQuality.Hits);
+        metrics.RecordCombat(DamageDirection.Outgoing, 120, "Striking Damavik", HitQuality.Hits);
 
-        // The minutes between undock and first contact are already gone; the clock has to have spent them.
+        // The 72 seconds between undock and first shot are already spent; the clock has to have spent them too.
         Assert.Equal(Undock, metrics.AbyssalAnchor);
         Assert.Equal("Abyssal (14:34)", AbyssalSpace.Describe("Aphend", metrics.AbyssalAnchor, At1740));
 
-        // Anchoring on the contact instead would have shown 19:07 — four and a half minutes the pilot does not have.
-        Assert.Equal("Abyssal (19:07)", AbyssalSpace.Describe("Aphend", FirstContact, At1740));
+        // Anchoring on the shot instead would have shown 15:46 — 72 seconds the pilot does not have.
+        Assert.Equal("Abyssal (15:46)", AbyssalSpace.Describe("Aphend", FirstContact, At1740));
     }
 
     [Fact]
@@ -48,6 +46,8 @@ public class AbyssalCountdownTests
         var metrics = new CharacterMetrics();
         metrics.SetLocation("Aphend", Undock);
         metrics.RecordCombat(DamageDirection.Outgoing, 120, "Serpentis Scout", HitQuality.Hits);
+        // A bare Triglavian hull flies in normal space; only an adjective in front of it means the abyss.
+        metrics.RecordCombat(DamageDirection.Outgoing, 120, "Damavik", HitQuality.Hits);
 
         Assert.Null(metrics.AbyssalAnchor);
         Assert.Equal("Aphend", AbyssalSpace.Describe("Aphend", metrics.AbyssalAnchor, At1740));
@@ -58,7 +58,7 @@ public class AbyssalCountdownTests
     {
         var metrics = new CharacterMetrics();
         metrics.SetLocation("Aphend", Undock);
-        metrics.RecordCombat(DamageDirection.Outgoing, 120, "Triglavian Biocombinative Cache", HitQuality.Hits);
+        metrics.RecordCombat(DamageDirection.Outgoing, 120, "Striking Damavik", HitQuality.Hits);
         Assert.NotNull(metrics.AbyssalAnchor);
 
         metrics.SetLocation("Kamela", At1740);
