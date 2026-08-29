@@ -140,9 +140,10 @@ public static class ClientFleetMetricTest
 
     /// <summary>
     /// Asserts the location privacy gate (Option P, 2026-06-04): it is the single publisher-level share decision,
-    /// uniform with DPS. On a <b>server</b> fleet location is opt-IN — off (default) publishes no
-    /// <see cref="MetricKind.Location"/> sample, on lets it through (other kinds unaffected). On a <b>local-only</b>
-    /// fleet the share-gate does not apply, so location is shared even when opted out (it only feeds your own graphs).
+    /// uniform with DPS. On a <b>server</b> fleet location is opt-IN, so off (the default) keeps the sample off the
+    /// wire — but it still reaches your own graphs either way (ET-41), which is all this bus can observe. That the
+    /// opted-out sample really does not leave the machine is asserted against a recording transport in
+    /// <c>MetricShareGateTests</c>.
     /// </summary>
     private static async Task<bool> CheckLocationOptInAsync(
         IServiceProvider services, FleetMetricPublisher publisher, IFleetParticipation participation, IEventBus bus, CancellationToken ct)
@@ -159,12 +160,15 @@ public static class ClientFleetMetricTest
             // --- Server fleet: location is opt-IN (the privacy gate applies). ---
             participation.Set([new FleetParticipant(Character, FleetId, ClientOnly: false)]);
 
-            // Default (opted out): no Location sample leaves, though DPS still does.
+            // Default (opted out): the share decision is off, yet your own graphs still get the sample.
             await SetShareLocationAsync(services, false);
             captured.Clear();
             await publisher.PublishTickAsync(Now(), ct);
-            ok &= Check("server fleet, opt-out (default) → no Location sample published",
-                captured.All(e => e.Data.Kind != MetricKind.Location));
+            var share = await services.GetRequiredService<IMetricShareSettings>().LoadAsync(ct);
+            ok &= Check("server fleet, opt-out (default) → Location is not shared with the fleet",
+                !share.IsShared(FleetId, Character, MetricKind.Location));
+            ok &= Check("server fleet, opt-out → Location still reaches your OWN graphs",
+                captured.Any(e => e.Data.Kind == MetricKind.Location));
             ok &= Check("server fleet, opt-out leaves the other kinds (DPS) untouched",
                 captured.Any(e => e.Data.Kind == MetricKind.Dps));
 
@@ -178,13 +182,13 @@ public static class ClientFleetMetricTest
             ok &= Check("Location sample scoped + stamped",
                 loc?.Data.FleetId == FleetId && loc?.Data.CharacterId == Character);
 
-            // --- Local-only fleet: the share-gate does not apply — location is shared even when opted OUT
+            // --- Local-only fleet: nothing ever leaves, so the gate is moot — location still feeds your own graphs
             //     (2026-06-04, Option P: a local-only fleet feeds only your own graphs, nothing to hide). ---
             await SetShareLocationAsync(services, false);
             participation.Set([new FleetParticipant(Character, FleetId, ClientOnly: true)]);
             captured.Clear();
             await publisher.PublishTickAsync(Now(), ct);
-            ok &= Check("local-only fleet, opt-out → Location IS still shared (gate bypassed for client-only)",
+            ok &= Check("local-only fleet, opt-out → Location IS still graphed (gate is moot for client-only)",
                 captured.Any(e => e.Data.Kind == MetricKind.Location));
         }
 

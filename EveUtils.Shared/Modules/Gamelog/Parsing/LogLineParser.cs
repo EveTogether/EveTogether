@@ -53,7 +53,9 @@ public static partial class LogLineParser
     [GeneratedRegex(@"^Undocking from .+ to (?<sys>.+?) solar system\.?$")]
     private static partial Regex Undocking();
 
-    [GeneratedRegex(@"^(?<isk>[\d,]+) ISK added to next bounty payout$")]
+    // EVE groups the thousands in the client's own language — "67,500 ISK" (en) and "67.500 ISK" (de/nl) are the same
+    // payout — so both separators group, and a trailing 1-2 digit fraction is a decimal that whole-ISK totals drop.
+    [GeneratedRegex(@"^(?<isk>\d{1,3}(?:[.,]\d{3})*|\d+)(?:[.,]\d{1,2})? ISK added to next bounty payout$")]
     private static partial Regex Bounty();
 
     public static LogCategory ParseCategory(string raw) => raw.ToLowerInvariant() switch
@@ -115,7 +117,7 @@ public static partial class LogLineParser
         if (!m.Success)
             return null;
 
-        var raw = m.Groups["isk"].Value.Replace(",", string.Empty);
+        var raw = m.Groups["isk"].Value.Replace(",", string.Empty).Replace(".", string.Empty);
         return long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var isk)
             ? new BountyEvent(timestamp, isk)
             : null;

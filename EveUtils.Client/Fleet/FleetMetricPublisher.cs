@@ -12,9 +12,9 @@ namespace EveUtils.Client.Fleet;
 /// <summary>
 /// Drives the ~1 Hz fleet activity stream. While the client is participating in a fleet
 /// (<see cref="IActiveFleetState"/>), each tick polls every <see cref="IFleetMetricSource"/> for the active
-/// scope and publishes each sample as a <see cref="FleetMetricEvent"/> with <see cref="EventTarget.Both"/>: the
-/// local UI graphs it, and the server reroutes it — fleet-scoped — to the fleet's other active participants
-/// . When not participating the tick is a no-op, so nothing leaks to a fleet the user has left.
+/// scope and publishes each sample as a <see cref="FleetMetricEvent"/>: the local UI always graphs it, and — when
+/// the share-gate allows it — the server reroutes it, fleet-scoped, to the fleet's other active participants.
+/// When not participating the tick is a no-op, so nothing leaks to a fleet the user has left.
 ///
 /// The client has no generic host, so <see cref="Start"/>/<see cref="StopAsync"/> own the loop manually (like
 /// <c>ClientTokenRefreshService</c>). The unit of work, <see cref="PublishTickAsync"/>, is public and
@@ -101,15 +101,14 @@ public sealed class FleetMetricPublisher(
             foreach (var source in _sources)
             foreach (var sample in source.Sample(participant.FleetId, participant.CharacterId, unixMs))
             {
-                // The share-gate is a privacy boundary for what you broadcast to OTHER members on a server (per-metric
-                // opt-out, location opt-in). A client-only fleet is purely local — the samples only ever feed
-                // your own graphs (EventTarget.Local above), so there is no one to hide them from: share everything
-                // regardless of the gate. The per-fleet override / global default applies only to server-backed fleets.
-                if (!participant.ClientOnly &&
-                    !share.IsShared(participant.FleetId, participant.CharacterId, sample.Kind))
-                    continue;
+                // The share-gate decides what LEAVES this machine, never what your own client draws: an unshared
+                // sample drops to Local so your own row and the fleet totals still get it (ET-41). A client-only
+                // fleet is already Local, so the gate is moot there.
+                var sampleTarget = share.IsShared(participant.FleetId, participant.CharacterId, sample.Kind)
+                    ? target
+                    : EventTarget.Local;
 
-                await eventBus.PublishAsync(new FleetMetricEvent(sample, participant.CharacterId), target, cancellationToken);
+                await eventBus.PublishAsync(new FleetMetricEvent(sample, participant.CharacterId), sampleTarget, cancellationToken);
             }
         }
     }
