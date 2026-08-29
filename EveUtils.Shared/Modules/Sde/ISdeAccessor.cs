@@ -66,6 +66,12 @@ public interface ISdeAccessor
     /// no positive damage attributes.</summary>
     DamageProfile? GetNpcDamageProfile(int typeId);
 
+    /// <summary>The site/dungeon catalogue, ordered by name. Every argument is an optional narrowing: a null or blank
+    /// <paramref name="nameQuery"/> matches every name (case-insensitive substring), a null
+    /// <paramref name="archetypeId"/> or <paramref name="factionId"/> does not filter on that axis. Empty when the
+    /// SDE is unavailable.</summary>
+    IReadOnlyList<SdeSite> SearchSites(string? nameQuery = null, int? archetypeId = null, int? factionId = null);
+
     /// <summary>Release the store file (drop pooled connections + stop serving queries) so the importer can overwrite
     /// it during the atomic swap — on Windows an open/pooled handle blocks <c>File.Move</c>. Pair with <see cref="Reopen"/>.</summary>
     void Close();

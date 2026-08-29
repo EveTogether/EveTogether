@@ -18,8 +18,12 @@ public sealed class SdeSqliteBuilder
     private const int ReportEvery = 2000;
 
     // Entry names are flat in the zip (verified build 3374020 — no sde/ submap). Order: dependency-light first.
+    // archetypes/factions/typeLists are read purely as lookups for the Site rows, so they must precede dungeons.
     private static readonly string[] Datasets =
-        ["categories.jsonl", "groups.jsonl", "dogmaAttributes.jsonl", "dogmaEffects.jsonl", "types.jsonl", "typeDogma.jsonl"];
+    [
+        "categories.jsonl", "groups.jsonl", "dogmaAttributes.jsonl", "dogmaEffects.jsonl", "types.jsonl", "typeDogma.jsonl",
+        "archetypes.jsonl", "factions.jsonl", "typeLists.jsonl", "dungeons.jsonl"
+    ];
 
     /// <summary>
     /// Builds the store at <paramref name="outputPath"/> from <paramref name="zipPath"/>. Reports the Processing

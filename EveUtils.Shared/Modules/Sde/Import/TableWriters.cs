@@ -1,4 +1,6 @@
+using System.Net;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using EveUtils.Shared.Modules.Sde.Enums;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Sde.Storage;
@@ -10,8 +12,10 @@ namespace EveUtils.Shared.Modules.Sde.Import;
 /// Prepared bulk-insert commands for the SDE tables, reused row-by-row inside the build transaction. Owns the
 /// per-dataset JSON shape: types/groups/categories carry a localized <c>name.en</c>, dogma attributes/effects a
 /// plain <c>name</c> string, and typeDogma drives both the per-type dogma rows and the pre-computed slot table.
+/// archetypes/factions/typeLists write no rows of their own — they accumulate into lookups that the later
+/// dungeons pass denormalises onto each Site row (hence the dataset order in <see cref="SdeSqliteBuilder"/>).
 /// </summary>
-internal sealed class TableWriters
+internal sealed partial class TableWriters
 {
     private readonly SqliteCommand _category;
     private readonly SqliteCommand _group;
@@ -22,6 +26,11 @@ internal sealed class TableWriters
     private readonly SqliteCommand _typeDogmaEffect;
     private readonly SqliteCommand _fitRequirement;
     private readonly SqliteCommand _typeAlias;
+    private readonly SqliteCommand _site;
+
+    private readonly Dictionary<long, string> _archetypeNames = [];
+    private readonly Dictionary<long, string> _factionNames = [];
+    private readonly Dictionary<long, int[]> _shipGroupsByTypeList = [];
 
     public TableWriters(SqliteConnection connection, SqliteTransaction transaction)
     {
@@ -56,6 +65,11 @@ internal sealed class TableWriters
         _typeAlias = Prepare(connection, transaction,
             "INSERT INTO TypeNameAlias (typeId, nameKey, locale) VALUES ($typeId, $nameKey, $locale);",
             "$typeId", "$nameKey", "$locale");
+        _site = Prepare(connection, transaction,
+            "INSERT INTO Site (dungeonId, nameEn, archetypeId, archetypeName, factionId, factionName, description, dedRating, shipGroupIdsJson) " +
+            "VALUES ($dungeonId, $nameEn, $archetypeId, $archetypeName, $factionId, $factionName, $description, $dedRating, $shipGroupIdsJson);",
+            "$dungeonId", "$nameEn", "$archetypeId", "$archetypeName", "$factionId", "$factionName", "$description",
+            "$dedRating", "$shipGroupIdsJson");
     }
 
     public void Insert(string dataset, JsonElement element)
@@ -68,6 +82,10 @@ internal sealed class TableWriters
             case "dogmaEffects.jsonl": InsertDogmaEffect(element); break;
             case "types.jsonl": InsertType(element); break;
             case "typeDogma.jsonl": InsertTypeDogma(element); break;
+            case "archetypes.jsonl": CollectArchetype(element); break;
+            case "factions.jsonl": CollectFaction(element); break;
+            case "typeLists.jsonl": CollectTypeList(element); break;
+            case "dungeons.jsonl": InsertSite(element); break;
         }
     }
 
@@ -209,6 +227,99 @@ internal sealed class TableWriters
         _fitRequirement.Parameters["$isLauncher"].Value = isLauncher;
         _fitRequirement.Parameters["$isTurret"].Value = isTurret;
         _fitRequirement.ExecuteNonQuery();
+    }
+
+    private void CollectArchetype(JsonElement e)
+    {
+        // Archetype 43 (45 dungeons) carries a description but no title at all — it stays absent here and the
+        // Site row keeps a null archetypeName rather than an invented one.
+        if (NullableEnName(e, "title") is string title && title.Length > 0)
+            _archetypeNames[Key(e)] = title;
+    }
+
+    private void CollectFaction(JsonElement e)
+    {
+        if (NullableEnName(e, "name") is string name && name.Length > 0)
+            _factionNames[Key(e)] = name;
+    }
+
+    private void CollectTypeList(JsonElement e) => _shipGroupsByTypeList[Key(e)] = IntArray(e, "includedGroupIDs");
+
+    private void InsertSite(JsonElement e)
+    {
+        var description = StripHtml(EnName(e, "description"));
+        var archetypeId = NullableInt(e, "archetypeID");
+        var factionId = NullableInt(e, "factionID");
+
+        _site.Parameters["$dungeonId"].Value = Key(e);
+        _site.Parameters["$nameEn"].Value = EnName(e, "name");
+        _site.Parameters["$archetypeId"].Value = archetypeId;
+        _site.Parameters["$archetypeName"].Value = Lookup(_archetypeNames, archetypeId);
+        _site.Parameters["$factionId"].Value = factionId;
+        _site.Parameters["$factionName"].Value = Lookup(_factionNames, factionId);
+        _site.Parameters["$description"].Value = description.Length > 0 ? description : DBNull.Value;
+        _site.Parameters["$dedRating"].Value = DedRating(description);
+        _site.Parameters["$shipGroupIdsJson"].Value = ShipGroupIdsJson(e);
+        _site.ExecuteNonQuery();
+    }
+
+    // NULL when the dungeon carries no allowedShipsList, a JSON array of InvGroup ids when it does. The array can be
+    // empty: 6 of the 70 referenced type lists (touching 27 dungeons) express their allow-list as includedTypeIDs or
+    // as a display-only description instead of ship groups. Keeping NULL and "[]" distinct stops those 27 restricted
+    // sites from reading as unrestricted.
+    // ponytail: includedGroupIDs only — the 9 includedTypeIDs / 7 excludedTypeIDs refinements are a known ceiling;
+    // widen to full set algebra if a consumer needs per-hull precision.
+    private object ShipGroupIdsJson(JsonElement e)
+    {
+        if (!e.TryGetProperty("allowedShipsList", out var lists) || lists.ValueKind != JsonValueKind.Array)
+            return DBNull.Value;
+        var groups = new SortedSet<int>();
+        var any = false;
+        foreach (var list in lists.EnumerateArray())
+        {
+            if (list.ValueKind != JsonValueKind.Number)
+                continue;
+            any = true;
+            if (_shipGroupsByTypeList.TryGetValue(list.GetInt64(), out var ids))
+                groups.UnionWith(ids);
+        }
+        return any ? "[" + string.Join(",", groups) + "]" : DBNull.Value;
+    }
+
+    private static object Lookup(Dictionary<long, string> names, object id) =>
+        id is int key && names.TryGetValue(key, out var name) ? name : DBNull.Value;
+
+    // 38 of the 1409 descriptions carry a parsable rating; the term appears 42 times, so anchoring on the phrase
+    // alone would invent a rating for the four that omit it.
+    private static object DedRating(string description)
+    {
+        var match = DedThreatAssessment().Match(description);
+        return match.Success ? int.Parse(match.Groups[1].Value) : DBNull.Value;
+    }
+
+    [GeneratedRegex(@"DED Threat Assessment[^(]*\((\d{1,2}) of 10\)", RegexOptions.IgnoreCase)]
+    private static partial Regex DedThreatAssessment();
+
+    [GeneratedRegex(@"<[^>]+>")]
+    private static partial Regex HtmlTag();
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex WhitespaceRun();
+
+    // Site descriptions are HTML (<p>, </p>, <br>). Strip once at import so no consumer has to. Tags become a space
+    // so paragraphs do not run together, then whitespace collapses.
+    private static string StripHtml(string value) =>
+        value.Length == 0 ? value : WhitespaceRun().Replace(WebUtility.HtmlDecode(HtmlTag().Replace(value, " ")), " ").Trim();
+
+    private static int[] IntArray(JsonElement e, string prop)
+    {
+        if (!e.TryGetProperty(prop, out var v) || v.ValueKind != JsonValueKind.Array)
+            return [];
+        var result = new List<int>(v.GetArrayLength());
+        foreach (var item in v.EnumerateArray())
+            if (item.ValueKind == JsonValueKind.Number)
+                result.Add(item.GetInt32());
+        return [.. result];
     }
 
     private static SqliteCommand Prepare(
