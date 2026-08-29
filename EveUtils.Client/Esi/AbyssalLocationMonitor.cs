@@ -45,9 +45,8 @@ public sealed class AbyssalLocationMonitor(
 
     private readonly ConcurrentDictionary<int, CancellationTokenSource> _running = new();
 
-    // The watch now starts while the app is still booting, and a character without the scope refuses on its very
-    // first poll — which raises a toast. Touching Avalonia's dispatcher before the UI thread owns it binds it to
-    // whatever thread got there first, and the real startup then dies on VerifyAccess. So every watch waits here.
+    // A scopeless character refuses on its first poll and toasts; touching the dispatcher before the UI thread owns
+    // it binds it to this one, and Avalonia's own start-up then dies on VerifyAccess (measured: no window at all).
     private readonly TaskCompletionSource _uiReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>The UI exists; watches may start polling (and may raise a toast). Idempotent.</summary>
