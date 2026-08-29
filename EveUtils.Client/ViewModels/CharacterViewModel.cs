@@ -4,6 +4,7 @@ using System.Collections.Specialized;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings;
 
 namespace EveUtils.Client.ViewModels;
@@ -23,8 +24,13 @@ public partial class CharacterViewModel : ObservableObject
     [ObservableProperty] private bool _hasReadFittings;
     [ObservableProperty] private bool _hasWriteFittings;
 
-    /// <summary>Local: has a locally stored ESI token (Mode A).</summary>
-    [ObservableProperty] private bool _isLocal;
+    /// <summary>
+    /// This character's own ESI session state, from a real token check (<c>ClientTokenRefreshService</c>) and held
+    /// per character id by <c>EsiTokenStatusTracker</c>, so it survives the list rebuild that replaces these rows.
+    /// It replaces the former <c>IsLocal</c> + <c>NeedsReauth</c> pair, which answered two different questions
+    /// ("does a token file exist" and "did the one startup check fail") and drifted apart — ET-24.
+    /// </summary>
+    [ObservableProperty] private TokenStatus _esiTokenStatus = TokenStatus.NoToken;
 
     /// <summary>True when a running EVE client on THIS machine is detected for this character (window title or
     /// launcher command line, swept by <c>EveClientPresenceService</c>) — drives the green dot in the list.</summary>
@@ -35,9 +41,6 @@ public partial class CharacterViewModel : ObservableObject
         : "No running EVE client detected on this PC";
 
     partial void OnHasActiveClientChanged(bool value) => OnPropertyChanged(nameof(ClientStatusTooltip));
-
-    /// <summary>Warning: the ESI token expired and could not be refreshed — the user must re-authenticate.</summary>
-    [ObservableProperty] private bool _needsReauth;
 
     /// <summary>Public corp/alliance label ("Corp [TICK] · Alliance [TICK]"), kept fresh from public ESI; "—" until resolved.</summary>
     [ObservableProperty] private string _affiliation = "—";
@@ -69,25 +72,41 @@ public partial class CharacterViewModel : ObservableObject
         }
     }
 
-    /// <summary>ESI-side indicator: local token + re-auth state.</summary>
-    public string EsiStatus =>
-        NeedsReauth ? "ESI: ⚠️ re-auth needed"
-        : IsLocal   ? "ESI: 🏠 connected"
-        :             "ESI: — not signed in";
+    /// <summary>True when this character has an ESI token stored at all — working or not. What the old
+    /// <c>IsLocal</c> meant; it gates the character pickers, which need a token to exist before offering the row.</summary>
+    public bool HasEsiToken => EsiTokenStatus is not TokenStatus.NoToken;
+
+    /// <summary>ESI-side indicator (chip tooltip): what this character's own ESI session is worth right now.</summary>
+    public string EsiStatus => EsiTokenStatus switch
+    {
+        TokenStatus.Valid or TokenStatus.Refreshed => "ESI: 🏠 connected",
+        TokenStatus.NeedsReauth                    => "ESI: ⚠️ re-auth needed",
+        TokenStatus.TemporarilyUnavailable         => "ESI: ⏳ temporarily unavailable — the token cannot be used "
+                                                      + "right now (usually a clock difference with EVE); signing in "
+                                                      + "again will not help",
+        _                                          => "ESI: — not signed in",
+    };
 
     // --- The mockup-style ESI status chip for the character list (module-shell mockup "ESI" chip):
     // the chip text + the mutually exclusive style variant it renders in. Hover shows EsiStatus. ---
 
-    public string EsiChipText => NeedsReauth ? "ESI ⚠" : IsLocal ? "ESI ✓" : "ESI —";
+    public string EsiChipText => EsiTokenStatus switch
+    {
+        TokenStatus.Valid or TokenStatus.Refreshed => "ESI ✓",
+        TokenStatus.NeedsReauth                    => "ESI ⚠",
+        TokenStatus.TemporarilyUnavailable         => "ESI ⏳",
+        _                                          => "ESI —",
+    };
 
-    /// <summary>Healthy accent chip: a working local ESI token.</summary>
-    public bool EsiOk => IsLocal && !NeedsReauth;
+    /// <summary>Healthy accent chip: this character's ESI session actually works.</summary>
+    public bool EsiOk => EsiTokenStatus is TokenStatus.Valid or TokenStatus.Refreshed;
 
-    /// <summary>Amber chip: the token expired and needs a re-auth.</summary>
-    public bool EsiWarn => NeedsReauth;
+    /// <summary>Amber chip: there is a token but it does not work — re-auth needed, or unusable for now.
+    /// TemporarilyUnavailable used to read as green while nothing worked; it does not any more.</summary>
+    public bool EsiWarn => EsiTokenStatus is TokenStatus.NeedsReauth or TokenStatus.TemporarilyUnavailable;
 
     /// <summary>Inert chip: not signed in at all (mutually exclusive with ok/warn, so the variants never stack).</summary>
-    public bool EsiDim => !IsLocal && !NeedsReauth;
+    public bool EsiDim => EsiTokenStatus is TokenStatus.NoToken;
 
     /// <summary>The names of the implants this character has plugged in, shown as a badge + tooltip in the
     /// overview so it is clear at a glance which implants a character carries.</summary>
@@ -122,17 +141,9 @@ public partial class CharacterViewModel : ObservableObject
     private void OnServerLinksChanged(object? sender, NotifyCollectionChangedEventArgs e) =>
         OnPropertyChanged(nameof(IsSynced));
 
-    partial void OnIsLocalChanged(bool value)
+    partial void OnEsiTokenStatusChanged(TokenStatus value)
     {
-        OnPropertyChanged(nameof(EsiStatus));
-        OnPropertyChanged(nameof(EsiChipText));
-        OnPropertyChanged(nameof(EsiOk));
-        OnPropertyChanged(nameof(EsiWarn));
-        OnPropertyChanged(nameof(EsiDim));
-    }
-
-    partial void OnNeedsReauthChanged(bool value)
-    {
+        OnPropertyChanged(nameof(HasEsiToken));
         OnPropertyChanged(nameof(EsiStatus));
         OnPropertyChanged(nameof(EsiChipText));
         OnPropertyChanged(nameof(EsiOk));

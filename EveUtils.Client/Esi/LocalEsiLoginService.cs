@@ -32,7 +32,8 @@ public sealed class LocalEsiLoginService(
     IEsiJwtValidator validator,
     IPerCharacterTokenStore tokenStore,
     ICharacterRegistry registry,
-    IEsiScopeRegistry scopeRegistry) : ISingletonService
+    IEsiScopeRegistry scopeRegistry,
+    EsiTokenStatusTracker statusTracker) : ISingletonService
 {
     /// <summary>
     /// Signs in a character requesting exactly <paramref name="requestedScopes"/> (the user picks these
@@ -67,6 +68,11 @@ public sealed class LocalEsiLoginService(
         var identity = await validator.ValidateAsync(tokens.AccessToken, options.ClientId, cancellationToken);
 
         await tokenStore.SaveAsync(identity.CharacterId, tokens, cancellationToken);
+
+        // A fresh grant is, by definition, a working session. Record it before the registry write: that write
+        // raises RegistryChanged and rebuilds the character list, and the rebuilt row reads its chip from here —
+        // without this, an earlier "needs re-auth" verdict would outlive the sign-in that fixed it.
+        await statusTracker.RecordAsync(identity.CharacterId, TokenStatus.Valid, cancellationToken);
 
         var character = new Character(identity.CharacterName, identity.CharacterId, identity.GrantedScopes);
         await registry.AddOrUpdateAsync(character, cancellationToken);

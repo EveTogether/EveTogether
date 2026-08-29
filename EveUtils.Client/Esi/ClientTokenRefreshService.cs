@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Esi;
 using Microsoft.Extensions.Hosting;
@@ -8,8 +9,10 @@ namespace EveUtils.Client.Esi;
 /// <summary>
 /// Background service that refreshes per-character ESI tokens before they expire.
 /// Runs every 60 s; refreshes any token whose remaining lifetime is under 5 minutes.
-/// Publishes <c>TokenRefreshedEvent</c> / <c>TokenRefreshFailedEvent</c> on the
-/// local event bus so the UI and other services stay in sync.
+/// Every outcome is recorded on <see cref="EsiTokenStatusTracker"/>, which publishes
+/// <see cref="Shared.Modules.Esi.Events.TokenRefreshedEvent"/> /
+/// <see cref="Shared.Modules.Esi.Events.TokenRefreshFailedEvent"/> on the local event bus so the UI
+/// and other services stay in sync.
 /// </summary>
 public sealed class ClientTokenRefreshService(
     ICharacterRegistry registry,
@@ -17,6 +20,7 @@ public sealed class ClientTokenRefreshService(
     IEsiAuthClient authClient,
     IEsiJwtValidator jwtValidator,
     EsiOptions options,
+    EsiTokenStatusTracker statusTracker,
     ILogger<ClientTokenRefreshService> logger) : BackgroundService
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(60);
@@ -24,7 +28,11 @@ public sealed class ClientTokenRefreshService(
     // After a refresh yields an unusable token (validation fails — almost always clock skew), wait this long before
     // trying again. Without it every 5s ESI consumer would re-refresh against EVE SSO and re-log on every tick.
     private static readonly TimeSpan UnusableBackoff = TimeSpan.FromSeconds(60);
-    private readonly Dictionary<int, DateTimeOffset> _unusableRetryAfter = new(); // per-char back-off after an unusable refresh
+    // Concurrent: EnsureValidAsync is reached from the 60 s loop and from every ESI call, on any thread.
+    private readonly ConcurrentDictionary<int, DateTimeOffset> _unusableRetryAfter = new(); // per-char back-off after an unusable refresh
+    // One gate per character so two callers never send the same refresh token to EVE SSO at the same time —
+    // with a rotating refresh token the loser of that race gets invalid_grant and the account is really signed out.
+    private readonly ConcurrentDictionary<int, SemaphoreSlim> _gates = new();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -65,10 +73,34 @@ public sealed class ClientTokenRefreshService(
     }
 
     /// <summary>
-    /// Checks the character's ESI token and refreshes it if expiring. Returns the outcome
-    /// so the caller (e.g. the startup check) can surface a "re-auth needed" indication.
+    /// Checks the character's ESI token and refreshes it if expiring. Returns the outcome, and records it on
+    /// <see cref="EsiTokenStatusTracker"/> so the character list shows this account's own state without the
+    /// caller having to push it anywhere.
+    /// Serialized per character: the 60 s loop and every ESI call reach this, and two concurrent refreshes of
+    /// one character would race on the same refresh token.
     /// </summary>
     public async Task<TokenStatus> EnsureValidAsync(int charId, CancellationToken cancellationToken = default)
+    {
+        var gate = _gates.GetOrAdd(charId, static _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken);
+
+        TokenStatus status;
+        try
+        {
+            status = await EnsureValidCoreAsync(charId, cancellationToken);
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        // Outside the gate on purpose: recording notifies the UI and publishes on the event bus, and a
+        // subscriber must never be able to deadlock a token refresh by asking about the same character.
+        await statusTracker.RecordAsync(charId, status, cancellationToken);
+        return status;
+    }
+
+    private async Task<TokenStatus> EnsureValidCoreAsync(int charId, CancellationToken cancellationToken)
     {
         var tokens = await tokenStore.LoadAsync(charId, cancellationToken);
         if (tokens is null) return TokenStatus.NoToken;
@@ -76,7 +108,7 @@ public sealed class ClientTokenRefreshService(
         var remaining = tokens.ExpiresAt - DateTimeOffset.UtcNow;
         if (remaining > RefreshThreshold)
         {
-            _unusableRetryAfter.Remove(charId); // a valid token ends any unusable run
+            _unusableRetryAfter.TryRemove(charId, out _); // a valid token ends any unusable run
             return TokenStatus.Valid;
         }
 
@@ -104,10 +136,13 @@ public sealed class ClientTokenRefreshService(
 
             await tokenStore.SaveAsync(charId, refreshed, cancellationToken);
 
-            if (character is not null)
+            // Only write when the grant actually changed. AddOrUpdateAsync raises RegistryChanged, and the UI
+            // treats that as "the set of characters changed" and rebuilds the whole list — so writing after every
+            // refresh meant the 60 s loop could rebuild the character list every minute for nothing (ET-24).
+            if (character is not null && !ScopesEqual(character.GrantedScopes, identity.GrantedScopes))
                 await registry.AddOrUpdateAsync(character with { GrantedScopes = identity.GrantedScopes }, cancellationToken);
 
-            _unusableRetryAfter.Remove(charId); // recovered
+            _unusableRetryAfter.TryRemove(charId, out _); // recovered
             logger.LogInformation("Token refreshed for character {CharacterId}.", charId);
             return TokenStatus.Refreshed;
         }
@@ -133,6 +168,11 @@ public sealed class ClientTokenRefreshService(
             return TokenStatus.TemporarilyUnavailable;
         }
     }
+
+    // Grant comparison is set-like: EVE returns the granted scopes in no guaranteed order, so an order
+    // difference is not a change. Ordinal (invariant) — scope names are protocol identifiers, not text.
+    private static bool ScopesEqual(IReadOnlyList<string>? current, IReadOnlyList<string>? granted) =>
+        new HashSet<string>(current ?? [], StringComparer.OrdinalIgnoreCase).SetEquals(granted ?? []);
 
     private static bool IsRevoked(Exception ex) =>
         ex.Message.Contains("401", StringComparison.OrdinalIgnoreCase) ||

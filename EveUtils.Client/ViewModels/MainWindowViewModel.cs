@@ -75,6 +75,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private readonly ICharacterRegistry? _registry;
     private readonly ICharacterInfoService? _characterInfo;
     private readonly EveUtils.Client.Platform.EveClientPresenceService? _clientPresence;
+    private readonly EsiTokenStatusTracker? _tokenStatus;
     private readonly ICharacterPortraitProvider? _portraits;
     private readonly IThemeService? _theme;
     private readonly IDialogService? _dialogs;
@@ -365,6 +366,13 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _clientPresence.Changed += evidence =>
             Avalonia.Threading.Dispatcher.UIThread.Post(() => _ApplyClientPresence(evidence));
 
+        // Live ESI session state per character → that row's ESI chip. Every token check (the 60 s loop, every
+        // ESI call, a sign-in) lands here, so the chip follows the real token instead of waiting for a restart.
+        // Rebuilt rows re-seed from the same tracker in RefreshCharactersAsync — see ET-24.
+        _tokenStatus = services.GetRequiredService<EsiTokenStatusTracker>();
+        _tokenStatus.Changed += (characterId, status) =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => _ApplyTokenStatus(characterId, status));
+
         // Live public affiliation (corp/alliance) per character, kept fresh by CharacterInfoRefreshService on the
         // metered ESI pipeline. Seed each rebuilt row from the cache (RefreshCharactersAsync) and follow changes.
         _portraits = services.GetRequiredService<ICharacterPortraitProvider>();
@@ -384,7 +392,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         // ~30fps DpsRenderDriver, so the curve scrolls + decays continuously and all graphs share one render path.
         _renderDriver = services.GetRequiredService<DpsRenderDriver>();
 
-        _ = LoadAsync();
+        _ = RunStartupResilientAsync();
     }
 
     // Marks every character row whose EVE client is currently running on this machine (matched on the window-title
@@ -393,6 +401,15 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     {
         foreach (var vm in Characters)
             vm.HasActiveClient = evidence.Matches(vm.Name, vm.CharacterId);
+    }
+
+    // Writes a measured token status onto the matching character row. The row is only a view of it — the value
+    // itself lives in EsiTokenStatusTracker, keyed by character id, so a rebuild between two checks cannot lose it.
+    private void _ApplyTokenStatus(int characterId, TokenStatus status)
+    {
+        foreach (var vm in Characters)
+            if (vm.CharacterId == characterId)
+                vm.EsiTokenStatus = status;
     }
 
     // Writes a resolved affiliation onto the matching character row (the list is rebuilt independently, so a
@@ -726,6 +743,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// <summary>
     /// On startup, check each character's ESI token: refresh if expiring, flag "re-auth needed" if the
     /// refresh fails. Shows one summary message if any character needs re-authentication.
+    /// The per-row chips are not set here — <c>EnsureValidAsync</c> records every outcome on
+    /// <c>EsiTokenStatusTracker</c>, which is what the rows read from, whether they survive this loop or not.
     /// </summary>
     private async Task CheckTokensOnStartupAsync()
     {
@@ -733,14 +752,16 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         var refresher = _services.GetRequiredService<ClientTokenRefreshService>();
 
         var needReauth = new List<string>();
-        foreach (var c in Characters)
+        // Iterate a copy: each check awaits, and a check that refreshes a token can write to the registry, which
+        // rebuilds Characters (Clear + Add) mid-loop — enumerating the live collection would throw right here and
+        // leave the remaining characters unchecked (the same reason LoadCharacterPortraitsAsync takes a copy).
+        foreach (var c in Characters.ToList())
         {
+            if (c.CharacterId <= 0) continue; // local-only gamelog row: no ESI identity, nothing to check
+
             var status = await refresher.EnsureValidAsync(c.CharacterId);
             if (status is TokenStatus.NeedsReauth)
-            {
-                c.NeedsReauth = true;
                 needReauth.Add(c.Name);
-            }
         }
 
         if (needReauth.Count > 0 && _dialogs is not null)
@@ -998,9 +1019,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             var has = requiredScope == FittingsScopeCatalog.ReadFittings ? c.HasReadFittings
                     : requiredScope == FittingsScopeCatalog.WriteFittings ? c.HasWriteFittings
                     : true;
-            var local = c.IsLocal ? "🏠 local" : "no local token";
+            var local = c.HasEsiToken ? "🏠 local" : "no local token";
             var detail = has ? local : $"{local} · missing {requiredScope}";
-            return new CharacterPickOption(c.CharacterId, c.Name, detail, Enabled: has && c.IsLocal);
+            return new CharacterPickOption(c.CharacterId, c.Name, detail, Enabled: has && c.HasEsiToken);
         }).ToList();
     }
 
@@ -1027,8 +1048,15 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             var charId = c.EsiCharacterId ?? 0;
             if (built.Any(b => b.CharacterId == charId)) continue; // never list a character twice
 
+            // The ESI chip comes from the tracked per-character status, never from the row's default: this rebuild
+            // fires after every sign-in and after any registry write, and re-deriving it here is exactly how a
+            // re-auth warning used to be wiped off every other character (ET-24). Only when nothing has measured
+            // this character yet — the very first paint, before the startup check — fall back to whether a token
+            // is stored at all, which is what the list showed before any check ran.
             var hasLocalToken = tokenStore is not null && await tokenStore.LoadAsync(charId) is not null;
-            var vm = new CharacterViewModel(c) { IsLocal = hasLocalToken }; // Mode A: local ESI token present
+            var esiStatus = _tokenStatus?.Get(charId)
+                            ?? (hasLocalToken ? TokenStatus.Valid : TokenStatus.NoToken);
+            var vm = new CharacterViewModel(c) { EsiTokenStatus = esiStatus };
             vm.Affiliation = _characterInfo?.GetCached(charId)?.AffiliationLabel ?? "—"; // seed from the last resolved value
 
             // surface the character's plugged-in implants in the overview (badge + tooltip), from the cached set.
@@ -1772,10 +1800,38 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         await RestoreServerConnectionsAsync(); // re-attach the event bus to paired servers on startup
 
         await RefreshCharactersAsync();
-        await CheckTokensOnStartupAsync();     // refresh/flag ESI tokens at startup
+
+        // The token check talks to EVE SSO and shows a modal; it is the step most likely to fail, and the three
+        // steps behind it have nothing to do with tokens. Keep its failure to itself instead of silently skipping
+        // the fittings list, the server tabs and the home dashboard (ET-24).
+        try
+        {
+            await CheckTokensOnStartupAsync(); // refresh/flag ESI tokens at startup
+        }
+        catch (Exception ex)
+        {
+            ActivityStatus = $"ESI token check failed: {ex.Message}";
+        }
+
         await LoadFittingsAsync();             // global Local fittings list (all characters)
         await RefreshFittingsTabsAsync();      // server tabs for the restored connections
         await Home.RefreshAsync();             // home dashboard: your fleets, latest shared fits, character stats
+    }
+
+    /// <summary>
+    /// The startup chain, kicked off from the constructor. Wrapped because a bare <c>_ = LoadAsync()</c> loses
+    /// whatever it throws into an unobserved task: the window comes up half-loaded with nothing said about it.
+    /// </summary>
+    private async Task RunStartupResilientAsync()
+    {
+        try
+        {
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            ActivityStatus = $"Startup failed: {ex.Message}";
+        }
     }
 
     /// <summary>

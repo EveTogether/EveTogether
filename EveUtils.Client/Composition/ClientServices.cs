@@ -147,6 +147,7 @@ public static class ClientServices
         services.AddEsiPipeline(DataDirectory()); // pivot + handler chain + file cache (ClientEsiTokenProvider auto-registered)
         // BackgroundService started manually (the client has no generic host); the other ESI services
         // (LocalEsiLoginService, DialogService) carry markers and are auto-registered above.
+        services.AddSingleton<EsiTokenStatusTracker>(); // one ESI session state per character, survives a list rebuild
         services.AddSingleton<ClientTokenRefreshService>();
         // EveServerStatusService is registered by AddEsiPipeline (shared) now that the server hosts it too.
         services.AddSingleton<EsiMarketPriceService>();  // hourly public /markets/prices/ refresh into the cache
