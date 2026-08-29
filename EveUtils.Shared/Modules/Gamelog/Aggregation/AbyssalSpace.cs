@@ -36,6 +36,16 @@ public static class AbyssalSpace
          PrefixedHulls.Any(hull => target.IndexOf(hull, StringComparison.OrdinalIgnoreCase) > 0));
 
     /// <summary>
+    /// Re-base a fleet mate's anchor onto our own clock. Their anchor and their sample timestamp come from the
+    /// same machine, so the elapsed time between them is theirs to measure; only that span crosses the wire.
+    /// Subtracting it from our own receipt time keeps both halves of the countdown on one clock, so a machine whose
+    /// clock differs cannot buy the pilot seconds. Network delay lands on the safe side: it ages the anchor, which
+    /// shows less time, never more.
+    /// </summary>
+    public static DateTime? AnchorFromWire(long anchorMs, long sentMs, DateTime receivedUtc) =>
+        anchorMs > 0 ? receivedUtc - TimeSpan.FromMilliseconds(sentMs - anchorMs) : null;
+
+    /// <summary>
     /// The text a location readout shows. Without a run this is the system name, untouched. With one it is the
     /// deadline counting down from <see cref="RunLimit"/>.
     ///

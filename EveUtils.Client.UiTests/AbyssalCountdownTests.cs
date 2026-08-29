@@ -53,6 +53,47 @@ public class AbyssalCountdownTests
         Assert.Equal("Aphend", AbyssalSpace.Describe("Aphend", metrics.AbyssalAnchor, At1740));
     }
 
+    /// <summary>
+    /// A fleet mate's countdown crosses the wire as an anchor stamped on THEIR clock. Read against ours it would be
+    /// off by whatever the two machines disagree by — and a receiver running behind would show that difference as
+    /// extra time, which is the one direction that costs a ship. Only the span between their anchor and their sample
+    /// is taken from them; both halves of the sum are then measured on the receiver's own clock.
+    /// </summary>
+    [Fact]
+    public void ASlowReceiverClock_DoesNotHandOutExtraTime()
+    {
+        var senderAnchor = new DateTimeOffset(Undock).ToUnixTimeMilliseconds();
+        var senderSentAt = new DateTimeOffset(At1740).ToUnixTimeMilliseconds();  // 5:26 into the run
+        var truth = "Abyssal (14:34)";
+
+        // Receiver in step: same answer as the sender's own row.
+        var inStep = AbyssalSpace.AnchorFromWire(senderAnchor, senderSentAt, At1740);
+        Assert.Equal(truth, AbyssalSpace.Describe("Aphend", inStep, At1740));
+
+        // Receiver 90 seconds behind. Reading the raw anchor against its own clock would have said 16:04.
+        var slowNow = At1740 - TimeSpan.FromSeconds(90);
+        var rebased = AbyssalSpace.AnchorFromWire(senderAnchor, senderSentAt, slowNow);
+        Assert.Equal(truth, AbyssalSpace.Describe("Aphend", rebased, slowNow));
+        Assert.Equal("Abyssal (16:04)", AbyssalSpace.Describe("Aphend", Undock, slowNow));
+
+        // Receiver 90 seconds ahead — same answer, so the correction is not a one-sided fudge.
+        var fastNow = At1740 + TimeSpan.FromSeconds(90);
+        Assert.Equal(truth, AbyssalSpace.Describe("Aphend", AbyssalSpace.AnchorFromWire(senderAnchor, senderSentAt, fastNow), fastNow));
+    }
+
+    [Fact]
+    public void NetworkDelay_ShowsLessTimeNotMore()
+    {
+        var senderAnchor = new DateTimeOffset(Undock).ToUnixTimeMilliseconds();
+        var senderSentAt = new DateTimeOffset(At1740).ToUnixTimeMilliseconds();
+
+        // The sample arrives 10 seconds late; those 10 seconds are spent, and the readout has to have spent them.
+        var arrived = At1740 + TimeSpan.FromSeconds(10);
+        var anchor = AbyssalSpace.AnchorFromWire(senderAnchor, senderSentAt, arrived);
+        Assert.Equal("Abyssal (14:34)", AbyssalSpace.Describe("Aphend", anchor, arrived));
+        Assert.Equal("Abyssal (14:24)", AbyssalSpace.Describe("Aphend", anchor, arrived + TimeSpan.FromSeconds(10)));
+    }
+
     [Fact]
     public void LeavingOnAJump_EndsTheRun()
     {
