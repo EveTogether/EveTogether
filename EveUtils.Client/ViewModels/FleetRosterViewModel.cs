@@ -984,7 +984,8 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
             return;
 
         var (status, message) = await removal.RemoveAsync(_fleets, new FleetMemberRemovalRequest(
-            member.Id, member.CharacterId, NameFor(member.CharacterId), _fleet.Name, _esiFleetId, _esiFleetBossId));
+            _fleet.Id, member.Id, member.CharacterId, NameFor(member.CharacterId), _fleet.Name,
+            _esiFleetId, _esiFleetBossId));
 
         if (status is FleetMemberRemovalStatus.Cancelled)
             return;

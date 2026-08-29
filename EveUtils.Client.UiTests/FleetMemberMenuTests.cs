@@ -45,6 +45,7 @@ public class FleetMemberMenuTests
     private const int Commander = 90250177;
     private const int Member = 90250178;
     private const int ExternalPilot = 96000001;   // on the roster, no client here, so never a sample of their own
+    private const int Straggler = 96000002;       // never on the roster: only ever arrives through a sample
     private const long FleetId = 100;
     private const long EsiFleetId = 999;
 
@@ -82,6 +83,7 @@ public class FleetMemberMenuTests
                 [Commander] = "RaymondKrah",
                 [Member] = "Lionear",
                 [ExternalPilot] = "Nomad Pilot",
+                [Straggler] = "Tarek",
             });
             if (dialogs is not null)
                 services.AddSingleton<IDialogService>(dialogs);
@@ -557,13 +559,14 @@ public class FleetMemberMenuTests
     // --- Where ET-44 meets ET-46 ---
 
     /// <summary>
-    /// ET-46's re-read is deliberately additive: a member the roster no longer names KEEPS their row, because a row
-    /// can legitimately come from samples alone. Taking someone off this screen is the removal action's job, where a
-    /// human said so — so the two rules have to hold at once, and this pins both halves against a future "tidy-up"
-    /// that starts pruning on refresh.
+    /// The seam between ET-46's additive re-read and ET-44's removal, as ET-49 settled it. Re-reading the roster adds
+    /// whoever joined and leaves a <b>straggler the roster has never named</b> exactly where they are — that is why
+    /// ET-46 made it additive, and it still holds. What it no longer does is keep a pilot the roster HAS named and
+    /// now does not: nothing but a removal produces that, and a removal is an event. The removal action itself still
+    /// drops the row on the spot, without waiting for any read.
     /// </summary>
     [AvaloniaFact]
-    public async Task RefreshModule_AddsWithoutRemoving_WhileTheRemovalActionStillDropsTheRow()
+    public async Task RefreshModule_AddsAJoinerAndDropsARemovedMember_ButNeverTheStragglerTheRosterHasNotNamed()
     {
         var dialogs = AlwaysConfirms();
         using var instance = CreateInstance(dialogs);
@@ -575,17 +578,23 @@ public class FleetMemberMenuTests
         vm.RefreshModule();
         Assert.True(await WaitForAsync(() => vm.Members.Count == 3), "the re-read did not pick up the new member");
 
-        // …and a roster that no longer names someone takes nobody off: their row stays, totals and all.
-        fleets.Members = [fleets.Members[0]];
+        // A straggler flying with the fleet in-game but absent from the roster arrives the only way they can.
+        await instance.Services.GetRequiredService<IEventBus>().PublishAsync(new FleetMetricEvent(
+            new MetricSample(Straggler, FleetId, MetricKind.Location, 0, 0, "Amarr")));
+        Assert.True(await WaitForAsync(() => vm.Members.Any(m => m.CharacterId == Straggler)),
+            "the straggler's sample raised no row");
+
+        // A roster that stops naming a member it named before is reporting a removal, so that row goes…
+        fleets.Members = [fleets.Members[0], fleets.Members[1]];
         vm.RefreshModule();
-        await Task.Delay(60);
-        Dispatcher.UIThread.RunJobs();
+        Assert.True(await WaitForAsync(() => vm.Members.All(m => m.CharacterId != ExternalPilot)),
+            "a member the roster no longer names kept their row");
+
+        // …while the straggler, whom it has never named, is untouched by every one of those re-reads.
+        Assert.Contains(vm.Members, m => m.CharacterId == Straggler);
         Assert.Equal(3, vm.Members.Count);
 
-        // The removal action is the one thing that does drop a row.
-        fleets.Members = Roster().Members;
-        vm.RefreshModule();
-        await WaitForAsync(() => vm.Members.Count == 3);
+        // And the removal action still drops a row itself, rather than waiting for a read to confirm it.
         await InvokeRemoveAsync(root, vm, IndexOf(vm, Member));
 
         Assert.DoesNotContain(vm.Members, m => m.CharacterId == Member);
