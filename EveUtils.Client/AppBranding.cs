@@ -8,7 +8,8 @@ public static class AppBranding
     /// <summary>
     /// The release-stage badge next to the app name — the title bar and the About window both show it.
     /// It has already been "POC" once; keeping the word in one place is what stops the two badges from
-    /// drifting apart the next time the stage changes.
+    /// drifting apart the next time the stage changes. Uppercase to match the other letterspaced
+    /// micro-labels it sits among ("EVE TOGETHER", "UPDATES").
     /// </summary>
-    public const string ReleaseStage = "Beta";
+    public const string ReleaseStage = "BETA";
 }
