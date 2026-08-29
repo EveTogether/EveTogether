@@ -10,11 +10,12 @@ using Xunit;
 namespace EveUtils.Client.UiTests;
 
 /// <summary>
-/// Verifies the per-metric share gate on SERVER fleets: combat metrics are shared by default (opt-OUT) and can be
-/// turned off, while location stays private by default (opt-IN) and only shares once enabled. Exercises both the pure
-/// <see cref="MetricShareSnapshot"/> defaults and the gate as applied by <see cref="FleetMetricPublisher"/>. A
-/// local-only fleet bypasses the gate entirely (2026-06-04, Option P) — covered by
-/// <see cref="Publisher_LocalOnlyFleet_SharesEverything_RegardlessOfTheGate"/>.
+/// Verifies the per-metric share gate on SERVER fleets: combat metrics are broadcast by default (opt-OUT) and can be
+/// turned off, while location and bounty stay private by default (opt-IN) and only go out once enabled. The gate
+/// decides what LEAVES this machine — a sample always reaches the local bus, which is what draws your own row and the
+/// fleet totals (ET-41). Exercises both the pure <see cref="MetricShareSnapshot"/> defaults and the gate as applied by
+/// <see cref="FleetMetricPublisher"/>. A local-only fleet never reaches the transport at all — covered by
+/// <see cref="Publisher_LocalOnlyFleet_NeverLeavesTheMachine"/>.
 /// </summary>
 public class MetricShareGateTests
 {
@@ -45,37 +46,57 @@ public class MetricShareGateTests
     }
 
     [Fact]
-    public async Task Publisher_SharesDpsByDefault_ButNotAfterOptOut()
+    public async Task Publisher_UnsharedMetric_StillFeedsYourOwnRow_ButIsNotBroadcast()
     {
+        // ET-41: bounty is opt-IN, so it is not broadcast — but it is YOUR bounty, so your own row and the fleet
+        // totals must still get it. The gate is a broadcast boundary, not a blindfold on your own client.
         var cancellationToken = TestContext.Current.CancellationToken;
         using var instance = TestClientInstance.Create();
-        var captured = SubscribeKinds(instance, out var bus);
-        var publisher = ServerFleetPublisher(instance, bus, MetricKind.Dps);
+        var capture = Capture(out var bus);
 
-        await publisher.PublishTickAsync(unixMs: 1, cancellationToken);
-        Assert.Contains(MetricKind.Dps, captured);
+        await ServerFleetPublisher(instance, bus, MetricKind.Bounty).PublishTickAsync(1, cancellationToken);
+        Assert.Contains(MetricKind.Bounty, capture.Local);
+        Assert.DoesNotContain(MetricKind.Bounty, capture.Broadcast);
 
-        await SetSettingAsync(instance, MetricShareSnapshot.KeyFor(MetricKind.Dps), "false", cancellationToken);
-        captured.Clear();
-        await publisher.PublishTickAsync(unixMs: 2, cancellationToken);
-        Assert.DoesNotContain(MetricKind.Dps, captured);
+        await SetSettingAsync(instance, MetricShareSnapshot.KeyFor(MetricKind.Bounty), "true", cancellationToken);
+        capture.Clear();
+        await ServerFleetPublisher(instance, bus, MetricKind.Bounty).PublishTickAsync(2, cancellationToken);
+        Assert.Contains(MetricKind.Bounty, capture.Broadcast);
     }
 
     [Fact]
-    public async Task Publisher_DoesNotShareLocationUntilOptedIn()
+    public async Task Publisher_BroadcastsDpsByDefault_ButNotAfterOptOut()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         using var instance = TestClientInstance.Create();
-        var captured = SubscribeKinds(instance, out var bus);
+        var capture = Capture(out var bus);
+        var publisher = ServerFleetPublisher(instance, bus, MetricKind.Dps);
+
+        await publisher.PublishTickAsync(unixMs: 1, cancellationToken);
+        Assert.Contains(MetricKind.Dps, capture.Broadcast);
+
+        await SetSettingAsync(instance, MetricShareSnapshot.KeyFor(MetricKind.Dps), "false", cancellationToken);
+        capture.Clear();
+        await publisher.PublishTickAsync(unixMs: 2, cancellationToken);
+        Assert.DoesNotContain(MetricKind.Dps, capture.Broadcast);
+        Assert.Contains(MetricKind.Dps, capture.Local); // still your own graph
+    }
+
+    [Fact]
+    public async Task Publisher_DoesNotBroadcastLocationUntilOptedIn()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var instance = TestClientInstance.Create();
+        var capture = Capture(out var bus);
         var publisher = ServerFleetPublisher(instance, bus, MetricKind.Location);
 
         await publisher.PublishTickAsync(unixMs: 1, cancellationToken);
-        Assert.DoesNotContain(MetricKind.Location, captured);
+        Assert.DoesNotContain(MetricKind.Location, capture.Broadcast);
 
         await SetSettingAsync(instance, MetricShareSnapshot.KeyFor(MetricKind.Location), "true", cancellationToken);
-        captured.Clear();
+        capture.Clear();
         await publisher.PublishTickAsync(unixMs: 2, cancellationToken);
-        Assert.Contains(MetricKind.Location, captured);
+        Assert.Contains(MetricKind.Location, capture.Broadcast);
     }
 
     [Fact]
@@ -99,29 +120,28 @@ public class MetricShareGateTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         using var instance = TestClientInstance.Create();
-        var captured = SubscribeKinds(instance, out var bus);
+        var capture = Capture(out var bus);
 
         // Location is globally off, but an override shares it for THIS fleet+character.
         await SetSettingAsync(instance, MetricShareSnapshot.OverrideKeyFor(FleetId, Owner, MetricKind.Location), "true", cancellationToken);
         await ServerFleetPublisher(instance, bus, MetricKind.Location).PublishTickAsync(1, cancellationToken);
-        Assert.Contains(MetricKind.Location, captured);
+        Assert.Contains(MetricKind.Location, capture.Broadcast);
 
         // DPS is globally on, but an override hides it for THIS fleet+character.
         await SetSettingAsync(instance, MetricShareSnapshot.OverrideKeyFor(FleetId, Owner, MetricKind.Dps), "false", cancellationToken);
-        captured.Clear();
+        capture.Clear();
         await ServerFleetPublisher(instance, bus, MetricKind.Dps).PublishTickAsync(2, cancellationToken);
-        Assert.DoesNotContain(MetricKind.Dps, captured);
+        Assert.DoesNotContain(MetricKind.Dps, capture.Broadcast);
     }
 
     [Fact]
-    public async Task Publisher_LocalOnlyFleet_SharesEverything_RegardlessOfTheGate()
+    public async Task Publisher_LocalOnlyFleet_NeverLeavesTheMachine()
     {
         // 2026-06-04 (Option P): a local-only fleet is purely local — its samples only ever feed your own
-        // graphs, so the privacy gate does not apply. Even an explicit opt-OUT (DPS) and the opt-IN default (Location)
-        // still get shared for a client-only participant.
+        // graphs, so nothing is broadcast whatever the gate says, and everything still reaches your own row.
         var cancellationToken = TestContext.Current.CancellationToken;
         using var instance = TestClientInstance.Create();
-        var captured = SubscribeKinds(instance, out var bus);
+        var capture = Capture(out var bus);
 
         await SetSettingAsync(instance, MetricShareSnapshot.KeyFor(MetricKind.Dps), "false", cancellationToken);
 
@@ -131,29 +151,54 @@ public class MetricShareGateTests
 
         await new FleetMetricPublisher(participation, [new FixedMetricSource(MetricKind.Dps)], bus, share)
             .PublishTickAsync(1, cancellationToken);
-        Assert.Contains(MetricKind.Dps, captured); // opted OUT, but a local-only fleet shares it anyway
+        Assert.Contains(MetricKind.Dps, capture.Local); // opted OUT, but it is your own graph
 
-        captured.Clear();
         await new FleetMetricPublisher(participation, [new FixedMetricSource(MetricKind.Location)], bus, share)
             .PublishTickAsync(2, cancellationToken);
-        Assert.Contains(MetricKind.Location, captured); // opt-IN default is off, but local-only shares it anyway
+        Assert.Contains(MetricKind.Location, capture.Local); // opt-IN default is off, but local-only still draws it
+
+        Assert.Empty(capture.Broadcast); // and nothing left the machine
     }
 
-    private static List<MetricKind> SubscribeKinds(TestClientInstance instance, out IEventBus bus)
+    /// <summary>A bus wired to a recording transport, so a test can tell "drawn on my own client" from "broadcast".</summary>
+    private static MetricCapture Capture(out IEventBus bus)
     {
-        bus = instance.Services.GetRequiredService<IEventBus>();
-        var captured = new List<MetricKind>();
-        // Subscription lives for the test's duration; the bus is torn down with the instance.
-        bus.Subscribe<FleetMetricEvent>((e, _) =>
+        var capture = new MetricCapture();
+        var inProcess = new InProcessEventBus(new RecordingTransport(capture.Broadcast));
+        // Subscription lives for the test's duration; the bus is local to the test.
+        inProcess.Subscribe<FleetMetricEvent>((e, _) =>
         {
-            captured.Add(e.Data.Kind);
+            capture.Local.Add(e.Data.Kind);
             return Task.CompletedTask;
         });
-        return captured;
+        bus = inProcess;
+        return capture;
+    }
+
+    private sealed class MetricCapture
+    {
+        public List<MetricKind> Local { get; } = [];
+        public List<MetricKind> Broadcast { get; } = [];
+
+        public void Clear()
+        {
+            Local.Clear();
+            Broadcast.Clear();
+        }
+    }
+
+    private sealed class RecordingTransport(List<MetricKind> broadcast) : IRemoteEventTransport
+    {
+        public Task SendAsync(IIntegrationEvent integrationEvent, CancellationToken cancellationToken = default)
+        {
+            if (integrationEvent is FleetMetricEvent metric)
+                broadcast.Add(metric.Data.Kind);
+            return Task.CompletedTask;
+        }
     }
 
     // A SERVER-backed participant: the per-metric share gate is a privacy boundary for what you broadcast to other
-    // members on a server, so it only applies here (a local-only fleet bypasses it — see Publisher_LocalOnlyFleet_*).
+    // members on a server, so it only applies here (a local-only fleet never reaches the transport at all).
     private static FleetMetricPublisher ServerFleetPublisher(TestClientInstance instance, IEventBus bus, MetricKind kind)
     {
         var participation = new FleetParticipation();
