@@ -523,6 +523,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             _services.GetRequiredService<EveSettingsNameResolver>(),
             _services.GetRequiredService<EveSettingsPreferences>(),
             _services.GetRequiredService<EveClientPresenceService>(),
+            _services.GetRequiredService<IEveSettingsWatch>(),
             _dialogs));
     }
 

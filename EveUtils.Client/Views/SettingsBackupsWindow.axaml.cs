@@ -34,6 +34,7 @@ public partial class SettingsBackupsWindow : ChromedWindow, IHostableModuleWindo
     public SettingsBackupsWindow(SettingsBackupsViewModel viewModel) : this()
     {
         DataContext = viewModel;
+        Closed += (_, _) => viewModel.Dispose();   // release the settings-watch subscription with the window
     }
 
     private void _ApplyViewport(Size size)

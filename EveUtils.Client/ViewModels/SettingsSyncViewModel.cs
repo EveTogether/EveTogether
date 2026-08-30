@@ -23,7 +23,7 @@ namespace EveUtils.Client.ViewModels;
 /// — and the check is on the running process, not only on who is visibly in-game. And every action says what it is
 /// about to do, in names, before it does it.
 /// </summary>
-public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
+public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule, IDisposable
 {
     private readonly SettingsSyncService _sync;
     private readonly SettingsBackupService _backups;
@@ -31,7 +31,9 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
     private readonly EveSettingsNameResolver _nameResolver;
     private readonly EveSettingsPreferences _preferences;
     private readonly EveClientPresenceService? _presence;
+    private readonly IEveSettingsWatch? _watch;
     private readonly IDialogService? _dialogs;
+    private readonly IDisposable? _subscription;
 
     private List<EveSettingsProfile> _profiles = [];
     private EveSettingsNames _names = EveSettingsNames.Empty;
@@ -43,6 +45,7 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
         EveSettingsNameResolver nameResolver,
         EveSettingsPreferences preferences,
         EveClientPresenceService? presence = null,
+        IEveSettingsWatch? watch = null,
         IDialogService? dialogs = null)
     {
         _sync = sync;
@@ -51,10 +54,55 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
         _nameResolver = nameResolver;
         _preferences = preferences;
         _presence = presence;
+        _watch = watch;
         _dialogs = dialogs;
         BackupRoot = backups.RootDirectory;
 
+        // One subscription for everything happening underneath this screen: clients opening and closing, and the
+        // automatic sync writing files. Without it the screen shows whatever was true when it was opened — which is
+        // how an automatic backup came to be made behind a banner insisting a client was running (ET-68).
+        _subscription = watch?.Subscribe(_OnChanged);
+
         _ = LoadAsync();
+    }
+
+    public void Dispose() => _subscription?.Dispose();
+
+    private void _OnChanged(EveSettingsChange change)
+    {
+        _ApplyClients(change.Clients);
+        if (change.Kind is not (EveSettingsChangeKind.Sync or EveSettingsChangeKind.Backups))
+            return;
+
+        _LoadBackups();
+        if (change.Run is { } run)
+        {
+            // Say it straight away rather than after a round-trip to the settings store: this line existing at all
+            // is the point, and the fuller history follows below.
+            AutoSyncLastRun = $"Last run {_Moment(run.AtUtc)} — {run.Summary}";
+            Status = $"Automatic sync at {_Moment(run.AtUtc)}: {run.Summary}";
+            StatusIsError = run.Failed;
+        }
+        else if (change.Kind == EveSettingsChangeKind.Sync)
+        {
+            // A restore in the backups window, say. Something else wrote these files; saying so beats silently
+            // swapping the timestamps under the user.
+            Status = "The settings on disk changed elsewhere, so this screen has been re-read.";
+            StatusIsError = false;
+        }
+
+        if (change.Kind == EveSettingsChangeKind.Sync)
+            _ = _RefreshAfterWriteAsync();
+        else
+            _NotifyGates();
+    }
+
+    private async Task _RefreshAfterWriteAsync()
+    {
+        await _LoadSelectedProfileAsync(announce: false);   // the write times on screen just changed
+        await LoadAutoSyncAsync();
+        _LoadBackups();
+        _NotifyGates();
     }
 
     // ── Where the settings are ───────────────────────────────────────────────────────────────────
@@ -98,6 +146,10 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
     [ObservableProperty] private bool _statusIsError;
 
     [ObservableProperty] private bool _isBusy;
+
+    /// <summary>What is taking the time, while it takes it — shown beside a progress bar so a slow backup reads as
+    /// work in progress rather than as a button that did nothing.</summary>
+    [ObservableProperty] private string _busyMessage = string.Empty;
 
     /// <summary>The running-client verdict, e.g. "2 EVE clients are running (Jithran, Lyra Custos)."</summary>
     [ObservableProperty] private string _clientWarning = string.Empty;
@@ -254,32 +306,28 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
     /// is what lets the warning name names instead of counting windows.
     /// </summary>
     [RelayCommand]
-    public void CheckClients()
+    public void CheckClients() => _ApplyClients(_watch?.ProbeClients() ?? _ProbeWithoutWatch());
+
+    // The banner is set here and nowhere else, whether the answer came from the button or from an announcement —
+    // two ways of writing it is how one of them ends up stale.
+    private void _ApplyClients(EveClientPresenceSnapshot clients)
     {
-        if (_presence is null)
-        {
-            ClientsRunning = false;
-            ClientWarning = string.Empty;
-            _NotifyGates();
-            return;
-        }
-
-        var processes = _presence.RunningClientCount();
-        var inGame = _presence.Current.CharacterNames.OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
-
-        ClientsRunning = processes > 0 || inGame.Count > 0;
-        ClientWarning = ClientsRunning
-            ? _ClientWarningText(processes, inGame)
-            : string.Empty;
+        ClientsRunning = clients.AnyRunning;
+        ClientWarning = clients.AnyRunning ? _ClientWarningText(clients) : string.Empty;
         _NotifyGates();
     }
 
-    private static string _ClientWarningText(int processes, IReadOnlyList<string> inGame)
+    // Only for a tool built without the watch (a test, or a host that wired neither).
+    private EveClientPresenceSnapshot _ProbeWithoutWatch() => _presence is null
+        ? EveClientPresenceSnapshot.None
+        : new EveClientPresenceSnapshot(_presence.RunningClientCount(),
+            _presence.Current.CharacterNames.OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList());
+
+    private static string _ClientWarningText(EveClientPresenceSnapshot clients)
     {
-        var who = inGame.Count > 0 ? $" ({string.Join(", ", inGame)})" : string.Empty;
-        var count = Math.Max(processes, inGame.Count);
-        var clients = count == 1 ? "1 EVE client is" : $"{count} EVE clients are";
-        return $"{clients} running{who}. EVE writes its settings when it closes, so anything copied now is " +
+        var who = clients.InGame.Count > 0 ? $" ({string.Join(", ", clients.InGame)})" : string.Empty;
+        var running = clients.Count == 1 ? "1 EVE client is" : $"{clients.Count} EVE clients are";
+        return $"{running} running{who}. EVE writes its settings when it closes, so anything copied now is " +
                "overwritten again at logout. Close every client, then check again.";
     }
 
@@ -715,6 +763,9 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
 
         try
         {
+            // A whole profile is a noticeable wait, and a button that shows nothing looks like a button that did
+            // nothing — which is how you get a second click.
+            BusyMessage = $"Backing up {profile.Name} — {profile.Characters.Count + profile.Accounts.Count} files…";
             IsBusy = true;
             var names = _names.AsLookup();
             var result = await Task.Run(() =>
@@ -725,6 +776,7 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
                 Status = $"Backed up {profile.Name}: {result.Value.Manifest.ContentsSummary} " +
                          $"({result.Value.Manifest.Entries.Count} files) to {result.Value.DirectoryPath}.";
                 StatusIsError = false;
+                _watch?.Announce(new EveSettingsChange(EveSettingsChangeKind.Backups, _watch.ProbeClients()));
             }
             else
             {
@@ -751,20 +803,11 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
         if (_dialogs is null)
             return;
 
-        var window = new SettingsBackupsViewModel(_backups, _names.AsLookup(), _presence, _dialogs);
-        // A restore over there changes the profile this screen is showing; re-read it rather than leave write times
-        // standing that are no longer true.
-        window.ProfileChanged += () => _ = _RefreshAfterRestoreAsync();
-        _dialogs.ShowSettingsBackups(window);
-    }
-
-    private async Task _RefreshAfterRestoreAsync()
-    {
-        await _LoadSelectedProfileAsync(announce: false);
-        _LoadBackups();
-        Status = "A backup was restored, so this screen has been re-read.";
-        StatusIsError = false;
-        _NotifyGates();
+        // A restore over there changes the profile this screen is showing, and a backup taken here shows up in that
+        // list — both travel over the same announcement every screen already listens to, so neither window needs a
+        // hand-off to the other.
+        _dialogs.ShowSettingsBackups(
+            new SettingsBackupsViewModel(_backups, _names.AsLookup(), _watch, _preferences, _dialogs));
     }
 
     // Only the newest two: the rest lives in the backups window. Enough to see that snapshots are being taken and

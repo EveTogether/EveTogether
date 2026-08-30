@@ -45,6 +45,7 @@ public partial class SettingsSyncWindow : ChromedWindow, IHostableModuleWindow
     public SettingsSyncWindow(SettingsSyncViewModel viewModel) : this()
     {
         DataContext = viewModel;
+        Closed += (_, _) => viewModel.Dispose();   // release the settings-watch subscription with the window
     }
 
     // Two shells, two sizes: the tool's own window has room for a full backup column and the standing

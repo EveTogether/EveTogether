@@ -29,6 +29,7 @@ public sealed class EveSettingsPreferences(IServiceProvider services) : ISinglet
     private const string AccountLinksKey = "eve-settings.account-links";
     private const string AutoSyncKey = "eve-settings.auto-sync";
     private const string AutoSyncHistoryKey = "eve-settings.auto-sync.history";
+    private const string AutoSyncKeepKey = "eve-settings.auto-sync.keep";
 
     /// <summary>How many automatic runs are kept. Enough to see a pattern, few enough to stay a settings value.</summary>
     private const int HistoryLength = 20;
@@ -97,6 +98,21 @@ public sealed class EveSettingsPreferences(IServiceProvider services) : ISinglet
 
     public Task SaveAutoSyncAsync(AutoSyncSettings settings, CancellationToken cancellationToken = default) =>
         _UpsertAsync(AutoSyncKey, JsonSerializer.Serialize(settings, JsonOptions), cancellationToken);
+
+    /// <summary>
+    /// How many automatic backups to keep, as the user set it in the backups window. Out-of-range or unreadable
+    /// values fall back to the default rather than being obeyed — this number decides what gets deleted.
+    /// </summary>
+    public async Task<int> LoadAutoSyncKeepAsync(int fallback, CancellationToken cancellationToken = default)
+    {
+        var stored = await _ValueAsync(AutoSyncKeepKey, cancellationToken);
+        return int.TryParse(stored, NumberStyles.None, CultureInfo.InvariantCulture, out var keep) && keep >= 1
+            ? keep
+            : fallback;
+    }
+
+    public Task SaveAutoSyncKeepAsync(int keep, CancellationToken cancellationToken = default) =>
+        _UpsertAsync(AutoSyncKeepKey, Math.Max(1, keep).ToString(CultureInfo.InvariantCulture), cancellationToken);
 
     /// <summary>What the automatic sync has done, newest first.</summary>
     public async Task<IReadOnlyList<AutoSyncRun>> LoadAutoSyncHistoryAsync(CancellationToken cancellationToken = default)

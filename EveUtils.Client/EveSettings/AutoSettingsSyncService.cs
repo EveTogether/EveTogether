@@ -53,8 +53,9 @@ public sealed class AutoSettingsSyncService : BackgroundService
     /// during shutdown, so acting the instant the process disappears risks copying a half-written file.</summary>
     public static readonly TimeSpan SettleDelay = TimeSpan.FromSeconds(30);
 
-    /// <summary>How many automatic backups are kept. Enough to walk back several days of runs; the newest is never
-    /// pruned, and backups the user made by hand or that came before a copy they pressed are never touched.</summary>
+    /// <summary>How many automatic backups are kept until the user says otherwise in the backups window. Enough to
+    /// walk back several days of runs; the newest is never pruned whatever the number, and backups made by hand or
+    /// taken before a copy the user pressed are never touched at all.</summary>
     public const int KeepAutomaticBackups = 10;
 
     private readonly SettingsSyncService _sync;
@@ -62,10 +63,15 @@ public sealed class AutoSettingsSyncService : BackgroundService
     private readonly EveSettingsNameResolver _names;
     private readonly EveSettingsPreferences _preferences;
     private readonly EveClientPresenceService? _presence;
+    private readonly IEveSettingsWatch? _watch;
     private readonly ILogger<AutoSettingsSyncService>? _logger;
     private readonly IToastService? _toasts;
     private readonly Func<DateTimeOffset> _now;
     private readonly TimeSpan _settleDelay;
+
+    // What the last pass saw, so a screen is told when it changes rather than on every tick. This pass is the only
+    // thing watching for a client that never logs in — one sitting on the login screen shows up in no game log.
+    private bool? _clientsWereRunning;
 
     // Startup counts as "a client was just seen": EVE Together often starts right after the game did, and the first
     // pass should wait out the settle window rather than pounce on files EVE may still be writing.
@@ -78,6 +84,7 @@ public sealed class AutoSettingsSyncService : BackgroundService
         EveSettingsNameResolver names,
         EveSettingsPreferences preferences,
         EveClientPresenceService? presence = null,
+        IEveSettingsWatch? watch = null,
         ILogger<AutoSettingsSyncService>? logger = null,
         IToastService? toasts = null,
         Func<DateTimeOffset>? now = null,
@@ -88,6 +95,7 @@ public sealed class AutoSettingsSyncService : BackgroundService
         _names = names;
         _preferences = preferences;
         _presence = presence;
+        _watch = watch;
         _logger = logger;
         _toasts = toasts;
         _now = now ?? (() => DateTimeOffset.UtcNow);
@@ -137,6 +145,15 @@ public sealed class AutoSettingsSyncService : BackgroundService
         if (clientsRunning)
             _clientsLastSeen = _now();
 
+        // This pass is the detection the screens follow: when what it sees changes, they are told. Without it a
+        // banner saying a client is running outlives the client, which is what the operator watched happen while
+        // this very pass was busy proving the opposite (ET-68).
+        if (_clientsWereRunning != clientsRunning)
+        {
+            _clientsWereRunning = clientsRunning;
+            _Announce(EveSettingsChangeKind.Clients);
+        }
+
         var settings = await _preferences.LoadAutoSyncAsync(cancellationToken);
         if (!settings.Enabled || !settings.IsConfigured)
             return _Pass(AutoSyncPass.Idle);
@@ -182,7 +199,9 @@ public sealed class AutoSettingsSyncService : BackgroundService
         if (!outcome.IsSuccess || outcome.Value is null)
             return await _FailAsync(string.Join(" ", outcome.Messages.Select(message => message.Text)), cancellationToken);
 
-        _backups.Prune(KeepAutomaticBackups, BackupReason.BeforeAutoSync);
+        // How many to keep is the user's, set in the backups window beside the list where the effect is visible.
+        _backups.Prune(await _preferences.LoadAutoSyncKeepAsync(KeepAutomaticBackups, cancellationToken),
+            BackupReason.BeforeAutoSync);
 
         var value = outcome.Value;
         var summary = value.Aborted
@@ -199,6 +218,7 @@ public sealed class AutoSettingsSyncService : BackgroundService
         _toasts?.Show("EVE settings synced", summary,
             value.Failed.Count > 0 ? ToastKind.Warning : ToastKind.Success);
         Ran?.Invoke(run);
+        _Announce(EveSettingsChangeKind.Sync, run);   // files written and a backup taken: every open screen re-reads
 
         return _Pass(value.Failed.Count > 0 ? AutoSyncPass.Failed : AutoSyncPass.Synced);
     }
@@ -245,6 +265,9 @@ public sealed class AutoSettingsSyncService : BackgroundService
             profile, settings.InstallRoot, source, source.FileName,
             outOfSync, outOfSync.Select(file => file.FileName).ToList()));
     }
+
+    private void _Announce(EveSettingsChangeKind kind, AutoSyncRun? run = null) =>
+        _watch?.Announce(new EveSettingsChange(kind, _watch.ProbeClients(), run));
 
     private bool _ClientsRunning() =>
         _presence is not null && (_presence.RunningClientCount() > 0 || _presence.Current.CharacterNames.Count > 0);

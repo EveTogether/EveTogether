@@ -24,32 +24,46 @@ namespace EveUtils.Client.ViewModels;
 /// Restoring is unchanged and stays deliberately slow: blocked while an EVE client runs, confirmed by name and
 /// count, and snapshotted first so the restore itself can be undone.
 /// </summary>
-public partial class SettingsBackupsViewModel : ViewModelBase, IRefreshableModule
+public partial class SettingsBackupsViewModel : ViewModelBase, IRefreshableModule, IDisposable
 {
     private readonly SettingsBackupService _backups;
-    private readonly EveClientPresenceService? _presence;
     private readonly IDialogService? _dialogs;
     private readonly IReadOnlyDictionary<long, string> _names;
+    private readonly IEveSettingsWatch? _watch;
+    private readonly EveSettingsPreferences? _preferences;
+    private readonly IDisposable? _subscription;
 
     public SettingsBackupsViewModel(
         SettingsBackupService backups,
         IReadOnlyDictionary<long, string> names,
-        EveClientPresenceService? presence = null,
+        IEveSettingsWatch? watch = null,
+        EveSettingsPreferences? preferences = null,
         IDialogService? dialogs = null)
     {
         _backups = backups;
         _names = names;
-        _presence = presence;
+        _watch = watch;
+        _preferences = preferences;
         _dialogs = dialogs;
         BackupRoot = backups.RootDirectory;
 
+        // One subscription for everything that moves under this window: a client opening or closing, a sync writing
+        // files, another screen taking a backup. Released when the window closes.
+        _subscription = watch?.Subscribe(_OnChanged);
+
         CheckClients();
         Reload();
+        _ = LoadKeepAsync();
     }
 
-    /// <summary>Raised after a restore put files back, so the sync tool behind this re-reads the profile it is
-    /// showing instead of standing there with write times that are no longer true.</summary>
-    public event Action? ProfileChanged;
+    public void Dispose() => _subscription?.Dispose();
+
+    private void _OnChanged(EveSettingsChange change)
+    {
+        _ApplyClients(change.Clients);
+        if (change.Kind is EveSettingsChangeKind.Sync or EveSettingsChangeKind.Backups)
+            Reload();
+    }
 
     public ObservableCollection<SettingsBackupRowViewModel> Backups { get; } = [];
 
@@ -63,6 +77,9 @@ public partial class SettingsBackupsViewModel : ViewModelBase, IRefreshableModul
     [ObservableProperty] private bool _statusIsError;
 
     [ObservableProperty] private bool _isBusy;
+
+    /// <summary>What is taking the time, while it takes it.</summary>
+    [ObservableProperty] private string _busyMessage = string.Empty;
 
     [ObservableProperty] private bool _clientsRunning;
 
@@ -98,34 +115,125 @@ public partial class SettingsBackupsViewModel : ViewModelBase, IRefreshableModul
 
         SelectedBackup = Backups.FirstOrDefault(row => row.Backup.Id == selectedId) ?? Backups.FirstOrDefault();
         OnPropertyChanged(nameof(HasBackups));
+        OnPropertyChanged(nameof(RetentionSummary));
         _Notify();
     }
 
     /// <summary>
-    /// Re-checks for running EVE clients. Restoring into a running client is undone at logout, so the same block the
-    /// sync tool applies applies here — on the process, not only on who is visibly in-game.
+    /// Re-checks for running EVE clients on demand. Restoring into a running client is undone at logout, so the same
+    /// block the sync tool applies applies here — on the process, not only on who is visibly in-game. The same one
+    /// path also serves every announcement, so the banner cannot be right in one place and stale in another.
     /// </summary>
     [RelayCommand]
-    public void CheckClients()
-    {
-        if (_presence is null)
-        {
-            ClientsRunning = false;
-            ClientWarning = string.Empty;
-            _Notify();
-            return;
-        }
+    public void CheckClients() => _ApplyClients(_watch?.ProbeClients() ?? EveClientPresenceSnapshot.None);
 
-        var processes = _presence.RunningClientCount();
-        var inGame = _presence.Current.CharacterNames.OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
-        ClientsRunning = processes > 0 || inGame.Count > 0;
-        ClientWarning = ClientsRunning
-            ? $"{Math.Max(processes, inGame.Count)} EVE client(s) running" +
-              (inGame.Count > 0 ? $" ({string.Join(", ", inGame)})" : string.Empty) +
+    private void _ApplyClients(EveClientPresenceSnapshot clients)
+    {
+        ClientsRunning = clients.AnyRunning;
+        ClientWarning = clients.AnyRunning
+            ? $"{clients.Count} EVE client(s) running" +
+              (clients.InGame.Count > 0 ? $" ({string.Join(", ", clients.InGame)})" : string.Empty) +
               ". EVE rewrites its settings when it closes, so anything restored now is overwritten again at logout. " +
               "Close every client, then check again."
             : string.Empty;
         _Notify();
+    }
+
+    // ── How many automatic backups to keep (ET-68) ───────────────────────────────────────────────
+
+    /// <summary>
+    /// The retention the automatic sync applies, set here beside the list where its effect is visible. A year of
+    /// running otherwise leaves a list nobody can manage.
+    /// </summary>
+    [ObservableProperty] private int _keepAutomatic = AutoSettingsSyncService.KeepAutomaticBackups;
+
+    /// <summary>What the number means right now, in this list: how many are subject to it, how many are not, and
+    /// what lowering it would cost.</summary>
+    public string RetentionSummary
+    {
+        get
+        {
+            var automatic = Backups.Count(row => row.Backup.Manifest.Reason == BackupReason.BeforeAutoSync);
+            var others = Backups.Count - automatic;
+            var over = Math.Max(0, automatic - Math.Max(1, KeepAutomatic));
+            return $"{automatic} automatic, {others} kept for other reasons — only the automatic ones are ever " +
+                   "deleted, and never the newest." +
+                   (over > 0 ? $" At {KeepAutomatic}, the {over} oldest automatic will go." : string.Empty);
+        }
+    }
+
+    private bool _applyingKeep;
+
+    private async Task LoadKeepAsync()
+    {
+        if (_preferences is null)
+            return;
+
+        _applyingKeep = true;
+        KeepAutomatic = await _preferences.LoadAutoSyncKeepAsync(AutoSettingsSyncService.KeepAutomaticBackups);
+        _applyingKeep = false;
+        OnPropertyChanged(nameof(RetentionSummary));
+    }
+
+    partial void OnKeepAutomaticChanged(int oldValue, int newValue)
+    {
+        OnPropertyChanged(nameof(RetentionSummary));
+        if (!_applyingKeep)
+            _ = _SaveKeepAsync(oldValue, newValue);
+    }
+
+    /// <summary>
+    /// Stores the new number, and when it means throwing snapshots away, says so first and names them. Lowering a
+    /// setting must never quietly take a row of backups with it — so a refusal puts the number back rather than
+    /// leaving it standing for the automatic pass to act on later, out of sight.
+    /// </summary>
+    private async Task _SaveKeepAsync(int previous, int keep)
+    {
+        if (_preferences is null || keep < 1)
+            return;
+
+        var doomed = Backups
+            .Where(row => row.Backup.Manifest.Reason == BackupReason.BeforeAutoSync)
+            .Skip(keep)
+            .ToList();
+
+        if (doomed.Count > 0 && _dialogs is not null)
+        {
+            var confirmed = await _dialogs.ConfirmAsync(
+                "Delete the older automatic backups?",
+                $"Keeping {keep} means {doomed.Count} automatic backup(s) go now:\n\n" +
+                string.Join("\n", doomed.Take(8).Select(row => $"  • {row.TakenAtDisplay} — {row.ContentsDisplay}")) +
+                (doomed.Count > 8 ? $"\n  • …and {doomed.Count - 8} more" : string.Empty) +
+                "\n\nBackups you made by hand, and those taken before a copy or a restore you asked for, are not touched.",
+                okText: "Delete them");
+            if (!confirmed)
+            {
+                _applyingKeep = true;
+                KeepAutomatic = previous;
+                _applyingKeep = false;
+                Status = "Kept the previous number — nothing was deleted.";
+                StatusIsError = false;
+                OnPropertyChanged(nameof(RetentionSummary));
+                return;
+            }
+        }
+
+        await _preferences.SaveAutoSyncKeepAsync(keep);
+
+        if (doomed.Count > 0)
+        {
+            var deleted = _backups.Prune(keep, BackupReason.BeforeAutoSync);
+            Status = $"Keeping the newest {keep} automatic backups; {deleted.Count} older one(s) deleted.";
+            StatusIsError = false;
+            Reload();
+            _watch?.Announce(new EveSettingsChange(EveSettingsChangeKind.Backups,
+                _watch.ProbeClients()));
+        }
+        else
+        {
+            Status = $"Keeping the newest {keep} automatic backups.";
+            StatusIsError = false;
+        }
     }
 
     [RelayCommand]
@@ -156,6 +264,10 @@ public partial class SettingsBackupsViewModel : ViewModelBase, IRefreshableModul
 
         try
         {
+            // A whole profile takes long enough that a silent button looks broken, and a second click on a restore
+            // is the last thing anybody wants.
+            BusyMessage = $"Restoring {row.Backup.Manifest.Entries.Count} files into {row.ProfileName} — backing up " +
+                          "what is there first…";
             IsBusy = true;
             var result = await Task.Run(() => _backups.Restore(row.Backup, _names));
 
@@ -167,7 +279,9 @@ public partial class SettingsBackupsViewModel : ViewModelBase, IRefreshableModul
                 Status = $"Restored {result.Value.Restored.Count} files into {row.ProfileName}.{failed} " +
                          $"The state from before this restore is in {result.Value.SafetyBackupDirectory}.";
                 StatusIsError = result.Value.Failed.Count > 0;
-                ProfileChanged?.Invoke();
+                // Files were written and a safety snapshot taken: every open screen re-reads, including the sync
+                // tool whose timestamps this just made untrue.
+                _watch?.Announce(new EveSettingsChange(EveSettingsChangeKind.Sync, _watch.ProbeClients()));
             }
             else
             {
@@ -196,9 +310,14 @@ public partial class SettingsBackupsViewModel : ViewModelBase, IRefreshableModul
 
         var result = _backups.Delete(row.Backup);
         if (!result.IsSuccess)
+        {
             _Fail(string.Join(" ", result.Messages.Select(message => message.Text)));
+        }
         else
+        {
             Status = $"Deleted the backup of {row.ProfileName} taken on {row.TakenAtDisplay}.";
+            _watch?.Announce(new EveSettingsChange(EveSettingsChangeKind.Backups, _watch.ProbeClients()));
+        }
 
         Reload();
     }

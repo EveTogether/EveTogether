@@ -115,8 +115,17 @@
         <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="0,10,0,0">
             <Border Grid.Column="0" Padding="11,7" Classes="statusline"
                     Classes.failed="{Binding StatusIsError}" Background="#22000000" BorderThickness="1">
-                <TextBlock Text="{Binding Status}" FontSize="11" TextWrapping="Wrap"
-                           Foreground="{StaticResource TextBrightBrush}"/>
+                <StackPanel Spacing="5">
+                    <TextBlock Text="{Binding Status}" FontSize="11" TextWrapping="Wrap"
+                               Foreground="{StaticResource TextBrightBrush}"/>
+                    <!-- Backing up a whole profile is a noticeable wait; without a sign of it the button looks
+                         broken and gets pressed again. -->
+                    <StackPanel Spacing="4" IsVisible="{Binding IsBusy}">
+                        <TextBlock Text="{Binding BusyMessage}" FontSize="11" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextAccentBrush}"/>
+                        <ProgressBar IsIndeterminate="True" Height="4"/>
+                    </StackPanel>
+                </StackPanel>
             </Border>
             <Button Grid.Column="1" Content="Close" Click="OnClose" VerticalAlignment="Center"/>
         </Grid>

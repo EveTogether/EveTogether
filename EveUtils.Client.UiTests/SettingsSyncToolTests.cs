@@ -84,6 +84,7 @@ public sealed class SettingsSyncToolTests : IDisposable
             instance.Services.GetRequiredService<EveSettingsNameResolver>(),
             instance.Services.GetRequiredService<EveSettingsPreferences>(),
             instance.Services.GetRequiredService<EveClientPresenceService>(),
+            instance.Services.GetRequiredService<IEveSettingsWatch>(),
             dialogs);
         await tool.LoadAsync();
         return tool;
@@ -388,7 +389,7 @@ public sealed class SettingsSyncToolTests : IDisposable
 
         Assert.Equal("original", File.ReadAllText(Path.Combine(profileDirectory, "core_char_90000001.dat")));
         Assert.Contains("Restored 1 files", backups.Status);
-        Assert.True(await _WaitForAsync(() => tool.Status.Contains("re-read")));
+        Assert.True(await _WaitForAsync(() => tool.Status.Contains("re-read")));   // it says so, rather than silently swapping the timestamps
     }
 
     /// <summary>
@@ -532,6 +533,90 @@ public sealed class SettingsSyncToolTests : IDisposable
         Assert.Contains("Account 1002", texts);
         Assert.Contains(texts, text => text is not null && text.Contains("Restoring writes these 6 files back"));
         window.Close();
+    }
+
+    /// <summary>
+    /// How many automatic backups to keep is the user's, set beside the list (ET-68) — a year of running otherwise
+    /// leaves a list nobody can manage. Lowering it says exactly what it would delete before deleting anything, and
+    /// a refusal puts the number back rather than leaving it standing for the automatic pass to act on unseen.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task BackupsWindow_RetentionIsTheUsers_AndNeverDeletesQuietly()
+    {
+        var profileDirectory = _WriteProfile("settings_Default", [(90000001, "a")], []);
+        using var instance = _NewInstance();
+        var store = instance.Services.GetRequiredService<SettingsBackupService>();
+        var profile = EveSettingsLocator.LoadProfile(profileDirectory);
+        var names = new Dictionary<long, string>();
+        for (var index = 0; index < 5; index++)
+            Assert.True(store.Create(profile, InstallRoot, names, BackupReason.BeforeAutoSync, $"auto {index}").IsSuccess);
+        Assert.True(store.Create(profile, InstallRoot, names, BackupReason.Manual, "by hand").IsSuccess);
+
+        var refused = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(false) };
+        var window = new SettingsBackupsViewModel(store, names,
+            instance.Services.GetRequiredService<IEveSettingsWatch>(),
+            instance.Services.GetRequiredService<EveSettingsPreferences>(), refused);
+        await _WaitForAsync(() => window.KeepAutomatic == AutoSettingsSyncService.KeepAutomaticBackups);
+
+        Assert.Equal(6, window.Backups.Count);
+        Assert.Contains("5 automatic, 1 kept for other reasons", window.RetentionSummary);
+
+        // Turning it down says what would go, by date — and taking it back leaves every one of them alone.
+        window.KeepAutomatic = 2;
+        Assert.True(await _WaitForAsync(() => window.KeepAutomatic == AutoSettingsSyncService.KeepAutomaticBackups));
+        Assert.Contains("3 automatic backup(s) go now", refused.LastConfirmMessage);
+        Assert.Contains("not touched", refused.LastConfirmMessage);   // by hand, and before a copy you asked for
+        Assert.Equal(6, store.List().Count);
+        Assert.Contains("nothing was deleted", window.Status);
+
+        var accepted = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(true) };
+        var second = new SettingsBackupsViewModel(store, names,
+            instance.Services.GetRequiredService<IEveSettingsWatch>(),
+            instance.Services.GetRequiredService<EveSettingsPreferences>(), accepted);
+        await _WaitForAsync(() => second.KeepAutomatic == AutoSettingsSyncService.KeepAutomaticBackups);
+
+        second.KeepAutomatic = 2;
+        Assert.True(await _WaitForAsync(() => second.Backups.Count == 3));
+
+        Assert.Equal(2, store.List().Count(backup => backup.Manifest.Reason == BackupReason.BeforeAutoSync));
+        Assert.Single(store.List(), backup => backup.Manifest.Reason == BackupReason.Manual);   // untouched
+        Assert.Equal(2, await instance.Services.GetRequiredService<EveSettingsPreferences>()
+            .LoadAutoSyncKeepAsync(AutoSettingsSyncService.KeepAutomaticBackups));
+    }
+
+    /// <summary>The number the user set is what the automatic pass prunes to — the setting is not decoration.</summary>
+    [AvaloniaFact]
+    public async Task AutomaticPass_PrunesToTheNumberTheUserSet()
+    {
+        var profileDirectory = _WriteProfile("settings_Default", [(90000001, "source"), (90000002, "target")], []);
+        using var instance = _NewInstance();
+        var preferences = instance.Services.GetRequiredService<EveSettingsPreferences>();
+        var store = instance.Services.GetRequiredService<SettingsBackupService>();
+        var profile = EveSettingsLocator.LoadProfile(profileDirectory);
+        for (var index = 0; index < 4; index++)
+            store.Create(profile, InstallRoot, new Dictionary<long, string>(), BackupReason.BeforeAutoSync, $"auto {index}");
+
+        await preferences.SaveAutoSyncKeepAsync(2);
+        await preferences.SaveAutoSyncAsync(new AutoSyncSettings
+        {
+            Enabled = true,
+            InstallRoot = InstallRoot,
+            ProfileName = "settings_Default",
+            CharacterSourceId = 90000001,
+            CharacterTargetIds = [90000002L]
+        });
+
+        var now = new DateTimeOffset(2026, 8, 30, 20, 0, 0, TimeSpan.Zero);
+        var automaton = new AutoSettingsSyncService(
+            instance.Services.GetRequiredService<SettingsSyncService>(), store,
+            instance.Services.GetRequiredService<EveSettingsNameResolver>(), preferences,
+            instance.Services.GetRequiredService<EveClientPresenceService>(),
+            now: () => now);
+
+        now = now.AddMinutes(5);   // past the settle window, which starts when the service is built
+        Assert.Equal(AutoSyncPass.Synced, await automaton.RunOnceAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(2, store.List().Count(backup => backup.Manifest.Reason == BackupReason.BeforeAutoSync));
     }
 
     /// <summary>Docked, in the host where the old in-tool panel showed a fraction of one backup: the list, the
@@ -803,6 +888,102 @@ public sealed class SettingsSyncToolTests : IDisposable
         Assert.Contains("Copied Jithran → Lyra Custos.", tool.AutoSyncLastRun);
         Assert.Contains("2026-08-30", tool.AutoSyncLastRun);
         Assert.Contains("Copied Jithran", tool.AutoSyncHistory);
+    }
+
+    /// <summary>
+    /// The screen follows the automaton running underneath it (ET-68). The operator watched an automatic backup
+    /// being made while the banner above it still insisted a client was running and the last-run line still said it
+    /// had never run — data that was right behind a screen that did not look. One announcement now carries both: the
+    /// banner clears the moment the detection sees no client, and the last-run line says what just happened.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Tool_FollowsTheAutomaticPass_RatherThanShowingWhatItSawWhenItOpened()
+    {
+        _WriteProfile("settings_Default", [(90000001, "source"), (90000002, "target")], []);
+        var probe = new FakeClientProbe { Processes = 1 };   // a client is up when the tool opens
+        using var instance = _NewInstance(probe);
+        await instance.Services.GetRequiredService<EveSettingsPreferences>().SaveAutoSyncAsync(new AutoSyncSettings
+        {
+            Enabled = true,
+            InstallRoot = InstallRoot,
+            ProfileName = "settings_Default",
+            CharacterSourceId = 90000001,
+            CharacterTargetIds = [90000002L]
+        });
+
+        var tool = await _BuildToolAsync(instance);
+        Assert.True(tool.ClientsRunning);
+        Assert.Contains("running", tool.ClientWarning);
+        Assert.Contains("has not run yet", tool.AutoSyncLastRun);
+
+        var now = new DateTimeOffset(2026, 8, 30, 20, 0, 0, TimeSpan.Zero);
+        var automaton = new AutoSettingsSyncService(
+            instance.Services.GetRequiredService<SettingsSyncService>(),
+            instance.Services.GetRequiredService<SettingsBackupService>(),
+            instance.Services.GetRequiredService<EveSettingsNameResolver>(),
+            instance.Services.GetRequiredService<EveSettingsPreferences>(),
+            instance.Services.GetRequiredService<EveClientPresenceService>(),
+            instance.Services.GetRequiredService<IEveSettingsWatch>(),
+            now: () => now);
+
+        // The client closes, and the pass that notices is the same pass that does the work.
+        probe.Processes = 0;
+        now = now.AddMinutes(5);
+        Assert.Equal(AutoSyncPass.Synced, await automaton.RunOnceAsync(TestContext.Current.CancellationToken));
+
+        Assert.True(await _WaitForAsync(() => !tool.ClientsRunning));
+        Assert.Equal(string.Empty, tool.ClientWarning);            // the banner went away by itself
+        Assert.True(await _WaitForAsync(() => tool.AutoSyncLastRun.Contains("Copied")));
+        Assert.Contains("2026-08-30", tool.AutoSyncLastRun);
+        Assert.Single(tool.RecentBackups);                         // and the backup it took is on screen
+        Assert.Contains("Last backup", tool.LastBackupDisplay);
+    }
+
+    /// <summary>The other direction: a client starting while the screen stands open puts the block back, without
+    /// anybody pressing CHECK AGAIN.</summary>
+    [AvaloniaFact]
+    public async Task Tool_PutsTheBlockBack_WhenAClientStartsWhileItIsOpen()
+    {
+        _WriteProfile("settings_Default", [(90000001, "a"), (90000002, "b")], []);
+        var probe = new FakeClientProbe();
+        using var instance = _NewInstance(probe);
+        var tool = await _BuildToolAsync(instance);
+
+        tool.CharacterSource = tool.Characters.First();
+        tool.Characters.Last().IsTarget = true;
+        Assert.False(tool.ClientsRunning);
+        Assert.True(tool.CanSyncCharacters);
+
+        probe.Processes = 1;
+        var watch = instance.Services.GetRequiredService<IEveSettingsWatch>();
+        watch.Announce(new EveSettingsChange(EveSettingsChangeKind.Clients, watch.ProbeClients()));
+
+        Assert.True(await _WaitForAsync(() => tool.ClientsRunning));
+        Assert.Contains("running", tool.ClientWarning);
+        Assert.False(tool.CanSyncCharacters);   // and the copy buttons went with it
+    }
+
+    /// <summary>A backup of a whole profile is a noticeable wait, so it says what it is doing while it does it —
+    /// a silent button reads as a broken one and gets pressed again.</summary>
+    [AvaloniaFact]
+    public async Task BackingUp_SaysWhatItIsDoingWhileItIsDoingIt()
+    {
+        _WriteProfile("settings_Default", [(90000001, "a"), (90000002, "b")], [(1001, "one")]);
+        using var instance = _NewInstance();
+        var tool = await _BuildToolAsync(instance);
+
+        var whileBusy = new List<string>();
+        tool.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(SettingsSyncViewModel.IsBusy) && tool.IsBusy)
+                whileBusy.Add(tool.BusyMessage);
+        };
+
+        await tool.BackupNowCommand.ExecuteAsync(null);
+
+        Assert.Contains(whileBusy, message => message.Contains("Backing up settings_Default") && message.Contains("3 files"));
+        Assert.False(tool.IsBusy);
+        Assert.Contains("Backed up settings_Default", tool.Status);
     }
 
     // ── Carrying settings to another machine (ET-61) ─────────────────────────────────────────────
