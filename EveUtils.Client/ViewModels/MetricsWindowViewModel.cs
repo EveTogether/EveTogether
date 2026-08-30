@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Gamelog;
+using EveUtils.Client.Platform;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.ViewModels;
@@ -39,6 +40,8 @@ public partial class MetricsWindowViewModel : ViewModelBase, IDisposable
     private readonly GamelogClientService _gamelog;
     private readonly ICharacterInfoService _characterInfo;
     private readonly DispatcherTimer _timer;
+    private readonly ILocalCharacterPresence? _presence;
+    private readonly IDisposable? _presenceSubscription;
     private int _tick;
 
     public ObservableCollection<MetricsCharacterOption> Available { get; } = [];
@@ -51,6 +54,11 @@ public partial class MetricsWindowViewModel : ViewModelBase, IDisposable
     {
         _gamelog = services.GetRequiredService<GamelogClientService>();
         _characterInfo = services.GetRequiredService<ICharacterInfoService>();
+
+        // The same verdict the fleet rows and the WITH FC badge read (ET-71). A logged-out pilot's location is the
+        // spot ESI says they logged off at, which reads here exactly as it does there — like somewhere they are.
+        _presence = services.GetService<ILocalCharacterPresence>();
+        _presenceSubscription = _presence?.Subscribe(ApplyPresence);
 
         foreach (var (name, id) in characters)
         {
@@ -85,6 +93,7 @@ public partial class MetricsWindowViewModel : ViewModelBase, IDisposable
             return;
 
         var row = new CharacterMetricsRowViewModel(option.Name, option.CharacterId);
+        ApplyPresence(row);
         Rows.Add(row);
         _ = _gamelog.EnsureSeededAsync(option.Name); // show persisted bounty/mined right away
         if (option.CharacterId > 0)
@@ -96,6 +105,21 @@ public partial class MetricsWindowViewModel : ViewModelBase, IDisposable
         var row = Rows.FirstOrDefault(r => string.Equals(r.Character, option.Name, StringComparison.OrdinalIgnoreCase));
         if (row is not null)
             Rows.Remove(row);
+    }
+
+    private void ApplyPresence()
+    {
+        foreach (var row in Rows)
+            ApplyPresence(row);
+    }
+
+    private void ApplyPresence(CharacterMetricsRowViewModel row)
+    {
+        // null = not one of this client's characters, so nothing may be claimed about them either way and the row
+        // shows its location exactly as it always has. That boundary is ET-70's, not this window's.
+        var inGame = _presence?.IsInGame(row.CharacterId, row.Character);
+        row.Dps.IsLocalCharacter = inGame is not null;
+        row.Dps.InEve = inGame is true;
     }
 
     private async Task LoadAffiliationAsync(CharacterMetricsRowViewModel row)
@@ -130,6 +154,7 @@ public partial class MetricsWindowViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         _timer.Stop();
+        _presenceSubscription?.Dispose();
         foreach (var option in Available)
             option.PropertyChanged -= OnOptionChanged;
     }

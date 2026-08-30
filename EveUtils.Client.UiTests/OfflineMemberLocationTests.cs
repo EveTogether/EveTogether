@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Gamelog;
 using EveUtils.Client.Platform;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.Views;
@@ -223,6 +224,98 @@ public class OfflineMemberLocationTests
         Assert.Equal("Amarr", row.SystemDisplay);
     }
 
+    // ---- the per-character metrics window reads the same verdict ------------------------------------------------
+
+    /// <summary>
+    /// The metrics window shows a location too, from its own view-model. It gets the verdict rather than a second
+    /// definition of it: that row already owned a <see cref="DpsViewModel"/> for its graph, so its readout now
+    /// comes from there instead of being formatted a second time beside it.
+    ///
+    /// Rendered in both shells, because this window is routed like the fleet screen — docked, the module host
+    /// lifts the content out of the window and anything left on the window is lost.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TheMetricsWindow_ReadsOffline_ForAParkedCharacter(bool docked)
+    {
+        using var harness = await StartAsync(inGame: [Commander]);
+
+        // Both are this client's characters and both have a system from the gamelog; only one has a client running.
+        var gamelog = harness.Services.GetRequiredService<GamelogClientService>();
+        gamelog.SetLocation(Names[Commander], "Jita", DateTime.UtcNow);
+        gamelog.SetLocation(Names[Alt], "Amarr", DateTime.UtcNow);
+
+        using var vm = new MetricsWindowViewModel(
+            harness.Services,
+            [(Names[Commander], Commander), (Names[Alt], Alt)],
+            preselect: null);
+        foreach (var option in vm.Available)
+            option.IsSelected = true;
+
+        var flying = vm.Rows.Single(r => r.Character == Names[Commander]);
+        var parked = vm.Rows.Single(r => r.Character == Names[Alt]);
+
+        Assert.False(flying.Dps.IsOffline);
+        Assert.Equal("Jita", flying.LocationDisplay);
+        Assert.True(parked.Dps.IsOffline);
+        Assert.Equal("offline", parked.LocationDisplay);   // not "Amarr", which is only where they logged off
+
+        var root = harness.ShowMetrics(vm, docked);
+        var readouts = root.GetVisualDescendants().OfType<TextBlock>()
+            .Where(t => t.IsVisible && t.Text is "Jita" or "Amarr" or "offline")
+            .ToList();
+
+        Assert.Contains(readouts, t => t.Text == "Jita");
+        Assert.Contains(readouts, t => t.Text == "offline");
+        Assert.DoesNotContain(readouts, t => t.Text == "Amarr");
+
+        var offline = readouts.Single(t => t.Text == "offline");
+        Assert.Contains("offline", offline.Classes);
+        Assert.Equal(DimColour(), Assert.IsAssignableFrom<ISolidColorBrush>(offline.Foreground).Color);
+    }
+
+    /// <summary>And it moves with the pilot, on the one announcement, without waiting for the 1 Hz refresh.</summary>
+    [AvaloniaFact]
+    public async Task TheMetricsWindow_FollowsAPilotLoggingBackIn()
+    {
+        using var harness = await StartAsync(inGame: [Commander]);
+        harness.Services.GetRequiredService<GamelogClientService>()
+            .SetLocation(Names[Alt], "Amarr", DateTime.UtcNow);
+
+        using var vm = new MetricsWindowViewModel(harness.Services, [(Names[Alt], Alt)], preselect: Names[Alt]);
+        var row = Assert.Single(vm.Rows);
+        Assert.Equal("offline", row.LocationDisplay);
+
+        var changed = new List<string?>();
+        row.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        await harness.SetInGameAsync(Commander, Alt);
+
+        Assert.Equal("Amarr", row.LocationDisplay);
+        Assert.Contains(nameof(CharacterMetricsRowViewModel.LocationDisplay), changed);
+    }
+
+    /// <summary>
+    /// The boundary that does not move: a row for a character this client does not own is never called offline,
+    /// however little we can see of them. That stays ET-70's question.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TheMetricsWindow_ClaimsNothing_AboutACharacterThatIsNotOurs()
+    {
+        using var harness = await StartAsync(inGame: [Commander]);
+        harness.Services.GetRequiredService<GamelogClientService>()
+            .SetLocation(Names[Stranger], "Amarr", DateTime.UtcNow);
+
+        using var vm = new MetricsWindowViewModel(
+            harness.Services, [(Names[Stranger], Stranger)], preselect: Names[Stranger]);
+
+        var row = Assert.Single(vm.Rows);
+        Assert.False(row.Dps.IsLocalCharacter);
+        Assert.False(row.Dps.IsOffline);
+        Assert.Equal("Amarr", row.LocationDisplay);
+    }
+
     // ---- harness ------------------------------------------------------------------------------------------------
 
     // Read out of the live theme rather than pinned as a hex here, so the assertion follows the palette.
@@ -278,6 +371,8 @@ public class OfflineMemberLocationTests
 
     private sealed class Harness(TestClientInstance instance, FakeProbe probe, FakeFleetClient fleets) : IDisposable
     {
+        public IServiceProvider Services => instance.Services;
+
         public FleetMetricsViewModel Vm { get; private set; } = null!;
 
         public async Task OpenAsync()
@@ -320,9 +415,15 @@ public class OfflineMemberLocationTests
             return Vm.CommanderPresence;
         }
 
-        public Control Show(bool docked)
+        /// <summary>The per-character metrics window, through the same two shells the fleet screen goes through.</summary>
+        public Control ShowMetrics(MetricsWindowViewModel metrics, bool docked) =>
+            Present(new MetricsWindow(metrics) { Width = 900, Height = 700 }, docked);
+
+        public Control Show(bool docked) =>
+            Present(new FleetMetricsWindow(Vm) { Width = 900, Height = 620 }, docked);
+
+        private static Control Present(Window window, bool docked)
         {
-            var window = new FleetMetricsWindow(Vm) { Width = 900, Height = 620 };
             Window root = window;
 
             if (docked)
