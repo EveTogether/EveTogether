@@ -334,6 +334,60 @@
         <Setter Property="Foreground" Value="White"/>
     </Style>
 
+    <!-- ── Pop-out overlay chrome (ET-73): the three title-bar buttons ──
+         Opacity, pin and close are one set and now look like one: same square, same size, same weight, all three
+         an icon. The pin used to be a ToggleButton with no style of its own, so it fell through to the stock Fluent
+         theme — a rounded, accent-filled pill with the word PIN in it, between two small squares.
+
+         Application-level because both pop-out windows are windows of their own and inherit nothing from anything
+         (the ET-43 rule). Small and quiet on purpose: this chrome lies over the game and must never weigh more than
+         the readout underneath it. -->
+    <Style Selector="Button.overlaybtn, ToggleButton.overlaybtn">
+        <Setter Property="Width" Value="22"/>
+        <Setter Property="Height" Value="22"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="Background" Value="#22FFFFFF"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalAlignment" Value="Top"/>
+    </Style>
+    <Style Selector="Button.overlaybtn:pointerover /template/ ContentPresenter,
+                     ToggleButton.overlaybtn:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+
+    <!-- Pinned. The word PIN carried the on-state before; an icon on its own cannot, so the whole square fills with
+         the faction accent and the glyph inverts to near-black. That is deliberately the loudest thing this chrome
+         can do: a solid bright block reads as on against ANY game background, at any window size, where a tinted
+         border or a brighter glyph would be lost over a nebula or a station backdrop. It is also the one state worth
+         being loud about — "is my window still on top" is the entire question that button exists to answer.
+         The stock theme's own :checked fill is overridden here, or it would put its rounded blue back. -->
+    <Style Selector="ToggleButton.overlaybtn:checked /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentBrightBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrightBrush}"/>
+        <Setter Property="Foreground" Value="#FF06070A"/>
+    </Style>
+    <Style Selector="ToggleButton.overlaybtn:checked:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="Foreground" Value="#FF06070A"/>
+    </Style>
+
+    <!-- Close keeps the red hover the rest of the app's window chrome has, so the one button you cannot undo is the
+         one button that says so before you press it. -->
+    <Style Selector="Button.overlaybtn.overlayclose:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#FFCC4444"/>
+        <Setter Property="BorderBrush" Value="#FFCC4444"/>
+        <Setter Property="Foreground" Value="White"/>
+    </Style>
+
     <!-- ── Module-shell rail (D-182): monochrome icon launcher + per-module item ── -->
     <Style Selector="Border.rail">
         <Setter Property="Background" Value="{DynamicResource RailBackgroundBrush}"/>

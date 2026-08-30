@@ -62,7 +62,7 @@
 
             <Border Classes="panel-header" DockPanel.Dock="Top" x:Name="DragHandle"
                     PointerPressed="OnHeaderPressed">
-                <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                <Grid ColumnDefinitions="*,Auto">
                     <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
                         <!-- Which fleet. Two of these windows open at once must never be a guess.
                              A Grid, not a horizontal StackPanel: a StackPanel measures its children with unbounded
@@ -85,30 +85,9 @@
                         </Border>
                     </StackPanel>
 
-                    <Button Grid.Column="1" Content="◐" FontSize="12" Padding="7,3" VerticalAlignment="Top"
-                            ToolTip.Tip="Overlay opacity">
-                        <Button.Flyout>
-                            <Flyout Placement="Bottom">
-                                <StackPanel Width="190" Margin="6" Spacing="8">
-                                    <Grid ColumnDefinitions="*,Auto">
-                                        <TextBlock Grid.Column="0" Classes="label" Text="OVERLAY OPACITY"/>
-                                        <TextBlock Grid.Column="1" Classes="mono" FontSize="11"
-                                                   Text="{Binding #OverlayRoot.FillOpacity, StringFormat='{}{0:P0}'}"/>
-                                    </Grid>
-                                    <Slider Minimum="0.15" Maximum="1" SmallChange="0.05" LargeChange="0.1"
-                                            Value="{Binding #OverlayRoot.FillOpacity, Mode=TwoWay}"/>
-                                </StackPanel>
-                            </Flyout>
-                        </Button.Flyout>
-                    </Button>
-
-                    <ToggleButton Grid.Column="2" Content="PIN" FontSize="10" Padding="8,3" Margin="6,0,0,0"
-                                  VerticalAlignment="Top"
-                                  IsChecked="{Binding $parent[Window].Topmost, Mode=TwoWay}"
-                                  ToolTip.Tip="Always on top"/>
-
-                    <Button Grid.Column="3" Classes="winclose" Content="✕" FontSize="12" Padding="9,3" Margin="6,0,0,0"
-                            VerticalAlignment="Top" Click="OnClose" ToolTip.Tip="Close"/>
+                    <!-- Opacity, pin and close: the same shared row the per-character pop-out carries (ET-73). -->
+                    <v:OverlayChromeButtons Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Top"
+                                            FillOpacity="{Binding #OverlayRoot.FillOpacity, Mode=TwoWay}"/>
                 </Grid>
             </Border>
 

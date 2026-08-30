@@ -595,12 +595,5 @@ public class FleetOverlayTests
 
     // Saved so the result can actually be looked at rather than only asserted on — the lesson this project has
     // learned nine times over. Kept, because an overlay is a thing whose whole purpose is how fast it reads.
-    private static void Capture(Window window, string name)
-    {
-        var frame = window.CaptureRenderedFrame();
-        Assert.NotNull(frame);
-        var directory = Environment.GetEnvironmentVariable("EVEUTILS_SHOT_DIR");
-        if (!string.IsNullOrWhiteSpace(directory))
-            frame!.Save(System.IO.Path.Combine(directory, name + ".png"));
-    }
+    private static void Capture(Window window, string name) => OverlayShots.Capture(window, name);
 }

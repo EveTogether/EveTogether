@@ -1,6 +1,5 @@
 using System;
 using Avalonia.Input;
-using Avalonia.Interactivity;
 using EveUtils.Client.ViewModels;
 
 namespace EveUtils.Client.Views;
@@ -45,6 +44,4 @@ public partial class FleetOverlayWindow : OverlayWindow
     }
 
     private void OnHeaderPressed(object? sender, PointerPressedEventArgs e) => BeginHeaderDrag(e);
-
-    private void OnClose(object? sender, RoutedEventArgs e) => Close();
 }

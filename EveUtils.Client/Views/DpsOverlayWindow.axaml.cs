@@ -1,5 +1,4 @@
 using Avalonia.Input;
-using Avalonia.Interactivity;
 using EveUtils.Client.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -30,8 +29,6 @@ public partial class DpsOverlayWindow : OverlayWindow
     }
 
     private void OnHeaderPressed(object? sender, PointerPressedEventArgs e) => BeginHeaderDrag(e);
-
-    private void OnClose(object? sender, RoutedEventArgs e) => Close();
 
     // Click the graph to bring this character's EVE client to the front (eve-o-preview style). The probe matches by
     // window title, so it only works while that client is logged in as this character; otherwise it's a no-op.

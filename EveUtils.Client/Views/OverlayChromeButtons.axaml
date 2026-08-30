@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="80" d:DesignHeight="24"
+             x:Class="EveUtils.Client.Views.OverlayChromeButtons"
+             x:Name="ChromeRoot">
+
+    <!-- The three buttons every pop-out's title bar carries, in one place so the two overlays cannot drift apart on
+         what they offer or how it looks (ET-73). The square-icon styling is Button.overlaybtn in the app theme —
+         these windows are windows of their own and inherit nothing from anywhere else.
+
+         Every one of them has a tooltip: an icon on its own is quick to read once you know it and opaque before. -->
+    <StackPanel Orientation="Horizontal" Spacing="4">
+        <!-- ◐ half-filled: how solid the backdrop is. -->
+        <Button Classes="overlaybtn" Content="◐" ToolTip.Tip="Overlay opacity">
+            <Button.Flyout>
+                <Flyout Placement="Bottom">
+                    <StackPanel Width="190" Margin="6" Spacing="8">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Classes="label" Text="OVERLAY OPACITY"/>
+                            <TextBlock Grid.Column="1" Classes="mono" FontSize="11"
+                                       Text="{Binding #ChromeRoot.FillOpacity, StringFormat='{}{0:P0}'}"/>
+                        </Grid>
+                        <!-- Bound through this control rather than reaching for the window: flyout content lives in a
+                             popup, so a $parent walk out of it is not the reliable route a name in the same scope is. -->
+                        <Slider Minimum="0.15" Maximum="1" SmallChange="0.05" LargeChange="0.1"
+                                Value="{Binding #ChromeRoot.FillOpacity, Mode=TwoWay}"/>
+                    </StackPanel>
+                </Flyout>
+            </Button.Flyout>
+        </Button>
+
+        <!-- ▲ up: this window stays above the others. A geometric glyph rather than a pushpin, because that is the
+             icon language the rest of the app speaks (◆ ◉ ◐ ⧉ ◇) and a pushpin from another one would be the odd
+             thing out again. Whether it is ON is carried by the fill, not by the glyph — see the :checked rule in
+             the theme.
+             ⬒ ("square with top half black") was tried first, to rhyme with ◐ beside it: the shipped font draws it
+             with the BOTTOM half filled, so it read as a floppy disk. Only visible by rendering it. -->
+        <ToggleButton x:Name="PinButton" Classes="overlaybtn" Content="▲"
+                      IsChecked="{Binding $parent[Window].Topmost, Mode=TwoWay}"
+                      ToolTip.Tip="Keep this window on top of other windows"/>
+
+        <Button x:Name="CloseButton" Classes="overlaybtn overlayclose" Content="✕"
+                Click="OnClose" ToolTip.Tip="Close this overlay"/>
+    </StackPanel>
+</UserControl>
