@@ -105,7 +105,8 @@
                                         <TextBlock Text="ACTIVITY" Classes="label" FontSize="9" Margin="0,8,0,2"/>
                                         <Grid ColumnDefinitions="92,*">
                                             <TextBlock Grid.Column="0" Text="Location" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding LocationDisplay}" FontSize="11"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding LocationDisplay}" FontSize="11"
+                                                       Classes.offline="{Binding Dps.IsOffline}"/>
                                         </Grid>
                                         <Grid ColumnDefinitions="92,*">
                                             <TextBlock Grid.Column="0" Text="Enemies" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>

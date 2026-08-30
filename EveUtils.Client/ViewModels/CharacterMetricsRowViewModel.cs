@@ -19,18 +19,18 @@ public partial class CharacterMetricsRowViewModel : ViewModelBase
     public DpsViewModel Dps { get; }
 
     [ObservableProperty] private string _affiliation = "—";
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(LocationDisplay))]
-    private string _location = "—";
 
-    /// <summary>When this character's abyssal countdown started, or null when they are not in one.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(LocationDisplay))]
-    private DateTime? _abyssalAnchorUtc;
-
-    /// <summary>The one text this row's location readout binds to — same seam as <see cref="DpsViewModel.LocationDisplay"/>.</summary>
-    public string LocationDisplay =>
-        AbyssalSpace.Describe(Location, AbyssalAnchorUtc, DateTime.UtcNow) ?? Location;
+    /// <summary>
+    /// The location readout — taken from <see cref="Dps"/> rather than worked out a second time here.
+    ///
+    /// This row has always owned a <see cref="DpsViewModel"/> for its graph, and it used to keep its own copy of
+    /// the system, the abyssal anchor and the formatting beside it. That copy is gone: it is where a second
+    /// definition of "offline" would have grown (ET-71), and this project has been bitten by exactly that before.
+    /// The verdict, the badge's count, the fleet rows and this window now all read the same property.
+    ///
+    /// The fallback is this window's own convention: every other field here shows "—" when it has nothing.
+    /// </summary>
+    public string LocationDisplay => Dps.LocationDisplay ?? "—";
     [ObservableProperty] private string _bounty = "0 ISK";
     [ObservableProperty] private string _kills = "0";
     [ObservableProperty] private string _iskPerHour = "—";
@@ -63,6 +63,14 @@ public partial class CharacterMetricsRowViewModel : ViewModelBase
         Character = character;
         CharacterId = characterId;
         Dps = new DpsViewModel(character, isSelf: true);
+
+        // The readout is Dps's now, so its changes are this row's changes — a pilot logging out has to reach the
+        // screen when it is announced, not a second later when the 1 Hz refresh happens to come round.
+        Dps.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(DpsViewModel.LocationDisplay))
+                OnPropertyChanged(nameof(LocationDisplay));
+        };
     }
 
     /// <summary>~30fps graph tick: an EMA-smoothed sample so the metrics graph scrolls + decays like the
@@ -84,8 +92,10 @@ public partial class CharacterMetricsRowViewModel : ViewModelBase
         BountyValue = s.BountyTotal;
         Bounty = $"{s.BountyTotal:N0} ISK";
         Kills = s.Kills.ToString();
-        Location = s.Location ?? "—";
-        AbyssalAnchorUtc = s.AbyssalAnchor;
+        // Straight onto the shared readout. Null stays null — "we have no system for them", which is a different
+        // thing from the "—" this window prints, and only the display layer may turn one into the other.
+        Dps.Location = s.Location;
+        Dps.AbyssalAnchorUtc = s.AbyssalAnchor;
         OnPropertyChanged(nameof(LocationDisplay)); // 1 Hz path: the countdown moves even when nothing else does
         IskPerHour = s.Duration.TotalMinutes < 1 ? "—" : $"{s.IskPerHour:N0} ISK/h";
         HitRate = s.Shots == 0 ? "—" : $"{s.HitRate * 100:0}%  ({s.Hits}/{s.Shots})";

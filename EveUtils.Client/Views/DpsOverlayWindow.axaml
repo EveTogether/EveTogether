@@ -52,6 +52,7 @@
                             <!-- Same tracker instance as the fleet-metrics row, so it turns green with it when the
                                  member stands in the FC's system — and moves along when either of them jumps. -->
                             <TextBlock Classes="location" Classes.withfc="{Binding IsWithCommander}"
+                                       Classes.offline="{Binding IsOffline}"
                                        FontSize="11"
                                        IsVisible="{Binding LocationDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                        Text="{Binding LocationDisplay, StringFormat='◉ {0}'}"

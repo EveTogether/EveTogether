@@ -299,6 +299,13 @@
     <Style Selector="TextBlock.location.withfc">
         <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
     </Style>
+    <!-- A pilot of ours who is not in game (ET-71). Not scoped to .location, because the per-character metrics
+         window shows the same readout without the accent colour — one rule for "we know they are not there",
+         wherever it is said. Declared after .withfc so it wins if both were ever set at once: an offline member has
+         no location to stand anywhere with, and a green "offline" is the exact confusion this exists to remove. -->
+    <Style Selector="TextBlock.offline">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+    </Style>
 
     <!-- ── Borderless window chrome (D-143): custom title bar + window buttons ── -->
     <Style Selector="Border.titlebar">
