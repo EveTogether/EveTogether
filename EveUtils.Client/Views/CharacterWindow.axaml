@@ -3,6 +3,7 @@
         xmlns:vm="using:EveUtils.Client.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         mc:Ignorable="d" d:DesignWidth="470" d:DesignHeight="460"
         x:Class="EveUtils.Client.Views.CharacterWindow"
         x:DataType="vm:CharacterDialogViewModel"
@@ -64,10 +65,12 @@
                                         <TextBlock Text="{Binding StatusLabel}" FontSize="10"
                                                    Foreground="{DynamicResource TextAccentBrush}"/>
                                     </StackPanel>
-                                    <Button Grid.Column="1" Content="⚙" FontSize="12" Padding="8,2" Margin="6,0,0,0"
+                                    <Button Grid.Column="1" Padding="8,2" Margin="6,0,0,0"
                                             VerticalAlignment="Center"
                                             Command="{Binding ViewTrustCommand}"
-                                            ToolTip.Tip="Server info + cert fingerprint (out-of-band trust check, SEC-13)."/>
+                                            ToolTip.Tip="Server info + cert fingerprint (out-of-band trust check, SEC-13).">
+                                        <mi:MaterialIcon Kind="CogOutline"/>
+                                    </Button>
                                     <Button Grid.Column="2" Content="DECOUPLE" FontSize="9" Padding="6,2" Margin="4,0,0,0"
                                             VerticalAlignment="Center"
                                             Command="{Binding DecoupleCommand}"
@@ -77,9 +80,14 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <Button Content="+ Couple to server ☁️" HorizontalAlignment="Left"
+                <Button HorizontalAlignment="Left"
                         Command="{Binding CoupleCommand}"
-                        ToolTip.Tip="Couple this character to a server: enter the address + an optional label, then log in via EVE SSO."/>
+                        ToolTip.Tip="Couple this character to a server: enter the address + an optional label, then log in via EVE SSO.">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <mi:MaterialIcon Kind="CloudPlusOutline"/>
+                        <TextBlock Text="Couple to server" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
             </StackPanel>
 
         </StackPanel>

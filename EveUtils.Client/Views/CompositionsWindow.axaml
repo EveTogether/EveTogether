@@ -3,6 +3,7 @@
         xmlns:vm="using:EveUtils.Client.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         mc:Ignorable="d" d:DesignWidth="780" d:DesignHeight="640"
         x:Class="EveUtils.Client.Views.CompositionsWindow"
         x:DataType="vm:CompositionsViewModel"
@@ -99,9 +100,19 @@
                                                             <Border Grid.Column="4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                                                                     CornerRadius="10" Padding="9,2">
                                                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                                                    <TextBlock Text="✎ can edit" FontSize="9" IsVisible="{Binding CanEdit}"
-                                                                               Foreground="{DynamicResource AccentBrightBrush}"/>
-                                                                    <TextBlock Text="🔒 read-only" FontSize="9" IsVisible="{Binding !CanEdit}" Classes="label"/>
+                                                                    <!-- The lock was an emoji, which Windows draws in colour out of a
+                                                                         different font entirely — bright yellow beside 9px grey text. -->
+                                                                    <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding CanEdit}">
+                                                                        <mi:MaterialIcon Classes="icon-sm" Kind="PencilOutline"
+                                                                                         Foreground="{DynamicResource AccentBrightBrush}"/>
+                                                                        <TextBlock Text="can edit" FontSize="9" VerticalAlignment="Center"
+                                                                                   Foreground="{DynamicResource AccentBrightBrush}"/>
+                                                                    </StackPanel>
+                                                                    <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding !CanEdit}">
+                                                                        <mi:MaterialIcon Classes="icon-sm" Kind="LockOutline"
+                                                                                         Foreground="{StaticResource TextDimBrush}"/>
+                                                                        <TextBlock Text="read-only" FontSize="9" Classes="label"/>
+                                                                    </StackPanel>
                                                                 </StackPanel>
                                                             </Border>
                                                         </Grid>
@@ -158,8 +169,15 @@
                                                             <!-- "N fleets" pill (FC-2): how many fleets fly this doctrine; hidden when none -->
                                                             <Border BorderBrush="{DynamicResource AccentBrightBrush}" BorderThickness="1" CornerRadius="9"
                                                                     Padding="8,2" VerticalAlignment="Center" IsVisible="{Binding HasFleets}">
-                                                                <TextBlock Text="{Binding FleetCountLabel}" FontSize="10"
-                                                                           Foreground="{DynamicResource AccentBrightBrush}" VerticalAlignment="Center"/>
+                                                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                                                    <!-- The same mark the rail uses for FLEET. A hull
+                                                                         silhouette (Material's Ferry, matching the ⛴ this
+                                                                         replaced) turns to a blob at 11px. -->
+                                                                    <mi:MaterialIcon Width="11" Height="11" Kind="AccountGroupOutline"
+                                                                                     Foreground="{DynamicResource AccentBrightBrush}"/>
+                                                                    <TextBlock Text="{Binding FleetCountLabel}" FontSize="10"
+                                                                               Foreground="{DynamicResource AccentBrightBrush}" VerticalAlignment="Center"/>
+                                                                </StackPanel>
                                                             </Border>
                                                             <Button Content="OPEN" FontSize="9" Classes="accent" IsVisible="{Binding CanEdit}"
                                                                     Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).OpenCompositionCommand}"

@@ -3,6 +3,7 @@
         xmlns:vm="using:EveUtils.Client.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         mc:Ignorable="d" d:DesignWidth="560" d:DesignHeight="580"
         x:Class="EveUtils.Client.Views.FitPickerWindow"
         x:DataType="vm:FitPickerViewModel"
@@ -66,10 +67,10 @@
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <TextBlock Text="{Binding FitName}" FontSize="12" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextBrightBrush}"/>
-                                <TextBlock Text="✓" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}"
-                                           IsVisible="{Binding CanFly}" ToolTip.Tip="{Binding SkillBadgeTooltip}"/>
-                                <TextBlock Text="⚠" FontSize="11" VerticalAlignment="Center" Foreground="#E0B341"
-                                           IsVisible="{Binding HasSkillGap}" ToolTip.Tip="{Binding SkillBadgeTooltip}"/>
+                                <mi:MaterialIcon Classes="icon-sm" Kind="Check" Foreground="{DynamicResource TextAccentBrush}"
+                                                 IsVisible="{Binding CanFly}" ToolTip.Tip="{Binding SkillBadgeTooltip}"/>
+                                <mi:MaterialIcon Classes="icon-sm" Kind="AlertOutline" Foreground="#E0B341"
+                                                 IsVisible="{Binding HasSkillGap}" ToolTip.Tip="{Binding SkillBadgeTooltip}"/>
                             </StackPanel>
                             <TextBlock Text="{Binding Detail}" Classes="label" FontSize="9"/>
                         </StackPanel>
@@ -81,13 +82,17 @@
                         <Border Grid.Column="4" Classes="checkbox" Classes.selected="{Binding IsSelected}"
                                 Width="20" Height="20" CornerRadius="3" VerticalAlignment="Center" BorderThickness="1"
                                 IsVisible="{Binding #FitPickerRoot.((vm:FitPickerViewModel)DataContext).IsMulti}">
-                            <TextBlock Text="✓" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                       Foreground="{DynamicResource AccentBrightBrush}" IsVisible="{Binding IsSelected}"/>
+                            <mi:MaterialIcon Classes="icon-sm" Kind="Check" HorizontalAlignment="Center"
+                                             Foreground="{DynamicResource AccentBrightBrush}" IsVisible="{Binding IsSelected}"/>
                         </Border>
                         <!-- single: current marker or Select -->
-                        <TextBlock Grid.Column="4" Text="✓ current" FontSize="9" VerticalAlignment="Center"
-                                   Foreground="{DynamicResource AccentBrightBrush}"
-                                   IsVisible="{Binding IsCurrent}"/>
+                        <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
+                                    IsVisible="{Binding IsCurrent}">
+                            <mi:MaterialIcon Classes="icon-sm" Kind="Check"
+                                             Foreground="{DynamicResource AccentBrightBrush}"/>
+                            <TextBlock Text="current" FontSize="9" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource AccentBrightBrush}"/>
+                        </StackPanel>
                         <Button Grid.Column="4" Content="SELECT" FontSize="9" Classes="accent" VerticalAlignment="Center"
                                 Command="{Binding #FitPickerRoot.((vm:FitPickerViewModel)DataContext).ActivateRowCommand}"
                                 CommandParameter="{Binding}">

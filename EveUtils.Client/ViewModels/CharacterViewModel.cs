@@ -1,11 +1,13 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.Globalization;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings;
+using Material.Icons;
 
 namespace EveUtils.Client.ViewModels;
 
@@ -79,23 +81,27 @@ public partial class CharacterViewModel : ObservableObject
     /// <summary>ESI-side indicator (chip tooltip): what this character's own ESI session is worth right now.</summary>
     public string EsiStatus => EsiTokenStatus switch
     {
-        TokenStatus.Valid or TokenStatus.Refreshed => "ESI: 🏠 connected",
-        TokenStatus.NeedsReauth                    => "ESI: ⚠️ re-auth needed",
-        TokenStatus.TemporarilyUnavailable         => "ESI: ⏳ temporarily unavailable — the token cannot be used "
+        TokenStatus.Valid or TokenStatus.Refreshed => "ESI: connected",
+        TokenStatus.NeedsReauth                    => "ESI: re-auth needed",
+        TokenStatus.TemporarilyUnavailable         => "ESI: temporarily unavailable — the token cannot be used "
                                                       + "right now (usually a clock difference with EVE); signing in "
                                                       + "again will not help",
-        _                                          => "ESI: — not signed in",
+        _                                          => "ESI: not signed in",
     };
 
     // --- The mockup-style ESI status chip for the character list (module-shell mockup "ESI" chip):
-    // the chip text + the mutually exclusive style variant it renders in. Hover shows EsiStatus. ---
+    // the chip's label, its state icon and the mutually exclusive style variant it renders in. Hover shows EsiStatus.
+    // The state was a glyph in the label ("ESI ⏳") until ET-74; the hourglass in particular came out of the emoji
+    // font in colour, which is not something a 9.5px chip can carry. ---
 
-    public string EsiChipText => EsiTokenStatus switch
+    public string EsiChipText => "ESI";
+
+    public MaterialIconKind EsiChipIcon => EsiTokenStatus switch
     {
-        TokenStatus.Valid or TokenStatus.Refreshed => "ESI ✓",
-        TokenStatus.NeedsReauth                    => "ESI ⚠",
-        TokenStatus.TemporarilyUnavailable         => "ESI ⏳",
-        _                                          => "ESI —",
+        TokenStatus.Valid or TokenStatus.Refreshed => MaterialIconKind.Check,
+        TokenStatus.NeedsReauth                    => MaterialIconKind.AlertOutline,
+        TokenStatus.TemporarilyUnavailable         => MaterialIconKind.ClockOutline,
+        _                                          => MaterialIconKind.Minus,
     };
 
     /// <summary>Healthy accent chip: this character's ESI session actually works.</summary>
@@ -112,7 +118,7 @@ public partial class CharacterViewModel : ObservableObject
     /// overview so it is clear at a glance which implants a character carries.</summary>
     public ObservableCollection<string> ImplantNames { get; } = [];
     public bool HasImplants => ImplantNames.Count > 0;
-    public string ImplantBadge => $"💉 {ImplantNames.Count}";
+    public string ImplantBadge => ImplantNames.Count.ToString(CultureInfo.InvariantCulture);
     public string ImplantTooltip => ImplantNames.Count == 0 ? "No implants" : string.Join("\n", ImplantNames);
 
     /// <summary>Sets the character's plugged-in implants (resolved names), refreshing the overview badge + tooltip.</summary>
@@ -145,7 +151,7 @@ public partial class CharacterViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HasEsiToken));
         OnPropertyChanged(nameof(EsiStatus));
-        OnPropertyChanged(nameof(EsiChipText));
+        OnPropertyChanged(nameof(EsiChipIcon));
         OnPropertyChanged(nameof(EsiOk));
         OnPropertyChanged(nameof(EsiWarn));
         OnPropertyChanged(nameof(EsiDim));

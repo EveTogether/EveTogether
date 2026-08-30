@@ -18,6 +18,8 @@ using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Esi.Events;
+using Material.Icons;
+using Material.Icons.Avalonia;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -109,7 +111,7 @@ public class EsiPerAccountStatusTests
             foreach (var chip in chips)
             {
                 var expired = chip.Row.CharacterId is HotSprockets or LyraCustos;
-                Assert.Equal(expired ? "ESI ⚠" : "ESI ✓", chip.Text);
+                Assert.Equal(expired ? MaterialIconKind.AlertOutline : MaterialIconKind.Check, chip.Icon);
                 Assert.Equal(expired, chip.Border.Classes.Contains("warn"));
                 Assert.Equal(!expired, chip.Border.Classes.Contains("ok")); // and never both at once
             }
@@ -209,7 +211,7 @@ public class EsiPerAccountStatusTests
         var chip = Assert.Single(EsiChips(window), c => c.Row.CharacterId == Noahmarr);
         Assert.DoesNotContain("ok", chip.Border.Classes); // nothing works — it must not read as a healthy session
         Assert.Contains("warn", chip.Border.Classes);
-        Assert.Equal("ESI ⏳", chip.Text);
+        Assert.Equal(MaterialIconKind.ClockOutline, chip.Icon);
         Assert.Contains("temporarily unavailable", chip.Row.EsiStatus);
 
         window.Close();
@@ -391,16 +393,21 @@ public class EsiPerAccountStatusTests
         var warning = vm.Characters.Where(c => c.EsiWarn).Select(c => c.CharacterId).Order().ToList();
         Assert.Equal(expectedWarning.Order().ToList(), warning);
         foreach (var row in vm.Characters.Where(c => !expectedWarning.Contains(c.CharacterId)))
-            Assert.True(row.EsiOk, $"{row.Name} should still read as connected but is '{row.EsiChipText}'.");
+            Assert.True(row.EsiOk, $"{row.Name} should still read as connected but is '{row.EsiChipIcon}'.");
     }
 
-    private static IReadOnlyList<(CharacterViewModel Row, Border Border, string Text)> EsiChips(MainWindow window) =>
+    /// <summary>The ESI chip of each character row, with the icon it is actually drawing. The state used to be a
+    /// character in the chip's label ("ESI ⏳"); it is an icon beside the label since ET-74, so the state has to be
+    /// read off the icon or these tests would pass on a chip that had stopped saying anything at all.</summary>
+    private static IReadOnlyList<(CharacterViewModel Row, Border Border, MaterialIconKind Icon)> EsiChips(MainWindow window) =>
         window.GetVisualDescendants().OfType<Border>()
             .Where(b => b.Classes.Contains("chip")
-                        && b.Child is TextBlock { Text: not null } t
-                        && t.Text.StartsWith("ESI", StringComparison.Ordinal)
-                        && b.DataContext is CharacterViewModel)
-            .Select(b => ((CharacterViewModel)b.DataContext!, b, ((TextBlock)b.Child!).Text!))
+                        && b.DataContext is CharacterViewModel
+                        && b.GetVisualDescendants().OfType<TextBlock>()
+                            .Any(t => string.Equals(t.Text, "ESI", StringComparison.Ordinal)))
+            .Select(b => ((CharacterViewModel)b.DataContext!, b,
+                          b.GetVisualDescendants().OfType<MaterialIcon>().Single().Kind
+                              ?? throw new InvalidOperationException("an ESI chip is drawing no icon at all")))
             .ToList();
 
     private static ClientTokenRefreshService Refresher(

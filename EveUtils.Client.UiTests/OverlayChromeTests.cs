@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-// The project's implicit usings pull in System.IO, whose Path would otherwise be ambiguous with the shape.
-using IconPath = Avalonia.Controls.Shapes.Path;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
@@ -13,6 +11,7 @@ using EveUtils.Client.Fleet;
 using EveUtils.Client.Theming;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.Views;
+using Material.Icons.Avalonia;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -84,15 +83,12 @@ public class OverlayChromeTests
             Assert.Equal(new Avalonia.CornerRadius(0), ((TemplatedControl)button).CornerRadius);
         }
 
-        // …and the icons inside them are drawn to one scale. Each sits on the same 16-unit canvas behind the same
-        // Viewbox, because letting a Path stretch to its own bounding box instead would draw the two-stroke ✕ at
-        // roughly twice the pin's scale — three icons of different weights, which is the complaint all over again.
-        var icons = new Control[] { opacity, pin, close }
-            .Select(b => b.GetVisualDescendants().OfType<Viewbox>().Single())
-            .ToList();
-        Assert.All(icons, box => Assert.Equal(icons[0].Bounds.Size, box.Bounds.Size));
-        Assert.All(icons, box => Assert.Equal(new Avalonia.Size(16, 16),
-            Assert.IsType<Canvas>(box.Child).Bounds.Size));
+        // …and the icons inside them are drawn to one scale. Material sizes an icon by the box you give it, so all
+        // three have to be given the same box; letting each size itself is how three icons of different weights get
+        // back into this row, which is the complaint all over again.
+        var icons = Icons(opacity, pin, close);
+        Assert.All(icons, icon => Assert.Equal(icons[0].Bounds.Size, icon.Bounds.Size));
+        Assert.All(icons, icon => Assert.Equal(new Avalonia.Size(13, 13), icon.Bounds.Size));
 
         window.Close();
     }
@@ -111,15 +107,9 @@ public class OverlayChromeTests
         {
             // A drawn shape, not text of any kind — not a word ("PIN", which broke the set), and not a character
             // either. A glyph is whatever the shipped font decides to draw: ⬒ arrived on screen with its bottom half
-            // filled and read as a floppy disk, which is why these are geometry now.
+            // filled and read as a floppy disk, which is why these come from an icon set now.
             Assert.False(button.Content is string, $"{button.Name ?? "button"} still carries text: {button.Content}");
-            var paths = button.GetVisualDescendants().OfType<IconPath>().ToList();
-            Assert.NotEmpty(paths);
-            Assert.All(paths, path => Assert.NotNull(path.Data));
-
-            // Every icon has to be tinted from the button, or it would sit at the resting colour through hover and,
-            // worse, through the pinned state — dark ink is what makes the filled square readable.
-            Assert.All(paths, path => Assert.True(path.Stroke is not null || path.Fill is not null));
+            Assert.Single(button.GetVisualDescendants().OfType<MaterialIcon>());
 
             // An icon is quick to read once you know it and opaque before, so all three have to say what they are.
             var tip = Assert.IsType<string>(ToolTip.GetTip(button));
@@ -204,12 +194,14 @@ public class OverlayChromeTests
         window.Close();
     }
 
-    /// <summary>The colour a button's icon is actually drawn in — the Path's own brush, not the button's, so a
-    /// binding that had come undone reads as "unchanged" here rather than passing on the button's intent.</summary>
+    private static List<MaterialIcon> Icons(params Control[] buttons) =>
+        buttons.Select(b => b.GetVisualDescendants().OfType<MaterialIcon>().Single()).ToList();
+
+    /// <summary>The colour the icon control itself resolves to, not the button's — the icon inherits its Foreground,
+    /// and the stock Fluent theme sets its own on the ContentPresenter in between, so a rule that never reached the
+    /// icon would read as "unchanged" here rather than passing on the button's intent.</summary>
     private static string Ink(Button button) =>
-        button.GetVisualDescendants().OfType<IconPath>()
-            .Select(path => (path.Stroke ?? path.Fill)?.ToString() ?? "none")
-            .First();
+        Icons(button)[0].Foreground?.ToString() ?? "none";
 
     private static string Capture(Window window, string name) => OverlayShots.Capture(window, name);
 }

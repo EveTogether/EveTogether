@@ -5,6 +5,7 @@
         xmlns:dlg="using:EveUtils.Client.Dialogs"
         xmlns:ctl="using:EveUtils.Client.Controls"
         xmlns:chrome="using:Avalonia.Controls.Chrome"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         xmlns:ships="using:EveUtils.Shared.Modules.Ships.Dtos"
         xmlns:settings="using:EveUtils.Shared.Modules.Settings.Dtos"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -22,25 +23,22 @@
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <!-- Monochrome line-icons (currentColor → faction-tinted): the Path strokes bind to the owning button's
-         Foreground so they re-tint with the active/faction colour (D-182). -->
-    <Window.Resources>
-        <StreamGeometry x:Key="IconFits">M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2 2.6-2.6z</StreamGeometry>
-        <StreamGeometry x:Key="IconFleet">M3,11 L22,2 L13,21 L11,13 Z</StreamGeometry>
-        <StreamGeometry x:Key="IconComp">M4,4 L10,4 L10,10 L4,10 Z M14,4 L20,4 L20,10 L14,10 Z M4,14 L10,14 L10,20 L4,20 Z M14,14 L20,14 L20,20 L14,20 Z</StreamGeometry>
-        <StreamGeometry x:Key="IconEsi">M6,20 L6,14 M12,20 L12,9 M18,20 L18,4</StreamGeometry>
-        <StreamGeometry x:Key="IconInbox">M3,5 L21,5 L21,19 L3,19 Z M3,7 L12,13 L21,7</StreamGeometry>
-        <StreamGeometry x:Key="IconLogs">M5,3 L19,3 L19,21 L5,21 Z M8,8 L16,8 M8,12 L16,12 M8,16 L13,16</StreamGeometry>
-        <StreamGeometry x:Key="IconSettings">M4,8 L20,8 M4,16 L20,16 M11.4,8 A2.4,2.4 0 1 1 6.6,8 A2.4,2.4 0 1 1 11.4,8 Z M17.4,16 A2.4,2.4 0 1 1 12.6,16 A2.4,2.4 0 1 1 17.4,16 Z</StreamGeometry>
-        <StreamGeometry x:Key="IconChars">M12,8 A3,3 0 1 1 6,8 A3,3 0 1 1 12,8 Z M3.5,20 A5.5,5.5 0 0 1 14.5,20 M16,5.4 A3,3 0 0 1 16,10.8 M20.5,20 A5.5,5.5 0 0 0 16.5,14.7</StreamGeometry>
-        <StreamGeometry x:Key="IconTools">M14.5,3.5 A4,4 0 0 0 19.8,8.8 L9.5,19 A2.5,2.5 0 0 1 6,15.5 L16.2,5.2 A4,4 0 0 0 14.5,3.5 Z M5,5 L8,8 M4,9 L7,6</StreamGeometry>
-        <StreamGeometry x:Key="IconAbout">M22,12 A10,10 0 1 1 2,12 A10,10 0 1 1 22,12 Z M12,11 L12,16.5 M12,7.5 L12,8</StreamGeometry>
-    </Window.Resources>
-
     <Window.Styles>
         <!-- Dim a home-dashboard character row that has no live combat (idle placeholder). -->
         <Style Selector="Border.idlecard">
             <Setter Property="Opacity" Value="0.5"/>
+        </Style>
+
+        <!-- The rail's ten launcher icons were StreamGeometry in this window's resources (D-182); they come from the
+             icon set now (ET-74). One size here rather than on each button, for the same reason it was one grid
+             before: ten shapes that size themselves are ten weights. They take their colour by inheritance, so the
+             faction/active/hover tint reaches them through the button's ContentPresenter.
+
+             20 rather than the 22 the drawn Paths used: Material's outlines carry more ink than a 1.7 stroke, so at
+             the old size the rail sat visibly heavier than the rest of the window. -->
+        <Style Selector="mi|MaterialIcon.rail">
+            <Setter Property="Width" Value="20"/>
+            <Setter Property="Height" Value="20"/>
         </Style>
     </Window.Styles>
 
@@ -68,13 +66,19 @@
                             IsVisible="{Binding ShowHeaderWindowButtons}">
                     <!-- User role = clickable on top of the caption area; the maximize button gets the native
                          MaximizeButton role so Windows 11 shows Snap Layouts when hovering it. -->
-                    <Button Classes="winbtn" Content="—" Click="OnMinimize" ToolTip.Tip="Minimize"
-                            chrome:WindowDecorationProperties.ElementRole="User"/>
-                    <Button Classes="winbtn" Content="▢" Click="OnMaximize" ToolTip.Tip="Maximize / restore"
+                    <Button Classes="winbtn" Click="OnMinimize" ToolTip.Tip="Minimize"
+                            chrome:WindowDecorationProperties.ElementRole="User">
+                        <mi:MaterialIcon Kind="WindowMinimize"/>
+                    </Button>
+                    <Button Classes="winbtn" Click="OnMaximize" ToolTip.Tip="Maximize / restore"
                             IsVisible="{Binding ShowMaximizeButton}"
-                            chrome:WindowDecorationProperties.ElementRole="MaximizeButton"/>
-                    <Button Classes="winbtn winclose" Content="✕" Click="OnCloseWindow" ToolTip.Tip="Close"
-                            chrome:WindowDecorationProperties.ElementRole="User"/>
+                            chrome:WindowDecorationProperties.ElementRole="MaximizeButton">
+                        <mi:MaterialIcon Kind="WindowMaximize"/>
+                    </Button>
+                    <Button Classes="winbtn winclose" Click="OnCloseWindow" ToolTip.Tip="Close"
+                            chrome:WindowDecorationProperties.ElementRole="User">
+                        <mi:MaterialIcon Kind="Close"/>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -83,7 +87,7 @@
         <Border DockPanel.Dock="Top" IsVisible="{Binding IsEsiAlert}" Background="#33CC4444"
                 BorderBrush="{StaticResource RedBrush}" BorderThickness="0,0,0,1" Padding="14,8">
             <StackPanel Orientation="Horizontal" Spacing="10">
-                <TextBlock Text="⚠" FontSize="14" Foreground="{StaticResource RedBrush}" VerticalAlignment="Center"/>
+                <mi:MaterialIcon Classes="icon-lg" Kind="AlertOutline" Foreground="{StaticResource RedBrush}"/>
                 <TextBlock Text="{Binding EsiAlertMessage}" Foreground="{StaticResource TextBrightBrush}"
                            FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
             </StackPanel>
@@ -95,8 +99,8 @@
         <Border DockPanel.Dock="Top" IsVisible="{Binding IsUpdateReady}" Background="{DynamicResource AccentSoftBrush}"
                 BorderBrush="{DynamicResource AccentBrightBrush}" BorderThickness="0,0,0,1" Padding="14,8">
             <Grid ColumnDefinitions="Auto,*,Auto">
-                <TextBlock Grid.Column="0" Text="✓" FontSize="14" VerticalAlignment="Center"
-                           Foreground="{DynamicResource AccentBrightBrush}"/>
+                <mi:MaterialIcon Grid.Column="0" Classes="icon-lg" Kind="Check"
+                                 Foreground="{DynamicResource AccentBrightBrush}"/>
                 <TextBlock Grid.Column="1" Text="{Binding UpdateReadyMessage}" Margin="10,0,0,0"
                            Foreground="{StaticResource TextBrightBrush}" FontSize="12" VerticalAlignment="Center"
                            TextWrapping="Wrap"/>
@@ -146,20 +150,17 @@
                         <Button Classes="railitem" Command="{Binding ToggleDockModeCommand}"
                                 ToolTip.Tip="Dock / undock: switch all modules between the docked host and floating windows">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
-                                <TextBlock Text="⧉" FontSize="19" HorizontalAlignment="Center"
-                                           Foreground="{Binding $parent[Button].Foreground}"/>
+                                <mi:MaterialIcon Classes="rail" Kind="DockWindow"/>
                                 <TextBlock Text="{Binding DockToggleLabel}" FontSize="9" LetterSpacing="1"
-                                           HorizontalAlignment="Center" Foreground="{Binding $parent[Button].Foreground}"/>
+                                           HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Button Classes="railitem" Command="{Binding ToggleCharsCommand}"
                                 ToolTip.Tip="Show/hide the character panel">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
-                                <Path Width="22" Height="22" Stretch="Uniform" Data="{StaticResource IconChars}"
-                                      Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.7"
-                                      StrokeLineCap="Round" StrokeJoin="Round"/>
+                                <mi:MaterialIcon Classes="rail" Kind="AccountMultipleOutline"/>
                                 <TextBlock Text="{Binding CharsToggleLabel}" FontSize="9" LetterSpacing="1"
-                                           HorizontalAlignment="Center" Foreground="{Binding $parent[Button].Foreground}"/>
+                                           HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <!-- Compact Tranquility/status dot for floating mode (the wide bottom bar is hidden there) -->
@@ -169,8 +170,12 @@
                         </Border>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="7"
                                     Margin="0,6,0,9" IsVisible="{Binding ShowRailWindowButtons}">
-                            <Button Classes="winbtn" Width="30" Content="—" Click="OnMinimize" ToolTip.Tip="Minimize"/>
-                            <Button Classes="winbtn winclose" Width="30" Content="✕" Click="OnCloseWindow" ToolTip.Tip="Close"/>
+                            <Button Classes="winbtn" Width="30" Click="OnMinimize" ToolTip.Tip="Minimize">
+                                <mi:MaterialIcon Kind="WindowMinimize"/>
+                            </Button>
+                            <Button Classes="winbtn winclose" Width="30" Click="OnCloseWindow" ToolTip.Tip="Close">
+                                <mi:MaterialIcon Kind="Close"/>
+                            </Button>
                         </StackPanel>
                     </StackPanel>
 
@@ -179,31 +184,22 @@
                         <Button Classes="railitem" Classes.active="{Binding IsFitsActive}"
                                 Command="{Binding LaunchModuleCommand}" CommandParameter="fits" ToolTip.Tip="Fittings">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
-                                <Path Width="22" Height="22" Stretch="Uniform" Data="{StaticResource IconFits}"
-                                      Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.7"
-                                      StrokeLineCap="Round" StrokeJoin="Round"/>
-                                <TextBlock Text="FITS" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"
-                                           Foreground="{Binding $parent[Button].Foreground}"/>
+                                <mi:MaterialIcon Classes="rail" Kind="WrenchOutline"/>
+                                <TextBlock Text="FITS" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Button Classes="railitem" Classes.active="{Binding IsFleetActive}"
                                 Command="{Binding LaunchModuleCommand}" CommandParameter="fleet" ToolTip.Tip="Fleets">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
-                                <Path Width="22" Height="22" Stretch="Uniform" Data="{StaticResource IconFleet}"
-                                      Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.7"
-                                      StrokeLineCap="Round" StrokeJoin="Round"/>
-                                <TextBlock Text="FLEET" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"
-                                           Foreground="{Binding $parent[Button].Foreground}"/>
+                                <mi:MaterialIcon Classes="rail" Kind="AccountGroupOutline"/>
+                                <TextBlock Text="FLEET" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Button Classes="railitem" Classes.active="{Binding IsCompositionsActive}"
                                 Command="{Binding LaunchModuleCommand}" CommandParameter="compositions" ToolTip.Tip="Fleet Compositions">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
-                                <Path Width="22" Height="22" Stretch="Uniform" Data="{StaticResource IconComp}"
-                                      Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.7"
-                                      StrokeLineCap="Round" StrokeJoin="Round"/>
-                                <TextBlock Text="COMP" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"
-                                           Foreground="{Binding $parent[Button].Foreground}"/>
+                                <mi:MaterialIcon Classes="rail" Kind="ViewGridOutline"/>
+                                <TextBlock Text="COMP" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <!-- Tools: a list of stand-alone tools, not one button that happens to have a menu. EVE
@@ -216,36 +212,28 @@
                                     <MenuItem Header="EVE Settings Sync…" Command="{Binding LaunchModuleCommand}"
                                               CommandParameter="settings-sync"
                                               ToolTip.Tip="Copy EVE's window layout, overview and account settings from one character or account to your others — with a backup taken first.">
-                                        <MenuItem.Icon><TextBlock Text="⇄" FontSize="13"/></MenuItem.Icon>
+                                        <MenuItem.Icon><mi:MaterialIcon Kind="SwapHorizontal"/></MenuItem.Icon>
                                     </MenuItem>
                                 </MenuFlyout>
                             </Button.Flyout>
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
-                                <Path Width="22" Height="22" Stretch="Uniform" Data="{StaticResource IconTools}"
-                                      Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.7"
-                                      StrokeLineCap="Round" StrokeJoin="Round"/>
-                                <TextBlock Text="TOOLS" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"
-                                           Foreground="{Binding $parent[Button].Foreground}"/>
+                                <mi:MaterialIcon Classes="rail" Kind="ToolboxOutline"/>
+                                <TextBlock Text="TOOLS" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Border Classes="rail-divider"/>
                         <Button Classes="railitem" Classes.active="{Binding IsEsiActive}"
                                 Command="{Binding LaunchModuleCommand}" CommandParameter="esi" ToolTip.Tip="ESI metrics">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
-                                <Path Width="22" Height="22" Stretch="Uniform" Data="{StaticResource IconEsi}"
-                                      Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.7"
-                                      StrokeLineCap="Round" StrokeJoin="Round"/>
-                                <TextBlock Text="ESI" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"
-                                           Foreground="{Binding $parent[Button].Foreground}"/>
+                                <mi:MaterialIcon Classes="rail" Kind="ChartBar"/>
+                                <TextBlock Text="ESI" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Button Classes="railitem" Classes.active="{Binding IsInboxActive}"
                                 Command="{Binding LaunchModuleCommand}" CommandParameter="inbox" ToolTip.Tip="Inbox">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
                                 <Panel HorizontalAlignment="Center">
-                                    <Path Width="22" Height="22" Stretch="Uniform" Data="{StaticResource IconInbox}"
-                                          Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.7"
-                                          StrokeLineCap="Round" StrokeJoin="Round"/>
+                                    <mi:MaterialIcon Classes="rail" Kind="EmailOutline"/>
                                     <Border IsVisible="{Binding Inbox.HasUnread}" Background="#FFCC4444" CornerRadius="7"
                                             Padding="4,0" MinWidth="14" Height="14" Margin="0,-7,-8,0"
                                             HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False">
@@ -253,39 +241,29 @@
                                                    Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                 </Panel>
-                                <TextBlock Text="INBOX" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"
-                                           Foreground="{Binding $parent[Button].Foreground}"/>
+                                <TextBlock Text="INBOX" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Button Classes="railitem" Classes.active="{Binding IsLogsActive}"
                                 Command="{Binding LaunchModuleCommand}" CommandParameter="logs" ToolTip.Tip="Client logs">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
-                                <Path Width="22" Height="22" Stretch="Uniform" Data="{StaticResource IconLogs}"
-                                      Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.7"
-                                      StrokeLineCap="Round" StrokeJoin="Round"/>
-                                <TextBlock Text="LOGS" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"
-                                           Foreground="{Binding $parent[Button].Foreground}"/>
+                                <mi:MaterialIcon Classes="rail" Kind="FileDocumentOutline"/>
+                                <TextBlock Text="LOGS" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Border Classes="rail-divider"/>
                         <Button Classes="railitem" Command="{Binding LaunchModuleCommand}" CommandParameter="settings"
                                 ToolTip.Tip="Settings">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
-                                <Path Width="22" Height="22" Stretch="Uniform" Data="{StaticResource IconSettings}"
-                                      Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.7"
-                                      StrokeLineCap="Round" StrokeJoin="Round"/>
-                                <TextBlock Text="SETTINGS" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"
-                                           Foreground="{Binding $parent[Button].Foreground}"/>
+                                <mi:MaterialIcon Classes="rail" Kind="TuneVariant"/>
+                                <TextBlock Text="SETTINGS" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Button Classes="railitem" Command="{Binding LaunchModuleCommand}" CommandParameter="about"
                                 ToolTip.Tip="About EVE Together">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
-                                <Path Width="22" Height="22" Stretch="Uniform" Data="{StaticResource IconAbout}"
-                                      Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.7"
-                                      StrokeLineCap="Round" StrokeJoin="Round"/>
-                                <TextBlock Text="ABOUT" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"
-                                           Foreground="{Binding $parent[Button].Foreground}"/>
+                                <mi:MaterialIcon Classes="rail" Kind="InformationOutline"/>
+                                <TextBlock Text="ABOUT" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                     </StackPanel>
@@ -356,11 +334,16 @@
                                                                TextTrimming="CharacterEllipsis"
                                                                Foreground="{StaticResource TextBrightBrush}"/>
                                                     <!-- Status chips (module-shell mockup "ESI ✓" / "☁ ET"): ESI link state,
-                                                         one chip per coupled server, and the implant count. -->
+                                                         one chip per coupled server, and the implant count. Each chip's
+                                                         state symbol used to be a character inside its label — two of
+                                                         them emoji, drawn in colour out of a different font (ET-74). -->
                                                     <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,4,0,0">
                                                         <Border Classes="chip" Classes.ok="{Binding EsiOk}" Classes.warn="{Binding EsiWarn}"
                                                                 Classes.dim="{Binding EsiDim}" ToolTip.Tip="{Binding EsiStatus}">
-                                                            <TextBlock Text="{Binding EsiChipText}"/>
+                                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                                <TextBlock Text="{Binding EsiChipText}" VerticalAlignment="Center"/>
+                                                                <mi:MaterialIcon Kind="{Binding EsiChipIcon}"/>
+                                                            </StackPanel>
                                                         </Border>
                                                         <ItemsControl ItemsSource="{Binding ServerLinks}">
                                                             <ItemsControl.ItemsPanel>
@@ -372,8 +355,12 @@
                                                                 <DataTemplate x:DataType="vm:ServerLinkViewModel">
                                                                     <Border Classes="chip" Classes.warn="{Binding HasIssue}"
                                                                             ToolTip.Tip="{Binding LinkTooltip}">
-                                                                        <TextBlock Text="{Binding ChipText}" MaxWidth="92"
-                                                                                   TextTrimming="CharacterEllipsis"/>
+                                                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                                                            <mi:MaterialIcon Kind="{Binding ChipIcon}"/>
+                                                                            <TextBlock Text="{Binding DisplayName}" MaxWidth="92"
+                                                                                       VerticalAlignment="Center"
+                                                                                       TextTrimming="CharacterEllipsis"/>
+                                                                        </StackPanel>
                                                                     </Border>
                                                                 </DataTemplate>
                                                             </ItemsControl.ItemTemplate>
@@ -381,27 +368,36 @@
                                                         <!-- Implant count (D-181): hover lists the character's implants -->
                                                         <Border Classes="chip" IsVisible="{Binding HasImplants}"
                                                                 ToolTip.Tip="{Binding ImplantTooltip}">
-                                                            <TextBlock Text="{Binding ImplantBadge}"/>
+                                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                                <mi:MaterialIcon Kind="Needle"/>
+                                                                <TextBlock Text="{Binding ImplantBadge}" VerticalAlignment="Center"/>
+                                                            </StackPanel>
                                                         </Border>
                                                     </StackPanel>
                                                 </StackPanel>
                                             </Grid>
                                             <Grid ColumnDefinitions="*,*,*" ColumnSpacing="5">
-                                                <Button Grid.Column="0" Content="📊" FontSize="13" Padding="0,3"
+                                                <Button Grid.Column="0" Padding="0,3"
                                                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                                         Command="{Binding #RootWindow.((vm:MainWindowViewModel)DataContext).OpenMetricsCommand}"
                                                         CommandParameter="{Binding}"
-                                                        ToolTip.Tip="Open metrics: live DPS, bounty, location, enemies."/>
-                                                <Button Grid.Column="1" Content="⤢" FontSize="13" Padding="0,3"
+                                                        ToolTip.Tip="Open metrics: live DPS, bounty, location, enemies.">
+                                                    <mi:MaterialIcon Kind="ChartBar"/>
+                                                </Button>
+                                                <Button Grid.Column="1" Padding="0,3"
                                                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                                         Command="{Binding #RootWindow.((vm:MainWindowViewModel)DataContext).OpenCharacterDpsOverlayCommand}"
                                                         CommandParameter="{Binding}"
-                                                        ToolTip.Tip="Pop this character's live DPS into a floating overlay."/>
-                                                <Button Grid.Column="2" Content="⚙" FontSize="13" Padding="0,3"
+                                                        ToolTip.Tip="Pop this character's live DPS into a floating overlay.">
+                                                    <mi:MaterialIcon Kind="ArrowExpand"/>
+                                                </Button>
+                                                <Button Grid.Column="2" Padding="0,3"
                                                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                                         Command="{Binding #RootWindow.((vm:MainWindowViewModel)DataContext).OpenCharacterSettingsCommand}"
                                                         CommandParameter="{Binding}"
-                                                        ToolTip.Tip="Character settings: ESI scopes, coupled servers, couple/decouple."/>
+                                                        ToolTip.Tip="Character settings: ESI scopes, coupled servers, couple/decouple.">
+                                                    <mi:MaterialIcon Kind="CogOutline"/>
+                                                </Button>
                                             </Grid>
                                         </StackPanel>
                                     </Border>
@@ -433,17 +429,21 @@
                                 <DataTemplate x:DataType="dlg:HostTab">
                                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Title}" FontSize="11" VerticalAlignment="Center"/>
-                                        <Button Classes="tabclose" Content="✕" FontSize="10" Command="{Binding CloseCommand}"
-                                                ToolTip.Tip="Close this module"/>
+                                        <Button Classes="tabclose" Command="{Binding CloseCommand}"
+                                                ToolTip.Tip="Close this module">
+                                            <mi:MaterialIcon Classes="icon-sm" Kind="Close"/>
+                                        </Button>
                                     </StackPanel>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
                         <TextBlock Grid.Column="1" Text="{Binding DockModeLabel}" Classes="label" FontSize="9"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <Button Grid.Column="2" Classes="winbtn" Width="30" Content="⧉" FontSize="13"
+                        <Button Grid.Column="2" Classes="winbtn" Width="30"
                                 Command="{Binding ToggleDockModeCommand}"
-                                ToolTip.Tip="Dock / undock: switch all modules between the docked host and floating windows."/>
+                                ToolTip.Tip="Dock / undock: switch all modules between the docked host and floating windows.">
+                            <mi:MaterialIcon Kind="DockWindow"/>
+                        </Button>
                     </Grid>
                 </Border>
 
@@ -597,12 +597,14 @@
                                                                    HorizontalAlignment="Center" VerticalAlignment="Center"
                                                                    IsVisible="{Binding !IsLive}"/>
                                                     </Grid>
-                                                    <Button Content="⤢" FontSize="11" Padding="6,1" Margin="0,4,6,0"
+                                                    <Button Padding="6,1" Margin="0,4,6,0"
                                                             HorizontalAlignment="Right" VerticalAlignment="Top"
                                                             IsVisible="{Binding IsLive}"
                                                             Command="{Binding #RootWindow.((vm:MainWindowViewModel)DataContext).OpenDpsOverlayCommand}"
                                                             CommandParameter="{Binding}"
-                                                            ToolTip.Tip="Pop this character's DPS into a floating, pinnable overlay"/>
+                                                            ToolTip.Tip="Pop this character's DPS into a floating, pinnable overlay">
+                                                        <mi:MaterialIcon Classes="icon-sm" Kind="ArrowExpand"/>
+                                                    </Button>
                                                 </Panel>
                                             </Border>
                                         </DataTemplate>

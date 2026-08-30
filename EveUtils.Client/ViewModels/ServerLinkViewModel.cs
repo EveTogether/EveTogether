@@ -4,6 +4,7 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Messaging;
+using Material.Icons;
 
 namespace EveUtils.Client.ViewModels;
 
@@ -26,11 +27,11 @@ public partial class ServerLinkViewModel : ObservableObject
 
     public string StatusLabel => State switch
     {
-        ServerConnectionState.Connected      => "☁️ connected",
-        ServerConnectionState.Connecting     => "☁️ connecting…",
-        ServerConnectionState.Reconnecting   => "⚠️ reconnecting…",
-        ServerConnectionState.SessionExpired => "⚠️ session expired — re-pair",
-        _                                    => "⚠️ disconnected"
+        ServerConnectionState.Connected      => "connected",
+        ServerConnectionState.Connecting     => "connecting…",
+        ServerConnectionState.Reconnecting   => "reconnecting…",
+        ServerConnectionState.SessionExpired => "session expired — re-pair",
+        _                                    => "disconnected"
     };
 
     /// <summary>True when the link is not in a healthy connected/connecting state — drives the warning badge.</summary>
@@ -38,11 +39,10 @@ public partial class ServerLinkViewModel : ObservableObject
                                   or ServerConnectionState.SessionExpired
                                   or ServerConnectionState.Disconnected;
 
-    /// <summary>Compact per-server icon for the character list: synced when healthy, warning on issue.</summary>
-    public string Icon => HasIssue ? "⚠️" : "☁️";
-
-    /// <summary>Mockup-style chip text for the character card (e.g. "ET"): status glyph + the server's display name.</summary>
-    public string ChipText => $"{(HasIssue ? "⚠" : "☁")} {DisplayName}";
+    /// <summary>The chip's icon for the character card: a cloud when healthy, a warning on issue. These were emoji in
+    /// the label text (☁️ / ⚠️), which Windows draws in full colour out of a separate font — two bright pictograms
+    /// beside 9.5px grey text (ET-74).</summary>
+    public MaterialIconKind ChipIcon => HasIssue ? MaterialIconKind.AlertOutline : MaterialIconKind.CloudOutline;
 
     /// <summary>Tooltip shown when hovering the per-server icon: server name + live status.</summary>
     public string LinkTooltip => $"{DisplayName} — {StatusLabel}";
@@ -63,14 +63,12 @@ public partial class ServerLinkViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(StatusLabel));
         OnPropertyChanged(nameof(HasIssue));
-        OnPropertyChanged(nameof(Icon));
-        OnPropertyChanged(nameof(ChipText));
+        OnPropertyChanged(nameof(ChipIcon));
         OnPropertyChanged(nameof(LinkTooltip));
     }
 
     partial void OnDisplayNameChanged(string value)
     {
-        OnPropertyChanged(nameof(ChipText));
         OnPropertyChanged(nameof(LinkTooltip));
     }
 }

@@ -40,6 +40,9 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- Material Design Icons (ET-74). The interface used to type its symbols as Unicode characters, which left the
+         shape up to whatever the shipped font drew — see Themes/Icons.axaml. -->
+    <PackageReference Include="Material.Icons.Avalonia" Version="3.0.2" />
     <!-- Auto-updater. Pinned as a pair with the `vpk` tool version in .github/workflows/release.yml: the tool
          writes the feed this package reads, and a version skew between them is a feed the app cannot parse. -->
     <PackageReference Include="Velopack" Version="1.2.0" />

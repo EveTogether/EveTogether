@@ -49,7 +49,7 @@ public class ToastActionContentTests
         var content = ToastActionContent.Build("Invite", null, ToastKind.Information,
             new List<ToastAction> { new("Accept", () => { }), new("Decline", () => { }) });
 
-        var texts = LayoutOf(content).Children.OfType<TextBlock>().ToList();
+        var texts = TextsOf(content);
         Assert.Single(texts); // title only — no secondary message line
         Assert.Contains("Invite", texts[0].Text);
         Assert.Equal(2, ButtonsOf(content).Count);
@@ -59,11 +59,21 @@ public class ToastActionContentTests
     private static StackPanel LayoutOf(Control content) =>
         Assert.IsType<StackPanel>(Assert.IsType<Border>(content).Child);
 
-    // The button row is the one horizontal StackPanel in the layout; pull its buttons.
+    // A severity toast puts its icon and title in a row of their own (ET-74), so the title is not always a direct
+    // child of the layout. Everything outside the button row counts as a text line, whichever shape it arrived in.
+    private static IReadOnlyList<TextBlock> TextsOf(Control content) =>
+        LayoutOf(content).Children.SelectMany(child => child switch
+        {
+            TextBlock text => [text],
+            StackPanel row when !row.Children.OfType<Button>().Any() => row.Children.OfType<TextBlock>(),
+            _ => Enumerable.Empty<TextBlock>(),
+        }).ToList();
+
+    // The button row is the horizontal StackPanel that actually holds the buttons.
     private static IReadOnlyList<Button> ButtonsOf(Control content) =>
         LayoutOf(content).Children
             .OfType<StackPanel>()
-            .Single(p => p.Orientation == Orientation.Horizontal)
+            .Single(p => p.Orientation == Orientation.Horizontal && p.Children.OfType<Button>().Any())
             .Children.OfType<Button>()
             .ToList();
 }

@@ -3,6 +3,7 @@
         xmlns:vm="using:EveUtils.Client.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         mc:Ignorable="d" d:DesignWidth="760" d:DesignHeight="560"
         x:Class="EveUtils.Client.Views.FleetRosterWindow"
         x:DataType="vm:FleetRosterViewModel"
@@ -47,7 +48,8 @@
                 BorderThickness="0,0,0,1" Padding="14,8" IsVisible="{Binding IsOwner}">
             <StackPanel Spacing="6">
                 <Grid ColumnDefinitions="Auto,8,*,Auto">
-                    <TextBlock Grid.Column="0" Text="🛰" Foreground="{DynamicResource AccentBrush}" FontSize="11" VerticalAlignment="Center"/>
+                    <mi:MaterialIcon Grid.Column="0" Classes="icon-sm" Kind="SatelliteUplink"
+                                     Foreground="{DynamicResource AccentBrush}"/>
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
                         <TextBlock Text="IN-GAME FLEET" FontSize="9" LetterSpacing="1.2" VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextDimBrush}"/>
@@ -230,12 +232,16 @@
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
                                                 Margin="6,0,0,0" VerticalAlignment="Center"
                                                 IsVisible="{Binding IsJoinRequest}">
-                                        <Button Content="✓" FontSize="9" Padding="6,1" Classes="accent"
+                                        <Button Padding="6,1" Classes="accent" ToolTip.Tip="Accept this join request"
                                                 Command="{Binding $parent[ListBox].((vm:FleetRosterViewModel)DataContext).AcceptRequestCommand}"
-                                                CommandParameter="{Binding}"/>
-                                        <Button Content="✕" FontSize="9" Padding="6,1"
+                                                CommandParameter="{Binding}">
+                                            <mi:MaterialIcon Classes="icon-sm" Kind="Check"/>
+                                        </Button>
+                                        <Button Padding="6,1" ToolTip.Tip="Decline this join request"
                                                 Command="{Binding $parent[ListBox].((vm:FleetRosterViewModel)DataContext).DeclineRequestCommand}"
-                                                CommandParameter="{Binding}"/>
+                                                CommandParameter="{Binding}">
+                                            <mi:MaterialIcon Classes="icon-sm" Kind="Close"/>
+                                        </Button>
                                     </StackPanel>
                                 </Grid>
                             </DataTemplate>
@@ -286,13 +292,15 @@
                                     </TextBlock>
                                     <TextBlock Text="{Binding Commander.AssignedFitLabel}" Classes="label" FontSize="10" VerticalAlignment="Center"
                                                IsVisible="{Binding HasCommander}"/>
-                                    <TextBlock Text="✓" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}"
+                                    <mi:MaterialIcon Classes="icon-sm" Kind="Check" Foreground="{DynamicResource TextAccentBrush}"
                                                IsVisible="{Binding CommanderCanFly}" ToolTip.Tip="{Binding CommanderSkillBadgeTooltip}"/>
-                                    <TextBlock Text="⚠" FontSize="11" VerticalAlignment="Center" Foreground="#E0B341"
+                                    <mi:MaterialIcon Classes="icon-sm" Kind="AlertOutline" Foreground="#E0B341"
                                                IsVisible="{Binding CommanderHasSkillGap}" ToolTip.Tip="{Binding CommanderSkillBadgeTooltip}"/>
-                                    <Button Content="↗" FontSize="12" Background="Transparent" BorderThickness="0" Padding="4,0"
+                                    <Button Background="Transparent" BorderThickness="0" Padding="4,0"
                                             VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}" ToolTip.Tip="Open fit detail"
-                                            IsVisible="{Binding CommanderHasFit}" Command="{Binding Commander.OpenFitCommand}"/>
+                                            IsVisible="{Binding CommanderHasFit}" Command="{Binding Commander.OpenFitCommand}">
+                                        <mi:MaterialIcon Classes="icon-sm" Kind="OpenInNew"/>
+                                    </Button>
                                     <Button Content="{Binding Commander.AssignFitButtonLabel}" Classes="accent" FontSize="8" Padding="8,2"
                                             VerticalAlignment="Center" Command="{Binding Commander.AssignFitCommand}">
                                         <Button.IsVisible>
@@ -329,13 +337,15 @@
                                     </TextBlock>
                                     <TextBlock Text="{Binding Commander.AssignedFitLabel}" Classes="label" FontSize="10" VerticalAlignment="Center"
                                                IsVisible="{Binding HasCommander}"/>
-                                    <TextBlock Text="✓" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}"
+                                    <mi:MaterialIcon Classes="icon-sm" Kind="Check" Foreground="{DynamicResource TextAccentBrush}"
                                                IsVisible="{Binding CommanderCanFly}" ToolTip.Tip="{Binding CommanderSkillBadgeTooltip}"/>
-                                    <TextBlock Text="⚠" FontSize="11" VerticalAlignment="Center" Foreground="#E0B341"
+                                    <mi:MaterialIcon Classes="icon-sm" Kind="AlertOutline" Foreground="#E0B341"
                                                IsVisible="{Binding CommanderHasSkillGap}" ToolTip.Tip="{Binding CommanderSkillBadgeTooltip}"/>
-                                    <Button Content="↗" FontSize="12" Background="Transparent" BorderThickness="0" Padding="4,0"
+                                    <Button Background="Transparent" BorderThickness="0" Padding="4,0"
                                             VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}" ToolTip.Tip="Open fit detail"
-                                            IsVisible="{Binding CommanderHasFit}" Command="{Binding Commander.OpenFitCommand}"/>
+                                            IsVisible="{Binding CommanderHasFit}" Command="{Binding Commander.OpenFitCommand}">
+                                        <mi:MaterialIcon Classes="icon-sm" Kind="OpenInNew"/>
+                                    </Button>
                                     <Button Content="{Binding Commander.AssignFitButtonLabel}" Classes="accent" FontSize="8" Padding="8,2"
                                             VerticalAlignment="Center" Command="{Binding Commander.AssignFitCommand}">
                                         <Button.IsVisible>
@@ -371,13 +381,15 @@
                                     </TextBlock>
                                     <TextBlock Text="{Binding Commander.AssignedFitLabel}" Classes="label" FontSize="10" VerticalAlignment="Center"
                                                IsVisible="{Binding HasCommander}"/>
-                                    <TextBlock Text="✓" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}"
+                                    <mi:MaterialIcon Classes="icon-sm" Kind="Check" Foreground="{DynamicResource TextAccentBrush}"
                                                IsVisible="{Binding CommanderCanFly}" ToolTip.Tip="{Binding CommanderSkillBadgeTooltip}"/>
-                                    <TextBlock Text="⚠" FontSize="11" VerticalAlignment="Center" Foreground="#E0B341"
+                                    <mi:MaterialIcon Classes="icon-sm" Kind="AlertOutline" Foreground="#E0B341"
                                                IsVisible="{Binding CommanderHasSkillGap}" ToolTip.Tip="{Binding CommanderSkillBadgeTooltip}"/>
-                                    <Button Content="↗" FontSize="12" Background="Transparent" BorderThickness="0" Padding="4,0"
+                                    <Button Background="Transparent" BorderThickness="0" Padding="4,0"
                                             VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}" ToolTip.Tip="Open fit detail"
-                                            IsVisible="{Binding CommanderHasFit}" Command="{Binding Commander.OpenFitCommand}"/>
+                                            IsVisible="{Binding CommanderHasFit}" Command="{Binding Commander.OpenFitCommand}">
+                                        <mi:MaterialIcon Classes="icon-sm" Kind="OpenInNew"/>
+                                    </Button>
                                     <Button Content="{Binding Commander.AssignFitButtonLabel}" Classes="accent" FontSize="8" Padding="8,2"
                                             VerticalAlignment="Center" Command="{Binding Commander.AssignFitCommand}">
                                         <Button.IsVisible>
@@ -410,13 +422,15 @@
                                         </TextBlock.ContextMenu>
                                     </TextBlock>
                                     <TextBlock Text="{Binding AssignedFitLabel}" Classes="label" FontSize="10" VerticalAlignment="Center"/>
-                                    <TextBlock Text="✓" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}"
+                                    <mi:MaterialIcon Classes="icon-sm" Kind="Check" Foreground="{DynamicResource TextAccentBrush}"
                                                IsVisible="{Binding CanFly}" ToolTip.Tip="{Binding SkillBadgeTooltip}"/>
-                                    <TextBlock Text="⚠" FontSize="11" VerticalAlignment="Center" Foreground="#E0B341"
+                                    <mi:MaterialIcon Classes="icon-sm" Kind="AlertOutline" Foreground="#E0B341"
                                                IsVisible="{Binding HasSkillGap}" ToolTip.Tip="{Binding SkillBadgeTooltip}"/>
-                                    <Button Content="↗" FontSize="12" Background="Transparent" BorderThickness="0" Padding="4,0"
+                                    <Button Background="Transparent" BorderThickness="0" Padding="4,0"
                                             VerticalAlignment="Center" Foreground="{DynamicResource TextAccentBrush}" ToolTip.Tip="Open fit detail"
-                                            IsVisible="{Binding HasAssignedFit}" Command="{Binding OpenFitCommand}"/>
+                                            IsVisible="{Binding HasAssignedFit}" Command="{Binding OpenFitCommand}">
+                                        <mi:MaterialIcon Classes="icon-sm" Kind="OpenInNew"/>
+                                    </Button>
                                     <Button Content="{Binding AssignFitButtonLabel}" Classes="accent" FontSize="8" Padding="8,2"
                                             VerticalAlignment="Center" IsVisible="{Binding IsOwner}" Command="{Binding AssignFitCommand}"/>
                                 </StackPanel>

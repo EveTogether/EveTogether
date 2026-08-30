@@ -1077,7 +1077,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             var has = requiredScope == FittingsScopeCatalog.ReadFittings ? c.HasReadFittings
                     : requiredScope == FittingsScopeCatalog.WriteFittings ? c.HasWriteFittings
                     : true;
-            var local = c.HasEsiToken ? "🏠 local" : "no local token";
+            var local = c.HasEsiToken ? "local token" : "no local token";
             var detail = has ? local : $"{local} · missing {requiredScope}";
             return new CharacterPickOption(c.CharacterId, c.Name, detail, Enabled: has && c.HasEsiToken);
         }).ToList();

@@ -187,9 +187,9 @@ public class CompositionsViewModelTests
         var unusedRow = rows.Single(r => r.Name == "Unused doctrine");
 
         Assert.Equal(2, armorRow.FleetCount);
-        Assert.Equal("⛴ 2 fleets", armorRow.FleetCountLabel);   // plural
+        Assert.Equal("2 fleets", armorRow.FleetCountLabel);   // plural
         Assert.Equal(1, shieldRow.FleetCount);
-        Assert.Equal("⛴ 1 fleet", shieldRow.FleetCountLabel);   // singular
+        Assert.Equal("1 fleet", shieldRow.FleetCountLabel);   // singular
         Assert.Equal(0, unusedRow.FleetCount);
         Assert.False(unusedRow.HasFleets);                       // pill hidden when no fleet uses the doctrine
     }

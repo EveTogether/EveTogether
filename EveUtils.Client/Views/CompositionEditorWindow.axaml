@@ -3,6 +3,7 @@
         xmlns:vm="using:EveUtils.Client.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="640"
         x:Class="EveUtils.Client.Views.CompositionEditorWindow"
         x:DataType="vm:CompositionEditorViewModel"
@@ -116,10 +117,12 @@
                                             <TextBlock Grid.Column="4" Classes="minlabel" Text="GROUP MIN" Margin="0,0,7,0"/>
                                             <TextBox Grid.Column="5" Classes="num" Text="{Binding GroupMinText}" PlaceholderText="—"
                                                      IsReadOnly="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsReadOnly}"/>
-                                            <Button Grid.Column="7" Content="✕" FontSize="11" Classes="danger"
+                                            <Button Grid.Column="7" Classes="danger" ToolTip.Tip="Remove this role"
                                                     IsVisible="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsEditable}"
                                                     Command="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).RemoveRoleCommand}"
-                                                    CommandParameter="{Binding}"/>
+                                                    CommandParameter="{Binding}">
+                                                <mi:MaterialIcon Classes="icon-sm" Kind="Close"/>
+                                            </Button>
                                         </Grid>
                                     </Border>
                                     <!-- entries -->
@@ -158,11 +161,13 @@
                                                                      VerticalAlignment="Center"
                                                                      ToolTip.Tip="Minimum number of this fit the composition needs"
                                                                      IsReadOnly="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsReadOnly}"/>
-                                                            <Button Grid.Column="6" Content="✕" FontSize="11" Classes="danger" Margin="6,0,0,0"
-                                                                    VerticalAlignment="Center"
+                                                            <Button Grid.Column="6" Classes="danger" Margin="6,0,0,0"
+                                                                    VerticalAlignment="Center" ToolTip.Tip="Remove this fit"
                                                                     IsVisible="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsEditable}"
                                                                     Command="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).RemoveEntryCommand}"
-                                                                    CommandParameter="{Binding}"/>
+                                                                    CommandParameter="{Binding}">
+                                                                <mi:MaterialIcon Classes="icon-sm" Kind="Close"/>
+                                                            </Button>
                                                         </Grid>
                                                     </Border>
                                                 </DataTemplate>

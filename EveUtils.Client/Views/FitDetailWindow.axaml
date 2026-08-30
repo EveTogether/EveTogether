@@ -3,17 +3,13 @@
         xmlns:fb="using:EveUtils.Client.ViewModels.FitBrowser"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         mc:Ignorable="d" d:DesignWidth="1260" d:DesignHeight="820"
         x:Class="EveUtils.Client.Views.FitDetailWindow"
         x:DataType="fb:FitDetailWindowViewModel"
         Width="1260" Height="820"
         WindowStartupLocation="CenterOwner"
         Title="Fit Detail">
-
-    <v:ChromedWindow.Resources>
-        <!-- Small open-book skill icon (EVE-style) for the "Skills Required" badge + panel header (16-unit viewbox) -->
-        <StreamGeometry x:Key="SkillBookGeometry">M8,4 C6,2.7 3.2,2.7 1.5,3.2 L1.5,12.8 C3.2,12.3 6,12.3 8,13.6 C10,12.3 12.8,12.3 14.5,12.8 L14.5,3.2 C12.8,2.7 10,2.7 8,4 Z M8,4 L8,13.6</StreamGeometry>
-    </v:ChromedWindow.Resources>
 
     <v:ChromedWindow.Styles>
         <!-- An over-budget gauge fill pulses ~2 Hz (the in-game overload animation) -->
@@ -38,39 +34,43 @@
                     <Border IsVisible="{Binding HasWarnings}" Background="#33D9443D" BorderBrush="#D9443D" BorderThickness="1" CornerRadius="3" Padding="6,1"
                             ToolTip.Tip="Fitting alerts — resource over budget">
                         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                            <TextBlock Text="⚠" FontSize="11" FontWeight="Bold" Foreground="#FF9A92" VerticalAlignment="Center"/>
+                            <mi:MaterialIcon Classes="icon-sm" Kind="AlertOutline" Foreground="#FF9A92"/>
                             <TextBlock Text="{Binding WarningCount}" FontSize="11" FontWeight="Bold" Foreground="#FF9A92" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <Border IsVisible="{Binding HasInfo}" Background="#33E8A23A" BorderBrush="#E8A23A" BorderThickness="1" CornerRadius="3" Padding="6,1"
                             ToolTip.Tip="Skills required — the character is missing skills to fly this fit">
                         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                            <Path Data="{StaticResource SkillBookGeometry}" Fill="#33F0C57A" Stroke="#F0C57A" StrokeThickness="1.2"
-                                  Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center"/>
+                            <mi:MaterialIcon Kind="BookOpenPageVariantOutline" Width="13" Height="13" Foreground="#F0C57A"/>
                             <TextBlock FontSize="11" FontWeight="Bold" Foreground="#F0C57A" Text="{Binding InfoCount}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <!-- D-188 FBX-2: export dropdown — share / push / copy eveship.fit link / open EFT window -->
                     <TextBlock Text="{Binding ExportStatus}" IsVisible="{Binding HasExportStatus}" FontSize="11"
                                VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{DynamicResource TextDimBrush}"/>
-                    <Button IsVisible="{Binding CanExport}" Content="⤓ EXPORT ▾" FontSize="11" Padding="11,5"
+                    <Button IsVisible="{Binding CanExport}" FontSize="11" Padding="11,5"
                             Foreground="{DynamicResource TextAccentBrush}" VerticalAlignment="Center"
                             ToolTip.Tip="Export this fit">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <mi:MaterialIcon Classes="icon-sm" Kind="TrayArrowDown"/>
+                            <TextBlock Text="EXPORT" VerticalAlignment="Center"/>
+                            <mi:MaterialIcon Classes="icon-sm" Kind="ChevronDown"/>
+                        </StackPanel>
                         <Button.Flyout>
                             <MenuFlyout>
                                 <TextBlock Classes="menuHeader" Text="EXPORT FIT" IsHitTestVisible="False"/>
                                 <MenuItem Header="Share to server…" Command="{Binding ShareToServerCommand}">
-                                    <MenuItem.Icon><TextBlock Text="☁" FontSize="13"/></MenuItem.Icon>
+                                    <MenuItem.Icon><mi:MaterialIcon Kind="CloudUploadOutline"/></MenuItem.Icon>
                                 </MenuItem>
                                 <MenuItem Header="Push to EVE (in-game)…" Command="{Binding PushToEveCommand}">
-                                    <MenuItem.Icon><TextBlock Text="⏵" FontSize="13"/></MenuItem.Icon>
+                                    <MenuItem.Icon><mi:MaterialIcon Kind="SendOutline"/></MenuItem.Icon>
                                 </MenuItem>
                                 <Separator/>
                                 <MenuItem Header="Copy eveship.fit link" Command="{Binding CopyEveshipLinkCommand}">
-                                    <MenuItem.Icon><TextBlock Text="🔗" FontSize="13"/></MenuItem.Icon>
+                                    <MenuItem.Icon><mi:MaterialIcon Kind="LinkVariant"/></MenuItem.Icon>
                                 </MenuItem>
                                 <MenuItem Header="Open EFT window…" Command="{Binding OpenEftWindowCommand}">
-                                    <MenuItem.Icon><TextBlock Text="▤" FontSize="13"/></MenuItem.Icon>
+                                    <MenuItem.Icon><mi:MaterialIcon Kind="TextBoxOutline"/></MenuItem.Icon>
                                 </MenuItem>
                             </MenuFlyout>
                         </Button.Flyout>
@@ -306,10 +306,12 @@
                                             <DockPanel Grid.Row="0" LastChildFill="False">
                                                 <TextBlock DockPanel.Dock="Left" Text="{Binding Index}" FontSize="9"
                                                            Foreground="{DynamicResource TextAccentBrush}"/>
-                                                <Button DockPanel.Dock="Right" Content="✕" IsVisible="{Binding !IsEmpty}" Width="15" Height="15"
-                                                        Padding="0" FontSize="8" Background="Transparent" BorderThickness="0"
+                                                <Button DockPanel.Dock="Right" IsVisible="{Binding !IsEmpty}" Width="15" Height="15"
+                                                        Padding="0" Background="Transparent" BorderThickness="0"
                                                         Command="{Binding #FighterBayRoot.((fb:FighterBayViewModel)DataContext).UnloadFighterCommand}"
-                                                        CommandParameter="{Binding Squadron}"/>
+                                                        CommandParameter="{Binding Squadron}">
+                                                    <mi:MaterialIcon Width="9" Height="9" Kind="Close"/>
+                                                </Button>
                                             </DockPanel>
                                             <!-- Centre: an open tube shows a dim ring + "+"; a loaded one shows the green active ring + the fighter -->
                                             <Panel Grid.Row="1" Width="50" Height="50" HorizontalAlignment="Center" Margin="0,3">
@@ -358,9 +360,11 @@
                                         <Border CornerRadius="4" Background="#73121A24" Margin="0,0,0,4" Padding="6"
                                                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" ToolTip.Tip="{Binding Name}">
                                             <DockPanel MinWidth="320">
-                                                <Button DockPanel.Dock="Right" Content="✕" FontSize="10" Padding="8,2"
+                                                <Button DockPanel.Dock="Right" Padding="8,2"
                                                         Command="{Binding #FighterBayRoot.((fb:FighterBayViewModel)DataContext).RemoveFighterCommand}"
-                                                        CommandParameter="{Binding}"/>
+                                                        CommandParameter="{Binding}">
+                                                    <mi:MaterialIcon Classes="icon-sm" Kind="Close"/>
+                                                </Button>
                                                 <Button DockPanel.Dock="Right" Content="Load" FontSize="10" Padding="8,2" Margin="0,0,4,0"
                                                         Command="{Binding #FighterBayRoot.((fb:FighterBayViewModel)DataContext).LoadFighterCommand}"
                                                         CommandParameter="{Binding}"/>
@@ -483,8 +487,10 @@
                                                     <Ellipse Width="7" Height="7" Fill="{Binding StatusBrush}"
                                                              HorizontalAlignment="Left" VerticalAlignment="Top"/>
                                                 </Panel>
-                                                <Button DockPanel.Dock="Right" Content="✕" Command="{Binding RemoveCommand}" Width="22" Height="22"
-                                                        Padding="0" FontSize="11" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
+                                                <Button DockPanel.Dock="Right" Command="{Binding RemoveCommand}" Width="22" Height="22"
+                                                        Padding="0" VerticalContentAlignment="Center" HorizontalContentAlignment="Center">
+                                                    <mi:MaterialIcon Classes="icon-sm" Kind="Close"/>
+                                                </Button>
                                                 <CheckBox DockPanel.Dock="Right" IsChecked="{Binding IsActive}" VerticalAlignment="Center"
                                                           Margin="0,0,4,0" ToolTip.Tip="Apply / suspend this booster"/>
                                                 <TextBlock Text="{Binding Name}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -845,7 +851,10 @@
                         <!-- Fitting-alert banner (D-179): resource over budget — the in-game red alert -->
                         <Border IsVisible="{Binding HasFittingAlerts}" Background="#33D9443D" BorderBrush="#D9443D" BorderThickness="1" CornerRadius="4" Padding="10,7">
                             <StackPanel Spacing="3">
-                                <TextBlock Text="⚠ FITTING ALERT" FontWeight="Bold" FontSize="11" Foreground="#FF9A92"/>
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <mi:MaterialIcon Classes="icon-sm" Kind="AlertOutline" Foreground="#FF9A92"/>
+                                    <TextBlock Text="FITTING ALERT" FontWeight="Bold" FontSize="11" Foreground="#FF9A92"/>
+                                </StackPanel>
                                 <ItemsControl ItemsSource="{Binding FittingAlerts}" x:CompileBindings="False">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
@@ -860,8 +869,7 @@
                         <Border Classes="panel" Padding="10,8" IsVisible="{Binding HasSkillGaps}">
                             <StackPanel Spacing="5">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <Path Data="{StaticResource SkillBookGeometry}" Fill="#33E8A23A" Stroke="#E8A23A" StrokeThickness="1.2"
-                                          Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/>
+                                    <mi:MaterialIcon Kind="BookOpenPageVariantOutline" Foreground="#E8A23A"/>
                                     <TextBlock Classes="panel-title" Text="SKILLS REQUIRED"/>
                                 </StackPanel>
                                 <ItemsControl ItemsSource="{Binding VisibleSkillGaps}">
@@ -990,7 +998,8 @@
                                                         <TextBlock Text="{Binding PctExp}" FontSize="11" Foreground="#D9A441"/>
                                                     </StackPanel>
                                                 </StackPanel>
-                                                <TextBlock Grid.Column="1" Text="▾" VerticalAlignment="Center" Foreground="{StaticResource TextDimBrush}"/>
+                                                <mi:MaterialIcon Grid.Column="1" Classes="icon-sm" Kind="ChevronDown"
+                                                                 Foreground="{StaticResource TextDimBrush}"/>
                                             </Grid>
                                         </Button>
                                     </DockPanel>

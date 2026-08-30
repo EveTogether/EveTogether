@@ -4,6 +4,7 @@
         xmlns:ctl="using:EveUtils.Client.Controls"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="640"
         x:Class="EveUtils.Client.Views.FleetsWindow"
         x:DataType="vm:FleetsViewModel"
@@ -52,15 +53,16 @@
                         Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Left"
                         FontSize="11.5" Foreground="{DynamicResource TextAccentBrush}" Cursor="Hand"
                         ToolTip.Tip="Open this fit's detail"/>
-                <TextBlock Grid.Column="3" Text="✓" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"
-                           Foreground="{DynamicResource TextAccentBrush}"
-                           IsVisible="{Binding ShowCanFly}" ToolTip.Tip="{Binding SkillTooltip}"/>
-                <TextBlock Grid.Column="3" Text="⚠" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"
-                           Foreground="#E0B341"
-                           IsVisible="{Binding ShowSkillGap}" ToolTip.Tip="{Binding SkillTooltip}"/>
-                <TextBlock Grid.Column="3" Text="?" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"
-                           Foreground="#7A8290" ToolTip.ShowOnDisabled="True"
-                           IsVisible="{Binding ShowSkillUnknown}" ToolTip.Tip="{Binding UnknownSkillTooltip}"/>
+                <mi:MaterialIcon Grid.Column="3" Classes="icon-sm" Kind="Check" Margin="0,0,8,0"
+                                 Foreground="{DynamicResource TextAccentBrush}"
+                                 IsVisible="{Binding ShowCanFly}" ToolTip.Tip="{Binding SkillTooltip}"/>
+                <mi:MaterialIcon Grid.Column="3" Classes="icon-sm" Kind="AlertOutline" Margin="0,0,8,0"
+                                 Foreground="#E0B341"
+                                 IsVisible="{Binding ShowSkillGap}" ToolTip.Tip="{Binding SkillTooltip}"/>
+                <!-- The third state of the same badge, so it has to come from the same set as the other two. -->
+                <mi:MaterialIcon Grid.Column="3" Classes="icon-sm" Kind="HelpCircleOutline" Margin="0,0,8,0"
+                                 Foreground="#7A8290" ToolTip.ShowOnDisabled="True"
+                                 IsVisible="{Binding ShowSkillUnknown}" ToolTip.Tip="{Binding UnknownSkillTooltip}"/>
                 <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                     <Button Content="{Binding SelectFitButtonLabel}" Classes="accent" FontSize="9"
                             Padding="8,2" Command="{Binding SelectFitCommand}"/>

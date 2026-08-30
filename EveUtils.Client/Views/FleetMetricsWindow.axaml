@@ -5,6 +5,7 @@
         xmlns:fleet="using:EveUtils.Client.Fleet"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="560"
         x:Class="EveUtils.Client.Views.FleetMetricsWindow"
         x:DataType="vm:FleetMetricsViewModel"
@@ -100,10 +101,12 @@
                                                   Series="{Binding Series}"
                                                   Revision="{Binding GraphRevision}"
                                                   Markers="{Binding Markers}"/>
-                                    <Button Grid.Column="2" Content="⧉" FontSize="13" Padding="8,3" Margin="10,0,0,0"
+                                    <Button Grid.Column="2" Padding="8,3" Margin="10,0,0,0"
                                             VerticalAlignment="Top" ToolTip.Tip="Pop out this graph"
                                             Command="{Binding $parent[ItemsControl].((vm:FleetMetricsViewModel)DataContext).PopOutCommand}"
-                                            CommandParameter="{Binding}"/>
+                                            CommandParameter="{Binding}">
+                                        <mi:MaterialIcon Kind="OpenInNew"/>
+                                    </Button>
                                 </Grid>
                             </Border>
                         </DataTemplate>
@@ -146,10 +149,12 @@
                                                        Text="{Binding LocationDisplay, StringFormat='◉ {0}'}"
                                                        ToolTip.Tip="Current solar system (location sharing)"/>
                                         </StackPanel>
-                                        <Button Grid.Column="1" Content="⧉" FontSize="11" Padding="6,1" Margin="8,0,0,0"
+                                        <Button Grid.Column="1" Padding="6,1" Margin="8,0,0,0"
                                                 VerticalAlignment="Top" ToolTip.Tip="Pop out this graph"
                                                 Command="{Binding $parent[ItemsControl].((vm:FleetMetricsViewModel)DataContext).PopOutCommand}"
-                                                CommandParameter="{Binding}"/>
+                                                CommandParameter="{Binding}">
+                                            <mi:MaterialIcon Classes="icon-sm" Kind="OpenInNew"/>
+                                        </Button>
                                     </Grid>
                                     <!-- Same four figures as the list, one size down so all four fit the card width. -->
                                     <Grid Grid.Row="1" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" Margin="0,6,0,0">
@@ -220,10 +225,12 @@
                                                HorizontalAlignment="Right"
                                                Foreground="#FFB07EE0"
                                                Text="{Binding Neut, StringFormat='NEUT {0}'}"/>
-                                    <Button Grid.Column="7" Content="⧉" FontSize="10" Padding="6,0" Margin="10,0,0,0"
+                                    <Button Grid.Column="7" Padding="6,0" Margin="10,0,0,0"
                                             VerticalAlignment="Center" ToolTip.Tip="Pop out this graph"
                                             Command="{Binding $parent[ItemsControl].((vm:FleetMetricsViewModel)DataContext).PopOutCommand}"
-                                            CommandParameter="{Binding}"/>
+                                            CommandParameter="{Binding}">
+                                        <mi:MaterialIcon Classes="icon-sm" Kind="OpenInNew"/>
+                                    </Button>
                                 </Grid>
                             </Border>
                         </DataTemplate>
@@ -247,12 +254,17 @@
                                 ToolTip.Tip="{Binding CommanderPresence.Tooltip}">
                             <TextBlock Text="{Binding CommanderPresence.BadgeText}"/>
                         </Border>
-                        <!-- The whole fleet as a pop-out, beside the per-member ⧉ buttons in the rows below and
+                        <!-- The whole fleet as a pop-out, beside the per-member pop-out buttons in the rows below and
                              marked the same way (ET-72). -->
-                        <Button x:Name="PopOutFleetButton" Content="⧉ FLEET" FontSize="9.5" LetterSpacing="1.2"
+                        <Button x:Name="PopOutFleetButton" FontSize="9.5" LetterSpacing="1.2"
                                 Padding="8,2" VerticalAlignment="Center"
                                 Command="{Binding PopOutFleetCommand}"
-                                ToolTip.Tip="Pop the fleet out: an always-on-top overlay with the WITH FC ratio, who is taking the most damage and who is being neuted the most"/>
+                                ToolTip.Tip="Pop the fleet out: an always-on-top overlay with the WITH FC ratio, who is taking the most damage and who is being neuted the most">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <mi:MaterialIcon Classes="icon-sm" Kind="OpenInNew"/>
+                                <TextBlock Text="FLEET" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                 </StackPanel>
                 <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto" VerticalAlignment="Center">
