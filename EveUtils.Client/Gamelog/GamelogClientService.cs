@@ -59,6 +59,11 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     private readonly ConcurrentDictionary<string, LiveRateTracker> _neutRate = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, LiveRateTracker> _capRate = new(StringComparer.OrdinalIgnoreCase);
 
+    // The receiving half of the neut rate on its own. The combined line above answers "is there cap warfare on this
+    // member", which is what a graph wants; it cannot answer "who is being neuted", because the member with the
+    // highest combined rate may be the one applying it (ET-72).
+    private readonly ConcurrentDictionary<string, LiveRateTracker> _neutInRate = new(StringComparer.OrdinalIgnoreCase);
+
     // Per-RUN bounty per (fleet, character): only ISK earned while the character is participating in that fleet — the
     // fleet meter is "this run", not the persisted lifetime total. Populated by AddBountyAsync when a kill lands while
     // participating; read by the fleet sampler.
@@ -333,7 +338,7 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     {
         var now = DateTimeOffset.FromUnixTimeMilliseconds(unixMs).UtcDateTime;
         var dps = new DpsSample(0, 0);
-        double neut = 0, cap = 0;
+        double neut = 0, neutIn = 0, cap = 0;
         string? system = null;
         DateTime? abyssalAnchor = null;
         if (_nameById.TryGetValue(characterId, out var name))
@@ -342,6 +347,8 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
                 dps = tracker.Sample(now);
             if (_neutRate.TryGetValue(name, out var neutRate))
                 neut = neutRate.Sample(now);
+            if (_neutInRate.TryGetValue(name, out var neutInRate))
+                neutIn = neutInRate.Sample(now);
             if (_capRate.TryGetValue(name, out var capRate))
                 cap = capRate.Sample(now);
             if (_metrics.TryGetValue(name, out var metrics))
@@ -360,6 +367,8 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         yield return new MetricSample(characterId, fleetId, MetricKind.DpsIn, dps.Received, unixMs);
         yield return new MetricSample(characterId, fleetId, MetricKind.Neut, neut, unixMs);
         yield return new MetricSample(characterId, fleetId, MetricKind.Cap, cap, unixMs);
+        // The received half on its own, for the one question the combined line cannot answer: who is being neuted.
+        yield return new MetricSample(characterId, fleetId, MetricKind.NeutIn, neutIn, unixMs);
         // Bounty is a cumulative ISK total (not a rate): the receiver shows the latest + the fleet sums them.
         yield return new MetricSample(characterId, fleetId, MetricKind.Bounty, bounty, unixMs);
 
@@ -431,8 +440,11 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     public void AddNeut(string characterName, bool outgoing, int amount, DateTime? occurredAt = null)
     {
         var name = Resolve(characterName);
+        var at = occurredAt ?? DateTime.UtcNow;
         Metrics(name).RecordNeut(outgoing, amount);
-        NeutRate(name).Add(occurredAt ?? DateTime.UtcNow, amount);   // log-line time, not read time (smooth, not spiky)
+        NeutRate(name).Add(at, amount);   // log-line time, not read time (smooth, not spiky)
+        if (!outgoing)
+            NeutInRate(name).Add(at, amount);
         MetricsChanged?.Invoke();
     }
 
@@ -525,5 +537,6 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     private CharacterMetrics Metrics(string name) => _metrics.GetOrAdd(name, _ => new CharacterMetrics());
     private LiveDpsTracker Tracker(string name) => _trackers.GetOrAdd(name, _ => new LiveDpsTracker());
     private LiveRateTracker NeutRate(string name) => _neutRate.GetOrAdd(name, _ => new LiveRateTracker());
+    private LiveRateTracker NeutInRate(string name) => _neutInRate.GetOrAdd(name, _ => new LiveRateTracker());
     private LiveRateTracker CapRate(string name) => _capRate.GetOrAdd(name, _ => new LiveRateTracker());
 }

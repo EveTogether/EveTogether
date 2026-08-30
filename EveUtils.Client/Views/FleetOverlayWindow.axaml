@@ -1,0 +1,116 @@
+<v:OverlayWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="340" d:DesignHeight="164"
+        x:Class="EveUtils.Client.Views.FleetOverlayWindow"
+        x:DataType="vm:FleetOverlayViewModel"
+        x:Name="OverlayRoot"
+        Title="Fleet overlay"
+        Icon="/Assets/eve-together.ico"
+        Width="340" Height="164" MinWidth="250" MinHeight="140"
+        Topmost="True" ShowInTaskbar="True"
+        WindowDecorations="None"
+        WindowStartupLocation="CenterScreen"
+        TransparencyLevelHint="Transparent"
+        Background="Transparent">
+
+    <Border x:Name="Backdrop" Classes="panel">
+      <DockPanel>
+        <!-- On the content, not on the window: this one is not routed, but the rule is the rule and a style on a
+             window is the thing that silently goes missing here (ET-30/ET-43). -->
+        <DockPanel.Styles>
+            <!-- A spotlight row has exactly two states, and the difference has to be legible without reading:
+                 someone is named (their colour, bright) or nobody is (everything grey). That is what makes an idle
+                 window look idle instead of merely saying so. -->
+            <Style Selector="TextBlock.who">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="16"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.who.quiet">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontWeight" Value="Normal"/>
+            </Style>
+
+            <Style Selector="TextBlock.rowlabel">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="9"/>
+                <Setter Property="LetterSpacing" Value="1.8"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <!-- The label carries the alarm colour, not the name: the name is the thing you read, and it reads
+                 fastest in plain bright text. -->
+            <Style Selector="TextBlock.rowlabel.damage">
+                <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.rowlabel.neut">
+                <Setter Property="Foreground" Value="#FFB07EE0"/>
+            </Style>
+
+            <Style Selector="TextBlock.figure">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="15"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="HorizontalAlignment" Value="Right"/>
+            </Style>
+        </DockPanel.Styles>
+
+            <Border Classes="panel-header" DockPanel.Dock="Top" x:Name="DragHandle"
+                    PointerPressed="OnHeaderPressed">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+                        <!-- Which fleet. Two of these windows open at once must never be a guess.
+                             A Grid, not a horizontal StackPanel: a StackPanel measures its children with unbounded
+                             width, so TextTrimming never engages and a long fleet name runs straight across the
+                             opacity, PIN and close buttons instead of ending in an ellipsis. -->
+                        <Grid ColumnDefinitions="Auto,*">
+                            <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
+                            <TextBlock Grid.Column="1" Classes="panel-title" Text="{Binding FleetName}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding FleetName}"/>
+                        </Grid>
+                        <!-- The very badge the fleet-metrics header shows, with the same green and the same
+                             separately-counted unknowns (ET-31/ET-63/ET-71). -->
+                        <Border x:Name="WithFcChip" Classes="chip"
+                                Classes.good="{Binding CommanderPresence.IsComplete}"
+                                Classes.dim="{Binding CommanderPresence.IsUnknown}"
+                                HorizontalAlignment="Left"
+                                ToolTip.Tip="{Binding CommanderPresence.Tooltip}">
+                            <TextBlock Text="{Binding CommanderPresence.BadgeText}"/>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Opacity, pin and close: the same shared row the per-character pop-out carries (ET-73). -->
+                    <v:OverlayChromeButtons Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Top"
+                                            FillOpacity="{Binding #OverlayRoot.FillOpacity, Mode=TwoWay}"/>
+                </Grid>
+            </Border>
+
+            <!-- Two fixed slots. They keep their place whether or not anyone is in them, so the window never resizes
+                 or reflows while you are flying — the only thing that changes is what the two lines say and what
+                 colour they say it in. -->
+            <Grid Margin="12,10" RowDefinitions="*,*" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9" RowSpacing="6">
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowlabel"
+                           Classes.damage="{Binding HasIncoming}" Text="INCOMING"
+                           ToolTip.Tip="Taking the most damage right now — rep them, or get them out"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="IncomingName" Classes="who"
+                           Classes.quiet="{Binding !HasIncoming}" Text="{Binding IncomingName}"/>
+                <TextBlock Grid.Row="0" Grid.Column="2" x:Name="IncomingValue" Classes="figure"
+                           Text="{Binding IncomingValue}"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowlabel"
+                           Classes.neut="{Binding HasNeuted}" Text="NEUTED"
+                           ToolTip.Tip="Being neuted the most right now — about to be unable to do anything"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="NeutedName" Classes="who"
+                           Classes.quiet="{Binding !HasNeuted}" Text="{Binding NeutedName}"/>
+                <TextBlock Grid.Row="1" Grid.Column="2" x:Name="NeutedValue" Classes="figure"
+                           Text="{Binding NeutedValue}"/>
+            </Grid>
+      </DockPanel>
+    </Border>
+</v:OverlayWindow>

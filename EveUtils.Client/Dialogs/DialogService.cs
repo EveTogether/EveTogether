@@ -23,6 +23,7 @@ public sealed class DialogService : IDialogService, ISingletonService
     private Window? _owner;
     private readonly ModuleHostService _moduleHost = new();
     private readonly Dictionary<string, DpsOverlayWindow> _dpsOverlays = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<long, FleetOverlayWindow> _fleetOverlays = new();
     private readonly List<Window> _infoPopouts = new(); // non-modal type-info cards, shown ownerless
 
     public void SetOwner(Window owner)
@@ -69,15 +70,42 @@ public sealed class DialogService : IDialogService, ISingletonService
             overlay.Close();   // fires Closed → drops itself from _dpsOverlays
     }
 
-    /// <summary>Open pop-out windows independent of the main window: floating modules + DPS overlays + info cards.
-    /// Used by the main window's close handler to decide whether to confirm before quitting.</summary>
-    public int OpenPopoutCount => _dpsOverlays.Count + _moduleHost.FloatingWindowCount + _infoPopouts.Count;
+    public void ShowFleetOverlay(FleetOverlayViewModel viewModel)
+    {
+        if (_owner is null) return;
+
+        // One overlay per fleet, exactly as there is one per character above: re-opening focuses the window that is
+        // already up instead of stacking a second one reading the same rows.
+        if (_fleetOverlays.TryGetValue(viewModel.FleetId, out var existing))
+        {
+            existing.Activate();
+            return;
+        }
+
+        var overlay = new FleetOverlayWindow(viewModel);
+        _fleetOverlays[viewModel.FleetId] = overlay;
+        overlay.Closed += (_, _) => _fleetOverlays.Remove(viewModel.FleetId);
+        overlay.Show();   // ownerless, like the DPS overlay: minimizing the main window must not take it with it
+    }
+
+    public void CloseFleetOverlay(long fleetId)
+    {
+        if (_fleetOverlays.TryGetValue(fleetId, out var overlay))
+            overlay.Close();   // fires Closed → drops itself from _fleetOverlays
+    }
+
+    /// <summary>Open pop-out windows independent of the main window: floating modules + DPS overlays + fleet
+    /// overlays + info cards. Used by the main window's close handler to decide whether to confirm before quitting.</summary>
+    public int OpenPopoutCount =>
+        _dpsOverlays.Count + _fleetOverlays.Count + _moduleHost.FloatingWindowCount + _infoPopouts.Count;
 
     /// <summary>Close every open pop-out window — called when the main window is closing so leftover ownerless
     /// windows don't keep the app alive.</summary>
     public void CloseAllPopouts()
     {
         foreach (var overlay in _dpsOverlays.Values.ToList())
+            overlay.Close();
+        foreach (var overlay in _fleetOverlays.Values.ToList())
             overlay.Close();
         foreach (var info in _infoPopouts.ToList())
             info.Close();

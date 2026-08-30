@@ -37,7 +37,7 @@ namespace EveUtils.Client.ViewModels;
 /// it keeps updating beside the main + fleets windows. <see cref="Layout"/> trades detail per member for members
 /// per screen so the window stays readable as a fleet grows; the choice is remembered across sessions.
 /// </summary>
-public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposable, IRefreshableModule
+public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposable, IRefreshableModule, IFleetOverlaySource
 {
     /// <summary>Where the chosen member layout is kept. One setting for the whole install, like the other shell
     /// preferences — the density that suits an FC does not change from fleet to fleet.</summary>
@@ -163,6 +163,10 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     public long FleetId => _fleetId;
 
     public ObservableCollection<DpsViewModel> Members { get; } = [];
+
+    // The fleet overlay reads these very rows rather than subscribing to the bus itself, so the pop-out and this
+    // screen cannot disagree about who is where or who is taking what (ET-72).
+    IReadOnlyList<DpsViewModel> IFleetOverlaySource.Members => Members;
 
     [ObservableProperty] private string _dealtTotal = "—";
     [ObservableProperty] private string _receivedTotal = "—";
@@ -467,7 +471,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         {
             // Each live combat line arrives as its own kind; feed the matching series' target and let the shared
             // driver smooth toward it. The driver appends frames — never this method directly (one render path).
-            case MetricKind.Dps or MetricKind.DpsIn or MetricKind.Neut or MetricKind.Cap:
+            case MetricKind.Dps or MetricKind.DpsIn or MetricKind.Neut or MetricKind.Cap or MetricKind.NeutIn:
                 Track(sample.CharacterId).SetRate(sample.Kind, sample.Value);
                 break;
             case MetricKind.Location:
@@ -533,6 +537,14 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         if (tracker is not null)
             _dialogs?.ShowDpsOverlay(tracker);
     }
+
+    /// <summary>
+    /// Pop the whole fleet out (ET-72): the WITH FC ratio plus who is taking the most damage and who is being neuted
+    /// the most, in the same borderless overlay the per-character meters use. It is handed this view-model rather
+    /// than a copy of its figures — the same reason the DPS pop-out is handed the tracker instance.
+    /// </summary>
+    [RelayCommand]
+    private void PopOutFleet() => _dialogs?.ShowFleetOverlay(new FleetOverlayViewModel(this));
 
     // --- The shared member menu (ET-44) ---
 
@@ -687,6 +699,12 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         if (_disposed)
             return;
         _disposed = true;
+
+        // The fleet overlay is a window onto THIS view-model's rows, so it goes when they do (the ET-52 rule the DPS
+        // pop-out follows on a dropped row). Left open it would sit on top of the game showing the last frame before
+        // the screen closed, with nothing left to update it — the most convincing kind of stale.
+        _dialogs?.CloseFleetOverlay(_fleetId);
+
         _subscription.Dispose();
         _rosterSubscription.Dispose();
         _presenceSubscription?.Dispose();

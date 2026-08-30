@@ -119,6 +119,16 @@ public interface IDialogService
     /// A no-op when nothing is popped out for them.</summary>
     void CloseDpsOverlay(DpsViewModel tracker);
 
+    /// <summary>Pops the whole fleet's readout into a borderless overlay beside the per-character ones (ET-72):
+    /// the WITH FC ratio plus who is taking the most damage and who is being neuted the most. Non-modal; one overlay
+    /// per fleet, so re-opening focuses the window that is already up rather than stacking a second.</summary>
+    void ShowFleetOverlay(FleetOverlayViewModel viewModel);
+
+    /// <summary>Closes the fleet overlay for this fleet, if one is open. Called when the fleet-metrics screen it
+    /// reads from goes away: its figures come from that screen's member rows, so without it the window would stand
+    /// there for good showing the last frame before the screen closed. A no-op when nothing is open for the fleet.</summary>
+    void CloseFleetOverlay(long fleetId);
+
     /// <summary>
     /// Opens the settings module: a docked tab in docked mode, a floating window otherwise — non-modal so it
     /// matches the rest of the module shell. <paramref name="currentDirectory"/> is the saved gamelog path (empty if
