@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Platform;
 using EveUtils.Client.Transport;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Shared.Messaging;
@@ -54,6 +55,8 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     private readonly IServiceProvider _services;
     private readonly IDisposable _subscription;
     private readonly IDisposable _rosterSubscription;
+    private readonly IDisposable? _presenceSubscription;
+    private readonly ILocalCharacterPresence? _presence;
     private readonly IExternalCharacterLookup _lookup;
     private readonly DpsRenderDriver? _driver;
     private readonly IDialogService? _dialogs;
@@ -123,6 +126,34 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         // arrives on the one shared watch (ET-52). It carries the client-only fleets too, which push no fleet.changed
         // and are precisely where a removal used to reach no other screen at all.
         _rosterSubscription = services.GetRequiredService<IFleetRosterWatch>().Subscribe(OnRosterChanged);
+
+        // A pilot of ours logging in or out changes what their row may claim (ET-71): ESI keeps answering with the
+        // spot they logged off at, which reads as a current position. One announcement, so the rows and the badge
+        // move together instead of each noticing separately — the mistake behind ET-46, ET-49, ET-52 and ET-68.
+        _presence = services.GetService<ILocalCharacterPresence>();
+        _presenceSubscription = _presence?.Subscribe(ApplyPresence);
+        ApplyPresence();
+    }
+
+    /// <summary>
+    /// Re-reads the one presence verdict onto every row, then re-counts. Both halves come from the same call, so a
+    /// member cannot be shown as offline while still sitting in the badge's denominator.
+    /// </summary>
+    private void ApplyPresence()
+    {
+        foreach (var tracker in _trackers.Values)
+            ApplyPresence(tracker);
+
+        RefreshCommanderPresence();
+    }
+
+    private void ApplyPresence(DpsViewModel tracker)
+    {
+        // null = not one of this client's characters, so nothing is claimed either way and the row goes on behaving
+        // exactly as it always has. Only our own pilots can be called offline.
+        var inGame = _presence?.IsInGame(tracker.CharacterId, tracker.Character);
+        tracker.IsLocalCharacter = inGame is not null;
+        tracker.InEve = inGame is true;
     }
 
     public string FleetName { get; }
@@ -473,6 +504,10 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
             CharacterId = characterId,
         };
         _trackers[characterId] = tracker;
+
+        // The verdict travels with the row from the moment it exists, so a row created between two announcements
+        // does not briefly claim a location for a pilot who is not in game.
+        ApplyPresence(tracker);
         InsertInOrder(tracker);
 
         // Render through the shared 30fps driver (the same path the own meters use), so a fleet graph scrolls,
@@ -603,6 +638,13 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
                 return;
             _nameById[characterId] = info.Name;
             tracker.Character = info.Name;
+
+            // The presence verdict is matched on the name as well as the id — window titles are the only evidence
+            // on Windows, and the launcher's id argument is absent on a manual login. Until this lands the row was
+            // called "Char 90250177", which matches no running client, so it has to be asked again now that the
+            // pilot has a name. Without this a row briefly reads "offline" for someone who is plainly flying.
+            ApplyPresence(tracker);
+            RefreshCommanderPresence();
         });
     }
 
@@ -621,17 +663,20 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     // polling for locations of its own.
     private void RefreshCommanderPresence()
     {
+        // KnownLocation, not Location: a pilot of ours who is not in game has no location anyone may act on, so
+        // they fall out of the denominator instead of counting as "somewhere else" (ET-63/ET-71). It is the same
+        // property their row shows, so the count and the screen cannot tell different stories.
         var commanderSystem = _commanderCharacterId is { } characterId && _trackers.TryGetValue(characterId, out var commander)
-            ? commander.Location
+            ? commander.KnownLocation
             : null;
-        CommanderPresence = FleetCommanderPresence.From(commanderSystem, _trackers.Values.Select(t => t.Location));
+        CommanderPresence = FleetCommanderPresence.From(commanderSystem, _trackers.Values.Select(t => t.KnownLocation));
 
         // Colour each member's own location off the badge that was just computed, rather than comparing systems a
         // second time — one verdict, so a green row and the badge's ratio can never disagree. The commander's own row
         // turns green too: they are a member, and they are trivially in their own system, exactly as the ratio counts
         // them.
         foreach (var tracker in _trackers.Values)
-            tracker.IsWithCommander = CommanderPresence.IsWith(tracker.Location);
+            tracker.IsWithCommander = CommanderPresence.IsWith(tracker.KnownLocation);
     }
 
     private static string Format(double? total, string unit) =>
@@ -644,6 +689,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         _disposed = true;
         _subscription.Dispose();
         _rosterSubscription.Dispose();
+        _presenceSubscription?.Dispose();
         foreach (var registration in _registrations.Values)
             registration.Dispose();
         _registrations.Clear();

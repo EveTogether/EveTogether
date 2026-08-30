@@ -247,6 +247,9 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
         {
             var match = characters.FirstOrDefault(c => string.Equals(c.Name, tracker.Character, StringComparison.OrdinalIgnoreCase));
             var id = match?.EsiCharacterId ?? 0;
+            // Every row here is one of this client's own characters, so InEve is evidence about them and not the
+            // absence of it — which is what lets the card drop a location for a pilot who is not in game (ET-71).
+            tracker.IsLocalCharacter = true;
             tracker.InEve = evidence is not null && evidence.Matches(tracker.Character, id);
             if (_portraits is not null && id > 0 && tracker.Portrait is null)
                 tracker.Portrait = await _portraits.GetPortraitAsync(id, 64);

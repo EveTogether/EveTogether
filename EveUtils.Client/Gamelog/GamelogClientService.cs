@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Platform;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
@@ -124,7 +125,7 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
             if (reading.IsOutside)
             {
                 metrics.SeenOutside(reading.AtUtc);
-                FillLocationGap(name, solarSystemId);
+                FillLocationGap(characterId, name, solarSystemId);
             }
             else
             {
@@ -144,9 +145,17 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     /// caller only offers readings from outside, because a room in the abyss has no name worth showing and the
     /// countdown owns that readout anyway.
     /// </summary>
-    private void FillLocationGap(string name, int solarSystemId)
+    private void FillLocationGap(int characterId, string name, int solarSystemId)
     {
         if (Metrics(name).Location is not null)
+            return;
+
+        // ESI answers /location/ for a logged-out character too, with the spot they logged off at. That is not
+        // somewhere they are, and recording it would put a system on screen that reads exactly like a current one
+        // (ET-71) and count them into the WITH FC denominator (ET-63). Same verdict the rows and the badge use, so
+        // the three cannot disagree. No evidence of a running client → nothing is written and the gap stays open,
+        // which is what it was before any of this existed.
+        if (_services.GetService<ILocalCharacterPresence>()?.IsInGame(characterId, name) is not true)
             return;
 
         if (_services.GetService<ISolarSystemNames>() is not { } systemNames)

@@ -299,6 +299,12 @@
     <Style Selector="TextBlock.location.withfc">
         <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
     </Style>
+    <!-- A pilot of ours who is not in game (ET-71). Dimmed, and last of the three so it wins if .withfc were ever
+         set at the same time: an offline member has no location to stand anywhere with, and a green "offline" would
+         be the exact confusion this readout exists to remove. -->
+    <Style Selector="TextBlock.location.offline">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+    </Style>
 
     <!-- ── Borderless window chrome (D-143): custom title bar + window buttons ── -->
     <Style Selector="Border.titlebar">

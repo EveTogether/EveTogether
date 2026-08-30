@@ -569,8 +569,12 @@
                                                                          Fill="#6B7280" IsVisible="{Binding !InEve}"/>
                                                                 <TextBlock Classes="label" Text="In EVE" IsVisible="{Binding InEve}"/>
                                                                 <TextBlock Classes="label" Text="Offline" IsVisible="{Binding !InEve}"/>
-                                                                <TextBlock Classes="label" Text="{Binding LocationDisplay, StringFormat='· {0}'}"
-                                                                           IsVisible="{Binding LocationDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                                                <!-- SystemDisplay, not LocationDisplay: this card
+                                                                     already says "In EVE" / "Offline" right beside
+                                                                     it, so the shared readout would repeat itself
+                                                                     as "Offline · offline" (ET-71). -->
+                                                                <TextBlock Classes="label" Text="{Binding SystemDisplay, StringFormat='· {0}'}"
+                                                                           IsVisible="{Binding SystemDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                                                             </StackPanel>
                                                             <TextBlock Classes="label" Text="DEALT / RECEIVED" Margin="0,2,0,0"
                                                                        IsVisible="{Binding IsLive}"/>

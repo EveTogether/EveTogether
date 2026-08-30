@@ -77,7 +77,34 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
 
     /// <summary>Whether an EVE client for this character is running on this machine (home dashboard presence dot);
     /// set best-effort by the dashboard from <c>EveClientPresenceService</c>.</summary>
-    [ObservableProperty] private bool _inEve;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsOffline))]
+    [NotifyPropertyChangedFor(nameof(KnownLocation))]
+    [NotifyPropertyChangedFor(nameof(LocationDisplay))]
+    [NotifyPropertyChangedFor(nameof(SystemDisplay))]
+    private bool _inEve;
+
+    /// <summary>
+    /// One of <b>this</b> client's own characters, so <see cref="InEve"/> is evidence about them rather than the
+    /// absence of it. False for a fleet mate on another machine: their EVE client is invisible to us and nothing
+    /// may be inferred from not seeing it — that stays ET-70's question.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsOffline))]
+    [NotifyPropertyChangedFor(nameof(KnownLocation))]
+    [NotifyPropertyChangedFor(nameof(LocationDisplay))]
+    [NotifyPropertyChangedFor(nameof(SystemDisplay))]
+    private bool _isLocalCharacter;
+
+    /// <summary>
+    /// Known not to be in game. ESI answers <c>/location/</c> for a logged-out character with the spot they logged
+    /// off at, which looks on screen exactly like a current position and is not one — the operator read a fleet as
+    /// all standing in Amarr while three of five accounts were closed (ET-71).
+    ///
+    /// This is the single verdict behind all three consequences, which must never disagree: no system is shown, the
+    /// member is left out of the WITH FC denominator, and they are never coloured green.
+    /// </summary>
+    public bool IsOffline => IsLocalCharacter && !InEve;
 
     /// <summary>True for a real live tracker (has a running graph); false for a home-dashboard placeholder — a
     /// character with no live combat yet. An online (in-EVE) placeholder is still shown as a normal row with its
@@ -101,24 +128,48 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     /// <summary>First letter of the character name for the hex glyph fallback.</summary>
     public string Initial => string.IsNullOrWhiteSpace(Character) || Character == "—" ? "?" : Character[..1].ToUpperInvariant();
 
-    /// <summary>The member's current solar system (fleet metrics, when location is shared); null = unknown/not shared.</summary>
+    /// <summary>The member's current solar system (fleet metrics, when location is shared); null = unknown/not shared.
+    /// The reported value, whatever its age — read <see cref="KnownLocation"/> to decide anything with it.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(KnownLocation))]
     [NotifyPropertyChangedFor(nameof(LocationDisplay))]
+    [NotifyPropertyChangedFor(nameof(SystemDisplay))]
     private string? _location;
 
     /// <summary>When this character's abyssal countdown started, or null when they are not in one.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(LocationDisplay))]
+    [NotifyPropertyChangedFor(nameof(SystemDisplay))]
     private DateTime? _abyssalAnchorUtc;
 
-    /// <summary>The one text every location readout binds to, so the five screens showing a location cannot drift
-    /// apart on what follows the system name.</summary>
-    public string? LocationDisplay =>
-        EveUtils.Shared.Modules.Gamelog.Aggregation.AbyssalSpace.Describe(Location, AbyssalAnchorUtc, DateTime.UtcNow);
+    /// <summary>
+    /// The location anything may rely on: the reported system, or null once we know the pilot is not in game. The
+    /// badge counts this, <c>FleetCommanderPresence.IsWith</c> colours from this, and the readout below shows it —
+    /// so the member who drops out of the count is exactly the member who shows no system, by construction.
+    /// </summary>
+    public string? KnownLocation => IsOffline ? null : Location;
+
+    /// <summary>The one text every location readout binds to, so the screens showing a location cannot drift
+    /// apart on what follows the system name. A pilot we know to be offline reads as that instead of as a system
+    /// they left hours ago — a blank would be indistinguishable from "shares no location".</summary>
+    public string? LocationDisplay => IsOffline
+        ? "offline"
+        : EveUtils.Shared.Modules.Gamelog.Aggregation.AbyssalSpace.Describe(Location, AbyssalAnchorUtc, DateTime.UtcNow);
+
+    /// <summary>
+    /// The system alone, dropped entirely when the pilot is offline. For the one readout that already names the
+    /// online state right beside it — the home card's "In EVE" / "Offline" label — where
+    /// <see cref="LocationDisplay"/> would read "Offline · offline".
+    /// </summary>
+    public string? SystemDisplay => IsOffline ? null : LocationDisplay;
 
     /// <summary>Re-read <see cref="LocationDisplay"/>. The countdown moves with the wall clock, not with the
     /// properties feeding it — a run's system and anchor both stay put, so nothing else would raise it.</summary>
-    public void RefreshLocationDisplay() => OnPropertyChanged(nameof(LocationDisplay));
+    public void RefreshLocationDisplay()
+    {
+        OnPropertyChanged(nameof(LocationDisplay));
+        OnPropertyChanged(nameof(SystemDisplay));
+    }
 
     /// <summary>The member stands in the fleet commander's solar system (fleet metrics), which colours their location
     /// readout. Set from <see cref="EveUtils.Client.Fleet.FleetCommanderPresence"/> — the same source the header badge
