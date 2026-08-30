@@ -9,6 +9,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.LocalApi;
 
@@ -26,6 +27,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
 {
     private readonly string _detectedDefault = "";
     private readonly ILocalApiServer? _localApi;
+    private readonly ClipboardWatchService? _clipboardWatch;
     private readonly Func<SettingsResult, Task>? _onApply;
 
     // Cached at construction (the instances survive the module host re-parenting; FindControl on the window would
@@ -34,7 +36,8 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private TextBlock _hintBlock = null!;
     private CheckBox _shareLocationBox = null!, _shareBountyBox = null!, _shareCombatBox = null!;
     private CheckBox _loadTypeImagesBox = null!, _openFitDetailAfterImportBox = null!, _enableLocalApiBox = null!;
-    private CheckBox _checkUpdatesOnStartupBox = null!;
+    private CheckBox _checkUpdatesOnStartupBox = null!, _watchClipboardBox = null!;
+    private TextBlock _clipboardConsumersBlock = null!, _clipboardUnsupportedBlock = null!;
     private ComboBox _toastPositionBox = null!;
     private TextBox _localApiPortBox = null!;
     private Ellipse _localApiStatusDot = null!;
@@ -51,10 +54,11 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         AvaloniaXamlLoader.Load(this);
     }
 
-    public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Func<SettingsResult, Task>? onApply = null) : this()
+    public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null) : this()
     {
         _detectedDefault = detectedDefault;
         _localApi = localApiServer;
+        _clipboardWatch = clipboardWatch;
         _onApply = onApply;
 
         _gamelogDirBox = this.FindControl<TextBox>("GamelogDirBox")!;
@@ -65,6 +69,9 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _loadTypeImagesBox = this.FindControl<CheckBox>("LoadTypeImagesBox")!;
         _openFitDetailAfterImportBox = this.FindControl<CheckBox>("OpenFitDetailAfterImportBox")!;
         _checkUpdatesOnStartupBox = this.FindControl<CheckBox>("CheckUpdatesOnStartupBox")!;
+        _watchClipboardBox = this.FindControl<CheckBox>("WatchClipboardBox")!;
+        _clipboardConsumersBlock = this.FindControl<TextBlock>("ClipboardConsumersBlock")!;
+        _clipboardUnsupportedBlock = this.FindControl<TextBlock>("ClipboardUnsupportedBlock")!;
         _enableLocalApiBox = this.FindControl<CheckBox>("EnableLocalApiBox")!;
         _toastPositionBox = this.FindControl<ComboBox>("ToastPositionBox")!;
         _localApiPortBox = this.FindControl<TextBox>("LocalApiPortBox")!;
@@ -110,6 +117,8 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
             _localApiStatusBlock.Text = localApiStatusLabel;
             _localApiStartStopButton.IsEnabled = false;
         }
+
+        ApplyClipboardDisclosure();
 
         FactionRadioFor(currentFaction).IsChecked = true;
         UpdateHint();
@@ -185,6 +194,21 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         await _localApi.ApplyAsync(enabled: true, port);
     }
 
+    // The list of features is read from the watcher's live subscribers rather than written out here, so the
+    // disclosure cannot drift away from what is actually listening.
+    private void ApplyClipboardDisclosure()
+    {
+        var supported = _clipboardWatch?.IsSupported ?? false;
+        _watchClipboardBox.IsChecked = _clipboardWatch?.IsWatching ?? false;
+        _watchClipboardBox.IsEnabled = supported;
+        _clipboardUnsupportedBlock.IsVisible = _clipboardWatch is not null && !supported;
+
+        var consumers = _clipboardWatch?.Consumers ?? [];
+        _clipboardConsumersBlock.Text = consumers.Count == 0
+            ? "Used by: nothing yet. No feature is listening, so turning this on has no effect beyond the recognition itself."
+            : $"Used by: {string.Join(", ", consumers)}.";
+    }
+
     private RadioButton FactionRadioFor(Theming.FactionTheme faction) => faction switch
     {
         Theming.FactionTheme.Amarr => _factionAmarr,
@@ -244,6 +268,12 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     {
         var result = BuildResult(reimportSde);
         RequestClose();
+
+        // The watcher persists and applies its own opt-in, the way the local API server does, so the toggle does
+        // not have to travel through SettingsResult to get back to the one object that owns the state.
+        if (_clipboardWatch is not null && _clipboardWatch.IsSupported)
+            await _clipboardWatch.SetEnabledAsync(_watchClipboardBox.IsChecked ?? false);
+
         if (_onApply is not null)
             await _onApply(result);
     }

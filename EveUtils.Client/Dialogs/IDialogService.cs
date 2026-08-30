@@ -74,6 +74,13 @@ public interface IDialogService
     /// <summary>Copies text to the system clipboard: a direct "copy eveship.fit link" without a window.</summary>
     Task SetClipboardTextAsync(string text);
 
+    /// <summary>
+    /// Reads the system clipboard's text, or null when it holds no text or is momentarily unreadable (the app that
+    /// copied can still have it open). Used by <see cref="EveUtils.Client.Clipboard.ClipboardWatchService"/>, which
+    /// is off unless the user turned it on.
+    /// </summary>
+    Task<string?> GetClipboardTextAsync();
+
     /// <summary>Yes/No confirmation for destructive actions. Returns true if confirmed.</summary>
     Task<bool> ConfirmAsync(string title, string message, string okText = "Delete");
 
@@ -118,7 +125,7 @@ public interface IDialogService
     /// none), <paramref name="detectedDefault"/> the platform-probed fallback (Auto-detect). On Save the view invokes
     /// <paramref name="onApply"/> with the chosen values (the caller persists + applies live); Cancel/close does nothing.
     /// </summary>
-    void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true);
+    void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null);
 
     /// <summary>Per-fleet sharing dialog: per character a three-way override per metric. Returns true if the user saved.</summary>
     Task<bool> ShowFleetSharingAsync(ViewModels.FleetShareViewModel viewModel);

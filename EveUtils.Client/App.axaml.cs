@@ -46,6 +46,10 @@ public partial class App : Application
             // Its first reading can raise a toast, which must not touch the dispatcher before this point (ET-62).
             Program.Services.GetRequiredService<Esi.IAbyssalLocationMonitor>().UiReady();
 
+            // Clipboard watch: reads the persisted opt-in and starts only if the user turned it on (default off).
+            // Started here rather than in Program because reading the clipboard needs the toplevel above (ET-57).
+            _ = Program.Services.GetRequiredService<Clipboard.ClipboardWatchService>().InitializeAsync();
+
             desktop.MainWindow = mainWindow;
             // Pop-outs (DPS overlays / floating modules / info cards) are shown ownerless so they survive a main-window
             // minimize. Tie app lifetime to the main window so closing it exits even if an ownerless pop-out lingers

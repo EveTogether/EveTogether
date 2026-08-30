@@ -32,6 +32,9 @@ public sealed class RecordingDialogService : IDialogService
     /// <summary>The text of the last <see cref="SetClipboardTextAsync"/> call, or null if never copied.</summary>
     public string? LastClipboardText { get; private set; }
 
+    /// <summary>What <see cref="GetClipboardTextAsync"/> hands back — the "system clipboard" a test copies into.</summary>
+    public string? ClipboardText { get; set; }
+
     /// <summary>The arguments of the last <see cref="ShowFitExportAsync"/> call, or null if never shown.</summary>
     public (string FitName, string Eft, string Dna, string EveshipUrl)? LastFitExport { get; private set; }
 
@@ -97,6 +100,7 @@ public sealed class RecordingDialogService : IDialogService
         LastClipboardText = text;
         return Task.CompletedTask;
     }
+    public Task<string?> GetClipboardTextAsync() => Task.FromResult(ClipboardText);
     /// <summary>Stub for confirm dialogs: set to drive the answer (and inspect the prompt). Defaults to throwing so a
     /// test that unexpectedly hits a confirm fails loudly.</summary>
     public Func<string, string, Task<bool>>? OnConfirm { get; set; }
@@ -127,7 +131,7 @@ public sealed class RecordingDialogService : IDialogService
     public List<DpsViewModel> ClosedDpsOverlays { get; } = [];
 
     public void CloseDpsOverlay(DpsViewModel tracker) => ClosedDpsOverlays.Add(tracker);
-    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, EveUtils.Client.Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, EveUtils.Client.Notifications.ToastPosition toastPosition = EveUtils.Client.Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = EveUtils.Client.LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", EveUtils.Client.LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true) => throw NotUsed();
+    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, EveUtils.Client.Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, EveUtils.Client.Notifications.ToastPosition toastPosition = EveUtils.Client.Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = EveUtils.Client.LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", EveUtils.Client.LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, EveUtils.Client.Clipboard.ClipboardWatchService? clipboardWatch = null) => throw NotUsed();
 
     /// <summary>
     /// Answers the update offer (true = download and install). Default: Later.

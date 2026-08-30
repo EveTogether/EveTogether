@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using EveUtils.Client.ViewModels;
@@ -173,6 +174,23 @@ public sealed class DialogService : IDialogService, ISingletonService
         if (clipboard is not null) await clipboard.SetTextAsync(text);
     }
 
+    public async Task<string?> GetClipboardTextAsync()
+    {
+        var clipboard = _owner?.Clipboard;
+        if (clipboard is null) return null;
+
+        try
+        {
+            return await clipboard.TryGetTextAsync();
+        }
+        catch (COMException)
+        {
+            // Windows hands the clipboard to one process at a time; the app that just copied can still hold it.
+            // A missed read is a dropped payload, which is the safe outcome here — not an error worth surfacing.
+            return null;
+        }
+    }
+
     public async Task<bool> ConfirmAsync(string title, string message, string okText = "Delete")
     {
         if (_owner is null) return false;
@@ -197,9 +215,9 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void ShowFleets(FleetsViewModel viewModel) =>
         Route(new FleetsWindow(viewModel), "FLEETS", "fleet");
 
-    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true)
+    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null)
     {
-        var window = new SettingsWindow(currentDirectory, detectedDefault, shareLocation, shareBounty, shareCombat, loadTypeImages, currentFaction, sdeVersionLabel, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, localApiStatusLabel, localApiServer, checkUpdatesOnStartup, onApply);
+        var window = new SettingsWindow(currentDirectory, detectedDefault, shareLocation, shareBounty, shareCombat, loadTypeImages, currentFaction, sdeVersionLabel, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, localApiStatusLabel, localApiServer, checkUpdatesOnStartup, clipboardWatch, onApply);
         Route(window, "SETTINGS", "settings"); // docked tab in docked mode, floating window otherwise
     }
 
