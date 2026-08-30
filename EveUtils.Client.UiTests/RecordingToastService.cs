@@ -36,4 +36,7 @@ public sealed class RecordingToastService : IToastService
         Positions.Add(position);
         ActionToasts.Add((title, message, kind, actions));
     }
+
+    public void Show(string title, string? message, ToastKind kind, IReadOnlyList<ToastAction> actions, Action? onClosed,
+        string? replacementKey = null, ToastPosition? position = null) => Show(title, message, kind, actions, position);
 }

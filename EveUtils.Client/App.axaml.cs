@@ -46,6 +46,9 @@ public partial class App : Application
             // Its first reading can raise a toast, which must not touch the dispatcher before this point (ET-62).
             Program.Services.GetRequiredService<Esi.IAbyssalLocationMonitor>().UiReady();
 
+            // This is the first consumer, so resolving it must precede starting the watch; otherwise no copy can offer a fit import.
+            _ = Program.Services.GetRequiredService<Fittings.ClipboardFitImportOffer>();
+
             // Clipboard watch: reads the persisted opt-in and starts only if the user turned it on (default off).
             // Started here rather than in Program because reading the clipboard needs the toplevel above (ET-57).
             _ = Program.Services.GetRequiredService<Clipboard.ClipboardWatchService>().InitializeAsync();
