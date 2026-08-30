@@ -178,6 +178,37 @@ public sealed class RecordingDialogService : IDialogService
     public SettingsSyncViewModel? LastSettingsSync { get; private set; }
 
     public void ShowSettingsSync(SettingsSyncViewModel viewModel) => LastSettingsSync = viewModel;
+
+    /// <summary>The backups module the tool asked to open, or null — how a test asserts that the button reaches it
+    /// without standing up the real window.</summary>
+    public SettingsBackupsViewModel? LastSettingsBackups { get; private set; }
+
+    public void ShowSettingsBackups(SettingsBackupsViewModel viewModel) => LastSettingsBackups = viewModel;
+
+    /// <summary>The save-a-preset dialog the tool asked for, or null — and a hook to drive it (pick a path and
+    /// export) without a window.</summary>
+    public PresetExportViewModel? LastPresetExport { get; private set; }
+
+    public Func<PresetExportViewModel, Task> OnShowPresetExport { get; set; } = _ => Task.CompletedTask;
+
+    public Task ShowPresetExportAsync(PresetExportViewModel viewModel)
+    {
+        LastPresetExport = viewModel;
+        return OnShowPresetExport(viewModel);
+    }
+
+    /// <summary>The read-a-preset dialog the tool asked for, or null. The hook stands in for the user: open a file,
+    /// change a line, apply — then the tool behind it sees whatever really happened.</summary>
+    public PresetImportViewModel? LastPresetImport { get; private set; }
+
+    public Func<PresetImportViewModel, Task> OnShowPresetImport { get; set; } = _ => Task.CompletedTask;
+
+    public async Task<bool> ShowPresetImportAsync(PresetImportViewModel viewModel)
+    {
+        LastPresetImport = viewModel;
+        await OnShowPresetImport(viewModel);
+        return viewModel.Applied;
+    }
     public void ShowFitBrowser(FitBrowserViewModel viewModel) => throw NotUsed();
     public void ShowCompositions(CompositionsViewModel viewModel) => throw NotUsed();
     public FitDetailWindowViewModel? LastFitDetail { get; private set; }

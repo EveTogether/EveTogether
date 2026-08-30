@@ -45,6 +45,7 @@ public partial class SettingsSyncWindow : ChromedWindow, IHostableModuleWindow
     public SettingsSyncWindow(SettingsSyncViewModel viewModel) : this()
     {
         DataContext = viewModel;
+        Closed += (_, _) => viewModel.Dispose();   // release the settings-watch subscription with the window
     }
 
     // Two shells, two sizes: the tool's own window has room for a full backup column and the standing
@@ -69,15 +70,21 @@ public partial class SettingsSyncWindow : ChromedWindow, IHostableModuleWindow
         if (DataContext is not SettingsSyncViewModel viewModel)
             return;
 
+        // From the button, not from this window: docked, the module host has moved this content into the main
+        // window and this Window is never shown, so its own StorageProvider has no top level behind it.
+        var storage = (sender is Visual visual ? TopLevel.GetTopLevel(visual) : this)?.StorageProvider;
+        if (storage is null)
+            return;
+
         var options = new FolderPickerOpenOptions
         {
             Title = "Select the EVE install folder that holds the settings_* directories",
             AllowMultiple = false
         };
         if (!string.IsNullOrWhiteSpace(viewModel.InstallRoot))
-            options.SuggestedStartLocation = await StorageProvider.TryGetFolderFromPathAsync(viewModel.InstallRoot);
+            options.SuggestedStartLocation = await storage.TryGetFolderFromPathAsync(viewModel.InstallRoot);
 
-        var picked = await StorageProvider.OpenFolderPickerAsync(options);
+        var picked = await storage.OpenFolderPickerAsync(options);
         if (picked.Count == 0)
             return;
 

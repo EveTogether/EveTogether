@@ -169,6 +169,21 @@ public interface IDialogService
     /// other feature modules. Non-modal: the tool re-reads the folder itself when the user reloads.</summary>
     void ShowSettingsSync(SettingsSyncViewModel viewModel);
 
+    /// <summary>Opens the settings-backups module — a docked tab or a floating window, like the sync tool itself.
+    /// Non-modal: it is a place to read a backup and put one back, not a question to answer.</summary>
+    void ShowSettingsBackups(SettingsBackupsViewModel viewModel);
+
+    /// <summary>Save-a-preset dialog (ET-61): pick what goes in, name it, write it to one portable file. Modal — the
+    /// file picker inside it belongs to the window, so the view-model never sees a path it did not ask for.</summary>
+    Task ShowPresetExportAsync(PresetExportViewModel viewModel);
+
+    /// <summary>
+    /// Read-a-preset dialog (ET-61): opens the file, shows what is in it and where every line would land, and
+    /// applies it only on the user's word. Returns true when something was actually written, so the tool behind it
+    /// can re-read the profile.
+    /// </summary>
+    Task<bool> ShowPresetImportAsync(PresetImportViewModel viewModel);
+
     /// <summary>Shows the FITS fit-browser window non-modally so the Local library and server tabs stay
     /// usable alongside it.</summary>
     void ShowFitBrowser(FitBrowserViewModel viewModel);

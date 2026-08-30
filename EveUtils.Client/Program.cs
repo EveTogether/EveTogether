@@ -56,6 +56,9 @@ sealed class Program
         RunResilient(Services.GetRequiredService<EveUtils.Client.Skills.SkillRefreshService>().StartAsync(refreshCts.Token), "skill-refresh");
         RunResilient(Services.GetRequiredService<EveUtils.Client.Implants.ImplantRefreshService>().StartAsync(refreshCts.Token), "implant-refresh");
         RunResilient(Services.GetRequiredService<EveUtils.Client.Platform.EveClientPresenceService>().StartAsync(refreshCts.Token), "eve-client-presence");
+        // Automatic EVE settings sync (ET-60): does nothing at all unless the user configured and enabled it, and
+        // then only while every EVE client is closed.
+        RunResilient(Services.GetRequiredService<EveUtils.Client.EveSettings.AutoSettingsSyncService>().StartAsync(refreshCts.Token), "eve-settings-auto-sync");
         // Opt-in local widget API host: reads the persisted enabled/port settings and starts the loopback server
         // only when the user enabled it (default off). No-op when disabled.
         RunResilient(Services.GetRequiredService<EveUtils.Client.LocalApi.ILocalApiServer>().StartAsync(refreshCts.Token), "local-api");

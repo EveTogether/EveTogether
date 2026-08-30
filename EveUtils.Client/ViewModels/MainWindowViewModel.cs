@@ -554,9 +554,11 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _dialogs.ShowSettingsSync(new SettingsSyncViewModel(
             _services.GetRequiredService<SettingsSyncService>(),
             _services.GetRequiredService<SettingsBackupService>(),
+            _services.GetRequiredService<SettingsPresetService>(),
             _services.GetRequiredService<EveSettingsNameResolver>(),
             _services.GetRequiredService<EveSettingsPreferences>(),
             _services.GetRequiredService<EveClientPresenceService>(),
+            _services.GetRequiredService<IEveSettingsWatch>(),
             _dialogs));
     }
 

@@ -295,6 +295,22 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void ShowSettingsSync(SettingsSyncViewModel viewModel) =>
         Route(new SettingsSyncWindow(viewModel), "EVE SETTINGS SYNC", "tools");
 
+    public void ShowSettingsBackups(SettingsBackupsViewModel viewModel) =>
+        Route(new SettingsBackupsWindow(viewModel), "SETTINGS BACKUPS", "tools");
+
+    public async Task ShowPresetExportAsync(PresetExportViewModel viewModel)
+    {
+        if (_owner is null) return;
+        await new PresetExportWindow(viewModel).ShowDialog(_owner);
+    }
+
+    public async Task<bool> ShowPresetImportAsync(PresetImportViewModel viewModel)
+    {
+        if (_owner is null) return false;
+        await new PresetImportWindow(viewModel).ShowDialog(_owner);
+        return viewModel.Applied;   // the window's own buttons never decide this — what was written does
+    }
+
     public void ShowFitBrowser(FitBrowserViewModel viewModel) =>
         Route(new FitBrowserWindow(viewModel), "FIT BROWSER", "fits");
 
