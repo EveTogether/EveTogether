@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -286,7 +287,7 @@ public sealed class SettingsSyncToolTests : IDisposable
         Assert.False(tool.StatusIsError);
         // The outcome names what the backup covers, both kinds — not just where it went.
         Assert.Contains("Backed up settings_Default (2 characters and 1 account)", tool.Status);
-        var backup = Assert.Single(tool.Backups);
+        var backup = Assert.Single(tool.RecentBackups);
         Assert.Equal("before a sync", backup.ReasonDisplay);
         Assert.Equal("ACCOUNTS (1)", backup.AccountHeader);
         Assert.Single(backup.AccountContents);   // the backup covers the whole profile, accounts included
@@ -310,7 +311,7 @@ public sealed class SettingsSyncToolTests : IDisposable
 
         Assert.Contains("3 characters and 2 accounts", tool.Status);
 
-        var backup = Assert.Single(tool.Backups);
+        var backup = Assert.Single(tool.RecentBackups);
         Assert.Equal("3 characters and 2 accounts", backup.Backup.Manifest.ContentsSummary);
         Assert.Contains("3 characters and 2 accounts", backup.ContentsDisplay);
         Assert.Equal("CHARACTERS (3)", backup.CharacterHeader);
@@ -356,12 +357,16 @@ public sealed class SettingsSyncToolTests : IDisposable
         await tool.SyncCharactersCommand.ExecuteAsync(null);
 
         Assert.Equal("bob", File.ReadAllText(Path.Combine(profileDirectory, "core_char_90000002.dat")));
-        Assert.Empty(tool.Backups);
+        Assert.Empty(tool.RecentBackups);
     }
 
-    /// <summary>Restoring puts a backup back over the profile it came from.</summary>
+    /// <summary>
+    /// Restoring puts a backup back over the profile it came from. It lives in the backups window now (ET-67), and
+    /// the tool that opened it re-reads the profile afterwards rather than leaving write times standing that the
+    /// restore has just made untrue.
+    /// </summary>
     [AvaloniaFact]
-    public async Task Tool_RestoresABackupOverTheProfileItCameFrom()
+    public async Task BackupsWindow_RestoresABackup_AndTheToolBehindItRe_Reads()
     {
         var profileDirectory = _WriteProfile("settings_Default", [(90000001, "original")], []);
         using var instance = _NewInstance();
@@ -369,15 +374,52 @@ public sealed class SettingsSyncToolTests : IDisposable
         var tool = await _BuildToolAsync(instance, dialogs);
 
         await tool.BackupNowCommand.ExecuteAsync(null);
-        Assert.Single(tool.Backups);
+        Assert.Single(tool.RecentBackups);
+        Assert.Contains("Last backup", tool.LastBackupDisplay);
+
+        tool.OpenBackupsCommand.Execute(null);
+        var backups = dialogs.LastSettingsBackups;
+        Assert.NotNull(backups);
 
         File.WriteAllText(Path.Combine(profileDirectory, "core_char_90000001.dat"), "ruined");
-        tool.SelectedBackup = tool.Backups.Single(row => row.ReasonDisplay == "made by hand");
+        backups!.SelectedBackup = backups.Backups.Single(row => row.ReasonDisplay == "made by hand");
 
-        await tool.RestoreBackupCommand.ExecuteAsync(null);
+        await backups.RestoreBackupCommand.ExecuteAsync(null);
 
         Assert.Equal("original", File.ReadAllText(Path.Combine(profileDirectory, "core_char_90000001.dat")));
-        Assert.Contains("Restored 1 files", tool.Status);
+        Assert.Contains("Restored 1 files", backups.Status);
+        Assert.True(await _WaitForAsync(() => tool.Status.Contains("re-read")));
+    }
+
+    /// <summary>
+    /// What the sync screen keeps of the backups: that they are being taken, when the last one was, and the two
+    /// doors out. Everything you can actually do with a backup moved to its own window, because in a column beside
+    /// two file lists a single backup was never readable in one go.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Tool_KeepsOnlyTheLastTwoBackups_AndADoorToTheRest()
+    {
+        _WriteProfile("settings_Default", [(90000001, "a"), (90000002, "b")], [(1001, "one")]);
+        using var instance = _NewInstance();
+        var dialogs = new RecordingDialogService();
+        var tool = await _BuildToolAsync(instance, dialogs);
+
+        Assert.Empty(tool.RecentBackups);
+        Assert.Contains("No backups yet", tool.LastBackupDisplay);
+
+        for (var index = 0; index < 4; index++)
+            await tool.BackupNowCommand.ExecuteAsync(null);
+
+        Assert.Equal(SettingsSyncViewModel.RecentBackupCount, tool.RecentBackups.Count);
+        Assert.Equal(4, tool.BackupCount);
+        Assert.Contains("Last backup", tool.LastBackupDisplay);
+        Assert.Contains("2 characters and 1 account", tool.LastBackupDisplay);
+        Assert.Contains("4 kept", tool.LastBackupDisplay);   // the ones not shown are still accounted for
+
+        tool.OpenBackupsCommand.Execute(null);
+        var backups = dialogs.LastSettingsBackups;
+        Assert.NotNull(backups);
+        Assert.Equal(4, backups!.Backups.Count);   // all of them, in the window that has room
     }
 
     // ── The Tools menu ───────────────────────────────────────────────────────────────────────────
@@ -454,11 +496,13 @@ public sealed class SettingsSyncToolTests : IDisposable
     }
 
     /// <summary>
-    /// The backups panel with a backup actually in it: both groups named and counted, the account files listed as
-    /// plainly as the character ones. This is the view that made "was my account data backed up too?" a question.
+    /// The backups window with a backup in it: the list beside the whole of what is inside the selected one, both
+    /// groups named and counted, the account files listed as plainly as the character ones. This is the view that
+    /// made "was my account data backed up too?" a question, and then made the sync screen unusable — it now has a
+    /// window of its own, and it is rendered docked as well, which is where the space ran out.
     /// </summary>
     [AvaloniaFact]
-    public async Task BackupsPanel_ShowsCharactersAndAccounts_Renders()
+    public async Task BackupsWindow_ShowsCharactersAndAccounts_Renders()
     {
         _WriteProfile("settings_Default",
             [(90000001, "a"), (90000002, "b"), (90000003, "c"), (90000004, "d")], [(1001, "one"), (1002, "two")]);
@@ -469,21 +513,66 @@ public sealed class SettingsSyncToolTests : IDisposable
         await instance.Services.GetRequiredService<EveSettingsPreferences>().SaveAccountNameAsync(1001, "Main account");
         instance.Services.GetRequiredService<IThemeService>().Apply(FactionTheme.Gallente);
 
-        var tool = await _BuildToolAsync(instance);
+        var dialogs = new RecordingDialogService();
+        var tool = await _BuildToolAsync(instance, dialogs);
         await tool.BackupNowCommand.ExecuteAsync(null);
+        tool.OpenBackupsCommand.Execute(null);
 
-        var window = new SettingsSyncWindow(tool) { Width = 1180, Height = 760 };
+        var window = new SettingsBackupsWindow(dialogs.LastSettingsBackups!) { Width = 900, Height = 620 };
         window.Show();
         await _WaitForAsync(() => false, tries: 12);
 
         window.CaptureRenderedFrame()!.Save(
-            Path.Combine(_ShotDirectory(), "eveutils-settings-sync-backups.png"), new PngBitmapEncoderOptions());
+            Path.Combine(_ShotDirectory(), "eveutils-settings-backups.png"), new PngBitmapEncoderOptions());
 
         var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(block => block.Text).ToList();
         Assert.Contains("CHARACTERS (4)", texts);
         Assert.Contains("ACCOUNTS (2)", texts);
         Assert.Contains("Main account · 1001", texts);   // the accounts are on screen, not clipped below the fold
         Assert.Contains("Account 1002", texts);
+        Assert.Contains(texts, text => text is not null && text.Contains("Restoring writes these 6 files back"));
+        window.Close();
+    }
+
+    /// <summary>Docked, in the host where the old in-tool panel showed a fraction of one backup: the list, the
+    /// contents of the selected one and the restore button all still fit.</summary>
+    [AvaloniaFact]
+    public async Task BackupsModule_RendersDocked()
+    {
+        _WriteProfile("settings_Default",
+            [(90000001, "a"), (90000002, "b"), (90000003, "c"), (90000004, "d")], [(1001, "one"), (1002, "two")]);
+        using var instance = _NewInstance();
+        await instance.Services.GetRequiredService<ISettingRepository>()
+            .UpsertAsync("eve-settings.install-root", InstallRoot);
+        await instance.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character("Jithran", 90000001));
+        instance.Services.GetRequiredService<IThemeService>().Apply(FactionTheme.Gallente);
+
+        var shell = new MainWindowViewModel(instance.Services);
+        var window = new MainWindow { DataContext = shell, Width = 1100, Height = 720 };
+        var dialogs = (DialogService)instance.Services.GetRequiredService<IDialogService>();
+        dialogs.SetOwner(window);
+        dialogs.SetHost(shell);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        await shell.LaunchModuleCommand.ExecuteAsync("settings-sync");
+        Assert.True(await _WaitForAsync(() => shell.HostTabs.Count == 1));
+        var tool = (SettingsSyncViewModel)shell.SelectedHostTab!.Content.DataContext!;
+        await tool.BackupNowCommand.ExecuteAsync(null);
+
+        tool.OpenBackupsCommand.Execute(null);
+        Assert.True(await _WaitForAsync(() => shell.HostTabs.Count == 2));
+        Assert.Equal("SETTINGS BACKUPS", shell.HostTabs[1].Title);
+        await _WaitForAsync(() => false, tries: 12);
+
+        window.CaptureRenderedFrame()!.Save(
+            Path.Combine(_ShotDirectory(), "eveutils-settings-backups-docked.png"), new PngBitmapEncoderOptions());
+
+        var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(block => block.Text).ToList();
+        Assert.Contains("CHARACTERS (4)", texts);
+        Assert.Contains("ACCOUNTS (2)", texts);
+        Assert.Contains("Jithran · 90000001", texts);
         window.Close();
     }
 
@@ -529,6 +618,34 @@ public sealed class SettingsSyncToolTests : IDisposable
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("EVE SETTINGS SYNC", shell.HostTabs[0].Title);
         window.Close();
+    }
+
+    /// <summary>
+    /// Typing a name and pressing Enter is the whole gesture — reaching for the mouse to finish it is a bug. Escape
+    /// is its counterpart: the prompt goes away and the account keeps the name it had.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task NamingAnAccount_IsConfirmedWithEnter_AndCancelledWithEscape()
+    {
+        var owner = new Window { Width = 400, Height = 300 };
+        owner.Show();
+
+        Assert.Equal("Alt account", await _PromptResultAsync(owner, "Alt account", Key.Enter, PhysicalKey.Enter));
+        // Escape returns nothing at all, so the caller never writes a name and the account keeps the one it had.
+        Assert.Null(await _PromptResultAsync(owner, "Alt account", Key.Escape, PhysicalKey.Escape));
+
+        owner.Close();
+    }
+
+    private static async Task<string?> _PromptResultAsync(Window owner, string value, Key key, PhysicalKey physical)
+    {
+        var prompt = new TextPromptWindow("Name this account", "EVE gives accounts no name.", value);
+        var result = prompt.ShowDialog<string?>(owner);
+        await _WaitForAsync(() => false, tries: 8);
+
+        prompt.KeyPress(key, RawInputModifiers.None, physical, keySymbol: null);
+        await _WaitForAsync(() => result.IsCompleted);
+        return result.IsCompleted ? await result : "the prompt never closed";
     }
 
     // ── Which characters are on which account (ET-64) ────────────────────────────────────────────
@@ -863,7 +980,7 @@ public sealed class SettingsSyncToolTests : IDisposable
         Assert.Contains("ACCOUNT SETTINGS", texts);
         Assert.Contains("BACKUPS", texts);
         Assert.Contains("PRESETS", texts);
-        Assert.Contains(texts, text => text is not null && text.Contains("Nothing set."));
+        Assert.Contains(texts, text => text is not null && text.Contains("Nothing set yet"));
         // The file rows are still there — the new panels did not push the lists off the screen.
         Assert.Contains("Jithran", texts);
         Assert.Contains("Unnamed account", texts);

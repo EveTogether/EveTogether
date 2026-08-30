@@ -168,6 +168,12 @@ public sealed class RecordingDialogService : IDialogService
 
     public void ShowSettingsSync(SettingsSyncViewModel viewModel) => LastSettingsSync = viewModel;
 
+    /// <summary>The backups module the tool asked to open, or null — how a test asserts that the button reaches it
+    /// without standing up the real window.</summary>
+    public SettingsBackupsViewModel? LastSettingsBackups { get; private set; }
+
+    public void ShowSettingsBackups(SettingsBackupsViewModel viewModel) => LastSettingsBackups = viewModel;
+
     /// <summary>The save-a-preset dialog the tool asked for, or null — and a hook to drive it (pick a path and
     /// export) without a window.</summary>
     public PresetExportViewModel? LastPresetExport { get; private set; }

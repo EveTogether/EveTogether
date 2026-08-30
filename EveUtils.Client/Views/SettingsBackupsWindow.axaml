@@ -1,0 +1,161 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:sys="using:System"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="620"
+        x:Class="EveUtils.Client.Views.SettingsBackupsWindow"
+        x:DataType="vm:SettingsBackupsViewModel"
+        x:Name="BackupsRoot"
+        Width="900" Height="620" MinWidth="560" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Title="EVE settings backups">
+
+    <DockPanel Margin="14" x:Name="BackupsRootPanel">
+
+        <!-- On the content root, not on the window: the module host re-parents this content into the main window's
+             tab when docked, and Window.Styles would stay behind with the (never shown) window. -->
+        <DockPanel.Styles>
+            <Style Selector="Border.statusline">
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            </Style>
+            <Style Selector="Border.statusline.failed">
+                <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.entry">
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Opacity" Value="0.75"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="TextBlock.field">
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Opacity" Value="0.7"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
+        </DockPanel.Styles>
+
+        <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,10">
+            <TextBlock Text="EVE SETTINGS BACKUPS" FontWeight="Bold" FontSize="15"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <TextBlock FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"
+                       Text="Every snapshot taken before a copy, before a restore, before a preset was read in, and every one you asked for by hand. Each holds a whole profile — all its characters and all its accounts."/>
+            <TextBlock Text="{Binding BackupRoot}" FontSize="10" Opacity="0.5"
+                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding BackupRoot}"/>
+        </StackPanel>
+
+        <!-- Running clients: restoring into an open client is undone at logout, so it blocks rather than warns. -->
+        <Border DockPanel.Dock="Top" IsVisible="{Binding ClientsRunning}" Margin="0,0,0,10" Padding="12,8"
+                Background="#33CC4444" BorderBrush="{StaticResource RedBrush}" BorderThickness="1">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <TextBlock Grid.Column="0" Text="⚠" FontSize="15" VerticalAlignment="Center"
+                           Foreground="{StaticResource RedBrush}"/>
+                <TextBlock Grid.Column="1" Text="{Binding ClientWarning}" Margin="10,0" TextWrapping="Wrap"
+                           FontSize="12" VerticalAlignment="Center" Foreground="{StaticResource TextBrightBrush}"/>
+                <Button Grid.Column="2" Content="CHECK AGAIN" FontSize="10" VerticalAlignment="Center"
+                        Command="{Binding CheckClientsCommand}"/>
+            </Grid>
+        </Border>
+
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="0,10,0,0">
+            <Border Grid.Column="0" Padding="11,7" Classes="statusline"
+                    Classes.failed="{Binding StatusIsError}" Background="#22000000" BorderThickness="1">
+                <TextBlock Text="{Binding Status}" FontSize="11" TextWrapping="Wrap"
+                           Foreground="{StaticResource TextBrightBrush}"/>
+            </Border>
+            <Button Grid.Column="1" Content="Close" Click="OnClose" VerticalAlignment="Center"/>
+        </Grid>
+
+        <!-- The list and what is in the selected one, each with half a window: the whole point of moving out of
+             the sync tool, where a backup was never readable in one go. -->
+        <Grid x:Name="BackupsBodyGrid" ColumnDefinitions="320,12,*">
+
+            <Border Grid.Column="0" Classes="panel" Padding="11,9">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,6">
+                        <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
+                        <TextBlock Grid.Column="1" Classes="panel-title" Text="BACKUPS" VerticalAlignment="Center"/>
+                        <Button Grid.Column="2" Content="RELOAD" FontSize="10" Command="{Binding ReloadCommand}"
+                                ToolTip.Tip="Re-read the folder — a sync or the automatic pass adds snapshots while this stands open."/>
+                    </Grid>
+
+                    <Panel>
+                        <TextBlock FontSize="11" Opacity="0.5" Margin="2,10" TextWrapping="Wrap"
+                                   IsVisible="{Binding !HasBackups}"
+                                   Text="No backups yet. One is taken automatically before every copy — or press BACK UP NOW in the sync tool to take one this moment."/>
+                        <ListBox ItemsSource="{Binding Backups}" SelectedItem="{Binding SelectedBackup}"
+                                 IsVisible="{Binding HasBackups}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SettingsBackupRowViewModel">
+                                    <StackPanel Spacing="1" Margin="0,2">
+                                        <TextBlock Text="{Binding TakenAtDisplay}" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextBrightBrush}"/>
+                                        <TextBlock Text="{Binding ProfileName}" FontSize="10" Opacity="0.7"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding ReasonDisplay}" FontSize="10" Opacity="0.5"/>
+                                        <TextBlock Text="{Binding ContentsDisplay}" FontSize="10" Opacity="0.5"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Panel>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="2" Classes="panel" Padding="11,9" IsVisible="{Binding HasSelection}">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Spacing="3" Margin="0,0,0,8">
+                        <Grid ColumnDefinitions="Auto,*">
+                            <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
+                            <TextBlock Grid.Column="1" Classes="panel-title" VerticalAlignment="Center"
+                                       Text="{Binding SelectedBackup.TakenAtDisplay}"/>
+                        </Grid>
+                        <TextBlock Classes="field" Text="{Binding SelectedBackup.ProfileName}"/>
+                        <TextBlock Classes="field" Text="{Binding SelectedBackup.ReasonDisplay}"/>
+                        <TextBlock Classes="field" Text="{Binding SelectedBackup.Note}"/>
+                        <TextBlock Classes="field" Text="{Binding SelectedBackup.ContentsDisplay}"/>
+                    </StackPanel>
+
+                    <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,8,0,0">
+                        <TextBlock Text="{Binding RestoreSummary}" FontSize="11" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextAccentBrush}"/>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                            <Button Grid.Column="0" Classes="accent" Content="RESTORE THIS BACKUP…" FontSize="10"
+                                    HorizontalAlignment="Stretch" IsEnabled="{Binding CanRestore}"
+                                    Command="{Binding RestoreBackupCommand}"
+                                    ToolTip.Tip="Writes these files back over the profile they came from. The profile's current state is backed up first."/>
+                            <Button Grid.Column="1" Classes="danger" Content="DELETE" FontSize="10"
+                                    IsEnabled="{Binding CanDelete}" Command="{Binding DeleteBackupCommand}"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- Two named, counted groups, each scrolling on its own: a backup covers the whole profile, and
+                         the accounts used to sit behind a long character list and get clipped off the bottom. -->
+                    <Grid RowDefinitions="Auto,*,8,Auto,*">
+                        <TextBlock Grid.Row="0" Classes="label" Text="{Binding SelectedBackup.CharacterHeader}"/>
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding SelectedBackup.CharacterContents}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="sys:String">
+                                        <TextBlock Classes="entry" Text="{Binding}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <TextBlock Grid.Row="3" Classes="label" Text="{Binding SelectedBackup.AccountHeader}"/>
+                        <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding SelectedBackup.AccountContents}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="sys:String">
+                                        <TextBlock Classes="entry" Text="{Binding}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</v:ChromedWindow>

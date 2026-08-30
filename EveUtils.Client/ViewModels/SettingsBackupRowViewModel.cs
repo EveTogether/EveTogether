@@ -29,11 +29,14 @@ public sealed class SettingsBackupRowViewModel(SettingsBackup backup) : ViewMode
 
     public string ContentsDisplay => $"{Backup.Manifest.ContentsSummary} · {_SizeDisplay()}";
 
-    // KB below a megabyte: "0.0 MB" on a small profile reads as "nothing was saved", which is the opposite of what
-    // this panel is for.
-    private string _SizeDisplay() => Backup.TotalSizeBytes < 1024 * 1024
-        ? (Backup.TotalSizeBytes / 1024d).ToString("0", CultureInfo.InvariantCulture) + " KB"
-        : (Backup.TotalSizeBytes / 1024d / 1024d).ToString("0.0", CultureInfo.InvariantCulture) + " MB";
+    // "0.0 MB" on a small profile reads as "nothing was saved", which is the opposite of what this says — so KB
+    // below a megabyte, and plain bytes below a kilobyte, where "0 KB" would read the same way again.
+    private string _SizeDisplay() => Backup.TotalSizeBytes switch
+    {
+        < 1024 => Backup.TotalSizeBytes.ToString(CultureInfo.InvariantCulture) + " B",
+        < 1024 * 1024 => (Backup.TotalSizeBytes / 1024d).ToString("0", CultureInfo.InvariantCulture) + " KB",
+        _ => (Backup.TotalSizeBytes / 1024d / 1024d).ToString("0.0", CultureInfo.InvariantCulture) + " MB"
+    };
 
     public string Note => Backup.Manifest.Note;
 

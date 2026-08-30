@@ -13,8 +13,10 @@
     <DockPanel Margin="18">
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
                     Spacing="8" Margin="0,14,0,0">
-            <Button Content="Cancel" Click="OnCancel" MinWidth="80"/>
-            <Button Content="OK" Click="OnConfirm" Classes="accent" MinWidth="80"/>
+            <!-- Enter confirms and Escape cancels: typing a name and pressing Enter is the gesture everybody
+                 makes, and reaching for the mouse to finish it is a bug, not a preference. -->
+            <Button Content="Cancel" Click="OnCancel" MinWidth="80" IsCancel="True"/>
+            <Button Content="OK" Click="OnConfirm" Classes="accent" MinWidth="80" IsDefault="True"/>
         </StackPanel>
 
         <StackPanel Spacing="8">

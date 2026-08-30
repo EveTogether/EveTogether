@@ -80,9 +80,16 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
 
     [ObservableProperty] private SettingsFileRowViewModel? _accountSource;
 
-    public ObservableCollection<SettingsBackupRowViewModel> Backups { get; } = [];
+    /// <summary>How many backups this screen shows. The rest live in the backups window, which has room for them.</summary>
+    public const int RecentBackupCount = 2;
 
-    [ObservableProperty] private SettingsBackupRowViewModel? _selectedBackup;
+    /// <summary>The newest couple of snapshots — evidence that they are being taken, not a place to work with them.</summary>
+    public ObservableCollection<SettingsBackupRowViewModel> RecentBackups { get; } = [];
+
+    /// <summary>When the last backup was taken and what it covers, or that there are none yet.</summary>
+    [ObservableProperty] private string _lastBackupDisplay = "No backups yet.";
+
+    [ObservableProperty] private int _backupCount;
 
     // ── What the screen is telling the user ──────────────────────────────────────────────────────
 
@@ -103,7 +110,7 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
 
     public bool HasProfile => _SelectedProfile() is not null;
 
-    public bool HasBackups => Backups.Count > 0;
+    public bool HasBackups => BackupCount > 0;
 
     /// <summary>What the character block would do if pressed right now — shown above the button, not after it.</summary>
     public string CharacterPlanSummary => _PlanSummary(SettingsFileKind.Character);
@@ -116,7 +123,6 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
 
     public bool CanBackup => !IsBusy && HasProfile;
 
-    public bool CanRestore => !ClientsRunning && !IsBusy && SelectedBackup is { CanRestore: true };
 
     // ── Loading ──────────────────────────────────────────────────────────────────────────────────
 
@@ -491,7 +497,7 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
 
     /// <summary>What is remembered, in names — the same choice as the blocks above, only kept.</summary>
     [ObservableProperty] private string _autoSyncRuleSummary =
-        "Nothing set. Pick a source and tick targets on the left, then press REMEMBER THIS.";
+        "Nothing set yet — REMEMBER THIS keeps whatever you pick on the left.";
 
     [ObservableProperty] private bool _hasAutoSyncRule;
 
@@ -499,6 +505,25 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
 
     /// <summary>The recent runs, for the tooltip: an unattended tool that touches files has to leave a record.</summary>
     [ObservableProperty] private string _autoSyncHistory = string.Empty;
+
+    /// <summary>
+    /// What switching this on actually means, said as a sentence rather than as a label on a switch. It has to
+    /// name three things the user cannot otherwise know: that it is a sync of the selection on the left, that it
+    /// only happens while EVE Together itself keeps running (which is why closing your clients is the trigger at
+    /// all), and how often it looks — an interval nobody can guess is an interval nobody can trust.
+    /// </summary>
+    public static string AutoSyncExplanation { get; } =
+        $"While EVE Together keeps running, it checks every {_Seconds(AutoSettingsSyncService.PollInterval)} whether " +
+        "every EVE client is closed — and then repeats the copy below on its own.";
+
+    /// <summary>The rest of the rules, on the tooltip: true and worth knowing, but not worth a paragraph in a
+    /// column this narrow.</summary>
+    public static string AutoSyncDetail { get; } =
+        AutoSyncExplanation + $" It waits until the clients have been closed for " +
+        $"{_Seconds(AutoSettingsSyncService.SettleDelay)}, so EVE has finished writing its files; it does nothing " +
+        "while the files already match; and it stops part-way if you start a client.";
+
+    private static string _Seconds(TimeSpan span) => $"{(int)span.TotalSeconds} seconds";
 
     private AutoSyncSettings _autoSync = AutoSyncSettings.None;
     private bool _applyingAutoSync;
@@ -579,7 +604,7 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
         AutoSyncEnabled = false;
         _applyingAutoSync = false;
         HasAutoSyncRule = false;
-        AutoSyncRuleSummary = "Nothing set. Pick a source and tick targets on the left, then press REMEMBER THIS.";
+        AutoSyncRuleSummary = "Nothing set yet — REMEMBER THIS keeps whatever you pick on the left.";
         Status = "The automatic sync is off and its rule is forgotten.";
         StatusIsError = false;
         _NotifyGates();
@@ -610,7 +635,7 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
     private string _DescribeAutoSync(AutoSyncSettings settings)
     {
         if (!settings.IsConfigured)
-            return "Nothing set. Pick a source and tick targets on the left, then press REMEMBER THIS.";
+            return "Nothing set yet — REMEMBER THIS keeps whatever you pick on the left.";
 
         var parts = new List<string>();
         if (settings.HasCharacterRule)
@@ -715,92 +740,47 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
         _NotifyGates();
     }
 
+    /// <summary>
+    /// Opens the backups in their own window (ET-67). Reading a backup and putting one back needs room this screen
+    /// does not have: crammed in beside the two file lists, a single backup's contents were a few lines on a
+    /// maximised window. Here only the last two and "back up now" stay behind.
+    /// </summary>
     [RelayCommand]
-    private async Task RestoreBackupAsync()
+    private void OpenBackups()
     {
-        var row = SelectedBackup;
-        if (row is null || !row.CanRestore)
+        if (_dialogs is null)
             return;
 
-        CheckClients();
-        if (ClientsRunning)
-        {
-            _Fail(ClientWarning);
-            return;
-        }
+        var window = new SettingsBackupsViewModel(_backups, _names.AsLookup(), _presence, _dialogs);
+        // A restore over there changes the profile this screen is showing; re-read it rather than leave write times
+        // standing that are no longer true.
+        window.ProfileChanged += () => _ = _RefreshAfterRestoreAsync();
+        _dialogs.ShowSettingsBackups(window);
+    }
 
-        if (_dialogs is not null)
-        {
-            var confirmed = await _dialogs.ConfirmAsync(
-                "Restore this backup?",
-                $"The backup of {row.TakenAtDisplay} — {row.Backup.Manifest.ContentsSummary}, " +
-                $"{row.Backup.Manifest.Entries.Count} files — will overwrite {row.ProfileName}. The profile's " +
-                "current state is backed up first, so this is undoable too.",
-                okText: "Restore");
-            if (!confirmed)
-                return;
-        }
-
-        try
-        {
-            IsBusy = true;
-            var names = _names.AsLookup();
-            var result = await Task.Run(() => _backups.Restore(row.Backup, names));
-
-            if (result.IsSuccess && result.Value is not null)
-            {
-                var failed = result.Value.Failed.Count == 0
-                    ? string.Empty
-                    : $" Not restored: {string.Join("; ", result.Value.Failed)}.";
-                Status = $"Restored {result.Value.Restored.Count} files into {row.ProfileName}.{failed} " +
-                         $"The state from before this restore is in {result.Value.SafetyBackupDirectory}.";
-                StatusIsError = result.Value.Failed.Count > 0;
-            }
-            else
-            {
-                _Fail(string.Join(" ", result.Messages.Select(message => message.Text)));
-            }
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-
+    private async Task _RefreshAfterRestoreAsync()
+    {
         await _LoadSelectedProfileAsync(announce: false);
         _LoadBackups();
+        Status = "A backup was restored, so this screen has been re-read.";
+        StatusIsError = false;
         _NotifyGates();
     }
 
-    [RelayCommand]
-    private async Task DeleteBackupAsync()
-    {
-        var row = SelectedBackup;
-        if (row is null)
-            return;
-
-        if (_dialogs is not null &&
-            !await _dialogs.ConfirmAsync("Delete this backup?",
-                $"The backup of {row.ProfileName} taken on {row.TakenAtDisplay} is removed from disk. This cannot be undone."))
-            return;
-
-        var result = _backups.Delete(row.Backup);
-        if (!result.IsSuccess)
-            _Fail(string.Join(" ", result.Messages.Select(message => message.Text)));
-        else
-            Status = $"Deleted the backup of {row.ProfileName} taken on {row.TakenAtDisplay}.";
-
-        _LoadBackups();
-        _NotifyGates();
-    }
-
+    // Only the newest two: the rest lives in the backups window. Enough to see that snapshots are being taken and
+    // when the last one was, which is what this screen is for.
     private void _LoadBackups()
     {
-        var selectedId = SelectedBackup?.Backup.Id;
-        Backups.Clear();
-        foreach (var backup in _backups.List())
-            Backups.Add(new SettingsBackupRowViewModel(backup));
+        RecentBackups.Clear();
+        var all = _backups.List();
+        foreach (var backup in all.Take(RecentBackupCount))
+            RecentBackups.Add(new SettingsBackupRowViewModel(backup));
 
-        SelectedBackup = Backups.FirstOrDefault(row => row.Backup.Id == selectedId) ?? Backups.FirstOrDefault();
+        BackupCount = all.Count;
+        LastBackupDisplay = all.Count == 0
+            ? "No backups yet — one is taken automatically before every copy."
+            : $"Last backup {_Moment(all[0].Manifest.CreatedAtUtc)} · {all[0].Manifest.ContentsSummary}" +
+              (all.Count == 1 ? " · 1 kept" : $" · {all.Count} kept");
         OnPropertyChanged(nameof(HasBackups));
     }
 
@@ -865,13 +845,10 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule
         OnPropertyChanged(nameof(CanSyncCharacters));
         OnPropertyChanged(nameof(CanSyncAccounts));
         OnPropertyChanged(nameof(CanBackup));
-        OnPropertyChanged(nameof(CanRestore));
         OnPropertyChanged(nameof(CanRememberAutoSync));
     }
 
     partial void OnIsBusyChanged(bool value) => _NotifyGates();
 
     partial void OnClientsRunningChanged(bool value) => _NotifyGates();
-
-    partial void OnSelectedBackupChanged(SettingsBackupRowViewModel? value) => OnPropertyChanged(nameof(CanRestore));
 }

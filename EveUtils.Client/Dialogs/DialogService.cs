@@ -277,6 +277,9 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void ShowSettingsSync(SettingsSyncViewModel viewModel) =>
         Route(new SettingsSyncWindow(viewModel), "EVE SETTINGS SYNC", "tools");
 
+    public void ShowSettingsBackups(SettingsBackupsViewModel viewModel) =>
+        Route(new SettingsBackupsWindow(viewModel), "SETTINGS BACKUPS", "tools");
+
     public async Task ShowPresetExportAsync(PresetExportViewModel viewModel)
     {
         if (_owner is null) return;
