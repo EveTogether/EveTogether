@@ -163,15 +163,23 @@ public class OverlayChromeTests
 
         // The word PIN used to carry the on-state. With an icon only the fill can, so the two states have to differ
         // in actual pixels — assert that rather than trusting a style rule to have been applied.
-        var (onWindow, _, _, _) = Show(which, pinned: true);
+        var (onWindow, _, onPin, _) = Show(which, pinned: true);
+        var onInk = Ink(onPin);
         var on = Capture(onWindow, $"chrome-{which}-pinned".ToLowerInvariant());
         onWindow.Close();
 
-        var (offWindow, _, _, _) = Show(which, pinned: false);
+        var (offWindow, _, offPin, _) = Show(which, pinned: false);
+        var offInk = Ink(offPin);
         var off = Capture(offWindow, $"chrome-{which}-unpinned".ToLowerInvariant());
         offWindow.Close();
 
         Assert.NotEqual(on, off);
+
+        // And the tack itself has to invert with the square. Pinned fills the button with the faction accent; an
+        // icon that stayed accent-coloured would be an accent tack on an accent square — all but invisible, in the
+        // one state this button exists to report. The frame comparison above cannot see this on its own: the
+        // background changes either way, so the pixels differ whether or not the ink followed.
+        Assert.NotEqual(onInk, offInk);
     }
 
     [AvaloniaFact]
@@ -195,6 +203,13 @@ public class OverlayChromeTests
         Capture(window, "chrome-small");
         window.Close();
     }
+
+    /// <summary>The colour a button's icon is actually drawn in — the Path's own brush, not the button's, so a
+    /// binding that had come undone reads as "unchanged" here rather than passing on the button's intent.</summary>
+    private static string Ink(Button button) =>
+        button.GetVisualDescendants().OfType<IconPath>()
+            .Select(path => (path.Stroke ?? path.Fill)?.ToString() ?? "none")
+            .First();
 
     private static string Capture(Window window, string name) => OverlayShots.Capture(window, name);
 }
