@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+// The project's implicit usings pull in System.IO, whose Path would otherwise be ambiguous with the shape.
+using IconPath = Avalonia.Controls.Shapes.Path;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
@@ -83,6 +84,16 @@ public class OverlayChromeTests
             Assert.Equal(new Avalonia.CornerRadius(0), ((TemplatedControl)button).CornerRadius);
         }
 
+        // …and the icons inside them are drawn to one scale. Each sits on the same 16-unit canvas behind the same
+        // Viewbox, because letting a Path stretch to its own bounding box instead would draw the two-stroke ✕ at
+        // roughly twice the pin's scale — three icons of different weights, which is the complaint all over again.
+        var icons = new Control[] { opacity, pin, close }
+            .Select(b => b.GetVisualDescendants().OfType<Viewbox>().Single())
+            .ToList();
+        Assert.All(icons, box => Assert.Equal(icons[0].Bounds.Size, box.Bounds.Size));
+        Assert.All(icons, box => Assert.Equal(new Avalonia.Size(16, 16),
+            Assert.IsType<Canvas>(box.Child).Bounds.Size));
+
         window.Close();
     }
 
@@ -98,9 +109,17 @@ public class OverlayChromeTests
 
         foreach (var button in new Button[] { opacity, pin, close })
         {
-            // A single glyph, not a word. "PIN" was the one that broke the set.
-            var content = Assert.IsType<string>(button.Content);
-            Assert.Single(content.EnumerateRunes());
+            // A drawn shape, not text of any kind — not a word ("PIN", which broke the set), and not a character
+            // either. A glyph is whatever the shipped font decides to draw: ⬒ arrived on screen with its bottom half
+            // filled and read as a floppy disk, which is why these are geometry now.
+            Assert.False(button.Content is string, $"{button.Name ?? "button"} still carries text: {button.Content}");
+            var paths = button.GetVisualDescendants().OfType<IconPath>().ToList();
+            Assert.NotEmpty(paths);
+            Assert.All(paths, path => Assert.NotNull(path.Data));
+
+            // Every icon has to be tinted from the button, or it would sit at the resting colour through hover and,
+            // worse, through the pinned state — dark ink is what makes the filled square readable.
+            Assert.All(paths, path => Assert.True(path.Stroke is not null || path.Fill is not null));
 
             // An icon is quick to read once you know it and opaque before, so all three have to say what they are.
             var tip = Assert.IsType<string>(ToolTip.GetTip(button));

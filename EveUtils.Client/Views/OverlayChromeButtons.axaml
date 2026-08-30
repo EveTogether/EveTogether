@@ -11,9 +11,31 @@
          these windows are windows of their own and inherit nothing from anywhere else.
 
          Every one of them has a tooltip: an icon on its own is quick to read once you know it and opaque before. -->
+    <!-- Every icon is drawn on the SAME 16-unit canvas and scaled by the same Viewbox, so all three share one scale
+         and one stroke weight. Sizing each Path to its own bounds instead would blow the two-stroke ✕ up to twice the
+         pin's scale, because a Path stretches its geometry's bounding box and the X's box is far smaller. -->
     <StackPanel Orientation="Horizontal" Spacing="4">
-        <!-- ◐ half-filled: how solid the backdrop is. -->
-        <Button Classes="overlaybtn" Content="◐" ToolTip.Tip="Overlay opacity">
+        <StackPanel.Styles>
+            <Style Selector="Viewbox.icon">
+                <Setter Property="Width" Value="13"/>
+                <Setter Property="Height" Value="13"/>
+            </Style>
+            <Style Selector="Path.icon">
+                <Setter Property="StrokeThickness" Value="1.5"/>
+                <Setter Property="StrokeLineCap" Value="Round"/>
+                <Setter Property="StrokeJoin" Value="Round"/>
+            </Style>
+        </StackPanel.Styles>
+
+        <!-- A half-filled disc: how solid the backdrop is. -->
+        <Button Classes="overlaybtn" ToolTip.Tip="Overlay opacity">
+            <Viewbox Classes="icon">
+                <Canvas Width="16" Height="16">
+                    <Path Classes="icon" Data="{StaticResource IconOpacityRing}"
+                          Stroke="{Binding $parent[Button].Foreground}"/>
+                    <Path Data="{StaticResource IconOpacityHalf}" Fill="{Binding $parent[Button].Foreground}"/>
+                </Canvas>
+            </Viewbox>
             <Button.Flyout>
                 <Flyout Placement="Bottom">
                     <StackPanel Width="190" Margin="6" Spacing="8">
@@ -31,17 +53,27 @@
             </Button.Flyout>
         </Button>
 
-        <!-- ▲ up: this window stays above the others. A geometric glyph rather than a pushpin, because that is the
-             icon language the rest of the app speaks (◆ ◉ ◐ ⧉ ◇) and a pushpin from another one would be the odd
-             thing out again. Whether it is ON is carried by the fill, not by the glyph — see the :checked rule in
-             the theme.
-             ⬒ ("square with top half black") was tried first, to rhyme with ◐ beside it: the shipped font draws it
-             with the BOTTOM half filled, so it read as a floppy disk. Only visible by rendering it. -->
-        <ToggleButton x:Name="PinButton" Classes="overlaybtn" Content="▲"
+        <!-- A thumbtack, because that is what a pin looks like everywhere else. Whether it is ON is carried by the
+             button's fill, not by the icon — see the :checked rule in the theme. -->
+        <ToggleButton x:Name="PinButton" Classes="overlaybtn"
                       IsChecked="{Binding $parent[Window].Topmost, Mode=TwoWay}"
-                      ToolTip.Tip="Keep this window on top of other windows"/>
+                      ToolTip.Tip="Keep this window on top of other windows">
+            <Viewbox Classes="icon">
+                <Canvas Width="16" Height="16">
+                    <Path Classes="icon" Data="{StaticResource IconPin}"
+                          Stroke="{Binding $parent[ToggleButton].Foreground}"/>
+                </Canvas>
+            </Viewbox>
+        </ToggleButton>
 
-        <Button x:Name="CloseButton" Classes="overlaybtn overlayclose" Content="✕"
-                Click="OnClose" ToolTip.Tip="Close this overlay"/>
+        <Button x:Name="CloseButton" Classes="overlaybtn overlayclose"
+                Click="OnClose" ToolTip.Tip="Close this overlay">
+            <Viewbox Classes="icon">
+                <Canvas Width="16" Height="16">
+                    <Path Classes="icon" Data="{StaticResource IconClose}"
+                          Stroke="{Binding $parent[Button].Foreground}"/>
+                </Canvas>
+            </Viewbox>
+        </Button>
     </StackPanel>
 </UserControl>
