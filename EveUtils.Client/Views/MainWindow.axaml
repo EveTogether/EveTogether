@@ -111,10 +111,22 @@
              a compact status dot in the rail replaces it there. ── -->
         <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,1,0,0" Padding="12,7" IsVisible="{Binding !IsFloating}">
-            <Grid ColumnDefinitions="*,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto">
                 <TextBlock Grid.Column="0" Text="{Binding ActivityStatus}" VerticalAlignment="Center"
                            Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
-                <TextBlock Grid.Column="1" Text="{Binding TranquilityStatus}" VerticalAlignment="Center"
+                <!-- Clipboard watch state. It sits in the always-visible strip rather than in settings: a feature
+                     that can see everything you copy has to be readable as off without going looking for it. -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                            Margin="0,0,14,0" ToolTip.Tip="{Binding ClipboardStatusTooltip}">
+                    <Panel Width="9" Height="9" VerticalAlignment="Center">
+                        <Ellipse Width="9" Height="9" Fill="{DynamicResource AccentBrightBrush}"
+                                 IsVisible="{Binding IsClipboardWatching}"/>
+                        <Ellipse Width="9" Height="9" Fill="#6B7280" IsVisible="{Binding !IsClipboardWatching}"/>
+                    </Panel>
+                    <TextBlock Text="{Binding ClipboardStatus}" VerticalAlignment="Center" FontSize="11"
+                               LetterSpacing="1" Opacity="0.85"/>
+                </StackPanel>
+                <TextBlock Grid.Column="2" Text="{Binding TranquilityStatus}" VerticalAlignment="Center"
                            Foreground="{Binding TranquilityBrush}" FontSize="11" FontWeight="SemiBold" LetterSpacing="1"
                            ToolTip.Tip="EVE Tranquility server status (ESI /status/, refreshed every 30s)."/>
             </Grid>

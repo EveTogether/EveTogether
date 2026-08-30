@@ -10,6 +10,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fittings;
 using EveUtils.Client.Notifications;
@@ -77,6 +78,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private readonly ICharacterRegistry? _registry;
     private readonly ICharacterInfoService? _characterInfo;
     private readonly EveUtils.Client.Platform.EveClientPresenceService? _clientPresence;
+    private readonly ClipboardWatchService? _clipboardWatch;
     private readonly EsiTokenStatusTracker? _tokenStatus;
     private readonly ICharacterPortraitProvider? _portraits;
     private readonly IThemeService? _theme;
@@ -173,6 +175,19 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// (with or without the character column); docked keeps the compact logo beside the brand text.</summary>
     public double BrandLogoHeight => IsFloating ? 38 : 26;
     public double TitleBarHeight => IsFloating ? 56 : 44;
+
+    /// <summary>Clipboard-watch state on the bottom bar. It is in the always-visible strip on purpose: a feature
+    /// that can see everything you copy has to say at a glance that it is off, without opening settings first.</summary>
+    [ObservableProperty] private string _clipboardStatus = "CLIPBOARD OFF";
+
+    /// <summary>True while the clipboard is actually being watched — the bar highlights that state.</summary>
+    [ObservableProperty] private bool _isClipboardWatching;
+
+    public string ClipboardStatusTooltip => IsClipboardWatching
+        ? "EVE Together is watching the clipboard for fits and inventory listings. Settings → Privacy & Sharing explains what it reads and what it drops."
+        : "EVE Together is not reading your clipboard. Turn it on in Settings → Privacy & Sharing.";
+
+    partial void OnIsClipboardWatchingChanged(bool value) => OnPropertyChanged(nameof(ClipboardStatusTooltip));
 
     /// <summary>Tooltip for the compact rail status dot (floating mode, where the wide bottom bar does not fit):
     /// the Tranquility line plus any current activity message.</summary>
@@ -393,6 +408,13 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             implantImporter.ImplantsChanged += (characterId, typeIds) =>
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => _ApplyImplants(characterId, typeIds));
 
+        // Clipboard watch state → the bottom bar. Seeded here and followed live, so flipping the setting updates
+        // the strip without a restart (ET-57).
+        _clipboardWatch = services.GetRequiredService<ClipboardWatchService>();
+        _ApplyClipboardState();
+        _clipboardWatch.StateChanged += () =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(_ApplyClipboardState);
+
         // Smooth, demo-parity DPS graphs: every tracker (own + fleet) renders through the one shared
         // ~30fps DpsRenderDriver, so the curve scrolls + decays continuously and all graphs share one render path.
         _renderDriver = services.GetRequiredService<DpsRenderDriver>();
@@ -406,6 +428,19 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     {
         foreach (var vm in Characters)
             vm.HasActiveClient = evidence.Matches(vm.Name, vm.CharacterId);
+    }
+
+    // "Unsupported" is a state of its own rather than a second flavour of off: on a platform that cannot report a
+    // clipboard change, showing OFF would suggest the switch does something.
+    private void _ApplyClipboardState()
+    {
+        if (_clipboardWatch is null)
+            return;
+
+        IsClipboardWatching = _clipboardWatch.IsWatching;
+        ClipboardStatus = !_clipboardWatch.IsSupported ? "CLIPBOARD UNSUPPORTED"
+            : _clipboardWatch.IsWatching ? "CLIPBOARD WATCHING"
+            : "CLIPBOARD OFF";
     }
 
     // Writes a measured token status onto the matching character row. The row is only a view of it — the value
@@ -839,7 +874,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             current, GameLogLocations.Default(),
             shares.IsShared(MetricKind.Location), shares.IsShared(MetricKind.Bounty), shares.IsShared(MetricKind.Dps),
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
-            localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup);
+            localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch);
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,

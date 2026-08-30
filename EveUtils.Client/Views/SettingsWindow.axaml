@@ -171,6 +171,23 @@
                         <TextBlock Text="These are your global defaults for every fleet. Combat metrics are shared by default; location is off by default. You can override any of these per fleet from its SHARING button."
                                    FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
                     </StackPanel>
+
+                    <!-- Clipboard watch. The disclosure is deliberately long and concrete: this is the one feature
+                         that can see everything you copy, so "what does it do with my clipboard" needs a real
+                         answer here rather than a reassuring sentence. -->
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="CLIPBOARD" Classes="label" FontSize="9"/>
+                        <CheckBox x:Name="WatchClipboardBox" Content="Watch the clipboard for fits and inventory listings"/>
+                        <TextBlock x:Name="ClipboardUnsupportedBlock" IsVisible="False" FontSize="10" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextAccentBrush}"
+                                   Text="Windows only. Other systems give no notification when the clipboard changes, and the alternative — checking it on a timer — would have to remember what was on it to spot a change. That is exactly what this feature promises not to do, so it stays off here instead of pretending to work."/>
+                        <TextBlock FontSize="10" Opacity="0.6" TextWrapping="Wrap"
+                                   Text="Off by default. While it is on, Windows tells EVE Together whenever you copy something. It reads the text and looks at its shape only: an EFT fit block starting with [Ship, name], or a tab-separated inventory listing of more than one row. Those two are handed to the features listed below."/>
+                        <TextBlock FontSize="10" Opacity="0.6" TextWrapping="Wrap"
+                                   Text="Everything else — a password, a link, part of a conversation — is dropped the moment it is read. It is not stored, not kept in a buffer for later, never written to the log window or a log file, and never attached to an error report. No clipboard text leaves your machine: the local API server never sees it either."/>
+                        <TextBlock x:Name="ClipboardConsumersBlock" FontSize="10" Opacity="0.75" TextWrapping="Wrap"
+                                   Margin="0,4,0,0"/>
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- ── Integrations ── -->
