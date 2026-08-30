@@ -113,15 +113,76 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         // ESI is the only source that can see either end of an abyssal run, so the watch runs for the whole session
         // rather than being triggered by a run the gamelog cannot reliably recognise (ET-62). Idempotent per character.
         var metrics = Metrics(name);
-        _services.GetService<IAbyssalLocationMonitor>()?.Watch(characterId, (inside, at) =>
+        _services.GetService<IAbyssalLocationMonitor>()?.Watch(characterId, reading =>
         {
-            if (inside is null)
+            if (reading.SolarSystemId is not { } solarSystemId)
+            {
                 metrics.AbyssalWatchLost();
-            else if (inside.Value)
-                metrics.SeenInside(at);
+                return;
+            }
+
+            if (reading.IsOutside)
+            {
+                metrics.SeenOutside(reading.AtUtc);
+                FillLocationGap(name, solarSystemId);
+            }
             else
-                metrics.SeenOutside(at);
+            {
+                metrics.SeenInside(reading.AtUtc);
+            }
         });
+    }
+
+    /// <summary>
+    /// ET-63: the gamelog only speaks when something happens. A pilot who is simply sitting still has never written
+    /// a jump or an undock line, so the app knows no system for them at all — right after start-up, or after coming
+    /// online without moving. This reading already has the answer, so closing that gap costs no location call of its
+    /// own; only the id→name lookup goes out, once per system per session.
+    ///
+    /// A gap, and only a gap. Once a system is known the gamelog owns the field again: it is the faster and more
+    /// direct source, and it is what every other screen has always shown. Nor is an abyssal reading used — the
+    /// caller only offers readings from outside, because a room in the abyss has no name worth showing and the
+    /// countdown owns that readout anyway.
+    /// </summary>
+    private void FillLocationGap(string name, int solarSystemId)
+    {
+        if (Metrics(name).Location is not null)
+            return;
+
+        if (_services.GetService<ISolarSystemNames>() is not { } systemNames)
+            return;
+
+        _ = FillLocationGapAsync(name, solarSystemId, systemNames);
+    }
+
+    private async Task FillLocationGapAsync(string name, int solarSystemId, ISolarSystemNames systemNames)
+    {
+        try
+        {
+            var system = await systemNames.NameAsync(solarSystemId);
+
+            // ESI down, an id it does not know, a token that stopped working: the location stays unknown, exactly
+            // as it was before this existed. Nothing to retry here — the next reading asks again if the gap is
+            // still open, and the resolver holds a failed id back so that costs nothing.
+            if (string.IsNullOrWhiteSpace(system))
+                return;
+
+            // The lookup took a round trip and a jump may have landed inside it. Re-check rather than assume:
+            // an ESI answer older than what we already know must not overwrite it.
+            if (Metrics(name).Location is not null)
+                return;
+
+            SetLocation(name, system, DateTime.UtcNow);
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                _services.GetService<ILoggerFactory>()?.CreateLogger<GamelogClientService>()
+                    .LogDebug(ex, "Could not fill {Character}'s location from ESI.", name);
+            }
+            catch { /* logging must never throw from a fire-and-forget fill */ }
+        }
     }
 
     private async Task RefreshRegistryMapAsync()

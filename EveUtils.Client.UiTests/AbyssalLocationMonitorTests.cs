@@ -49,7 +49,7 @@ public class AbyssalLocationMonitorTests
         var monitor = Build(locations, out _);
 
         var seen = new List<bool?>();
-        await monitor.WatchAsync(1, (inside, _) => seen.Add(inside), cts.Token);
+        await monitor.WatchAsync(1, reading => seen.Add(reading.Inside), cts.Token);
 
         Assert.Equal([false, true, true, false], seen);
     }
@@ -67,7 +67,7 @@ public class AbyssalLocationMonitorTests
         var monitor = Build(locations, out _);
 
         var seen = new List<bool?>();
-        await monitor.WatchAsync(1, (inside, _) => seen.Add(inside), cts.Token);
+        await monitor.WatchAsync(1, reading => seen.Add(reading.Inside), cts.Token);
 
         // The old behaviour ended here after one call, with `seen` holding a single entry.
         Assert.Equal(4, locations.Calls);
@@ -84,7 +84,7 @@ public class AbyssalLocationMonitorTests
 
         var before = DateTime.UtcNow;
         var stamps = new List<DateTime>();
-        await monitor.WatchAsync(1, (_, at) => stamps.Add(at), cts.Token);
+        await monitor.WatchAsync(1, reading => stamps.Add(reading.AtUtc), cts.Token);
 
         Assert.Equal(2, stamps.Count);
         Assert.All(stamps, at => Assert.InRange(at, before, DateTime.UtcNow));
@@ -101,7 +101,7 @@ public class AbyssalLocationMonitorTests
         var monitor = Build(locations, out var toasts);
 
         var seen = new List<bool?>();
-        await monitor.WatchAsync(1, (inside, _) => seen.Add(inside), CancellationToken.None);
+        await monitor.WatchAsync(1, reading => seen.Add(reading.Inside), CancellationToken.None);
 
         var toast = Assert.Single(toasts.ActionToasts);
         Assert.Equal("No abyssal detection", toast.Title);
@@ -121,7 +121,7 @@ public class AbyssalLocationMonitorTests
         var monitor = Build(locations, out var toasts);
 
         for (var run = 0; run < 3; run++)
-            await monitor.WatchAsync(1, (_, _) => { }, CancellationToken.None);
+            await monitor.WatchAsync(1, _ => { }, CancellationToken.None);
 
         Assert.Single(toasts.ActionToasts);
     }
@@ -138,7 +138,7 @@ public class AbyssalLocationMonitorTests
         var monitor = Build(locations, out var toasts);
 
         var seen = new List<bool?>();
-        await monitor.WatchAsync(1, (inside, _) => seen.Add(inside), cts.Token);
+        await monitor.WatchAsync(1, reading => seen.Add(reading.Inside), cts.Token);
 
         Assert.Equal([true, false], seen);
         Assert.Empty(toasts.Toasts);
@@ -152,7 +152,7 @@ public class AbyssalLocationMonitorTests
         var monitor = Build(locations, out _);
 
         var seen = new List<bool?>();
-        await monitor.WatchAsync(1, (inside, _) => seen.Add(inside), CancellationToken.None);
+        await monitor.WatchAsync(1, reading => seen.Add(reading.Inside), CancellationToken.None);
 
         Assert.Equal([null], seen);
         Assert.InRange(locations.Calls, 20, 22);
@@ -187,7 +187,7 @@ public class AbyssalLocationMonitorTests
         };
 
         using var cts = new CancellationTokenSource();
-        var watching = monitor.WatchAsync(1, (_, _) => { }, cts.Token);
+        var watching = monitor.WatchAsync(1, _ => { }, cts.Token);
 
         await Task.Delay(50, TestContext.Current.CancellationToken);
         Assert.Equal(0, locations.Calls);   // still gated

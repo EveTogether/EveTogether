@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using EveUtils.Client.Notifications;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Modules.Esi.Http;
-using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Location;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -17,6 +16,9 @@ namespace EveUtils.Client.Esi;
 /// rather than per-run (ET-62) because the countdown anchors on the last moment the pilot was proven outside, and
 /// only these polls can prove it — the gamelog writes nothing on the way in or out. Stop between runs and that anchor
 /// ages without bound; polling keeps it within one <see cref="PollInterval"/>.
+///
+/// It reports the whole reading rather than an abyssal verdict, because ET-63's location bootstrap reads the same
+/// polls to fill a system the gamelog has not named yet. Neither reader adds a call of its own.
 /// </summary>
 public sealed class AbyssalLocationMonitor(
     IEsiLocationClient locations,
@@ -49,12 +51,11 @@ public sealed class AbyssalLocationMonitor(
     private readonly ConcurrentDictionary<int, byte> _warned = new();
 
     /// <summary>
-    /// Starts watching <paramref name="characterId"/> for the rest of the session. <paramref name="onPresence"/> is
-    /// called after every reading: <c>true</c> = inside abyssal space, <c>false</c> = outside (which is also the
-    /// anchor the next run will use), <c>null</c> = the watch was lost and no clock can be trusted. Watching a
-    /// character that is already watched does nothing.
+    /// Starts watching <paramref name="characterId"/> for the rest of the session. <paramref name="onReading"/> is
+    /// called after every reading; a reading without a system id means the watch was lost and no clock can be
+    /// trusted. Watching a character that is already watched does nothing.
     /// </summary>
-    public void Watch(int characterId, Action<bool?, DateTime> onPresence)
+    public void Watch(int characterId, Action<EsiLocationReading> onReading)
     {
         var cts = new CancellationTokenSource();
         if (!_running.TryAdd(characterId, cts))
@@ -63,7 +64,7 @@ public sealed class AbyssalLocationMonitor(
             return;
         }
 
-        _ = Task.Run(() => WatchAsync(characterId, onPresence, cts.Token), CancellationToken.None);
+        _ = Task.Run(() => WatchAsync(characterId, onReading, cts.Token), CancellationToken.None);
     }
 
     public void Stop(int characterId)
@@ -75,7 +76,7 @@ public sealed class AbyssalLocationMonitor(
     }
 
     /// <summary>The watch itself. <see cref="Watch"/> is only the fire-and-forget wrapper; tests drive this.</summary>
-    internal async Task WatchAsync(int characterId, Action<bool?, DateTime> onPresence, CancellationToken cancellationToken)
+    internal async Task WatchAsync(int characterId, Action<EsiLocationReading> onReading, CancellationToken cancellationToken)
     {
         var failures = 0;
 
@@ -90,19 +91,19 @@ public sealed class AbyssalLocationMonitor(
                 if (result is { IsSuccess: true, Value: { } location })
                 {
                     failures = 0;
-                    onPresence(AbyssalSpace.IsAbyssalSystem(location.SolarSystemId), DateTime.UtcNow);
+                    onReading(new EsiLocationReading(location.SolarSystemId, DateTime.UtcNow));
                 }
                 else if (Fatal(result.Error?.Kind))
                 {
                     Warn(characterId, result.Error?.Kind);
-                    Lost(characterId, onPresence);
+                    Lost(characterId, onReading);
                     return;
                 }
                 else if (++failures > MaxConsecutiveFailures)
                 {
                     logger.LogWarning("Abyssal monitor for {CharacterId} gave up after {Failures} failed location reads.",
                         characterId, failures);
-                    Lost(characterId, onPresence);
+                    Lost(characterId, onReading);
                     return;
                 }
 
@@ -116,7 +117,7 @@ public sealed class AbyssalLocationMonitor(
         catch (Exception ex)
         {
             logger.LogError(ex, "Abyssal monitor for {CharacterId} stopped on an unexpected error.", characterId);
-            Lost(characterId, onPresence);
+            Lost(characterId, onReading);
         }
     }
 
@@ -161,11 +162,11 @@ public sealed class AbyssalLocationMonitor(
         }
     }
 
-    private void Lost(int characterId, Action<bool?, DateTime> onPresence)
+    private void Lost(int characterId, Action<EsiLocationReading> onReading)
     {
         if (_running.TryRemove(characterId, out var cts))
             cts.Dispose();
-        onPresence(null, DateTime.UtcNow);
+        onReading(EsiLocationReading.Lost(DateTime.UtcNow));
     }
 
     public void Dispose()
