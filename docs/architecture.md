@@ -1,9 +1,9 @@
 # Architecture
 
 How EVE Together is put together: three core projects (`Client` / `Server` / `Shared`) plus migration
-plumbing, CQRS with its own dispatcher, a server-side permission gate, a local + gRPC event bus, and two
-per-character auth modes. Coding conventions live in [`AGENTS.md`](../AGENTS.md); this document is the
-structural overview.
+plumbing, CQRS with its own dispatcher, a server-side permission gate, a local + gRPC event bus, two
+per-character auth modes, and the client-only clipboard watch. Coding conventions live in
+[`AGENTS.md`](../AGENTS.md); this document is the structural overview.
 
 ## Projects (10, .NET 10, `.slnx`)
 
@@ -114,3 +114,17 @@ SharedDbContext (abstract, not injectable)  → Ships + Esi + Fittings + ServerA
 Contexts have **no public `DbSet`s**; they build the model via `XxxModule.ConfigureModel(...)` and
 repositories reach tables through `Set<T>()`. Data access is via **`IDbContextFactory<SharedDbContext>`**
 (a short-lived context per operation).
+
+## Clipboard watch (client-only)
+
+`EveUtils.Client/Clipboard/` — not a `Shared` module: the clipboard is a desktop concern, like
+`Client/Platform/`. An opt-in `ClipboardWatchService` recognises an EFT fit or an EVE inventory
+listing on the clipboard and hands it to subscribed features; `ClipboardShapeRecogniser` decides on
+shape only, `ClipboardCaptureParser` parses on request. Windows pushes changes through a
+message-only window (`AddClipboardFormatListener`/`WM_CLIPBOARDUPDATE`); Linux and macOS report
+themselves unsupported rather than poll.
+
+The guarantees are the design here — off unless switched on, not read while nothing subscribes,
+unrecognised payloads dropped unread and never logged — as is the reason polling is excluded rather
+than pending, and the measured properties of EVE's clipboard output the parser depends on. All of
+that, plus the state today (**no consumers yet**), is in **[`clipboard.md`](clipboard.md)**.

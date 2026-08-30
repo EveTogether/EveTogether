@@ -3,6 +3,15 @@ using System.Collections.Generic;
 
 namespace EveUtils.Client.Clipboard;
 
+/// <summary>
+/// Reads the rows of a recognised inventory listing. Nothing is read by position: the player chooses which
+/// columns the inventory window shows, so a column is identified by the shape of its contents — a volume ends in
+/// <c>m3</c>, a price in <c>ISK</c>, a quantity is a bare whole number, and the name is the text column that is
+/// always filled. Numbers come in the player's locale (<c>42.237,65</c> here, <c>42,237.65</c> elsewhere), which
+/// is why the form is derived from the text itself rather than from any <see cref="System.Globalization.CultureInfo"/>:
+/// a culture-blind parse would return a silently wrong number instead of an error. Anything that cannot be read
+/// with certainty yields no value rather than a guess. Reasoning and the measurements behind it: docs/clipboard.md.
+/// </summary>
 public static class ClipboardInventoryParser
 {
     public static IReadOnlyList<ClipboardInventoryItem> Parse(string text)

@@ -174,6 +174,7 @@ See [`AGENTS.md`](AGENTS.md) for the full conventions before you write code.
 | Document | What it covers |
 |----------|----------------|
 | [`docs/architecture.md`](docs/architecture.md) | Full architecture: projects, modules, CQRS, permission gate, event bus, auth, EF contexts |
+| [`docs/clipboard.md`](docs/clipboard.md) | The clipboard watch: its privacy guarantees, why polling is excluded, and the measured EVE clipboard formats |
 | [`AGENTS.md`](AGENTS.md) | Coding conventions + module structure — read before contributing code |
 | [`docs/server-installation.md`](docs/server-installation.md) | Self-hosting the server (Docker): EVE app registration, configuration, TLS/reverse proxy |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to contribute, the PR bar, and what gets closed |
