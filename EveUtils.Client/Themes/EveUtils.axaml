@@ -1,6 +1,7 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:views="using:EveUtils.Client.Views">
+        xmlns:views="using:EveUtils.Client.Views"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia">
 
     <Styles.Resources>
 
@@ -30,29 +31,8 @@
 
         <FontFamily x:Key="MonoFont">Consolas, Cascadia Mono, monospace</FontFamily>
 
-        <!-- Pop-out title-bar icons (ET-73). Drawn as geometry, not typed as characters: a glyph is whatever the
-             shipped font decides to draw it as, which is how ⬒ ("square with top half black") arrived on screen with
-             its BOTTOM half filled and read as a floppy disk. A path is the shape we chose, at every size, on every
-             machine.
-
-             Line-art on a 16-unit box, stroked from the owning button's Foreground — the same language as the module
-             rail's icons (D-182) and the inbox trash. One stroke thickness across all three is what makes them weigh
-             the same; that is the whole reason they are drawn on one grid instead of being sized to fit their own
-             bounds. -->
-
-        <!-- A thumbtack seen head-on: wide cap, tapering shank, flared base, needle. What a "pin" looks like
-             everywhere else, which is the point — the triangle that stood here was ours alone. Deliberately short of
-             detail: at 13px a cap ridge or a highlight turns to mush. -->
-        <StreamGeometry x:Key="IconPin">M5.5,2 H10.5 L9.5,8.5 L12.5,11 H3.5 L6.5,8.5 Z M8,11 V15</StreamGeometry>
-
-        <!-- Opacity: the half-filled disc this button has always shown, now as a ring plus a solid half. -->
-        <StreamGeometry x:Key="IconOpacityRing">M8,1.6 A6.4,6.4 0 0 1 8,14.4 A6.4,6.4 0 0 1 8,1.6 Z</StreamGeometry>
-        <StreamGeometry x:Key="IconOpacityHalf">M8,2.9 A5.1,5.1 0 0 1 8,13.1 Z</StreamGeometry>
-
-        <!-- Wider across its box than the other two are across theirs: two straight strokes lay down about half the
-             ink of the pin's outline or the ring, so at equal extents the ✕ reads noticeably lighter. Optical
-             weight is the thing being matched here, not nominal size. -->
-        <StreamGeometry x:Key="IconClose">M3.9,3.9 L12.1,12.1 M12.1,3.9 L3.9,12.1</StreamGeometry>
+        <!-- The pop-out title bar's three shapes were StreamGeometry here (ET-73) because the app owned no icon set.
+             They come from Material now (ET-74) — see Themes/Icons.axaml, which is the only place an icon comes from. -->
     </Styles.Resources>
 
     <!-- ── Window ── -->
@@ -178,8 +158,9 @@
     </Style>
 
     <!-- Compact icon-only destructive button (e.g. inbox delete). Borderless line-icon that reads clearly at rest
-         (accent text) and turns red with a soft fill on hover. A child Path bound to the button Foreground re-tints
-         with the state. -->
+         (accent text) and turns red with a soft fill on hover. The icon inherits the state colour, so the hover ink
+         has to sit on the ContentPresenter: the plain Button:pointerover rule above already sets a bright Foreground
+         there, and a red one on the button itself would never reach past it. -->
     <Style Selector="Button.trash">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="0"/>
@@ -187,11 +168,9 @@
         <Setter Property="Padding" Value="6,4"/>
         <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
     </Style>
-    <Style Selector="Button.trash:pointerover">
-        <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
-    </Style>
     <Style Selector="Button.trash:pointerover /template/ ContentPresenter">
         <Setter Property="Background" Value="#22EF5A5A"/>
+        <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
     </Style>
 
     <!-- Server-group header (D-105 multi-server aggregation): a section header above each coupled server's fleets. -->
@@ -278,38 +257,47 @@
     <!-- ── Status chips (module-shell mockup): small rounded pills for the character card's ESI / server /
          implant badges. Variants: .ok = healthy accent (mockup .chip.esi), .warn = needs attention (amber),
          .good = target reached (green), .dim = inert ("not signed in"). Faction-swappable colours via DynamicResource. ── -->
+    <!-- Size and ink are set on the chip as INHERITED text properties rather than on a direct TextBlock child: a chip
+         may now hold an icon beside its label (ET-74), and a "> TextBlock" rule reaches neither the icon nor a label
+         that has been wrapped in a row to sit next to one. -->
     <Style Selector="Border.chip">
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
         <Setter Property="CornerRadius" Value="10"/>
         <Setter Property="Padding" Value="7,1,7,2"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="TextElement.FontSize" Value="9.5"/>
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextAccentBrush}"/>
     </Style>
     <Style Selector="Border.chip > TextBlock">
-        <Setter Property="FontSize" Value="9.5"/>
-        <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
     <Style Selector="Border.chip.ok">
         <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentBrightBrush}"/>
     </Style>
-    <Style Selector="Border.chip.ok > TextBlock">
-        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
-    </Style>
+    <!-- The amber is a brush element, not the string "#FFE0B341": an attached-property setter carries no target type
+         for the string converter to work from, so the literal silently resolved to nothing and the chip's icon and
+         label stayed at the resting accent — a warning chip that read as a healthy one. -->
     <Style Selector="Border.chip.warn">
         <Setter Property="BorderBrush" Value="#8CE0B341"/>
-    </Style>
-    <Style Selector="Border.chip.warn > TextBlock">
-        <Setter Property="Foreground" Value="#FFE0B341"/>
+        <Setter Property="TextElement.Foreground">
+            <SolidColorBrush Color="#FFE0B341"/>
+        </Setter>
     </Style>
     <Style Selector="Border.chip.good">
         <Setter Property="BorderBrush" Value="{StaticResource GreenBrush}"/>
+        <Setter Property="TextElement.Foreground" Value="{StaticResource GreenBrush}"/>
     </Style>
-    <Style Selector="Border.chip.good > TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
+    <Style Selector="Border.chip.dim">
+        <Setter Property="TextElement.Foreground" Value="{StaticResource TextDimBrush}"/>
     </Style>
-    <Style Selector="Border.chip.dim > TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+
+    <!-- A chip's icon rides at the label's size, not the app default: a chip is 9.5px text, and a 14px icon beside it
+         would be the loudest thing on the character card. -->
+    <Style Selector="Border.chip mi|MaterialIcon">
+        <Setter Property="Width" Value="11"/>
+        <Setter Property="Height" Value="11"/>
     </Style>
 
     <!-- ── A fleet member's solar system (ET-43) ──
@@ -380,17 +368,15 @@
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="VerticalAlignment" Value="Top"/>
     </Style>
-    <!-- Every state's ink is set on the BUTTON, never on its ContentPresenter, because the icons are Paths and a
-         Path's Stroke does not inherit the way a TextBlock's Foreground does — it binds to $parent[Button].Foreground
-         and would sit frozen at the resting colour if the state set it one level down. Same arrangement as
-         Button.trash. Fills and borders stay on the presenter, which is where the stock theme puts them. -->
-    <Style Selector="Button.overlaybtn:pointerover, ToggleButton.overlaybtn:pointerover">
-        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
-    </Style>
+    <!-- Every state's ink is set on the ContentPresenter, not on the button. An icon takes its colour by inheritance
+         (MaterialIcon and TextBlock both do), and the stock Fluent theme sets its own Foreground ON THE PRESENTER for
+         :pointerover and :checked — a rule one level up loses to it. That is not theory: the pinned tack rendered
+         near-white on the accent square until these moved down, which is the state the button exists to report. -->
     <Style Selector="Button.overlaybtn:pointerover /template/ ContentPresenter,
                      ToggleButton.overlaybtn:pointerover /template/ ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
     </Style>
 
     <!-- Pinned. The word PIN carried the on-state before; an icon on its own cannot, so the whole square fills with
@@ -399,26 +385,23 @@
          border or a brighter glyph would be lost over a nebula or a station backdrop. It is also the one state worth
          being loud about — "is my window still on top" is the entire question that button exists to answer.
          The stock theme's own :checked fill is overridden here, or it would put its rounded blue back. -->
-    <Style Selector="ToggleButton.overlaybtn:checked, ToggleButton.overlaybtn:checked:pointerover">
-        <Setter Property="Foreground" Value="#FF06070A"/>
-    </Style>
     <Style Selector="ToggleButton.overlaybtn:checked /template/ ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource AccentBrightBrush}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource AccentBrightBrush}"/>
+        <Setter Property="Foreground" Value="#FF06070A"/>
     </Style>
     <Style Selector="ToggleButton.overlaybtn:checked:pointerover /template/ ContentPresenter">
         <Setter Property="Background" Value="{StaticResource TextBrightBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="Foreground" Value="#FF06070A"/>
     </Style>
 
     <!-- Close keeps the red hover the rest of the app's window chrome has, so the one button you cannot undo is the
          one button that says so before you press it. -->
-    <Style Selector="Button.overlaybtn.overlayclose:pointerover">
-        <Setter Property="Foreground" Value="White"/>
-    </Style>
     <Style Selector="Button.overlaybtn.overlayclose:pointerover /template/ ContentPresenter">
         <Setter Property="Background" Value="#FFCC4444"/>
         <Setter Property="BorderBrush" Value="#FFCC4444"/>
+        <Setter Property="Foreground" Value="White"/>
     </Style>
 
     <!-- ── Module-shell rail (D-182): monochrome icon launcher + per-module item ── -->

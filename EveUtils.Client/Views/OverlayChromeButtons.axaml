@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              mc:Ignorable="d" d:DesignWidth="80" d:DesignHeight="24"
              x:Class="EveUtils.Client.Views.OverlayChromeButtons"
              x:Name="ChromeRoot">
@@ -11,31 +12,23 @@
          these windows are windows of their own and inherit nothing from anywhere else.
 
          Every one of them has a tooltip: an icon on its own is quick to read once you know it and opaque before. -->
-    <!-- Every icon is drawn on the SAME 16-unit canvas and scaled by the same Viewbox, so all three share one scale
-         and one stroke weight. Sizing each Path to its own bounds instead would blow the two-stroke ✕ up to twice the
-         pin's scale, because a Path stretches its geometry's bounding box and the X's box is far smaller. -->
+    <!-- The three shapes were drawn by hand in ET-73 because the app had no icon set; they come from Material now
+         (ET-74), so the set keeps no permanent exception. What that round cost to learn is kept: one size for all
+         three, three weights that match each other, and a pinned state carried by the button's fill rather than by
+         the icon — see the :checked rule in the theme. -->
     <StackPanel Orientation="Horizontal" Spacing="4">
         <StackPanel.Styles>
-            <Style Selector="Viewbox.icon">
+            <!-- One size for the set: the complaint that opened ET-73 was three buttons of unequal weight. -->
+            <Style Selector="mi|MaterialIcon.chrome">
                 <Setter Property="Width" Value="13"/>
                 <Setter Property="Height" Value="13"/>
             </Style>
-            <Style Selector="Path.icon">
-                <Setter Property="StrokeThickness" Value="1.5"/>
-                <Setter Property="StrokeLineCap" Value="Round"/>
-                <Setter Property="StrokeJoin" Value="Round"/>
-            </Style>
         </StackPanel.Styles>
 
-        <!-- A half-filled disc: how solid the backdrop is. -->
+        <!-- A half-filled disc: how solid the backdrop is. Material's own "Opacity" is a droplet, which says liquid
+             rather than transparency; CircleHalfFull is the disc this button has shown since it existed. -->
         <Button Classes="overlaybtn" ToolTip.Tip="Overlay opacity">
-            <Viewbox Classes="icon">
-                <Canvas Width="16" Height="16">
-                    <Path Classes="icon" Data="{StaticResource IconOpacityRing}"
-                          Stroke="{Binding $parent[Button].Foreground}"/>
-                    <Path Data="{StaticResource IconOpacityHalf}" Fill="{Binding $parent[Button].Foreground}"/>
-                </Canvas>
-            </Viewbox>
+            <mi:MaterialIcon Classes="chrome" Kind="CircleHalfFull"/>
             <Button.Flyout>
                 <Flyout Placement="Bottom">
                     <StackPanel Width="190" Margin="6" Spacing="8">
@@ -53,27 +46,21 @@
             </Button.Flyout>
         </Button>
 
-        <!-- A thumbtack, because that is what a pin looks like everywhere else. Whether it is ON is carried by the
-             button's fill, not by the icon — see the :checked rule in the theme. -->
+        <!-- A thumbtack, because that is what a pin looks like everywhere else. Solid rather than PinOutline: at 13px
+             over a game the outline's hollow head loses the tack's silhouette, and this is the one of the three whose
+             shape has to survive being glanced at. -->
         <ToggleButton x:Name="PinButton" Classes="overlaybtn"
                       IsChecked="{Binding $parent[Window].Topmost, Mode=TwoWay}"
                       ToolTip.Tip="Keep this window on top of other windows">
-            <Viewbox Classes="icon">
-                <Canvas Width="16" Height="16">
-                    <Path Classes="icon" Data="{StaticResource IconPin}"
-                          Stroke="{Binding $parent[ToggleButton].Foreground}"/>
-                </Canvas>
-            </Viewbox>
+            <mi:MaterialIcon Classes="chrome" Kind="Pin"/>
         </ToggleButton>
 
+        <!-- CloseThick, not Close. Two thin strokes lay down about half the ink of the tack or the disc, so the plain
+             ✕ read visibly lighter than its neighbours at the same 13px — the same imbalance, and the same fix, as
+             the hand-drawn round. Optical weight, not nominal size, is what is being matched. -->
         <Button x:Name="CloseButton" Classes="overlaybtn overlayclose"
                 Click="OnClose" ToolTip.Tip="Close this overlay">
-            <Viewbox Classes="icon">
-                <Canvas Width="16" Height="16">
-                    <Path Classes="icon" Data="{StaticResource IconClose}"
-                          Stroke="{Binding $parent[Button].Foreground}"/>
-                </Canvas>
-            </Viewbox>
+            <mi:MaterialIcon Classes="chrome" Kind="CloseThick"/>
         </Button>
     </StackPanel>
 </UserControl>

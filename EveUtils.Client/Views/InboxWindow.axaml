@@ -3,16 +3,13 @@
         xmlns:vm="using:EveUtils.Client.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         mc:Ignorable="d" d:DesignWidth="460" d:DesignHeight="520"
         x:Class="EveUtils.Client.Views.InboxWindow"
         x:DataType="vm:InboxViewModel"
         Width="460" Height="520"
         WindowStartupLocation="CenterOwner"
         Title="Inbox">
-
-    <v:ChromedWindow.Resources>
-        <StreamGeometry x:Key="IconTrash">M3,6 L21,6 M9,6 L9,4 L15,4 L15,6 M6,6 L7,20 L17,20 L18,6 M10,10 L10,17 M14,10 L14,17</StreamGeometry>
-    </v:ChromedWindow.Resources>
 
     <DockPanel Margin="14">
 
@@ -59,9 +56,7 @@
                                                        VerticalAlignment="Center" Margin="8,0,0,0"/>
                                             <Button Grid.Column="2" Classes="trash" VerticalAlignment="Center" Margin="4,0,0,0"
                                                     Command="{Binding DeleteCommand}" ToolTip.Tip="Delete message">
-                                                <Path Width="15" Height="15" Stretch="Uniform" Data="{StaticResource IconTrash}"
-                                                      Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.6"
-                                                      StrokeLineCap="Round" StrokeJoin="Round"/>
+                                                <mi:MaterialIcon Width="15" Height="15" Kind="TrashCanOutline"/>
                                             </Button>
                                         </Grid>
                                         <TextBlock Text="{Binding RecipientLabel}" FontSize="10"

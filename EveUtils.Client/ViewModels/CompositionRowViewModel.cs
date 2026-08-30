@@ -35,7 +35,9 @@ public sealed partial class CompositionRowViewModel(
     /// <summary>How many fleets are coupled to this doctrine; 0 hides the pill.</summary>
     public int FleetCount { get; } = info.FleetCount;
     public bool HasFleets => FleetCount > 0;
-    public string FleetCountLabel => FleetCount == 1 ? "⛴ 1 fleet" : $"⛴ {FleetCount} fleets";
+    /// <summary>Was prefixed with the ⛴ emoji, which Windows draws in colour from the emoji font (ET-74); the pill
+    /// carries a Material hull icon beside this label instead.</summary>
+    public string FleetCountLabel => FleetCount == 1 ? "1 fleet" : $"{FleetCount} fleets";
 
     public ObservableCollection<CompositionRoleChipViewModel> RoleChips { get; } = [];
 

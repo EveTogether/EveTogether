@@ -4,6 +4,7 @@
         xmlns:sys="using:System"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         mc:Ignorable="d" d:DesignWidth="1180" d:DesignHeight="760"
         x:Class="EveUtils.Client.Views.SettingsSyncWindow"
         x:DataType="vm:SettingsSyncViewModel"
@@ -78,7 +79,7 @@
         <Border DockPanel.Dock="Top" IsVisible="{Binding ClientsRunning}" Margin="0,0,0,10" Padding="12,8"
                 Background="#33CC4444" BorderBrush="{StaticResource RedBrush}" BorderThickness="1">
             <Grid ColumnDefinitions="Auto,*,Auto">
-                <TextBlock Grid.Column="0" Text="⚠" FontSize="15" VerticalAlignment="Center"
+                <mi:MaterialIcon Grid.Column="0" Classes="icon-lg" Kind="AlertOutline"
                            Foreground="{StaticResource RedBrush}"/>
                 <TextBlock Grid.Column="1" Text="{Binding ClientWarning}" Margin="10,0" TextWrapping="Wrap"
                            FontSize="12" VerticalAlignment="Center" Foreground="{StaticResource TextBrightBrush}"/>

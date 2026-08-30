@@ -13,6 +13,8 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.VisualTree;
+using Material.Icons;
+using Material.Icons.Avalonia;
 
 namespace EveUtils.Client.Views;
 
@@ -63,14 +65,14 @@ public class ChromedWindow : Window
         brand.Children.Add(badge);
         brand.Children.Add(title);
 
-        var minimize = new Button { Content = "—" };
+        var minimize = new Button { Content = new MaterialIcon { Kind = MaterialIconKind.WindowMinimize } };
         minimize.Classes.Add("winbtn");
         ToolTip.SetTip(minimize, "Minimize");
         minimize.Click += (_, _) => window.WindowState = WindowState.Minimized;
         // Fixed-size dialogs don't minimize (they're not resizable); only the resizable module pop-outs do.
         minimize.Bind(Visual.IsVisibleProperty, window.GetObservable(CanResizeProperty));
 
-        var close = new Button { Content = "✕" };
+        var close = new Button { Content = new MaterialIcon { Kind = MaterialIconKind.Close } };
         close.Classes.Add("winbtn");
         close.Classes.Add("winclose");
         ToolTip.SetTip(close, "Close");

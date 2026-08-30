@@ -230,8 +230,8 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
 
         var dir = _gamelogDirBox.Text?.Trim();
         _hintBlock.Text = string.IsNullOrWhiteSpace(dir) ? $"Detected default: {_detectedDefault}"
-            : Directory.Exists(dir) ? "✓ folder exists"
-            : "⚠️ folder not found — it will be picked up once it appears";
+            : Directory.Exists(dir) ? "Folder exists."
+            : "Folder not found — it will be picked up once it appears.";
     }
 
     private async void OnBrowse(object? sender, RoutedEventArgs e)

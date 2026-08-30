@@ -86,6 +86,8 @@
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
+        <!-- Before the app's own styles so a window can still override an icon's size locally if it must (ET-74). -->
+        <StyleInclude Source="avares://EveUtils.Client/Themes/Icons.axaml"/>
         <StyleInclude Source="avares://EveUtils.Client/Themes/EveUtils.axaml"/>
     </Application.Styles>
 </Application>

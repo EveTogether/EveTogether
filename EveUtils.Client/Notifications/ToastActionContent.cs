@@ -4,6 +4,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.Notifications;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Material.Icons;
+using Material.Icons.Avalonia;
 
 namespace EveUtils.Client.Notifications;
 
@@ -22,12 +24,37 @@ public static class ToastActionContent
     {
         var layout = new StackPanel { Spacing = 6 };
 
-        layout.Children.Add(new TextBlock
+        var heading = new TextBlock
         {
-            Text = KindGlyph(kind) + title,
+            Text = title,
             FontWeight = FontWeight.SemiBold,
             TextWrapping = TextWrapping.Wrap,
-        });
+        };
+
+        if (KindIcon(kind) is { } kindIcon)
+        {
+            layout.Children.Add(new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 7,
+                Children =
+                {
+                    new MaterialIcon
+                    {
+                        Kind = kindIcon,
+                        Width = 14,
+                        Height = 14,
+                        VerticalAlignment = VerticalAlignment.Top,
+                        Margin = new Thickness(0, 2, 0, 0),
+                    },
+                    heading,
+                },
+            });
+        }
+        else
+        {
+            layout.Children.Add(heading);
+        }
 
         if (!string.IsNullOrEmpty(message))
             layout.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, Opacity = 0.8 });
@@ -66,13 +93,14 @@ public static class ToastActionContent
         _ => null,
     };
 
-    // A leading severity cue. Success is the quiet default (no glyph); the rest match the plain toast's intent without
-    // inventing theme colours (the card chrome is themed by the host) — see Languages/AvaloniaUI.md.
-    private static string KindGlyph(ToastKind kind) => kind switch
+    // A leading severity cue. Success is the quiet default (no icon); the rest match the plain toast's intent without
+    // inventing theme colours (the card chrome is themed by the host) — see Languages/AvaloniaUI.md. These were
+    // characters prepended to the title until ET-74, and ⛔ in particular came out of the emoji font in full colour.
+    private static MaterialIconKind? KindIcon(ToastKind kind) => kind switch
     {
-        ToastKind.Warning => "⚠ ",     // ⚠
-        ToastKind.Error => "⛔ ",       // ⛔
-        ToastKind.Information => "ℹ ",  // ℹ
-        _ => "",
+        ToastKind.Warning => MaterialIconKind.AlertOutline,
+        ToastKind.Error => MaterialIconKind.CloseOctagonOutline,
+        ToastKind.Information => MaterialIconKind.InformationOutline,
+        _ => null,
     };
 }

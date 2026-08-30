@@ -1,0 +1,54 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia">
+
+    <!-- Where an icon comes from (ET-74).
+
+         Every symbol in this interface used to be a Unicode character typed into a Text or Content: ⚠ ✓ ⧉ ⇄ ☁ 🗑.
+         What those look like is decided by the shipped font, not by us, and that went wrong twice in ET-73 — ⬒
+         ("square with top half black") drew with its BOTTOM half filled and read on screen as a floppy disk, and the
+         thumbtack the operator asked for does not exist as a usable character at all. The answer that round was three
+         hand-drawn StreamGeometry shapes, which only moved the problem: a private drawing per window is how a set
+         drifts apart.
+
+         So: Material Design Icons through Material.Icons.Avalonia (MIT, ~7500 icons). One package, one control, one
+         name per icon — Kind="Pin" is a shape someone else has already drawn at a consistent weight, and it reads the
+         same on every machine.
+
+         OUTLINE VARIANTS BY DEFAULT. This app's own icon language is monochrome line art — the module rail (D-182),
+         the inbox trash — and Material's solid icons lay down two to three times the ink of the text they sit next
+         to, which is exactly the "not heavier than what it replaces" the ticket asks for. Where Material offers an
+         outline (TrashCanOutline, ContentCopy, CloudOutline…) take it; only reach for a solid when the icon has to
+         carry a state on its own, the way the chips' status dot does.
+
+         SIZE. Three sizes, matching the three text sizes this interface actually uses (9-10px labels, 11px body,
+         13px+ headers). Material draws on a 24-unit box with about a unit of margin, so an icon of the same nominal
+         size as the text beside it reads a little smaller — hence sizes a touch above what they accompany. A surface
+         with its own scale (the module rail, a chip) sets that once for the whole surface rather than per icon; ten
+         icons that each size themselves are ten different weights, which is what ET-73 was about.
+
+         COLOUR. An icon takes its Foreground by inheritance, exactly like a TextBlock, so it follows whatever the
+         surrounding button or chip has set. Two things follow from that, both learned the hard way here: a state's
+         ink has to sit on the ContentPresenter (the stock Fluent theme sets its own there and a rule one level up
+         loses to it), and a colour handed to an ATTACHED TextElement.Foreground setter has to be a brush element —
+         a "#RRGGBB" string has no target type to convert against and silently resolves to nothing. -->
+    <mi:MaterialIconStyles/>
+
+    <Style Selector="mi|MaterialIcon">
+        <Setter Property="Width" Value="14"/>
+        <Setter Property="Height" Value="14"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- Beside 9-10px label text: badges, chips, row-level affordances. -->
+    <Style Selector="mi|MaterialIcon.icon-sm">
+        <Setter Property="Width" Value="12"/>
+        <Setter Property="Height" Value="12"/>
+    </Style>
+
+    <!-- Banner and header company: the few places a symbol is the first thing you are meant to see. -->
+    <Style Selector="mi|MaterialIcon.icon-lg">
+        <Setter Property="Width" Value="17"/>
+        <Setter Property="Height" Value="17"/>
+    </Style>
+</Styles>

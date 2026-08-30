@@ -3,6 +3,7 @@
         xmlns:fb="using:EveUtils.Client.ViewModels.FitBrowser"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="660"
         x:Class="EveUtils.Client.Views.FitBrowserWindow"
         x:DataType="fb:FitBrowserViewModel"
@@ -23,22 +24,26 @@
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top"
                         IsVisible="{Binding CanImport}">
                 <!-- Single import dropdown (D-188 FBX-6): same Button+MenuFlyout pattern + theming as the export menu -->
-                <Button Content="IMPORT ▾" ToolTip.Tip="Import a fit from EVE, EFT/DNA text or an eveship.fit link">
+                <Button ToolTip.Tip="Import a fit from EVE, EFT/DNA text or an eveship.fit link">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="IMPORT" VerticalAlignment="Center"/>
+                        <mi:MaterialIcon Classes="icon-sm" Kind="ChevronDown"/>
+                    </StackPanel>
                     <Button.Flyout>
                         <MenuFlyout>
                             <TextBlock Classes="menuHeader" Text="IMPORT FIT" IsHitTestVisible="False"/>
                             <MenuItem Header="From EVE (ESI)…" Command="{Binding ImportFromEsiCommand}"
                                       ToolTip.Tip="Fetch your fits from EVE and pick which to import. Choose the character in the dialog (D-90).">
-                                <MenuItem.Icon><TextBlock Text="⤓" FontSize="13"/></MenuItem.Icon>
+                                <MenuItem.Icon><mi:MaterialIcon Kind="DownloadOutline"/></MenuItem.Icon>
                             </MenuItem>
                             <Separator/>
                             <MenuItem Header="From EFT / DNA text…" Command="{Binding ImportTextCommand}"
                                       ToolTip.Tip="Paste an EFT block or DNA string to import a fit (D-47).">
-                                <MenuItem.Icon><TextBlock Text="▤" FontSize="13"/></MenuItem.Icon>
+                                <MenuItem.Icon><mi:MaterialIcon Kind="TextBoxOutline"/></MenuItem.Icon>
                             </MenuItem>
                             <MenuItem Header="From fit link…" Command="{Binding ImportEsfLinkCommand}"
                                       ToolTip.Tip="Paste an eveship.fit link to import a fit (D-188).">
-                                <MenuItem.Icon><TextBlock Text="🔗" FontSize="13"/></MenuItem.Icon>
+                                <MenuItem.Icon><mi:MaterialIcon Kind="LinkVariant"/></MenuItem.Icon>
                             </MenuItem>
                         </MenuFlyout>
                     </Button.Flyout>
@@ -79,16 +84,24 @@
 
                         <!-- Pager -->
                         <Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="0,8,0,0">
-                            <Button Grid.Column="0" Content="⏮" FontSize="11" Command="{Binding FirstPageCommand}"
-                                    IsEnabled="{Binding CanPrev}" ToolTip.Tip="First page"/>
-                            <Button Grid.Column="1" Content="◀" FontSize="11" Margin="4,0,0,0" Command="{Binding PrevPageCommand}"
-                                    IsEnabled="{Binding CanPrev}" ToolTip.Tip="Previous page"/>
+                            <Button Grid.Column="0" Command="{Binding FirstPageCommand}"
+                                    IsEnabled="{Binding CanPrev}" ToolTip.Tip="First page">
+                                <mi:MaterialIcon Kind="PageFirst"/>
+                            </Button>
+                            <Button Grid.Column="1" Margin="4,0,0,0" Command="{Binding PrevPageCommand}"
+                                    IsEnabled="{Binding CanPrev}" ToolTip.Tip="Previous page">
+                                <mi:MaterialIcon Kind="ChevronLeft"/>
+                            </Button>
                             <TextBlock Grid.Column="2" Text="{Binding PageInfo}" HorizontalAlignment="Center"
                                        VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextAccentBrush}"/>
-                            <Button Grid.Column="3" Content="▶" FontSize="11" Margin="0,0,4,0" Command="{Binding NextPageCommand}"
-                                    IsEnabled="{Binding CanNext}" ToolTip.Tip="Next page"/>
-                            <Button Grid.Column="4" Content="⏭" FontSize="11" Command="{Binding LastPageCommand}"
-                                    IsEnabled="{Binding CanNext}" ToolTip.Tip="Last page"/>
+                            <Button Grid.Column="3" Margin="0,0,4,0" Command="{Binding NextPageCommand}"
+                                    IsEnabled="{Binding CanNext}" ToolTip.Tip="Next page">
+                                <mi:MaterialIcon Kind="ChevronRight"/>
+                            </Button>
+                            <Button Grid.Column="4" Command="{Binding LastPageCommand}"
+                                    IsEnabled="{Binding CanNext}" ToolTip.Tip="Last page">
+                                <mi:MaterialIcon Kind="PageLast"/>
+                            </Button>
                         </Grid>
 
                         <!-- Full-width fit table (D-188 FBX-4): hull · fit name · slot counts (+ tooltip) · uploader · export -->
@@ -138,7 +151,8 @@
                                                             PointerEntered="OnRackPointerEntered" ToolTip.ShowDelay="250">
                                                     <TextBlock Text="{Binding HighCount, StringFormat='{}{0} modules'}"
                                                                FontSize="12" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="▾" FontSize="10" Foreground="{DynamicResource TextAccentBrush}" VerticalAlignment="Center"/>
+                                                    <mi:MaterialIcon Classes="icon-sm" Kind="ChevronDown"
+                                                                     Foreground="{DynamicResource TextAccentBrush}"/>
                                                     <ToolTip.Tip>
                                                         <StackPanel MinWidth="200">
                                                             <TextBlock Text="HIGH SLOTS" FontSize="9" FontWeight="SemiBold" LetterSpacing="1.4"
@@ -169,7 +183,8 @@
                                                             PointerEntered="OnRackPointerEntered" ToolTip.ShowDelay="250">
                                                     <TextBlock Text="{Binding MidCount, StringFormat='{}{0} modules'}"
                                                                FontSize="12" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="▾" FontSize="10" Foreground="{DynamicResource TextAccentBrush}" VerticalAlignment="Center"/>
+                                                    <mi:MaterialIcon Classes="icon-sm" Kind="ChevronDown"
+                                                                     Foreground="{DynamicResource TextAccentBrush}"/>
                                                     <ToolTip.Tip>
                                                         <StackPanel MinWidth="200">
                                                             <TextBlock Text="MID SLOTS" FontSize="9" FontWeight="SemiBold" LetterSpacing="1.4"
@@ -200,7 +215,8 @@
                                                             PointerEntered="OnRackPointerEntered" ToolTip.ShowDelay="250">
                                                     <TextBlock Text="{Binding LowCount, StringFormat='{}{0} modules'}"
                                                                FontSize="12" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="▾" FontSize="10" Foreground="{DynamicResource TextAccentBrush}" VerticalAlignment="Center"/>
+                                                    <mi:MaterialIcon Classes="icon-sm" Kind="ChevronDown"
+                                                                     Foreground="{DynamicResource TextAccentBrush}"/>
                                                     <ToolTip.Tip>
                                                         <StackPanel MinWidth="200">
                                                             <TextBlock Text="LOW SLOTS" FontSize="9" FontWeight="SemiBold" LetterSpacing="1.4"
@@ -243,24 +259,25 @@
                                     <DataGridTemplateColumn Header="EXPORT" Width="92">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
-                                                <Button Content="⤓" IsVisible="{Binding CanExport}" HorizontalAlignment="Center"
-                                                        Padding="9,3" FontSize="14" Foreground="{DynamicResource TextAccentBrush}"
+                                                <Button IsVisible="{Binding CanExport}" HorizontalAlignment="Center"
+                                                        Padding="9,3" Foreground="{DynamicResource TextAccentBrush}"
                                                         ToolTip.Tip="Export this fit">
+                                                    <mi:MaterialIcon Kind="TrayArrowDown"/>
                                                     <Button.Flyout>
                                                         <MenuFlyout>
                                                             <TextBlock Classes="menuHeader" Text="EXPORT FIT" IsHitTestVisible="False"/>
                                                             <MenuItem Header="Share to server…" Command="{Binding ShareToServerCommand}">
-                                                                <MenuItem.Icon><TextBlock Text="☁" FontSize="13"/></MenuItem.Icon>
+                                                                <MenuItem.Icon><mi:MaterialIcon Kind="CloudUploadOutline"/></MenuItem.Icon>
                                                             </MenuItem>
                                                             <MenuItem Header="Push to EVE (in-game)…" Command="{Binding PushToEveCommand}">
-                                                                <MenuItem.Icon><TextBlock Text="⏵" FontSize="13"/></MenuItem.Icon>
+                                                                <MenuItem.Icon><mi:MaterialIcon Kind="SendOutline"/></MenuItem.Icon>
                                                             </MenuItem>
                                                             <Separator/>
                                                             <MenuItem Header="Copy eveship.fit link" Command="{Binding CopyEveshipLinkCommand}">
-                                                                <MenuItem.Icon><TextBlock Text="🔗" FontSize="13"/></MenuItem.Icon>
+                                                                <MenuItem.Icon><mi:MaterialIcon Kind="LinkVariant"/></MenuItem.Icon>
                                                             </MenuItem>
                                                             <MenuItem Header="Open EFT window…" Command="{Binding OpenEftWindowCommand}">
-                                                                <MenuItem.Icon><TextBlock Text="▤" FontSize="13"/></MenuItem.Icon>
+                                                                <MenuItem.Icon><mi:MaterialIcon Kind="TextBoxOutline"/></MenuItem.Icon>
                                                             </MenuItem>
                                                         </MenuFlyout>
                                                     </Button.Flyout>
@@ -273,18 +290,19 @@
                                     <DataGridTemplateColumn Header="" Width="48">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
-                                                <Button Content="⋯" IsVisible="{Binding CanManage}" HorizontalAlignment="Center"
-                                                        Padding="9,3" FontSize="14" Foreground="{DynamicResource TextAccentBrush}"
+                                                <Button IsVisible="{Binding CanManage}" HorizontalAlignment="Center"
+                                                        Padding="9,3" Foreground="{DynamicResource TextAccentBrush}"
                                                         ToolTip.Tip="Manage this fit">
+                                                    <mi:MaterialIcon Kind="DotsHorizontal"/>
                                                     <Button.Flyout>
                                                         <MenuFlyout>
                                                             <TextBlock Classes="menuHeader" Text="FIT" IsHitTestVisible="False"/>
                                                             <MenuItem Header="Edit details…" Command="{Binding EditMetadataCommand}">
-                                                                <MenuItem.Icon><TextBlock Text="✎" FontSize="13"/></MenuItem.Icon>
+                                                                <MenuItem.Icon><mi:MaterialIcon Kind="PencilOutline"/></MenuItem.Icon>
                                                             </MenuItem>
                                                             <Separator/>
                                                             <MenuItem Header="Delete" Command="{Binding DeleteCommand}">
-                                                                <MenuItem.Icon><TextBlock Text="🗑" FontSize="13"/></MenuItem.Icon>
+                                                                <MenuItem.Icon><mi:MaterialIcon Kind="TrashCanOutline"/></MenuItem.Icon>
                                                             </MenuItem>
                                                         </MenuFlyout>
                                                     </Button.Flyout>
