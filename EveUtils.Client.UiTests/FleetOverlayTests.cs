@@ -261,15 +261,14 @@ public class FleetOverlayTests
         var overlay = new FleetOverlayViewModel(fleet);
         overlay.Refresh(Now);
 
-        // One spike well past Alpha, gone again before the dwell is up.
-        Settle(b, 1400, 0);
-        overlay.Refresh(Now + TimeSpan.FromMilliseconds(250));
-        Settle(b, 1400, 0);
-        overlay.Refresh(Now + TimeSpan.FromMilliseconds(500));
-        Settle(b, 60, 0);
-        overlay.Refresh(Now + TimeSpan.FromMilliseconds(750));
-
-        Assert.Equal("Alpha", overlay.IncomingName);
+        // One spike well past Alpha, gone again before the dwell is up. The row must not move at ANY point — a name
+        // that flashes onto the window and off it again is worse than one that never appeared.
+        foreach (var (value, afterMs) in new[] { (1400L, 250), (1400L, 500), (60L, 750) })
+        {
+            Settle(b, value, 0);
+            overlay.Refresh(Now + TimeSpan.FromMilliseconds(afterMs));
+            Assert.Equal("Alpha", overlay.IncomingName);
+        }
     }
 
     [Fact]
