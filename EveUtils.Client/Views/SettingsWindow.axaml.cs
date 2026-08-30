@@ -205,7 +205,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
 
         var consumers = _clipboardWatch?.Consumers ?? [];
         _clipboardConsumersBlock.Text = consumers.Count == 0
-            ? "Used by: nothing yet. No feature is listening, so turning this on has no effect beyond the recognition itself."
+            ? "Used by: nothing yet. While no feature is listening the clipboard is not read at all, so switching this on changes nothing until one does."
             : $"Used by: {string.Join(", ", consumers)}.";
     }
 

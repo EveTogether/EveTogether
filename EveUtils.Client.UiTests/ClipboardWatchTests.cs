@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using EveUtils.Client.Clipboard;
@@ -52,17 +53,30 @@ public class ClipboardWatchTests
         Assert.Equal(expected, ClipboardShapeRecogniser.Recognise(text));
 
     /// <summary>
-    /// The guarantee the feature is sold on: an unrecognised payload never reaches a subscriber, a recognised one
-    /// reaches every current subscriber, and unsubscribing removes the feature from the disclosure as well as from
-    /// the delivery.
+    /// The guarantees the feature is sold on, in the order a sceptical user would ask about them: nothing is read
+    /// while the watcher is off, nothing is read while no feature is listening, an unrecognised payload never
+    /// reaches a subscriber, a recognised one reaches every current subscriber, and switching off stops the reading
+    /// even for a notification that was already on its way.
     /// </summary>
     [AvaloniaFact]
-    public void ClipboardWatch_DeliversRecognisedPayloadsOnly_ToItsCurrentSubscribers()
+    public async Task ClipboardWatch_ReadsTheClipboardOnlyWhileSwitchedOn_AndListenedTo()
     {
         var source = new FakeClipboardChangeSource();
         var dialogs = new RecordingDialogService();
-        using var empty = new ServiceCollection().BuildServiceProvider();
-        using var watch = new ClipboardWatchService(dialogs, empty, NullLogger<ClipboardWatchService>.Instance, source);
+        using var instance = TestClientInstance.Create();
+        using var watch = new ClipboardWatchService(dialogs, instance.Services,
+            NullLogger<ClipboardWatchService>.Instance, source);
+
+        // Off is the state after an install: a copy is not read at all.
+        Copy(source);
+        Assert.Equal(0, dialogs.ClipboardReads);
+
+        await watch.SetEnabledAsync(true);
+        Assert.True(watch.IsWatching);
+
+        // On, but nothing subscribed yet — still not read, so the disclosure's "nothing uses this" is literal.
+        Copy(source);
+        Assert.Equal(0, dialogs.ClipboardReads);
 
         var delivered = new List<ClipboardCapture>();
         var subscription = watch.Subscribe("Abyssal run loot", delivered.Add);
@@ -70,17 +84,23 @@ public class ClipboardWatchTests
 
         dialogs.ClipboardText = "correct horse battery staple";
         Copy(source);
+        Assert.Equal(1, dialogs.ClipboardReads);
         Assert.Empty(delivered);
 
-        dialogs.ClipboardText = "[Gila, Abyssal T5]\n\nDrone Damage Amplifier II";
+        dialogs.ClipboardText = "[Jackdaw, Jackdaw - T1/T2 - D]\r\nBallistic Control System II";
         Copy(source);
         Assert.Equal(ClipboardShape.Fit, Assert.Single(delivered).Shape);
 
+        // Switched off with a subscriber still registered: the notification arrives, nothing is read.
+        await watch.SetEnabledAsync(false);
+        Assert.False(watch.IsWatching);
+        var readsBeforeOff = dialogs.ClipboardReads;
+        Copy(source);
+        Assert.Equal(readsBeforeOff, dialogs.ClipboardReads);
+        Assert.Single(delivered);
+
         subscription.Dispose();
         Assert.Empty(watch.Consumers);
-
-        Copy(source);
-        Assert.Single(delivered);
     }
 
     // The notification arrives off the UI thread and the read is marshalled onto it; run the posted work.

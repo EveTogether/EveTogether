@@ -24,7 +24,9 @@ taken from the matching `## vX.Y.Z` section below.
   link, part of a conversation — is dropped the moment it is read: not stored, not buffered, never
   written to the log window or a log file, never attached to an error report, and never sent
   anywhere. The settings screen lists which features are listening, read from what is actually
-  registered rather than from a written-out list, so today it tells you plainly that nothing is.
+  registered rather than from a written-out list, so today it tells you plainly that nothing is —
+  and while nothing is listening, the clipboard is not read at all, so switching this on before
+  there is a feature that uses it changes nothing.
   Linux and macOS are not supported rather than quietly polling, because spotting a change by
   polling means remembering what was on the clipboard, which is the one thing this feature
   promises not to do.

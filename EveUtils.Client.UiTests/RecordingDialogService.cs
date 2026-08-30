@@ -35,6 +35,9 @@ public sealed class RecordingDialogService : IDialogService
     /// <summary>What <see cref="GetClipboardTextAsync"/> hands back — the "system clipboard" a test copies into.</summary>
     public string? ClipboardText { get; set; }
 
+    /// <summary>How often the clipboard was actually read — how a test asserts that it was left alone.</summary>
+    public int ClipboardReads { get; private set; }
+
     /// <summary>The arguments of the last <see cref="ShowFitExportAsync"/> call, or null if never shown.</summary>
     public (string FitName, string Eft, string Dna, string EveshipUrl)? LastFitExport { get; private set; }
 
@@ -100,7 +103,11 @@ public sealed class RecordingDialogService : IDialogService
         LastClipboardText = text;
         return Task.CompletedTask;
     }
-    public Task<string?> GetClipboardTextAsync() => Task.FromResult(ClipboardText);
+    public Task<string?> GetClipboardTextAsync()
+    {
+        ClipboardReads++;
+        return Task.FromResult(ClipboardText);
+    }
     /// <summary>Stub for confirm dialogs: set to drive the answer (and inspect the prompt). Defaults to throwing so a
     /// test that unexpectedly hits a confirm fails loudly.</summary>
     public Func<string, string, Task<bool>>? OnConfirm { get; set; }

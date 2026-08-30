@@ -19,11 +19,12 @@ namespace EveUtils.Client.Clipboard;
 /// features that subscribed. It is a system with subscribers, not a helper for one caller, which is why the
 /// guarantees below live here and not in whatever happens to consume it.
 ///
-/// It is off unless the user turned it on (<c>clipboard.watch</c>, absent = off). While on it sees everything
-/// that is copied, so: an unrecognised payload is dropped where it is read — never stored, buffered, logged or
-/// attached to an error report — and no raw clipboard text ever leaves the process, not to a log file and not to
-/// the local API. <see cref="Consumers"/> names the features currently listening, so the disclosure shown to the
-/// user is the live truth rather than a maintained list.
+/// It is off unless the user turned it on (<c>clipboard.watch</c>, absent = off), and it does not read the
+/// clipboard at all while nothing is subscribed. While on and listened to it sees everything that is copied, so:
+/// an unrecognised payload is dropped where it is read — never stored, buffered, logged or attached to an error
+/// report — and no raw clipboard text ever leaves the process, not to a log file and not to the local API.
+/// <see cref="Consumers"/> names the features currently listening, so the disclosure shown to the user is the
+/// live truth rather than a maintained list.
 /// </summary>
 public sealed class ClipboardWatchService : ISingletonService, IDisposable
 {
@@ -135,6 +136,16 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
 
     private async Task InspectAsync()
     {
+        // Stopping the source holds off new notifications but not one already queued here, and "off" has to mean
+        // the clipboard is not read — not that it is read one last time.
+        if (!IsWatching)
+            return;
+
+        // Nothing listening means there is nothing to read the clipboard for, so it is not read at all.
+        var subscribers = Snapshot();
+        if (subscribers.Length == 0)
+            return;
+
         string? text;
         try
         {
@@ -152,7 +163,7 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
             return; // dropped here: nothing kept, nothing buffered, nothing written down
 
         var capture = new ClipboardCapture(shape, text);
-        foreach (var subscription in Snapshot())
+        foreach (var subscription in subscribers)
         {
             try
             {
