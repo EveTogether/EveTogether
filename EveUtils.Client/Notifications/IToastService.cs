@@ -28,4 +28,9 @@ public interface IToastService
     /// </summary>
     void Show(string title, string? message, ToastKind kind, IReadOnlyList<ToastAction> actions,
         ToastPosition? position = null);
+
+    /// <summary>Shows an action toast that replaces the earlier card with the same key and reports when it closes.</summary>
+    void Show(string title, string? message, ToastKind kind, IReadOnlyList<ToastAction> actions, Action? onClosed,
+        string? replacementKey = null, ToastPosition? position = null);
+
 }

@@ -28,6 +28,10 @@ public sealed class ToastService : IToastService, ISingletonService
     // per window: a manager stacks every card it owns in a single panel, so corners sharing one would move each
     // other's toasts.
     private readonly ConditionalWeakTable<TopLevel, Dictionary<ToastPosition, WindowNotificationManager>> _managers = new();
+    private readonly ConditionalWeakTable<WindowNotificationManager, Dictionary<string, object>> _replacements = new();
+    private readonly Lock _replacementGate = new();
+    private readonly Dictionary<string, long> _replacementVersions = new(StringComparer.Ordinal);
+    private long _nextReplacementVersion;
 
     /// <summary>Where toasts appear within the window. Settable live (Settings); applied on the next toast.</summary>
     public ToastPosition Position { get; set; } = ToastPosition.TopRight;
@@ -42,6 +46,10 @@ public sealed class ToastService : IToastService, ISingletonService
 
     public void Show(string title, string? message, ToastKind kind, IReadOnlyList<ToastAction> actions,
         ToastPosition? position = null)
+        => Show(title, message, kind, actions, onClosed: null, replacementKey: null, position);
+
+    public void Show(string title, string? message, ToastKind kind, IReadOnlyList<ToastAction> actions, Action? onClosed,
+        string? replacementKey = null, ToastPosition? position = null)
     {
         if (actions.Count == 0)
         {
@@ -50,9 +58,69 @@ public sealed class ToastService : IToastService, ISingletonService
         }
 
         // Action toasts carry buttons, which Avalonia's Notification can't render, so they're shown as plain content
-        // (ToastActionContent). They have no expiration: the card persists until the user picks an action or closes it,
-        // so the choice isn't missed.
-        ShowOnActiveWindow(position, manager => manager.Show(ToastActionContent.Build(title, message, kind, actions)));
+        // (ToastActionContent). They have no expiration: the card persists until the user picks an action or closes it.
+        var replacementVersion = _ReserveReplacement(replacementKey);
+        ShowOnActiveWindow(position, manager => ShowAction(manager, title, message, kind, actions, onClosed, replacementKey,
+            replacementVersion));
+    }
+
+    private void ShowAction(WindowNotificationManager manager, string title, string? message, ToastKind kind,
+        IReadOnlyList<ToastAction> actions, Action? onClosed, string? replacementKey, long? replacementVersion)
+    {
+        if (!_IsCurrentReplacement(replacementKey, replacementVersion))
+            return;
+
+        var content = ToastActionContent.Build(title, message, kind, actions);
+        var replacements = _replacements.GetValue(manager, _ => new Dictionary<string, object>(StringComparer.Ordinal));
+
+        if (replacementKey is { } key && replacements.Remove(key, out var previous))
+            manager.Close(previous);
+
+        if (replacementKey is { } currentKey)
+            replacements.Add(currentKey, content);
+
+        manager.Show(content, ToNotificationType(kind), null, null, () =>
+        {
+            if (replacementKey is { } key && replacements.TryGetValue(key, out var current)
+                && ReferenceEquals(current, content))
+                replacements.Remove(key);
+            _ReleaseReplacement(replacementKey, replacementVersion);
+            onClosed?.Invoke();
+        }, []);
+    }
+
+    private long? _ReserveReplacement(string? replacementKey)
+    {
+        if (replacementKey is null)
+            return null;
+
+        lock (_replacementGate)
+        {
+            var version = ++_nextReplacementVersion;
+            _replacementVersions[replacementKey] = version;
+            return version;
+        }
+    }
+
+    private bool _IsCurrentReplacement(string? replacementKey, long? replacementVersion)
+    {
+        if (replacementKey is null || replacementVersion is null)
+            return true;
+
+        lock (_replacementGate)
+            return _replacementVersions.TryGetValue(replacementKey, out var current) && current == replacementVersion;
+    }
+
+    private void _ReleaseReplacement(string? replacementKey, long? replacementVersion)
+    {
+        if (replacementKey is null || replacementVersion is null)
+            return;
+
+        lock (_replacementGate)
+        {
+            if (_replacementVersions.TryGetValue(replacementKey, out var current) && current == replacementVersion)
+                _replacementVersions.Remove(replacementKey);
+        }
     }
 
     // Resolves the window the user is looking at and hands it the manager for the requested corner. A fresh manager
