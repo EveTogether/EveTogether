@@ -138,6 +138,17 @@ public sealed class RecordingDialogService : IDialogService
     public List<DpsViewModel> ClosedDpsOverlays { get; } = [];
 
     public void CloseDpsOverlay(DpsViewModel tracker) => ClosedDpsOverlays.Add(tracker);
+
+    /// <summary>The fleet overlays a screen asked to open (ET-72). Recorded rather than shown: a test asserts that
+    /// the pop-out command reached the service and what it was handed, without a second window on screen.</summary>
+    public List<FleetOverlayViewModel> ShownFleetOverlays { get; } = [];
+
+    /// <summary>The fleets whose overlay a screen asked to close — how a test asserts the overlay follows the
+    /// fleet-metrics screen it reads from. Closing what was never opened is a no-op in the real service.</summary>
+    public List<long> ClosedFleetOverlays { get; } = [];
+
+    public void ShowFleetOverlay(FleetOverlayViewModel viewModel) => ShownFleetOverlays.Add(viewModel);
+    public void CloseFleetOverlay(long fleetId) => ClosedFleetOverlays.Add(fleetId);
     public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, EveUtils.Client.Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, EveUtils.Client.Notifications.ToastPosition toastPosition = EveUtils.Client.Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = EveUtils.Client.LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", EveUtils.Client.LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, EveUtils.Client.Clipboard.ClipboardWatchService? clipboardWatch = null) => throw NotUsed();
 
     /// <summary>

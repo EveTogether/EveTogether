@@ -46,6 +46,12 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     private double _targetDealt;
     private double _targetReceived;
 
+    // Neut RECEIVED, smoothed like every other line but deliberately without a series: the combined Neut line above
+    // already draws cap warfare on this member's graph, and this figure exists to be read as a number by the fleet
+    // overlay ("who is being neuted"), not to be drawn a second time (ET-72).
+    private double _emaNeutIn;
+    private double _targetNeutIn;
+
     // A local meter pulls its live (decaying) rates from the gamelog each frame; a remote/fleet meter has no sampler
     // and is fed each line's latest value via SetRate. Either way the render frame smooths toward the target the same way.
     private Func<CombatRates?>? _sampler;
@@ -54,6 +60,11 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     [ObservableProperty] private long _received;
     [ObservableProperty] private long _neut;
     [ObservableProperty] private long _cap;
+
+    /// <summary>Energy neutralized ON this member, GJ/s. <see cref="Neut"/> combines both directions and so cannot
+    /// say who is on the receiving end; this can. Fed by <see cref="MetricKind.NeutIn"/> and read by the fleet
+    /// overlay — no screen graphs it.</summary>
+    [ObservableProperty] private long _neutIn;
     [ObservableProperty] private string _character = "—";
 
     /// <summary>The EVE character this meter belongs to, or 0 where there is none to name (the design-time meter,
@@ -252,6 +263,9 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
             case MetricKind.DpsIn:
                 _targetReceived = value;
                 break;
+            case MetricKind.NeutIn:
+                _targetNeutIn = value;
+                break;
             default:
                 foreach (var line in _extraLines)
                     if (line.Kind == kind)
@@ -294,6 +308,10 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
             line.Ema += Smoothing * (line.Target - line.Ema);
             Append(line.Series, line.Ema);
         }
+
+        // Smoothed on the same frame as every line so the overlay's figure moves with the graphs, series or not.
+        _emaNeutIn += Smoothing * (_targetNeutIn - _emaNeutIn);
+        NeutIn = (long)_emaNeutIn;
 
         Neut = (long)_neutLine.Ema;
         Cap = (long)_capLine.Ema;

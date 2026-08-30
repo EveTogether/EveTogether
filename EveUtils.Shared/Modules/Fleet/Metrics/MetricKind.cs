@@ -30,4 +30,16 @@ public enum MetricKind
     /// <summary>Remote capacitor transmitted per second (cap support activity, given and received combined). A Rate,
     /// drawn as its own line on a member's live combat graph.</summary>
     Cap = 7,
+
+    /// <summary>
+    /// Energy neutralized <b>on</b> this member per second — the receiving half of <see cref="Neut"/> on its own.
+    /// <see cref="Neut"/> deliberately combines both directions, which makes it the right line for "is there cap
+    /// warfare on this member's graph" and the wrong figure for "who is being neuted": the pilot with the highest
+    /// combined rate may well be the one doing the neuting. A window that names a pilot to act on needs the
+    /// direction, so it travels as its own kind rather than as a second meaning of an existing one (ET-72).
+    ///
+    /// Not drawn as a graph line: the combined <see cref="Neut"/> line already occupies that slot on every existing
+    /// screen, and doubling it would say the same thing twice.
+    /// </summary>
+    NeutIn = 8,
 }

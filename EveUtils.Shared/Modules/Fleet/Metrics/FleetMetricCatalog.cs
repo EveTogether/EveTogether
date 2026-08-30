@@ -16,6 +16,7 @@ public static class FleetMetricCatalog
         [MetricKind.Location] = new(MetricKind.Location, MetricSemantics.State, Aggregatable: false, Unit: "system"),
         [MetricKind.Neut] = new(MetricKind.Neut, MetricSemantics.Rate, Aggregatable: true, Unit: "GJ/s"),
         [MetricKind.Cap] = new(MetricKind.Cap, MetricSemantics.Rate, Aggregatable: true, Unit: "GJ/s"),
+        [MetricKind.NeutIn] = new(MetricKind.NeutIn, MetricSemantics.Rate, Aggregatable: true, Unit: "GJ/s"),
         [MetricKind.MiningLedger] = new(MetricKind.MiningLedger, MetricSemantics.Cumulative, Aggregatable: true, Unit: "m3"),
     };
 

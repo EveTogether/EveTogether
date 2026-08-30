@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+<v:OverlayWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EveUtils.Client.ViewModels"
         xmlns:ctl="using:EveUtils.Client.Controls"
@@ -97,4 +97,4 @@
             </Border>
         </DockPanel>
     </Border>
-</Window>
+</v:OverlayWindow>
