@@ -9,13 +9,11 @@ are separate, and which measured properties of EVE's clipboard output the parser
 It is deliberately **not** a `Shared` module: the clipboard is a desktop concern, like
 `EveUtils.Client/Platform/`. Structural overview → [`architecture.md`](architecture.md).
 
-**State today: nothing subscribes.** Nothing calls `Subscribe`, and `ClipboardCaptureParser` carries
-no DI marker and is named nowhere but its own file and its own test. Copying an inventory out of EVE
-therefore does nothing, and turning the switch on before a feature listens changes nothing at all —
-the clipboard is not read while the subscriber list is empty. Two consumers are planned: registering
-loot after an abyssal run, and offering to import a copied fit. That is the current state of the
-system, not a hole in it: the recognition layer, the parser and the consumers were built as separate
-steps on purpose.
+**State today: two features subscribe.** `ClipboardFitImportOffer` offers to import a copied fit, and
+`ClipboardSignatureOffer` (ET-79) shows what the SDE knows about a copied cosmic signature or
+anomaly. `ClipboardCaptureParser` still carries no DI marker — the two subscribers above call the
+shape-specific static parsers directly, and it exists for a future consumer that wants the parsing
+layer through DI. Registering loot after an abyssal run remains planned but unbuilt.
 
 ## The guarantees
 
@@ -160,6 +158,11 @@ rule, so it has to be strict. Parsing runs only on something already recognised,
 - **Inventory** — at least two non-empty rows, at least one tab, and the same tab count on every
   row. An inventory copy carries whichever columns the window happened to show, so there is no
   header row to key on; the only stable signal is the table shape.
+- **Signature** (ET-79) — every non-empty row has exactly six tab-separated fields, the first
+  matching the (unverified — see below) signature-id pattern and the fifth ending in `%`. Checked
+  before the inventory rule, because several signature rows also carry an equal tab count per row
+  and would otherwise be claimed as `Inventory` first. No word from the EVE UI is used as an anchor,
+  so the shape is recognised the same way regardless of the client's language.
 
 **A stricter shape rule is not available from the material.** There are no negative captures — no
 spreadsheet selection, no web-page table — so a pasted spreadsheet with a consistent tab count is
@@ -207,3 +210,12 @@ returning line in `ClipboardInventoryParser.FindNameColumn`.
 | Stopped on the way out, because a child process outlives its parent | `App.OnFrameworkInitializationCompleted` → `desktop.Exit` |
 | Reading the clipboard where the platform needs its own channel | `IClipboardChangeSource.ReadTextAsync` → `WaylandClipboardChangeSource` |
 | Platform change source (injectable, so tests replace it) | `IClipboardChangeSource` → `WindowsClipboardChangeSource` / `WaylandClipboardChangeSource` / `UnsupportedClipboardChangeSource` |
+| Signature detection, resolved before the watch starts (ET-79) | `App.OnFrameworkInitializationCompleted` → `ClipboardSignatureOffer` |
+
+## Open verification (ET-79)
+
+The signature-id pattern (`ClipboardShapeRecogniser.SignatureId`), the full set of scan-window groups
+and the "not fully scanned yet" boundary are read from three external parsers, not from a live EVE
+client — there was none running when this was built. They need checking against real captures, in
+English and in a non-English client, before the id anchor is tightened or loosened. Full reasoning
+and what exactly to verify: `tickets/ET-79-*.md` in the Depot `eve-together` project, §7.

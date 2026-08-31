@@ -8,7 +8,8 @@ public enum ClipboardShape
 {
     Unrecognised,
     Fit,
-    Inventory
+    Inventory,
+    Signature
 }
 
 /// <summary>

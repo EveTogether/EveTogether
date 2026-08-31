@@ -22,6 +22,7 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     private readonly Dictionary<int, int> _groupCategory = new();
     private readonly Dictionary<string, int> _byName = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<int, List<SdeDogmaAttribute>> _attrs = new();
+    private readonly List<SdeSite> _sites = [];
 
     public bool IsAvailable { get; private set; } = true;
     public SdeVersion? Version => new(1, DateTimeOffset.UnixEpoch);
@@ -45,6 +46,12 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     public FakeSdeAccessor Offline()
     {
         IsAvailable = false;
+        return this;
+    }
+
+    public FakeSdeAccessor AddSite(SdeSite site)
+    {
+        _sites.Add(site);
         return this;
     }
 
@@ -112,7 +119,10 @@ public sealed class FakeSdeAccessor : ISdeAccessor
 
     public DamageProfile? GetNpcDamageProfile(int typeId) => null;
 
-    public IReadOnlyList<SdeSite> SearchSites(string? nameQuery = null, int? archetypeId = null, int? factionId = null) => [];
+    public IReadOnlyList<SdeSite> SearchSites(string? nameQuery = null, int? archetypeId = null, int? factionId = null) =>
+        string.IsNullOrWhiteSpace(nameQuery)
+            ? _sites
+            : _sites.Where(s => s.Name.Contains(nameQuery, StringComparison.OrdinalIgnoreCase)).ToList();
 
     public void Close() { }
     public void Reopen() { }

@@ -49,6 +49,9 @@ public partial class App : Application
             // This is the first consumer, so resolving it must precede starting the watch; otherwise no copy can offer a fit import.
             _ = Program.Services.GetRequiredService<Fittings.ClipboardFitImportOffer>();
 
+            // Second consumer, same reason: a copied signature list needs this resolved before the watch starts (ET-79).
+            _ = Program.Services.GetRequiredService<Clipboard.ClipboardSignatureOffer>();
+
             // Clipboard watch: reads the persisted opt-in and starts only if the user turned it on (default off).
             // Started here rather than in Program because reading the clipboard needs the toplevel above (ET-57).
             var clipboardWatch = Program.Services.GetRequiredService<Clipboard.ClipboardWatchService>();
