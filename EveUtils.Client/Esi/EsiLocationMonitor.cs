@@ -144,20 +144,34 @@ public sealed class EsiLocationMonitor(
         if (kind is not { } reason)
             return;
 
-        (int Id, string Name)[] affected;
+        // Shown while the gate is held. Snapshotting first and showing after leaves no ordering between the two, so
+        // the watch that raised its card last could carry an older list — which is how four characters without
+        // access produced a message naming two of them.
         lock (_warnGate)
         {
             if (!_warned.TryGetValue(reason, out var byId))
                 _warned[reason] = byId = [];
             if (!byId.TryAdd(characterId, characterName))
                 return;
-            affected = [.. byId.Select(entry => (entry.Key, entry.Value))];
+
+            // Sorted by name so the message reads the same whichever watch answered first.
+            var affected = byId
+                .Select(entry => (Id: entry.Key, Name: entry.Value))
+                .OrderBy(character => character.Name, StringComparer.CurrentCultureIgnoreCase)
+                .ToArray();
+            ShowAccessWarning(reason, affected);
         }
+    }
+
+    private void ShowAccessWarning(EsiErrorKind reason, (int Id, string Name)[] affected)
+    {
 
         // What the location is used for is deliberately left out: this watch feeds whatever reads it, and naming
         // today's reader would age the moment a second one arrives.
         var (title, why, fix) = reason == EsiErrorKind.ScopeMissing
-            ? ("No location access", $"EVE Together may not read the location of {Names(affected)}.", "Allow location")
+            ? ("No location access",
+                $"EVE Together has not been given permission to read the location of {Names(affected)}.",
+                "Allow location")
             : ("ESI sign-in expired", $"EVE Together can no longer sign in as {Names(affected)}, so it cannot read "
                                       + "their location.", "Sign in again");
 

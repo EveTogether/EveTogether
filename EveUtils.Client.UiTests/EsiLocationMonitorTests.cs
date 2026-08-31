@@ -139,6 +139,30 @@ public class EsiLocationMonitorTests
         Assert.All(toasts.ActionToasts, toast => Assert.Equal("location-access-ScopeMissing", toast.ReplacementKey));
     }
 
+    /// <summary>
+    /// Four characters whose watches answer at the same moment still produce one message naming all four. The
+    /// snapshot of who has failed and the raising of the card have to happen together: taken apart, the watch that
+    /// raised its card last could carry an older list, and the operator saw two names where four were expected.
+    /// </summary>
+    [Fact]
+    public async Task CharactersFailingAtTheSameMoment_AllReachTheMessage()
+    {
+        string[] names = ["RaymondKrah", "Catbank", "Raymond Makbema", "Raymond Maulerant"];
+
+        // Repeated, because one round catches the losing interleaving about a fifth of the time and a test that
+        // flakes on a returning bug is worse than none. Each round is four pre-flight refusals, so this stays quick.
+        for (var round = 0; round < 300; round++)
+        {
+            var monitor = Build(new FakeLocationClient { Error = EsiErrorKind.ScopeMissing }, out var toasts);
+
+            await Task.WhenAll(names.Select((name, index) =>
+                Task.Run(() => monitor.WatchAsync(index + 1, name, _ => { }, CancellationToken.None))));
+
+            var latest = toasts.ActionToasts[^1].Message ?? "";
+            Assert.All(names, name => Assert.Contains(name, latest));
+        }
+    }
+
     [Fact]
     public async Task TheScopeWarning_IsNotRepeatedForTheSameCharacter()
     {
