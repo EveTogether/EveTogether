@@ -18,7 +18,7 @@ public sealed class AppraisalRowViewModel(AppraisalRow row)
 
     public string QuantityDisplay => Quantity.ToString("N0", CultureInfo.InvariantCulture);
 
-    public string UnitPriceDisplay => IskFormat.Short(UnitPrice);
+    public string UnitPriceDisplay => IskFormat.Exact(UnitPrice);
 
-    public string TotalDisplay => IskFormat.Short(Total);
+    public string TotalDisplay => IskFormat.Exact(Total);
 }
