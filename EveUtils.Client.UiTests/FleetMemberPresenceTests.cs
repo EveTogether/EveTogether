@@ -191,6 +191,52 @@ public class FleetMemberPresenceTests
         Assert.Equal((double)PresenceState.Unknown, sample.Value);
     }
 
+    // ---- version skew: this is a self-hosted server, so client and server are updated by different people --------
+
+    /// <summary>
+    /// New client, old server. The old build knows no <c>last_seen_ms</c>, so the field is simply absent — and it has
+    /// to degrade to "we have never heard of them", never to "gone". Read as 0 it would put every member of every
+    /// fleet an hour past the silence window at once, and the whole roster would read as departed.
+    /// </summary>
+    [Fact]
+    public void AMemberDtoWithoutTheNewField_ReadsAsNeverHeardFrom_NotAsDeparted()
+    {
+        var fromAnOlderServer = new EveUtils.Grpc.MemberDto { Id = 1, CharacterId = 42 };
+
+        Assert.False(fromAnOlderServer.HasLastSeenMs);
+
+        // The mapping the transport does, and what the verdict then makes of it.
+        DateTimeOffset? lastSeen = fromAnOlderServer.HasLastSeenMs
+            ? DateTimeOffset.FromUnixTimeMilliseconds(fromAnOlderServer.LastSeenMs)
+            : null;
+
+        Assert.Null(lastSeen);
+        Assert.False(FleetMemberPresence.IsSilent(lastSeen, Now));
+        Assert.Equal(
+            FleetMemberPresenceState.Unknown,
+            FleetMemberPresence.Read(inGameLocally: null, PresenceState.Unknown, FleetMemberPresence.IsSilent(lastSeen, Now)));
+    }
+
+    /// <summary>
+    /// Old client, new server — and old client, old server standing between two new ones. The sample travels as JSON
+    /// with the enum as a plain number, so a build that has never heard of the kind deserializes it without
+    /// complaint and passes it on; the catalog degrades an unknown kind to a non-aggregatable State rather than
+    /// throwing. That matters more than it looks: the whole envelope is dropped if deserialization fails, which
+    /// would take the fleet's DPS with it.
+    /// </summary>
+    [Fact]
+    public void AKindAnOlderBuildDoesNotKnow_TravelsAndDegrades_RatherThanBreakingTheStream()
+    {
+        var fromANewerClient = System.Text.Json.JsonSerializer.Deserialize<
+            EveUtils.Shared.Modules.Fleet.Dtos.MetricSample>(
+            """{"CharacterId":42,"FleetId":100,"Kind":99,"Value":1,"UnixMs":0}""");
+
+        Assert.NotNull(fromANewerClient);
+        Assert.Equal(100, fromANewerClient!.FleetId);   // the rest of the sample is intact and still reroutable
+        Assert.False(FleetMetricCatalog.IsAggregatable(fromANewerClient.Kind));
+        Assert.Equal(MetricSemantics.State, FleetMetricCatalog.Describe(fromANewerClient.Kind).Semantics);
+    }
+
     private sealed class StubPresence(bool? inGame) : ILocalCharacterPresence
     {
         public bool? IsInGame(int characterId, string? characterName) => inGame;
