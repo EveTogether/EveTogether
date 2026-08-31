@@ -360,12 +360,12 @@
                                         <Border CornerRadius="4" Background="#73121A24" Margin="0,0,0,4" Padding="6"
                                                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" ToolTip.Tip="{Binding Name}">
                                             <DockPanel MinWidth="320">
-                                                <Button DockPanel.Dock="Right" Padding="8,2"
+                                                <Button DockPanel.Dock="Right" Classes="rowaction" Padding="8,2"
                                                         Command="{Binding #FighterBayRoot.((fb:FighterBayViewModel)DataContext).RemoveFighterCommand}"
                                                         CommandParameter="{Binding}">
                                                     <mi:MaterialIcon Classes="icon-sm" Kind="Close"/>
                                                 </Button>
-                                                <Button DockPanel.Dock="Right" Content="Load" FontSize="10" Padding="8,2" Margin="0,0,4,0"
+                                                <Button DockPanel.Dock="Right" Classes="rowaction" Content="Load" FontSize="10" Padding="8,2" Margin="0,0,4,0"
                                                         Command="{Binding #FighterBayRoot.((fb:FighterBayViewModel)DataContext).LoadFighterCommand}"
                                                         CommandParameter="{Binding}"/>
                                                 <Panel DockPanel.Dock="Left" Width="28" Height="28" Margin="0,0,8,0">

@@ -89,6 +89,9 @@ taken from the matching `## vX.Y.Z` section below.
   `docker-compose.yml` already references instead of building it from source.
 
 ### Changed
+- The two buttons at the end of a coupled-server row — the gear and **DECOUPLE** — are the same height now.
+  Each used to be as tall as whatever it contained, an icon against smaller text, so the pair never quite lined up.
+  The fighter bay's reserve rows are the same pairing and follow the same rule.
 - Dependency maintenance (Dependabot): Avalonia and its companion packages
   (`Avalonia.Desktop`, `Avalonia.Themes.Fluent`, `Avalonia.Controls.DataGrid`, `Avalonia.Fonts.Inter`,
   `Avalonia.Headless.XUnit`) to 12.1.0; `Microsoft.AspNetCore.OpenApi` to 10.0.10,
