@@ -13,12 +13,10 @@ namespace EveUtils.Client.UiTests;
 
 /// <summary>
 /// The clipboard system (ET-57): which shapes it recognises, and the promise that everything else leaves the
-/// process without reaching a subscriber. The Win32 change notification itself is thin platform plumbing and is
-/// substituted here; the parts worth pinning are the recognition and the routing around it.
-///
-/// The fit and inventory samples are taken verbatim from clipboard captures out of a running EVE client (two fit
-/// exports, plus the details, list and icons views of an item hangar), so the shapes below are what the game
-/// actually writes rather than what the format is assumed to look like.
+/// process without reaching a subscriber; the Win32 change notification itself is thin platform plumbing,
+/// substituted here so the recognition and routing are what is pinned. Fit and inventory samples are taken
+/// verbatim from a running EVE client; the ET-79 signature samples are constructed from the vermoeden format in
+/// docs/clipboard.md §7, not yet from a live capture.
 /// </summary>
 public class ClipboardWatchTests
 {
@@ -44,6 +42,18 @@ public class ClipboardWatchTests
     [InlineData("Triglavian Survey Database\t682", ClipboardShape.Unrecognised)]
     // Ragged rows are not a table either — this is what rules out most pasted prose that happens to hold a tab.
     [InlineData("Agitated Exotic Filament\t1\tAbyssal Filaments\r\nBaryon Exotic Plasma S Blueprint\t", ClipboardShape.Unrecognised)]
+    // Signature: a single copied signature is enough on its own (ET-79 AC-1).
+    [InlineData("KDC-304\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU", ClipboardShape.Signature)]
+    // Several signature rows also carry an equal tab count per row — exactly what IsInventoryTable alone would
+    // accept — so the signature check has to run first, or a scan-window copy is misdelivered (ET-79 AC-2).
+    [InlineData("KDC-304\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU\r\n" +
+                "ABC-123\tCosmic Anomaly\t\t\t25.0%\t-\r\n" +
+                "XYZ-789\tCosmic Signature\t\t\t50.0%\t5,17 AU", ClipboardShape.Signature)]
+    // No word from the EVE UI is an anchor: a translated kind/group and a comma-decimal percentage still
+    // recognise (ET-79 AC-3) — this stands in for a non-English client capture until one is measured (§7).
+    [InlineData("KDC-304\t中庭の亡霊\t戦闘サイト\t中庭の亡霊\t100,00%\t5,17 AE", ClipboardShape.Signature)]
+    // Six fields but no percentage on the fifth is not a signature row — the anchor is load-bearing.
+    [InlineData("KDC-304\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0\t2.71 AU", ClipboardShape.Unrecognised)]
     // Ordinary things people copy all day.
     [InlineData("correct horse battery staple", ClipboardShape.Unrecognised)]
     [InlineData("https://example.test/some/page", ClipboardShape.Unrecognised)]

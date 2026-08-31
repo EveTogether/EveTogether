@@ -22,4 +22,12 @@ public sealed class ClipboardCaptureParser(IFitTextImporter fitTextImporter)
 
         return ClipboardInventoryParser.Parse(capture.Text);
     }
+
+    public IReadOnlyList<ClipboardSignatureRow> ParseSignatures(ClipboardCapture capture)
+    {
+        if (capture.Shape is not ClipboardShape.Signature)
+            throw new ArgumentException("The clipboard capture is not a signature list.", nameof(capture));
+
+        return ClipboardSignatureParser.Parse(capture.Text);
+    }
 }

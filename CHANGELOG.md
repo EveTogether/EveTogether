@@ -31,8 +31,8 @@ taken from the matching `## vX.Y.Z` section below.
   a question pushed aside by a newer fit could never come back.
 - Importing a fit you copied now opens the **From EFT / DNA text** window with the fit already pasted in, instead
   of putting it straight into your library. You see what is about to be added, and can correct it, before it lands.
-- **Not today** on a copied fit now silences only that fit for the rest of the day. It used to silence every fit,
-  which is not what a button sitting under one named fit promises.
+- **Ignore** on a copied fit closes just that card without silencing the fit. Copying the same fit again after
+  answers the question again, instead of it going unaskable.
 - A notification that asks you something now stays on screen until you answer it. The offer to import a fit you
   copied used to disappear by itself after about five seconds, so the question was often gone before you looked at
   it. Every notification with buttons keeps this behaviour, and each one now carries a small cross so you can put it
@@ -40,6 +40,10 @@ taken from the matching `## vX.Y.Z` section below.
 - The clipboard reading in the status bar at the bottom of the window is now clickable and takes you straight to
   **Settings → Privacy & Sharing**, where the switch, the explanation of what is read, and — if your desktop cannot
   report a change — the reason it is unavailable all live.
+- Copying a cosmic signature or anomaly out of the scan window now shows a toast with what the site catalogue knows
+  about it — archetype, faction, DED rating and any ship restriction, only for whichever of those are actually on
+  record. A site whose name matches more than one catalogue entry shows what they agree on plus how many variants
+  there are, rather than guessing which one you scanned. This does not start anything yet.
 - EVE Together can now watch your clipboard and recognise two things you copy out of the game: a
   fit in EFT format, and an inventory listing. **It is off until you switch it on** in
   **Settings → Privacy & Sharing**, and the status bar at the bottom of the window says which it
