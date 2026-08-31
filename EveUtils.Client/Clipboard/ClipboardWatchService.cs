@@ -108,7 +108,9 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
     }
 
     private static IClipboardChangeSource CreatePlatformSource() =>
-        OperatingSystem.IsWindows() ? new WindowsClipboardChangeSource() : new UnsupportedClipboardChangeSource();
+        OperatingSystem.IsWindows() ? new WindowsClipboardChangeSource()
+        : OperatingSystem.IsLinux() ? new WaylandClipboardChangeSource()
+        : new UnsupportedClipboardChangeSource();
 
     private void StartWatching()
     {
@@ -116,7 +118,10 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
             return;
 
         _source.Start();
-        IsWatching = true;
+
+        // A source may only be able to learn that this desktop cannot notify it by trying, so IsSupported is read
+        // again afterwards: the status line then says unsupported instead of leaving a switch that looks on.
+        IsWatching = _source.IsSupported;
         StateChanged?.Invoke();
     }
 
