@@ -17,7 +17,7 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.8")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -449,6 +449,9 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                         .HasColumnType("bit");
 
                     b.Property<DateTimeOffset>("JoinTime")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("LastSeenAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<int>("Role")

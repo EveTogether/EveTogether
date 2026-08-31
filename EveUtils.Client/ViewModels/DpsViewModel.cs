@@ -80,6 +80,23 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     /// publishing" wants the answer at the moment they ask, not a value that ticks 40 rows a second.</summary>
     public DateTimeOffset? LastSampleAt { get; set; }
 
+    /// <summary>
+    /// When the server last saw this member's client publish into the fleet, off the roster read; null = never. It
+    /// answers the one thing <see cref="LastSampleAt"/> cannot: a screen that has just opened has heard nobody yet,
+    /// so without this every member would look equally silent for the first minute and a half.
+    /// </summary>
+    public DateTimeOffset? ServerLastSeenAt { get; set; }
+
+    /// <summary>The most recent contact from this pilot's client from either account of it. Null = they have never
+    /// been heard from at all, which is not the same as having gone quiet.</summary>
+    public DateTimeOffset? LastHeardAt => (LastSampleAt, ServerLastSeenAt) switch
+    {
+        ({ } sample, { } server) => sample > server ? sample : server,
+        ({ } sample, null) => sample,
+        (null, { } server) => server,
+        _ => null,
+    };
+
     /// <summary>The shared right-click menu for this member (ET-44), rebuilt as the menu opens so its live lines are
     /// current. Empty off the fleet-metrics screen — the own meters and the DPS pop-out are not roster rows.</summary>
     [ObservableProperty] private IReadOnlyList<FleetMemberMenuItemViewModel> _memberMenu = [];
@@ -89,6 +106,7 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     /// <summary>Whether an EVE client for this character is running on this machine (home dashboard presence dot);
     /// set best-effort by the dashboard from <c>EveClientPresenceService</c>.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Presence))]
     [NotifyPropertyChangedFor(nameof(IsOffline))]
     [NotifyPropertyChangedFor(nameof(KnownLocation))]
     [NotifyPropertyChangedFor(nameof(LocationDisplay))]
@@ -101,11 +119,46 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     /// may be inferred from not seeing it — that stays ET-70's question.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Presence))]
     [NotifyPropertyChangedFor(nameof(IsOffline))]
     [NotifyPropertyChangedFor(nameof(KnownLocation))]
     [NotifyPropertyChangedFor(nameof(LocationDisplay))]
     [NotifyPropertyChangedFor(nameof(SystemDisplay))]
     private bool _isLocalCharacter;
+
+    /// <summary>What this member's own client last said about their game (ET-70). Only ever set from a
+    /// <see cref="MetricKind.Presence"/> sample, so a member on a client too old to send one stays
+    /// <see cref="PresenceState.Unknown"/> and goes on being read exactly as before.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Presence))]
+    [NotifyPropertyChangedFor(nameof(IsOffline))]
+    [NotifyPropertyChangedFor(nameof(KnownLocation))]
+    [NotifyPropertyChangedFor(nameof(LocationDisplay))]
+    [NotifyPropertyChangedFor(nameof(SystemDisplay))]
+    private PresenceState _reportedPresence = PresenceState.Unknown;
+
+    /// <summary>
+    /// This member was publishing and has stopped for longer than <see cref="FleetMemberPresence.SilentAfter"/> —
+    /// their EVE Together is gone, which is the one state no message can ever report. Pushed in by the screen's own
+    /// slow sweep rather than derived here, because it moves with the wall clock and nothing else: no property on
+    /// this row changes at the moment a pilot becomes silent, so nothing here could raise it.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Presence))]
+    [NotifyPropertyChangedFor(nameof(IsOffline))]
+    [NotifyPropertyChangedFor(nameof(KnownLocation))]
+    [NotifyPropertyChangedFor(nameof(LocationDisplay))]
+    [NotifyPropertyChangedFor(nameof(SystemDisplay))]
+    private bool _isSilent;
+
+    /// <summary>
+    /// Everything known about whether this pilot is here, folded into one verdict by
+    /// <see cref="FleetMemberPresence.Read"/> — the single definition, so a row, the header badge and the pop-out
+    /// cannot tell three stories. <see cref="FleetMemberPresenceState.Unknown"/> is a state of its own and not a
+    /// quiet "online": a pilot who shares nothing has never been evidence of anything.
+    /// </summary>
+    public FleetMemberPresenceState Presence => FleetMemberPresence.Read(
+        IsLocalCharacter ? InEve : null, ReportedPresence, IsSilent);
 
     /// <summary>
     /// Known not to be in game. ESI answers <c>/location/</c> for a logged-out character with the spot they logged
@@ -115,7 +168,14 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     /// This is the single verdict behind all three consequences, which must never disagree: no system is shown, the
     /// member is left out of the WITH FC denominator, and they are never coloured green.
     /// </summary>
-    public bool IsOffline => IsLocalCharacter && !InEve;
+    public bool IsOffline => Presence is FleetMemberPresenceState.Offline;
+
+    /// <summary>
+    /// Re-read the silence half of <see cref="Presence"/> against the clock. Driven by the owning screen's slow
+    /// sweep and given the time rather than reading it, so a test decides when "now" is.
+    /// </summary>
+    public void RefreshPresence(DateTimeOffset now) =>
+        IsSilent = FleetMemberPresence.IsSilent(LastHeardAt, now);
 
     /// <summary>True for a real live tracker (has a running graph); false for a home-dashboard placeholder — a
     /// character with no live combat yet. An online (in-EVE) placeholder is still shown as a normal row with its

@@ -3,17 +3,21 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Platform;
 using EveUtils.Client.Transport;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Shared.Messaging;   // Result / ResultMessage, used by the ESI mirror helpers below
 using EveUtils.Shared.Modules.Fleet;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Events;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.ViewModels;
@@ -44,6 +48,22 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
     private readonly ISdeNameResolver _shipNames;
     private readonly IFleetRosterWatch _rosterWatch;
     private readonly IDisposable _rosterSubscription;
+    private readonly IDisposable? _metricSubscription;
+    private readonly IDisposable? _presenceSubscription;
+    private readonly ILocalCharacterPresence? _presence;
+    private readonly DispatcherTimer _presenceSweep;
+
+    // Every member node this window is showing, so the presence sweep can reach them without walking the tree. A list
+    // per pilot and not one node: a placed member gets a node in the structure tree AND a second one behind their row
+    // in the left list, and a sweep that reached only the last one built would leave the other surface reading the
+    // verdict from whenever the roster last reloaded.
+    private readonly Dictionary<int, List<MemberNodeViewModel>> _nodesByCharacter = [];
+
+    // What each member's own client last said about their game. This window is not a metrics screen and shows no
+    // figures, but it subscribes to the one stream that carries the answer: a pilot whose EVE is closed while their
+    // EVE Together runs goes on publishing, so their LastSeenAt stays fresh and silence alone would call them
+    // present. The reported half is the only thing that can tell the roster otherwise (ET-70).
+    private readonly Dictionary<int, (PresenceState State, DateTimeOffset At)> _reportedPresence = [];
 
     // The announcements this window made for its own mutations, so it does not reload a second time for news it is
     // already showing. Matched on identity, never on value: two changes that describe the same pilot are still two
@@ -106,7 +126,72 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         _rosterWatch = services.GetRequiredService<IFleetRosterWatch>();
         _rosterSubscription = _rosterWatch.Subscribe(_OnRosterChanged);
 
+        // Who is actually here (ET-70). Two evidence paths, and this window needs both: our own pilots' EVE clients,
+        // which the local sweep sees directly, and everyone else's, which only reaches us over the fleet's metric
+        // stream — or, when their client is gone, by not reaching us at all.
+        _presence = services.GetService<ILocalCharacterPresence>();
+        _presenceSubscription = _presence?.Subscribe(() => _RefreshPresence(DateTimeOffset.UtcNow));
+        _metricSubscription = services.GetService<IEventBus>()?.Subscribe<FleetMetricEvent>(_OnFleetMetric);
+        _presenceSweep = new DispatcherTimer { Interval = FleetMetricsViewModel.PresenceSweepInterval };
+        _presenceSweep.Tick += (_, _) => _RefreshPresence(DateTimeOffset.UtcNow);
+        _presenceSweep.Start();
+
         _ = ReloadAsync();
+    }
+
+    private void _OnFleetMetric(FleetMetricEvent integrationEvent)
+    {
+        var sample = integrationEvent.Data;
+        if (sample.FleetId != _fleet.Id || sample.Kind is not MetricKind.Presence)
+            return;
+
+        // Onto the UI thread before it touches the dictionary the sweep reads and the nodes it writes.
+        Dispatcher.UIThread.Post(() =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            // An out-of-range value is a newer client's state we have no reading for; claiming nothing is the safe
+            // answer, and the sample still counts as contact.
+            _reportedPresence[sample.CharacterId] = (
+                Enum.IsDefined((PresenceState)(int)sample.Value) ? (PresenceState)(int)sample.Value : PresenceState.Unknown,
+                now);
+            _RefreshPresence(now);
+        });
+    }
+
+    /// <summary>
+    /// Re-read every member's presence. Public and clock-driven so a test owns the time rather than waiting out the
+    /// silence window; run on the sweep because a departing client's whole signature is that nothing happens.
+    /// </summary>
+    public void RefreshPresence(DateTimeOffset now) => _RefreshPresence(now);
+
+    private void _RefreshPresence(DateTimeOffset now)
+    {
+        foreach (var member in _members)
+        {
+            if (!_nodesByCharacter.TryGetValue(member.CharacterId, out var nodes))
+                continue;
+
+            // The later of the two accounts of contact. The roster read's LastSeenAt is written at most every
+            // SeenWriteThrottle and was taken whenever this window last reloaded; a live sample is exact but only
+            // covers pilots who have published since it opened. Neither alone answers for every member.
+            var reported = _reportedPresence.TryGetValue(member.CharacterId, out var last)
+                ? last
+                : (State: PresenceState.Unknown, At: (DateTimeOffset?)null);
+            var heardAt = (reported.At, member.LastSeenAt) switch
+            {
+                ({ } live, { } stored) => live > stored ? live : stored,
+                ({ } live, null) => live,
+                (null, { } stored) => stored,
+                _ => (DateTimeOffset?)null,
+            };
+
+            var verdict = FleetMemberPresence.Read(
+                _presence?.IsInGame(member.CharacterId, NameFor(member.CharacterId)),
+                reported.State,
+                FleetMemberPresence.IsSilent(heardAt, now));
+            foreach (var node in nodes)
+                node.Presence = verdict;
+        }
     }
 
     private void _OnRosterChanged(FleetRosterChange change)
@@ -123,7 +208,13 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
             _ = ReloadAsync();
     }
 
-    public void Dispose() => _rosterSubscription.Dispose();
+    public void Dispose()
+    {
+        _presenceSweep.Stop();
+        _presenceSubscription?.Dispose();
+        _metricSubscription?.Dispose();
+        _rosterSubscription.Dispose();
+    }
 
     /// <summary>Tell every other open screen that this fleet's roster moved. Announcing is not "also refresh the
     /// neighbours" — it is the one route a roster change travels, the same one the fleet browser and fleet metrics
@@ -692,8 +783,12 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
 
         await ComputeSkillBadgesAsync(members);   // can-fly verdicts, read before the nodes are built
         await ReportOwnVerdictAsync(members);     // cross-client: push my own verdict when it changed
+        // Both builders below mint fresh member nodes; the sweep's index has to start empty or it would go on writing
+        // to the nodes of a roster that is no longer on screen.
+        _nodesByCharacter.Clear();
         BuildList(members, invites, requests, wings, squadsByWing);
         BuildTree(members, wings, squadsByWing);
+        _RefreshPresence(DateTimeOffset.UtcNow);   // the new nodes start at Unknown; seed them before they are seen
         BuildCompositionFill();   // fresh composition (above) + fresh roster → the two-level fill
     }
 
@@ -868,8 +963,9 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
     private MemberNodeViewModel MemberNode(
         FleetMemberInfo member,
         IReadOnlyList<FleetWingInfo> wings,
-        IReadOnlyDictionary<long, IReadOnlyList<FleetSquadInfo>> squadsByWing) =>
-        new(member, NameFor(member.CharacterId), _isOwner,
+        IReadOnlyDictionary<long, IReadOnlyList<FleetSquadInfo>> squadsByWing)
+    {
+        var node = new MemberNodeViewModel(member, NameFor(member.CharacterId), _isOwner,
             BuildMoveTargets(member, wings, squadsByWing),
             unassignCommand: Cmd(() => UnassignMemberAsync(member)),
             removeFromFleetCommand: Cmd(() => RemoveMemberAsync(member)),
@@ -878,6 +974,12 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
             openFitCommand: Cmd(() => OpenMemberFitAsync(member)),
             skillBadge: _skillBadges.GetValueOrDefault(member.Id),
             shipName: member.AssignedFit is { } fit ? _shipNames.TypeName(fit.ShipTypeId) : null);
+
+        if (!_nodesByCharacter.TryGetValue(member.CharacterId, out var nodes))
+            _nodesByCharacter[member.CharacterId] = nodes = [];
+        nodes.Add(node);
+        return node;
+    }
 
     /// <summary>
     /// Builds the EVE move-cascade for one member: Fleet Commander · per wing → Wing Commander · per squad → Squad

@@ -51,6 +51,10 @@ public interface IFleetRepository
     /// <summary>Bumps <see cref="FleetEntity.LastActivityAt"/> — the cleanup inactivity signal.</summary>
     Task TouchActivityAsync(long fleetId, DateTimeOffset at, CancellationToken cancellationToken = default);
 
+    /// <summary>Bumps one member's <see cref="FleetMember.LastSeenAt"/> — the per-member presence signal (ET-70).
+    /// A character who is not on this fleet's roster is silently ignored.</summary>
+    Task TouchMemberSeenAsync(long fleetId, int characterId, DateTimeOffset at, CancellationToken cancellationToken = default);
+
     /// <summary>Hard-deletes a fleet; its wings, squads, members and invites cascade with it (FK).</summary>
     Task DeleteAsync(long fleetId, CancellationToken cancellationToken = default);
 

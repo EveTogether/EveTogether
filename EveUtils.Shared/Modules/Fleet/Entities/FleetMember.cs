@@ -43,6 +43,14 @@ public sealed class FleetMember
     /// never leave the pilot's client, so only the verdict travels. Reset to Unknown whenever the fit changes.</summary>
     public FitSkillVerdict FitSkillVerdict { get; set; }
 
+    /// <summary>
+    /// When this member's client last published anything into this fleet; null = never. The per-member counterpart of
+    /// <see cref="Fleet.LastActivityAt"/> and fed the same way — off the ~1 Hz metric stream, throttled — because the
+    /// one thing a departing client cannot do is announce that it is leaving (ET-70). A screen reads
+    /// <c>FleetMemberPresence.SilentAfter</c> against it; nothing sweeps it in the background.
+    /// </summary>
+    public DateTimeOffset? LastSeenAt { get; set; }
+
     /// <summary>The in-game ESI fleet member id once this member is matched to the live fleet; null
     /// until linked. Distinct from <see cref="CharacterId"/> — ESI keys move/kick by this member id.</summary>
     public long? EsiMemberId { get; set; }

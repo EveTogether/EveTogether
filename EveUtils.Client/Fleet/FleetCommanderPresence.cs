@@ -15,35 +15,44 @@ namespace EveUtils.Client.Fleet;
 /// </summary>
 /// <param name="InSystem">Members known to stand in <paramref name="CommanderSystem"/>.</param>
 /// <param name="Known">Members whose solar system is known — the denominator of the ratio.</param>
-/// <param name="UnknownLocations">Tracked members whose solar system is not known, counted apart from the ratio.</param>
+/// <param name="UnknownLocations">Tracked members who are here but whose solar system is not known, counted apart
+/// from the ratio.</param>
+/// <param name="Offline">Tracked members known not to be here at all, counted apart from both (ET-70).</param>
 /// <param name="CommanderSystem">The commander's solar system, or null when it is unknown.</param>
-public readonly record struct FleetCommanderPresence(int InSystem, int Known, int UnknownLocations, string? CommanderSystem)
+public readonly record struct FleetCommanderPresence(
+    int InSystem, int Known, int UnknownLocations, int Offline, string? CommanderSystem)
 {
     /// <summary>No commander on the roster, no location shared, or nothing tracked yet.</summary>
-    public static readonly FleetCommanderPresence Unknown = new(0, 0, 0, null);
+    public static readonly FleetCommanderPresence Unknown = new(0, 0, 0, 0, null);
 
-    /// <summary>Every tracked member, whether their location is known or not.</summary>
-    public int Total => Known + UnknownLocations;
+    /// <summary>Every tracked member, in whichever of the three buckets they fell.</summary>
+    public int Total => Known + UnknownLocations + Offline;
 
     /// <summary>
-    /// Count <paramref name="memberSystems"/> — one entry per tracked member, the commander's own included — against
-    /// the commander's system. Without a commander system there is no honest ratio to show, so the result is
+    /// Count <paramref name="members"/> — one entry per tracked member, the commander's own included — against the
+    /// commander's system. Without a commander system there is no honest ratio to show, so the result is
     /// <see cref="Unknown"/> rather than a figure that reads as "nobody is with the FC".
+    ///
+    /// Offline members are counted apart from the members with no location fix, rather than folded in with them, and
+    /// that separation is the whole of ET-70's badge half: "three pilots have gone" and "three pilots share no
+    /// position" call for different things from an FC, and a single "unknown" suffix could say neither.
     /// </summary>
-    public static FleetCommanderPresence From(string? commanderSystem, IEnumerable<string?> memberSystems)
+    public static FleetCommanderPresence From(string? commanderSystem, IEnumerable<FleetMemberStanding> members)
     {
         if (string.IsNullOrWhiteSpace(commanderSystem))
             return Unknown;
 
-        List<string?> systems = memberSystems.ToList();
-        if (systems.Count == 0)
+        List<FleetMemberStanding> standings = members.ToList();
+        if (standings.Count == 0)
             return Unknown;
 
-        int known = systems.Count(IsKnown);
+        int known = standings.Count(m => IsKnown(m.System));
+        int offline = standings.Count(m => m.IsOffline);
         return new FleetCommanderPresence(
-            systems.Count(system => IsCommanderSystem(system, commanderSystem)),
+            standings.Count(m => IsCommanderSystem(m.System, commanderSystem)),
             known,
-            systems.Count - known,
+            standings.Count - known - offline,
+            offline,
             commanderSystem);
     }
 
@@ -81,16 +90,27 @@ public readonly record struct FleetCommanderPresence(int InSystem, int Known, in
 
     public bool IsUnknown => Level is FleetCommanderPresenceLevel.Unknown;
 
-    public string BadgeText => IsUnknown ? "◉ — WITH FC" : $"◉ {InSystem}/{Known} WITH FC{UnknownSuffix}";
+    // In the unknown state the dash already says "no location is known", so repeating it as "(n unknown)" would only
+    // restate it — but "(n offline)" is news the dash does not carry, and often the reason for it.
+    public string BadgeText => IsUnknown ? $"◉ — WITH FC{OfflineSuffix}" : $"◉ {InSystem}/{Known} WITH FC{Suffix}";
 
-    // Only when there is something to say. A trailing "(0 unknown)" would be noise on the common case.
-    private string UnknownSuffix => UnknownLocations > 0 ? $" ({UnknownLocations} unknown)" : "";
+    private string OfflineSuffix => Offline > 0 ? $" ({Offline} offline)" : "";
+
+    // Only what there is something to say about, and offline before unknown: "who is even here" is read first.
+    // A trailing "(0 unknown)" would be noise on the common case.
+    private string Suffix => (Offline, UnknownLocations) switch
+    {
+        (0, 0) => "",
+        (0, var unknown) => $" ({unknown} unknown)",
+        (var offline, 0) => $" ({offline} offline)",
+        var (offline, unknown) => $" ({offline} offline, {unknown} unknown)",
+    };
 
     public string Tooltip => IsUnknown
         ? "Unknown: the fleet has no commander, or nobody's location is known — the commander's own included. "
-          + "Location sharing is opt-in."
+          + $"Location sharing is opt-in.{OfflineTooltip}{UnknownTooltip}"
         : $"{InSystem} of {Known} fleet members with a known location are in {CommanderSystem} with the fleet "
-          + $"commander.{UnknownTooltip}";
+          + $"commander.{OfflineTooltip}{UnknownTooltip}";
 
     private string UnknownTooltip => UnknownLocations switch
     {
@@ -98,4 +118,19 @@ public readonly record struct FleetCommanderPresence(int InSystem, int Known, in
         1 => " 1 more shares no location and is left out of the count.",
         _ => $" {UnknownLocations} more share no location and are left out of the count.",
     };
+
+    // Named apart from the sentence above, because "not sharing a position" and "not here" are different news.
+    private string OfflineTooltip => Offline switch
+    {
+        0 => "",
+        1 => " 1 more is offline and is left out of the count.",
+        _ => $" {Offline} more are offline and are left out of the count.",
+    };
 }
+
+/// <summary>
+/// One member as the badge counts them: where they stand, and whether they are here to stand anywhere.
+/// <paramref name="System"/> is the location anything may act on — <c>DpsViewModel.KnownLocation</c>, already null for
+/// an offline pilot — so the two can never contradict each other.
+/// </summary>
+public readonly record struct FleetMemberStanding(string? System, bool IsOffline);

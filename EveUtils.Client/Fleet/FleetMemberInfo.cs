@@ -7,7 +7,9 @@ namespace EveUtils.Client.Fleet;
 /// <paramref name="AssignedCompositionEntryId"/> is the coupled-composition entry that fit fills (the doctrine
 /// join key for the two-level fill overview), or null when the member flies an own fit outside the doctrine.
 /// <paramref name="FitSkillVerdict"/> is the pilot's own client's can-fly verdict for that fit,
-/// the badge fallback for pilots whose skills this client does not know locally.</summary>
+/// the badge fallback for pilots whose skills this client does not know locally.
+/// <paramref name="LastSeenAt"/> is when the server last saw this member's client publish into the fleet, or null when
+/// it never has — the difference between a pilot who left and one we have simply never heard from (ET-70).</summary>
 public sealed record FleetMemberInfo(
     long Id,
     int CharacterId,
@@ -17,4 +19,5 @@ public sealed record FleetMemberInfo(
     bool IsExternal,
     FitReferenceInfo? AssignedFit = null,
     long? AssignedCompositionEntryId = null,
-    FitSkillVerdict FitSkillVerdict = FitSkillVerdict.Unknown);
+    FitSkillVerdict FitSkillVerdict = FitSkillVerdict.Unknown,
+    DateTimeOffset? LastSeenAt = null);

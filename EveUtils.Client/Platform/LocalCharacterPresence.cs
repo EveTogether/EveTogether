@@ -64,6 +64,8 @@ public sealed class LocalCharacterPresence : ILocalCharacterPresence, ISingleton
         return _presence.Current.Matches(characterName ?? string.Empty, characterId);
     }
 
+    public bool? IsInGame(int characterId) => IsInGame(characterId, _known.NameFor(characterId));
+
     public IDisposable Subscribe(Action handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
@@ -83,7 +85,10 @@ public sealed class LocalCharacterPresence : ILocalCharacterPresence, ISingleton
         {
             var characters = await _registry.GetAllAsync();
             _known = new LocalCharacters(
-                new HashSet<int>(characters.Where(c => c.EsiCharacterId is > 0).Select(c => c.EsiCharacterId!.Value)),
+                characters
+                    .Where(c => c.EsiCharacterId is > 0)
+                    .GroupBy(c => c.EsiCharacterId!.Value)
+                    .ToDictionary(g => g.Key, g => g.First().Name),
                 new HashSet<string>(characters.Select(c => c.Name), StringComparer.OrdinalIgnoreCase));
         }
         catch
@@ -131,14 +136,18 @@ public sealed class LocalCharacterPresence : ILocalCharacterPresence, ISingleton
             _registry.RegistryChanged -= _onRegistry;
     }
 
-    private sealed record LocalCharacters(IReadOnlySet<int> Ids, IReadOnlySet<string> Names)
+    // Keyed by id AND held as a set of names: a character registered before its ESI id was known has no id to key on,
+    // and the window-title evidence identifies a pilot by name in the first place.
+    private sealed record LocalCharacters(IReadOnlyDictionary<int, string> NameById, IReadOnlySet<string> Names)
     {
         public static readonly LocalCharacters Empty = new(
-            new HashSet<int>(), new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            new Dictionary<int, string>(), new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
         public bool Contains(int characterId, string? characterName) =>
-            (characterId > 0 && Ids.Contains(characterId)) ||
+            (characterId > 0 && NameById.ContainsKey(characterId)) ||
             (!string.IsNullOrWhiteSpace(characterName) && Names.Contains(characterName));
+
+        public string? NameFor(int characterId) => NameById.GetValueOrDefault(characterId);
     }
 
     private sealed class Subscription(LocalCharacterPresence presence, Action handler) : IDisposable

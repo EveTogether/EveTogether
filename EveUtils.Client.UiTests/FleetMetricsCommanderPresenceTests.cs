@@ -270,7 +270,7 @@ public class FleetMetricsCommanderPresenceTests
     [Fact]
     public void Badge_ReadsUnknown_WhenNoMemberLocationIsKnownAtAll()
     {
-        var presence = FleetCommanderPresence.From("Jita", [null, null, "  "]);
+        var presence = FleetCommanderPresence.From("Jita", FleetStandings.At(null, null, "  "));
 
         Assert.Equal(0, presence.InSystem);
         Assert.Equal(0, presence.Known);

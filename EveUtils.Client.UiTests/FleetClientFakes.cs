@@ -30,8 +30,16 @@ internal sealed class FakeFleetClient : IFleetClient
     public Task<IReadOnlyList<FleetMemberInfo>> ListMembersAsync(long fleetId) => Task.FromResult(Members);
     public Task<IReadOnlyList<FleetInviteInfo>> ListPendingFleetInvitesAsync(long fleetId) => Task.FromResult(Invites);
     public Task<IReadOnlyList<FleetJoinRequestInfo>> ListPendingJoinRequestsAsync(long fleetId) => Empty<FleetJoinRequestInfo>();
-    public Task<IReadOnlyList<FleetWingInfo>> ListWingsAsync(long fleetId) => Empty<FleetWingInfo>();
-    public Task<IReadOnlyList<FleetSquadInfo>> ListSquadsAsync(long wingId) => Empty<FleetSquadInfo>();
+    /// <summary>The fleet's structure. Seed it when a test needs members actually PLACED in the tree — an unplaced
+    /// member lives in the roster's left list only, so a structure-less fleet quietly halves what a roster test
+    /// renders.</summary>
+    public IReadOnlyList<FleetWingInfo> Wings { get; set; } = [];
+    public IReadOnlyList<FleetSquadInfo> Squads { get; set; } = [];
+
+    public Task<IReadOnlyList<FleetWingInfo>> ListWingsAsync(long fleetId) => Task.FromResult(Wings);
+
+    public Task<IReadOnlyList<FleetSquadInfo>> ListSquadsAsync(long wingId) =>
+        Task.FromResult<IReadOnlyList<FleetSquadInfo>>([.. Squads.Where(s => s.WingId == wingId)]);
     public Task<IReadOnlyList<ConnectedCharacterInfo>> ListConnectedCharactersAsync() => Task.FromResult(Connected);
 
     public Task<(bool Ok, string Message)> MoveMemberAsync(long memberId, FleetRole role, long wingId, long squadId) => Ok();

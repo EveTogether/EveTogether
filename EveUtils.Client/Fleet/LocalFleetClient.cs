@@ -34,7 +34,7 @@ public sealed class LocalFleetClient(
 
     public async Task<IReadOnlyList<FleetMemberInfo>> ListMembersAsync(long fleetId) =>
         (await repository.ListMembersAsync(fleetId))
-            .Select(m => new FleetMemberInfo(m.Id, m.CharacterId, m.WingId, m.SquadId, m.Role, m.IsExternal, _FromFit(m.AssignedFit), m.AssignedCompositionEntryId, m.FitSkillVerdict))
+            .Select(m => new FleetMemberInfo(m.Id, m.CharacterId, m.WingId, m.SquadId, m.Role, m.IsExternal, _FromFit(m.AssignedFit), m.AssignedCompositionEntryId, m.FitSkillVerdict, m.LastSeenAt))
             .ToList();
 
     private static FitReferenceInfo? _FromFit(FitReference? fit) => fit is null ? null : new FitReferenceInfo(

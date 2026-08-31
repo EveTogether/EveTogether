@@ -99,8 +99,15 @@ public sealed class EventBusStreamService(
                     // Live fleet traffic (the participation metric stream) keeps the fleet's cleanup clock fresh so an
                     // actively-playing fleet is not archived the moment everyone briefly disconnects.
                     // Throttled to ~1/min per fleet, so combat — which never hits a roster command — counts as activity.
+                    var now = DateTimeOffset.UtcNow;
                     await services.GetRequiredService<FleetActivityTracker>()
-                        .NoteAsync(envelope.Event.FleetId, DateTimeOffset.UtcNow, context.CancellationToken);
+                        .NoteAsync(envelope.Event.FleetId, now, context.CancellationToken);
+
+                    // …and the same fact per member (ET-70). Noted off the attached session's character, never the
+                    // envelope's: this is the record that decides whether a pilot is called offline, so it may only
+                    // ever be written by the client that actually is that pilot.
+                    await services.GetRequiredService<FleetMemberActivityTracker>()
+                        .NoteAsync(envelope.Event.FleetId, attachedCharacterId, now, context.CancellationToken);
 
                     // Only an ACTIVE fleet broadcasts — a Forming fleet (advance sign-up) delivers nothing even if
                     // an old/buggy client publishes to it.

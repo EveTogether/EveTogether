@@ -42,4 +42,15 @@ public enum MetricKind
     /// screen, and doubling it would say the same thing twice.
     /// </summary>
     NeutIn = 8,
+
+    /// <summary>
+    /// Whether the publishing character is in game, as their own client sees it — a <see cref="PresenceState"/> in
+    /// the sample's value. A State kind: it is a label about the pilot, never a figure to roll up.
+    ///
+    /// It rides the existing 1 Hz stream rather than a channel of its own precisely because the stream's arrival is
+    /// half the answer. A sample says "my EVE Together is running" by existing at all, and says whether EVE itself is
+    /// running by its value; a client that has been closed sends neither, which is the case no message can ever
+    /// report and <see cref="FleetMemberPresence.SilentAfter"/> reads instead (ET-70).
+    /// </summary>
+    Presence = 9,
 }

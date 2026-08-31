@@ -222,8 +222,15 @@
                                             <MenuItem Header="Remove from fleet" Command="{Binding Node.RemoveFromFleetCommand}"/>
                                         </ContextMenu>
                                     </Grid.ContextMenu>
-                                    <TextBlock Grid.Column="0" Text="{Binding Name}" VerticalAlignment="Center"
-                                               Foreground="{StaticResource TextBrightBrush}"/>
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource TextBrightBrush}"/>
+                                        <!-- The same offline mark as the tree leaf: one pilot, one reading, whichever
+                                             half of this window you are looking at (ET-70). -->
+                                        <TextBlock Classes="offline" FontSize="10" VerticalAlignment="Center" Text="◉ offline"
+                                                   IsVisible="{Binding Node.IsOffline, FallbackValue=False}"
+                                                   ToolTip.Tip="Not in game — their EVE client is closed, or their EVE Together has stopped reporting."/>
+                                    </StackPanel>
                                     <Border Grid.Column="1" Background="{DynamicResource AccentSoftBrush}"
                                             CornerRadius="3" Padding="5,1" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Badge}" FontSize="9"
@@ -421,6 +428,13 @@
                                             </ContextMenu>
                                         </TextBlock.ContextMenu>
                                     </TextBlock>
+                                    <!-- Not here at all (ET-70). Its own mark rather than a dimmed name: an FC scanning
+                                         the tree has to be able to tell "gone" from "we know nothing about them", and
+                                         nothing is what a member with no mark says. After the name, as on the left
+                                         list, so the two halves of this window read in the same order. -->
+                                    <TextBlock Classes="offline" FontSize="10" VerticalAlignment="Center" Text="◉ offline"
+                                               IsVisible="{Binding IsOffline}"
+                                               ToolTip.Tip="Not in game — their EVE client is closed, or their EVE Together has stopped reporting."/>
                                     <TextBlock Text="{Binding AssignedFitLabel}" Classes="label" FontSize="10" VerticalAlignment="Center"/>
                                     <mi:MaterialIcon Classes="icon-sm" Kind="Check" Foreground="{DynamicResource TextAccentBrush}"
                                                IsVisible="{Binding CanFly}" ToolTip.Tip="{Binding SkillBadgeTooltip}"/>

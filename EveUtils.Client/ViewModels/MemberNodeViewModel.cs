@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Fleet;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 
 namespace EveUtils.Client.ViewModels;
 
@@ -13,7 +15,7 @@ namespace EveUtils.Client.ViewModels;
 /// directly on this member. The same instance also backs a level commander shown in a node header, so the node menu
 /// can reuse its move/unassign/cascade.
 /// </summary>
-public sealed class MemberNodeViewModel : IFleetMemberMenuHost
+public sealed partial class MemberNodeViewModel : ObservableObject, IFleetMemberMenuHost
 {
     private readonly MemberSkillBadge? _skillBadge;
 
@@ -53,16 +55,42 @@ public sealed class MemberNodeViewModel : IFleetMemberMenuHost
         var externalSuffix = member.IsExternal ? " (extern)" : string.Empty;
         Label = $"{displayName} — {roleLabel}{externalSuffix}";
 
-        // The same pilot summary fleet metrics shows, built from the same place — here it hangs under a "Pilot
-        // details" submenu because this menu already carries the roster's own structure actions. No remove action:
-        // the roster menu has had its own "Remove from fleet" since E2, and it runs the same shared flow.
-        MemberMenu = FleetMemberMenu.Build(
-            new FleetMemberFacts(displayName, member.Role, member.IsExternal, shipName, member.AssignedFit?.FitName),
-            DateTimeOffset.UtcNow);
+        DisplayName = displayName;
+        _shipName = shipName;
+        MemberMenu = _BuildMenu();
     }
 
+    private readonly string? _shipName;
+
+    /// <summary>The pilot's name on its own, without the role suffix <see cref="Label"/> carries.</summary>
+    public string DisplayName { get; }
+
+    /// <summary>
+    /// Whether this pilot is here, kept current by the roster's own sweep (ET-70). Observable because it moves while
+    /// the window stands open — a member closing their client is news that arrives as nothing arriving, and the tree
+    /// is otherwise only rebuilt when the roster itself changes.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsOffline))]
+    private FleetMemberPresenceState _presence = FleetMemberPresenceState.Unknown;
+
+    /// <summary>Known not to be here — an own category, distinct from a pilot nothing is known about.</summary>
+    public bool IsOffline => Presence is FleetMemberPresenceState.Offline;
+
+    // The menu carries the presence line, so it is rebuilt when the verdict moves rather than showing the reading
+    // from whenever the tree happened to be built.
+    partial void OnPresenceChanged(FleetMemberPresenceState value) => MemberMenu = _BuildMenu();
+
     /// <summary>The shared fleet-member information block (ET-44) — the roster's facts, no live metrics.</summary>
-    public IReadOnlyList<FleetMemberMenuItemViewModel> MemberMenu { get; }
+    [ObservableProperty] private IReadOnlyList<FleetMemberMenuItemViewModel> _memberMenu;
+
+    // The same pilot summary fleet metrics shows, built from the same place — in the view it hangs under a "Pilot
+    // details" submenu because this menu already carries the roster's own structure actions. No remove action:
+    // the roster menu has had its own "Remove from fleet" since E2, and it runs the same shared flow.
+    private IReadOnlyList<FleetMemberMenuItemViewModel> _BuildMenu() => FleetMemberMenu.Build(
+        new FleetMemberFacts(DisplayName, Member.Role, Member.IsExternal, _shipName, Member.AssignedFit?.FitName,
+            Presence: Presence),
+        DateTimeOffset.UtcNow);
 
     public FleetMemberInfo Member { get; }
     public string Label { get; }

@@ -322,7 +322,8 @@ public sealed class FleetClient(
                 ? reply.Members.Select(m => new FleetMemberInfo(m.Id, m.CharacterId, m.WingId, m.SquadId, (FleetRole)m.Role, m.IsExternal,
                     m.AssignedFit is null ? null : MapFit(m.AssignedFit),
                     m.HasAssignedCompositionEntryId ? m.AssignedCompositionEntryId : null,
-                    (FitSkillVerdict)m.FitSkillVerdict)).ToList()
+                    (FitSkillVerdict)m.FitSkillVerdict,
+                    m.HasLastSeenMs ? DateTimeOffset.FromUnixTimeMilliseconds(m.LastSeenMs) : null)).ToList()
                 : [], cancellationToken);
 
     public Task<IReadOnlyList<FleetInviteInfo>> ListPendingInvitesAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>

@@ -33,7 +33,7 @@ public class OverlayChromeTests
         public long FleetId => 77;
         public IReadOnlyList<DpsViewModel> Members { get; } = [];
         public FleetCommanderPresence CommanderPresence =>
-            FleetCommanderPresence.From("Jita", ["Jita", "Jita", "Perimeter", null]);
+            FleetCommanderPresence.From("Jita", FleetStandings.At("Jita", "Jita", "Perimeter", null));
     }
 
     /// <summary>Both pop-outs, because the whole point of the shared chrome is that neither can drift.</summary>
