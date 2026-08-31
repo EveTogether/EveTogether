@@ -88,7 +88,9 @@ public static class ToastActionContent
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             Margin = new Thickness(0, 8, 0, 0),
-            HorizontalAlignment = HorizontalAlignment.Right,
+            // Centred rather than pushed right: the card's width comes from the message line, so a right-aligned row
+            // leaves whatever the message did not use as a gap on the left. Centring spends that evenly.
+            HorizontalAlignment = HorizontalAlignment.Center,
         };
 
         foreach (var action in actions)
