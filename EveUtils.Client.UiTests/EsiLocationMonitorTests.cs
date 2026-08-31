@@ -207,6 +207,43 @@ public class EsiLocationMonitorTests
         Assert.InRange(locations.Calls, 20, 22);
     }
 
+    /// <summary>
+    /// ET-81: EVE's daily downtime must not end the watch. Our own gate withholds every non-essential call for the
+    /// 11:00–11:03 UTC maintenance window, and those refusals were counted as failed reads — twenty polls at six
+    /// seconds is two minutes, so the budget always ran out before the window did. Every day, deterministically, the
+    /// watch gave up and never came back, taking the abyssal clock and ET-63's location bootstrap with it: a client
+    /// started after downtime kept an unknown location because no reading ever arrived to fill it.
+    /// </summary>
+    /// <remarks>
+    /// Measured in the wild 2026-08-31: all three characters logged "gave up after 21 failed location reads" at
+    /// 13:02:04 local — 11:02:04 UTC, the last second of the gate's window.
+    /// </remarks>
+    [Fact]
+    public async Task DowntimeDoesNotEndTheWatch_AndItReadsAgainAfterwards()
+    {
+        using var cts = new CancellationTokenSource();
+
+        // Twice the failure budget, so a counted withholding could not possibly survive it.
+        const int Withheld = 40;
+        var locations = new FakeLocationClient(Aphend)
+        {
+            WithholdFirst = Withheld,
+            CancelAfter = (Withheld + 1, cts),
+        };
+        var monitor = Build(locations, out var toasts);
+
+        var seen = new List<bool?>();
+        await monitor.WatchAsync(1, "RaymondKrah", reading => seen.Add(reading.Inside), cts.Token);
+
+        // No lost reading anywhere: a clock is not dropped over calls that never left the machine, and the first
+        // poll after downtime is read normally.
+        Assert.Equal([false], seen);
+        Assert.Equal(Withheld + 1, locations.Calls);
+
+        // Nothing to tell the pilot either — the downtime banner already explains it.
+        Assert.Empty(toasts.Toasts);
+    }
+
     private static EsiLocationMonitor Build(FakeLocationClient locations, out RecordingToastService toasts)
     {
         toasts = new RecordingToastService();
@@ -254,6 +291,10 @@ public class EsiLocationMonitorTests
         public int Calls { get; private set; }
         public EsiErrorKind? Error { get; init; }
         public EsiErrorKind? FailFirst { get; init; }
+
+        /// <summary>How many opening calls the local gate withholds — what downtime looks like to the watch.</summary>
+        public int WithholdFirst { get; init; }
+
         public (int After, CancellationTokenSource Source)? CancelAfter { get; init; }
 
         private readonly Queue<int> _systems = new(systems);
@@ -264,6 +305,10 @@ public class EsiLocationMonitorTests
 
             if (CancelAfter is { } cancel && Calls >= cancel.After)
                 cancel.Source.Cancel();
+
+            if (Calls <= WithholdFirst)
+                return Task.FromResult(EsiResult<EsiCharacterLocation>.Fail(
+                    EsiError.Of(EsiErrorKind.Unavailable, "fake downtime")));
 
             if (Error is { } fatal)
                 return Task.FromResult(EsiResult<EsiCharacterLocation>.Fail(EsiError.Of(fatal, "fake")));
