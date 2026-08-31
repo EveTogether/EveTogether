@@ -30,4 +30,15 @@ internal sealed class MarketPriceRepository(IDbContextFactory<SharedDbContext> c
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
         return await db.Set<LocalMarketPrice>().CountAsync(cancellationToken);
     }
+
+    public async Task<DateTimeOffset?> GetSnapshotTimeAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        // The whole cache is replaced in one pass with a single stamp, so any row's stamp is the snapshot's — and
+        // taking one beats aggregating, which SQLite cannot do over a DateTimeOffset at all. The nullable
+        // projection makes an empty table read as null rather than as the default date.
+        return await db.Set<LocalMarketPrice>()
+            .Select(price => (DateTimeOffset?)price.UpdatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
 }

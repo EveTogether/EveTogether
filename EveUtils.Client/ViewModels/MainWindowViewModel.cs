@@ -28,6 +28,7 @@ using EveUtils.Client.Gamelog;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Messaging;
 using EveUtils.Shared.Modules.Market.Repositories;
+using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Client.Pairing;
 using EveUtils.Client.Theming;
 using EveUtils.Client.Transport;
@@ -271,6 +272,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             case "compositions": OpenCompositions(); break;
             case "esi": OpenEsiMetrics(); break;
             case "settings-sync": OpenSettingsSync(); break;
+            case "appraisal": OpenAppraisal(); break;
             case "inbox": OpenInbox(); break;
             case "logs": OpenLogs(); break;
             case "settings": await OpenSettings(); break;
@@ -576,6 +578,18 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             _services.GetRequiredService<EveClientPresenceService>(),
             _services.GetRequiredService<IEveSettingsWatch>(),
             _dialogs));
+    }
+
+    /// <summary>Opens the Appraisal tool (ET-83) — non-modal, like the other modules. A fresh view-model per open so
+    /// it reads the price cache as it stands now rather than as it stood when the window was first built.</summary>
+    [RelayCommand]
+    private void OpenAppraisal()
+    {
+        if (_dialogs is null || _services is null)
+            return;
+        _dialogs.ShowAppraisal(new AppraisalViewModel(
+            _services.GetRequiredService<IEnumerable<IAppraisalProvider>>(),
+            _services.GetRequiredService<ISdeAccessor>()));
     }
 
     /// <summary>Open the FITS fit-browser window: the Local library plus a tab per coupled server, each a

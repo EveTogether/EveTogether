@@ -52,6 +52,9 @@ public class FitBrowserTests
                 typeIds.Where(_prices.ContainsKey).ToDictionary(id => id, id => _prices[id]));
 
         public Task<int> CountAsync(CancellationToken cancellationToken = default) => Task.FromResult(_prices.Count);
+
+        public Task<DateTimeOffset?> GetSnapshotTimeAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<DateTimeOffset?>(_prices.Count == 0 ? null : DateTimeOffset.UnixEpoch);
     }
 
     [Fact]

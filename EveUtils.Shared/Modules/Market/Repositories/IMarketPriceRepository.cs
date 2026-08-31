@@ -13,4 +13,8 @@ public interface IMarketPriceRepository
 
     /// <summary>How many prices are cached (0 = not refreshed yet).</summary>
     Task<int> CountAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>When the cached snapshot was written, or null when nothing is cached — so a readout can say how old
+    /// the prices it is showing are instead of presenting them as current.</summary>
+    Task<DateTimeOffset?> GetSnapshotTimeAsync(CancellationToken cancellationToken = default);
 }

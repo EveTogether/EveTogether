@@ -326,6 +326,9 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void ShowSettingsBackups(SettingsBackupsViewModel viewModel) =>
         Route(new SettingsBackupsWindow(viewModel), "SETTINGS BACKUPS", "tools");
 
+    public void ShowAppraisal(AppraisalViewModel viewModel) =>
+        Route(new AppraisalWindow(viewModel), "APPRAISAL", "tools");
+
     public async Task ShowPresetExportAsync(PresetExportViewModel viewModel)
     {
         if (_owner is null) return;
