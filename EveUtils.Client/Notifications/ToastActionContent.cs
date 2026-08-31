@@ -95,7 +95,10 @@ public static class ToastActionContent
 
         foreach (var action in actions)
         {
-            var button = new Button { Content = action.Label, MinWidth = 0 };
+            // The label carries its own colour rather than leaning on the button's: a Foreground set through the
+            // style never reaches this text, which left white on the affirmative green at 1.74:1 where 4.5:1 is the
+            // floor. Dark on that green measures 11.56:1.
+            var button = new Button { MinWidth = 0, Content = Label(action) };
             button.Classes.Add("toast-action"); // compact sizing (the form-button default overflows the card)
             if (StyleClass(action.Style) is { } styleClass)
                 button.Classes.Add(styleClass); // green (good) / red (danger) tint via the themed button classes
@@ -113,6 +116,12 @@ public static class ToastActionContent
         // left exactly 310 after the inset, so the last button ended up against the border with nothing to spare.
         return new Border { Padding = new Thickness(14, 12), MinWidth = 240, MaxWidth = ContentWidthCap, Child = layout };
     }
+
+    // A tinted button (green or red) needs a dark label to stay readable; a plain one keeps the theme's own.
+    private static TextBlock Label(ToastAction action) => action.Style is ToastActionStyle.Affirmative
+        or ToastActionStyle.Destructive
+        ? new TextBlock { Text = action.Label, Foreground = new SolidColorBrush(Color.Parse("#FF06070A")) }
+        : new TextBlock { Text = action.Label };
 
     private static string? StyleClass(ToastActionStyle style) => style switch
     {

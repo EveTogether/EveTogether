@@ -36,7 +36,8 @@ public class ToastActionContentTests
 
         var buttons = ButtonsOf(content);
         Assert.Equal(2, buttons.Count);
-        Assert.Equal(new[] { "Open metrics", "Dismiss" }, buttons.Select(b => (string?)b.Content));
+        // The label is a TextBlock, not a bare string: it carries its own colour so a tinted button stays readable.
+        Assert.Equal(new[] { "Open metrics", "Dismiss" }, buttons.Select(b => (b.Content as TextBlock)?.Text));
         Assert.All(buttons, b => Assert.True(NotificationCard.GetCloseOnClick(b), "every action button must dismiss the toast"));
 
         buttons[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

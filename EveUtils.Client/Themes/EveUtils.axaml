@@ -137,6 +137,12 @@
         <Setter Property="BorderBrush" Value="{StaticResource GreenBrush}"/>
         <Setter Property="Foreground" Value="#FF06070A"/>
     </Style>
+    <!-- The dark label has to be set on the ContentPresenter, the way the pointerover rule already does: set on the
+         button alone it never reaches the text, which stayed white on the green at 1.74:1 where 4.5:1 is the floor.
+         Dark on this green measures 11.56:1. -->
+    <Style Selector="Button.toast-action.good /template/ ContentPresenter">
+        <Setter Property="Foreground" Value="#FF06070A"/>
+    </Style>
     <Style Selector="Button.toast-action.good:pointerover /template/ ContentPresenter">
         <Setter Property="Background" Value="#FF6BE89B"/>
         <Setter Property="Foreground" Value="#FF06070A"/>
@@ -144,6 +150,9 @@
     <Style Selector="Button.toast-action.danger">
         <Setter Property="Background" Value="{StaticResource RedBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
+        <Setter Property="Foreground" Value="#FF06070A"/>
+    </Style>
+    <Style Selector="Button.toast-action.danger /template/ ContentPresenter">
         <Setter Property="Foreground" Value="#FF06070A"/>
     </Style>
     <Style Selector="Button.toast-action.danger:pointerover /template/ ContentPresenter">
