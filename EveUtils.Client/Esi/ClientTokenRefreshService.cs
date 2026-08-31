@@ -115,6 +115,9 @@ public sealed class ClientTokenRefreshService(
         if (string.IsNullOrEmpty(tokens.RefreshToken))
         {
             logger.LogError("Character {CharacterId} has no refresh token; re-auth needed.", charId);
+            // No refresh token means the stored token set can never become valid again, unlike
+            // TemporarilyUnavailable — remove it so a dead blob doesn't linger (ET-54).
+            await tokenStore.RemoveAsync(charId, cancellationToken);
             return TokenStatus.NeedsReauth;
         }
 
@@ -149,6 +152,10 @@ public sealed class ClientTokenRefreshService(
         catch (Exception ex) when (IsRevoked(ex))
         {
             logger.LogError(ex, "Token revoked for character {CharacterId} — re-auth needed.", charId);
+            // A definitive invalid_grant/401 means the refresh token is dead for good — unlike the
+            // TemporarilyUnavailable case below, retrying will never recover it, so the encrypted
+            // blob is just dead weight on disk from here on (ET-54).
+            await tokenStore.RemoveAsync(charId, cancellationToken);
             return TokenStatus.NeedsReauth;
         }
         catch (Exception ex)

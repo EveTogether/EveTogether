@@ -157,7 +157,7 @@ public sealed class EncryptedPerCharacterTokenStore(string dataDirectory) : IPer
 
     private static void TryDelete(string path)
     {
-        try { File.Delete(path); } catch (IOException) { }
+        try { File.Delete(path); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
     private static void TryRestrictPermissions(string path)
