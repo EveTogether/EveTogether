@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
@@ -103,6 +104,89 @@ public class ClipboardWatchTests
         Assert.Empty(watch.Consumers);
     }
 
+    /// <summary>
+    /// wl-paste reports the clipboard that was already there the moment it starts, and that copy was made before
+    /// the user switched watching on — so the Wayland source drops it and reports every change after it.
+    /// </summary>
+    /// <remarks>
+    /// Driven through a reader rather than a real <c>wl-paste</c>: the process needs a Wayland compositor and the
+    /// build agents have none, while the rule being pinned lives in the lines, not in the process.
+    /// </remarks>
+    [Fact]
+    public void WaylandSource_DropsTheStartupLine_AndReportsEveryChangeAfterIt()
+    {
+        var source = new WaylandClipboardChangeSource();
+        var changes = 0;
+        source.Changed += () => changes++;
+
+        // Four lines out of wl-paste: the startup one, then three copies the user actually made.
+        source.Pump(new StringReader("\n\n\n\n"));
+
+        Assert.Equal(3, changes);
+    }
+
+    /// <summary>
+    /// A desktop that cannot notify makes wl-paste exit without ever writing a line, so a source that gets no
+    /// first line reports itself unsupported instead of sitting there looking started.
+    /// </summary>
+    [Fact]
+    public void WaylandSource_ReportsUnsupported_WhenNoLineEverArrives()
+    {
+        var source = new WaylandClipboardChangeSource();
+        var reported = 0;
+        source.SupportChanged += () => reported++;
+
+        source.Pump(new StringReader(""));
+
+        Assert.False(source.IsSupported);
+        Assert.Equal(1, reported);
+    }
+
+    /// <summary>
+    /// A watcher that falls away mid-run ends the pump, and that end is reported rather than silent — otherwise
+    /// the switch goes on looking on while nothing will ever arrive again.
+    /// </summary>
+    [Fact]
+    public void WaylandSource_ReportsTheEndOfThePump_WhenTheWatcherFallsAway()
+    {
+        var source = new WaylandClipboardChangeSource();
+        var changes = 0;
+        var reported = 0;
+        source.Changed += () => changes++;
+        source.SupportChanged += () => reported++;
+
+        // The startup line, one copy the user made, and then the watcher is gone.
+        source.Pump(new StringReader("\n\n"));
+
+        Assert.Equal(1, changes);
+        Assert.Equal(1, reported);
+    }
+
+    /// <summary>
+    /// A source that loses its notifier while running — a compositor restart, a killed helper — stops the watch
+    /// rather than leaving the status line claiming the clipboard is still being read.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ClipboardWatch_StopsClaimingToWatch_WhenTheSourceLosesItsNotifier()
+    {
+        var source = new FakeClipboardChangeSource();
+        using var instance = TestClientInstance.Create();
+        using var watch = new ClipboardWatchService(new RecordingDialogService(), instance.Services,
+            NullLogger<ClipboardWatchService>.Instance, source);
+
+        await watch.SetEnabledAsync(true);
+        Assert.True(watch.IsWatching);
+
+        var stateChanges = 0;
+        watch.StateChanged += () => stateChanges++;
+
+        source.RaiseSupportChanged();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(watch.IsWatching);
+        Assert.Equal(1, stateChanges);
+    }
+
     // The notification arrives off the UI thread and the read is marshalled onto it; run the posted work.
     private static void Copy(FakeClipboardChangeSource source)
     {
@@ -115,6 +199,8 @@ public class ClipboardWatchTests
         public bool IsSupported => true;
 
         public event Action? Changed;
+
+        public event Action? SupportChanged;
 
         public void Start()
         {
@@ -129,5 +215,7 @@ public class ClipboardWatchTests
         }
 
         public void RaiseChanged() => Changed?.Invoke();
+
+        public void RaiseSupportChanged() => SupportChanged?.Invoke();
     }
 }

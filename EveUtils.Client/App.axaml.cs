@@ -51,7 +51,12 @@ public partial class App : Application
 
             // Clipboard watch: reads the persisted opt-in and starts only if the user turned it on (default off).
             // Started here rather than in Program because reading the clipboard needs the toplevel above (ET-57).
-            _ = Program.Services.GetRequiredService<Clipboard.ClipboardWatchService>().InitializeAsync();
+            var clipboardWatch = Program.Services.GetRequiredService<Clipboard.ClipboardWatchService>();
+            _ = clipboardWatch.InitializeAsync();
+
+            // On Linux the watcher is a child process, and a child outlives the parent that spawned it — so it is
+            // stopped on the way out instead of being left watching an application that is gone (ET-75).
+            desktop.Exit += (_, _) => clipboardWatch.Dispose();
 
             desktop.MainWindow = mainWindow;
             // Pop-outs (DPS overlays / floating modules / info cards) are shown ownerless so they survive a main-window

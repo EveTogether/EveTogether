@@ -2,9 +2,9 @@
 
 `EveUtils.Client/Clipboard/` — an opt-in system that watches the system clipboard, recognises an
 EFT fit or an EVE inventory listing, and hands the payload to whichever features subscribed. This
-document records the reasoning the code cannot show on its own: the guarantees it makes, why Linux
-and macOS are excluded rather than pending, why recognition and parsing are separate, and which
-measured properties of EVE's clipboard output the parser leans on.
+document records the reasoning the code cannot show on its own: the guarantees it makes, which
+platforms are served and why the rest are excluded rather than pending, why recognition and parsing
+are separate, and which measured properties of EVE's clipboard output the parser leans on.
 
 It is deliberately **not** a `Shared` module: the clipboard is a desktop concern, like
 `EveUtils.Client/Platform/`. Structural overview → [`architecture.md`](architecture.md).
@@ -39,7 +39,7 @@ one process at a time and the application that just copied can still hold it, so
 Subscriber names are user-visible — they appear in the disclosure — so `Subscribe` takes a feature
 name, not a class name.
 
-## Windows only, and why that is an exclusion rather than a to-do
+## Per platform, and what is still an exclusion rather than a to-do
 
 Windows needs no polling: a message-only window (`HWND_MESSAGE`) registered with
 `AddClipboardFormatListener` receives `WM_CLIPBOARDUPDATE` whenever the clipboard changes. The OS
@@ -47,17 +47,91 @@ pushes, so there is no interval to tune and nothing to fight over with a clipboa
 window lives on its own thread with its own message pump, because a window created on the UI thread
 would deliver its messages into Avalonia's loop.
 
-Linux and macOS report `IsSupported == false` and the UI says so, instead of leaving a toggle that
-silently does nothing. **This is a decision, not an unimplemented platform.** The only alternative
-is polling, and a poller cannot tell "changed" from "still the same" without keeping state about
-the previous payload — including payloads it did not recognise. Either it drags the same password
-back into the process on every tick, or it remembers a hash of unrecognised material, and a hash of
-a password is derived from that password. Both collide head-on with the first guarantee above.
-Additionally, on Wayland an application may not read the clipboard without focus at all, and there
-is no XDG portal for clipboard changes of the kind that exists for global shortcuts.
+Linux on Wayland needs no polling either. `WaylandClipboardChangeSource` keeps one
+`wl-paste --watch echo` running and treats each line it writes as one change. `wl-paste` speaks the
+compositor's data-control protocol, which is a real push, and the command it runs per change is
+`echo` — which ignores the payload handed to it on stdin. (One user action is not always one line:
+clearing the clipboard measurably produces two. Harmless — both reads find nothing recognisable and
+drop it — but "a line per change" is the honest phrasing, not "a line per copy".) What crosses into the application is
+therefore a bare line: an event, with no previous content kept anywhere and nothing compared. Two
+consequences worth naming: **byte-identical copies each raise a change** (a content diff could not
+do that), and the line `wl-paste` writes for the clipboard that was *already there* when it starts
+is dropped, because the user did not copy it while watching.
 
-Anyone reaching for a poller to "finish" Linux support is proposing to break the feature's central
-promise. If the promise is ever renegotiated, that is the conversation to have first.
+The alternative — speaking the protocol directly through a libwayland binding — is a few hundred
+lines for the same event. `wl-paste` costs one child process and a dependency on `wl-clipboard`
+being installed, and both failure modes are loud rather than silent: the process either starts or
+exits at once.
+
+### What stays unsupported
+
+**macOS** and **Linux without Wayland** (an X11-only session) report `IsSupported == false`, and
+the UI says so instead of leaving a toggle that silently does nothing. Each has a known route —
+macOS through `NSPasteboard.changeCount`, a monotonic counter with no content to remember, and X11
+through XFixes selection notifications — and neither is built, because neither could be measured on
+the machine this was written on. An untested platform source is more expensive than none: it turns
+a visible "unsupported" into an invisible "does nothing".
+
+**Wayland without data-control.** GNOME's Mutter does not offer the protocol. This cannot be known
+without trying, and the only probe that does not read the clipboard is starting `wl-paste` itself —
+so the probe *is* the start, and it runs when the user switches on rather than in the constructor,
+where they have not opted in yet. The **first line does double duty**: a desktop that cannot notify
+makes `wl-paste` exit without writing one, so its arrival is the capability answer, and its payload
+was copied before watching began, so it is dropped either way. Nothing is waited for on the calling
+thread — that thread is the UI's.
+
+### A source that falls away must not fall silent
+
+The same failure has a second half. `wl-paste` can also disappear *after* a good start: a compositor
+restart, an OOM kill, a `wl-clipboard` upgrade underneath a running app. The pump then reaches
+end-of-stream and returns, and without a signal `IsWatching` would stay `true` for the rest of the
+session — a switch that looks on while nothing will ever arrive again, which is the exact state
+`UnsupportedClipboardChangeSource` exists to prevent.
+
+So `IClipboardChangeSource` carries a second event, `SupportChanged`, raised off the UI thread when
+a source learns it cannot notify or stops being able to. `ClipboardWatchService` drops `IsWatching`
+and raises `StateChanged`, and the status bar follows. Windows declares it and never raises it: it
+knows on construction and does not change its mind.
+
+**The watcher is deliberately not restarted.** Restarting needs a policy — how often, how fast, when
+to give up — that nothing here asks for, and a watcher that died because the protocol went away
+would restart-loop. Stopping honestly leaves the switch usable, so switching on again *is* the
+retry, with no policy to tune.
+
+**And it is stopped on the way out.** A child process outlives the parent that spawned it, so
+`App.OnFrameworkInitializationCompleted` disposes the watch service on `desktop.Exit`; without that,
+every run of the application would leave a `wl-paste` behind watching a clipboard for nobody. The
+Windows source never needed this — it is in-process.
+
+Polling on content remains ruled out everywhere. A poller cannot tell "changed" from "still the
+same" without keeping state about the previous payload — including payloads it did not recognise.
+Either it drags the same password back into the process on every tick, or it remembers a hash of
+unrecognised material, and a hash of a password is derived from that password. Both collide
+head-on with the first guarantee above. Anyone reaching for a poller to "finish" a platform is
+proposing to break the feature's central promise; if the promise is ever renegotiated, that is the
+conversation to have first.
+
+### Measured on KDE Plasma, Wayland, Fedora 44 (2026-08-31)
+
+The reason this is measurement rather than reading. `wl-paste --watch` was compared against an
+XFixes listener on the X11 `CLIPBOARD` selection, three rounds per origin, alongside what an
+ordinary X11 client managed to *read* afterwards:
+
+| copied by | `wl-paste` fired | XFixes fired | X11 read succeeded |
+|---|---:|---:|---:|
+| a native Wayland application | 3/3 | 1/3 | 1/3 |
+| an X11 application (through XWayland) | 3/3 | 3/3 | 3/3 |
+
+Three things follow. **XFixes is not a Linux answer** — with `DISPLAY` set it looks like one,
+because XWayland is running, but it misses native Wayland copies unpredictably rather than
+consistently, which is worse than not working. **This compositor advertises
+`ext_data_control_manager_v1`**, the standardised successor to `zwlr_data_control_manager_v1`;
+`wl-clipboard` 2.2.1 speaks both. And **Avalonia reads through X11**: `Avalonia.Desktop` 12.1.1
+depends on `Avalonia.X11` and ships no Wayland backend, so the application is an XWayland client.
+A change notification can therefore arrive for a native Wayland copy the read cannot reach — the
+right-hand column above. That is a limit of the reader, not of the source, and it lands in the
+existing path: `GetClipboardTextAsync` returns nothing and the payload is dropped. In practice EVE
+runs under Wine, which is an X11 client, so the game's own copies are the bottom row.
 
 ## Recognition and parsing are separate on purpose
 
@@ -118,4 +192,5 @@ returning line in `ClipboardInventoryParser.FindNameColumn`.
 | Status bar state, followed live via `StateChanged` | `MainWindowViewModel` |
 | The switch and the disclosure | `SettingsWindow` → Privacy & Sharing |
 | Reading the clipboard text | `IDialogService.GetClipboardTextAsync` |
-| Platform change source (injectable, so tests replace it) | `IClipboardChangeSource` → `WindowsClipboardChangeSource` / `UnsupportedClipboardChangeSource` |
+| Stopped on the way out, because a child process outlives its parent | `App.OnFrameworkInitializationCompleted` → `desktop.Exit` |
+| Platform change source (injectable, so tests replace it) | `IClipboardChangeSource` → `WindowsClipboardChangeSource` / `WaylandClipboardChangeSource` / `UnsupportedClipboardChangeSource` |

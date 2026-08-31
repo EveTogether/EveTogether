@@ -38,6 +38,13 @@ public sealed class WindowsClipboardChangeSource : IClipboardChangeSource
 
     public event Action? Changed;
 
+    // Windows answers this on construction and never changes its mind, so this is declared and never raised.
+    public event Action? SupportChanged
+    {
+        add { }
+        remove { }
+    }
+
     public void Start()
     {
         lock (_gate)

@@ -17,9 +17,9 @@ taken from the matching `## vX.Y.Z` section below.
 - EVE Together can now watch your clipboard and recognise two things you copy out of the game: a
   fit in EFT format, and an inventory listing. **It is off until you switch it on** in
   **Settings → Privacy & Sharing**, and the status bar at the bottom of the window says which it
-  is — `CLIPBOARD OFF`, `CLIPBOARD WATCHING` or, on Linux and macOS, `CLIPBOARD UNSUPPORTED` —
+  is — `CLIPBOARD OFF`, `CLIPBOARD WATCHING` or `CLIPBOARD UNSUPPORTED` —
   from the moment the app starts, so you never have to open settings to find out. While it is on,
-  Windows tells the app whenever you copy something; it reads the text, looks at its shape, and
+  your desktop tells the app whenever you copy something; it reads the text, looks at its shape, and
   passes a fit or an inventory to the features that asked for it. Everything else — a password, a
   link, part of a conversation — is dropped the moment it is read: not stored, not buffered, never
   written to the log window or a log file, never attached to an error report, and never sent
@@ -27,9 +27,11 @@ taken from the matching `## vX.Y.Z` section below.
   registered rather than from a written-out list, so today it tells you plainly that nothing is —
   and while nothing is listening, the clipboard is not read at all, so switching this on before
   there is a feature that uses it changes nothing.
-  Linux and macOS are not supported rather than quietly polling, because spotting a change by
-  polling means remembering what was on the clipboard, which is the one thing this feature
-  promises not to do.
+  This works on Windows and on Linux under Wayland (through `wl-clipboard`, which needs to be
+  installed). It is not supported on macOS, on a Linux session running plain X11, or on a Wayland
+  desktop that does not offer clipboard notifications — GNOME is the one to know about. Those say
+  `CLIPBOARD UNSUPPORTED` rather than quietly polling, because spotting a change by polling means
+  remembering what was on the clipboard, which is the one thing this feature promises not to do.
 - The fleet metrics window can now be switched between three densities with the **LIST / GRID /
   COMPACT** buttons above the member list, so the screen stays readable as a fleet grows past ten
   or thirty members. **List** is unchanged and remains the default: every figure plus the live
