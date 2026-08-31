@@ -4,7 +4,7 @@ namespace EveUtils.Client.Clipboard;
 
 /// <summary>
 /// Reads the rows of a recognised scan-signature list. Only the id (column 0), group (column 2) and name
-/// (column 3) are needed for the fase-1 toast; the kind, scan percentage and distance columns carry no information
+/// (column 3) are needed for the phase-1 toast; the kind, scan percentage and distance columns carry no information
 /// the toast shows and are left unparsed.
 /// </summary>
 public static class ClipboardSignatureParser

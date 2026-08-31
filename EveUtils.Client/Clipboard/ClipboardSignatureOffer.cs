@@ -88,10 +88,9 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
 
     private string DescribeSignature(string signatureId, string name)
     {
-        // English-only exact match (ET-79 AC-4b): the store only carries nameEn today, the multi-language alias
-        // table + schema bump this would need is an open decision. A miss here does not prove the site is
-        // missing from the catalogue — it may just be a name the client did not copy in English — so the toast
-        // says that honestly instead of the stronger, unearned "not in the site catalogue".
+        // English-only exact match (ET-79 AC-4b: the multi-language alias table is an open decision). A miss does
+        // not prove the site is missing from the catalogue, so the toast says that honestly instead of the
+        // stronger, unearned "not in the site catalogue".
         var matches = _sde.SearchSites(nameQuery: name)
             .Where(site => string.Equals(site.Name, name, StringComparison.OrdinalIgnoreCase))
             .ToList();
