@@ -19,6 +19,11 @@ namespace EveUtils.Client.Notifications;
 /// </summary>
 public static class ToastActionContent
 {
+    /// <summary>
+    /// Widest a card's content may get. Named because a test holds the button row against it.
+    /// </summary>
+    internal const double ContentWidthCap = 400;
+
     /// <summary>Builds the content control for a toast with <paramref name="actions"/> rendered as buttons.</summary>
     public static Control Build(string title, string? message, ToastKind kind, IReadOnlyList<ToastAction> actions)
     {
@@ -96,8 +101,10 @@ public static class ToastActionContent
         layout.Children.Add(buttons);
 
         // The card gives custom content no padding and does not bound its width, so a toast otherwise sits flush
-        // against the border with its title running off-screen — inset + cap the width here.
-        return new Border { Padding = new Thickness(14, 12), MinWidth = 240, MaxWidth = 340, Child = layout };
+        // against the border with its title running off-screen — inset + cap the width here. The cap has to leave the
+        // button row room to breathe: measured through the real manager, three buttons come to 310 and a cap of 340
+        // left exactly 310 after the inset, so the last button ended up against the border with nothing to spare.
+        return new Border { Padding = new Thickness(14, 12), MinWidth = 240, MaxWidth = ContentWidthCap, Child = layout };
     }
 
     private static string? StyleClass(ToastActionStyle style) => style switch

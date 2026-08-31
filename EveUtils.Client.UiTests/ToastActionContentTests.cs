@@ -4,8 +4,11 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Controls.Notifications;
 using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using EveUtils.Client.Theming;
+using Microsoft.Extensions.DependencyInjection;
 using EveUtils.Client.Notifications;
 using Xunit;
 
@@ -94,5 +97,52 @@ public class ToastActionContentTests
     {
         Assert.Equal(TimeSpan.Zero, ToastService.ExpirationFor([new ToastAction("Import", () => { })]));
         Assert.Null(ToastService.ExpirationFor([]));
+    }
+
+    /// <summary>
+    /// The buttons must fit inside the card with their inset intact. A cap that leaves exactly enough puts the last
+    /// button against the border, which is what a fourth button or a wordier label would quietly do again.
+    /// </summary>
+    /// <remarks>
+    /// Driven through the real <see cref="WindowNotificationManager"/>: a card shown any other way styles its buttons
+    /// narrower than the app does, and a test against those passes at any cap while the shipped row still overruns.
+    /// </remarks>
+    [AvaloniaFact]
+    public void TheButtonRow_FitsInsideTheCardWithItsInsetToSpare()
+    {
+        using var instance = TestClientInstance.Create();
+        instance.Services.GetRequiredService<IThemeService>().Apply(FactionTheme.Caldari);
+
+        var window = new Window { Width = 1100, Height = 720 };
+        window.Show();
+        Pump();
+
+        var manager = new WindowNotificationManager(window) { MaxItems = 3, Position = NotificationPosition.TopRight };
+        Pump();
+
+        var content = (Border)ToastActionContent.Build("Fit copied",
+            "Import [Punisher, Punisher 1788169225] into your Local library?", ToastKind.Information,
+            [new ToastAction("Ignore this fit", () => { }), new ToastAction("Not today", () => { }),
+             new ToastAction("Import", () => { }, ToastActionStyle.Affirmative)]);
+        manager.Show(content, NotificationType.Information, null, null, () => { }, []);
+        Pump();
+
+        // Room to spare, not merely "it fits": at a cap of 340 the row measured 310 and the inset 28, which is
+        // inside the cap by two pixels and reads on screen as the last button touching the border.
+        const double breathingRoom = 16;
+        var inset = content.Padding.Left + content.Padding.Right;
+        var row = (Control)ButtonsOf(content)[0].Parent!;
+        var spare = ToastActionContent.ContentWidthCap - inset - row.Bounds.Width;
+        Assert.True(spare >= breathingRoom,
+            $"the row measures {row.Bounds.Width} and the inset takes {inset}, leaving {spare} under the "
+            + $"{ToastActionContent.ContentWidthCap} cap — less than the {breathingRoom} a card needs to spare");
+
+        window.Close();
+    }
+
+    private static void Pump()
+    {
+        for (var i = 0; i < 12; i++)
+            Dispatcher.UIThread.RunJobs();
     }
 }

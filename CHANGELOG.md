@@ -14,6 +14,8 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- Notification cards are a little wider, so the last button keeps the same margin from the edge as the text does.
+  Three buttons used to fill the card exactly, which left the rightmost one sitting against the border.
 - Notifications no longer sit on top of the title bar or the status bar. They keep clear of whichever of the two
   is actually on screen, so a card counted from the top or the bottom lands inside the window rather than over it.
 - **Clipboard watching now works on Wayland for anything you copy.** A fit copied from a browser produced nothing
