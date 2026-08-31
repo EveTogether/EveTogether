@@ -113,7 +113,7 @@
 
         <!-- ── Status bar: transient activity (left) + live Tranquility status (right). Hidden in floating (too narrow);
              a compact status dot in the rail replaces it there. ── -->
-        <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource BorderBrush}"
+        <Border DockPanel.Dock="Bottom" x:Name="StatusBar" BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,1,0,0" Padding="12,7" IsVisible="{Binding !IsFloating}">
             <Grid ColumnDefinitions="*,Auto,Auto">
                 <TextBlock Grid.Column="0" Text="{Binding ActivityStatus}" VerticalAlignment="Center"

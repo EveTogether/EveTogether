@@ -14,6 +14,8 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- Notifications no longer sit on top of the title bar or the status bar. They keep clear of whichever of the two
+  is actually on screen, so a card counted from the top or the bottom lands inside the window rather than over it.
 - **Clipboard watching now works on Wayland for anything you copy.** A fit copied from a browser produced nothing
   before: the change was noticed, but the text could not be read, because the reading went a different way than the
   notification did. Both now go the same way.

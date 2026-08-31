@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Notifications;
+using Avalonia.VisualTree;
 using Avalonia.Threading;
 using EveUtils.Shared.DependencyInjection;
 
@@ -148,6 +149,10 @@ public sealed class ToastService : IToastService, ISingletonService
 
             var (manager, isNew) = ManagerFor(host, requested);
 
+            // Re-measured per toast rather than once: the titlebar scales with the theme and the status strip is
+            // hidden in floating mode, so an inset taken at creation would go stale.
+            manager.Margin = ChromeInset(host);
+
             if (isNew)
                 Dispatcher.UIThread.Post(() => show(manager), DispatcherPriority.Background);
             else
@@ -173,6 +178,19 @@ public sealed class ToastService : IToastService, ISingletonService
 
         return (created, true);
     }
+
+    /// <summary>
+    /// How far a toast has to stay clear of the window's own chrome, so a card counted from the top or the bottom
+    /// does not land on the titlebar or the status strip.
+    /// </summary>
+    internal static Thickness ChromeInset(TopLevel host) =>
+        new(0, VisibleHeightOf(host, "TitleBar"), 0, VisibleHeightOf(host, "StatusBar"));
+
+    private static double VisibleHeightOf(TopLevel host, string name) =>
+        host.GetVisualDescendants().OfType<Control>()
+            .FirstOrDefault(control => control.Name == name) is { IsVisible: true } found
+            ? found.Bounds.Height
+            : 0;
 
     private static TopLevel? ResolveActiveWindow()
     {
