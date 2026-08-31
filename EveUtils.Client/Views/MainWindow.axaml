@@ -354,6 +354,7 @@
                                                             <ItemsControl.ItemTemplate>
                                                                 <DataTemplate x:DataType="vm:ServerLinkViewModel">
                                                                     <Border Classes="chip" Classes.warn="{Binding HasIssue}"
+                                                                            Classes.danger="{Binding HasExpired}"
                                                                             ToolTip.Tip="{Binding LinkTooltip}">
                                                                         <StackPanel Orientation="Horizontal" Spacing="4">
                                                                             <mi:MaterialIcon Kind="{Binding ChipIcon}"/>

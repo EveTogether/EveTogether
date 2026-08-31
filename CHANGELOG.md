@@ -182,6 +182,19 @@ repository. **Beta:** more stable than the alpha, but expect occasional rough ed
   and unfolding survives a refresh. A small fleet is unchanged: no extra line, no extra click.
 
 ### Fixed
+- Leaving the app open for an hour no longer breaks saving. Your login to a server is renewed
+  every hour, and until now that only happened when the connection to that server dropped — so on
+  a connection that simply stayed up, the login quietly went stale while the app still showed
+  itself as connected. Fleets and fits kept arriving over that open connection, so nothing looked
+  wrong; but the first thing you tried to *save* — a new fleet composition, a fit shared to the
+  server — came back **"Not authenticated — pair with the server first."**, which was neither true
+  nor something re-pairing would have fixed. The login is now renewed the moment the server stops
+  accepting it, whether the connection dropped or not.
+- The server chip beside a character (the cloud with the server's name) now turns **red** as soon
+  as the app knows the pairing is no longer valid and only you can fix it, with a struck-through
+  cloud and "session expired — re-pair" on hover. A link that is merely dropped or reconnecting
+  stays amber, as it fixes itself. Previously an invalid pairing was something you found out about
+  by trying to save.
 - **EVE Settings Sync** now finds your EVE folder on Linux by itself. EVE on Linux is the Windows
   client running under Steam's Proton (or plain Wine), so its settings live inside that prefix
   rather than where a Linux program would put them — and the tool, which only ever looked in the

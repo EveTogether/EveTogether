@@ -34,15 +34,25 @@ public partial class ServerLinkViewModel : ObservableObject
         _                                    => "disconnected"
     };
 
-    /// <summary>True when the link is not in a healthy connected/connecting state — drives the warning badge.</summary>
+    /// <summary>Amber chip: the link is not healthy, but nothing the user has to act on — it is dropped or coming
+    /// back by itself. Mutually exclusive with <see cref="HasExpired"/> so the two style variants never stack.</summary>
     public bool HasIssue => State is ServerConnectionState.Reconnecting
-                                  or ServerConnectionState.SessionExpired
                                   or ServerConnectionState.Disconnected;
 
-    /// <summary>The chip's icon for the character card: a cloud when healthy, a warning on issue. These were emoji in
-    /// the label text (☁️ / ⚠️), which Windows draws in full colour out of a separate font — two bright pictograms
-    /// beside 9.5px grey text (ET-74).</summary>
-    public MaterialIconKind ChipIcon => HasIssue ? MaterialIconKind.AlertOutline : MaterialIconKind.CloudOutline;
+    /// <summary>Red chip: the pairing itself is no longer valid and only the user can fix it (re-pair). Shown as soon
+    /// as the app knows — the 30s heartbeat finds an access token the server refuses and cannot silently refresh
+    /// (ET-77) — rather than leaving the user to discover it on a save that comes back "Not authenticated".</summary>
+    public bool HasExpired => State is ServerConnectionState.SessionExpired;
+
+    /// <summary>The chip's icon for the character card: a cloud when healthy, a struck-through cloud when the pairing
+    /// has lapsed, a warning on any other issue. These were emoji in the label text (☁️ / ⚠️), which Windows draws in
+    /// full colour out of a separate font — two bright pictograms beside 9.5px grey text (ET-74).</summary>
+    public MaterialIconKind ChipIcon => State switch
+    {
+        ServerConnectionState.SessionExpired => MaterialIconKind.CloudOffOutline,
+        _ when HasIssue                      => MaterialIconKind.AlertOutline,
+        _                                    => MaterialIconKind.CloudOutline
+    };
 
     /// <summary>Tooltip shown when hovering the per-server icon: server name + live status.</summary>
     public string LinkTooltip => $"{DisplayName} — {StatusLabel}";
@@ -63,6 +73,7 @@ public partial class ServerLinkViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(StatusLabel));
         OnPropertyChanged(nameof(HasIssue));
+        OnPropertyChanged(nameof(HasExpired));
         OnPropertyChanged(nameof(ChipIcon));
         OnPropertyChanged(nameof(LinkTooltip));
     }
