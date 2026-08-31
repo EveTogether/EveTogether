@@ -42,8 +42,11 @@
                  (replaces the former per-scope "+ ADD" buttons). -->
             <StackPanel Spacing="5" IsVisible="{Binding CanCouple}">
                 <TextBlock Text="ESI SCOPES" Classes="label" FontSize="9"/>
-                <TextBlock Text="Choose which ESI data this character shares." FontSize="11"
-                           TextWrapping="Wrap" Foreground="{DynamicResource TextAccentBrush}"/>
+                <!-- The tooltip answers the question this block used to leave open: what does it share right now?
+                     Read from the stored grant, so a scope the app wants but never got does not appear. -->
+                <TextBlock Text="Choose which ESI data this character shares — hover to see what it shares now."
+                           FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextAccentBrush}"
+                           ToolTip.Tip="{Binding ScopesTooltip}"/>
                 <Button Content="Re-authenticate…" FontSize="10"
                         Command="{Binding ReAuthenticateCommand}"/>
             </StackPanel>

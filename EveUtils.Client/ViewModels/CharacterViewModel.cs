@@ -14,6 +14,9 @@ namespace EveUtils.Client.ViewModels;
 public partial class CharacterViewModel : ObservableObject
 {
     public int CharacterId { get; }
+
+    /// <summary>The ESI scopes EVE actually granted for this character; empty for a local-only row.</summary>
+    public IReadOnlyList<string> GrantedScopes { get; } = [];
     public string Name { get; }
     public string OwnerId => CharacterId.ToString();
 
@@ -137,6 +140,7 @@ public partial class CharacterViewModel : ObservableObject
         CharacterId = character.EsiCharacterId ?? 0;
         IsLocalOnly = character.EsiCharacterId is null;
         Name = character.Name;
+        GrantedScopes = character.GrantedScopes ?? [];
         HasReadFittings  = character.HasScope(FittingsScopeCatalog.ReadFittings);
         HasWriteFittings = character.HasScope(FittingsScopeCatalog.WriteFittings);
         ServerLinks.CollectionChanged += OnServerLinksChanged;

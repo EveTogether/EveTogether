@@ -14,8 +14,12 @@ public sealed class RecordingToastService : IToastService
     /// <summary>Every toast shown, in order, as (title, message, kind) — action toasts included.</summary>
     public List<(string Title, string? Message, ToastKind Kind)> Toasts { get; } = new();
 
-    /// <summary>The action toasts shown, in order, with their buttons — so a test can assert the offered choices.</summary>
-    public List<(string Title, string? Message, ToastKind Kind, IReadOnlyList<ToastAction> Actions)> ActionToasts { get; } = new();
+    /// <summary>
+    /// The action toasts shown, in order, with their buttons and the key they replace under — so a test can assert
+    /// both the offered choices and whether two shows are one card being updated or two cards side by side.
+    /// </summary>
+    public List<(string Title, string? Message, ToastKind Kind, IReadOnlyList<ToastAction> Actions,
+        string? ReplacementKey)> ActionToasts { get; } = new();
 
     /// <summary>
     /// The corner each toast asked for, in the order of <see cref="Toasts"/>; null means "follow the setting".
@@ -30,13 +34,13 @@ public sealed class RecordingToastService : IToastService
     }
 
     public void Show(string title, string? message, ToastKind kind, IReadOnlyList<ToastAction> actions,
-        ToastPosition? position = null)
+        ToastPosition? position = null) => Show(title, message, kind, actions, onClosed: null, null, position);
+
+    public void Show(string title, string? message, ToastKind kind, IReadOnlyList<ToastAction> actions, Action? onClosed,
+        string? replacementKey = null, ToastPosition? position = null)
     {
         Toasts.Add((title, message, kind));
         Positions.Add(position);
-        ActionToasts.Add((title, message, kind, actions));
+        ActionToasts.Add((title, message, kind, actions, replacementKey));
     }
-
-    public void Show(string title, string? message, ToastKind kind, IReadOnlyList<ToastAction> actions, Action? onClosed,
-        string? replacementKey = null, ToastPosition? position = null) => Show(title, message, kind, actions, position);
 }

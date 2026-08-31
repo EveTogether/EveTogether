@@ -44,7 +44,7 @@ public partial class App : Application
             InstallGlobalErrorHandler();
 
             // Its first reading can raise a toast, which must not touch the dispatcher before this point (ET-62).
-            Program.Services.GetRequiredService<Esi.IAbyssalLocationMonitor>().UiReady();
+            Program.Services.GetRequiredService<Esi.IEsiLocationMonitor>().UiReady();
 
             // This is the first consumer, so resolving it must precede starting the watch; otherwise no copy can offer a fit import.
             _ = Program.Services.GetRequiredService<Fittings.ClipboardFitImportOffer>();

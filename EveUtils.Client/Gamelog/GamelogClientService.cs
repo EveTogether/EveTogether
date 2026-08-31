@@ -119,7 +119,7 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         // ESI is the only source that can see either end of an abyssal run, so the watch runs for the whole session
         // rather than being triggered by a run the gamelog cannot reliably recognise (ET-62). Idempotent per character.
         var metrics = Metrics(name);
-        _services.GetService<IAbyssalLocationMonitor>()?.Watch(characterId, reading =>
+        _services.GetService<IEsiLocationMonitor>()?.Watch(characterId, name, reading =>
         {
             if (reading.SolarSystemId is not { } solarSystemId)
             {

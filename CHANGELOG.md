@@ -14,6 +14,12 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- Characters whose location EVE Together may not read now produce **one** message naming them all, instead of one
+  message per character. The wording says what is actually wrong — that their location cannot be read — rather than
+  naming the abyssal countdown, which was only the first feature to need it.
+- The character dialog's **ESI SCOPES** block now tells you what that character shares right now: hover it for the
+  list, read from what EVE actually granted rather than from what the app asks for. A character that granted nothing
+  says so.
 - Notification cards are a little wider, so the last button keeps the same margin from the edge as the text does.
   Three buttons used to fill the card exactly, which left the rightmost one sitting against the border.
 - Notifications no longer sit on top of the title bar or the status bar. They keep clear of whichever of the two

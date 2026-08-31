@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Notifications;
@@ -20,11 +22,11 @@ namespace EveUtils.Client.Esi;
 /// It reports the whole reading rather than an abyssal verdict, because ET-63's location bootstrap reads the same
 /// polls to fill a system the gamelog has not named yet. Neither reader adds a call of its own.
 /// </summary>
-public sealed class AbyssalLocationMonitor(
+public sealed class EsiLocationMonitor(
     IEsiLocationClient locations,
     IToastService toasts,
     IServiceProvider services,
-    ILogger<AbyssalLocationMonitor> logger) : IAbyssalLocationMonitor, ISingletonService, IDisposable
+    ILogger<EsiLocationMonitor> logger) : IEsiLocationMonitor, ISingletonService, IDisposable
 {
     /// <summary>
     /// 6 s, not the 5 s ESI caches this endpoint for: polling on the TTL re-serves the same cached body about half
@@ -46,16 +48,17 @@ public sealed class AbyssalLocationMonitor(
     /// <summary>The UI exists; watches may start polling (and may raise a toast). Idempotent.</summary>
     public void UiReady() => _uiReady.TrySetResult();
 
-    // One warning per character per session. The watch runs all evening now, so without this the same toast would
-    // return every time the failure counter trips; a restart is a fair moment to mention it again.
-    private readonly ConcurrentDictionary<int, byte> _warned = new();
+    // Who has already been warned about, per reason, and under which name. One warning per character per session:
+    // the watch runs all evening, so without this the same toast would return every time the counter trips.
+    private readonly Lock _warnGate = new();
+    private readonly Dictionary<EsiErrorKind, Dictionary<int, string>> _warned = [];
 
     /// <summary>
     /// Starts watching <paramref name="characterId"/> for the rest of the session. <paramref name="onReading"/> is
     /// called after every reading; a reading without a system id means the watch was lost and no clock can be
     /// trusted. Watching a character that is already watched does nothing.
     /// </summary>
-    public void Watch(int characterId, Action<EsiLocationReading> onReading)
+    public void Watch(int characterId, string characterName, Action<EsiLocationReading> onReading)
     {
         var cts = new CancellationTokenSource();
         if (!_running.TryAdd(characterId, cts))
@@ -64,7 +67,7 @@ public sealed class AbyssalLocationMonitor(
             return;
         }
 
-        _ = Task.Run(() => WatchAsync(characterId, onReading, cts.Token), CancellationToken.None);
+        _ = Task.Run(() => WatchAsync(characterId, characterName, onReading, cts.Token), CancellationToken.None);
     }
 
     public void Stop(int characterId)
@@ -76,7 +79,8 @@ public sealed class AbyssalLocationMonitor(
     }
 
     /// <summary>The watch itself. <see cref="Watch"/> is only the fire-and-forget wrapper; tests drive this.</summary>
-    internal async Task WatchAsync(int characterId, Action<EsiLocationReading> onReading, CancellationToken cancellationToken)
+    internal async Task WatchAsync(int characterId, string characterName, Action<EsiLocationReading> onReading,
+        CancellationToken cancellationToken)
     {
         var failures = 0;
 
@@ -95,7 +99,7 @@ public sealed class AbyssalLocationMonitor(
                 }
                 else if (Fatal(result.Error?.Kind))
                 {
-                    Warn(characterId, result.Error?.Kind);
+                    Warn(characterId, characterName, result.Error?.Kind);
                     Lost(characterId, onReading);
                     return;
                 }
@@ -125,40 +129,77 @@ public sealed class AbyssalLocationMonitor(
     // rate limits, ESI being down — is transient and goes through the failure counter instead.
     private static bool Fatal(EsiErrorKind? kind) => kind is EsiErrorKind.ScopeMissing or EsiErrorKind.AuthRequired;
 
-    private void Warn(int characterId, EsiErrorKind? kind)
+    /// <summary>
+    /// Reports that a character's location cannot be read, as one message covering everyone it applies to.
+    /// </summary>
+    /// <remarks>
+    /// Grouped by reason rather than by character: three pilots without access is one problem, but "may not read"
+    /// and "cannot sign in" are two, and they need different sentences. The card is re-shown under a fixed key as
+    /// characters arrive, so a second pilot joins the message already on screen instead of raising a second card.
+    /// </remarks>
+    private void Warn(int characterId, string characterName, EsiErrorKind? kind)
     {
-        logger.LogWarning("Abyssal monitor for {CharacterId} stopped: {Kind}.", characterId, kind);
+        logger.LogWarning("Location watch for {CharacterId} stopped: {Kind}.", characterId, kind);
 
-        if (!_warned.TryAdd(characterId, 0))
+        if (kind is not { } reason)
             return;
 
-        var why = kind == EsiErrorKind.ScopeMissing
-            ? "EVE Together may not read this character's location, so it cannot see abyssal runs at all — no "
-              + "countdown will appear."
-            : "This character's ESI sign-in no longer works, so EVE Together cannot see abyssal runs.";
+        (int Id, string Name)[] affected;
+        lock (_warnGate)
+        {
+            if (!_warned.TryGetValue(reason, out var byId))
+                _warned[reason] = byId = [];
+            if (!byId.TryAdd(characterId, characterName))
+                return;
+            affected = [.. byId.Select(entry => (entry.Key, entry.Value))];
+        }
+
+        // What the location is used for is deliberately left out: this watch feeds whatever reads it, and naming
+        // today's reader would age the moment a second one arrives.
+        var (title, why, fix) = reason == EsiErrorKind.ScopeMissing
+            ? ("No location access", $"EVE Together may not read the location of {Names(affected)}.", "Allow location")
+            : ("ESI sign-in expired", $"EVE Together can no longer sign in as {Names(affected)}, so it cannot read "
+                                      + "their location.", "Sign in again");
 
         // Actions keep the toast on screen until it is answered, which is the point: the one thing that fixes this is
         // a sign-in the pilot has to start.
-        toasts.Show("No abyssal detection", why, ToastKind.Warning,
+        toasts.Show(title, why, ToastKind.Warning,
         [
             new ToastAction("Not now", () => { }),
-            new ToastAction("Allow location", () => _ = GrantLocationAsync(characterId), ToastActionStyle.Affirmative),
-        ]);
+            new ToastAction(fix, () => _ = GrantLocationAsync(affected), ToastActionStyle.Affirmative),
+        ], onClosed: null, replacementKey: "location-access-" + reason);
     }
 
-    // Re-auth rather than a fresh sign-in: the granted set is kept and the location scope is added to it.
-    private async Task GrantLocationAsync(int characterId)
+    private static string Names(IReadOnlyList<(int Id, string Name)> affected) => affected.Count switch
     {
-        try
+        1 => affected[0].Name,
+        _ => string.Join(", ", affected.Take(affected.Count - 1).Select(c => c.Name)) + " and " + affected[^1].Name,
+    };
+
+    /// <summary>
+    /// Re-authenticates each affected character in turn, keeping the scopes already granted and adding location.
+    /// </summary>
+    /// <remarks>
+    /// One at a time: each opens a sign-in the pilot has to complete, and starting them together would stack browser
+    /// tabs and race the same login service.
+    /// </remarks>
+    private async Task GrantLocationAsync(IReadOnlyList<(int Id, string Name)> affected)
+    {
+        if (services.GetService<LocalEsiLoginService>() is not { } login)
+            return;
+
+        foreach (var character in affected)
         {
-            if (services.GetService<LocalEsiLoginService>() is { } login)
-                await login.ReAuthenticateAsync(characterId, [LocationScopeCatalog.ReadLocation]);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Re-authentication for location access failed for {CharacterId}.", characterId);
-            toasts.Show("Sign-in failed", "Could not add location access. Try again from the character's ESI menu.",
-                ToastKind.Error);
+            try
+            {
+                await login.ReAuthenticateAsync(character.Id, [LocationScopeCatalog.ReadLocation]);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Re-authentication for location access failed for {CharacterId}.", character.Id);
+                toasts.Show("Sign-in failed", $"Could not add location access for {character.Name}. Try again from "
+                                              + "that character's ESI menu.", ToastKind.Error);
+            }
         }
     }
 

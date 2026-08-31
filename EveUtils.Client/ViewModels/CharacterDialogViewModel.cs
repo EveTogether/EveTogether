@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Messaging;
+using EveUtils.Shared.Modules.Esi;
 
 namespace EveUtils.Client.ViewModels;
 
@@ -29,6 +30,15 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
     public bool CanCouple => !IsLocalOnly;
 
     [ObservableProperty] private string _name = "";
+
+    /// <summary>
+    /// What this character actually shares, for the tooltip on the scopes block.
+    /// </summary>
+    /// <remarks>
+    /// Read from the grant rather than from the scopes this build would ask for: where those two differ is the
+    /// interesting part, and it is the question the re-authenticate button leaves unanswered.
+    /// </remarks>
+    [ObservableProperty] private string _scopesTooltip = "";
     [ObservableProperty] private string _esiStatus = "";
     [ObservableProperty] private string _status = "";
 
@@ -59,6 +69,8 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
         var c = IsLocalOnly ? _initial : _owner.Characters.FirstOrDefault(x => x.CharacterId == CharacterId) ?? _initial;
         Name = c.Name;
         EsiStatus = c.EsiStatus;
+        ScopesTooltip = Esi.EsiScopeSummary.Describe(c.GrantedScopes,
+            _owner.ScopeRegistry?.GetRequirements(EsiScopeTarget.Client) ?? []);
     }
 
     private async Task ReloadServerLinksAsync()

@@ -436,6 +436,10 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             vm.HasActiveClient = evidence.Matches(vm.Name, vm.CharacterId);
     }
 
+    /// <summary>The ESI scopes this build declares, so a view can name a granted one instead of showing its id.</summary>
+    internal EveUtils.Shared.Modules.Esi.IEsiScopeRegistry? ScopeRegistry =>
+        _services?.GetService<EveUtils.Shared.Modules.Esi.IEsiScopeRegistry>();
+
     // All three states lead to the same place: Privacy & Sharing holds the switch, the disclosure of what is read,
     // and — when the desktop cannot report a change — the explanation of why it is off. So every state has something
     // there to act on or to read, and picking a different destination per state would only change the scroll offset.
