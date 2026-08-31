@@ -31,7 +31,7 @@ namespace EveUtils.Client.UiTests;
 /// zero, and the screen itself rendered in both shells. The price source behind it is the real
 /// <c>MarketPriceAppraisalProvider</c> over a real (scratch) price cache.
 /// </summary>
-public sealed class AppraisalToolTests
+public sealed class AppraisalToolTests(ITestOutputHelper output)
 {
     // A hangar of minerals: names outnumber their shared group, which is what the inventory parser needs to be sure
     // which column is the name. Isogen is deliberately left out of the price cache below.
@@ -94,7 +94,7 @@ public sealed class AppraisalToolTests
         Assert.Equal("1,000,000", tritanium.QuantityDisplay);
         Assert.Equal(5, tritanium.UnitPrice);
         Assert.Equal(5_000_000, tritanium.Total);
-        Assert.Equal("5 M ISK", tritanium.TotalDisplay);
+        Assert.Equal("5,000,000 ISK", tritanium.TotalDisplay);
 
         // 1,000,000×5 + 250,000×10 + 40,000×80 + 5,000×40 = 10,900,000. The grand total is written out in full:
         // it is the answer the tool exists to give, and "10.9 M ISK" covers a span of fifty thousand ISK.
@@ -567,6 +567,64 @@ public sealed class AppraisalToolTests
     }
 
     /// <summary>
+    /// ET-93 widens PRICE EACH and TOTAL from "5 M ISK" to "5,000,000 ISK" — measured here, not assumed, because
+    /// ET-90-grooming already found the fixed columns on this grid squeezing NAME to its 20px floor from ~900px
+    /// down and, below that floor, cutting the money columns themselves (TOTAL 130 → 96 → 36). Both columns are a
+    /// fixed 130px, not "*"/"Auto", so they do not react to window width at all until NAME has bottomed out — what
+    /// changes with wider text is whether it still fits the 130px cell it always had. Render-verified (PNGs saved
+    /// alongside this run): at 1100/900/740 a ten-digit total ("1,000,000,000 ISK") reads whole, the few-pixel
+    /// bounds shortfall logged below is cell padding, not visible clipping. At 620 — the same width ET-90 already
+    /// found NAME collapsed at — the identical total is genuinely, visibly cut off mid-digit ("1,000,000,000 I"),
+    /// which "1 B ISK" never was. This does not fix that; it is ET-90's layout, not this ticket's. See
+    /// [[domain/DataGrid-Star-Column-Collapse]].
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(620, 1000)]
+    [InlineData(740, 1000)]
+    [InlineData(900, 1000)]
+    [InlineData(1100, 1000)]
+    [InlineData(1100, 999)]
+    public async Task Measure_MoneyColumnWidths_AtTheEt90Breakpoints(double windowWidth, double tritaniumPrice)
+    {
+        using var instance = _NewInstance(_Minerals());
+        await _CachePricesAsync(instance, new DateTimeOffset(2026, 8, 31, 9, 30, 0, TimeSpan.Zero),
+            (34, tritaniumPrice), (35, 1400), (36, 1125));
+        instance.Services.GetRequiredService<IThemeService>().Apply(FactionTheme.Gallente);
+
+        var tool = _BuildTool(instance);
+        tool.PasteText = MineralPaste;
+        await tool.AppraiseCommand.ExecuteAsync(null);
+
+        var window = new AppraisalWindow(tool) { Width = windowWidth, Height = 640 };
+        window.Show();
+        await _WaitForAsync(() => false, tries: 12);
+
+        window.CaptureRenderedFrame()!.Save(
+            Path.Combine(_ShotDirectory(), $"eveutils-appraisal-columns-{windowWidth:0}-{tritaniumPrice:0}.png"),
+            new PngBitmapEncoderOptions());
+
+        var grid = window.GetVisualDescendants().OfType<DataGrid>().Single();
+        var byHeader = grid.Columns.ToDictionary(column => column.Header!.ToString()!, column => column.ActualWidth);
+        output.WriteLine($"window={windowWidth}: NAME={byHeader["NAME"]:0} QTY={byHeader["QTY"]:0} "
+                          + $"PRICE EACH={byHeader["PRICE EACH"]:0} TOTAL={byHeader["TOTAL"]:0}");
+
+        // Bounds against desired size, same as ET-83's header-total check, because a clipped TextBlock still
+        // reports its full Text. Below 620 the shortfall is large (24px) and matches a visibly cut-off render;
+        // at 740/900/1100 it is a few pixels of cell padding that the saved PNGs show reads whole.
+        var tritanium = tool.Rows.Single(row => row.Name == "Tritanium");
+        var totalCell = grid.GetVisualDescendants().OfType<TextBlock>()
+            .Single(block => block.Text == tritanium.TotalDisplay);
+        var fits = totalCell.Bounds.Width >= totalCell.DesiredSize.Width - 0.5;
+        output.WriteLine($"window={windowWidth}: TOTAL cell for \"{tritanium.TotalDisplay}\" "
+                          + $"desired={totalCell.DesiredSize.Width:0} bounds={totalCell.Bounds.Width:0} fits={fits}");
+
+        // The floor Avalonia's DataGrid enforces is 20px, not 0 — an ActualWidth > 0 assertion would stay green on
+        // a column that has visibly collapsed. This only records the figures for the ET-90 writeup; it does not
+        // assert a minimum, because the fix for the layout itself is ET-90's, not this ticket's.
+        window.Close();
+    }
+
+    /// <summary>
     /// Both shells, through the real module host: docked the tool is a tab in the main window, floating it is its
     /// own window, and the open module survives the switch. The grid is the part that has to survive the narrower
     /// docked host — its columns are the answer.
@@ -608,7 +666,7 @@ public sealed class AppraisalToolTests
         // The value columns still show their figures in the narrower host — the reason this screen has a viewport.
         Assert.Contains("Tritanium", texts);
         Assert.Contains("1,000,000", texts);
-        Assert.Contains("5 M ISK", texts);
+        Assert.Contains("5,000,000 ISK", texts);
 
         shell.ToggleDockModeCommand.Execute(null);   // → floating: the tool becomes its own window, not an orphan
         Dispatcher.UIThread.RunJobs();
