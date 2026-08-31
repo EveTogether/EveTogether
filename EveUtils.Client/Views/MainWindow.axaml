@@ -227,6 +227,11 @@
                                               ToolTip.Tip="Copy EVE's window layout, overview and account settings from one character or account to your others — with a backup taken first.">
                                         <MenuItem.Icon><mi:MaterialIcon Kind="SwapHorizontal"/></MenuItem.Icon>
                                     </MenuItem>
+                                    <MenuItem Header="Appraisal…" Command="{Binding LaunchModuleCommand}"
+                                              CommandParameter="appraisal"
+                                              ToolTip.Tip="Paste what is in a hangar, a wreck or a can and see what it is worth, from the market prices this client already keeps.">
+                                        <MenuItem.Icon><mi:MaterialIcon Kind="ScaleBalance"/></MenuItem.Icon>
+                                    </MenuItem>
                                 </MenuFlyout>
                             </Button.Flyout>
                             <StackPanel HorizontalAlignment="Center" Spacing="5">

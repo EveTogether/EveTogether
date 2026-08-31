@@ -186,6 +186,10 @@ public interface IDialogService
     /// Non-modal: it is a place to read a backup and put one back, not a question to answer.</summary>
     void ShowSettingsBackups(SettingsBackupsViewModel viewModel);
 
+    /// <summary>Opens the Appraisal tool as a hosted module — a docked tab or a floating window, like the other
+    /// tools. Non-modal: pasting a second list is the next thing the user does, not a reason to reopen it.</summary>
+    void ShowAppraisal(AppraisalViewModel viewModel);
+
     /// <summary>Save-a-preset dialog (ET-61): pick what goes in, name it, write it to one portable file. Modal — the
     /// file picker inside it belongs to the window, so the view-model never sees a path it did not ask for.</summary>
     Task ShowPresetExportAsync(PresetExportViewModel viewModel);

@@ -209,6 +209,12 @@ public sealed class RecordingDialogService : IDialogService
 
     public void ShowSettingsBackups(SettingsBackupsViewModel viewModel) => LastSettingsBackups = viewModel;
 
+    /// <summary>The appraisal tool the shell was asked to open, or null — how a test asserts the Tools menu reaches
+    /// the module without standing up the real window.</summary>
+    public AppraisalViewModel? LastAppraisal { get; private set; }
+
+    public void ShowAppraisal(AppraisalViewModel viewModel) => LastAppraisal = viewModel;
+
     /// <summary>The save-a-preset dialog the tool asked for, or null — and a hook to drive it (pick a path and
     /// export) without a window.</summary>
     public PresetExportViewModel? LastPresetExport { get; private set; }

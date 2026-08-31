@@ -1,0 +1,151 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:market="using:EveUtils.Shared.Modules.Market.Services"
+        xmlns:sys="using:System"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        mc:Ignorable="d" d:DesignWidth="960" d:DesignHeight="640"
+        x:Class="EveUtils.Client.Views.AppraisalWindow"
+        x:DataType="vm:AppraisalViewModel"
+        Width="960" Height="640" MinWidth="560" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Title="Appraisal">
+
+    <DockPanel Margin="14">
+
+        <!-- On the content root, not on the window: the module host re-parents this content into the main window's
+             tab when docked, and Window.Styles would stay behind with the (never shown) window. -->
+        <DockPanel.Styles>
+            <Style Selector="Border.statusline">
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            </Style>
+            <Style Selector="Border.statusline.failed">
+                <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.entry">
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Opacity" Value="0.75"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+        </DockPanel.Styles>
+
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+            <StackPanel Grid.Column="0" Spacing="2">
+                <TextBlock Text="APPRAISAL" FontWeight="Bold" FontSize="15"
+                           Foreground="{StaticResource TextBrightBrush}"/>
+                <TextBlock FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"
+                           Text="Paste what is in a hangar, a wreck or a can and see what it is worth. Nothing is sent anywhere: the prices come from the copy of EVE's market averages this client already keeps."/>
+            </StackPanel>
+            <!-- Hidden while one price source is installed: with a single entry a picker is a question without an answer. -->
+            <StackPanel Grid.Column="1" Spacing="3" IsVisible="{Binding ShowProviderPicker}" VerticalAlignment="Top">
+                <TextBlock Classes="label" Text="PRICE SOURCE"/>
+                <ComboBox MinWidth="180" FontSize="11" ItemsSource="{Binding Providers}"
+                          SelectedItem="{Binding SelectedProvider}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="market:IAppraisalProvider">
+                            <TextBlock Text="{Binding DisplayName}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+        </Grid>
+
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="0,10,0,0">
+            <Border Grid.Column="0" Padding="11,7" Classes="statusline"
+                    Classes.failed="{Binding StatusIsError}" Background="#22000000" BorderThickness="1">
+                <TextBlock Text="{Binding Status}" FontSize="11" TextWrapping="Wrap"
+                           Foreground="{StaticResource TextBrightBrush}"/>
+            </Border>
+            <Button Grid.Column="1" Content="Close" Click="OnClose" VerticalAlignment="Center"/>
+        </Grid>
+
+        <Grid x:Name="AppraisalBodyGrid" ColumnDefinitions="300,12,*">
+
+            <Border Grid.Column="0" Classes="panel" Padding="11,9">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="0,0,0,6">
+                        <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
+                        <TextBlock Grid.Column="1" Classes="panel-title" Text="PASTE" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,8,0,0">
+                        <ProgressBar IsIndeterminate="True" Height="4" IsVisible="{Binding IsBusy}"/>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                            <Button Grid.Column="0" Classes="accent" Content="APPRAISE" FontSize="10"
+                                    HorizontalAlignment="Stretch" Command="{Binding AppraiseCommand}"/>
+                            <Button Grid.Column="1" Content="CLEAR" FontSize="10" Command="{Binding ClearCommand}"/>
+                        </Grid>
+                        <TextBlock FontSize="10" Opacity="0.55" TextWrapping="Wrap"
+                                   Text="Tab-separated inventory rows, as EVE copies them. A multibuy list (name and amount separated by a space) is not read yet."/>
+                    </StackPanel>
+
+                    <TextBox AcceptsReturn="True" AcceptsTab="True" FontSize="11" FontFamily="Consolas,monospace"
+                             TextWrapping="NoWrap" VerticalContentAlignment="Top"
+                             VerticalAlignment="Stretch" MinHeight="120"
+                             PlaceholderText="Paste here."
+                             Text="{Binding PasteText}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="2" Classes="panel" Padding="11,9">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,8">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
+                            <TextBlock Grid.Column="1" Classes="panel-title" Text="{Binding RowsHeader}"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" Text="{Binding TotalDisplay}" FontSize="18" FontWeight="Bold"
+                                       IsVisible="{Binding HasRows}"
+                                       Foreground="{StaticResource TextBrightBrush}" VerticalAlignment="Center"/>
+                        </Grid>
+                        <!-- The provider says what its figures are; the screen never claims more than the source can back. -->
+                        <TextBlock Text="{Binding PricingBasis}" FontSize="10" Opacity="0.6" TextWrapping="Wrap"
+                                   IsVisible="{Binding HasRows}"/>
+                    </StackPanel>
+
+                    <!-- What the SDE could not place, kept in sight: a dropped name is a hole in the total. -->
+                    <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="0,8,0,0"
+                                IsVisible="{Binding HasUnresolved}">
+                        <TextBlock Classes="label" Text="{Binding UnresolvedHeader}"/>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="96">
+                            <ItemsControl ItemsSource="{Binding Unresolved}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="sys:String">
+                                        <TextBlock Classes="entry" Text="{Binding}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <TextBlock FontSize="10" Opacity="0.55" TextWrapping="Wrap"
+                                   Text="These names are not in the loaded SDE and count for nothing in the total."/>
+                    </StackPanel>
+
+                    <Panel>
+                        <TextBlock FontSize="11" Opacity="0.5" Margin="2,10" TextWrapping="Wrap"
+                                   IsVisible="{Binding !HasRows}"
+                                   Text="Nothing appraised yet. Paste a listing on the left and press APPRAISE."/>
+                        <DataGrid x:CompileBindings="False" IsVisible="{Binding HasRows}"
+                                  ItemsSource="{Binding Rows}"
+                                  AutoGenerateColumns="False" IsReadOnly="True"
+                                  SelectionMode="Single" CanUserReorderColumns="False"
+                                  CanUserResizeColumns="True" CanUserSortColumns="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="NAME" Binding="{Binding Name}" Width="*"/>
+                                <DataGridTextColumn Header="QTY" Binding="{Binding QuantityDisplay}" Width="90"
+                                                    SortMemberPath="Quantity"/>
+                                <DataGridTextColumn Header="PRICE EACH" Binding="{Binding UnitPriceDisplay}" Width="130"
+                                                    SortMemberPath="UnitPrice"/>
+                                <DataGridTextColumn Header="TOTAL" Binding="{Binding TotalDisplay}" Width="130"
+                                                    SortMemberPath="Total"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Panel>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</v:ChromedWindow>
