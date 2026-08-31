@@ -74,57 +74,57 @@
         </DataTemplate>
     </v:ChromedWindow.Resources>
 
-    <!-- Fleet-state pill (B-3, option B): the fleet's ACTIVE / FORMING state on its own pill, accent-green by default
-         and amber while forming — separate from the participation dot (D-122). Shared over the four tabs. -->
-    <v:ChromedWindow.Styles>
-        <Style Selector="Border.statepill">
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="9"/>
-            <Setter Property="Padding" Value="7,1"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-        <Style Selector="Border.statepill > TextBlock">
-            <Setter Property="FontSize" Value="9"/>
-            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
-        </Style>
-        <Style Selector="Border.statepill.forming">
-            <Setter Property="BorderBrush" Value="#80E0B341"/>
-        </Style>
-        <Style Selector="Border.statepill.forming > TextBlock">
-            <Setter Property="Foreground" Value="#E0B341"/>
-        </Style>
-        <!-- The member list's fold line (ET-53): "▾ + 45 more" / "▴ SHOW FEWER". Deliberately quiet and inset to the
-             member leaves' own indent — it reads as the tail of the list rather than a fifth action on the card. -->
-        <Style Selector="Button.morelink">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="Margin" Value="22,1,0,0"/>
-            <Setter Property="FontSize" Value="10"/>
-            <Setter Property="HorizontalAlignment" Value="Left"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
-        </Style>
-        <Style Selector="Button.morelink:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="TextBlock.Foreground" Value="{DynamicResource AccentBrightBrush}"/>
-        </Style>
-        <!-- Doctrine pill (B-3): the coupled composition "◆ name" as a bordered accent pill, matching the mockup. -->
-        <Style Selector="Border.docpill">
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="9"/>
-            <Setter Property="Padding" Value="8,1"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-        <Style Selector="Border.docpill > TextBlock">
-            <Setter Property="FontSize" Value="9"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
-        </Style>
-    </v:ChromedWindow.Styles>
-
     <DockPanel>
+
+        <!-- Fleet-state pill (B-3, option B): the fleet's ACTIVE / FORMING state on its own pill, accent-green by default
+             and amber while forming — separate from the participation dot (D-122). Shared over the four tabs. -->
+        <DockPanel.Styles>
+            <Style Selector="Border.statepill">
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="9"/>
+                <Setter Property="Padding" Value="7,1"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Border.statepill > TextBlock">
+                <Setter Property="FontSize" Value="9"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+            <Style Selector="Border.statepill.forming">
+                <Setter Property="BorderBrush" Value="#80E0B341"/>
+            </Style>
+            <Style Selector="Border.statepill.forming > TextBlock">
+                <Setter Property="Foreground" Value="#E0B341"/>
+            </Style>
+            <!-- The member list's fold line (ET-53): "▾ + 45 more" / "▴ SHOW FEWER". Deliberately quiet and inset to the
+                 member leaves' own indent — it reads as the tail of the list rather than a fifth action on the card. -->
+            <Style Selector="Button.morelink">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="22,1,0,0"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="HorizontalAlignment" Value="Left"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            </Style>
+            <Style Selector="Button.morelink:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="TextBlock.Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+            <!-- Doctrine pill (B-3): the coupled composition "◆ name" as a bordered accent pill, matching the mockup. -->
+            <Style Selector="Border.docpill">
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="9"/>
+                <Setter Property="Padding" Value="8,1"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Border.docpill > TextBlock">
+                <Setter Property="FontSize" Value="9"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            </Style>
+        </DockPanel.Styles>
 
         <!-- Header: server + acting character -->
         <Border DockPanel.Dock="Top" Height="40" Background="#EA080604"
