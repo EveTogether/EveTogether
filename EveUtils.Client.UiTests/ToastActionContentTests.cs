@@ -120,8 +120,9 @@ public class ToastActionContentTests
         var manager = new WindowNotificationManager(window) { MaxItems = 3, Position = NotificationPosition.TopRight };
         Pump();
 
+        // The short message is the case that broke: a long one pushes the card out to its cap and hides the problem.
         var content = (Border)ToastActionContent.Build("Fit copied",
-            "Import [Punisher, Punisher 1788169225] into your Local library?", ToastKind.Information,
+            "Import [Punisher, Punisher ] into your Local library?", ToastKind.Information,
             [new ToastAction("Ignore this fit", () => { }), new ToastAction("Not today", () => { }),
              new ToastAction("Import", () => { }, ToastActionStyle.Affirmative)]);
         manager.Show(content, NotificationType.Information, null, null, () => { }, []);
@@ -132,10 +133,10 @@ public class ToastActionContentTests
         const double breathingRoom = 16;
         var inset = content.Padding.Left + content.Padding.Right;
         var row = (Control)ButtonsOf(content)[0].Parent!;
-        var spare = ToastActionContent.ContentWidthCap - inset - row.Bounds.Width;
+        var spare = content.Bounds.Width - inset - row.Bounds.Width;
         Assert.True(spare >= breathingRoom,
-            $"the row measures {row.Bounds.Width} and the inset takes {inset}, leaving {spare} under the "
-            + $"{ToastActionContent.ContentWidthCap} cap — less than the {breathingRoom} a card needs to spare");
+            $"the row measures {row.Bounds.Width} and the inset takes {inset} of the card's {content.Bounds.Width}, "
+            + $"leaving {spare} — less than the {breathingRoom} a card needs to spare");
 
         window.Close();
     }

@@ -22,7 +22,12 @@ public static class ToastActionContent
     /// <summary>
     /// Widest a card's content may get. Named because a test holds the button row against it.
     /// </summary>
+    /// <remarks>
+    /// A row wider than this cap overruns the inset and puts the last button against the border, which is what the
+    /// buttons' own sizing has to stay clear of — see the compact <c>Button.toast-action</c> style.
+    /// </remarks>
     internal const double ContentWidthCap = 400;
+
 
     /// <summary>Builds the content control for a toast with <paramref name="actions"/> rendered as buttons.</summary>
     public static Control Build(string title, string? message, ToastKind kind, IReadOnlyList<ToastAction> actions)

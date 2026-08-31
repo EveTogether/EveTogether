@@ -541,8 +541,8 @@
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="6"/>
         <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-        <!-- Roomier than the content's own cap (ToastActionContent.ContentWidthCap = 400) plus the card's chrome,
-             so the card never becomes the tighter of the two constraints. -->
+        <!-- Roomier than the content's own cap (ToastActionContent.ContentWidthCap), so the card is never the
+             tighter of the two constraints. -->
         <Setter Property="MaxWidth" Value="420"/>
     </Style>
     <!-- Compact action-toast buttons (Button.toast-action): the default form-button sizing overflows the card. The
@@ -550,8 +550,8 @@
          card width are handled in ToastActionContent itself (the card gives custom content no padding). -->
     <Style Selector="Button.toast-action">
         <Setter Property="MinHeight" Value="0"/>
-        <Setter Property="Padding" Value="12,3"/>
-        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="Padding" Value="9,2"/>
+        <Setter Property="FontSize" Value="10"/>
     </Style>
     <Style Selector="Button.toast-action /template/ ContentPresenter">
         <Setter Property="MinHeight" Value="0"/>
