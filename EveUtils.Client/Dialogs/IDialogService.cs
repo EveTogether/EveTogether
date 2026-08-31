@@ -57,8 +57,11 @@ public interface IDialogService
     /// <summary>Shows a modal message box (used for error reporting instead of crashing).</summary>
     Task ShowMessageAsync(string title, string message);
 
-    /// <summary>Paste-a-fit dialog: returns the pasted EFT/DNA text, or null if cancelled/empty.</summary>
-    Task<string?> ImportFitTextAsync();
+    /// <summary>
+    /// Paste-a-fit dialog: returns the pasted EFT/DNA text, or null if cancelled/empty.
+    /// </summary>
+    /// <param name="initialText">Pre-fills the box, for a caller that already has the fit text.</param>
+    Task<string?> ImportFitTextAsync(string? initialText = null);
 
     /// <summary>eveship.fit (ESF) link dialog: returns the pasted link, or null if cancelled/empty. The
     /// link decodes through the same fit-text importer.</summary>

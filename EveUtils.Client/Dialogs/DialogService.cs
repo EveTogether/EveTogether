@@ -172,10 +172,10 @@ public sealed class DialogService : IDialogService, ISingletonService
         await dialog.ShowDialog(_owner);
     }
 
-    public async Task<string?> ImportFitTextAsync()
+    public async Task<string?> ImportFitTextAsync(string? initialText = null)
     {
         if (_owner is null) return null;
-        return await new FitTextImportWindow().ShowDialog<string?>(_owner);
+        return await new FitTextImportWindow(initialText).ShowDialog<string?>(_owner);
     }
 
     public async Task<string?> ImportFitEsfLinkAsync()

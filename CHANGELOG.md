@@ -14,6 +14,10 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- Importing a fit you copied now opens the **From EFT / DNA text** window with the fit already pasted in, instead
+  of putting it straight into your library. You see what is about to be added, and can correct it, before it lands.
+- **Not today** on a copied fit now silences only that fit for the rest of the day. It used to silence every fit,
+  which is not what a button sitting under one named fit promises.
 - A notification that asks you something now stays on screen until you answer it. The offer to import a fit you
   copied used to disappear by itself after about five seconds, so the question was often gone before you looked at
   it. Every notification with buttons keeps this behaviour, and each one now carries a small cross so you can put it

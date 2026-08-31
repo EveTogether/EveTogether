@@ -81,7 +81,20 @@ public sealed class RecordingDialogService : IDialogService
         LastMessage = message;
         return Task.CompletedTask;
     }
-    public Task<string?> ImportFitTextAsync() => throw NotUsed();
+    /// <summary>What the paste-a-fit dialog was pre-filled with, and how often it was opened.</summary>
+    public string? ImportFitTextInitial { get; private set; }
+
+    public int ImportFitTextCalls { get; private set; }
+
+    /// <summary>What the dialog returns. Null (the default) stands for the user cancelling it.</summary>
+    public string? ImportFitTextResult { get; set; }
+
+    public Task<string?> ImportFitTextAsync(string? initialText = null)
+    {
+        ImportFitTextCalls++;
+        ImportFitTextInitial = initialText;
+        return Task.FromResult(ImportFitTextResult);
+    }
     public Task<string?> ImportFitEsfLinkAsync() => throw NotUsed();
 
     /// <summary>Stub for the edit-fit-metadata dialog: set to inspect the prefilled draft and drive the result.

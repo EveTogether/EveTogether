@@ -15,8 +15,12 @@ namespace EveUtils.Client.UiTests;
 
 public sealed class ClipboardFitImportOfferTests
 {
+    /// <summary>
+    /// "Not today" sits under one named fit, so it silences that fit and nothing else — a later, different fit is
+    /// still offered. Muting the whole feature from a button that names one fit is a promise the text does not make.
+    /// </summary>
     [AvaloniaFact]
-    public async Task FitCapture_OffersImportOnceAndCanBeIgnoredForToday()
+    public async Task NotToday_SilencesOnlyTheFitItWasPressedOn()
     {
         var source = new FakeClipboardChangeSource();
         var dialogs = new RecordingDialogService();
@@ -24,7 +28,7 @@ public sealed class ClipboardFitImportOfferTests
         using var instance = TestClientInstance.Create();
         using var watch = new ClipboardWatchService(dialogs, instance.Services,
             NullLogger<ClipboardWatchService>.Instance, source);
-        using var offers = new ClipboardFitImportOffer(watch, toasts, instance.Services);
+        using var offers = new ClipboardFitImportOffer(watch, toasts, dialogs, instance.Services);
         await watch.SetEnabledAsync(true);
 
         dialogs.ClipboardText = "[Jackdaw, Jackdaw - T1/T2 - D]\r\nBallistic Control System II\r\nBallistic Control System II";
@@ -36,11 +40,12 @@ public sealed class ClipboardFitImportOfferTests
         Assert.Equal(new[] { "Ignore this fit", "Not today", "Import" },
             Array.ConvertAll(firstOffer.Actions.ToArray(), action => action.Label));
 
-        firstOffer.Actions[1].Run();
+        firstOffer.Actions[1].Run(); // "Not today", on the Jackdaw
         dialogs.ClipboardText = "[Armageddon, PVE High DPS 0-60KM (1000+)]\r\nBallistic Control System II";
         Copy(source);
 
-        Assert.Single(toasts.ActionToasts);
+        Assert.Equal(2, toasts.ActionToasts.Count);
+        Assert.Contains("[Armageddon, PVE High DPS 0-60KM (1000+)]", toasts.ActionToasts[^1].Message);
     }
 
     [AvaloniaFact]
@@ -52,7 +57,7 @@ public sealed class ClipboardFitImportOfferTests
         using var instance = TestClientInstance.Create();
         using var watch = new ClipboardWatchService(dialogs, instance.Services,
             NullLogger<ClipboardWatchService>.Instance, source);
-        using var offers = new ClipboardFitImportOffer(watch, toasts, instance.Services);
+        using var offers = new ClipboardFitImportOffer(watch, toasts, dialogs, instance.Services);
         await watch.SetEnabledAsync(true);
 
         dialogs.ClipboardText = "Agitated Exotic Filament\t1\tAbyssal Filaments\t\t\t0,10 m3\t42.237,65 ISK\r\n" +
@@ -71,7 +76,7 @@ public sealed class ClipboardFitImportOfferTests
         using var instance = TestClientInstance.Create();
         using var watch = new ClipboardWatchService(dialogs, instance.Services,
             NullLogger<ClipboardWatchService>.Instance, source);
-        using var offers = new ClipboardFitImportOffer(watch, toasts, instance.Services);
+        using var offers = new ClipboardFitImportOffer(watch, toasts, dialogs, instance.Services);
         await watch.SetEnabledAsync(true);
 
         dialogs.ClipboardText = "[Jackdaw, Jackdaw - T1/T2 - D]\r\nBallistic Control System II";
@@ -83,10 +88,16 @@ public sealed class ClipboardFitImportOfferTests
         Assert.Contains("[Armageddon, PVE High DPS 0-60KM (1000+)]", latestOffer.Message);
     }
 
+    /// <summary>
+    /// Import does not put the fit straight into the library: it opens the paste window with the fit already in it,
+    /// and imports what comes back out — so what the pilot reads there, and may correct, is what lands.
+    /// </summary>
     [AvaloniaFact]
-    public async Task ImportAction_UsesTheExistingFitTextImporter()
+    public async Task ImportAction_OpensThePasteWindowPrefilled_AndImportsWhatItReturns()
     {
         const string text = "[Jackdaw, Jackdaw - T1/T2 - D]\r\nBallistic Control System II\r\nBallistic Control System II";
+        // Deliberately not the clipboard text: the edited version is the one that must reach the importer.
+        const string edited = text + "\r\nDrone Damage Amplifier II";
         var importer = new RecordingFitTextImporter(FitImportResult.Ok(
             new EsiFitting(0, "Jackdaw - clipboard", "", 23533, []), []));
         var source = new FakeClipboardChangeSource();
@@ -95,10 +106,11 @@ public sealed class ClipboardFitImportOfferTests
         using var instance = TestClientInstance.Create(services => services.AddSingleton<IFitTextImporter>(importer));
         using var watch = new ClipboardWatchService(dialogs, instance.Services,
             NullLogger<ClipboardWatchService>.Instance, source);
-        using var offers = new ClipboardFitImportOffer(watch, toasts, instance.Services);
+        using var offers = new ClipboardFitImportOffer(watch, toasts, dialogs, instance.Services);
         await watch.SetEnabledAsync(true);
 
         dialogs.ClipboardText = text;
+        dialogs.ImportFitTextResult = edited;
         Copy(source);
         toasts.ActionToasts[0].Actions[2].Run();
 
@@ -106,7 +118,9 @@ public sealed class ClipboardFitImportOfferTests
         for (var attempt = 0; attempt < 100 && (await repository.ListAllAsync()).Count == 0; attempt++)
             await Task.Delay(10);
 
-        Assert.Equal(text, importer.ImportedText);
+        Assert.Equal(1, dialogs.ImportFitTextCalls);
+        Assert.Equal(text, dialogs.ImportFitTextInitial); // the window opened with the copied fit already in it
+        Assert.Equal(edited, importer.ImportedText);      // and what it returned is what was imported
         Assert.Equal("Jackdaw - clipboard", Assert.Single(await repository.ListAllAsync()).Name);
     }
 

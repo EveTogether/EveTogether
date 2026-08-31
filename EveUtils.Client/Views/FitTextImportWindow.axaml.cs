@@ -10,9 +10,24 @@ namespace EveUtils.Client.Views;
 /// </summary>
 public partial class FitTextImportWindow : ChromedWindow
 {
-    public FitTextImportWindow()
+    public FitTextImportWindow() : this(null)
+    {
+    }
+
+    /// <summary>
+    /// Opens the dialog with <paramref name="initialText"/> already in the box, for a caller that has the fit text
+    /// in hand and wants it read before it is imported rather than after.
+    /// </summary>
+    public FitTextImportWindow(string? initialText)
     {
         AvaloniaXamlLoader.Load(this);
+
+        if (string.IsNullOrEmpty(initialText))
+            return;
+
+        var box = this.FindControl<TextBox>("TextBoxInput")!;
+        box.Text = initialText;
+        box.CaretIndex = initialText.Length;
     }
 
     private void OnCancel(object? sender, RoutedEventArgs e) => Close(null);

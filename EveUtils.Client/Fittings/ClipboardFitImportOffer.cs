@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using EveUtils.Client.Clipboard;
+using EveUtils.Client.Dialogs;
 using EveUtils.Client.Notifications;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.DependencyInjection;
@@ -19,20 +20,25 @@ public sealed class ClipboardFitImportOffer : ISingletonService, IDisposable
     public const string FeatureName = "Fit import offers";
 
     private readonly IToastService _toasts;
+    private readonly IDialogService _dialogs;
     private readonly IServiceProvider _services;
     private readonly TimeProvider _clock;
     private readonly Lock _gate = new();
     private readonly HashSet<string> _offeredCaptures = new(StringComparer.Ordinal);
     private readonly IDisposable _subscription;
 
+    // Muted per fit rather than for the feature: "Not today" sits under one named fit, so it promises silence about
+    // that fit and nothing else. Muting everything is a different promise and would need a different button.
+    private readonly Dictionary<string, DateOnly> _mutedFits = new(StringComparer.Ordinal);
+
     private string? _openFingerprint;
     private string? _pendingText;
-    private DateOnly? _mutedOn;
 
-    public ClipboardFitImportOffer(ClipboardWatchService clipboardWatch, IToastService toasts, IServiceProvider services,
-        TimeProvider? clock = null)
+    public ClipboardFitImportOffer(ClipboardWatchService clipboardWatch, IToastService toasts, IDialogService dialogs,
+        IServiceProvider services, TimeProvider? clock = null)
     {
         _toasts = toasts;
+        _dialogs = dialogs;
         _services = services;
         _clock = clock ?? TimeProvider.System;
         _subscription = clipboardWatch.Subscribe(FeatureName, OnCapture);
@@ -49,7 +55,9 @@ public sealed class ClipboardFitImportOffer : ISingletonService, IDisposable
         lock (_gate)
         {
             var today = DateOnly.FromDateTime(_clock.GetLocalNow().DateTime);
-            if (_mutedOn == today || !_offeredCaptures.Add(fingerprint))
+            if (_mutedFits.TryGetValue(fingerprint, out var mutedOn) && mutedOn == today)
+                return;
+            if (!_offeredCaptures.Add(fingerprint))
                 return;
 
             _openFingerprint = fingerprint;
@@ -78,9 +86,15 @@ public sealed class ClipboardFitImportOffer : ISingletonService, IDisposable
         if (text is null)
             return;
 
+        // The offer hands the fit to the paste window rather than importing on the spot: the pilot sees what is about
+        // to enter the library, and can correct it, before it does. Cancelling there imports nothing.
+        var confirmed = await _dialogs.ImportFitTextAsync(text);
+        if (confirmed is null)
+            return;
+
         using var scope = _services.CreateScope();
         var result = await scope.ServiceProvider.GetRequiredService<IDispatcher>()
-            .Send(new ImportFitFromTextCommand(text));
+            .Send(new ImportFitFromTextCommand(confirmed));
 
         if (result.IsSuccess)
             _toasts.Show("Fit imported", $"'{result.Value}' is in your Local library.");
@@ -94,7 +108,7 @@ public sealed class ClipboardFitImportOffer : ISingletonService, IDisposable
         {
             if (_openFingerprint != fingerprint)
                 return;
-            _mutedOn = DateOnly.FromDateTime(_clock.GetLocalNow().DateTime);
+            _mutedFits[fingerprint] = DateOnly.FromDateTime(_clock.GetLocalNow().DateTime);
         }
         CloseOffer(fingerprint);
     }
