@@ -6,8 +6,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -527,8 +530,8 @@ public sealed class AppraisalToolTests(ITestOutputHelper output)
     /// <summary>
     /// The total is the answer the tool exists to give, so it is written out in full rather than rounded — "1.4 B
     /// ISK" covers a span of ten million. That makes it far wider than what it replaces, and it sits in an Auto
-    /// column beside the heading, so at the narrow width the docked host gives it both still have to hold: the
-    /// figure whole, the heading not crushed out of the row.
+    /// column beside the heading, so at the window's own minimum width (ET-90 raised it to 760, the narrowest this
+    /// screen can be) both still have to hold: the figure whole, the heading not crushed out of the row.
     /// </summary>
     [AvaloniaFact]
     public async Task Total_IsWrittenOutInFull_AndStillFitsBesideTheHeading()
@@ -546,7 +549,7 @@ public sealed class AppraisalToolTests(ITestOutputHelper output)
         // rounded away to "1.4 B ISK", five million ISK wide.
         Assert.Equal("1,395,000,000 ISK", tool.TotalDisplay);
 
-        var window = new AppraisalWindow(tool) { Width = 620, Height = 520 };   // under the narrow-layout threshold
+        var window = new AppraisalWindow(tool) { Width = 760, Height = 520 };   // the window's own minimum (ET-90)
         window.Show();
         await _WaitForAsync(() => false, tries: 12);
 
@@ -567,60 +570,92 @@ public sealed class AppraisalToolTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// ET-93 widens PRICE EACH and TOTAL from "5 M ISK" to "5,000,000 ISK" — measured here, not assumed, because
-    /// ET-90-grooming already found the fixed columns on this grid squeezing NAME to its 20px floor from ~900px
-    /// down and, below that floor, cutting the money columns themselves (TOTAL 130 → 96 → 36). Both columns are a
-    /// fixed 130px, not "*"/"Auto", so they do not react to window width at all until NAME has bottomed out — what
-    /// changes with wider text is whether it still fits the 130px cell it always had. Render-verified (PNGs saved
-    /// alongside this run): at 1100/900/740 a ten-digit total ("1,000,000,000 ISK") reads whole, the few-pixel
-    /// bounds shortfall logged below is cell padding, not visible clipping. At 620 — the same width ET-90 already
-    /// found NAME collapsed at — the identical total is genuinely, visibly cut off mid-digit ("1,000,000,000 I"),
-    /// which "1 B ISK" never was. This does not fix that; it is ET-90's layout, not this ticket's. See
+    /// ET-90: NAME now floors at its own 180px <c>MinWidth</c>, not Avalonia's DataGrid-wide 20px — and the fixed
+    /// QTY/PRICE EACH/TOTAL columns, which used to give way once NAME hit that lower floor (TOTAL 130 → 96 → 36,
+    /// per ET-90-grooming), must never move again: the grid scrolls horizontally instead. Swept across the window's
+    /// own minimum width (760, raised from 560 by this ticket) up to a generous 1100, with the ET-93 billion-ISK
+    /// total as the widest realistic figure the money columns have to hold whole. An <c>ActualWidth &gt; 0</c>
+    /// assertion would stay green on the pre-fix collapse; this checks the real floor. See
     /// [[domain/DataGrid-Star-Column-Collapse]].
     /// </summary>
     [AvaloniaTheory]
-    [InlineData(620, 1000)]
-    [InlineData(740, 1000)]
-    [InlineData(900, 1000)]
-    [InlineData(1100, 1000)]
-    [InlineData(1100, 999)]
-    public async Task Measure_MoneyColumnWidths_AtTheEt90Breakpoints(double windowWidth, double tritaniumPrice)
+    [InlineData(760)]
+    [InlineData(900)]
+    [InlineData(1100)]
+    public async Task NameColumn_KeepsItsMinimum_AndMoneyColumnsStayWhole(double windowWidth)
     {
         using var instance = _NewInstance(_Minerals());
         await _CachePricesAsync(instance, new DateTimeOffset(2026, 8, 31, 9, 30, 0, TimeSpan.Zero),
-            (34, tritaniumPrice), (35, 1400), (36, 1125));
+            (34, 1000), (35, 1400), (36, 1125));
         instance.Services.GetRequiredService<IThemeService>().Apply(FactionTheme.Gallente);
 
         var tool = _BuildTool(instance);
         tool.PasteText = MineralPaste;
         await tool.AppraiseCommand.ExecuteAsync(null);
 
+        // 1,000,000 × 1,000 = 1,000,000,000 — the same figure ET-93 measured cutting off mid-digit at the old
+        // 620px floor ("1,000,000,000 I").
+        var tritanium = tool.Rows.Single(row => row.Name == "Tritanium");
+        Assert.Equal("1,000,000,000 ISK", tritanium.TotalDisplay);
+
         var window = new AppraisalWindow(tool) { Width = windowWidth, Height = 640 };
         window.Show();
         await _WaitForAsync(() => false, tries: 12);
 
         window.CaptureRenderedFrame()!.Save(
-            Path.Combine(_ShotDirectory(), $"eveutils-appraisal-columns-{windowWidth:0}-{tritaniumPrice:0}.png"),
-            new PngBitmapEncoderOptions());
+            Path.Combine(_ShotDirectory(), $"eveutils-appraisal-namefloor-{windowWidth:0}.png"), new PngBitmapEncoderOptions());
 
         var grid = window.GetVisualDescendants().OfType<DataGrid>().Single();
-        var byHeader = grid.Columns.ToDictionary(column => column.Header!.ToString()!, column => column.ActualWidth);
+        var byHeader = grid.Columns.ToDictionary(_HeaderText, column => column.ActualWidth);
         output.WriteLine($"window={windowWidth}: NAME={byHeader["NAME"]:0} QTY={byHeader["QTY"]:0} "
                           + $"PRICE EACH={byHeader["PRICE EACH"]:0} TOTAL={byHeader["TOTAL"]:0}");
 
-        // Bounds against desired size, same as ET-83's header-total check, because a clipped TextBlock still
-        // reports its full Text. Below 620 the shortfall is large (24px) and matches a visibly cut-off render;
-        // at 740/900/1100 it is a few pixels of cell padding that the saved PNGs show reads whole.
-        var tritanium = tool.Rows.Single(row => row.Name == "Tritanium");
+        Assert.True(byHeader["NAME"] >= 180, $"NAME bottomed out at {byHeader["NAME"]:0}px, not its 180px minimum");
+        Assert.Equal(90, byHeader["QTY"]);
+        Assert.Equal(130, byHeader["PRICE EACH"]);
+        Assert.Equal(130, byHeader["TOTAL"]);
+
+        // Below the columns' combined minimum (180+90+130+130=530) the grid has to give way somewhere, and it must
+        // be the scrollbar, not one of the columns just pinned above (ET-90's "prefer horizontal scroll" — confirmed
+        // by hand against the renders saved above, where the DataGrid's own horizontal scrollbar sits at the bottom
+        // of the grid's row area rather than snug under the last row).
+        var hScroll = grid.GetVisualDescendants().OfType<ScrollBar>().Single(bar => bar.Orientation == Orientation.Horizontal);
+        var shortfall = 180 + 90 + 130 + 130 - grid.Bounds.Width;
+        if (shortfall > 0)
+            Assert.True(hScroll.Maximum > 0, $"the grid was {shortfall:0}px short but its scrollbar reports Maximum={hScroll.Maximum}");
+        else
+            Assert.Equal(0, hScroll.Maximum);
+
+        // Bounds, not text: a squeezed TextBlock keeps its full Text and renders an ellipsis rather than vanishing.
+        // The DataGrid cell's own padding costs the TextBlock a fixed ~3px versus its DesiredSize even with the
+        // column at its full pinned width and room to spare (confirmed identical at 760/900/1100, and against the
+        // saved renders above, which show the figure whole) — a real squeeze is an order of magnitude larger, as
+        // the pre-fix measurements were (TOTAL down to 36px against a >100px desired).
         var totalCell = grid.GetVisualDescendants().OfType<TextBlock>()
             .Single(block => block.Text == tritanium.TotalDisplay);
-        var fits = totalCell.Bounds.Width >= totalCell.DesiredSize.Width - 0.5;
-        output.WriteLine($"window={windowWidth}: TOTAL cell for \"{tritanium.TotalDisplay}\" "
-                          + $"desired={totalCell.DesiredSize.Width:0} bounds={totalCell.Bounds.Width:0} fits={fits}");
+        Assert.True(totalCell.Bounds.Width >= totalCell.DesiredSize.Width - 5,
+            $"the total was squeezed: {totalCell.Bounds.Width} arranged for {totalCell.DesiredSize.Width} desired");
 
-        // The floor Avalonia's DataGrid enforces is 20px, not 0 — an ActualWidth > 0 assertion would stay green on
-        // a column that has visibly collapsed. This only records the figures for the ET-90 writeup; it does not
-        // assert a minimum, because the fix for the layout itself is ET-90's, not this ticket's.
+        // Right-aligned so digit groups line up (ET-90): the figures' TextAlignment carries the visible alignment,
+        // and the header TextBlock (an explicit column-header override, unlike NAME's plain string) sits at the
+        // same right edge as the column's cells rather than trailing off on its own.
+        Assert.Equal(TextAlignment.Right, totalCell.TextAlignment);
+        var totalHeader = window.GetVisualDescendants().OfType<TextBlock>()
+            .Single(block => block.Text == "TOTAL" && block.FindAncestorOfType<DataGridColumnHeader>() is not null);
+        Assert.Equal(HorizontalAlignment.Right, totalHeader.HorizontalAlignment);
+
+        // Bounds are relative to each control's own parent, not a shared origin, so the header and the cell — in
+        // different branches of the DataGrid's template — need translating into one coordinate space before their
+        // right edges mean anything next to each other.
+        //
+        // A residual ~12px gap survives even with the sort-icon reservation zeroed out below (DataGridColumnHeader
+        // and DataGridCell just carry different built-in Fluent padding) — render-verified as visually flush, unlike
+        // the ~20-32px gap the un-zeroed reservation left, which read as the header sitting off on its own.
+        var headerRight = totalHeader.TranslatePoint(new Point(totalHeader.Bounds.Width, 0), window)!.Value.X;
+        var cellRight = totalCell.TranslatePoint(new Point(totalCell.Bounds.Width, 0), window)!.Value.X;
+        Assert.True(Math.Abs(headerRight - cellRight) < 15,
+            $"TOTAL's header (right edge {headerRight}) does not line up with its cells (right edge {cellRight})");
+
         window.Close();
     }
 
@@ -663,10 +698,30 @@ public sealed class AppraisalToolTests(ITestOutputHelper output)
         var texts = _VisibleTexts(window);
         Assert.Contains("ITEMS (4)", texts);
         Assert.Contains("10,700,000 ISK", texts);
-        // The value columns still show their figures in the narrower host — the reason this screen has a viewport.
         Assert.Contains("Tritanium", texts);
         Assert.Contains("1,000,000", texts);
+        // Present in the visual tree, not necessarily on screen: a TextBlock scrolled past the viewport keeps its
+        // Text and stays IsEffectivelyVisible (the exact trap ET-90 exists to stop assuming past) — the grid check
+        // below is what actually proves the docked host's width.
         Assert.Contains("5,000,000 ISK", texts);
+
+        // ET-90: the docked host is narrower than the tool's own window ever gets (its MinWidth can't apply here),
+        // so this is the one presentation path where the grid's minimum genuinely gets exercised. At the shipped
+        // default main-window size (1100×720) it lands right at the columns' combined minimum, so — unlike the
+        // pre-ET-90 layout, which fit all four columns by squeezing NAME to ~106px and the money columns not at
+        // all yet — the grid now scrolls horizontally here too, even for ordinary figures, not just the
+        // billion-ISK case. Confirmed against the render saved above and worth carrying into the write-up: this
+        // is the direct, accepted cost of NAME's floor, not a defect.
+        Assert.True(_NameColumnWidth(window) >= 180,
+            $"NAME bottomed out at {_NameColumnWidth(window):0}px in the docked host, not its 180px minimum");
+        var dockedGrid = window.GetVisualDescendants().OfType<DataGrid>().Single();
+        var dockedShortfall = 180 + 90 + 130 + 130 - dockedGrid.Bounds.Width;
+        var dockedHScroll = dockedGrid.GetVisualDescendants().OfType<ScrollBar>().Single(bar => bar.Orientation == Orientation.Horizontal);
+        if (dockedShortfall > 0)
+            Assert.True(dockedHScroll.Maximum > 0,
+                $"the docked grid was {dockedShortfall:0}px short but its scrollbar reports Maximum={dockedHScroll.Maximum}");
+        else
+            Assert.Equal(0, dockedHScroll.Maximum);
 
         shell.ToggleDockModeCommand.Execute(null);   // → floating: the tool becomes its own window, not an orphan
         Dispatcher.UIThread.RunJobs();
@@ -676,8 +731,24 @@ public sealed class AppraisalToolTests(ITestOutputHelper output)
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("APPRAISAL", shell.HostTabs[0].Title);
         Assert.Same(tool, shell.SelectedHostTab!.Content.DataContext);   // and with what it had valued still in it
+
+        // The dock→float→dock round trip reuses the same AppraisalWindow instance (ModuleHostService.Render just
+        // steals its Content back), including the _isWide field _ApplyViewport tracks — so a stale read there would
+        // survive the switch instead of showing up fresh. It does not: the column is still above its floor.
+        Assert.True(_NameColumnWidth(window) >= 180,
+            $"NAME bottomed out at {_NameColumnWidth(window):0}px after the dock/float round trip, not its 180px minimum");
+
         window.Close();
     }
+
+    private static double _NameColumnWidth(Visual root) =>
+        root.GetVisualDescendants().OfType<DataGrid>().Single().Columns
+            .Single(column => _HeaderText(column) == "NAME").ActualWidth;
+
+    /// <summary>QTY/PRICE EACH/TOTAL carry their header as a right-aligned <see cref="TextBlock"/> (ET-90), not the
+    /// plain string NAME still uses, so a column's header text takes either form.</summary>
+    private static string _HeaderText(DataGridColumn column) =>
+        column.Header is TextBlock heading ? heading.Text! : column.Header!.ToString()!;
 
     /// <summary>The text actually on the screen — a hidden control is still in the visual tree, so a readout that is
     /// merely bound would pass an assertion that only looked at every <see cref="TextBlock"/>.</summary>

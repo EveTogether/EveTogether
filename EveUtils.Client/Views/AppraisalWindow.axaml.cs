@@ -10,8 +10,9 @@ namespace EveUtils.Client.Views;
 
 /// <summary>
 /// The Appraisal tool (ET-83), hosted like the other feature modules: a docked tab when docked, its own window when
-/// floating. Below a narrow content width the paste column gives up some of its width, so the value columns stay
-/// readable in the docked host.
+/// floating. Below a narrow content width the paste column gives up some of its width in favour of the results
+/// grid; below the grid's own column minimums (ET-90) it scrolls horizontally rather than squeezing NAME or the
+/// money columns further.
 /// </summary>
 public partial class AppraisalWindow : ChromedWindow, IHostableModuleWindow
 {
