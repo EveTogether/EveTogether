@@ -148,6 +148,73 @@ public sealed class SettingsSyncToolTests : IDisposable
         Assert.Equal("Alt account", stored[1001]);   // survives the next open
     }
 
+    // ── Finding the EVE folder, and doing without (ET-76) ────────────────────────────────────────
+
+    /// <summary>AUTODETECT fills the field in, reads what is there, and remembers it — so a Linux install found
+    /// inside its Proton prefix is not looked for again next time. The detector is replaced here because whether
+    /// the machine running this test has EVE installed is beside the point.</summary>
+    [AvaloniaFact]
+    public async Task Tool_FillsTheFolderInWhenAutodetectFindsOne()
+    {
+        _WriteProfile("settings_Default", [(90000001, "alice")], [(1001, "account one")]);
+        using var instance = _NewInstance();
+        var tool = await _BuildToolAsync(instance);
+
+        var detected = Path.Combine(_root, "prefix-install");
+        Directory.CreateDirectory(Path.Combine(detected, "settings_Proton"));
+        File.WriteAllText(Path.Combine(detected, "settings_Proton", "core_char_90000007.dat"), "found");
+        tool.Detector = () => detected;
+
+        await tool.DetectInstallRootCommand.ExecuteAsync(null);
+
+        Assert.Equal(detected, tool.InstallRoot);
+        Assert.Equal("settings_Proton", tool.SelectedProfileName);
+        Assert.Contains(tool.Characters, row => row.File.Id == 90000007);
+        Assert.False(tool.StatusIsError);
+        Assert.Contains(detected, tool.Status);
+        Assert.Equal(detected, await instance.Services.GetRequiredService<EveSettingsPreferences>().LoadInstallRootAsync());
+    }
+
+    /// <summary>Detection coming up empty must leave everything as it was and say where the manual way in is. It is
+    /// the shortcut, not the only route — a Wine prefix somewhere unusual still has to be reachable by hand.</summary>
+    [AvaloniaFact]
+    public async Task Tool_KeepsTheManualFolderWhenAutodetectFindsNothing()
+    {
+        _WriteProfile("settings_Default", [(90000001, "alice")], [(1001, "account one")]);
+        using var instance = _NewInstance();
+        var tool = await _BuildToolAsync(instance);
+        tool.Detector = () => null;
+
+        await tool.DetectInstallRootCommand.ExecuteAsync(null);
+
+        Assert.Equal(InstallRoot, tool.InstallRoot);                 // the folder the user gave it stands
+        Assert.Equal("settings_Default", tool.SelectedProfileName);  // and what it had read is still on screen
+        Assert.Single(tool.Characters);
+        Assert.True(tool.StatusIsError);
+        Assert.Contains("BROWSE", tool.Status);
+    }
+
+    /// <summary>And the manual route itself: pointing at a folder auto-detection would never have found works, and
+    /// is remembered.</summary>
+    [AvaloniaFact]
+    public async Task Tool_TakesAFolderThePickerHandsItAndRemembersIt()
+    {
+        _WriteProfile("settings_Default", [(90000001, "alice")], []);
+        using var instance = _NewInstance();
+        var tool = await _BuildToolAsync(instance);
+        tool.Detector = () => null;
+
+        var picked = Path.Combine(_root, "somewhere-odd");
+        Directory.CreateDirectory(Path.Combine(picked, "settings_Wine"));
+        File.WriteAllText(Path.Combine(picked, "settings_Wine", "core_char_90000009.dat"), "by hand");
+
+        await tool.PickInstallRootAsync(picked);
+
+        Assert.Equal("settings_Wine", tool.SelectedProfileName);
+        Assert.Contains(tool.Characters, row => row.File.Id == 90000009);
+        Assert.Equal(picked, await instance.Services.GetRequiredService<EveSettingsPreferences>().LoadInstallRootAsync());
+    }
+
     // ── The two blocks stay apart ────────────────────────────────────────────────────────────────
 
     /// <summary>The character block only ever plans character files and the account block only account files: the

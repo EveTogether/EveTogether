@@ -182,6 +182,17 @@ repository. **Beta:** more stable than the alpha, but expect occasional rough ed
   and unfolding survives a refresh. A small fleet is unchanged: no extra line, no extra click.
 
 ### Fixed
+- **EVE Settings Sync** now finds your EVE folder on Linux by itself. EVE on Linux is the Windows
+  client running under Steam's Proton (or plain Wine), so its settings live inside that prefix
+  rather than where a Linux program would put them — and the tool, which only ever looked in the
+  Windows location, opened empty and left you to hunt the folder down through
+  `steamapps/compatdata/…/pfx/drive_c/users/steamuser/…` yourself. It now walks Steam's libraries
+  (including a second disk, and the Flatpak install) to EVE's own prefix, falling back to
+  `$WINEPREFIX` and `~/.wine` for an install outside Steam. There is also a new **AUTODETECT**
+  button beside **BROWSE…**, so a game installed or moved after you first opened the tool can be
+  picked up without restarting it. If nothing is found, nothing changes: the folder you set stays,
+  and **BROWSE…** still points the tool wherever you like. Windows is unaffected — it is asked
+  first, exactly as before.
 - Removing, adding or repositioning a fleet member now updates **every** open screen showing that
   pilot, not only the screen you did it in. Removing someone in fleet metrics with the fleet
   overview open beside it used to clear the metrics card and leave the pilot sitting on the

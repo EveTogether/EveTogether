@@ -92,21 +92,24 @@
              squeezes the profile picker out of view, and the profile is never implicit — several settings_*
              profiles side by side is normal, and picking the wrong one is how you overwrite the wrong thing. -->
         <Border DockPanel.Dock="Top" Classes="panel" Padding="11,9" Margin="0,0,0,10">
-            <Grid RowDefinitions="Auto,6,Auto" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="7">
+            <Grid RowDefinitions="Auto,6,Auto" ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="7">
                 <TextBlock Grid.Row="0" Grid.Column="0" Classes="label" Text="EVE FOLDER" VerticalAlignment="Center"/>
                 <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding InstallRoot}" FontSize="11"
                          VerticalContentAlignment="Center" MinWidth="180"
                          PlaceholderText="The folder that holds the settings_* directories"
-                         ToolTip.Tip="Normally %LOCALAPPDATA%\CCP\EVE\&lt;install&gt;. Detected automatically on Windows; point at it yourself if nothing was found."/>
-                <Button Grid.Row="0" Grid.Column="2" Content="BROWSE…" FontSize="10" Click="OnBrowse"/>
-                <Button Grid.Row="0" Grid.Column="3" Content="RELOAD" FontSize="10"
+                         ToolTip.Tip="Normally %LOCALAPPDATA%\CCP\EVE\&lt;install&gt;, and on Linux the same folder inside EVE's Proton or Wine prefix. Try AUTODETECT; point at it yourself if nothing was found."/>
+                <Button Grid.Row="0" Grid.Column="2" Content="AUTODETECT" FontSize="10"
+                        Command="{Binding DetectInstallRootCommand}"
+                        ToolTip.Tip="Look for EVE again — %LOCALAPPDATA% on Windows, the Steam libraries and their Proton prefixes on Linux."/>
+                <Button Grid.Row="0" Grid.Column="3" Content="BROWSE…" FontSize="10" Click="OnBrowse"/>
+                <Button Grid.Row="0" Grid.Column="4" Content="RELOAD" FontSize="10"
                         Command="{Binding ReloadProfilesCommand}"
                         ToolTip.Tip="Re-read the folder — EVE rewrites these files whenever a client closes."/>
 
                 <TextBlock Grid.Row="2" Grid.Column="0" Classes="label" Text="PROFILE" VerticalAlignment="Center"/>
                 <ComboBox Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" MinWidth="220" FontSize="11"
                           ItemsSource="{Binding ProfileNames}" SelectedItem="{Binding SelectedProfileName}"/>
-                <TextBlock Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" Text="{Binding ProfileSummary}"
+                <TextBlock Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="3" Text="{Binding ProfileSummary}"
                            VerticalAlignment="Center" FontSize="11" TextTrimming="CharacterEllipsis"
                            Foreground="{DynamicResource TextAccentBrush}"/>
             </Grid>
