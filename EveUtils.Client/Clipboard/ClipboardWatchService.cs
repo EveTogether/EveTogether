@@ -46,7 +46,7 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
         _dialogs = dialogs;
         _services = services;
         _logger = logger;
-        _source = source ?? CreatePlatformSource();
+        _source = source ?? CreatePlatformSource(logger);
         _source.Changed += OnClipboardChanged;
         _source.SupportChanged += OnSupportChanged;
     }
@@ -109,9 +109,9 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
         _source.Dispose();
     }
 
-    private static IClipboardChangeSource CreatePlatformSource() =>
+    private static IClipboardChangeSource CreatePlatformSource(ILogger logger) =>
         OperatingSystem.IsWindows() ? new WindowsClipboardChangeSource()
-        : OperatingSystem.IsLinux() ? new WaylandClipboardChangeSource()
+        : OperatingSystem.IsLinux() ? new WaylandClipboardChangeSource(logger)
         : new UnsupportedClipboardChangeSource();
 
     private void StartWatching()
@@ -164,12 +164,22 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
         string? text;
         try
         {
-            text = await _dialogs.GetClipboardTextAsync();
+            // The platform source reads it where its own notification and the toplevel's clipboard disagree
+            // (Wayland); everywhere else it returns null and the toplevel is the reader, as before.
+            text = await _source.ReadTextAsync() ?? await _dialogs.GetClipboardTextAsync();
         }
         catch (Exception ex)
         {
             // The message carries no payload: an unreadable clipboard is worth knowing about, its contents are not.
             _logger.LogError(ex, "Could not read the clipboard after a change notification.");
+            return;
+        }
+
+        if (text is null)
+        {
+            // A change was reported and nothing came back. Usually that is an image or an empty clipboard, but it is
+            // also how an unreachable selection looks, and that must not be indistinguishable from silence.
+            _logger.LogInformation("A clipboard change was reported but no text could be read.");
             return;
         }
 

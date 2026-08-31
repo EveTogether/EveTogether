@@ -128,10 +128,22 @@ consistently, which is worse than not working. **This compositor advertises
 `ext_data_control_manager_v1`**, the standardised successor to `zwlr_data_control_manager_v1`;
 `wl-clipboard` 2.2.1 speaks both. And **Avalonia reads through X11**: `Avalonia.Desktop` 12.1.1
 depends on `Avalonia.X11` and ships no Wayland backend, so the application is an XWayland client.
-A change notification can therefore arrive for a native Wayland copy the read cannot reach — the
-right-hand column above. That is a limit of the reader, not of the source, and it lands in the
-existing path: `GetClipboardTextAsync` returns nothing and the payload is dropped. In practice EVE
-runs under Wine, which is an X11 client, so the game's own copies are the bottom row.
+A change notification therefore arrives for a native Wayland copy that the toplevel's read cannot
+reach — the right-hand column above.
+
+**This was not a corner case, and it is now fixed.** Measured on 2026-08-31 with a fit copied out of
+Chromium: `wl-paste` returned all 555 bytes, the X11 `CLIPBOARD` selection had **no owner at all**,
+and four X11 reads in a row returned nothing. Every fit copied from a browser was noticed and then
+silently dropped, because the notification came over the compositor's data-control protocol while
+the reading went through Avalonia's X11 clipboard. Two different worlds.
+
+So reading moved onto the same seam as notification: `IClipboardChangeSource.ReadTextAsync` returns
+the text over the channel that source is notified on, or null to leave the reading to the toplevel.
+The Wayland source runs a one-shot `wl-paste`; Windows returns null and the toplevel reads as before.
+A consumer never sees the difference — it subscribes and receives a `ClipboardCapture`.
+
+And a read that comes back empty no longer ends in silence: it is indistinguishable from "nothing
+recognisable was copied" otherwise, so the fact (never the payload) is logged.
 
 ## Recognition and parsing are separate on purpose
 
@@ -193,4 +205,5 @@ returning line in `ClipboardInventoryParser.FindNameColumn`.
 | The switch and the disclosure | `SettingsWindow` → Privacy & Sharing |
 | Reading the clipboard text | `IDialogService.GetClipboardTextAsync` |
 | Stopped on the way out, because a child process outlives its parent | `App.OnFrameworkInitializationCompleted` → `desktop.Exit` |
+| Reading the clipboard where the platform needs its own channel | `IClipboardChangeSource.ReadTextAsync` → `WaylandClipboardChangeSource` |
 | Platform change source (injectable, so tests replace it) | `IClipboardChangeSource` → `WindowsClipboardChangeSource` / `WaylandClipboardChangeSource` / `UnsupportedClipboardChangeSource` |

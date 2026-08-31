@@ -31,9 +31,10 @@ public static class ToastActionContent
             TextWrapping = TextWrapping.Wrap,
         };
 
+        Control headerContent = heading;
         if (KindIcon(kind) is { } kindIcon)
         {
-            layout.Children.Add(new StackPanel
+            headerContent = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 7,
@@ -49,12 +50,25 @@ public static class ToastActionContent
                     },
                     heading,
                 },
-            });
+            };
         }
-        else
+
+        // These cards stay up until they are answered, so there has to be a way out that answers nothing — otherwise
+        // a question the user has no opinion about is a card that cannot be got rid of.
+        var dismiss = new Button
         {
-            layout.Children.Add(heading);
-        }
+            Content = new MaterialIcon { Kind = MaterialIconKind.Close, Width = 11, Height = 11 },
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(8, -1, 0, 0),
+        };
+        dismiss.Classes.Add("toast-dismiss");
+        NotificationCard.SetCloseOnClick(dismiss, true); // closes the card and runs the caller's onClosed, nothing else
+
+        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        header.Children.Add(headerContent);
+        Grid.SetColumn(dismiss, 1);
+        header.Children.Add(dismiss);
+        layout.Children.Add(header);
 
         if (!string.IsNullOrEmpty(message))
             layout.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, Opacity = 0.8 });

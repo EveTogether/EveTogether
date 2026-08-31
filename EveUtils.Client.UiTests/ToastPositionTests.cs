@@ -94,4 +94,38 @@ public class ToastPositionTests
         first.Close();
         second.Close();
     }
+
+    /// <summary>
+    /// A toast counted from the top or the bottom must clear the window's own chrome, and a bar that is not on
+    /// screen must not reserve room — the status strip is hidden in floating mode.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheInset_ClearsTheChromeThatIsActuallyShown()
+    {
+        var titleBar = new Border { Name = "TitleBar", Height = 48 };
+        var statusBar = new Border { Name = "StatusBar", Height = 30 };
+        var window = new Window
+        {
+            Width = 400,
+            Height = 300,
+            Content = new DockPanel { Children = { titleBar, statusBar } },
+        };
+        DockPanel.SetDock(titleBar, Dock.Top);
+        DockPanel.SetDock(statusBar, Dock.Bottom);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var both = ToastService.ChromeInset(window);
+        Assert.Equal(48, both.Top);
+        Assert.Equal(30, both.Bottom);
+
+        statusBar.IsVisible = false;
+        Dispatcher.UIThread.RunJobs();
+
+        var floating = ToastService.ChromeInset(window);
+        Assert.Equal(48, floating.Top);
+        Assert.Equal(0, floating.Bottom);
+
+        window.Close();
+    }
 }

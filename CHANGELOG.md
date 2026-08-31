@@ -14,6 +14,24 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- Notifications no longer sit on top of the title bar or the status bar. They keep clear of whichever of the two
+  is actually on screen, so a card counted from the top or the bottom lands inside the window rather than over it.
+- **Clipboard watching now works on Wayland for anything you copy.** A fit copied from a browser produced nothing
+  before: the change was noticed, but the text could not be read, because the reading went a different way than the
+  notification did. Both now go the same way.
+- A copied fit is offered again if you copy it again. Previously a fit was offered only once per run of the app, so
+  a question pushed aside by a newer fit could never come back.
+- Importing a fit you copied now opens the **From EFT / DNA text** window with the fit already pasted in, instead
+  of putting it straight into your library. You see what is about to be added, and can correct it, before it lands.
+- **Not today** on a copied fit now silences only that fit for the rest of the day. It used to silence every fit,
+  which is not what a button sitting under one named fit promises.
+- A notification that asks you something now stays on screen until you answer it. The offer to import a fit you
+  copied used to disappear by itself after about five seconds, so the question was often gone before you looked at
+  it. Every notification with buttons keeps this behaviour, and each one now carries a small cross so you can put it
+  away without answering.
+- The clipboard reading in the status bar at the bottom of the window is now clickable and takes you straight to
+  **Settings → Privacy & Sharing**, where the switch, the explanation of what is read, and — if your desktop cannot
+  report a change — the reason it is unavailable all live.
 - EVE Together can now watch your clipboard and recognise two things you copy out of the game: a
   fit in EFT format, and an inventory listing. **It is off until you switch it on** in
   **Settings → Privacy & Sharing**, and the status bar at the bottom of the window says which it
