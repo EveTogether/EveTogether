@@ -68,13 +68,13 @@
                                         <TextBlock Text="{Binding StatusLabel}" FontSize="10"
                                                    Foreground="{DynamicResource TextAccentBrush}"/>
                                     </StackPanel>
-                                    <Button Grid.Column="1" Padding="8,2" Margin="6,0,0,0"
+                                    <Button Grid.Column="1" Classes="rowaction" Padding="8,2" Margin="6,0,0,0"
                                             VerticalAlignment="Center"
                                             Command="{Binding ViewTrustCommand}"
                                             ToolTip.Tip="Server info + cert fingerprint (out-of-band trust check, SEC-13).">
                                         <mi:MaterialIcon Kind="CogOutline"/>
                                     </Button>
-                                    <Button Grid.Column="2" Content="DECOUPLE" FontSize="9" Padding="6,2" Margin="4,0,0,0"
+                                    <Button Grid.Column="2" Classes="rowaction" Content="DECOUPLE" FontSize="9" Padding="8,2" Margin="4,0,0,0"
                                             VerticalAlignment="Center"
                                             Command="{Binding DecoupleCommand}"
                                             ToolTip.Tip="Revoke this character's session on the server and disconnect (D-109)."/>

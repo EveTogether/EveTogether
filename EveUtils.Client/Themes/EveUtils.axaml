@@ -166,6 +166,23 @@
         <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
     </Style>
 
+    <!-- Buttons that sit side by side at the end of a list row (ET-82). Left to themselves an icon button and a text
+         button take their height from their own content — a 14px icon against ~12px of 9pt text — and end up two
+         boxes of different height in the same row. The height belongs to the row, not to what each button happens to
+         contain, so it is set here once: 24 also keeps a one-glyph button a comfortable click target.
+
+         The alignment is half the rule, not decoration. A button here is deliberately TALLER than what it holds, and
+         this app's buttons content-align to Stretch — so the label is handed the whole content box and draws its line
+         at the top of it, leaving the gap underneath. An icon escapes that only because mi|MaterialIcon carries its
+         own VerticalAlignment=Center (Themes/Icons.axaml); text has no such rule of its own. Before a shared height
+         the box fitted the content exactly and Stretch was invisible, which is why this surfaced with the MinHeight
+         rather than before it. -->
+    <Style Selector="Button.rowaction">
+        <Setter Property="MinHeight" Value="24"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    </Style>
+
     <!-- Compact icon-only destructive button (e.g. inbox delete). Borderless line-icon that reads clearly at rest
          (accent text) and turns red with a soft fill on hover. The icon inherits the state colour, so the hover ink
          has to sit on the ContentPresenter: the plain Button:pointerover rule above already sets a bright Foreground
@@ -349,8 +366,6 @@
         <Setter Property="Padding" Value="0"/>
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="VerticalAlignment" Value="Stretch"/>
-        <Setter Property="VerticalContentAlignment" Value="Center"/>
-        <Setter Property="HorizontalContentAlignment" Value="Center"/>
     </Style>
     <Style Selector="Button.winbtn:pointerover /template/ ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
