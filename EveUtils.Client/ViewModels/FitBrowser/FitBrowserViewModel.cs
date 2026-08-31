@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Dialogs;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 
 namespace EveUtils.Client.ViewModels.FitBrowser;
@@ -15,7 +16,7 @@ namespace EveUtils.Client.ViewModels.FitBrowser;
 /// detail window via the injected <c>openDetail</c> callback. The view-model is pure — the rows, server
 /// loaders and detail opener are supplied by <see cref="MainWindowViewModel"/>, so it stays unit-testable.
 /// </summary>
-public partial class FitBrowserViewModel : ObservableObject
+public partial class FitBrowserViewModel : ObservableObject, IRefreshableModule
 {
     public ObservableCollection<FitBrowserTabViewModel> Tabs { get; } = [];
 
@@ -25,21 +26,33 @@ public partial class FitBrowserViewModel : ObservableObject
     private readonly Func<Task>? _importEsi;
     private readonly Func<Task>? _importText;
     private readonly Func<Task>? _importEsfLink;
+    private readonly Func<Task>? _refresh;
 
     public FitBrowserViewModel(
         IEnumerable<FitBrowserTabViewModel> tabs,
         Func<FitRowViewModel, Task>? openDetail = null,
         Func<Task>? importEsi = null,
         Func<Task>? importText = null,
-        Func<Task>? importEsfLink = null)
+        Func<Task>? importEsfLink = null,
+        Func<Task>? refresh = null)
     {
         _openDetail = openDetail;
         _importEsi = importEsi;
         _importText = importText;
         _importEsfLink = importEsfLink;
+        _refresh = refresh;
         foreach (var tab in tabs) Tabs.Add(tab);
         SelectedTab = Tabs.FirstOrDefault();
     }
+
+    /// <summary>
+    /// The browser is one module for the whole app (not per-entity), so re-opening it re-selects this standing
+    /// instance instead of building a fresh one — and a fresh one is exactly what would have picked up a fit
+    /// imported elsewhere or a server coupled after this screen was first opened. <paramref name="refresh"/> (built
+    /// by <see cref="MainWindowViewModel"/>, which owns the local-fit and coupled-server reads) re-syncs this
+    /// instance the same way (ET-48, same pattern as ET-46).
+    /// </summary>
+    public void RefreshModule() => _ = _refresh?.Invoke();
 
     /// <summary>The browser is the single fittings surface, so it owns the import actions.</summary>
     public bool CanImport => _importEsi is not null || _importText is not null || _importEsfLink is not null;

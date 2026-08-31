@@ -24,7 +24,7 @@ namespace EveUtils.Client.ViewModels;
 /// disconnected or empty server reads clearly instead of silently. Drives create / open (editor) / delete and the
 /// push-to-server / download-to-local transfer, the composition analogue of fit sharing.
 /// </summary>
-public sealed partial class CompositionsViewModel : ObservableObject
+public sealed partial class CompositionsViewModel : ObservableObject, IRefreshableModule
 {
     private readonly IServiceProvider _services;
     private readonly ClientFleetService _localFleets;
@@ -87,6 +87,32 @@ public sealed partial class CompositionsViewModel : ObservableObject
     public async Task ReloadAsync()
     {
         await _EnsureInitializedAsync();
+        if (SelectedTab is not null)
+            await SelectedTab.ReloadAsync();
+    }
+
+    /// <summary>
+    /// The library is one module for the whole app (unlike the per-fleet roster/metrics), so re-opening it re-selects
+    /// this standing instance instead of building a fresh one — and a fresh one is exactly what would have picked up
+    /// a server coupled after this screen was first opened. Add any such server's tab before reloading, same pattern
+    /// as ET-46's RefreshModule.
+    /// </summary>
+    public void RefreshModule() => _ = _RefreshAsync();
+
+    private async Task _RefreshAsync()
+    {
+        await _EnsureInitializedAsync();
+
+        var registry = _services.GetService<IServerRegistry>();
+        var known = Tabs.Where(t => !t.IsLocal).Select(t => t.ServerAddress).ToHashSet();
+        foreach (var server in await _sessions.ListServersAsync())
+        {
+            if (known.Contains(server))
+                continue;
+            var display = registry is null ? server : await registry.DisplayNameAsync(server);
+            Tabs.Add(new CompositionTabViewModel(display, isLocal: false, server, _LoadServerTabAsync));
+        }
+
         if (SelectedTab is not null)
             await SelectedTab.ReloadAsync();
     }
