@@ -25,7 +25,9 @@ namespace EveUtils.Server.Grpc;
 /// Fleet lifecycle over gRPC. Auth-gated by the server session token; the acting
 /// character is taken from the validated session (never the request body) and stamped onto each command,
 /// so the per-fleet creator check in the handlers can't be spoofed. The app-permission gate (fleet.*) runs
-/// inside the dispatcher (<c>RequiresPermissionAttribute</c>); replies carry {accepted,message}.
+/// inside the dispatcher (<c>RequiresPermissionAttribute</c>); replies carry {accepted,message}. A refused
+/// session is the exception: that answers <see cref="StatusCode.Unauthenticated"/>, not a reply payload — see
+/// <see cref="AuthenticateAsync"/>.
 /// </summary>
 public sealed class FleetsGrpcService(
     ServerSessionService sessions,
@@ -41,8 +43,6 @@ public sealed class FleetsGrpcService(
     public override async Task<CreateFleetReply> CreateFleet(CreateFleetRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new CreateFleetReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new CreateFleetCommand(
             request.Name,
@@ -51,7 +51,7 @@ public sealed class FleetsGrpcService(
             ParseTime(request.FromTime),
             ParseTime(request.ToTime),
             (FleetOfflineBehavior)request.OfflineBehavior,
-            character.Value), context.CancellationToken);
+            character), context.CancellationToken);
 
         return result.IsSuccess
             ? new CreateFleetReply { Accepted = true, Message = "Created.", FleetId = result.Value }
@@ -61,8 +61,6 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> EditFleet(EditFleetRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new EditFleetCommand(
             request.FleetId,
@@ -72,7 +70,7 @@ public sealed class FleetsGrpcService(
             ParseTime(request.FromTime),
             ParseTime(request.ToTime),
             (FleetOfflineBehavior)request.OfflineBehavior,
-            character.Value), context.CancellationToken);
+            character), context.CancellationToken);
 
         return ToActionReply(result, "Saved.");
     }
@@ -80,11 +78,9 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> SetFleetComposition(SetFleetCompositionRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new SetFleetCompositionCommand(
-            request.FleetId, request.HasCompositionId ? request.CompositionId : null, character.Value), context.CancellationToken);
+            request.FleetId, request.HasCompositionId ? request.CompositionId : null, character), context.CancellationToken);
         if (result.IsSuccess)
             await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.CompositionChanged, context.CancellationToken);
         return ToActionReply(result, "Composition coupled.");
@@ -93,11 +89,9 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> CoupleFleetToEsi(CoupleFleetToEsiRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new CoupleFleetToEsiCommand(
-            request.FleetId, request.EsiFleetId, request.EsiFleetBossId, character.Value), context.CancellationToken);
+            request.FleetId, request.EsiFleetId, request.EsiFleetBossId, character), context.CancellationToken);
         if (result.IsSuccess)
             await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Coupled to the in-game fleet.");
@@ -106,10 +100,8 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> UncoupleFleetFromEsi(UncoupleFleetFromEsiRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
-        var result = await dispatcher.Send(new UncoupleFleetFromEsiCommand(request.FleetId, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new UncoupleFleetFromEsiCommand(request.FleetId, character), context.CancellationToken);
         if (result.IsSuccess)
             await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Uncoupled from the in-game fleet.");
@@ -118,11 +110,9 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> SetFleetEsiAutomation(SetFleetEsiAutomationRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(
-            new SetFleetEsiAutomationCommand(request.FleetId, character.Value, request.AutoApplyStructure, request.AutoInviteMembers),
+            new SetFleetEsiAutomationCommand(request.FleetId, character, request.AutoApplyStructure, request.AutoInviteMembers),
             context.CancellationToken);
         if (result.IsSuccess)
             await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
@@ -132,20 +122,16 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> DisbandFleet(DisbandFleetRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
-        var result = await dispatcher.Send(new DisbandFleetCommand(request.FleetId, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new DisbandFleetCommand(request.FleetId, character), context.CancellationToken);
         return ToActionReply(result, "Disbanded.");
     }
 
     public override async Task<FleetActionReply> StartFleet(StartFleetRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
-        var result = await dispatcher.Send(new StartFleetCommand(request.FleetId, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new StartFleetCommand(request.FleetId, character), context.CancellationToken);
         if (result.IsSuccess)
             await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.Activated, context.CancellationToken);
         return ToActionReply(result, "Started.");
@@ -154,10 +140,8 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> ConcludeFleet(ConcludeFleetRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
-        var result = await dispatcher.Send(new ConcludeFleetCommand(request.FleetId, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new ConcludeFleetCommand(request.FleetId, character), context.CancellationToken);
         if (result.IsSuccess)
             await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.Concluded, context.CancellationToken);
         return ToActionReply(result, "Concluded.");
@@ -165,9 +149,7 @@ public sealed class FleetsGrpcService(
 
     public override async Task<GetFleetReply> GetFleet(GetFleetRequest request, ServerCallContext context)
     {
-        var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new GetFleetReply { Found = false, Message = NotAuthenticated };
+        await AuthenticateAsync(context);
 
         var fleet = await dispatcher.Query(new GetFleetQuery(request.FleetId), context.CancellationToken);
         return fleet is null
@@ -178,12 +160,10 @@ public sealed class FleetsGrpcService(
     public override async Task<ListFleetsReply> ListMyFleets(ListMyFleetsRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new ListFleetsReply { Ok = false, Message = NotAuthenticated };
 
         // "My fleets" = fleets I own OR am a member of — a member who accepted an invite must see the fleet
         // to enter it; the per-row edit/disband stays gated on the creator check client-side.
-        var fleets = await dispatcher.Query(new ListMyFleetsQuery(character.Value), context.CancellationToken);
+        var fleets = await dispatcher.Query(new ListMyFleetsQuery(character), context.CancellationToken);
         var reply = new ListFleetsReply { Ok = true };
         foreach (var fleet in fleets)
             reply.Fleets.Add(ToDto(fleet));
@@ -195,68 +175,54 @@ public sealed class FleetsGrpcService(
     public override async Task<CreateStructureReply> CreateWing(CreateWingRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new CreateStructureReply { Accepted = false, Message = NotAuthenticated };
 
-        var result = await dispatcher.Send(new CreateWingCommand(request.FleetId, request.Name, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new CreateWingCommand(request.FleetId, request.Name, character), context.CancellationToken);
         return ToCreateReply(result);
     }
 
     public override async Task<FleetActionReply> RenameWing(RenameWingRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
-        var result = await dispatcher.Send(new RenameWingCommand(request.WingId, request.Name, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new RenameWingCommand(request.WingId, request.Name, character), context.CancellationToken);
         return ToActionReply(result, "Saved.");
     }
 
     public override async Task<FleetActionReply> DeleteWing(DeleteWingRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
-        var result = await dispatcher.Send(new DeleteWingCommand(request.WingId, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new DeleteWingCommand(request.WingId, character), context.CancellationToken);
         return ToActionReply(result, "Deleted.");
     }
 
     public override async Task<CreateStructureReply> CreateSquad(CreateSquadRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new CreateStructureReply { Accepted = false, Message = NotAuthenticated };
 
-        var result = await dispatcher.Send(new CreateSquadCommand(request.WingId, request.Name, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new CreateSquadCommand(request.WingId, request.Name, character), context.CancellationToken);
         return ToCreateReply(result);
     }
 
     public override async Task<FleetActionReply> RenameSquad(RenameSquadRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
-        var result = await dispatcher.Send(new RenameSquadCommand(request.SquadId, request.Name, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new RenameSquadCommand(request.SquadId, request.Name, character), context.CancellationToken);
         return ToActionReply(result, "Saved.");
     }
 
     public override async Task<FleetActionReply> DeleteSquad(DeleteSquadRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
-        var result = await dispatcher.Send(new DeleteSquadCommand(request.SquadId, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new DeleteSquadCommand(request.SquadId, character), context.CancellationToken);
         return ToActionReply(result, "Deleted.");
     }
 
     public override async Task<ListWingsReply> ListWings(ListWingsRequest request, ServerCallContext context)
     {
-        var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new ListWingsReply { Ok = false, Message = NotAuthenticated };
+        await AuthenticateAsync(context);
 
         var wings = await dispatcher.Query(new ListWingsQuery(request.FleetId), context.CancellationToken);
         var reply = new ListWingsReply { Ok = true };
@@ -268,8 +234,6 @@ public sealed class FleetsGrpcService(
     public override async Task<ListSquadsReply> ListSquads(ListSquadsRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new ListSquadsReply { Ok = false, Message = NotAuthenticated };
 
         var squads = await dispatcher.Query(new ListSquadsQuery(request.WingId), context.CancellationToken);
         var reply = new ListSquadsReply { Ok = true };
@@ -283,11 +247,9 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> MoveMember(MoveMemberRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new MoveMemberCommand(
-            request.MemberId, (FleetRole)request.Role, request.WingId, request.SquadId, character.Value), context.CancellationToken);
+            request.MemberId, (FleetRole)request.Role, request.WingId, request.SquadId, character), context.CancellationToken);
         // A move/unassign is a roster mutation — refresh viewers live just like a swap/fit change (the request
         // carries only the member, so resolve its fleet). Without it other open windows kept the old position.
         if (result.IsSuccess && await fleets.GetMemberAsync(request.MemberId, context.CancellationToken) is { } member)
@@ -298,11 +260,9 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> SwapMembers(SwapMembersRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new SwapMembersCommand(
-            request.FirstMemberId, request.SecondMemberId, character.Value), context.CancellationToken);
+            request.FirstMemberId, request.SecondMemberId, character), context.CancellationToken);
         // Stream G: a position swap is a roster mutation — refresh viewers live just like a move/fit change. Reuse the
         // RosterChanged kind (clients reload kind-agnostically). Both members share a fleet (the handler enforces it),
         // so resolve it from either one.
@@ -314,12 +274,10 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> AssignMemberFit(AssignMemberFitRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new AssignMemberFitCommand(
             request.MemberId, FromFitDto(request.Fit),
-            request.HasCompositionEntryId ? request.CompositionEntryId : null, character.Value), context.CancellationToken);
+            request.HasCompositionEntryId ? request.CompositionEntryId : null, character), context.CancellationToken);
         // B-4: a member-fit change must refresh viewers live — the roster's assigned fit + skill badge and
         // the Fleets tabs' member leaves. Reuse the existing RosterChanged kind (the request carries only the member,
         // so resolve its fleet) rather than a new event type; clients reload kind-agnostically.
@@ -331,13 +289,11 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> ReportMemberFitVerdict(ReportMemberFitVerdictRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         // cross-client: self-only enforced in the handler (the pilot's client is the only skill authority).
         // The result's value says whether the stored verdict changed — only then are viewers notified.
         var result = await dispatcher.Send(new ReportMemberFitVerdictCommand(
-            request.MemberId, (FitSkillVerdict)request.Verdict, character.Value), context.CancellationToken);
+            request.MemberId, (FitSkillVerdict)request.Verdict, character), context.CancellationToken);
         if (result.IsSuccess && result.Value && await fleets.GetMemberAsync(request.MemberId, context.CancellationToken) is { } member)
             await BroadcastFleetChangedAsync(member.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return result.IsSuccess
@@ -348,13 +304,11 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> ReportMemberInGameFleet(ReportMemberInGameFleetRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         // self-report: self-only enforced in the handler (presence comes from the pilot's own /characters/{id}/fleet/).
         // The result's value says whether the stored presence changed — only then are viewers notified.
         var result = await dispatcher.Send(new ReportMemberInGameFleetCommand(
-            request.MemberId, request.InFleet, character.Value), context.CancellationToken);
+            request.MemberId, request.InFleet, character), context.CancellationToken);
         if (result.IsSuccess && result.Value && await fleets.GetMemberAsync(request.MemberId, context.CancellationToken) is { } member)
             await BroadcastFleetChangedAsync(member.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return result.IsSuccess
@@ -364,9 +318,7 @@ public sealed class FleetsGrpcService(
 
     public override async Task<ListMembersReply> ListMembers(ListMembersRequest request, ServerCallContext context)
     {
-        var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new ListMembersReply { Ok = false, Message = NotAuthenticated };
+        await AuthenticateAsync(context);
 
         var members = await dispatcher.Query(new ListMembersQuery(request.FleetId), context.CancellationToken);
         var reply = new ListMembersReply { Ok = true };
@@ -393,11 +345,9 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> AddExternalMember(AddExternalMemberRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new AddExternalMemberCommand(
-            request.FleetId, request.CharacterId, character.Value), context.CancellationToken);
+            request.FleetId, request.CharacterId, character), context.CancellationToken);
         if (result.IsSuccess)
             await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Added.");
@@ -406,11 +356,9 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> TransferFleetOwnership(TransferFleetOwnershipRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new TransferFleetOwnershipCommand(
-            request.FleetId, request.NewOwnerCharacterId, character.Value), context.CancellationToken);
+            request.FleetId, request.NewOwnerCharacterId, character), context.CancellationToken);
         if (result.IsSuccess)
             await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Transferred.");
@@ -419,14 +367,12 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> RemoveFleetMember(RemoveFleetMemberRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         // Resolve the fleet BEFORE the removal deletes the member row, so a successful kick can still notify the
         // remaining (and the kicked) members — without it their open windows kept showing the removed member.
         var member = await fleets.GetMemberAsync(request.MemberId, context.CancellationToken);
         var result = await dispatcher.Send(new RemoveFleetMemberCommand(
-            request.MemberId, character.Value), context.CancellationToken);
+            request.MemberId, character), context.CancellationToken);
         if (result.IsSuccess && member is not null)
             await BroadcastFleetChangedAsync(member.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Removed.");
@@ -437,8 +383,6 @@ public sealed class FleetsGrpcService(
     public override async Task<CreateStructureReply> CreateFleetInvite(CreateFleetInviteRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new CreateStructureReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new CreateFleetInviteCommand(
             request.FleetId,
@@ -447,7 +391,7 @@ public sealed class FleetsGrpcService(
             NullIfZero(request.WingId),
             NullIfZero(request.SquadId),
             NullIfEmpty(request.Message),
-            character.Value), context.CancellationToken);
+            character), context.CancellationToken);
 
         if (!result.IsSuccess)
             return new CreateStructureReply { Accepted = false, Message = FirstMessage(result) };
@@ -461,10 +405,8 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> RespondToFleetInvite(RespondToFleetInviteRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
-        var result = await dispatcher.Send(new RespondToFleetInviteCommand(request.InviteId, request.Accept, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new RespondToFleetInviteCommand(request.InviteId, request.Accept, character), context.CancellationToken);
         if (!result.IsSuccess)
             return new FleetActionReply { Accepted = false, Message = FirstMessage(result) };
 
@@ -478,12 +420,10 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> RespondToMessage(RespondToMessageRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         // generic respond — the message-kind's responder runs the domain action (a fleet invite joins
         // the roster). RespondToFleetInvite stays as the internal fleet path the responder delegates to.
-        var result = await dispatcher.Send(new RespondToMessageCommand(request.MessageId, request.Accept, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new RespondToMessageCommand(request.MessageId, request.Accept, character), context.CancellationToken);
         return result.IsSuccess
             ? new FleetActionReply { Accepted = true, Message = result.Value!.Accepted ? "Accepted." : "Declined." }
             : new FleetActionReply { Accepted = false, Message = FirstMessage(result) };
@@ -492,19 +432,15 @@ public sealed class FleetsGrpcService(
     public override async Task<ListInvitesReply> ListPendingInvites(ListPendingInvitesRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new ListInvitesReply { Ok = false, Message = NotAuthenticated };
 
-        var invites = await dispatcher.Query(new ListPendingInvitesQuery(character.Value), context.CancellationToken);
+        var invites = await dispatcher.Query(new ListPendingInvitesQuery(character), context.CancellationToken);
         return ToInvitesReply(invites);
     }
 
     /// <summary>A fleet's open invites for the roster's pending-invites section.</summary>
     public override async Task<ListInvitesReply> ListPendingFleetInvites(ListPendingFleetInvitesRequest request, ServerCallContext context)
     {
-        var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new ListInvitesReply { Ok = false, Message = NotAuthenticated };
+        await AuthenticateAsync(context);
 
         var invites = await dispatcher.Query(new ListPendingFleetInvitesQuery(request.FleetId), context.CancellationToken);
         return ToInvitesReply(invites);
@@ -531,9 +467,7 @@ public sealed class FleetsGrpcService(
 
     public override async Task<ListFleetsReply> ListOpenFleets(ListOpenFleetsRequest request, ServerCallContext context)
     {
-        var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new ListFleetsReply { Ok = false, Message = NotAuthenticated };
+        await AuthenticateAsync(context);
 
         var fleets = await dispatcher.Query(new ListOpenFleetsQuery(), context.CancellationToken);
         var reply = new ListFleetsReply { Ok = true };
@@ -545,10 +479,8 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> JoinFleet(JoinFleetRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
-        var result = await dispatcher.Send(new JoinFleetCommand(request.FleetId, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new JoinFleetCommand(request.FleetId, character), context.CancellationToken);
         if (result.IsSuccess)
             await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Joined.");
@@ -560,10 +492,8 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> RequestToJoin(RequestToJoinRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
-        var result = await dispatcher.Send(new RequestToJoinCommand(request.FleetId, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new RequestToJoinCommand(request.FleetId, character), context.CancellationToken);
         if (!result.IsSuccess)
             return new FleetActionReply { Accepted = false, Message = FirstMessage(result) };
 
@@ -575,11 +505,9 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> RespondToJoinRequest(RespondToJoinRequestRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         // Direct owner accept/decline by request id — the same shared respond-core the message path uses.
-        var result = await dispatcher.Send(new RespondToJoinRequestCommand(request.RequestId, request.Accept, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new RespondToJoinRequestCommand(request.RequestId, request.Accept, character), context.CancellationToken);
         return result.IsSuccess
             ? new FleetActionReply { Accepted = true, Message = request.Accept ? "Accepted." : "Declined." }
             : new FleetActionReply { Accepted = false, Message = FirstMessage(result) };
@@ -587,9 +515,7 @@ public sealed class FleetsGrpcService(
 
     public override async Task<ListJoinRequestsReply> ListPendingJoinRequests(ListPendingJoinRequestsRequest request, ServerCallContext context)
     {
-        var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new ListJoinRequestsReply { Ok = false, Message = NotAuthenticated };
+        await AuthenticateAsync(context);
 
         var requests = await dispatcher.Query(new ListPendingJoinRequestsQuery(request.FleetId), context.CancellationToken);
         var reply = new ListJoinRequestsReply { Ok = true };
@@ -605,9 +531,7 @@ public sealed class FleetsGrpcService(
 
     public override async Task<ListConnectedCharactersReply> ListConnectedCharacters(ListConnectedCharactersRequest request, ServerCallContext context)
     {
-        var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new ListConnectedCharactersReply { Ok = false, Message = NotAuthenticated };
+        await AuthenticateAsync(context);
 
         var reply = new ListConnectedCharactersReply { Ok = true };
         foreach (var connected in connectedClients.ConnectedCharacters())
@@ -621,8 +545,6 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> EnterFleet(EnterFleetRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         var fleet = await dispatcher.Query(new GetFleetQuery(request.FleetId), context.CancellationToken);
         if (fleet is null || fleet.State != FleetState.Active)
@@ -630,8 +552,8 @@ public sealed class FleetsGrpcService(
 
         // Participation requires roster membership — except the creator, who may always enter their own fleet
         // even without a roster row.
-        var isCreator = fleet.CreatorCharacterId == character.Value;
-        if (!isCreator && !await dispatcher.Query(new IsFleetMemberQuery(request.FleetId, character.Value), context.CancellationToken))
+        var isCreator = fleet.CreatorCharacterId == character;
+        if (!isCreator && !await dispatcher.Query(new IsFleetMemberQuery(request.FleetId, character), context.CancellationToken))
             return new FleetActionReply { Accepted = false, Message = "You must be a fleet member to participate." };
 
         // Participation is now derived server-side: a connected roster member is automatically in the fleet's
@@ -643,19 +565,17 @@ public sealed class FleetsGrpcService(
     public override async Task<FleetActionReply> LeaveFleet(LeaveFleetRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         // Leaving means leaving the roster: once the membership is gone the character drops out of the fleet's
         // broadcast set (members ∩ connected). Leave the SPECIFIC fleet (a character may be a member of several —
         // e.g. signed up in advance to more than one). RemoveFleetMember enforces self-only + the creator-must-transfer
         // rule.
         var member = (await fleets.ListMembersAsync(request.FleetId, context.CancellationToken))
-            .FirstOrDefault(m => m.CharacterId == character.Value);
+            .FirstOrDefault(m => m.CharacterId == character);
         if (member is null)
             return new FleetActionReply { Accepted = true, Message = "Left." }; // not a member → nothing to do
 
-        var result = await dispatcher.Send(new RemoveFleetMemberCommand(member.Id, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new RemoveFleetMemberCommand(member.Id, character), context.CancellationToken);
         if (result.IsSuccess)
             await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Left.");
@@ -675,42 +595,34 @@ public sealed class FleetsGrpcService(
     public override async Task<CreateStructureReply> CreateFleetComposition(CreateFleetCompositionRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new CreateStructureReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new CreateFleetCompositionCommand(
-            request.Name, NullIfEmpty(request.Description), request.IsClientOnly, character.Value), context.CancellationToken);
+            request.Name, NullIfEmpty(request.Description), request.IsClientOnly, character), context.CancellationToken);
         return ToCreateReply(result);
     }
 
     public override async Task<FleetActionReply> EditFleetComposition(EditFleetCompositionRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new EditFleetCompositionCommand(
-            request.CompositionId, request.Name, NullIfEmpty(request.Description), character.Value), context.CancellationToken);
+            request.CompositionId, request.Name, NullIfEmpty(request.Description), character), context.CancellationToken);
         return ToActionReply(result, "Saved.");
     }
 
     public override async Task<FleetActionReply> DeleteFleetComposition(DeleteFleetCompositionRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
-        var result = await dispatcher.Send(new DeleteFleetCompositionCommand(request.CompositionId, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new DeleteFleetCompositionCommand(request.CompositionId, character), context.CancellationToken);
         return ToActionReply(result, "Deleted.");
     }
 
     public override async Task<ListFleetCompositionsReply> ListMyFleetCompositions(ListMyFleetCompositionsRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new ListFleetCompositionsReply { Ok = false, Message = NotAuthenticated };
 
-        var list = await compositions.ListByOwnerAsync(character.Value, context.CancellationToken);
+        var list = await compositions.ListByOwnerAsync(character, context.CancellationToken);
         var names = await OwnerNamesAsync(context.CancellationToken);
         var fleetCounts = await fleets.CountFleetsByCompositionIdsAsync(list.Select(c => c.Id).ToList(), context.CancellationToken);
         var reply = new ListFleetCompositionsReply { Ok = true };
@@ -723,8 +635,6 @@ public sealed class FleetsGrpcService(
     public override async Task<ListFleetCompositionsReply> ListAllFleetCompositions(ListAllFleetCompositionsRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new ListFleetCompositionsReply { Ok = false, Message = NotAuthenticated };
 
         var list = await compositions.ListAllAsync(context.CancellationToken);
         var names = await OwnerNamesAsync(context.CancellationToken);
@@ -732,7 +642,7 @@ public sealed class FleetsGrpcService(
         var reply = new ListFleetCompositionsReply { Ok = true };
         foreach (var composition in list)
         {
-            var canEdit = await compositionAuthorizer.CanManageAsync(composition, character.Value, context.CancellationToken);
+            var canEdit = await compositionAuthorizer.CanManageAsync(composition, character, context.CancellationToken);
             reply.Compositions.Add(ToCompositionDto(composition, canEdit,
                 OwnerName(names, composition.OwnerCharacterId), FleetCountOf(fleetCounts, composition.Id)));
         }
@@ -752,9 +662,7 @@ public sealed class FleetsGrpcService(
 
     public override async Task<GetFleetCompositionReply> GetFleetComposition(GetFleetCompositionRequest request, ServerCallContext context)
     {
-        var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new GetFleetCompositionReply { Found = false, Message = NotAuthenticated };
+        await AuthenticateAsync(context);
 
         var graph = await compositions.GetGraphAsync(request.CompositionId, context.CancellationToken);
         if (graph is null)
@@ -768,86 +676,70 @@ public sealed class FleetsGrpcService(
     public override async Task<CreateStructureReply> AddFleetCompositionRole(AddFleetCompositionRoleRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new CreateStructureReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new AddFleetCompositionRoleCommand(
-            request.CompositionId, request.RoleName, request.HasGroupMinCount ? request.GroupMinCount : null, character.Value), context.CancellationToken);
+            request.CompositionId, request.RoleName, request.HasGroupMinCount ? request.GroupMinCount : null, character), context.CancellationToken);
         return ToCreateReply(result);
     }
 
     public override async Task<FleetActionReply> EditFleetCompositionRole(EditFleetCompositionRoleRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new EditFleetCompositionRoleCommand(
-            request.RoleId, request.RoleName, request.HasGroupMinCount ? request.GroupMinCount : null, character.Value), context.CancellationToken);
+            request.RoleId, request.RoleName, request.HasGroupMinCount ? request.GroupMinCount : null, character), context.CancellationToken);
         return ToActionReply(result, "Saved.");
     }
 
     public override async Task<FleetActionReply> RemoveFleetCompositionRole(RemoveFleetCompositionRoleRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
-        var result = await dispatcher.Send(new RemoveFleetCompositionRoleCommand(request.RoleId, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new RemoveFleetCompositionRoleCommand(request.RoleId, character), context.CancellationToken);
         return ToActionReply(result, "Removed.");
     }
 
     public override async Task<FleetActionReply> ReorderFleetCompositionRoles(ReorderFleetCompositionRolesRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new ReorderFleetCompositionRolesCommand(
-            request.CompositionId, request.OrderedRoleIds.ToList(), character.Value), context.CancellationToken);
+            request.CompositionId, request.OrderedRoleIds.ToList(), character), context.CancellationToken);
         return ToActionReply(result, "Reordered.");
     }
 
     public override async Task<CreateStructureReply> AddFleetCompositionEntry(AddFleetCompositionEntryRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new CreateStructureReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new AddFleetCompositionEntryCommand(
-            request.RoleId, FromFitDto(request.Fit), request.HasEntryMinCount ? request.EntryMinCount : null, character.Value), context.CancellationToken);
+            request.RoleId, FromFitDto(request.Fit), request.HasEntryMinCount ? request.EntryMinCount : null, character), context.CancellationToken);
         return ToCreateReply(result);
     }
 
     public override async Task<FleetActionReply> EditFleetCompositionEntry(EditFleetCompositionEntryRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new EditFleetCompositionEntryCommand(
-            request.EntryId, request.HasEntryMinCount ? request.EntryMinCount : null, character.Value), context.CancellationToken);
+            request.EntryId, request.HasEntryMinCount ? request.EntryMinCount : null, character), context.CancellationToken);
         return ToActionReply(result, "Saved.");
     }
 
     public override async Task<FleetActionReply> RemoveFleetCompositionEntry(RemoveFleetCompositionEntryRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
-        var result = await dispatcher.Send(new RemoveFleetCompositionEntryCommand(request.EntryId, character.Value), context.CancellationToken);
+        var result = await dispatcher.Send(new RemoveFleetCompositionEntryCommand(request.EntryId, character), context.CancellationToken);
         return ToActionReply(result, "Removed.");
     }
 
     public override async Task<FleetActionReply> ReorderFleetCompositionEntries(ReorderFleetCompositionEntriesRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
-        if (character is null)
-            return new FleetActionReply { Accepted = false, Message = NotAuthenticated };
 
         var result = await dispatcher.Send(new ReorderFleetCompositionEntriesCommand(
-            request.RoleId, request.OrderedEntryIds.ToList(), character.Value), context.CancellationToken);
+            request.RoleId, request.OrderedEntryIds.ToList(), character), context.CancellationToken);
         return ToActionReply(result, "Reordered.");
     }
 
@@ -943,11 +835,16 @@ public sealed class FleetsGrpcService(
 
     private static long? NullIfZero(long value) => value > 0 ? value : null;
 
-    private async Task<int?> AuthenticateAsync(ServerCallContext context)
+    /// <summary>The acting character of the validated session, or an <see cref="StatusCode.Unauthenticated"/>
+    /// <see cref="RpcException"/> — the same signal <c>EventBusStreamService.Attach</c> already raises for a refused
+    /// token. A status code rather than a reply payload so the client's refresh-and-retry can recover the call
+    /// in flight instead of waiting for the next 30s heartbeat (ET-78, the gap ET-77 left open).</summary>
+    private async Task<int> AuthenticateAsync(ServerCallContext context)
     {
         var token = ExtractBearer(context);
         var session = token is null ? null : await sessions.ValidateAsync(token, context.CancellationToken);
-        return session?.SyncedCharacter?.EsiCharacterId;
+        return session?.SyncedCharacter?.EsiCharacterId
+            ?? throw new RpcException(new Status(StatusCode.Unauthenticated, NotAuthenticated));
     }
 
     private static FleetActionReply ToActionReply(Result result, string okMessage) =>
