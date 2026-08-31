@@ -108,8 +108,13 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule, 
     // ── Where the settings are ───────────────────────────────────────────────────────────────────
 
     /// <summary>The EVE install directory that holds the settings_* profiles. Editable: auto-detection covers the
-    /// Windows install, and everywhere else (and after a move) the user points at it themselves.</summary>
+    /// Windows install and a Linux one inside its Proton/Wine prefix, and when it comes up empty (or the folder
+    /// moved) the user points at it themselves.</summary>
     [ObservableProperty] private string _installRoot = string.Empty;
+
+    /// <summary>Where AUTODETECT looks. Only a test replaces it, so that both outcomes can be driven without
+    /// depending on whether the machine running the test happens to have EVE installed.</summary>
+    internal Func<string?> Detector { get; set; } = EveSettingsLocator.DefaultInstallRoot;
 
     public ObservableCollection<string> ProfileNames { get; } = [];
 
@@ -186,7 +191,7 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule, 
         {
             IsBusy = true;
             if (string.IsNullOrWhiteSpace(InstallRoot))
-                InstallRoot = await _preferences.LoadInstallRootAsync() ?? EveSettingsLocator.DefaultInstallRoot() ?? string.Empty;
+                InstallRoot = await _preferences.LoadInstallRootAsync() ?? Detector() ?? string.Empty;
 
             CheckClients();
             await ReloadProfilesAsync();
@@ -214,6 +219,31 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule, 
         await ReloadProfilesAsync();
     }
 
+    /// <summary>
+    /// The AUTODETECT button (ET-76). Runs the search again and fills the field in with what it finds — on Linux
+    /// that means walking the Steam libraries and their Proton prefixes, which is worth a button because a game
+    /// installed or moved after the tool was first opened would otherwise never be noticed.
+    ///
+    /// Finding nothing changes nothing: the path already in the field stays, and the line underneath points at
+    /// BROWSE… — auto-detection is the shortcut here, not the only way in.
+    /// </summary>
+    [RelayCommand]
+    public async Task DetectInstallRootAsync()
+    {
+        // Off the UI thread: this stats its way through every Steam library on the machine, and one of them can be
+        // a disk that has to spin up first.
+        var detected = await Task.Run(Detector);
+        if (string.IsNullOrWhiteSpace(detected))
+        {
+            _Fail("No EVE folder found automatically. Use BROWSE… to point at the folder that holds the settings_* directories.");
+            return;
+        }
+
+        await PickInstallRootAsync(detected);
+        Status = $"Found EVE's settings at {detected}. Nothing is written until you press a copy button.";
+        StatusIsError = false;
+    }
+
     /// <summary>Re-scan the install directory. Also the RELOAD button: EVE writes these files on logout, so the
     /// timestamps on screen go stale while the tool stands open.</summary>
     [RelayCommand]
@@ -239,7 +269,7 @@ public partial class SettingsSyncViewModel : ViewModelBase, IRefreshableModule, 
 
         if (_profiles.Count == 0)
             Status = string.IsNullOrWhiteSpace(InstallRoot)
-                ? "No EVE settings folder found. Use BROWSE to point at the folder that holds the settings_* directories."
+                ? "No EVE settings folder found. Press AUTODETECT, or use BROWSE… to point at the folder that holds the settings_* directories."
                 : $"No settings_* profiles found under {InstallRoot}.";
     }
 
