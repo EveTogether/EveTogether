@@ -48,7 +48,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     /// shared list would grow past the value limit as every fleet appended its own members to it.</summary>
     public const string OrderSettingKeyPrefix = "ui.fleet-metrics.order.";
 
-    private const int MaxOrderValueLength = 512;   // ClientSettingConfiguration caps a setting value at 512
+    private const int MaxOrderValueLength = 4000;   // ClientSettingConfiguration caps a setting value at 4000
 
     private readonly long _fleetId;
     private readonly IFleetClient _fleets;
@@ -296,11 +296,23 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         });
     }
 
-    private async System.Threading.Tasks.Task PersistOrderAsync(IReadOnlyList<int> order)
+    /// <summary>Internal, not private, so a test can drive an order straight past <see cref="MaxOrderValueLength"/>
+    /// without having to grow a fleet to 256+ live members first.</summary>
+    internal async System.Threading.Tasks.Task PersistOrderAsync(IReadOnlyList<int> order)
     {
+        string value = JoinOrder(order);
         using var scope = _services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<ICqrsDispatcher>()
-            .Send(new SetSettingCommand(OrderSettingKey, JoinOrder(order)));
+            .Send(new SetSettingCommand(OrderSettingKey, value));
+
+        // JoinOrder silently drops what does not fit rather than failing the save — the fitting part is still worth
+        // keeping — but a silent drop is exactly what ET-45 flagged: past this size the user would just find part of
+        // their arrangement reset one day with no idea why.
+        int kept = ParseOrder(value).Count;
+        if (kept < order.Count)
+            _toasts?.Show("Order not fully saved",
+                $"Kept the manual order for the first {kept} of {order.Count} members; the rest stay in arrival order.",
+                ToastKind.Warning);
     }
 
     // Stable: members the stored order knows keep its sequence, the rest keep the sequence they arrived in, behind.
@@ -355,9 +367,12 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
                 .ToList();
 
     /// <summary>
-    /// The stored order as one setting value. A setting value holds 512 characters and a character id plus its comma
-    /// is nine, so beyond roughly the first 56 members the tail is dropped rather than truncated mid-id — and the
-    /// tail is the part nobody dragged, since new members join at the back and stay there until they are moved.
+    /// The stored order as one setting value. A setting value holds 4000 characters and a character id plus its
+    /// comma is at most eleven, so this covers every member of a full 256-member fleet (EVE's own hard cap,
+    /// <see cref="EveUtils.Shared.Modules.Fleet.FleetStructureLimits.MaxFleetSize"/>) with room to spare. If a
+    /// caller still manages to overflow it, the tail is dropped rather than truncated mid-id — and the tail is the
+    /// part nobody dragged, since new members join at the back and stay there until they are moved.
+    /// <see cref="PersistOrderAsync"/> is what tells the user when that happened.
     /// </summary>
     internal static string JoinOrder(IEnumerable<int> order)
     {

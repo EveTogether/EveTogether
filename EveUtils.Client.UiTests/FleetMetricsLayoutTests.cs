@@ -14,6 +14,7 @@ using Avalonia.VisualTree;
 using EveUtils.Client.Controls;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Messaging;
@@ -47,13 +48,17 @@ public class FleetMetricsLayoutTests
     private static readonly FleetInfo Op = new(FleetId, "Op", null, FleetVisibility.Public, FleetState.Active, 1,
         null, null, DateTimeOffset.UnixEpoch, FleetActivation.Active);
 
-    private static TestClientInstance CreateInstance() => TestClientInstance.Create(services =>
+    private static TestClientInstance CreateInstance(RecordingToastService? toasts = null) => TestClientInstance.Create(services =>
+    {
         services.AddSingleton<IExternalCharacterLookup>(new FakeExternalLookup
         {
             [Commander] = "RaymondKrah",
             [Member] = "Lionear",
             [Latecomer] = "Tarek",
-        }));
+        });
+        if (toasts is not null)
+            services.AddSingleton<IToastService>(toasts);
+    });
 
     private static FakeFleetClient Roster() => new()
     {
@@ -790,12 +795,36 @@ public class FleetMetricsLayoutTests
     [AvaloniaFact]
     public void Order_DropsTheTailRatherThanHalfAnId_WhenItOutgrowsTheSettingValue()
     {
-        int[] order = Enumerable.Range(90_000_000, 120).ToArray();
+        int[] order = Enumerable.Range(90_000_000, 500).ToArray();
 
         string value = FleetMetricsViewModel.JoinOrder(order);
 
-        Assert.True(value.Length <= 512, $"a setting value holds 512 characters, got {value.Length}");
+        Assert.True(value.Length <= 4000, $"a setting value holds 4000 characters, got {value.Length}");
         Assert.Equal(order.Take(FleetMetricsViewModel.ParseOrder(value).Count), FleetMetricsViewModel.ParseOrder(value));
+    }
+
+    // The setting value is now sized for EVE's own 256-member fleet cap with room to spare, but a runaway order
+    // (or a future setting change that shrinks the margin again) should still tell the FC rather than fail quietly.
+    [AvaloniaFact]
+    public async Task PersistOrderAsync_WarnsAndDropsTheTail_WhenTheOrderOutgrowsTheSettingValue()
+    {
+        var toasts = new RecordingToastService();
+        using var instance = CreateInstance(toasts);
+        var vm = await BuildViewModelAsync(instance, Roster());
+
+        int[] order = Enumerable.Range(90_000_000, 500).ToArray();
+        await vm.PersistOrderAsync(order);
+
+        string? stored = await ReadSettingAsync(instance, vm.OrderSettingKey);
+        int kept = FleetMetricsViewModel.ParseOrder(stored).Count;
+        Assert.True(kept < order.Length, "the seeded order was meant to overflow the setting value");
+
+        var toast = Assert.Single(toasts.Toasts);
+        Assert.Equal("Order not fully saved", toast.Title);
+        Assert.Equal(ToastKind.Warning, toast.Kind);
+        Assert.Contains($"first {kept} of {order.Length}", toast.Message);
+
+        vm.Dispose();
     }
 
     [AvaloniaTheory]
