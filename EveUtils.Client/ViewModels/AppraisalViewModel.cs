@@ -44,9 +44,9 @@ public partial class AppraisalViewModel : ViewModelBase
 
     public bool ShowProviderPicker => Providers.Count > 1;
 
-    [ObservableProperty] private string _pasteText = string.Empty;
-
-    partial void OnPasteTextChanged(string value) => AppraiseCommand.NotifyCanExecuteChanged();
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AppraiseCommand))]
+    private string _pasteText = string.Empty;
 
     public ObservableCollection<AppraisalRowViewModel> Rows { get; } = [];
 
@@ -57,7 +57,9 @@ public partial class AppraisalViewModel : ViewModelBase
 
     [ObservableProperty] private bool _statusIsError;
 
-    [ObservableProperty] private bool _isBusy;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AppraiseCommand))]
+    private bool _isBusy;
 
     [ObservableProperty] private string _totalDisplay = IskFormat.Short(0);
 
@@ -76,11 +78,13 @@ public partial class AppraisalViewModel : ViewModelBase
 
     private bool CanAppraise => !IsBusy && !string.IsNullOrWhiteSpace(PasteText);
 
-    partial void OnIsBusyChanged(bool value) => AppraiseCommand.NotifyCanExecuteChanged();
-
     [RelayCommand(CanExecute = nameof(CanAppraise))]
     private async Task AppraiseAsync(CancellationToken cancellationToken)
     {
+        // Every run starts from an empty screen: the box has changed, so the figures standing there no longer
+        // describe what is in it, and a total left behind beside a refusal is the worse of the two mistakes.
+        _Show([], [], string.Empty, IskFormat.Short(0));
+
         if (SelectedProvider is not { } provider)
         {
             _Fail("No price source is available.");
@@ -116,7 +120,7 @@ public partial class AppraisalViewModel : ViewModelBase
 
             if (lines.Count == 0)
             {
-                _Show([], unresolved, string.Empty, IskFormat.Short(0));
+                _Show([], unresolved, string.Empty, IskFormat.Short(0));   // nothing valued, but say what was read
                 // Where a multibuy list ("Tritanium 100") lands: it reads as one name column, and none of those
                 // names is a type. Saying so beats a bare "nothing found" on the format most likely to be tried.
                 _Fail($"None of the {unresolved.Count} pasted names is a known item type. A multibuy list (name and "
@@ -180,23 +184,4 @@ public partial class AppraisalViewModel : ViewModelBase
         Status = message;
         StatusIsError = true;
     }
-}
-
-/// <summary>One valued line as the grid shows it: the figures for sorting, the strings for reading.</summary>
-public sealed class AppraisalRowViewModel(AppraisalRow row)
-{
-    public string Name => row.Line.Name;
-
-    public long Quantity => row.Line.Quantity;
-
-    /// <summary>Zero when the source has no price for this type — which the readout spells as "—" rather than 0 ISK.</summary>
-    public double UnitPrice => row.Price?.Estimate ?? 0;
-
-    public double Total => UnitPrice * Quantity;
-
-    public string QuantityDisplay => Quantity.ToString("N0", CultureInfo.InvariantCulture);
-
-    public string UnitPriceDisplay => IskFormat.Short(UnitPrice);
-
-    public string TotalDisplay => IskFormat.Short(Total);
 }

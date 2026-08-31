@@ -216,8 +216,8 @@ public sealed class AppraisalToolTests
         Assert.Empty(tool.Rows);
     }
 
-    /// <summary>Text that is not a listing at all leaves the previous result standing nowhere: nothing is appraised
-    /// and the reason is on screen.</summary>
+    /// <summary>Text that is not a listing at all is refused, and the figures the last paste produced go with it —
+    /// a total left standing beside a refusal describes a box that no longer holds what produced it.</summary>
     [AvaloniaFact]
     public async Task Tool_RefusesTextThatIsNotAListing_AndClearsWhatWasThere()
     {
@@ -234,12 +234,12 @@ public sealed class AppraisalToolTests
 
         Assert.True(tool.StatusIsError);
         Assert.Contains("does not read as an inventory listing", tool.Status);
-        Assert.Single(tool.Rows);   // the refusal changes nothing; what was valued is still what is on screen
+        Assert.Empty(tool.Rows);                     // the last paste's figures do not survive a refusal
+        Assert.Equal("— ISK", tool.TotalDisplay);
+        Assert.Equal(string.Empty, tool.PricingBasis);
 
         tool.ClearCommand.Execute(null);
-        Assert.Empty(tool.Rows);
-        Assert.Equal(string.Empty, tool.PasteText);
-        Assert.Equal("— ISK", tool.TotalDisplay);
+        Assert.Equal(string.Empty, tool.PasteText);   // and CLEAR empties the box behind it too
         Assert.False(tool.StatusIsError);
     }
 
