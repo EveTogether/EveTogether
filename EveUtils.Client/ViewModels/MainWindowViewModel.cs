@@ -589,7 +589,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             return;
         _dialogs.ShowAppraisal(new AppraisalViewModel(
             _services.GetRequiredService<IEnumerable<IAppraisalProvider>>(),
-            _services.GetRequiredService<ISdeAccessor>()));
+            _services.GetRequiredService<ISdeAccessor>(),
+            _dialogs));
     }
 
     /// <summary>Open the FITS fit-browser window: the Local library plus a tab per coupled server, each a

@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Clipboard;
+using EveUtils.Client.Dialogs;
 using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Sde;
@@ -28,10 +29,12 @@ public partial class AppraisalViewModel : ViewModelBase
     private const string PastePrompt = "Paste an inventory listing (Ctrl+A, Ctrl+C in an EVE inventory window).";
 
     private readonly ISdeAccessor _sde;
+    private readonly IDialogService? _dialogs;
 
-    public AppraisalViewModel(IEnumerable<IAppraisalProvider> providers, ISdeAccessor sde)
+    public AppraisalViewModel(IEnumerable<IAppraisalProvider> providers, ISdeAccessor sde, IDialogService? dialogs = null)
     {
         _sde = sde;
+        _dialogs = dialogs;
         Providers = [.. providers.OrderBy(provider => provider.DisplayName, StringComparer.Ordinal)];
         SelectedProvider = Providers.FirstOrDefault();
     }
@@ -63,10 +66,22 @@ public partial class AppraisalViewModel : ViewModelBase
 
     [ObservableProperty] private string _totalDisplay = IskFormat.Exact(0);
 
+    /// <summary>The total behind <see cref="TotalDisplay"/> — kept only to say whether there is one worth copying at
+    /// all; the copy itself reads <see cref="TotalDisplay"/>, not this.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTotal))]
+    [NotifyCanExecuteChangedFor(nameof(CopyTotalCommand))]
+    private double _totalRaw;
+
     /// <summary>What the prices on screen are and when they are from, in the provider's own words.</summary>
     [ObservableProperty] private string _pricingBasis = string.Empty;
 
     public bool HasRows => Rows.Count > 0;
+
+    /// <summary>Whether there is a real total to copy. False for the empty screen and for a listing whose rows
+    /// are all priceless — both read "— ISK" on screen, and copying either would silently hand out that placeholder
+    /// as if it were a figure.</summary>
+    public bool HasTotal => TotalRaw > 0;
 
     public bool HasUnresolved => Unresolved.Count > 0;
 
@@ -83,7 +98,7 @@ public partial class AppraisalViewModel : ViewModelBase
     {
         // Every run starts from an empty screen: the box has changed, so the figures standing there no longer
         // describe what is in it, and a total left behind beside a refusal is the worse of the two mistakes.
-        _Show([], [], string.Empty, IskFormat.Exact(0));
+        _Show([], [], string.Empty, 0);
 
         if (SelectedProvider is not { } provider)
         {
@@ -120,7 +135,7 @@ public partial class AppraisalViewModel : ViewModelBase
 
             if (lines.Count == 0)
             {
-                _Show([], unresolved, string.Empty, IskFormat.Exact(0));   // nothing valued, but say what was read
+                _Show([], unresolved, string.Empty, 0);   // nothing valued, but say what was read
                 // Where a multibuy list ("Tritanium 100") lands: it reads as one name column, and none of those
                 // names is a type. Saying so beats a bare "nothing found" on the format most likely to be tried.
                 _Fail($"None of the {unresolved.Count} pasted names is a known item type. A multibuy list (name and "
@@ -131,13 +146,12 @@ public partial class AppraisalViewModel : ViewModelBase
             var result = await provider.AppraiseAsync(lines, cancellationToken);
             if (!result.IsSuccess || result.Value is not { } outcome)
             {
-                _Show([], unresolved, string.Empty, IskFormat.Exact(0));
+                _Show([], unresolved, string.Empty, 0);
                 _Fail(result.Messages.FirstOrDefault()?.Text ?? "The price source returned nothing.");
                 return;
             }
 
-            _Show(outcome.Rows, [.. unresolved, .. outcome.Unresolved], outcome.PricingBasis,
-                IskFormat.Exact(outcome.Total));
+            _Show(outcome.Rows, [.. unresolved, .. outcome.Unresolved], outcome.PricingBasis, outcome.Total);
 
             var priceless = outcome.Rows.Count(row => row.Price is null);
             Status = $"{outcome.Rows.Count} item(s) valued via {provider.DisplayName}."
@@ -156,12 +170,12 @@ public partial class AppraisalViewModel : ViewModelBase
     private void Clear()
     {
         PasteText = string.Empty;
-        _Show([], [], string.Empty, IskFormat.Exact(0));
+        _Show([], [], string.Empty, 0);
         Status = PastePrompt;
         StatusIsError = false;
     }
 
-    private void _Show(IReadOnlyList<AppraisalRow> rows, IReadOnlyList<string> unresolved, string basis, string total)
+    private void _Show(IReadOnlyList<AppraisalRow> rows, IReadOnlyList<string> unresolved, string basis, double total)
     {
         Rows.Clear();
         foreach (var row in rows)
@@ -172,7 +186,8 @@ public partial class AppraisalViewModel : ViewModelBase
             Unresolved.Add(name);
 
         PricingBasis = basis;
-        TotalDisplay = total;
+        TotalRaw = total;
+        TotalDisplay = IskFormat.Exact(total);
         OnPropertyChanged(nameof(HasRows));
         OnPropertyChanged(nameof(HasUnresolved));
         OnPropertyChanged(nameof(RowsHeader));
@@ -183,5 +198,19 @@ public partial class AppraisalViewModel : ViewModelBase
     {
         Status = message;
         StatusIsError = true;
+    }
+
+    /// <summary>Puts the total on the clipboard exactly as it reads on screen (operator's call: pasted into a chat,
+    /// not a spreadsheet, so the grouping and the "ISK" suffix stay) — the same <see cref="TotalDisplay"/> string,
+    /// not a second formatting rule that could drift from it. Guarded by <see cref="HasTotal"/>: with nothing valued
+    /// (or nothing priced) there is no total to copy, so the button is not offered rather than silently handing out
+    /// "— ISK".</summary>
+    [RelayCommand(CanExecute = nameof(HasTotal))]
+    private async Task CopyTotalAsync()
+    {
+        if (_dialogs is null) return;
+        await _dialogs.SetClipboardTextAsync(TotalDisplay);
+        Status = "Copied the total to the clipboard.";
+        StatusIsError = false;
     }
 }

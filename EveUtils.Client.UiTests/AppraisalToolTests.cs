@@ -64,7 +64,8 @@ public sealed class AppraisalToolTests
 
     private static AppraisalViewModel _BuildTool(TestClientInstance instance) =>
         new(instance.Services.GetRequiredService<IEnumerable<IAppraisalProvider>>(),
-            instance.Services.GetRequiredService<ISdeAccessor>());
+            instance.Services.GetRequiredService<ISdeAccessor>(),
+            instance.Services.GetRequiredService<IDialogService>());
 
     // ── Valuing a paste ──────────────────────────────────────────────────────────────────────────
 
@@ -254,6 +255,115 @@ public sealed class AppraisalToolTests
         Assert.False(tool.AppraiseCommand.CanExecute(null));
         tool.PasteText = "Tritanium\t1";
         Assert.True(tool.AppraiseCommand.CanExecute(null));
+    }
+
+    // ── Copying the total (ET-91) ────────────────────────────────────────────────────────────────
+
+    /// <summary>The clipboard gets exactly what the screen shows — grouped and suffixed with "ISK" — because the
+    /// operator's use for it is pasting into a chat, not an input field: cleaning it up there would be the wrong
+    /// direction. And the user is told it happened: a copy with nothing to show for it is indistinguishable from
+    /// one that silently failed.</summary>
+    [AvaloniaFact]
+    public async Task CopyTotalCommand_CopiesWhatTheScreenShows_AndSaysSo()
+    {
+        using var instance = TestClientInstance.Create(services =>
+        {
+            services.AddSingleton<ISdeAccessor>(_Minerals());
+            services.AddSingleton<IDialogService, RecordingDialogService>();
+        });
+        await _CachePricesAsync(instance, new DateTimeOffset(2026, 8, 31, 9, 30, 0, TimeSpan.Zero),
+            (34, 5), (35, 10), (36, 80), (37, 40));
+        var tool = _BuildTool(instance);
+        tool.PasteText = MineralPaste;
+        await tool.AppraiseCommand.ExecuteAsync(null);
+
+        Assert.Equal("10,900,000 ISK", tool.TotalDisplay);
+        Assert.True(tool.CopyTotalCommand.CanExecute(null));
+
+        await tool.CopyTotalCommand.ExecuteAsync(null);
+
+        var dialogs = (RecordingDialogService)instance.Services.GetRequiredService<IDialogService>();
+        Assert.Equal(tool.TotalDisplay, dialogs.LastClipboardText);   // no separate clipboard-only formatting
+        Assert.Contains("Copied", tool.Status);
+        Assert.False(tool.StatusIsError);
+    }
+
+    /// <summary>An empty price cache shows an explicit message instead of a total (ET-83) — copying must not hand
+    /// out a silent "0" for it, so the command is off along with the figure it would have copied.</summary>
+    [AvaloniaFact]
+    public async Task CopyTotalCommand_IsUnavailable_WhenThePriceCacheIsEmpty()
+    {
+        using var instance = _NewInstance(_Minerals());
+        var tool = _BuildTool(instance);
+        tool.PasteText = MineralPaste;
+
+        await tool.AppraiseCommand.ExecuteAsync(null);
+
+        Assert.Equal("— ISK", tool.TotalDisplay);
+        Assert.False(tool.HasTotal);
+        Assert.False(tool.CopyTotalCommand.CanExecute(null));
+    }
+
+    /// <summary>Rows that all carry no price total to zero, which reads on screen exactly like the empty state
+    /// ("— ISK") — and copying has to agree with what the screen says, not with the number underneath it.</summary>
+    [AvaloniaFact]
+    public async Task CopyTotalCommand_IsUnavailable_WhenEveryRowIsPriceless()
+    {
+        using var instance = _NewInstance(_Minerals());
+        // Cache is not empty (Pyerite is priced), so this is the "priced nothing pasted" case, not the
+        // empty-cache one — and still nothing to copy, because the one pasted row (Tritanium) has no price of
+        // its own.
+        await _CachePricesAsync(instance, DateTimeOffset.UtcNow, (35, 10));
+        var tool = _BuildTool(instance);
+        tool.PasteText = "Tritanium\t1,000,000";
+
+        await tool.AppraiseCommand.ExecuteAsync(null);
+
+        Assert.Single(tool.Rows);           // a row exists...
+        Assert.Equal("— ISK", tool.TotalDisplay);   // ...but it carries no price, so there is nothing to copy
+        Assert.False(tool.CopyTotalCommand.CanExecute(null));
+    }
+
+    /// <summary>The empty screen before anything is pasted: same guard, same reason.</summary>
+    [AvaloniaFact]
+    public void CopyTotalCommand_IsUnavailable_OnTheEmptyScreen()
+    {
+        using var instance = _NewInstance(_Minerals());
+        var tool = _BuildTool(instance);
+
+        Assert.False(tool.HasTotal);
+        Assert.False(tool.CopyTotalCommand.CanExecute(null));
+    }
+
+    /// <summary>The confirmation actually drawn on screen, not only bound — a copy that only a green assertion can
+    /// see is indistinguishable, to the operator, from one that silently did nothing.</summary>
+    [AvaloniaFact]
+    public async Task CopyTotalCommand_Renders_TheConfirmationInTheStatusBar()
+    {
+        using var instance = TestClientInstance.Create(services =>
+        {
+            services.AddSingleton<ISdeAccessor>(_Minerals());
+            services.AddSingleton<IDialogService, RecordingDialogService>();
+        });
+        instance.Services.GetRequiredService<IThemeService>().Apply(FactionTheme.Gallente);
+        await _CachePricesAsync(instance, new DateTimeOffset(2026, 8, 31, 9, 30, 0, TimeSpan.Zero),
+            (34, 5), (35, 10), (36, 80), (37, 40));
+        var tool = _BuildTool(instance);
+        tool.PasteText = MineralPaste;
+        await tool.AppraiseCommand.ExecuteAsync(null);
+
+        var window = new AppraisalWindow(tool) { Width = 960, Height = 640 };
+        window.Show();
+        await _WaitForAsync(() => false, tries: 12);
+
+        await tool.CopyTotalCommand.ExecuteAsync(null);
+        await _WaitForAsync(() => false, tries: 12);
+
+        window.CaptureRenderedFrame()!.Save(
+            Path.Combine(_ShotDirectory(), "eveutils-appraisal-copied.png"), new PngBitmapEncoderOptions());
+
+        Assert.Contains("Copied the total to the clipboard.", _VisibleTexts(window));
+        window.Close();
     }
 
     // ── The provider seam ────────────────────────────────────────────────────────────────────────

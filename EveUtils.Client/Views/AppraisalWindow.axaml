@@ -94,7 +94,7 @@
             <Border Grid.Column="2" Classes="panel" Padding="11,9">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,8">
-                        <Grid ColumnDefinitions="Auto,*,Auto">
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                             <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
                             <TextBlock Grid.Column="1" x:Name="ItemsHeading" Classes="panel-title"
                                        Text="{Binding RowsHeader}" VerticalAlignment="Center"
@@ -104,6 +104,13 @@
                             <TextBlock Grid.Column="2" x:Name="TotalReadout" Text="{Binding TotalDisplay}"
                                        FontSize="18" FontWeight="Bold" IsVisible="{Binding HasRows}"
                                        Foreground="{StaticResource TextBrightBrush}" VerticalAlignment="Center"/>
+                            <!-- Copies the total exactly as shown (ET-91): hidden together with the empty/priceless
+                                 states the total itself reads "— ISK" for, so it never hands out that placeholder. -->
+                            <Button Grid.Column="3" Padding="6,4" Margin="6,0,0,0" VerticalAlignment="Center"
+                                    IsVisible="{Binding HasTotal}" Command="{Binding CopyTotalCommand}"
+                                    ToolTip.Tip="Copy the total to the clipboard">
+                                <mi:MaterialIcon Kind="ContentCopy"/>
+                            </Button>
                         </Grid>
                         <!-- The provider says what its figures are; the screen never claims more than the source can back. -->
                         <TextBlock Text="{Binding PricingBasis}" FontSize="10" Opacity="0.6" TextWrapping="Wrap"
