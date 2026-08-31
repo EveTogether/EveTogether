@@ -66,10 +66,15 @@ public static class ClientGamelogTest
             await watcher.StartAsync();
 
             // Write the header AFTER the watcher started (so it tails new growth, not history), then append combat.
+            // Every embedded log timestamp is anchored to DateTime.UtcNow at write time, not a fixed calendar date:
+            // the DPS/neut/cap sliding windows (LiveDpsTracker/LiveRateTracker, 5s) sample against the real wall
+            // clock, so a hit stamped with a date that has since scrolled out of that window is dropped before it's
+            // ever sampled — indistinguishable from the coupling itself being broken.
             var logPath = Path.Combine(dir, "20260528_123316_1.txt");
-            await File.WriteAllTextAsync(logPath, Header("TestPilot"));
+            await File.WriteAllTextAsync(logPath, Header("TestPilot", DateTime.UtcNow));
             await Task.Delay(900); // let the watcher baseline + detect the character
-            await File.AppendAllTextAsync(logPath, CombatLine(250, "Guristas Frigate") + "\n" + CombatLine(300, "Guristas Frigate") + "\n");
+            var hitAt = DateTime.UtcNow;
+            await File.AppendAllTextAsync(logPath, CombatLine(250, "Guristas Frigate", hitAt) + "\n" + CombatLine(300, "Guristas Frigate", hitAt) + "\n");
 
             var dealtKnown = await PollFleetDpsAsync(gamelog, KnownId);
             // Poll for the bus events too: the tracker is fed before the (async) publish, so a single check could
@@ -83,18 +88,19 @@ public static class ClientGamelogTest
             // TestPilot is participating in the fleet before the bounty lands → the fleet meter counts it as run bounty.
             var participation = services.GetRequiredService<IFleetParticipation>();
             participation.Set([new FleetParticipant(KnownId, FleetId, ClientOnly: false)]);
+            var blockAt = DateTime.UtcNow;
             await File.AppendAllTextAsync(logPath,
-                "[ 2026.05.28 12:33:20 ] (bounty) 4,875 ISK added to next bounty payout\n" +
-                "[ 2026.05.28 12:33:21 ] (None) Jumping from Eba to Fora\n" +
-                "[ 2026.05.28 12:33:22 ] (notify) Interference from Guristas Scout's warp prevents your sensors from locking the target\n" +
-                "[ 2026.05.28 12:33:23 ] (combat) Your group of Small Pulse misses Guristas Frigate completely - Small Pulse\n" +
-                "[ 2026.05.28 12:33:24 ] (mining) You mined 1500 units of Veldspar\n" +
-                "[ 2026.05.28 12:33:25 ] (combat) 250 remote armor repaired to Fleetmate - Medium Remote Armor Repairer II\n" +
+                $"[ {Ts(blockAt)} ] (bounty) 4,875 ISK added to next bounty payout\n" +
+                $"[ {Ts(blockAt.AddSeconds(1))} ] (None) Jumping from Eba to Fora\n" +
+                $"[ {Ts(blockAt.AddSeconds(2))} ] (notify) Interference from Guristas Scout's warp prevents your sensors from locking the target\n" +
+                $"[ {Ts(blockAt.AddSeconds(3))} ] (combat) Your group of Small Pulse misses Guristas Frigate completely - Small Pulse\n" +
+                $"[ {Ts(blockAt.AddSeconds(4))} ] (mining) You mined 1500 units of Veldspar\n" +
+                $"[ {Ts(blockAt.AddSeconds(5))} ] (combat) 250 remote armor repaired to Fleetmate - Medium Remote Armor Repairer II\n" +
                 // Incoming energy neut — direction comes from the lead colour (0xffe57f7f = incoming), validated against
                 // real gamelogs. And a remote-capacitor-transmitted line that must NOT count as a rep (cap warfare ≠ heal).
-                "[ 2026.05.28 12:33:26 ] (combat) <color=0xffe57f7f><b>54 GJ</b><color=0x77ffffff><font size=10> energy neutralized </font><b><color=0xffffffff>Corpum Priest</b><color=0x77ffffff><font size=10> - Corpum Priest</font>\n" +
-                "[ 2026.05.28 12:33:27 ] (combat) <color=0xff7fffff><b>40 GJ</b><color=0x77ffffff><font size=10> energy neutralized </font><b><color=0xffffffff>Guristas Scout</b><color=0x77ffffff><font size=10> - Medium Energy Neutralizer II</font>\n" +
-                "[ 2026.05.28 12:33:28 ] (combat) <color=0xffccff66><b>236</b><color=0x77ffffff><font size=10> remote capacitor transmitted by </font><b><color=0xffffffff>Catbank</b><color=0x77ffffff><font size=10> - Corpum C-Type Medium Remote Capacitor Transmitter</font>\n");
+                $"[ {Ts(blockAt.AddSeconds(6))} ] (combat) <color=0xffe57f7f><b>54 GJ</b><color=0x77ffffff><font size=10> energy neutralized </font><b><color=0xffffffff>Corpum Priest</b><color=0x77ffffff><font size=10> - Corpum Priest</font>\n" +
+                $"[ {Ts(blockAt.AddSeconds(7))} ] (combat) <color=0xff7fffff><b>40 GJ</b><color=0x77ffffff><font size=10> energy neutralized </font><b><color=0xffffffff>Guristas Scout</b><color=0x77ffffff><font size=10> - Medium Energy Neutralizer II</font>\n" +
+                $"[ {Ts(blockAt.AddSeconds(8))} ] (combat) <color=0xffccff66><b>236</b><color=0x77ffffff><font size=10> remote capacitor transmitted by </font><b><color=0xffffffff>Catbank</b><color=0x77ffffff><font size=10> - Corpum C-Type Medium Remote Capacitor Transmitter</font>\n");
 
             var m = await PollAsync(() => gamelog.Snapshot("TestPilot"),
                 s => s.BountyTotal > 0 && s.Location is not null && s.TotalMinedUnits > 0 && s.RepairedOut > 0 && s.NeutIn > 0 && s.NeutOut > 0);
@@ -135,9 +141,9 @@ public static class ClientGamelogTest
 
             // A second character's gamelog must be tracked separately — no cross-contamination.
             var otherPath = Path.Combine(dir, "20260528_123317_2.txt");
-            await File.WriteAllTextAsync(otherPath, Header("OtherPilot"));
+            await File.WriteAllTextAsync(otherPath, Header("OtherPilot", DateTime.UtcNow));
             await Task.Delay(900);
-            await File.AppendAllTextAsync(otherPath, CombatLine(900, "Serpentis Cruiser") + "\n");
+            await File.AppendAllTextAsync(otherPath, CombatLine(900, "Serpentis Cruiser", DateTime.UtcNow) + "\n");
             gamelog.MapCharacter(OtherId, "OtherPilot");
 
             var dealtOther = await PollFleetDpsAsync(gamelog, OtherId);
@@ -193,16 +199,18 @@ public static class ClientGamelogTest
     private static double FleetMetric(GamelogClientService gamelog, int characterId, MetricKind kind, long fleetId) =>
         gamelog.Sample(fleetId, characterId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()).First(s => s.Kind == kind).Value;
 
-    private static string Header(string characterName) =>
+    private static string Ts(DateTime at) => at.ToString("yyyy.MM.dd HH:mm:ss");
+
+    private static string Header(string characterName, DateTime sessionStarted) =>
         "------------------------------------------------------------\n" +
         "  Gamelog\n" +
         $"  Listener: {characterName}\n" +
-        "  Session Started: 2026.05.28 12:33:16\n" +
+        $"  Session Started: {Ts(sessionStarted)}\n" +
         "------------------------------------------------------------\n";
 
     // Tags are stripped by the parser, so a plain line is enough: "<amount> to <target> - <quality>".
-    private static string CombatLine(int amount, string target) =>
-        $"[ 2026.05.28 12:33:16 ] (combat) {amount} to {target} - Hits";
+    private static string CombatLine(int amount, string target, DateTime at) =>
+        $"[ {Ts(at)} ] (combat) {amount} to {target} - Hits";
 
     private static bool Check(string label, bool pass)
     {
