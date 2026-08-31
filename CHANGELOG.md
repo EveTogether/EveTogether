@@ -208,6 +208,13 @@ repository. **Beta:** more stable than the alpha, but expect occasional rough ed
   and unfolding survives a refresh. A small fleet is unchanged: no extra line, no extra click.
 
 ### Fixed
+- **EVE's daily downtime no longer stops the app from following where your characters are.** While Tranquility is
+  down the app holds back its own calls rather than hammering a dead API — but it counted each held-back call as a
+  failed reading, and after two minutes of them it gave up watching, for the rest of the session. Downtime lasts
+  longer than two minutes, so this happened every single day, and nothing started the watch again. The visible cost
+  was a character whose location simply never appeared: start a client after downtime and the app no longer asked
+  EVE where you were, because the answer arrives on the readings that had stopped. Calls the app held back itself
+  are no longer counted as failures — nothing was asked, so nothing failed.
 - Leaving the app open for an hour no longer breaks saving. Your login to a server is renewed
   every hour, and until now that only happened when the connection to that server dropped — so on
   a connection that simply stayed up, the login quietly went stale while the app still showed
