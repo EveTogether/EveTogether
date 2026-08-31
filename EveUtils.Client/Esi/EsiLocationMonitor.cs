@@ -103,7 +103,13 @@ public sealed class EsiLocationMonitor(
                     Lost(characterId, onReading);
                     return;
                 }
-                else if (++failures > MaxConsecutiveFailures)
+                // A call our own gate withheld is not a failed read — nothing left the machine, so it is evidence of
+                // nothing and the counter must not move. Counting it ended the watch every single day: the gate holds
+                // the whole 11:00-11:03 UTC maintenance window and the budget is twenty polls at six seconds, so the
+                // budget always ran out first. The abyssal clock and ET-63's location bootstrap went with it for the
+                // rest of the session, which is what ET-81 reported. Same distinction EsiClient's outage detector
+                // already makes, for the same reason.
+                else if (result.Error?.Kind is not EsiErrorKind.Unavailable && ++failures > MaxConsecutiveFailures)
                 {
                     logger.LogWarning("Abyssal monitor for {CharacterId} gave up after {Failures} failed location reads.",
                         characterId, failures);
@@ -125,8 +131,9 @@ public sealed class EsiLocationMonitor(
         }
     }
 
-    // Only a refusal that the next poll cannot fix: no scope, and no working token. Everything else — 5xx, timeouts,
-    // rate limits, ESI being down — is transient and goes through the failure counter instead.
+    // Only a refusal that the next poll cannot fix: no scope, and no working token. Real trouble that the next poll
+    // might — 5xx, timeouts, rate limits — is transient and goes through the failure counter instead. ESI being down
+    // is neither: the local gate answers those without sending anything, so they are not counted at all (ET-81).
     private static bool Fatal(EsiErrorKind? kind) => kind is EsiErrorKind.ScopeMissing or EsiErrorKind.AuthRequired;
 
     /// <summary>

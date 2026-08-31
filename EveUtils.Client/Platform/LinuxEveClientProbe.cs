@@ -9,8 +9,10 @@ namespace EveUtils.Client.Platform;
 /// <summary>
 /// Linux probe, two layered signals because neither covers everything:
 /// <list type="bullet">
-/// <item><c>wmctrl -l</c> window titles → character NAMES. Live-accurate, but X11-only (silent no-op on
-/// Wayland or when wmctrl is not installed).</item>
+/// <item><c>wmctrl -l</c> window titles → character NAMES. Live-accurate, and a silent no-op only where there is
+/// no X server to ask at all or wmctrl is not installed. NOT "X11 sessions only": EVE runs under Proton, so it is
+/// an XWayland client and wmctrl reads its title on a Wayland desktop too. [gemeten 2026-08-31, KDE Plasma on
+/// Wayland: <c>wmctrl -l</c> returns "EVE - Jithran".]</item>
 /// <item><c>/proc/*/cmdline</c> of wine/Proton EVE clients (<c>exefile.exe</c>) → the launcher's
 /// <c>/autoSelectCharacter:&lt;id&gt;</c> character IDS. Works everywhere incl. Wayland, but is launch intent —
 /// stale after an in-client character switch and absent on manual logins.</item>
