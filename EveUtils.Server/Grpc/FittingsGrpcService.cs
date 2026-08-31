@@ -6,6 +6,7 @@ using EveUtils.Shared.Modules.Fittings;
 using EveUtils.Shared.Modules.Fittings.Entities;
 using EveUtils.Shared.Modules.Fittings.Events;
 using EveUtils.Shared.Modules.Fittings.Repositories;
+using EveUtils.Shared.Modules.ServerAuth.Entities;
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
 using GrpcFittings = EveUtils.Grpc.Fittings;
@@ -16,7 +17,9 @@ namespace EveUtils.Server.Grpc;
 /// Synchronous fit-sharing. Auth-gated by the server session token; enforces the
 /// <c>fit.sync</c> app-permission SERVER-SIDE and returns a real accept/deny result so the client
 /// can show the truth (a fire-and-forget event gave false "shared" feedback). On accept it stores the
-/// fit and reroutes it to the other connected clients over the event bus.
+/// fit and reroutes it to the other connected clients over the event bus. A refused session is the
+/// exception: that answers <see cref="StatusCode.Unauthenticated"/>, not a reply payload — see
+/// <see cref="AuthenticateAsync"/>.
 /// </summary>
 public sealed class FittingsGrpcService(
     ServerSessionService sessions,
@@ -28,10 +31,7 @@ public sealed class FittingsGrpcService(
 {
     public override async Task<ShareFitReply> ShareFit(ShareFitRequest request, ServerCallContext context)
     {
-        var token = ExtractBearer(context);
-        var session = token is null ? null : await sessions.ValidateAsync(token, context.CancellationToken);
-        if (session is null)
-            return new ShareFitReply { Accepted = false, Message = "Not authenticated — pair with the server first." };
+        var session = await AuthenticateAsync(context);
 
         // Attribution comes from the validated session, never the request body (SEC): otherwise an authenticated
         // client could share a fit on another character's behalf.
@@ -89,10 +89,7 @@ public sealed class FittingsGrpcService(
 
     public override async Task<GetSharedFitsReply> GetSharedFits(GetSharedFitsRequest request, ServerCallContext context)
     {
-        var token = ExtractBearer(context);
-        var session = token is null ? null : await sessions.ValidateAsync(token, context.CancellationToken);
-        if (session is null)
-            return new GetSharedFitsReply { Ok = false, Message = "Not authenticated — pair with the server first." };
+        await AuthenticateAsync(context);
 
         var reply = new GetSharedFitsReply { Ok = true, Message = "" };
         foreach (var fit in await repository.ListAsync(context.CancellationToken))
@@ -114,10 +111,7 @@ public sealed class FittingsGrpcService(
 
     public override async Task<DeleteSharedFitReply> DeleteSharedFit(DeleteSharedFitRequest request, ServerCallContext context)
     {
-        var token = ExtractBearer(context);
-        var session = token is null ? null : await sessions.ValidateAsync(token, context.CancellationToken);
-        if (session is null)
-            return new DeleteSharedFitReply { Accepted = false, Message = "Not authenticated — pair with the server first." };
+        await AuthenticateAsync(context);
 
         // Needs the fit.manage permission — separate from fit.sync.
         if (!await policy.IsAllowedAsync(principals.Current, FittingsPermissions.Manage, context.CancellationToken))
@@ -131,6 +125,19 @@ public sealed class FittingsGrpcService(
             ? new DeleteSharedFitReply { Accepted = true, Message = "Deleted." }
             : new DeleteSharedFitReply { Accepted = false, Message = "Fit not found on the server." };
     }
+
+    /// <summary>The validated session, or a <see cref="StatusCode.Unauthenticated"/> <see cref="RpcException"/> —
+    /// the same signal <c>EventBusStreamService.Attach</c> already raises for a refused token. A status code rather
+    /// than a reply payload so the client's refresh-and-retry can recover the call in flight instead of waiting for
+    /// the next 30s heartbeat (ET-85, following ET-78).</summary>
+    private async Task<ServerSession> AuthenticateAsync(ServerCallContext context)
+    {
+        var token = ExtractBearer(context);
+        var session = token is null ? null : await sessions.ValidateAsync(token, context.CancellationToken);
+        return session ?? throw new RpcException(new Status(StatusCode.Unauthenticated, NotAuthenticated));
+    }
+
+    private const string NotAuthenticated = "Not authenticated — pair with the server first.";
 
     private static string? ExtractBearer(ServerCallContext context)
     {
