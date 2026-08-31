@@ -16,11 +16,11 @@ namespace EveUtils.Client.UiTests;
 public sealed class ClipboardFitImportOfferTests
 {
     /// <summary>
-    /// "Not today" sits under one named fit, so it silences that fit and nothing else — a later, different fit is
-    /// still offered. Muting the whole feature from a button that names one fit is a promise the text does not make.
+    /// The toast offers exactly "Ignore" and "Import". "Ignore" only closes this card, it does not mute the fit, so
+    /// copying it again still offers it.
     /// </summary>
     [AvaloniaFact]
-    public async Task NotToday_SilencesOnlyTheFitItWasPressedOn()
+    public async Task Ignore_ClosesTheCardWithoutMutingTheFit()
     {
         var source = new FakeClipboardChangeSource();
         var dialogs = new RecordingDialogService();
@@ -33,19 +33,17 @@ public sealed class ClipboardFitImportOfferTests
 
         dialogs.ClipboardText = "[Jackdaw, Jackdaw - T1/T2 - D]\r\nBallistic Control System II\r\nBallistic Control System II";
         Copy(source);
-        Copy(source);
+        Copy(source); // same fit, card still open — must not stack a second card
 
         var firstOffer = Assert.Single(toasts.ActionToasts);
         Assert.Equal("Fit copied", firstOffer.Title);
-        Assert.Equal(new[] { "Ignore this fit", "Not today", "Import" },
+        Assert.Equal(new[] { "Ignore", "Import" },
             Array.ConvertAll(firstOffer.Actions.ToArray(), action => action.Label));
 
-        firstOffer.Actions[1].Run(); // "Not today", on the Jackdaw
-        dialogs.ClipboardText = "[Armageddon, PVE High DPS 0-60KM (1000+)]\r\nBallistic Control System II";
+        firstOffer.Actions[0].Run(); // "Ignore"
         Copy(source);
 
         Assert.Equal(2, toasts.ActionToasts.Count);
-        Assert.Contains("[Armageddon, PVE High DPS 0-60KM (1000+)]", toasts.ActionToasts[^1].Message);
     }
 
     /// <summary>
@@ -141,7 +139,7 @@ public sealed class ClipboardFitImportOfferTests
         dialogs.ClipboardText = text;
         dialogs.ImportFitTextResult = edited;
         Copy(source);
-        toasts.ActionToasts[0].Actions[2].Run();
+        toasts.ActionToasts[0].Actions[1].Run();
 
         var repository = instance.Services.GetRequiredService<IFittingRepository>();
         for (var attempt = 0; attempt < 100 && (await repository.ListAllAsync()).Count == 0; attempt++)

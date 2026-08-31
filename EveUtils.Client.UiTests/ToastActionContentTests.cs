@@ -124,7 +124,7 @@ public class ToastActionContentTests
         // The short message is the case that broke: a long one pushes the card out to its cap and hides the problem.
         var content = (Border)ToastActionContent.Build("Fit copied",
             "Import [Punisher, Punisher ] into your Local library?", ToastKind.Information,
-            [new ToastAction("Ignore this fit", () => { }), new ToastAction("Not today", () => { }),
+            [new ToastAction("Ignore", () => { }),
              new ToastAction("Import", () => { }, ToastActionStyle.Affirmative)]);
         manager.Show(content, NotificationType.Information, null, null, () => { }, []);
         Pump();
