@@ -19,6 +19,16 @@ namespace EveUtils.Client.Notifications;
 /// </summary>
 public static class ToastActionContent
 {
+    /// <summary>
+    /// Widest a card's content may get. Named because a test holds the button row against it.
+    /// </summary>
+    /// <remarks>
+    /// A row wider than this cap overruns the inset and puts the last button against the border, which is what the
+    /// buttons' own sizing has to stay clear of — see the compact <c>Button.toast-action</c> style.
+    /// </remarks>
+    internal const double ContentWidthCap = 400;
+
+
     /// <summary>Builds the content control for a toast with <paramref name="actions"/> rendered as buttons.</summary>
     public static Control Build(string title, string? message, ToastKind kind, IReadOnlyList<ToastAction> actions)
     {
@@ -78,12 +88,17 @@ public static class ToastActionContent
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             Margin = new Thickness(0, 8, 0, 0),
-            HorizontalAlignment = HorizontalAlignment.Right,
+            // Centred rather than pushed right: the card's width comes from the message line, so a right-aligned row
+            // leaves whatever the message did not use as a gap on the left. Centring spends that evenly.
+            HorizontalAlignment = HorizontalAlignment.Center,
         };
 
         foreach (var action in actions)
         {
-            var button = new Button { Content = action.Label, MinWidth = 0 };
+            // The label carries its own colour rather than leaning on the button's: a Foreground set through the
+            // style never reaches this text, which left white on the affirmative green at 1.74:1 where 4.5:1 is the
+            // floor. Dark on that green measures 11.56:1.
+            var button = new Button { MinWidth = 0, Content = Label(action) };
             button.Classes.Add("toast-action"); // compact sizing (the form-button default overflows the card)
             if (StyleClass(action.Style) is { } styleClass)
                 button.Classes.Add(styleClass); // green (good) / red (danger) tint via the themed button classes
@@ -96,9 +111,17 @@ public static class ToastActionContent
         layout.Children.Add(buttons);
 
         // The card gives custom content no padding and does not bound its width, so a toast otherwise sits flush
-        // against the border with its title running off-screen — inset + cap the width here.
-        return new Border { Padding = new Thickness(14, 12), MinWidth = 240, MaxWidth = 340, Child = layout };
+        // against the border with its title running off-screen — inset + cap the width here. The cap has to leave the
+        // button row room to breathe: measured through the real manager, three buttons come to 310 and a cap of 340
+        // left exactly 310 after the inset, so the last button ended up against the border with nothing to spare.
+        return new Border { Padding = new Thickness(14, 12), MinWidth = 240, MaxWidth = ContentWidthCap, Child = layout };
     }
+
+    // A tinted button (green or red) needs a dark label to stay readable; a plain one keeps the theme's own.
+    private static TextBlock Label(ToastAction action) => action.Style is ToastActionStyle.Affirmative
+        or ToastActionStyle.Destructive
+        ? new TextBlock { Text = action.Label, Foreground = new SolidColorBrush(Color.Parse("#FF06070A")) }
+        : new TextBlock { Text = action.Label };
 
     private static string? StyleClass(ToastActionStyle style) => style switch
     {
