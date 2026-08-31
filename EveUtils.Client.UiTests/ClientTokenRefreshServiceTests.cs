@@ -42,6 +42,7 @@ public class ClientTokenRefreshServiceTests
         Assert.Equal(TokenStatus.TemporarilyUnavailable, first);
         Assert.Equal(TokenStatus.TemporarilyUnavailable, second);
         Assert.Equal(1, auth.RefreshCalls); // backed off → the second call did not re-refresh against EVE SSO
+        Assert.Equal(0, store.RemoveCalls); // a clock-skew hiccup is recoverable — never delete the stored token for it
     }
 
     [Fact]
@@ -71,6 +72,7 @@ public class ClientTokenRefreshServiceTests
         var status = await service.EnsureValidAsync(100, ct);
 
         Assert.Equal(TokenStatus.NeedsReauth, status);
+        Assert.Equal(1, store.RemoveCalls); // invalid_grant is permanent — the dead blob must not linger on disk (ET-54)
     }
 
     [Fact]
@@ -86,6 +88,7 @@ public class ClientTokenRefreshServiceTests
 
         Assert.Equal(TokenStatus.NeedsReauth, status);
         Assert.Equal(0, auth.RefreshCalls); // nothing to refresh with → don't even call SSO
+        Assert.Equal(1, store.RemoveCalls); // a token set without a refresh token can never recover — remove it (ET-54)
     }
 
     private sealed class RevokingAuthClient : IEsiAuthClient
@@ -100,11 +103,12 @@ public class ClientTokenRefreshServiceTests
 
     private sealed class FakeTokenStore(EsiTokenSet tokens) : IPerCharacterTokenStore
     {
-        private EsiTokenSet _tokens = tokens;
+        private EsiTokenSet? _tokens = tokens;
+        public int RemoveCalls { get; private set; }
         public Task SaveAsync(int characterId, EsiTokenSet t, CancellationToken cancellationToken = default) { _tokens = t; return Task.CompletedTask; }
-        public Task<EsiTokenSet?> LoadAsync(int characterId, CancellationToken cancellationToken = default) => Task.FromResult<EsiTokenSet?>(_tokens);
+        public Task<EsiTokenSet?> LoadAsync(int characterId, CancellationToken cancellationToken = default) => Task.FromResult(_tokens);
         public Task<IReadOnlyList<int>> ListCharacterIdsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<int>>([]);
-        public Task RemoveAsync(int characterId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task RemoveAsync(int characterId, CancellationToken cancellationToken = default) { RemoveCalls++; _tokens = null; return Task.CompletedTask; }
     }
 
     private sealed class CountingAuthClient(EsiTokenSet refreshed) : IEsiAuthClient

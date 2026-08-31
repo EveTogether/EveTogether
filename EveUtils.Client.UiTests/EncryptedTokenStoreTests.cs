@@ -121,6 +121,27 @@ public sealed class EncryptedTokenStoreTests : IDisposable
         Assert.Equal(tokens, await store.LoadAsync(CharacterId, ct));
     }
 
+    [Fact]
+    public async Task PerCharacterStore_Remove_DeletesTokenAndKeyFiles()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new EncryptedPerCharacterTokenStore(_directory);
+        await store.SaveAsync(CharacterId, Tokens(), ct);
+
+        await store.RemoveAsync(CharacterId, ct);
+
+        Assert.False(File.Exists(Path.Combine(_directory, $"esi-{CharacterId}.bin")));
+        Assert.False(File.Exists(Path.Combine(_directory, $"esi-{CharacterId}.key")));
+        Assert.Null(await store.LoadAsync(CharacterId, ct));
+    }
+
+    [Fact]
+    public async Task PerCharacterStore_Remove_WhenNothingStored_DoesNotThrow()
+    {
+        var store = new EncryptedPerCharacterTokenStore(_directory);
+        await store.RemoveAsync(CharacterId, TestContext.Current.CancellationToken);
+    }
+
     private static byte[] RandomBytes(int count)
     {
         var bytes = new byte[count];
