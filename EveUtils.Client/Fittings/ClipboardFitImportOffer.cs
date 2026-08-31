@@ -24,7 +24,6 @@ public sealed class ClipboardFitImportOffer : ISingletonService, IDisposable
     private readonly IServiceProvider _services;
     private readonly TimeProvider _clock;
     private readonly Lock _gate = new();
-    private readonly HashSet<string> _offeredCaptures = new(StringComparer.Ordinal);
     private readonly IDisposable _subscription;
 
     // Muted per fit rather than for the feature: "Not today" sits under one named fit, so it promises silence about
@@ -57,7 +56,11 @@ public sealed class ClipboardFitImportOffer : ISingletonService, IDisposable
             var today = DateOnly.FromDateTime(_clock.GetLocalNow().DateTime);
             if (_mutedFits.TryGetValue(fingerprint, out var mutedOn) && mutedOn == today)
                 return;
-            if (!_offeredCaptures.Add(fingerprint))
+
+            // Suppressed only while this fit's own card is still up, so copying twice in a row does not stack two
+            // cards. Once the card is gone — answered, dismissed, or pushed aside by a newer fit — copying it again
+            // is a fresh question, because a question nobody answered must not be unaskable.
+            if (_openFingerprint == fingerprint)
                 return;
 
             _openFingerprint = fingerprint;

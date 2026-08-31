@@ -1,11 +1,12 @@
 using System;
+using System.Threading.Tasks;
 
 namespace EveUtils.Client.Clipboard;
 
 /// <summary>
-/// One platform's way of being told that the clipboard changed. An implementation never reads the clipboard
-/// itself — it only reports that something was copied, and <see cref="ClipboardWatchService"/> decides whether
-/// to look. Implementations are best-effort and must never throw.
+/// One platform's way of being told that the clipboard changed, and — where the platform needs it — of reading it.
+/// It never decides what to do with a payload: <see cref="ClipboardWatchService"/> decides whether to look at all.
+/// Implementations are best-effort and must never throw.
 /// </summary>
 public interface IClipboardChangeSource : IDisposable
 {
@@ -27,6 +28,17 @@ public interface IClipboardChangeSource : IDisposable
     void Start();
 
     void Stop();
+
+    /// <summary>
+    /// Reads the clipboard through the same channel this source is notified on, or null to let the caller read it
+    /// through the toplevel instead.
+    /// </summary>
+    /// <remarks>
+    /// Only a platform whose notification and whose reading disagree needs this. On Wayland they do: the change is
+    /// seen over the compositor's data-control protocol while the toplevel reads the X11 selection, which a native
+    /// Wayland owner is only mirrored into when something there asks for it.
+    /// </remarks>
+    Task<string?> ReadTextAsync() => Task.FromResult<string?>(null);
 }
 
 /// <summary>

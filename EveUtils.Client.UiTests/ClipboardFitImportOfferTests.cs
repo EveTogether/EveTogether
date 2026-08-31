@@ -48,6 +48,35 @@ public sealed class ClipboardFitImportOfferTests
         Assert.Contains("[Armageddon, PVE High DPS 0-60KM (1000+)]", toasts.ActionToasts[^1].Message);
     }
 
+    /// <summary>
+    /// A fit whose card was pushed aside by a newer one is offered again the next time it is copied. Copying is an
+    /// explicit act, so a question nobody answered must never become unaskable.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AFitPushedAsideByANewerOne_IsOfferedAgainWhenCopiedAgain()
+    {
+        const string jackdaw = "[Jackdaw, Jackdaw - T1/T2 - D]\r\nBallistic Control System II";
+        var source = new FakeClipboardChangeSource();
+        var dialogs = new RecordingDialogService();
+        var toasts = new RecordingToastService();
+        using var instance = TestClientInstance.Create();
+        using var watch = new ClipboardWatchService(dialogs, instance.Services,
+            NullLogger<ClipboardWatchService>.Instance, source);
+        using var offers = new ClipboardFitImportOffer(watch, toasts, dialogs, instance.Services);
+        await watch.SetEnabledAsync(true);
+
+        dialogs.ClipboardText = jackdaw;
+        Copy(source);
+        dialogs.ClipboardText = "[Armageddon, PVE High DPS 0-60KM (1000+)]\r\nBallistic Control System II";
+        Copy(source); // replaces the Jackdaw card, leaving that question unanswered
+
+        dialogs.ClipboardText = jackdaw;
+        Copy(source);
+
+        Assert.Equal(3, toasts.ActionToasts.Count);
+        Assert.Contains("[Jackdaw, Jackdaw - T1/T2 - D]", toasts.ActionToasts[^1].Message);
+    }
+
     [AvaloniaFact]
     public async Task InventoryCapture_DoesNotOfferFitImport()
     {

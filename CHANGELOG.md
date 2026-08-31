@@ -14,6 +14,11 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- **Clipboard watching now works on Wayland for anything you copy.** A fit copied from a browser produced nothing
+  before: the change was noticed, but the text could not be read, because the reading went a different way than the
+  notification did. Both now go the same way.
+- A copied fit is offered again if you copy it again. Previously a fit was offered only once per run of the app, so
+  a question pushed aside by a newer fit could never come back.
 - Importing a fit you copied now opens the **From EFT / DNA text** window with the fit already pasted in, instead
   of putting it straight into your library. You see what is about to be added, and can correct it, before it lands.
 - **Not today** on a copied fit now silences only that fit for the rest of the day. It used to silence every fit,

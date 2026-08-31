@@ -187,6 +187,28 @@ public class ClipboardWatchTests
         Assert.Equal(1, stateChanges);
     }
 
+    /// <summary>
+    /// Where a platform reads the clipboard over its own channel, that reading is the one used — the toplevel is not
+    /// consulted at all. On Wayland the two disagree, and the toplevel's X11 selection is the one that comes back empty.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task WhereTheSourceReadsTheClipboardItself_TheToplevelIsNotAsked()
+    {
+        var source = new FakeClipboardChangeSource { OwnText = "[Jackdaw, from the platform]\r\nBallistic Control System II" };
+        var dialogs = new RecordingDialogService { ClipboardText = "[Rifter, from the toplevel]\r\nGyrostabilizer II" };
+        using var instance = TestClientInstance.Create();
+        using var watch = new ClipboardWatchService(dialogs, instance.Services,
+            NullLogger<ClipboardWatchService>.Instance, source);
+        await watch.SetEnabledAsync(true);
+
+        var delivered = new List<ClipboardCapture>();
+        using var subscription = watch.Subscribe("Test", delivered.Add);
+        Copy(source);
+
+        Assert.Contains("from the platform", Assert.Single(delivered).Text);
+        Assert.Equal(0, dialogs.ClipboardReads);
+    }
+
     // The notification arrives off the UI thread and the read is marshalled onto it; run the posted work.
     private static void Copy(FakeClipboardChangeSource source)
     {
@@ -196,6 +218,9 @@ public class ClipboardWatchTests
 
     private sealed class FakeClipboardChangeSource : IClipboardChangeSource
     {
+        /// <summary>What this source reads over its own channel; null leaves the reading to the toplevel.</summary>
+        public string? OwnText { get; init; }
+
         public bool IsSupported => true;
 
         public event Action? Changed;
@@ -213,6 +238,8 @@ public class ClipboardWatchTests
         public void Dispose()
         {
         }
+
+        public Task<string?> ReadTextAsync() => Task.FromResult(OwnText);
 
         public void RaiseChanged() => Changed?.Invoke();
 
