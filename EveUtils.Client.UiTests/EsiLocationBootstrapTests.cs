@@ -282,7 +282,7 @@ public class EsiLocationBootstrapTests
         var instance = TestClientInstance.Create(services =>
         {
             services.AddSingleton<IEveClientProbe>(probe);
-            services.AddSingleton<IAbyssalLocationMonitor>(monitor);
+            services.AddSingleton<IEsiLocationMonitor>(monitor);
             services.AddSingleton<ISolarSystemNames>(names);
         });
 
@@ -336,11 +336,11 @@ public class EsiLocationBootstrapTests
     }
 
     /// <summary>Stands in for the ESI poll loop, so a test drives readings instead of waiting on 6 s ticks.</summary>
-    private sealed class FakeMonitor : IAbyssalLocationMonitor
+    private sealed class FakeMonitor : IEsiLocationMonitor
     {
         private readonly ConcurrentDictionary<int, Action<EsiLocationReading>> _watched = new();
 
-        public void Watch(int characterId, Action<EsiLocationReading> onReading) =>
+        public void Watch(int characterId, string characterName, Action<EsiLocationReading> onReading) =>
             _watched.TryAdd(characterId, onReading);
 
         public void Stop(int characterId) => _watched.TryRemove(characterId, out _);

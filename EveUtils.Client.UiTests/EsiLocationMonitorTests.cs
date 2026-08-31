@@ -17,7 +17,7 @@ namespace EveUtils.Client.UiTests;
 /// you in, and you leave where you fired it. So the watch runs for the whole session and reports every reading, and
 /// these cover what it reports: inside, outside, and the refusals that mean it can report nothing at all.
 /// </summary>
-public class AbyssalLocationMonitorTests
+public class EsiLocationMonitorTests
 {
     private const int Aphend = 30002718;      // an ordinary high-sec system id
     private const int AbyssalRoom = 32000042; // inside ADR01's range
@@ -49,7 +49,7 @@ public class AbyssalLocationMonitorTests
         var monitor = Build(locations, out _);
 
         var seen = new List<bool?>();
-        await monitor.WatchAsync(1, reading => seen.Add(reading.Inside), cts.Token);
+        await monitor.WatchAsync(1, "RaymondKrah", reading => seen.Add(reading.Inside), cts.Token);
 
         Assert.Equal([false, true, true, false], seen);
     }
@@ -67,7 +67,7 @@ public class AbyssalLocationMonitorTests
         var monitor = Build(locations, out _);
 
         var seen = new List<bool?>();
-        await monitor.WatchAsync(1, reading => seen.Add(reading.Inside), cts.Token);
+        await monitor.WatchAsync(1, "RaymondKrah", reading => seen.Add(reading.Inside), cts.Token);
 
         // The old behaviour ended here after one call, with `seen` holding a single entry.
         Assert.Equal(4, locations.Calls);
@@ -84,16 +84,20 @@ public class AbyssalLocationMonitorTests
 
         var before = DateTime.UtcNow;
         var stamps = new List<DateTime>();
-        await monitor.WatchAsync(1, reading => stamps.Add(reading.AtUtc), cts.Token);
+        await monitor.WatchAsync(1, "RaymondKrah", reading => stamps.Add(reading.AtUtc), cts.Token);
 
         Assert.Equal(2, stamps.Count);
         Assert.All(stamps, at => Assert.InRange(at, before, DateTime.UtcNow));
     }
 
     /// <summary>
-    /// No scope means no abyssal detection at all now — there is no gamelog fallback left. That is worth saying out
-    /// loud, and the toast carries the one action that fixes it, which is also why it must not auto-dismiss.
+    /// No scope means the location cannot be read at all — there is no gamelog fallback left. That is worth saying
+    /// out loud, and the toast carries the one action that fixes it, which is also why it must not auto-dismiss.
     /// </summary>
+    /// <remarks>
+    /// The wording says what is wrong, not what the location happens to be used for: this watch feeds whatever reads
+    /// it, and naming today's reader would age the moment a second one arrives.
+    /// </remarks>
     [Fact]
     public async Task WithoutTheLocationScope_ItStopsAndOffersToFixIt()
     {
@@ -101,10 +105,12 @@ public class AbyssalLocationMonitorTests
         var monitor = Build(locations, out var toasts);
 
         var seen = new List<bool?>();
-        await monitor.WatchAsync(1, reading => seen.Add(reading.Inside), CancellationToken.None);
+        await monitor.WatchAsync(1, "RaymondKrah", reading => seen.Add(reading.Inside), CancellationToken.None);
 
         var toast = Assert.Single(toasts.ActionToasts);
-        Assert.Equal("No abyssal detection", toast.Title);
+        Assert.Equal("No location access", toast.Title);
+        Assert.DoesNotContain("abyssal", toast.Title + toast.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("RaymondKrah", toast.Message);
         Assert.Equal(ToastKind.Warning, toast.Kind);
         Assert.Contains(toast.Actions, a => a.Style == ToastActionStyle.Affirmative);
 
@@ -114,6 +120,25 @@ public class AbyssalLocationMonitorTests
         Assert.Equal([null], seen);
     }
 
+    /// <summary>
+    /// Several characters without location access raise one message that names them all, not one message each.
+    /// </summary>
+    [Fact]
+    public async Task SeveralCharactersWithoutAccess_RaiseOneMessageNamingThemAll()
+    {
+        var locations = new FakeLocationClient { Error = EsiErrorKind.ScopeMissing };
+        var monitor = Build(locations, out var toasts);
+
+        await monitor.WatchAsync(1, "RaymondKrah", _ => { }, CancellationToken.None);
+        await monitor.WatchAsync(2, "Catbank", _ => { }, CancellationToken.None);
+
+        // The second card replaces the first under the same key, so what is on screen is one message, not two.
+        var latest = toasts.ActionToasts[^1];
+        Assert.Contains("RaymondKrah", latest.Message);
+        Assert.Contains("Catbank", latest.Message);
+        Assert.All(toasts.ActionToasts, toast => Assert.Equal("location-access-ScopeMissing", toast.ReplacementKey));
+    }
+
     [Fact]
     public async Task TheScopeWarning_IsNotRepeatedForTheSameCharacter()
     {
@@ -121,7 +146,7 @@ public class AbyssalLocationMonitorTests
         var monitor = Build(locations, out var toasts);
 
         for (var run = 0; run < 3; run++)
-            await monitor.WatchAsync(1, _ => { }, CancellationToken.None);
+            await monitor.WatchAsync(1, "RaymondKrah", _ => { }, CancellationToken.None);
 
         Assert.Single(toasts.ActionToasts);
     }
@@ -138,7 +163,7 @@ public class AbyssalLocationMonitorTests
         var monitor = Build(locations, out var toasts);
 
         var seen = new List<bool?>();
-        await monitor.WatchAsync(1, reading => seen.Add(reading.Inside), cts.Token);
+        await monitor.WatchAsync(1, "RaymondKrah", reading => seen.Add(reading.Inside), cts.Token);
 
         Assert.Equal([true, false], seen);
         Assert.Empty(toasts.Toasts);
@@ -152,17 +177,17 @@ public class AbyssalLocationMonitorTests
         var monitor = Build(locations, out _);
 
         var seen = new List<bool?>();
-        await monitor.WatchAsync(1, reading => seen.Add(reading.Inside), CancellationToken.None);
+        await monitor.WatchAsync(1, "RaymondKrah", reading => seen.Add(reading.Inside), CancellationToken.None);
 
         Assert.Equal([null], seen);
         Assert.InRange(locations.Calls, 20, 22);
     }
 
-    private static AbyssalLocationMonitor Build(FakeLocationClient locations, out RecordingToastService toasts)
+    private static EsiLocationMonitor Build(FakeLocationClient locations, out RecordingToastService toasts)
     {
         toasts = new RecordingToastService();
-        var monitor = new AbyssalLocationMonitor(locations, toasts, new ServiceCollection().BuildServiceProvider(),
-            NullLogger<AbyssalLocationMonitor>.Instance)
+        var monitor = new EsiLocationMonitor(locations, toasts, new ServiceCollection().BuildServiceProvider(),
+            NullLogger<EsiLocationMonitor>.Instance)
         {
             // The real value is 6 s; the logic under test is the same at this one.
             PollInterval = TimeSpan.FromMilliseconds(1),
@@ -180,14 +205,14 @@ public class AbyssalLocationMonitorTests
     public async Task NoPollHappens_BeforeTheUiIsReady()
     {
         var locations = new FakeLocationClient(Aphend);
-        var monitor = new AbyssalLocationMonitor(locations, new RecordingToastService(),
-            new ServiceCollection().BuildServiceProvider(), NullLogger<AbyssalLocationMonitor>.Instance)
+        var monitor = new EsiLocationMonitor(locations, new RecordingToastService(),
+            new ServiceCollection().BuildServiceProvider(), NullLogger<EsiLocationMonitor>.Instance)
         {
             PollInterval = TimeSpan.FromMilliseconds(1),
         };
 
         using var cts = new CancellationTokenSource();
-        var watching = monitor.WatchAsync(1, _ => { }, cts.Token);
+        var watching = monitor.WatchAsync(1, "RaymondKrah", _ => { }, cts.Token);
 
         await Task.Delay(50, TestContext.Current.CancellationToken);
         Assert.Equal(0, locations.Calls);   // still gated
