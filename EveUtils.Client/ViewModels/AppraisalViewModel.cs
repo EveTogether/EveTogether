@@ -61,7 +61,7 @@ public partial class AppraisalViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(AppraiseCommand))]
     private bool _isBusy;
 
-    [ObservableProperty] private string _totalDisplay = IskFormat.Short(0);
+    [ObservableProperty] private string _totalDisplay = IskFormat.Exact(0);
 
     /// <summary>What the prices on screen are and when they are from, in the provider's own words.</summary>
     [ObservableProperty] private string _pricingBasis = string.Empty;
@@ -83,7 +83,7 @@ public partial class AppraisalViewModel : ViewModelBase
     {
         // Every run starts from an empty screen: the box has changed, so the figures standing there no longer
         // describe what is in it, and a total left behind beside a refusal is the worse of the two mistakes.
-        _Show([], [], string.Empty, IskFormat.Short(0));
+        _Show([], [], string.Empty, IskFormat.Exact(0));
 
         if (SelectedProvider is not { } provider)
         {
@@ -120,7 +120,7 @@ public partial class AppraisalViewModel : ViewModelBase
 
             if (lines.Count == 0)
             {
-                _Show([], unresolved, string.Empty, IskFormat.Short(0));   // nothing valued, but say what was read
+                _Show([], unresolved, string.Empty, IskFormat.Exact(0));   // nothing valued, but say what was read
                 // Where a multibuy list ("Tritanium 100") lands: it reads as one name column, and none of those
                 // names is a type. Saying so beats a bare "nothing found" on the format most likely to be tried.
                 _Fail($"None of the {unresolved.Count} pasted names is a known item type. A multibuy list (name and "
@@ -131,13 +131,13 @@ public partial class AppraisalViewModel : ViewModelBase
             var result = await provider.AppraiseAsync(lines, cancellationToken);
             if (!result.IsSuccess || result.Value is not { } outcome)
             {
-                _Show([], unresolved, string.Empty, IskFormat.Short(0));
+                _Show([], unresolved, string.Empty, IskFormat.Exact(0));
                 _Fail(result.Messages.FirstOrDefault()?.Text ?? "The price source returned nothing.");
                 return;
             }
 
             _Show(outcome.Rows, [.. unresolved, .. outcome.Unresolved], outcome.PricingBasis,
-                IskFormat.Short(outcome.Total));
+                IskFormat.Exact(outcome.Total));
 
             var priceless = outcome.Rows.Count(row => row.Price is null);
             Status = $"{outcome.Rows.Count} item(s) valued via {provider.DisplayName}."
@@ -156,7 +156,7 @@ public partial class AppraisalViewModel : ViewModelBase
     private void Clear()
     {
         PasteText = string.Empty;
-        _Show([], [], string.Empty, IskFormat.Short(0));
+        _Show([], [], string.Empty, IskFormat.Exact(0));
         Status = PastePrompt;
         StatusIsError = false;
     }

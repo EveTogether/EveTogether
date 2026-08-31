@@ -95,8 +95,9 @@ public sealed class AppraisalToolTests
         Assert.Equal(5_000_000, tritanium.Total);
         Assert.Equal("5 M ISK", tritanium.TotalDisplay);
 
-        // 1,000,000×5 + 250,000×10 + 40,000×80 + 5,000×40 = 10,900,000
-        Assert.Equal("10.9 M ISK", tool.TotalDisplay);
+        // 1,000,000×5 + 250,000×10 + 40,000×80 + 5,000×40 = 10,900,000. The grand total is written out in full:
+        // it is the answer the tool exists to give, and "10.9 M ISK" covers a span of fifty thousand ISK.
+        Assert.Equal("10,900,000 ISK", tool.TotalDisplay);
         Assert.Equal("ITEMS (4)", tool.RowsHeader);
     }
 
@@ -133,7 +134,7 @@ public sealed class AppraisalToolTests
         Assert.Equal("— ISK", isogen.UnitPriceDisplay);
         Assert.Contains("1 of them carry no price", tool.Status);
         Assert.False(tool.StatusIsError);
-        Assert.Equal("10.7 M ISK", tool.TotalDisplay);   // the priced three, and nothing invented for the fourth
+        Assert.Equal("10,700,000 ISK", tool.TotalDisplay);   // the priced three, and nothing invented for the fourth
     }
 
     /// <summary>A name the SDE does not know gets its own list. Dropping it silently would leave a total that is
@@ -295,7 +296,7 @@ public sealed class AppraisalToolTests
         Assert.Equal(34, line.TypeId);
         Assert.Equal(1000, line.Quantity);
         Assert.Contains("Stub quotes", tool.PricingBasis);
-        Assert.Equal("2 M ISK", tool.TotalDisplay);
+        Assert.Equal("2,000,000 ISK", tool.TotalDisplay);
     }
 
     /// <summary>A price source that cannot answer reports why, and the screen shows that rather than a total.</summary>
@@ -398,8 +399,9 @@ public sealed class AppraisalToolTests
         }
         else
         {
-            // The total and the basis behind it are both actually drawn, not merely bound.
-            Assert.Contains("10.7 M ISK", texts);
+            // The total and the basis behind it are both actually drawn, not merely bound — and the total is the
+            // whole figure, not a rounded one.
+            Assert.Contains("10,700,000 ISK", texts);
             Assert.Contains(texts, text => text.Contains("2026-08-31 09:30 UTC"));
             Assert.Contains("Tritanium", texts);
         }
@@ -408,6 +410,48 @@ public sealed class AppraisalToolTests
             Assert.Contains("NOT RECOGNISED (1)", texts);
             Assert.Contains("Spodumain Chunk", texts);
         }
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// The total is the answer the tool exists to give, so it is written out in full rather than rounded — "1.4 B
+    /// ISK" covers a span of ten million. That makes it far wider than what it replaces, and it sits in an Auto
+    /// column beside the heading, so at the narrow width the docked host gives it both still have to hold: the
+    /// figure whole, the heading not crushed out of the row.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Total_IsWrittenOutInFull_AndStillFitsBesideTheHeading()
+    {
+        using var instance = _NewInstance(_Minerals());
+        await _CachePricesAsync(instance, new DateTimeOffset(2026, 8, 31, 9, 30, 0, TimeSpan.Zero),
+            (34, 1000), (35, 1400), (36, 1125));
+        instance.Services.GetRequiredService<IThemeService>().Apply(FactionTheme.Gallente);
+
+        var tool = _BuildTool(instance);
+        tool.PasteText = MineralPaste;
+        await tool.AppraiseCommand.ExecuteAsync(null);
+
+        // 1,000,000×1,000 + 250,000×1,400 + 40,000×1,125 = 1,395,000,000 — which the compact form would have
+        // rounded away to "1.4 B ISK", five million ISK wide.
+        Assert.Equal("1,395,000,000 ISK", tool.TotalDisplay);
+
+        var window = new AppraisalWindow(tool) { Width = 620, Height = 520 };   // under the narrow-layout threshold
+        window.Show();
+        await _WaitForAsync(() => false, tries: 12);
+
+        window.CaptureRenderedFrame()!.Save(
+            Path.Combine(_ShotDirectory(), "eveutils-appraisal-total-in-full.png"), new PngBitmapEncoderOptions());
+
+        Assert.Contains("1,395,000,000 ISK", _VisibleTexts(window));
+
+        // Bounds, not text: a squeezed TextBlock keeps its full Text and renders an ellipsis, so no string
+        // assertion can tell the difference between a figure that fits and one that is cut off.
+        var total = _Named(window, "TotalReadout");
+        var heading = _Named(window, "ItemsHeading");
+        Assert.True(total.Bounds.Width >= total.DesiredSize.Width - 0.5,
+            $"the total was squeezed: {total.Bounds.Width} arranged for {total.DesiredSize.Width} desired");
+        Assert.True(heading.Bounds.Width > 0, "the wider total crushed the heading out of the row");
 
         window.Close();
     }
@@ -450,7 +494,7 @@ public sealed class AppraisalToolTests
 
         var texts = _VisibleTexts(window);
         Assert.Contains("ITEMS (4)", texts);
-        Assert.Contains("10.7 M ISK", texts);
+        Assert.Contains("10,700,000 ISK", texts);
         // The value columns still show their figures in the narrower host — the reason this screen has a viewport.
         Assert.Contains("Tritanium", texts);
         Assert.Contains("1,000,000", texts);
@@ -469,6 +513,9 @@ public sealed class AppraisalToolTests
 
     /// <summary>The text actually on the screen — a hidden control is still in the visual tree, so a readout that is
     /// merely bound would pass an assertion that only looked at every <see cref="TextBlock"/>.</summary>
+    private static TextBlock _Named(Visual root, string name) =>
+        root.GetVisualDescendants().OfType<TextBlock>().Single(block => block.Name == name);
+
     private static List<string> _VisibleTexts(Visual root) =>
         [.. root.GetVisualDescendants().OfType<TextBlock>()
             .Where(block => block.IsEffectivelyVisible && !string.IsNullOrEmpty(block.Text))

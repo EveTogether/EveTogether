@@ -96,10 +96,13 @@
                     <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,8">
                         <Grid ColumnDefinitions="Auto,*,Auto">
                             <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
-                            <TextBlock Grid.Column="1" Classes="panel-title" Text="{Binding RowsHeader}"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock Grid.Column="2" Text="{Binding TotalDisplay}" FontSize="18" FontWeight="Bold"
-                                       IsVisible="{Binding HasRows}"
+                            <TextBlock Grid.Column="1" x:Name="ItemsHeading" Classes="panel-title"
+                                       Text="{Binding RowsHeader}" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <!-- Auto column: the total is written out in full, so it takes the width it needs and the
+                                 heading beside it gives way rather than the figure being cut off. -->
+                            <TextBlock Grid.Column="2" x:Name="TotalReadout" Text="{Binding TotalDisplay}"
+                                       FontSize="18" FontWeight="Bold" IsVisible="{Binding HasRows}"
                                        Foreground="{StaticResource TextBrightBrush}" VerticalAlignment="Center"/>
                         </Grid>
                         <!-- The provider says what its figures are; the screen never claims more than the source can back. -->
