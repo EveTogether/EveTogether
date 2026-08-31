@@ -11,20 +11,20 @@
         WindowStartupLocation="CenterOwner"
         Title="Fit Detail">
 
-    <v:ChromedWindow.Styles>
-        <!-- An over-budget gauge fill pulses ~2 Hz (the in-game overload animation) -->
-        <Style Selector="Path.pulse">
-            <Style.Animations>
-                <Animation Duration="0:0:0.5" IterationCount="INFINITE">
-                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="1"/></KeyFrame>
-                    <KeyFrame Cue="50%"><Setter Property="Opacity" Value="0.46"/></KeyFrame>
-                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1"/></KeyFrame>
-                </Animation>
-            </Style.Animations>
-        </Style>
-    </v:ChromedWindow.Styles>
-
     <DockPanel Margin="16">
+
+        <DockPanel.Styles>
+            <!-- An over-budget gauge fill pulses ~2 Hz (the in-game overload animation) -->
+            <Style Selector="Path.pulse">
+                <Style.Animations>
+                    <Animation Duration="0:0:0.5" IterationCount="INFINITE">
+                        <KeyFrame Cue="0%"><Setter Property="Opacity" Value="1"/></KeyFrame>
+                        <KeyFrame Cue="50%"><Setter Property="Opacity" Value="0.46"/></KeyFrame>
+                        <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1"/></KeyFrame>
+                    </Animation>
+                </Style.Animations>
+            </Style>
+        </DockPanel.Styles>
 
         <!-- Header -->
         <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,12">
