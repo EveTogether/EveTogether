@@ -184,17 +184,17 @@ public sealed class FleetClient(
     public Task<IReadOnlyList<FleetInfo>> ListMyFleetsAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
         QueryOrThrowAsync(serverAddress, actingCharacterId,
             (client, headers) => client.ListMyFleetsAsync(new ListMyFleetsRequest(), headers, ListDeadline(), cancellationToken),
-            reply => reply.Ok ? reply.Fleets.Select(MapFleet).ToList() : [], cancellationToken);
+            reply => reply.Ok ? reply.Fleets.Select(MapFleet).ToList() : throw NotOk(reply.Message), cancellationToken);
 
     public Task<IReadOnlyList<FleetInfo>> ListOpenFleetsAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
         QueryOrThrowAsync(serverAddress, actingCharacterId,
             (client, headers) => client.ListOpenFleetsAsync(new ListOpenFleetsRequest(), headers, ListDeadline(), cancellationToken),
-            reply => reply.Ok ? reply.Fleets.Select(MapFleet).ToList() : [], cancellationToken);
+            reply => reply.Ok ? reply.Fleets.Select(MapFleet).ToList() : throw NotOk(reply.Message), cancellationToken);
 
     public Task<IReadOnlyList<ConnectedCharacterInfo>> ListConnectedCharactersAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
         QueryAsync(serverAddress, actingCharacterId,
             (client, headers) => client.ListConnectedCharactersAsync(new ListConnectedCharactersRequest(), headers, cancellationToken: cancellationToken),
-            reply => reply.Ok ? reply.Characters.Select(c => new ConnectedCharacterInfo(c.CharacterId, c.CharacterName)).ToList() : [], cancellationToken);
+            reply => reply.Ok ? reply.Characters.Select(c => new ConnectedCharacterInfo(c.CharacterId, c.CharacterName)).ToList() : throw NotOk(reply.Message), cancellationToken);
 
     public Task<(bool Ok, string Message)> MoveMemberAsync(
         string serverAddress, long memberId, FleetRole role, long wingId, long squadId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
@@ -210,12 +210,12 @@ public sealed class FleetClient(
     public Task<IReadOnlyList<FleetWingInfo>> ListWingsAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
         QueryAsync(serverAddress, actingCharacterId,
             (client, headers) => client.ListWingsAsync(new ListWingsRequest { FleetId = fleetId }, headers, cancellationToken: cancellationToken),
-            reply => reply.Ok ? reply.Wings.Select(w => new FleetWingInfo(w.Id, w.FleetId, w.Name)).ToList() : [], cancellationToken);
+            reply => reply.Ok ? reply.Wings.Select(w => new FleetWingInfo(w.Id, w.FleetId, w.Name)).ToList() : throw NotOk(reply.Message), cancellationToken);
 
     public Task<IReadOnlyList<FleetSquadInfo>> ListSquadsAsync(string serverAddress, long wingId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
         QueryAsync(serverAddress, actingCharacterId,
             (client, headers) => client.ListSquadsAsync(new ListSquadsRequest { WingId = wingId }, headers, cancellationToken: cancellationToken),
-            reply => reply.Ok ? reply.Squads.Select(s => new FleetSquadInfo(s.Id, s.WingId, s.Name)).ToList() : [], cancellationToken);
+            reply => reply.Ok ? reply.Squads.Select(s => new FleetSquadInfo(s.Id, s.WingId, s.Name)).ToList() : throw NotOk(reply.Message), cancellationToken);
 
     /// <summary>Adds a wing to a fleet. The server enforces the EVE 5-wing limit.</summary>
     public Task<(bool Ok, string Message, long Id)> CreateWingAsync(string serverAddress, long fleetId, string name, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
@@ -354,7 +354,7 @@ public sealed class FleetClient(
     public Task<IReadOnlyList<FleetJoinRequestInfo>> ListPendingJoinRequestsAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
         QueryAsync(serverAddress, actingCharacterId,
             (client, headers) => client.ListPendingJoinRequestsAsync(new ListPendingJoinRequestsRequest { FleetId = fleetId }, headers, cancellationToken: cancellationToken),
-            reply => reply.Ok ? reply.Requests.Select(r => new FleetJoinRequestInfo(r.Id, r.FleetId, r.RequesterCharacterId)).ToList() : [], cancellationToken);
+            reply => reply.Ok ? reply.Requests.Select(r => new FleetJoinRequestInfo(r.Id, r.FleetId, r.RequesterCharacterId)).ToList() : throw NotOk(reply.Message), cancellationToken);
 
     // --- Plumbing: every RPC runs through InvokeAsync (load session → call → refresh-on-401 → retry once). ---
 
@@ -395,15 +395,17 @@ public sealed class FleetClient(
         ActionAsync(serverAddress, actingCharacterId, (client, headers) =>
             client.DeleteFleetCompositionAsync(new DeleteFleetCompositionRequest { CompositionId = compositionId }, headers, cancellationToken: cancellationToken), cancellationToken);
 
+    // Both composition lists throw rather than return an empty list on a failure: the Compositions window says
+    // "no compositions shared on this server yet" for an empty result, which is a lie when the read never landed.
     public Task<IReadOnlyList<FleetCompositionInfo>> ListMyFleetCompositionsAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
-        QueryAsync(serverAddress, actingCharacterId,
+        QueryOrThrowAsync(serverAddress, actingCharacterId,
             (client, headers) => client.ListMyFleetCompositionsAsync(new ListMyFleetCompositionsRequest(), headers, ListDeadline(), cancellationToken),
-            reply => reply.Ok ? reply.Compositions.Select(MapComposition).ToList() : [], cancellationToken);
+            reply => reply.Ok ? reply.Compositions.Select(MapComposition).ToList() : throw NotOk(reply.Message), cancellationToken);
 
     public Task<IReadOnlyList<FleetCompositionInfo>> ListAllFleetCompositionsAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
-        QueryAsync(serverAddress, actingCharacterId,
+        QueryOrThrowAsync(serverAddress, actingCharacterId,
             (client, headers) => client.ListAllFleetCompositionsAsync(new ListAllFleetCompositionsRequest(), headers, ListDeadline(), cancellationToken),
-            reply => reply.Ok ? reply.Compositions.Select(MapComposition).ToList() : [], cancellationToken);
+            reply => reply.Ok ? reply.Compositions.Select(MapComposition).ToList() : throw NotOk(reply.Message), cancellationToken);
 
     public async Task<FleetCompositionDetail?> GetFleetCompositionAsync(string serverAddress, long compositionId, int actingCharacterId = 0, CancellationToken cancellationToken = default)
     {
@@ -599,6 +601,13 @@ public sealed class FleetClient(
         }
     }
 
+    /// <summary>A refused list reply (<c>Ok = false</c>) is a FAILURE, not an empty result. Every map above used to
+    /// fold it to <c>[]</c>, which is how "the server no longer accepts this session" came out looking exactly like
+    /// "there is nothing here" (ET-77) — the one thing a caller must never confuse. Routed through the same
+    /// <see cref="FleetTransportException"/> the transport failures already use, so callers have one thing to catch.</summary>
+    private static FleetTransportException NotOk(string message) =>
+        new(string.IsNullOrWhiteSpace(message) ? "The server refused the request." : message);
+
     private async Task<IReadOnlyList<TResult>> QueryAsync<TReply, TResult>(
         string serverAddress, int actingCharacterId,
         Func<GrpcFleets.FleetsClient, Metadata, AsyncUnaryCall<TReply>> call,
@@ -612,6 +621,10 @@ public sealed class FleetClient(
         catch (RpcException)
         {
             return [];
+        }
+        catch (FleetTransportException)
+        {
+            return []; // this overload's callers ask for best-effort; QueryOrThrowAsync is for the ones that can't
         }
     }
 

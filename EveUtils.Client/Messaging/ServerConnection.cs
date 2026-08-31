@@ -41,6 +41,7 @@ public sealed class ServerConnection
     private readonly ILogger<ServerConnection> _logger;
 
     private readonly SemaphoreSlim _writeGate = new(1, 1);
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private AsyncDuplexStreamingCall<ClientEnvelope, ServerEnvelope>? _call;
     private CancellationTokenSource? _connectionCts;
 
@@ -252,37 +253,57 @@ public sealed class ServerConnection
     /// </summary>
     private async Task<RefreshOutcome> TryRefreshSessionAsync(CancellationToken cancellationToken)
     {
-        // Refresh the session for the character this connection serves (multi-char safe).
-        var session = await _sessionStore.LoadForCharacterAsync(_serverAddress, _characterId, cancellationToken);
-        if (session is null || string.IsNullOrEmpty(session.RefreshToken))
-            return RefreshOutcome.Rejected; // nothing usable to refresh → treat as re-pair
-
+        // Serialised: the connect loop and the heartbeat can both find the access token expired at the same
+        // moment. A refresh ROTATES the refresh token, so two in flight at once would make the loser present a
+        // token the server has already replaced — read as "genuinely expired", costing the user a re-pair. The
+        // second caller waits, re-reads the store below and sees the freshly rotated pair.
+        await _refreshGate.WaitAsync(cancellationToken);
         try
         {
-            var channel = _channelFactory.CreatePinned(_serverAddress);
-            var client = new GrpcSession.SessionClient(channel);
-            var reply = await client.RefreshAsync(
-                new RefreshRequest { SessionRefreshToken = session.RefreshToken }, cancellationToken: cancellationToken);
-            if (!reply.Ok)
-                return RefreshOutcome.Rejected; // server reached us and refused → genuinely expired/invalid
+            // Refresh the session for the character this connection serves (multi-char safe).
+            var session = await _sessionStore.LoadForCharacterAsync(_serverAddress, _characterId, cancellationToken);
+            if (session is null || string.IsNullOrEmpty(session.RefreshToken))
+                return RefreshOutcome.Rejected; // nothing usable to refresh → treat as re-pair
 
-            await _sessionStore.SaveAsync(_serverAddress,
-                new ClientSessionTokens(reply.SessionToken, reply.SessionRefreshToken, session.CharacterName, session.CharacterId),
-                cancellationToken);
-            return RefreshOutcome.Refreshed;
+            try
+            {
+                var channel = _channelFactory.CreatePinned(_serverAddress);
+                var client = new GrpcSession.SessionClient(channel);
+                var reply = await client.RefreshAsync(
+                    new RefreshRequest { SessionRefreshToken = session.RefreshToken }, cancellationToken: cancellationToken);
+                if (!reply.Ok)
+                    return RefreshOutcome.Rejected; // server reached us and refused → genuinely expired/invalid
+
+                await _sessionStore.SaveAsync(_serverAddress,
+                    new ClientSessionTokens(reply.SessionToken, reply.SessionRefreshToken, session.CharacterName, session.CharacterId),
+                    cancellationToken);
+                return RefreshOutcome.Refreshed;
+            }
+            catch (Exception)
+            {
+                // Couldn't reach the server (network/TLS/cancellation) — keep the session and retry later. On
+                // a real shutdown the connect loop's `while (!cancellationToken.IsCancellationRequested)` exits.
+                return RefreshOutcome.TransientError;
+            }
         }
-        catch (Exception)
+        finally
         {
-            // Couldn't reach the server (network/TLS/cancellation) — keep the session and retry later. On
-            // a real shutdown the connect loop's `while (!cancellationToken.IsCancellationRequested)` exits.
-            return RefreshOutcome.TransientError;
+            _refreshGate.Release();
         }
     }
 
     // Independent backup liveness: a periodic unary Session.Heartbeat on its own call, separate from
     // the bus stream. It keeps the server's LastHeartbeat fresh (admin-panel "last seen") and gives a coarse
-    // reachability signal even if the stream path ever has a gap. The bus read-deadline owns reconnects, so this
-    // loop is observational — a failure is only logged at Debug (an outage must not flood the log window).
+    // reachability signal even if the stream path ever has a gap. A transport failure is only logged at Debug (an
+    // outage must not flood the log window) — the bus read-deadline owns reconnects.
+    //
+    // It is also the only thing that notices the 1-hour access token expiring while the bus stream stays healthy
+    // (ET-77). The stream is authenticated ONCE, at attach, so it keeps delivering fleet/fit events for as long as it
+    // lives — but every unary RPC re-validates the token on each call, and the server answers an expired one with a
+    // normal reply carrying "Not authenticated — pair with the server first." rather than a gRPC Unauthenticated
+    // status. So the refresh-on-401 in FleetClient/ServerFitShareClient never fires, the reads that fail do so
+    // silently (mapped to an empty list), and the first thing that TELLS the user is a save. This loop already asks
+    // the server "is this token still good?" every 30s; acting on the answer is what keeps the token alive.
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
 
     private async Task HeartbeatLoopAsync(CancellationToken cancellationToken)
@@ -300,8 +321,27 @@ public sealed class ServerConnection
 
                     var channel = _channelFactory.CreatePinned(_serverAddress);
                     var client = new GrpcSession.SessionClient(channel);
-                    await client.HeartbeatAsync(
+                    var reply = await client.HeartbeatAsync(
                         new HeartbeatRequest { SessionToken = session.AccessToken }, cancellationToken: cancellationToken);
+                    if (reply.Ok)
+                        continue;
+
+                    // The server reached us and does not accept this access token any more.
+                    switch (await TryRefreshSessionAsync(cancellationToken))
+                    {
+                        case RefreshOutcome.Refreshed:
+                            _logger.LogInformation(
+                                "Server session for {Server} (character {Character}) was refreshed after its access token expired.",
+                                _serverAddress, _characterId);
+                            break;
+                        case RefreshOutcome.Rejected:
+                            // Genuinely no longer paired (revoked, or past the refresh window). Say so NOW, on the
+                            // character's server chip, instead of letting the user discover it on a failed save. The
+                            // session row is left for the connect loop to clear when the stream itself drops.
+                            SetState(ServerConnectionState.SessionExpired);
+                            break;
+                        // TransientError: server unreachable — keep the session and try again next tick.
+                    }
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {

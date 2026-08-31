@@ -175,7 +175,18 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         // Couple from the whole server-wide library (ListAll), not just the acting character's own compositions
         // (ListAsync = ListByOwner on a server): a doctrine to couple is a shared-server one, often authored by
         // someone else. On the local store ListAll == the owner's own, so client-only fleets are unaffected.
-        var comps = await _compositions!.ListAllAsync();
+        IReadOnlyList<FleetCompositionInfo> comps;
+        try
+        {
+            comps = await _compositions!.ListAllAsync();
+        }
+        catch (FleetTransportException ex)
+        {
+            // "None to couple" is only true when the read succeeded and came back empty (ET-77).
+            StatusMessage = $"Couldn't load the compositions — {ex.Message}";
+            return;
+        }
+
         if (comps.Count == 0)
         {
             StatusMessage = "No compositions to couple — create one in the Compositions library first.";

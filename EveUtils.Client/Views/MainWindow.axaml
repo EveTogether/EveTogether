@@ -93,6 +93,18 @@
             </StackPanel>
         </Border>
 
+        <!-- ── Lapsed server pairing (ET-77) ── Stays put until the pairing is valid again, like the update banner
+             and unlike a toast: a list read against a server that refuses the session comes back EMPTY rather than
+             failing, so the app would otherwise go on showing "there is nothing here" indefinitely. ── -->
+        <Border DockPanel.Dock="Top" IsVisible="{Binding IsServerPairingAlert}" Background="#33CC4444"
+                BorderBrush="{StaticResource RedBrush}" BorderThickness="0,0,0,1" Padding="14,8">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <mi:MaterialIcon Classes="icon-lg" Kind="CloudOffOutline" Foreground="{StaticResource RedBrush}"/>
+                <TextBlock Text="{Binding ServerPairingAlertMessage}" Foreground="{StaticResource TextBrightBrush}"
+                           FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
         <!-- ── Update-ready banner (ET-32) ── A downloaded package that is never applied leaves the app running the
              old build forever, so this stays put until the user restarts or dismisses it — unlike the offer toast,
              which only has to carry news. ── -->
@@ -355,6 +367,7 @@
                                                             <ItemsControl.ItemTemplate>
                                                                 <DataTemplate x:DataType="vm:ServerLinkViewModel">
                                                                     <Border Classes="chip" Classes.warn="{Binding HasIssue}"
+                                                                            Classes.danger="{Binding HasExpired}"
                                                                             ToolTip.Tip="{Binding LinkTooltip}">
                                                                         <StackPanel Orientation="Horizontal" Spacing="4">
                                                                             <mi:MaterialIcon Kind="{Binding ChipIcon}"/>

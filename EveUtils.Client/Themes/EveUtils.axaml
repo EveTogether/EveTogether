@@ -285,6 +285,12 @@
             <SolidColorBrush Color="#FFE0B341"/>
         </Setter>
     </Style>
+    <!-- Red, not amber: something the user has to act on (a server pairing that has lapsed and needs re-pairing),
+         as opposed to .warn's "not healthy, but it is fixing itself". -->
+    <Style Selector="Border.chip.danger">
+        <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
+        <Setter Property="TextElement.Foreground" Value="{StaticResource RedBrush}"/>
+    </Style>
     <Style Selector="Border.chip.good">
         <Setter Property="BorderBrush" Value="{StaticResource GreenBrush}"/>
         <Setter Property="TextElement.Foreground" Value="{StaticResource GreenBrush}"/>
