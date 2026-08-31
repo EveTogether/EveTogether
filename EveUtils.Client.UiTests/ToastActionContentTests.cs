@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
@@ -59,15 +60,22 @@ public class ToastActionContentTests
     private static StackPanel LayoutOf(Control content) =>
         Assert.IsType<StackPanel>(Assert.IsType<Border>(content).Child);
 
-    // A severity toast puts its icon and title in a row of their own (ET-74), so the title is not always a direct
-    // child of the layout. Everything outside the button row counts as a text line, whichever shape it arrived in.
+    // A severity toast puts its icon and title in a row of their own (ET-74), and the title row is a Grid so the
+    // dismiss cross can sit opposite it, so a text line can be one or two levels down. Everything outside the button
+    // row counts as a text line, whichever shape it arrived in.
     private static IReadOnlyList<TextBlock> TextsOf(Control content) =>
         LayoutOf(content).Children.SelectMany(child => child switch
         {
-            TextBlock text => [text],
-            StackPanel row when !row.Children.OfType<Button>().Any() => row.Children.OfType<TextBlock>(),
-            _ => Enumerable.Empty<TextBlock>(),
+            Grid header => header.Children.SelectMany(TextsIn),
+            _ => TextsIn(child),
         }).ToList();
+
+    private static IEnumerable<TextBlock> TextsIn(Control child) => child switch
+    {
+        TextBlock text => [text],
+        StackPanel row when !row.Children.OfType<Button>().Any() => row.Children.OfType<TextBlock>(),
+        _ => [],
+    };
 
     // The button row is the horizontal StackPanel that actually holds the buttons.
     private static IReadOnlyList<Button> ButtonsOf(Control content) =>
@@ -76,4 +84,15 @@ public class ToastActionContentTests
             .Single(p => p.Orientation == Orientation.Horizontal && p.Children.OfType<Button>().Any())
             .Children.OfType<Button>()
             .ToList();
+
+    /// <summary>
+    /// A toast with buttons asks a question, and it must not withdraw the question by itself. Avalonia reads a null
+    /// expiration as its ~5 s default, so this pins the one place that decides it.
+    /// </summary>
+    [Fact]
+    public void AToastWithActions_NeverExpiresOnItsOwn_WhileAPlainOneStillMay()
+    {
+        Assert.Equal(TimeSpan.Zero, ToastService.ExpirationFor([new ToastAction("Import", () => { })]));
+        Assert.Null(ToastService.ExpirationFor([]));
+    }
 }

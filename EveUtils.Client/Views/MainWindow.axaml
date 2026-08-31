@@ -121,7 +121,8 @@
                 <!-- Clipboard watch state. It sits in the always-visible strip rather than in settings: a feature
                      that can see everything you copy has to be readable as off without going looking for it. -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
-                            Margin="0,0,14,0" ToolTip.Tip="{Binding ClipboardStatusTooltip}">
+                            Margin="0,0,14,0" ToolTip.Tip="{Binding ClipboardStatusTooltip}"
+                            Background="Transparent" Cursor="Hand" Tapped="OnClipboardStatusTapped">
                     <Panel Width="9" Height="9" VerticalAlignment="Center">
                         <Ellipse Width="9" Height="9" Fill="{DynamicResource AccentBrightBrush}"
                                  IsVisible="{Binding IsClipboardWatching}"/>

@@ -430,6 +430,12 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             vm.HasActiveClient = evidence.Matches(vm.Name, vm.CharacterId);
     }
 
+    // All three states lead to the same place: Privacy & Sharing holds the switch, the disclosure of what is read,
+    // and — when the desktop cannot report a change — the explanation of why it is off. So every state has something
+    // there to act on or to read, and picking a different destination per state would only change the scroll offset.
+    [RelayCommand]
+    private Task OpenClipboardSettings() => OpenSettings(Views.SettingsWindow.PrivacyCategory);
+
     // "Unsupported" is a state of its own rather than a second flavour of off: on a platform that cannot report a
     // clipboard change, showing OFF would suggest the switch does something.
     private void _ApplyClipboardState()
@@ -841,7 +847,10 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// Settings module and re-baselines the live gamelog watcher there.
     /// </summary>
     [RelayCommand]
-    private async Task OpenSettings()
+    /// <summary>
+    /// Opens the settings window, optionally straight at one of its categories rather than at General.
+    /// </summary>
+    private async Task OpenSettings(int initialCategory = 0)
     {
         if (_dialogs is null || _services is null) return;
 
@@ -876,7 +885,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             current, GameLogLocations.Default(),
             shares.IsShared(MetricKind.Location), shares.IsShared(MetricKind.Bounty), shares.IsShared(MetricKind.Dps),
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
-            localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch);
+            localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory);
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,

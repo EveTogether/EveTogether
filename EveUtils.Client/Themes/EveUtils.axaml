@@ -554,6 +554,23 @@
     <Style Selector="Button.toast-action /template/ ContentPresenter">
         <Setter Property="MinHeight" Value="0"/>
     </Style>
+    <!-- The dismiss cross on an action card: chromeless, so it reads as part of the card rather than as a fourth
+         answer next to the buttons. Dim until pointed at, the way a close affordance should be. -->
+    <Style Selector="Button.toast-dismiss">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="Padding" Value="3"/>
+        <Setter Property="Opacity" Value="0.45"/>
+    </Style>
+    <Style Selector="Button.toast-dismiss:pointerover">
+        <Setter Property="Opacity" Value="1"/>
+    </Style>
+    <Style Selector="Button.toast-dismiss /template/ ContentPresenter">
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
     <Style Selector="NotificationCard:success /template/ Panel#PART_HeaderBar">
         <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
     </Style>

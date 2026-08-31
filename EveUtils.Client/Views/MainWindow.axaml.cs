@@ -79,6 +79,13 @@ public partial class MainWindow : Window
         _HighlightCharacterTarget(null); // drag ended (dropped or cancelled) → clear the highlight
     }
 
+    // The strip is the only always-visible place this feature appears, so it is also the shortest way to its switch.
+    private void OnClipboardStatusTapped(object? sender, Avalonia.Input.TappedEventArgs e)
+    {
+        if (DataContext is ViewModels.MainWindowViewModel vm)
+            vm.OpenClipboardSettingsCommand.Execute(null);
+    }
+
     private void OnCharacterDragOver(object? sender, DragEventArgs e)
     {
         var isCharacter = e.DataTransfer.Contains(CharacterFormat);

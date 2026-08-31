@@ -58,7 +58,7 @@ public sealed class ToastService : IToastService, ISingletonService
         }
 
         // Action toasts carry buttons, which Avalonia's Notification can't render, so they're shown as plain content
-        // (ToastActionContent). They have no expiration: the card persists until the user picks an action or closes it.
+        // (ToastActionContent), and they never auto-dismiss — see ExpirationFor.
         var replacementVersion = _ReserveReplacement(replacementKey);
         ShowOnActiveWindow(position, manager => ShowAction(manager, title, message, kind, actions, onClosed, replacementKey,
             replacementVersion));
@@ -79,7 +79,7 @@ public sealed class ToastService : IToastService, ISingletonService
         if (replacementKey is { } currentKey)
             replacements.Add(currentKey, content);
 
-        manager.Show(content, ToNotificationType(kind), null, null, () =>
+        manager.Show(content, ToNotificationType(kind), ExpirationFor(actions), null, () =>
         {
             if (replacementKey is { } key && replacements.TryGetValue(key, out var current)
                 && ReferenceEquals(current, content))
@@ -88,6 +88,18 @@ public sealed class ToastService : IToastService, ISingletonService
             onClosed?.Invoke();
         }, []);
     }
+
+    /// <summary>
+    /// How long a card stays up: buttons make it a question, and a question that withdraws itself after five seconds
+    /// is not a question, so an action toast stays until it is answered or dismissed.
+    /// </summary>
+    /// <remarks>
+    /// Avalonia reads a null expiration as "use the default" (~5 s) rather than "never", which is what
+    /// <see cref="TimeSpan.Zero"/> means — the two are easy to swap and the difference is invisible until a card
+    /// vanishes while the user is reading it.
+    /// </remarks>
+    internal static TimeSpan? ExpirationFor(IReadOnlyList<ToastAction> actions) =>
+        actions.Count > 0 ? TimeSpan.Zero : null;
 
     private long? _ReserveReplacement(string? replacementKey)
     {

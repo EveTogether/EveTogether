@@ -49,12 +49,21 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     /// <summary>Set by the module host so Save/Cancel dismiss the docked tab; null when floating (then we Close()).</summary>
     public Action? CloseRequested { get; set; }
 
+    /// <summary>
+    /// Index of the Privacy &amp; Sharing entry in <c>CategoryNav</c>, for callers that want the window opened there.
+    /// </summary>
+    /// <remarks>
+    /// Lives here rather than at the caller because the order it refers to is in this file's own markup.
+    /// </remarks>
+    public const int PrivacyCategory = 2;
+
     public SettingsWindow()
     {
         AvaloniaXamlLoader.Load(this);
     }
 
-    public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null) : this()
+    public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null,
+        int initialCategory = 0) : this()
     {
         _detectedDefault = detectedDefault;
         _localApi = localApiServer;
@@ -123,7 +132,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         FactionRadioFor(currentFaction).IsChecked = true;
         UpdateHint();
 
-        this.FindControl<ListBox>("CategoryNav")!.SelectedIndex = 0; // show General first (fires OnCategoryChanged)
+        this.FindControl<ListBox>("CategoryNav")!.SelectedIndex = initialCategory; // fires OnCategoryChanged
     }
 
     // Switch the visible category panel to match the selected nav item.

@@ -14,6 +14,13 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- A notification that asks you something now stays on screen until you answer it. The offer to import a fit you
+  copied used to disappear by itself after about five seconds, so the question was often gone before you looked at
+  it. Every notification with buttons keeps this behaviour, and each one now carries a small cross so you can put it
+  away without answering.
+- The clipboard reading in the status bar at the bottom of the window is now clickable and takes you straight to
+  **Settings → Privacy & Sharing**, where the switch, the explanation of what is read, and — if your desktop cannot
+  report a change — the reason it is unavailable all live.
 - EVE Together can now watch your clipboard and recognise two things you copy out of the game: a
   fit in EFT format, and an inventory listing. **It is off until you switch it on** in
   **Settings → Privacy & Sharing**, and the status bar at the bottom of the window says which it
