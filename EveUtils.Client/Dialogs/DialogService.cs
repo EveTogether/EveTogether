@@ -340,10 +340,15 @@ public sealed class DialogService : IDialogService, ISingletonService
     }
 
     public void ShowFitBrowser(FitBrowserViewModel viewModel) =>
-        Route(new FitBrowserWindow(viewModel), "FIT BROWSER", "fits");
+        // One fit-browser module for the whole app (not per-entity, unlike roster/metrics): re-opening re-selects
+        // it and refreshes instead of silently handing back the library as it stood at first open (ET-48, same
+        // pattern as ET-46).
+        Route(new FitBrowserWindow(viewModel), "FIT BROWSER", "fits", moduleId: "fit-browser");
 
     public void ShowCompositions(CompositionsViewModel viewModel) =>
-        Route(new CompositionsWindow(viewModel), "COMPOSITIONS", "compositions");
+        // Same fix as the fit browser above: one compositions module for the whole app, refreshed on re-open
+        // instead of re-selecting a stale one (ET-48).
+        Route(new CompositionsWindow(viewModel), "COMPOSITIONS", "compositions", moduleId: "compositions");
 
     public void ShowFitDetail(FitDetailWindowViewModel viewModel) =>
         Route(new FitDetailWindow(viewModel), string.IsNullOrWhiteSpace(viewModel.Name) ? "FIT DETAIL" : viewModel.Name, "fits");

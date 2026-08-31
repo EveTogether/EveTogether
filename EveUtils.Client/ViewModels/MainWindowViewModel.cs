@@ -616,11 +616,30 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 && localTab.FindByName(importedName) is { } row)
                 await OpenFitDetailAsync(row);
         }
-        _dialogs.ShowFitBrowser(new FitBrowserViewModel(
+
+        FitBrowserViewModel viewModel = null!;
+        // The browser is one module for the whole app (ET-48): re-opening FITS re-selects this standing instance and
+        // calls this instead of building a fresh one, so a fit imported elsewhere or a server coupled meanwhile
+        // still shows up — additive on the server tabs, same as ET-46's RefreshModule.
+        async Task RefreshAsync()
+        {
+            await ReloadLocalAsync();
+            var known = viewModel.Tabs.Where(t => !t.IsLocal).Select(t => t.ServerAddress).ToHashSet();
+            foreach (var addr in await sessionStore.ListServersAsync())
+            {
+                if (known.Contains(addr)) continue;
+                var display = _serverRegistry is null ? addr : await _serverRegistry.DisplayNameAsync(addr);
+                viewModel.Tabs.Add(new FitBrowserTabViewModel(display, addr, LoadServerFitBrowserTabAsync, names));
+            }
+        }
+
+        viewModel = new FitBrowserViewModel(
             tabs, OpenFitDetailAsync,
             importEsi: async () => { await ImportFittings(); await ReloadLocalAsync(); },
             importText: () => ImportThenMaybeOpenAsync(ImportFitText),
-            importEsfLink: () => ImportThenMaybeOpenAsync(ImportFitEsfLink)));
+            importEsfLink: () => ImportThenMaybeOpenAsync(ImportFitEsfLink),
+            refresh: RefreshAsync);
+        _dialogs.ShowFitBrowser(viewModel);
     }
 
     // Set when the fit-browser builds its Local tab; lets the detail window's in-place metadata edit refresh that tab.

@@ -13,6 +13,8 @@ using EveUtils.Client.Fleet;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.Views;
+using EveUtils.Shared.Identity;
+using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fittings.Entities;
@@ -355,6 +357,78 @@ public class ModuleNavigationTests
         Assert.True(vm.IsCompositionsActive);
 
         window.CaptureRenderedFrame()!.Save(Path.Combine(Path.GetTempPath(), "eveutils-shell-docked-compositions.png"));
+        window.Close();
+    }
+
+    /// <summary>
+    /// The fit browser is one module for the whole app (ET-48, same pattern as the per-fleet roster/metrics fix in
+    /// ET-46): re-opening FITS while it is already open must re-select the standing instance — not stack a second
+    /// tab — and must refresh it, so a fit imported through another path while the browser stood open is not stuck
+    /// missing until restart.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Docked_ReopeningFits_RefreshesTheStandingBrowser_WithoutDuplicateTab()
+    {
+        using var instance = TestClientInstance.Create();
+        await SeedFitsAsync(instance.Services, ("Rifter — Kite", 587));
+        var (vm, window) = BuildHostedApp(instance.Services);
+
+        vm.LaunchModuleCommand.Execute("fits");
+        Assert.True(await WaitForAsync(() => vm.SelectedHostTab?.Content.DataContext is FitBrowserViewModel),
+            "rail FITS did not host the browser");
+        var browser = (FitBrowserViewModel)vm.SelectedHostTab!.Content.DataContext!;
+        await browser.Tabs[0].EnsureLoadedAsync();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, browser.Tabs[0].TotalCount);
+
+        // A fit lands in the local library through another path (e.g. an import elsewhere) while the browser
+        // stays open — the standing instance's own reload hooks never fire for this, only a re-open can.
+        var repo = instance.Services.GetRequiredService<IFittingRepository>();
+        await repo.UpsertAsync(new LocalFitting
+        {
+            OwnerId = "0", EsiFittingId = 2, Name = "Thanatos — Ratting", ShipTypeId = 23911,
+            RawJson = JsonSerializer.Serialize(new EsiFitting(0, "Thanatos — Ratting", "", 23911, new List<EsiFittingItem>())),
+            ContentHash = "hash-2", ImportedAt = DateTimeOffset.UtcNow
+        });
+
+        vm.LaunchModuleCommand.Execute("fits");   // re-open → re-select, not a duplicate
+        Assert.True(await WaitForAsync(() => browser.Tabs[0].TotalCount >= 2),
+            $"local rows after reopen = {browser.Tabs[0].TotalCount}");
+        Assert.Single(vm.HostTabs);
+        Assert.Same(browser, vm.SelectedHostTab!.Content.DataContext);   // same instance, not rebuilt
+        window.Close();
+    }
+
+    /// <summary>Same fix, same reasoning, for the compositions library (ET-48).</summary>
+    [AvaloniaFact]
+    public async Task Docked_ReopeningCompositions_RefreshesTheStandingLibrary_WithoutDuplicateTab()
+    {
+        using var instance = TestClientInstance.Create();
+        const int owner = 95400001;
+        await instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character("Pilot One", owner));
+        var (vm, window) = BuildHostedApp(instance.Services);
+
+        vm.LaunchModuleCommand.Execute("compositions");
+        Assert.True(await WaitForAsync(() => vm.SelectedHostTab?.Content.DataContext is CompositionsViewModel),
+            "rail COMP did not host the compositions library");
+        var library = (CompositionsViewModel)vm.SelectedHostTab!.Content.DataContext!;
+        Assert.True(await WaitForAsync(() => library.SelectedTab is not null));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(library.SelectedTab!.Compositions);
+
+        // A composition created through another path while the library stays open — same gap as the fit above.
+        var compositionRepo = instance.Services.GetRequiredService<IFleetCompositionRepository>();
+        var now = DateTimeOffset.UtcNow;
+        await compositionRepo.AddAsync(new FleetComposition
+        {
+            Name = "Armor doctrine", OwnerCharacterId = owner, IsClientOnly = true, CreatedAt = now, UpdatedAt = now
+        });
+
+        vm.LaunchModuleCommand.Execute("compositions");   // re-open → re-select, not a duplicate
+        Assert.True(await WaitForAsync(() => library.SelectedTab!.Compositions.Any(c => c.Name == "Armor doctrine")),
+            "reopened library did not show the composition created while it stood open");
+        Assert.Single(vm.HostTabs);
+        Assert.Same(library, vm.SelectedHostTab!.Content.DataContext);   // same instance, not rebuilt
         window.Close();
     }
 
