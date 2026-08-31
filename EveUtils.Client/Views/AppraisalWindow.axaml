@@ -9,7 +9,7 @@
         mc:Ignorable="d" d:DesignWidth="960" d:DesignHeight="640"
         x:Class="EveUtils.Client.Views.AppraisalWindow"
         x:DataType="vm:AppraisalViewModel"
-        Width="960" Height="640" MinWidth="560" MinHeight="420"
+        Width="960" Height="640" MinWidth="760" MinHeight="420"
         WindowStartupLocation="CenterOwner"
         Title="Appraisal">
 
@@ -17,6 +17,13 @@
 
         <!-- On the content root, not on the window: the module host re-parents this content into the main window's
              tab when docked, and Window.Styles would stay behind with the (never shown) window. -->
+        <DockPanel.Resources>
+            <!-- DataGridColumnHeader reserves a fixed slot for the sort glyph after the header content, even when
+                 that column isn't the one currently sorted — which is what put a ~20px gap between a right-aligned
+                 header and the right-aligned figures below it (ET-90). Scoped to this window's content, not
+                 App.axaml: it only affects this DataGrid, not FitBrowserWindow's (ET-92). -->
+            <sys:Double x:Key="DataGridSortIconMinWidth">0</sys:Double>
+        </DockPanel.Resources>
         <DockPanel.Styles>
             <Style Selector="Border.statusline">
                 <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
@@ -28,6 +35,22 @@
                 <Setter Property="FontSize" Value="11"/>
                 <Setter Property="Opacity" Value="0.75"/>
                 <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <!-- DataGridTextColumn has no TextTrimming property of its own; it names the TextBlock it generates
+                 "CellTextBlock", which is the only hook available. Without this, a cell a user drags narrower than
+                 its content — or one the fixed-column layout squeezes, pre-ET-90 — clips mid-character instead of
+                 eliding, which is how "1,000,000,000 ISK" turned into "1,000,000,000 I". -->
+            <Style Selector="DataGrid TextBlock#CellTextBlock">
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <!-- QTY/PRICE EACH/TOTAL, right-aligned so digit groups line up and an order-of-magnitude difference
+                 reads at a glance instead of needing to be read out (ET-90). CellStyleClasses puts "money" on the
+                 DataGridCell; the header TextBlock is right-aligned to match directly in the column, not here. Right
+                 alignment plus TextTrimming would trim the leading digits — the ones that carry the magnitude —
+                 rather than the trailing ones, which is why QTY/PRICE EACH/TOTAL are pinned to MinWidth == Width
+                 above: that keeps them from ever reaching a width where trimming would engage. -->
+            <Style Selector="DataGridCell.money TextBlock#CellTextBlock">
+                <Setter Property="TextAlignment" Value="Right"/>
             </Style>
         </DockPanel.Styles>
 
@@ -144,13 +167,37 @@
                                   SelectionMode="Single" CanUserReorderColumns="False"
                                   CanUserResizeColumns="True" CanUserSortColumns="True">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="NAME" Binding="{Binding Name}" Width="*"/>
-                                <DataGridTextColumn Header="QTY" Binding="{Binding QuantityDisplay}" Width="90"
-                                                    SortMemberPath="Quantity"/>
-                                <DataGridTextColumn Header="PRICE EACH" Binding="{Binding UnitPriceDisplay}" Width="130"
-                                                    SortMemberPath="UnitPrice"/>
-                                <DataGridTextColumn Header="TOTAL" Binding="{Binding TotalDisplay}" Width="130"
-                                                    SortMemberPath="Total"/>
+                                <!-- The one column that used to take whatever was left over, down to Avalonia's own
+                                     20px DataGrid floor: below the fixed columns' combined minimum the grid now
+                                     scrolls horizontally instead, so a name never bottoms out unreadable and the
+                                     money columns beside it are never squeezed to make room (ET-90). -->
+                                <DataGridTextColumn Header="NAME" Binding="{Binding Name}" Width="*" MinWidth="180"/>
+                                <!-- MinWidth == Width on these three: without it Avalonia's DataGrid still treats a
+                                     pixel Width as a mere preference and keeps shrinking it — proportionally, past
+                                     NAME's own floor above — once nothing else can give. That is exactly the "clip
+                                     a figure to make room" outcome ET-90 rules out; pinning them makes the grid
+                                     scroll horizontally instead when the sum of minimums does not fit. It matters
+                                     more than it did pre-ET-90: right-aligned (below), a squeeze eats the leading
+                                     digits first, and a total that loses its front reads as a much smaller number,
+                                     not as an obviously-cut-off one. -->
+                                <DataGridTextColumn Binding="{Binding QuantityDisplay}" Width="90" MinWidth="90"
+                                                    SortMemberPath="Quantity" CellStyleClasses="money">
+                                    <DataGridTextColumn.Header>
+                                        <TextBlock Text="QTY" HorizontalAlignment="Right"/>
+                                    </DataGridTextColumn.Header>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Binding="{Binding UnitPriceDisplay}" Width="130" MinWidth="130"
+                                                    SortMemberPath="UnitPrice" CellStyleClasses="money">
+                                    <DataGridTextColumn.Header>
+                                        <TextBlock Text="PRICE EACH" HorizontalAlignment="Right"/>
+                                    </DataGridTextColumn.Header>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Binding="{Binding TotalDisplay}" Width="130" MinWidth="130"
+                                                    SortMemberPath="Total" CellStyleClasses="money">
+                                    <DataGridTextColumn.Header>
+                                        <TextBlock Text="TOTAL" HorizontalAlignment="Right"/>
+                                    </DataGridTextColumn.Header>
+                                </DataGridTextColumn>
                             </DataGrid.Columns>
                         </DataGrid>
                     </Panel>
