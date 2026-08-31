@@ -221,11 +221,22 @@ public sealed class RecordingFleetTransportClient : IFleetTransportClient
 
     public Task<(bool Ok, string Message)> DeleteFleetCompositionAsync(string serverAddress, long compositionId, int actingCharacterId = 0, CancellationToken cancellationToken = default) => Accepted();
 
+    /// <summary>Compositions returned by the two list endpoints per server (default: none) — so a test can tell an
+    /// empty library apart from a library that could not be read (see <see cref="UnreachableServers"/>).</summary>
+    public Dictionary<string, IReadOnlyList<FleetCompositionInfo>> CompositionsByServer { get; } = new();
+
     public Task<IReadOnlyList<FleetCompositionInfo>> ListMyFleetCompositionsAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
-        Task.FromResult(EmptyList<FleetCompositionInfo>());
+        CompositionsFor(serverAddress);
 
     public Task<IReadOnlyList<FleetCompositionInfo>> ListAllFleetCompositionsAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
-        Task.FromResult(EmptyList<FleetCompositionInfo>());
+        CompositionsFor(serverAddress);
+
+    /// <summary>Mirrors the real client: a server that cannot be read throws, it does not answer with an empty list.</summary>
+    private Task<IReadOnlyList<FleetCompositionInfo>> CompositionsFor(string serverAddress) =>
+        UnreachableServers.Contains(serverAddress)
+            ? Task.FromException<IReadOnlyList<FleetCompositionInfo>>(
+                new FleetTransportException("Not authenticated — pair with the server first."))
+            : Task.FromResult(CompositionsByServer.TryGetValue(serverAddress, out var list) ? list : EmptyList<FleetCompositionInfo>());
 
     /// <summary>Compositions returned by <see cref="GetFleetCompositionAsync"/> per id (default: none → null).</summary>
     public Dictionary<long, FleetCompositionDetail> CompositionsById { get; } = new();

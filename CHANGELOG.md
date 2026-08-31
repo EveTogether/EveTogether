@@ -195,6 +195,16 @@ repository. **Beta:** more stable than the alpha, but expect occasional rough ed
   cloud and "session expired — re-pair" on hover. A link that is merely dropped or reconnecting
   stays amber, as it fixes itself. Previously an invalid pairing was something you found out about
   by trying to save.
+- A lapsed pairing also raises a **banner across the top of the window** naming the server, and it
+  stays there until the pairing is good again rather than fading after a few seconds. It has to:
+  a list read against a server that no longer accepts your session used to come back **empty**
+  instead of failing, so fleets, compositions and shared fits from that server quietly read as
+  "there is nothing here" — indefinitely, and with nothing on screen to say otherwise.
+- A list that could not be read no longer claims to be empty. The Compositions window said
+  "No compositions shared on this server yet." whether the server held nothing or had refused the
+  request outright; it now says it couldn't load, and passes on the server's own reason. The same
+  applies to coupling a composition to a fleet, and to duplicating or pushing one — none of which
+  will now act on a library it failed to read.
 - **EVE Settings Sync** now finds your EVE folder on Linux by itself. EVE on Linux is the Windows
   client running under Steam's Proton (or plain Wine), so its settings live inside that prefix
   rather than where a Linux program would put them — and the tool, which only ever looked in the

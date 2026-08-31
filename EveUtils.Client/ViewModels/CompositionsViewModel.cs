@@ -138,7 +138,21 @@ public sealed partial class CompositionsViewModel : ObservableObject
         // One server-wide list as the first coupled character; each row carries its own edit-state (owner-or-manage)
         // and the server-resolved owner name. In v1 the policy grants manage to everyone, so all are editable.
         var client = new ServerFleetCompositionClient(_transport, server, sessions[0].CharacterId);
-        foreach (var info in await client.ListAllAsync())
+        IReadOnlyList<FleetCompositionInfo> infos;
+        try
+        {
+            infos = await client.ListAllAsync();
+        }
+        catch (FleetTransportException ex)
+        {
+            // The read never landed. Saying "none shared yet" here is what let a lapsed pairing pass for an empty
+            // library (ET-77) — an empty list and a failed read must never read the same.
+            tab.SetFilter(SearchText);
+            tab.Status = $"Couldn't load this server's compositions — {ex.Message}";
+            return;
+        }
+
+        foreach (var info in infos)
             tab.Loaded.Add(new CompositionRowViewModel(info, info.OwnerName, canEdit: info.CanEdit, isLocal: false, client,
                 _services.GetService<ITypeImageProvider>()));
 
@@ -231,7 +245,18 @@ public sealed partial class CompositionsViewModel : ObservableObject
             return;
         }
 
-        var existing = (await row.Client.ListAsync()).Select(c => c.Name).ToList();
+        List<string> existing;
+        try
+        {
+            existing = (await row.Client.ListAsync()).Select(c => c.Name).ToList();
+        }
+        catch (FleetTransportException ex)
+        {
+            // Without the existing names the copy would collide or overwrite blind; stop and say why.
+            StatusMessage = $"Couldn't duplicate — {ex.Message}";
+            return;
+        }
+
         var copyName = _UniqueCopyName(source.Composition.Name, existing);
         var (ok, message) = await _CopyGraphAsync(source, row.Client, copyName);
         StatusMessage = ok ? $"Duplicated as \"{copyName}\"." : message;
@@ -390,7 +415,16 @@ public sealed partial class CompositionsViewModel : ObservableObject
         FleetCompositionDetail source, IFleetCompositionClient target, string? targetName = null)
     {
         var name = targetName ?? source.Composition.Name;
-        var existing = await target.ListAsync();
+        IReadOnlyList<FleetCompositionInfo> existing;
+        try
+        {
+            existing = await target.ListAsync();
+        }
+        catch (FleetTransportException ex)
+        {
+            return (false, ex.Message); // couldn't read the target's library — don't copy into the dark
+        }
+
         if (existing.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)))
             return (false, $"\"{name}\" already exists there — not copied again.");
 

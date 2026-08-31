@@ -131,6 +131,12 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     [ObservableProperty] private bool _isEsiAlert;
     [ObservableProperty] private string _esiAlertMessage = "";
 
+    // Same banner slot, for a server pairing that has lapsed (ET-77). Persistent on purpose: a list read against a
+    // server that no longer accepts the session comes back EMPTY rather than failing, so without this the app would
+    // go on quietly showing "there is nothing here" for as long as the pairing stays broken.
+    [ObservableProperty] private bool _isServerPairingAlert;
+    [ObservableProperty] private string _serverPairingAlertMessage = "";
+
     private static readonly IBrush OnlineStatusBrush = new SolidColorBrush(Color.Parse("#FF6FCF97"));
     private static readonly IBrush VipStatusBrush = new SolidColorBrush(Color.Parse("#FFE0B341"));
     private static readonly IBrush OfflineStatusBrush = new SolidColorBrush(Color.Parse("#FFCC4444"));
@@ -789,7 +795,16 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             foreach (var link in c.ServerLinks)
                 if (string.Equals(link.Address, address, StringComparison.OrdinalIgnoreCase))
                     link.State = state;
+
+        RefreshServerPairingAlert();
     }
+
+    /// <summary>Re-derives the lapsed-pairing banner from the links as they now stand. Called on every state change
+    /// and after the character list is rebuilt, so the banner appears without waiting for a state change to happen to
+    /// fire, and clears itself the moment the pairing is good again.</summary>
+    public void RefreshServerPairingAlert() =>
+        (IsServerPairingAlert, ServerPairingAlertMessage) = ServerPairingAlert.For(
+            Characters.SelectMany(c => c.ServerLinks).Select(l => (l.DisplayName, l.State)));
 
     // Lazy-load a server tab the first time it is shown.
     partial void OnSelectedFittingsTabChanged(FittingsTabViewModel? value)
@@ -1147,6 +1162,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         // Rebuilt rows start without the presence dot — re-seed from the latest sweep.
         if (_clientPresence is not null)
             _ApplyClientPresence(_clientPresence.Current);
+
+        RefreshServerPairingAlert(); // the fresh links carry their own state; no StateChanged fires for a rebuild
 
         _ = LoadCharacterPortraitsAsync(); // hex ESI portraits, best-effort
     }
