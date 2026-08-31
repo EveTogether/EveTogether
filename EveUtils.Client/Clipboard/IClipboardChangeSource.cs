@@ -18,6 +18,12 @@ public interface IClipboardChangeSource : IDisposable
     /// <summary>Raised off the UI thread on every clipboard change while started; subscribers marshal.</summary>
     event Action? Changed;
 
+    /// <summary>
+    /// Raised off the UI thread when <see cref="IsSupported"/> changes or the source stops notifying, which some
+    /// platforms can only discover after <see cref="Start"/>.
+    /// </summary>
+    event Action? SupportChanged;
+
     void Start();
 
     void Stop();
@@ -38,6 +44,12 @@ public sealed class UnsupportedClipboardChangeSource : IClipboardChangeSource
     public bool IsSupported => false;
 
     public event Action? Changed
+    {
+        add { }
+        remove { }
+    }
+
+    public event Action? SupportChanged
     {
         add { }
         remove { }

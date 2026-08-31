@@ -48,6 +48,7 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
         _logger = logger;
         _source = source ?? CreatePlatformSource();
         _source.Changed += OnClipboardChanged;
+        _source.SupportChanged += OnSupportChanged;
     }
 
     /// <summary>False where the OS cannot report a clipboard change; the UI says so instead of offering a dead toggle.</summary>
@@ -104,6 +105,7 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
     public void Dispose()
     {
         _source.Changed -= OnClipboardChanged;
+        _source.SupportChanged -= OnSupportChanged;
         _source.Dispose();
     }
 
@@ -118,10 +120,7 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
             return;
 
         _source.Start();
-
-        // A source may only be able to learn that this desktop cannot notify it by trying, so IsSupported is read
-        // again afterwards: the status line then says unsupported instead of leaving a switch that looks on.
-        IsWatching = _source.IsSupported;
+        IsWatching = true;
         StateChanged?.Invoke();
     }
 
@@ -134,6 +133,17 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
         IsWatching = false;
         StateChanged?.Invoke();
     }
+
+    // A source can lose its notifier while running, or find out on the way up that this desktop has none. Either
+    // way the clipboard is no longer being watched, and the status line has to stop saying that it is.
+    private void OnSupportChanged() => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+    {
+        if (!IsWatching)
+            return;
+
+        IsWatching = false;
+        StateChanged?.Invoke();
+    });
 
     // The notification arrives on the listener's own thread; the clipboard is read through the toplevel, which is
     // the UI thread's.

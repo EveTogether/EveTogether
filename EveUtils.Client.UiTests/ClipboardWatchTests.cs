@@ -126,24 +126,63 @@ public class ClipboardWatchTests
     }
 
     /// <summary>
-    /// A desktop that turns out to have no clipboard notification is reported as unsupported the moment the user
-    /// switches on, rather than left showing a switch that looks on while nothing arrives.
+    /// A desktop that cannot notify makes wl-paste exit without ever writing a line, so a source that gets no
+    /// first line reports itself unsupported instead of sitting there looking started.
+    /// </summary>
+    [Fact]
+    public void WaylandSource_ReportsUnsupported_WhenNoLineEverArrives()
+    {
+        var source = new WaylandClipboardChangeSource();
+        var reported = 0;
+        source.SupportChanged += () => reported++;
+
+        source.Pump(new StringReader(""));
+
+        Assert.False(source.IsSupported);
+        Assert.Equal(1, reported);
+    }
+
+    /// <summary>
+    /// A watcher that falls away mid-run ends the pump, and that end is reported rather than silent — otherwise
+    /// the switch goes on looking on while nothing will ever arrive again.
+    /// </summary>
+    [Fact]
+    public void WaylandSource_ReportsTheEndOfThePump_WhenTheWatcherFallsAway()
+    {
+        var source = new WaylandClipboardChangeSource();
+        var changes = 0;
+        var reported = 0;
+        source.Changed += () => changes++;
+        source.SupportChanged += () => reported++;
+
+        // The startup line, one copy the user made, and then the watcher is gone.
+        source.Pump(new StringReader("\n\n"));
+
+        Assert.Equal(1, changes);
+        Assert.Equal(1, reported);
+    }
+
+    /// <summary>
+    /// A source that loses its notifier while running — a compositor restart, a killed helper — stops the watch
+    /// rather than leaving the status line claiming the clipboard is still being read.
     /// </summary>
     [AvaloniaFact]
-    public async Task ClipboardWatch_ReportsUnsupported_WhenTheSourceOnlyLearnsItOnStart()
+    public async Task ClipboardWatch_StopsClaimingToWatch_WhenTheSourceLosesItsNotifier()
     {
-        var source = new LateUnsupportedClipboardChangeSource();
+        var source = new FakeClipboardChangeSource();
         using var instance = TestClientInstance.Create();
         using var watch = new ClipboardWatchService(new RecordingDialogService(), instance.Services,
             NullLogger<ClipboardWatchService>.Instance, source);
 
-        Assert.True(watch.IsSupported);
+        await watch.SetEnabledAsync(true);
+        Assert.True(watch.IsWatching);
 
         var stateChanges = 0;
         watch.StateChanged += () => stateChanges++;
-        await watch.SetEnabledAsync(true);
 
-        Assert.False(watch.IsSupported);
+        source.RaiseSupportChanged();
+        Dispatcher.UIThread.RunJobs();
+
         Assert.False(watch.IsWatching);
         Assert.Equal(1, stateChanges);
     }
@@ -161,6 +200,8 @@ public class ClipboardWatchTests
 
         public event Action? Changed;
 
+        public event Action? SupportChanged;
+
         public void Start()
         {
         }
@@ -174,27 +215,7 @@ public class ClipboardWatchTests
         }
 
         public void RaiseChanged() => Changed?.Invoke();
-    }
 
-    // Stands in for a Wayland compositor without the data-control protocol: it looks usable until Start tries.
-    private sealed class LateUnsupportedClipboardChangeSource : IClipboardChangeSource
-    {
-        public bool IsSupported { get; private set; } = true;
-
-        public event Action? Changed
-        {
-            add { }
-            remove { }
-        }
-
-        public void Start() => IsSupported = false;
-
-        public void Stop()
-        {
-        }
-
-        public void Dispose()
-        {
-        }
+        public void RaiseSupportChanged() => SupportChanged?.Invoke();
     }
 }

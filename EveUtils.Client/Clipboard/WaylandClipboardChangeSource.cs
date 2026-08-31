@@ -8,7 +8,7 @@ namespace EveUtils.Client.Clipboard;
 
 /// <summary>
 /// Wayland clipboard notification through a long-lived <c>wl-paste --watch</c>, which speaks the compositor's
-/// data-control protocol and writes one line per change.
+/// data-control protocol and writes a line for every change.
 /// </summary>
 /// <remarks>
 /// The command it runs for each change is <c>echo</c>, which ignores the payload handed to it on stdin, so what
@@ -16,7 +16,6 @@ namespace EveUtils.Client.Clipboard;
 /// </remarks>
 public sealed class WaylandClipboardChangeSource : IClipboardChangeSource
 {
-    private static readonly TimeSpan StartupGrace = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(2);
 
     private readonly Lock _gate = new();
@@ -24,9 +23,18 @@ public sealed class WaylandClipboardChangeSource : IClipboardChangeSource
     private bool _supported = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY") is { Length: > 0 };
     private Process? _watcher;
 
-    public bool IsSupported => _supported;
+    public bool IsSupported
+    {
+        get
+        {
+            lock (_gate)
+                return _supported;
+        }
+    }
 
     public event Action? Changed;
+
+    public event Action? SupportChanged;
 
     public void Start()
     {
@@ -42,26 +50,18 @@ public sealed class WaylandClipboardChangeSource : IClipboardChangeSource
                 {
                     ArgumentList = { "--watch", "echo" },
                     RedirectStandardOutput = true,
-                    RedirectStandardError = true,
                     UseShellExecute = false
                 })!;
             }
             catch (Exception)
             {
                 _supported = false; // wl-clipboard is not installed
+                SupportChanged?.Invoke();
                 return;
             }
 
-            // A compositor that does not offer the data-control protocol makes wl-paste exit at once, and trying
-            // is the only capability probe that does not read the clipboard — which is why it happens on Start
-            // rather than in the constructor, where the user has not opted in yet.
-            if (watcher.WaitForExit(StartupGrace))
-            {
-                _supported = false;
-                watcher.Dispose();
-                return;
-            }
-
+            // Nothing is waited for here: whether this desktop can notify at all is answered by the first line,
+            // and answering it on the calling thread would freeze the UI for as long as the answer takes.
             _watcher = watcher;
             Task.Run(() => Pump(watcher.StandardOutput));
         }
@@ -96,26 +96,28 @@ public sealed class WaylandClipboardChangeSource : IClipboardChangeSource
     public void Dispose() => Stop();
 
     /// <summary>
-    /// Turns wl-paste's lines into <see cref="Changed"/>, dropping the one it writes for the clipboard that was
-    /// already there when it started.
+    /// Turns wl-paste's lines into <see cref="Changed"/>, after dropping the one it writes for the clipboard that
+    /// was already there when it started.
     /// </summary>
     /// <remarks>
-    /// Reads from a <see cref="TextReader"/> rather than the process so this rule can be exercised on any
+    /// Reads from a <see cref="TextReader"/> rather than the process so these rules can be exercised on any
     /// platform: the lines are the contract, the child process is only how they are produced.
     /// </remarks>
     internal void Pump(TextReader lines)
     {
-        // The user did not copy the startup line's payload while watching, so switching on must not read it.
-        var startup = true;
+        // The first line does double duty. A desktop that cannot notify makes wl-paste exit without writing one,
+        // so its arrival is the capability probe; and its payload was copied before watching began, so switching
+        // on must not read it.
+        if (lines.ReadLine() is null)
+        {
+            lock (_gate)
+                _supported = false;
+            SupportChanged?.Invoke();
+            return;
+        }
 
         while (lines.ReadLine() is not null)
         {
-            if (startup)
-            {
-                startup = false;
-                continue;
-            }
-
             try
             {
                 Changed?.Invoke();
@@ -126,5 +128,12 @@ public sealed class WaylandClipboardChangeSource : IClipboardChangeSource
                 // no way back short of a restart.
             }
         }
+
+        // The pump ends when the watcher does: a compositor restart, an OOM kill, or Stop killing it. Clear it so
+        // a later Start can replace it, and say so — a silent end is what leaves a switch looking on while nothing
+        // arrives. Restarting is deliberately not done: that needs a policy, and switching on again is the retry.
+        lock (_gate)
+            _watcher = null;
+        SupportChanged?.Invoke();
     }
 }

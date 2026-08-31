@@ -122,6 +122,12 @@ public sealed class ClipboardFitImportOfferTests
 
         public event Action? Changed;
 
+        public event Action? SupportChanged
+        {
+            add { }
+            remove { }
+        }
+
         public void Start()
         {
         }

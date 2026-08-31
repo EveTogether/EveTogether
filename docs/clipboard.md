@@ -50,7 +50,9 @@ would deliver its messages into Avalonia's loop.
 Linux on Wayland needs no polling either. `WaylandClipboardChangeSource` keeps one
 `wl-paste --watch echo` running and treats each line it writes as one change. `wl-paste` speaks the
 compositor's data-control protocol, which is a real push, and the command it runs per change is
-`echo` — which ignores the payload handed to it on stdin. What crosses into the application is
+`echo` — which ignores the payload handed to it on stdin. (One user action is not always one line:
+clearing the clipboard measurably produces two. Harmless — both reads find nothing recognisable and
+drop it — but "a line per change" is the honest phrasing, not "a line per copy".) What crosses into the application is
 therefore a bare line: an event, with no previous content kept anywhere and nothing compared. Two
 consequences worth naming: **byte-identical copies each raise a change** (a content diff could not
 do that), and the line `wl-paste` writes for the clipboard that was *already there* when it starts
@@ -73,9 +75,33 @@ a visible "unsupported" into an invisible "does nothing".
 **Wayland without data-control.** GNOME's Mutter does not offer the protocol. This cannot be known
 without trying, and the only probe that does not read the clipboard is starting `wl-paste` itself —
 so the probe *is* the start, and it runs when the user switches on rather than in the constructor,
-where they have not opted in yet. If the process exits within the startup grace period the source
-reports itself unsupported, `StartWatching` re-reads `IsSupported` after `Start`, and the status bar
-turns to `CLIPBOARD UNSUPPORTED` instead of showing a switch that looks on.
+where they have not opted in yet. The **first line does double duty**: a desktop that cannot notify
+makes `wl-paste` exit without writing one, so its arrival is the capability answer, and its payload
+was copied before watching began, so it is dropped either way. Nothing is waited for on the calling
+thread — that thread is the UI's.
+
+### A source that falls away must not fall silent
+
+The same failure has a second half. `wl-paste` can also disappear *after* a good start: a compositor
+restart, an OOM kill, a `wl-clipboard` upgrade underneath a running app. The pump then reaches
+end-of-stream and returns, and without a signal `IsWatching` would stay `true` for the rest of the
+session — a switch that looks on while nothing will ever arrive again, which is the exact state
+`UnsupportedClipboardChangeSource` exists to prevent.
+
+So `IClipboardChangeSource` carries a second event, `SupportChanged`, raised off the UI thread when
+a source learns it cannot notify or stops being able to. `ClipboardWatchService` drops `IsWatching`
+and raises `StateChanged`, and the status bar follows. Windows declares it and never raises it: it
+knows on construction and does not change its mind.
+
+**The watcher is deliberately not restarted.** Restarting needs a policy — how often, how fast, when
+to give up — that nothing here asks for, and a watcher that died because the protocol went away
+would restart-loop. Stopping honestly leaves the switch usable, so switching on again *is* the
+retry, with no policy to tune.
+
+**And it is stopped on the way out.** A child process outlives the parent that spawned it, so
+`App.OnFrameworkInitializationCompleted` disposes the watch service on `desktop.Exit`; without that,
+every run of the application would leave a `wl-paste` behind watching a clipboard for nobody. The
+Windows source never needed this — it is in-process.
 
 Polling on content remains ruled out everywhere. A poller cannot tell "changed" from "still the
 same" without keeping state about the previous payload — including payloads it did not recognise.
@@ -166,4 +192,5 @@ returning line in `ClipboardInventoryParser.FindNameColumn`.
 | Status bar state, followed live via `StateChanged` | `MainWindowViewModel` |
 | The switch and the disclosure | `SettingsWindow` → Privacy & Sharing |
 | Reading the clipboard text | `IDialogService.GetClipboardTextAsync` |
+| Stopped on the way out, because a child process outlives its parent | `App.OnFrameworkInitializationCompleted` → `desktop.Exit` |
 | Platform change source (injectable, so tests replace it) | `IClipboardChangeSource` → `WindowsClipboardChangeSource` / `WaylandClipboardChangeSource` / `UnsupportedClipboardChangeSource` |
