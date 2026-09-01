@@ -24,6 +24,7 @@ using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
+using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -78,7 +79,8 @@ public class ActivityWindowTests
         Assert.DoesNotContain("ET-40", abyssal.Fit.HeaderSummary);
         Assert.Contains("choose a character", abyssal.Fit.HeaderSummary);
         Assert.Contains("ET-65", abyssal.Loot.HeaderSummary);
-        Assert.Contains("ET-80", new ActivityWindowViewModel(ActivityKind.Site, _Unused()).Activity.HeaderSummary);
+        // ACTIVITY no longer waits on anything (ET-80): with nothing copied it names the gap instead of a ticket.
+        Assert.Equal("no signature", new ActivityWindowViewModel(ActivityKind.Site, _Unused()).Activity.HeaderSummary);
     }
 
     [Fact]
@@ -699,6 +701,61 @@ public class ActivityWindowTests
 
     /// <summary>A provider nothing in these tests reaches into: only the setting round-trip touches the client DI,
     /// and it uses a real <see cref="TestClientInstance"/>.</summary>
+    // ── ET-80 — what the catalogue adds, and what it refuses to guess ───────────────────────────────
+
+    [Fact]
+    public void AMatchedSiteWithNeitherRatingNorRestriction_SaysTheCatalogueCarriesNone_NotZeroAndNotUnrated()
+    {
+        var model = _Site(_Entry("Haunted Yard"));
+
+        Assert.Equal("Haunted Yard", model.SignatureSiteText);
+        Assert.Equal("no DED rating in the catalogue", model.ThreatText);
+        Assert.Equal("no ship restriction in the catalogue", model.ShipRestrictionText);
+        Assert.DoesNotContain("0", model.ThreatText);
+        Assert.Equal("Haunted Yard", model.Activity.HeaderSummary);
+    }
+
+    // The branch that costs a ship if it collapses into the unrestricted one: a handful of the catalogue's type
+    // lists state their restriction per hull, so a restricted site can resolve to no groups at all.
+    [Fact]
+    public void ARestrictedSiteWhoseAllowListResolvesToNoGroups_StaysRestricted_AndIsNeverReadAsAnythingGoes()
+    {
+        var model = _Site(_Entry("Sleeper Cache", restricted: true));
+
+        Assert.Equal("restricted, but the catalogue does not state it as ship groups", model.ShipRestrictionText);
+        Assert.NotEqual("no ship restriction in the catalogue", model.ShipRestrictionText);
+        Assert.Equal("Sleeper Cache · ship-restricted", model.Activity.HeaderSummary);
+    }
+
+    [Fact]
+    public void SeveralCatalogueEntriesSharingAName_ReportTheDisagreement_RatherThanPickingOne()
+    {
+        var model = _Site(
+            _Entry("SCC Secure Key Storage", ded: 4, restricted: true),
+            _Entry("SCC Secure Key Storage", ded: 8, groups: [new SdeGroup(25, 6, "Frigate", true)]));
+
+        Assert.Equal("SCC Secure Key Storage — 2 catalogue entries share this name", model.SignatureSiteText);
+        Assert.Equal("the entries sharing this name disagree on their DED rating", model.ThreatText);
+        Assert.Equal("the entries sharing this name disagree on their ship restriction", model.ShipRestrictionText);
+        Assert.DoesNotContain("DED 4", model.ThreatText);
+        Assert.DoesNotContain("DED 8", model.ThreatText);
+        // The ratings disagree so no DED is claimed, but both entries are restricted — which ships is the open
+        // question, whether you are restricted at all is not, and the shut header keeps the half that holds.
+        Assert.Equal("SCC Secure Key Storage · ship-restricted", model.Activity.HeaderSummary);
+    }
+
+    private static ActivityWindowViewModel _Site(params SdeSite[] matches) =>
+        new(ActivityKind.Site, _Unused())
+        {
+            SignatureGroup = "Combat Site",
+            SignatureName = matches[0].Name,
+            MatchedSites = matches
+        };
+
+    private static SdeSite _Entry(string name, int? ded = null, bool restricted = false,
+        IReadOnlyList<SdeGroup>? groups = null) =>
+        new(1263, name, null, null, null, null, null, ded, restricted || groups is not null, groups ?? []);
+
     private static IServiceProvider _Unused() => new ServiceCollection().BuildServiceProvider();
 
     private static ActivityWindowViewModel _Filled(ActivityKind kind) => _Filled(kind, Anchor);
