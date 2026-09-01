@@ -1,0 +1,362 @@
+<v:OverlayWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:va="using:EveUtils.Client.ViewModels.Activity"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="560" d:DesignHeight="560"
+        x:Class="EveUtils.Client.Views.ActivityWindow"
+        x:DataType="va:ActivityWindowViewModel"
+        x:Name="OverlayRoot"
+        Title="Activity"
+        Icon="/Assets/eve-together.ico"
+        Width="560" Height="560" MinWidth="420" MinHeight="220"
+        Topmost="True" ShowInTaskbar="True"
+        WindowDecorations="None"
+        WindowStartupLocation="CenterScreen"
+        TransparencyLevelHint="Transparent"
+        Background="Transparent">
+
+    <Border x:Name="Backdrop" Classes="panel">
+      <DockPanel>
+        <!-- Resources and styles on the content, not on the window: a style declared on a Window is the thing that
+             silently goes missing here (ET-30/ET-43), and this window inherits nothing from the shell that opened it.
+
+             Every colour below is a resource key, never a literal. The window derives from OverlayWindow, which —
+             unlike ChromedWindow — does not bind its own brushes to resource observables, so DynamicResource on the
+             faction-swappable keys is the only thing that re-tints this window when the faction changes. -->
+        <DockPanel.Resources>
+            <!-- One header for all five sections: caret, fixed-width title, and the summary hard right. The summary
+                 is why a folded section is still worth having on screen. -->
+            <DataTemplate x:Key="SectionHeader" DataType="va:ActivitySection">
+                <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
+                    <TextBlock Grid.Column="0" Classes="caret" Text="&#x25B6;"/>
+                    <TextBlock Grid.Column="1" Classes="sectiontitle" Text="{Binding Title}"/>
+                    <TextBlock Grid.Column="2" Classes="sectionsummary" Text="{Binding HeaderSummary}"/>
+                </Grid>
+            </DataTemplate>
+        </DockPanel.Resources>
+
+        <DockPanel.Styles>
+            <!-- ── The clock ── the largest thing in the window, because the only number that matters in an abyssal
+                 pocket is how long you have left. Amber at five minutes, red at two: both still enough time to go. -->
+            <Style Selector="TextBlock.clockfigure">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="FontSize" Value="30"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+            <Style Selector="TextBlock.clockfigure.warn">
+                <Setter Property="Foreground" Value="{StaticResource ValueBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.clockfigure.crit">
+                <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.clockmeta">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+            </Style>
+            <Style Selector="TextBlock.clockmeta.figure">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            </Style>
+
+            <!-- ── A section header ── a flat full-width row, not a button that looks like one: the whole line is the
+                 hit target, and nothing about it should read as an action to take. -->
+            <Style Selector="ToggleButton.section">
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="Padding" Value="14,9"/>
+                <Setter Property="ContentTemplate" Value="{StaticResource SectionHeader}"/>
+            </Style>
+            <!-- State ink goes on the presenter: the stock Fluent theme sets its own there for :pointerover and
+                 :checked, and a rule one level up loses to it (the lesson Button.overlaybtn is carrying). -->
+            <Style Selector="ToggleButton.section:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            </Style>
+            <Style Selector="ToggleButton.section:checked /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+            </Style>
+            <Style Selector="ToggleButton.section:checked:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            </Style>
+
+            <Style Selector="TextBlock.caret">
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="FontSize" Value="9"/>
+                <Setter Property="Width" Value="9"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="RenderTransform" Value="none"/>
+            </Style>
+            <Style Selector="ToggleButton.section:checked TextBlock.caret">
+                <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+            </Style>
+            <Style Selector="TextBlock.sectiontitle">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="LetterSpacing" Value="1.8"/>
+                <Setter Property="Width" Value="96"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.sectionsummary">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+
+            <!-- ── A section body ── indented under the title column so an open section reads as belonging to the
+                 header above it rather than as a new block. -->
+            <Style Selector="Border.sectionbody">
+                <Setter Property="Background" Value="{StaticResource BgRowBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="Padding" Value="37,2,14,13"/>
+            </Style>
+
+            <!-- ── A key/value line ── the label carries the letterspacing, the value carries the ink. -->
+            <!-- ColumnDefinitions is not a styled property, so the two columns stay on each Grid; everything else
+                 about a key/value line lives here. -->
+            <Style Selector="Grid.kv">
+                <Setter Property="Margin" Value="0,3"/>
+            </Style>
+            <Style Selector="Grid.kv > TextBlock:nth-child(1)">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="LetterSpacing" Value="1.8"/>
+            </Style>
+            <Style Selector="Grid.kv > TextBlock:nth-child(2)">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11.5"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
+
+            <!-- ── The hint under a section ── where the window says what it does NOT know, and why. Half the reason
+                 this window exists is that it refuses to fill a field it cannot source. -->
+            <Style Selector="TextBlock.hint">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="LineHeight" Value="14"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+                <Setter Property="Margin" Value="0,6,0,0"/>
+            </Style>
+
+            <!-- ── The weather / tier picker ── quiet until pressed: twelve buttons that shout would be the loudest
+                 thing in a window whose point is a countdown. -->
+            <Style Selector="Button.pick">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="Padding" Value="9,4"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="Margin" Value="0,0,4,4"/>
+            </Style>
+            <Style Selector="Button.pick:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="Button.pick.on /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+        </DockPanel.Styles>
+
+        <!-- ══ Header ══ the run, what is known about it, and the three chrome buttons every pop-out carries. -->
+        <Border Classes="panel-header" DockPanel.Dock="Top" x:Name="DragHandle" PointerPressed="OnHeaderPressed">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Classes="diamond" Text="&#x25C6;" Margin="0,0,6,0"/>
+                    <TextBlock Classes="panel-title" Text="{Binding HeaderTitle}" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <WrapPanel Grid.Column="1" VerticalAlignment="Center" ItemSpacing="5" LineSpacing="4">
+                    <Border Classes="chip ok" IsVisible="{Binding HasWeatherAndTier}">
+                        <TextBlock Text="{Binding TierText}"/>
+                    </Border>
+                    <Border Classes="chip ok" IsVisible="{Binding HasWeatherAndTier}">
+                        <TextBlock Text="{Binding Weather.Name}"/>
+                    </Border>
+                    <!-- Not set is a state the header owns, not a blank: the clock does not wait on it, so the only
+                         thing left to do is say it is missing. -->
+                    <Border Classes="chip warn" IsVisible="{Binding NeedsWeatherAndTier}"
+                            ToolTip.Tip="Neither weather nor tier can be detected — set them in the ACTIVITY section">
+                        <TextBlock Text="SET TIER + WEATHER"/>
+                    </Border>
+                    <Border Classes="chip dim">
+                        <TextBlock Text="SOLO"/>
+                    </Border>
+                </WrapPanel>
+
+                <v:OverlayChromeButtons Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Top"
+                                        FillOpacity="{Binding #OverlayRoot.FillOpacity, Mode=TwoWay}"/>
+            </Grid>
+        </Border>
+
+        <!-- ══ The clock ══ the envelope as what it is: two moments and the time between them. A per-member bar chart
+             stood here and came out — the starts sit seconds apart on a twenty-minute axis, so the bars overlapped
+             into one and said nothing. -->
+        <Border DockPanel.Dock="Top" Padding="14,13,14,15" BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource BorderBrush}">
+            <StackPanel Spacing="12">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                    <StackPanel Grid.Column="0" Spacing="4">
+                        <TextBlock Classes="label" Text="{Binding ClockLabel}"/>
+                        <TextBlock x:Name="ClockFigure" Classes="clockfigure"
+                                   Classes.warn="{Binding IsClockWarning}"
+                                   Classes.crit="{Binding IsClockCritical}"
+                                   Text="{Binding ClockText}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Bottom">
+                        <TextBlock Classes="clockmeta">
+                            <Run Text="START "/><Run Classes="figure" Text="{Binding StartText}"/>
+                        </TextBlock>
+                        <TextBlock Classes="clockmeta">
+                            <Run Text="END "/><Run Classes="figure" Text="{Binding EndText}"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Grid>
+                <TextBlock Classes="hint" Margin="0" Text="{Binding ClockHint}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ══ The five sections ══ each says something with its body shut, so folding the window down never costs
+             the reader the answer — only the detail behind it. -->
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+
+                <ToggleButton Classes="section" Content="{Binding Activity}"
+                              IsChecked="{Binding Activity.IsExpanded, Mode=TwoWay}"/>
+                <Border Classes="sectionbody" IsVisible="{Binding Activity.IsExpanded}">
+                    <StackPanel>
+                        <StackPanel IsVisible="{Binding IsAbyssal}">
+                            <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasWeatherAndTier}">
+                                <TextBlock Text="WEATHER"/>
+                                <TextBlock Grid.Column="1" Text="{Binding WeatherEnvironmentText}"/>
+                            </Grid>
+                            <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasWeatherAndTier}">
+                                <TextBlock Text="EFFECT"/>
+                                <TextBlock Grid.Column="1" Text="{Binding WeatherEffectText}"/>
+                            </Grid>
+                            <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasWeatherAndTier}">
+                                <TextBlock Text="TIER"/>
+                                <TextBlock Grid.Column="1" Text="{Binding TierText}"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="LOCATION"/>
+                            <TextBlock Grid.Column="1" Text="{Binding LocationText}"/>
+                        </Grid>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="LOOT STRATEGY"/>
+                            <TextBlock Grid.Column="1" Text="{Binding LootStrategyText}"/>
+                        </Grid>
+
+                        <!-- ── The manual entry ── the only field in this window the user fills in, because nothing
+                             can detect it. Answered, it folds behind one line: twelve buttons standing open under a
+                             question nobody is asking any more would be the loudest thing in the section. -->
+                        <StackPanel IsVisible="{Binding IsAbyssal}">
+                        <Button Classes="pick" Content="change tier / weather" HorizontalAlignment="Left"
+                                Margin="0,8,0,0"
+                                IsVisible="{Binding !IsPickerShown}"
+                                Command="{Binding OpenPickerCommand}"/>
+
+                        <StackPanel IsVisible="{Binding IsPickerShown}" Margin="0,8,0,0">
+                            <TextBlock Classes="label" Text="WEATHER" Margin="0,0,0,4"/>
+                            <ItemsControl ItemsSource="{Binding WeatherChoices}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="va:ActivityChoice">
+                                        <Button Classes="pick" Classes.on="{Binding IsSelected}"
+                                                Content="{Binding Label}" ToolTip.Tip="{Binding Tooltip}"
+                                                Command="{Binding $parent[ItemsControl].((va:ActivityWindowViewModel)DataContext).SelectWeatherCommand}"
+                                                CommandParameter="{Binding Index}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Classes="label" Text="TIER" Margin="0,4,0,4"/>
+                            <ItemsControl ItemsSource="{Binding TierChoices}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="va:ActivityChoice">
+                                        <Button Classes="pick" Classes.on="{Binding IsSelected}"
+                                                Content="{Binding Label}"
+                                                Command="{Binding $parent[ItemsControl].((va:ActivityWindowViewModel)DataContext).SelectTierCommand}"
+                                                CommandParameter="{Binding Index}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Button Classes="pick" Content="clear" HorizontalAlignment="Left"
+                                    IsVisible="{Binding HasWeatherAndTier}"
+                                    Command="{Binding ClearWeatherAndTierCommand}"/>
+                        </StackPanel>
+                        </StackPanel>
+
+                        <TextBlock Classes="hint" IsVisible="{Binding IsAbyssal}"
+                                   Text="Weather and tier cannot be detected — not from the game log and not from ESI. They are set here, and the last choice stays because you usually fly the same tier several runs in a row. The resist penalty is rolled per site, so it is shown as the band it can land in."/>
+                        <TextBlock Classes="hint" IsVisible="{Binding !IsAbyssal}"
+                                   Text="Type, site and signature come from the copied signature through the SDE — waiting on ET-80. The loot strategy is what explains the duration; without it, &quot;19 minutes&quot; says nothing."/>
+                    </StackPanel>
+                </Border>
+
+                <ToggleButton Classes="section" Content="{Binding Fit}"
+                              IsChecked="{Binding Fit.IsExpanded, Mode=TwoWay}"/>
+                <Border Classes="sectionbody" IsVisible="{Binding Fit.IsExpanded}">
+                    <TextBlock Classes="hint" Margin="0"
+                               Text="The linked fit, its max velocity and its warp speed come from the Dogma calculation — waiting on ET-40. Nothing is shown here until it can be computed rather than guessed."/>
+                </Border>
+
+                <ToggleButton Classes="section" Content="{Binding Fleet}"
+                              IsChecked="{Binding Fleet.IsExpanded, Mode=TwoWay}"/>
+                <Border Classes="sectionbody" IsVisible="{Binding Fleet.IsExpanded}">
+                    <TextBlock Classes="hint" Margin="0"
+                               Text="A fleet activity is: in a fleet and in the same place. The envelope over every member's re-based anchor, and the count of how many members it is based on, is ET-98 phase 2."/>
+                </Border>
+
+                <ToggleButton Classes="section" Content="{Binding Bounty}"
+                              IsChecked="{Binding Bounty.IsExpanded, Mode=TwoWay}"/>
+                <Border Classes="sectionbody" IsVisible="{Binding Bounty.IsExpanded}">
+                    <StackPanel>
+                        <TextBlock Classes="hint" Margin="0" IsVisible="{Binding IsAbyssal}"
+                                   Text="Abyssal NPCs pay no bounty; the whole return is in the loot. The section stays so nobody goes looking for a figure that does not exist."/>
+                        <TextBlock Classes="hint" Margin="0" IsVisible="{Binding !IsAbyssal}"
+                                   Text="From the game log: every &quot;… ISK added to next bounty payout&quot; line is one rat, and only for your own character — a bounty event carries no character, so a fleet total cannot be built. Wiring is ET-98 phase 3."/>
+                    </StackPanel>
+                </Border>
+
+                <ToggleButton Classes="section" Content="{Binding Loot}"
+                              IsChecked="{Binding Loot.IsExpanded, Mode=TwoWay}"/>
+                <Border Classes="sectionbody" IsVisible="{Binding Loot.IsExpanded}">
+                    <StackPanel>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="ISK"/>
+                            <TextBlock Grid.Column="1" Text="{Binding IskLabel}"/>
+                        </Grid>
+                        <TextBlock Classes="hint"
+                                   Text="Waiting on ET-65. Every copy becomes its own timestamped snapshot shown beside the total, so nothing is silently summed and nothing is silently de-duplicated. Loot, spent and net stay three separate figures — a run that burned three filaments is not as rich as its gross."/>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+</v:OverlayWindow>

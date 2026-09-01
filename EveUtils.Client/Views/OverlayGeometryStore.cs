@@ -39,6 +39,10 @@ internal static class OverlayGeometryStore
     /// op, and two fleets open at once are two windows that must not fight over one position.</summary>
     public static string ForFleet(long fleetId) => $"ui.fleet-overlay.{fleetId}";
 
+    /// <summary>The activity window's key. Not per run: only one is ever open, and where it belongs on the screen
+    /// outlives tonight's run.</summary>
+    public static string ForActivity() => "ui.activity-window";
+
     public static async Task<OverlayGeometry?> LoadAsync(string key)
     {
         if (string.IsNullOrWhiteSpace(key)) return null;

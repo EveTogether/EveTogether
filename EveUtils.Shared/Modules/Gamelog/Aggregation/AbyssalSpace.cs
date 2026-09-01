@@ -33,30 +33,40 @@ public static class AbyssalSpace
         anchorMs > 0 ? receivedUtc - TimeSpan.FromMilliseconds(sentMs - anchorMs) : null;
 
     /// <summary>
-    /// The text a location readout shows. Without a run this is the system name, untouched. With one it is the
-    /// deadline counting down from <see cref="RunLimit"/>.
+    /// How long is left on the run, or null when there is no anchor or the deadline has passed.
     ///
     /// The countdown never claims more time than there is. <paramref name="anchorUtc"/> is the last moment we could
     /// prove the pilot was outside — the undock or jump before the first abyssal shot, or the poll that saw them
-    /// leave — which is at or before the real entry, so the number shown is at or below the real remaining time.
-    /// Past zero we are wrong about something (the pilot left and we cannot see it, or the anchor was not theirs),
-    /// and the readout says so rather than counting on into negative time.
+    /// leave — which is at or before the real entry, so the number is at or below the real remaining time. Past zero
+    /// we are wrong about something (the pilot left and we cannot see it, or the anchor was not theirs), and the
+    /// caller says so rather than counting on into negative time.
     /// </summary>
-    public static string? Describe(string? system, DateTime? anchorUtc, DateTime nowUtc)
+    public static TimeSpan? Remaining(DateTime? anchorUtc, DateTime nowUtc)
     {
         if (anchorUtc is not { } anchor)
-            return system;
+            return null;
 
         var remaining = RunLimit - (nowUtc - anchor);
         if (remaining <= TimeSpan.Zero)
-            return "Abyssal (--:--)";
+            return null;
 
         // An anchor stamped slightly ahead of us (log time vs. wall clock) must not buy the pilot extra seconds.
-        if (remaining > RunLimit)
-            remaining = RunLimit;
+        return remaining > RunLimit ? RunLimit : remaining;
+    }
+
+    /// <summary>
+    /// The text a location readout shows. Without a run this is the system name, untouched. With one it is the
+    /// deadline counting down from <see cref="RunLimit"/>.
+    /// </summary>
+    public static string? Describe(string? system, DateTime? anchorUtc, DateTime nowUtc)
+    {
+        if (anchorUtc is null)
+            return system;
 
         // The "+" says this is a floor, not a reading: entry falls in a window the log never writes in, measured at
         // 72 s, 84 s and 3.5 minutes on three runs. Drop the sign and the readout starts claiming to be exact.
-        return $"Abyssal ({remaining:mm\\:ss}+)";
+        return Remaining(anchorUtc, nowUtc) is { } remaining
+            ? $"Abyssal ({remaining:mm\\:ss}+)"
+            : "Abyssal (--:--)";
     }
 }

@@ -217,6 +217,26 @@ public class AbyssalCountdownTests
         Assert.Equal(At1740, metrics.AbyssalAnchor);
     }
 
+    /// <summary>
+    /// The two guards <see cref="AbyssalSpace.Remaining"/> carries, asserted on it directly rather than only through
+    /// the sentence <see cref="AbyssalSpace.Describe"/> wraps around it — the activity window reads the figure
+    /// without that sentence (ET-98), so both callers have to be held to the same clamp.
+    /// </summary>
+    [Fact]
+    public void Remaining_NeverExceedsTheRunLimit_AndIsGoneOnceTheDeadlinePasses()
+    {
+        Assert.Null(AbyssalSpace.Remaining(null, At1740));
+
+        // An anchor stamped ahead of us (log time against wall clock) must not buy the pilot extra seconds.
+        Assert.Equal(AbyssalSpace.RunLimit, AbyssalSpace.Remaining(At1740.AddMinutes(3), At1740));
+
+        Assert.Equal(TimeSpan.FromMinutes(14), AbyssalSpace.Remaining(At1740.AddMinutes(-6), At1740));
+
+        // Past zero the readout stops counting rather than running on into negative time.
+        Assert.Null(AbyssalSpace.Remaining(At1740 - AbyssalSpace.RunLimit, At1740));
+        Assert.Equal("Abyssal (--:--)", AbyssalSpace.Describe("Aphend", At1740 - AbyssalSpace.RunLimit, At1740));
+    }
+
     /// <summary>Staying inside must not re-anchor: the clock would stand still at full time forever.</summary>
     [Fact]
     public void RepeatedInsideReadings_DoNotMoveTheAnchor()
