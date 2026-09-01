@@ -1,4 +1,5 @@
 using System.Threading;
+using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Gamelog.Models;
 
 namespace EveUtils.Shared.Modules.Gamelog.Aggregation;
@@ -30,7 +31,8 @@ public sealed record CharacterMetricsSnapshot(
     long RepairedIn,
     long NeutOut,
     long NeutIn,
-    DateTime? AbyssalAnchor)
+    DateTime? AbyssalAnchor,
+    EsiErrorKind? LocationUnavailableReason)
 {
     public int Shots => Hits + Misses;
     public double HitRate => Shots == 0 ? 0 : (double)Hits / Shots;
@@ -62,6 +64,9 @@ public sealed class CharacterMetrics
     private DateTime? _lastKnownOutsideAt;
     private DateTime? _abyssalAnchor;
     private double _peakDealtDps;
+    // Why the ESI location watch could report nothing, the last time it said so — null once a real reading arrives,
+    // and also null before the watch has said anything at all (ET-96: that silence is not itself a reason).
+    private EsiErrorKind? _locationUnavailableReason;
 
     public void RecordCombat(DamageDirection direction, int amount, string target, HitQuality quality)
     {
@@ -162,6 +167,7 @@ public sealed class CharacterMetrics
         {
             _abyssalAnchor = null;
             _lastKnownOutsideAt = atUtc;
+            _locationUnavailableReason = null; // a real reading arrived — any earlier refusal no longer applies
         }
     }
 
@@ -177,14 +183,20 @@ public sealed class CharacterMetrics
         {
             if (_abyssalAnchor is null && _lastKnownOutsideAt is { } anchor)
                 _abyssalAnchor = anchor;
+            _locationUnavailableReason = null; // a real reading arrived — any earlier refusal no longer applies
         }
     }
 
-    /// <summary>Stopped watching (no scope, no token, ESI unreachable): clear the clock rather than let it run on.</summary>
-    public void AbyssalWatchLost()
+    /// <summary>Stopped watching (no scope, no token, ESI unreachable): clear the clock rather than let it run on,
+    /// and remember why — so the location readout can say "no permission" or "sign-in expired" instead of just
+    /// going blank for the rest of the session (ET-96). Null when the watch cannot say (an unexpected error).</summary>
+    public void AbyssalWatchLost(EsiErrorKind? reason)
     {
         lock (_gate)
+        {
             _abyssalAnchor = null;
+            _locationUnavailableReason = reason;
+        }
     }
 
     /// <summary>The character's last known solar system (gamelog jump/undock), or null until one is seen.</summary>
@@ -235,7 +247,8 @@ public sealed class CharacterMetrics
                 new Dictionary<HitQuality, int>(_qualities), enemies,
                 _bounty, _kills, _location, _peakDealtDps,
                 DateTime.UtcNow - _sessionStart, recent,
-                _mining.Totals(), _mining.TotalUnits, _repairedOut, _repairedIn, _neutOut, _neutIn, _abyssalAnchor);
+                _mining.Totals(), _mining.TotalUnits, _repairedOut, _repairedIn, _neutOut, _neutIn, _abyssalAnchor,
+                _locationUnavailableReason);
         }
     }
 }

@@ -15,4 +15,6 @@ public sealed record CharacterMetricsDto(
     long BountyTotal,
     int Kills,
     string? Location,
-    double PeakDps);
+    double PeakDps,
+    bool LocationWatchActive = false,
+    string? LocationStatus = null);

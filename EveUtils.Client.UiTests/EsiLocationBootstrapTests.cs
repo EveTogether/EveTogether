@@ -9,6 +9,9 @@ using EveUtils.Client.Esi;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.Platform;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Esi;
+using EveUtils.Shared.Modules.Esi.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -250,6 +253,55 @@ public class EsiLocationBootstrapTests
         Assert.Equal("Jita", await harness.WaitForLocationAsync());
     }
 
+    // ---- ET-96: recovering a watch that died, without a registry row ever changing --------------------------------
+
+    /// <summary>
+    /// A character logging into the game client, while EVE Together already has their registry row from an earlier
+    /// session, never fires <c>RegistryChanged</c> — the row does not change. Only <c>EveClientPresenceService</c>'s
+    /// 5 s sweep sees it, and it has to be able to restart a watch that already died (no scope, no working token),
+    /// not just the one <c>MapCharacter</c> already runs unconditionally at start-up.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task PresenceComingOnline_RestartsAWatchThatHadDied()
+    {
+        var monitor = new FakeMonitor();
+        using var harness = await StartAsync(monitor, new FakeSystemNames { [Jita] = "Jita" }, inGame: true);
+        Assert.True(monitor.IsWatching(Pilot)); // the unconditional start-up mapping already started it
+
+        monitor.Lose(Pilot);
+        Assert.False(monitor.IsWatching(Pilot));
+
+        // PollOnce only raises Changed on a real transition, so the sweep has to actually change what it sees —
+        // this is what a relog into the game client looks like from the outside.
+        await harness.SetInGameAsync(false);
+        Assert.False(monitor.IsWatching(Pilot)); // going offline must not itself restart anything
+
+        await harness.SetInGameAsync(true);
+        Assert.True(monitor.IsWatching(Pilot));
+    }
+
+    /// <summary>
+    /// <c>ClientTokenRefreshService</c> deliberately does not touch the registry when a refresh succeeds with the
+    /// same scopes (ET-24) — so a token that silently starts working again after a spell of failing needs its own
+    /// path back to <c>MapCharacter</c>. <c>TokenRefreshedEvent</c> only fires on a real status change, which is
+    /// exactly the transition a dead-then-recovered watch needs.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ATokenWorkingAgain_RestartsAWatchThatHadDied()
+    {
+        var monitor = new FakeMonitor();
+        using var harness = await StartAsync(monitor, new FakeSystemNames { [Jita] = "Jita" });
+        Assert.True(monitor.IsWatching(Pilot));
+
+        monitor.Lose(Pilot);
+        Assert.False(monitor.IsWatching(Pilot));
+
+        var bus = harness.Services.GetRequiredService<IEventBus>();
+        await bus.PublishAsync(new TokenRefreshedEvent(new TokenStatusChange(Pilot, TokenStatus.Refreshed)));
+
+        Assert.True(monitor.IsWatching(Pilot));
+    }
+
     /// <summary>
     /// The judgement is only ever made about this client's own characters. A character the registry has never
     /// heard of is not "offline", it is none of our business — so the gate does not fire on it either way. Here
@@ -347,6 +399,8 @@ public class EsiLocationBootstrapTests
 
         public void UiReady() { }
 
+        public bool IsWatching(int characterId) => _watched.ContainsKey(characterId);
+
         public void Report(int characterId, int solarSystemId)
         {
             if (_watched.TryGetValue(characterId, out var onReading))
@@ -355,8 +409,10 @@ public class EsiLocationBootstrapTests
 
         public void Lose(int characterId)
         {
-            if (_watched.TryGetValue(characterId, out var onReading))
-                onReading(EsiLocationReading.Lost(DateTime.UtcNow));
+            // Mirrors the real monitor's Lost(): the character comes out of the running set, so a later Watch()
+            // for the same id is a genuine restart rather than the idempotent no-op it would otherwise be.
+            if (_watched.TryRemove(characterId, out var onReading))
+                onReading(EsiLocationReading.Lost(null, DateTime.UtcNow));
         }
     }
 

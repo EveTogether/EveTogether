@@ -1,4 +1,5 @@
 using System;
+using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 
 namespace EveUtils.Client.Esi;
@@ -11,10 +12,14 @@ namespace EveUtils.Client.Esi;
 /// <param name="SolarSystemId">The system ESI placed the character in, or null when the watch could read nothing.</param>
 /// <param name="AtUtc">When the reading was taken. The next abyssal run anchors on this, so it is the moment of the
 /// poll and not the moment a reader gets around to it.</param>
-public readonly record struct EsiLocationReading(int? SolarSystemId, DateTime AtUtc)
+/// <param name="Reason">Why the watch could report nothing, when <see cref="SolarSystemId"/> is null — the same
+/// classification <c>EsiLocationMonitor.Fatal</c> or the exhausted failure budget already made. Null on every
+/// reading that carries a system, and also null when nothing has been heard from the watch at all (ET-96): a
+/// reader must not turn "no reason recorded yet" into a claim about why.</param>
+public readonly record struct EsiLocationReading(int? SolarSystemId, DateTime AtUtc, EsiErrorKind? Reason = null)
 {
     /// <summary>The watch can report nothing further: no scope, no working token, or unbroken failure.</summary>
-    public static EsiLocationReading Lost(DateTime atUtc) => new(null, atUtc);
+    public static EsiLocationReading Lost(EsiErrorKind? reason, DateTime atUtc) => new(null, atUtc, reason);
 
     /// <summary>
     /// <c>true</c> = inside abyssal deadspace, <c>false</c> = outside, <c>null</c> = the watch was lost. Derived
