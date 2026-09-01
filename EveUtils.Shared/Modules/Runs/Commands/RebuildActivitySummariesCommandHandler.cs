@@ -37,7 +37,11 @@ internal sealed class RebuildActivitySummariesCommandHandler(IDbContextFactory<C
         DateTime? stoppedAtUtc = runs.All(run => run.StoppedAtUtc is not null)
             ? runs.Max(run => run.StoppedAtUtc)
             : null;
-        List<RunLootEntry> loot = runs.SelectMany(run => run.LootCaptures).SelectMany(capture => capture.Entries).ToList();
+        // An excluded capture stays visible on its run and counts towards nothing.
+        List<RunLootEntry> loot = runs.SelectMany(run => run.LootCaptures)
+            .Where(capture => !capture.IsExcluded)
+            .SelectMany(capture => capture.Entries)
+            .ToList();
         decimal? gained = _KnownLootValue(loot, LootKind.Gained);
         decimal? lost = _KnownLootValue(loot, LootKind.Lost);
 
@@ -61,7 +65,8 @@ internal sealed class RebuildActivitySummariesCommandHandler(IDbContextFactory<C
             LootIskNet = gained is null && lost is null ? null : gained.GetValueOrDefault() - lost.GetValueOrDefault(),
             LootEntriesWithoutPrice = loot.Count(entry => entry.ClipboardPrice is null),
             LootItemCount = checked((int)loot.Sum(entry => entry.Quantity.GetValueOrDefault())),
-            LootVolume = loot.Sum(entry => entry.Volume.GetValueOrDefault() * entry.Quantity.GetValueOrDefault()),
+            // The volume column of an EVE inventory is already the volume of the whole stack (measured: 2 filaments = 0,20 m3).
+            LootVolume = loot.Sum(entry => entry.Volume.GetValueOrDefault()),
             BountyIsk = runs.SelectMany(run => run.BountyEntries).Sum(entry => entry.Isk),
             ExpectedPayoutIsk = 0m,
             EnemyTypeCount = runs.SelectMany(run => run.EnemyObservations).Select(observation => observation.EnemyTypeId).Distinct().Count(),

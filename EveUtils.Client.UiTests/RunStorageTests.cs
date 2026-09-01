@@ -58,9 +58,31 @@ public sealed class RunStorageTests
         Assert.Equal(100m, summary.LootIskNet);
         Assert.Equal(1, summary.LootEntriesWithoutPrice);
         Assert.Equal(6, summary.LootItemCount);
-        Assert.Equal(0.06m, summary.LootVolume);
+        Assert.Equal(0.03m, summary.LootVolume);   // the volume column of an EVE inventory is the stack, not one unit
         Assert.Equal(75m, summary.BountyIsk);
         Assert.Equal(2, summary.SourceRevisionSum);
+    }
+
+    /// <summary>Loot copied while nothing is running is refused with a reason rather than filed somewhere.</summary>
+    [AvaloniaFact]
+    public async Task LootCapture_WithoutARunningRun_IsRefusedWithAReason()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        Result<DateTime?> added = await dispatcher.Send(new AddRunLootCaptureCommand(new RunLootCaptureInput
+        {
+            CapturedAtUtc = StartedAtUtc,
+            Source = LootCaptureSource.Clipboard,
+            ContentHash = "ABC",
+            Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = 1, LootKind = LootKind.Gained }]
+        }), cancellationToken);
+
+        Assert.False(added.IsSuccess);
+        Assert.Contains("No run is running", added.Messages[0].Text);
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        Assert.Empty(await db.Set<RunLootCapture>().ToListAsync(cancellationToken));
     }
 
     [AvaloniaFact]

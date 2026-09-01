@@ -135,7 +135,7 @@ public partial class AppraisalViewModel : ViewModelBase
                 return;
             }
 
-            var result = await provider.AppraiseAsync(lines, cancellationToken);
+            var result = await provider.AppraiseAsync([.. lines.Select(line => line.Line)], cancellationToken);
             if (!result.IsSuccess || result.Value is not { } outcome)
             {
                 _Show([], unresolved, string.Empty, 0);
