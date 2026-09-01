@@ -20,11 +20,14 @@ public sealed class SelfSignedCertProvider(string dataDirectory)
         ? X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.UserKeySet
         : X509KeyStorageFlags.EphemeralKeySet;
 
-    public X509Certificate2 GetOrCreate()
+    // `created` is true when no PFX was present and a new certificate was generated — every previously paired
+    // client pinned the old fingerprint and has to re-pair, which the server logs loudly (ET-94).
+    public X509Certificate2 GetOrCreate(out bool created)
     {
         Directory.CreateDirectory(dataDirectory);
 
-        if (File.Exists(_pfxPath))
+        created = !File.Exists(_pfxPath);
+        if (!created)
             return X509CertificateLoader.LoadPkcs12FromFile(_pfxPath, null, KeyStorageFlags);
 
         using var rsa = RSA.Create(2048);
