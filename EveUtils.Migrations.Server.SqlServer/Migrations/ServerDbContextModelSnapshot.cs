@@ -843,6 +843,13 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                     b.Property<DateTime>("CapturedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("ContentHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<bool>("IsExcluded")
+                        .HasColumnType("bit");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("uniqueidentifier");
 

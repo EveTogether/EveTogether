@@ -843,6 +843,13 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.Property<DateTime>("CapturedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ContentHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("IsExcluded")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("uuid");
 

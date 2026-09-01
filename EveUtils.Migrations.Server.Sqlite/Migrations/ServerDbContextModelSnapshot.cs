@@ -806,6 +806,13 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.Property<DateTime>("CapturedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ContentHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsExcluded")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("TEXT");
 
