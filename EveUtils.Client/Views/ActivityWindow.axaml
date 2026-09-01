@@ -340,8 +340,14 @@
                 <ToggleButton Classes="section" Content="{Binding Fit}"
                               IsChecked="{Binding Fit.IsExpanded, Mode=TwoWay}"/>
                 <Border Classes="sectionbody" IsVisible="{Binding Fit.IsExpanded}">
-                    <TextBlock Classes="hint" Margin="0"
-                               Text="The linked fit, its max velocity and its warp speed come from the Dogma calculation — waiting on ET-40. Nothing is shown here until it can be computed rather than guessed."/>
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="hint" Margin="0" Text="{Binding FitDetectionText}"/>
+                        <TextBlock Classes="hint" Margin="0" Text="{Binding FitSelectionText}"/>
+                        <TextBlock Classes="hint" Margin="0" Text="{Binding FitVelocityText}"/>
+                        <TextBlock Classes="hint" Margin="0" Text="{Binding FitWarpSpeedText}"/>
+                        <Button Classes="pick" Content="choose fit" HorizontalAlignment="Left"
+                                Command="{Binding ChooseFitCommand}"/>
+                    </StackPanel>
                 </Border>
 
                 <ToggleButton Classes="section" Content="{Binding Fleet}"

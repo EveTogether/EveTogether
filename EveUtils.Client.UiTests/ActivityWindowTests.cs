@@ -71,13 +71,32 @@ public class ActivityWindowTests
     }
 
     [Fact]
-    public void ASectionWaitingOnAnotherTicket_NamesIt_RatherThanShowingSampleData()
+    public void ASectionWithoutItsOwnDependency_DoesNotWaitOnAnotherTicket()
     {
         var abyssal = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
 
-        Assert.Contains("ET-40", abyssal.Fit.HeaderSummary);
+        Assert.DoesNotContain("ET-40", abyssal.Fit.HeaderSummary);
+        Assert.Contains("choose a character", abyssal.Fit.HeaderSummary);
         Assert.Contains("ET-65", abyssal.Loot.HeaderSummary);
         Assert.Contains("ET-80", new ActivityWindowViewModel(ActivityKind.Site, _Unused()).Activity.HeaderSummary);
+    }
+
+    [Fact]
+    public void FitDetection_ScopeMissingAndNoFitFoundStayDistinctAndUsable()
+    {
+        var model = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
+        model.ApplyFitDetection(ShipFitDetectionReading.ScopeMissing);
+        var scopeMissing = model.FitDetectionText;
+
+        model.ApplyFitDetection(new ShipFitDetectionReading(
+            ShipFitDetectionState.Observed, Anchor, 17715, 9, "Gila", null,
+            ShipFitMatchReason.NoFitFound, []));
+
+        Assert.Contains("scope", scopeMissing, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no known fit", model.FitDetectionText, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual(scopeMissing, model.FitDetectionText);
+        Assert.Equal("no fit chosen", model.FitSelectionText);
+        Assert.NotNull(model.ChooseFitCommand);
     }
 
     [Fact]
