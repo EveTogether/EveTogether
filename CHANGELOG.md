@@ -14,6 +14,13 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- **The server control panel can now take a backup and put one back.** One encrypted file holds everything a server
+  needs to be rebuilt somewhere else: the whole database, the key that decrypts the stored ESI refresh tokens, and
+  the TLS certificate your clients pinned. Restoring it on a fresh install brings the server back with every linked
+  character still connected. The archive is always encrypted with a password you choose at download time, and that
+  password cannot be recovered. Your configuration — the ESI client id and secret, the admin password, the database
+  connection string — deliberately stays out of the archive, and the panel says so. Restoring is destructive, asks
+  you to confirm in so many words, keeps an archive of what it replaced, and restarts the server afterwards.
 - Characters whose location EVE Together may not read now produce **one** message naming them all, instead of one
   message per character. The wording says what is actually wrong — that their location cannot be read — rather than
   naming the abyssal countdown, which was only the first feature to need it.

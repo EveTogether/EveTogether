@@ -21,4 +21,8 @@ public static class MessageCodes
     public const string UpdateFailed = "UPDATE_FAILED";
     public const string FileIoFailed = "FILE_IO_FAILED";
     public const string PriceCacheEmpty = "PRICE_CACHE_EMPTY";
+    public const string BackupPasswordWrong = "BACKUP_PASSWORD_WRONG";
+    public const string BackupCorrupt = "BACKUP_CORRUPT";
+    public const string BackupIncompatible = "BACKUP_INCOMPATIBLE";
+    public const string BackupRestoreFailed = "BACKUP_RESTORE_FAILED";
 }

@@ -123,6 +123,40 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.ToTable("RolePermission");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Backup.Entities.BackupDownload", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AdminUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("AdminUsername")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("AppVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("DownloadedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BackupDownload");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Fittings.Entities.SharedFit", b =>
                 {
                     b.Property<int>("Id")

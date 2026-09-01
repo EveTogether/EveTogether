@@ -1,0 +1,142 @@
+@* Static server rendering on purpose: both forms are ordinary POSTs, so the archive password never travels over
+   an interactive circuit and the download is a plain HTTP response the browser can stream to disk. *@
+@page "/backup"
+@attribute [Authorize(Policy = PanelPermissions.BackupDownload)]
+@using EveUtils.Server.Backup
+@using EveUtils.Shared.Modules.Backup.Entities
+@inject ServerBackupService Backups
+
+<PageTitle>Backup — EVE Together</PageTitle>
+
+<div class="crumb">Administration / <b>Backup</b></div>
+
+@if (Error is not null)
+{
+    <p class="loginerr">@ErrorText(Error)</p>
+}
+
+<Card Title="Download a full backup">
+    <div style="padding:14px">
+        <p class="dim" style="margin-top:0">
+            One encrypted file that rebuilds this server somewhere else. It holds the database — paired characters,
+            sessions, fleets, shared fits — plus <code>token-protector.key</code> and <code>server-cert.pfx</code>.
+        </p>
+        <p class="dim">
+            It does <b>not</b> hold your configuration: the ESI client id and secret, the admin password and the
+            database connection string stay where they are. You supply those yourself on the new machine.
+            <code>esi-cache/</code> and the SDE are left out too — both rebuild themselves.
+        </p>
+        <p class="warn">
+            ⚠ This archive decrypts the stored refresh token of every paired character. Treat the file, and the
+            password, the way you would treat the tokens themselves.
+        </p>
+
+        <form method="post" action="/backup/download">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="password">Archive password</label>
+                <input id="password" name="password" type="password" autocomplete="new-password" />
+            </div>
+            <div class="field">
+                <label for="confirm">Repeat the password</label>
+                <input id="confirm" name="confirm" type="password" autocomplete="new-password" />
+            </div>
+            <p class="dim">@BackupPasswordPolicy.Requirement</p>
+            <button type="submit" class="btn accent">DOWNLOAD BACKUP</button>
+        </form>
+    </div>
+</Card>
+
+<Card Title="Downloads" Count="@_downloads.Count.ToString()">
+    @if (_downloads.Count == 0)
+    {
+        <p class="dim" style="padding:14px;margin:0;">No backup has been downloaded from this server.</p>
+    }
+    else
+    {
+        <table>
+            <thead><tr><th>When</th><th>Admin</th><th>Version</th><th>File</th></tr></thead>
+            <tbody>
+                @foreach (var download in _downloads)
+                {
+                    <tr>
+                        <td class="bright">@download.DownloadedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>@download.AdminUsername</td>
+                        <td class="dim">@download.AppVersion</td>
+                        <td class="dim">@download.FileName</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</Card>
+
+<AuthorizeView Policy="@PanelPermissions.BackupRestore">
+    <Authorized>
+        <Card Title="Restore from an archive">
+            <div style="padding:14px">
+                <p class="warn">
+                    ⚠ A restore is destructive and cannot be undone from the panel. Everything currently on this
+                    server is replaced by what is in the archive: paired characters and their tokens, sessions,
+                    fleets, shared fits, admin users and their passwords, and the TLS certificate clients have
+                    pinned. Anyone paired since the archive was taken will have to pair again.
+                </p>
+                <p class="dim">
+                    Before it drops anything, the server writes an archive of its current state into its data
+                    directory, encrypted with the password you enter below. If the restore fails halfway, that file
+                    is the way back — the failure message says where it is.
+                </p>
+                <p class="dim">
+                    An archive from a <b>newer</b> version of EVE Together is refused; an older one is accepted and
+                    brought forward by the migrations on the next start. The archive must come from the same
+                    database engine this server runs on.
+                </p>
+                <p class="dim">
+                    Afterwards the server stops itself so it comes back up on the restored data. Under Docker the
+                    restart policy does that for you; a bare-metal install has to be started again by hand.
+                    You will still need your configuration — the ESI client id and secret, the admin password
+                    and the connection string — in place, because the archive does not carry it.
+                </p>
+
+                <form method="post" action="/backup/restore" enctype="multipart/form-data">
+                    <AntiforgeryToken />
+                    <div class="field">
+                        <label for="archive">Archive file (@BackupFormat.FileExtension)</label>
+                        <input id="archive" name="archive" type="file" accept="@BackupFormat.FileExtension" />
+                    </div>
+                    <div class="field">
+                        <label for="restorepassword">Archive password</label>
+                        <input id="restorepassword" name="password" type="password" autocomplete="off" />
+                    </div>
+                    <div class="field">
+                        <label for="confirmword">Type @BackupRestorePage.ConfirmationWord to confirm</label>
+                        <input id="confirmword" name="confirm" autocomplete="off" />
+                    </div>
+                    <button type="submit" class="btn danger">RESTORE AND RESTART</button>
+                </form>
+            </div>
+        </Card>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private const int RecentDownloads = 50;
+
+    private IReadOnlyList<BackupDownload> _downloads = [];
+
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync() =>
+        _downloads = await Backups.ListDownloadsAsync(RecentDownloads);
+
+    private static string ErrorText(string code) => code switch
+    {
+        "length" => BackupPasswordPolicy.Requirement,
+        "confirm" => "The two passwords do not match.",
+        "no-file" => "Choose an archive file to restore.",
+        "no-password" => "Enter the password the archive was encrypted with.",
+        "confirm-word" => $"Type {BackupRestorePage.ConfirmationWord} in the confirmation box to restore.",
+        _ => "That request could not be handled.",
+    };
+}
