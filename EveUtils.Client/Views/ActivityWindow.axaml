@@ -294,6 +294,17 @@
                             <TextBlock Grid.Column="1" Text="{Binding LootStrategyText}"/>
                         </Grid>
 
+                        <ItemsControl ItemsSource="{Binding EnemyObservations}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="va:RunEnemyObservationViewModel">
+                                    <Grid Classes="kv" ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="{Binding EnemyName}"/>
+                                        <TextBox Grid.Column="1" Width="52" Text="{Binding Count, Mode=TwoWay}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
                         <!-- ── The manual entry ── the only field in this window the user fills in, because nothing
                              can detect it. Answered, it folds behind one line: twelve buttons standing open under a
                              question nobody is asking any more would be the loudest thing in the section. -->

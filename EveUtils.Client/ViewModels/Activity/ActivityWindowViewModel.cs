@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Gamelog;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Shared.Cqrs;
@@ -22,6 +23,7 @@ using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Queries;
+using EveUtils.Shared.Modules.Sde;
 using Microsoft.Extensions.DependencyInjection;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
@@ -60,13 +62,18 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private const string NoClock = "--:--";
 
     private readonly IServiceProvider _services;
+    private readonly GamelogClientService? _gamelog;
     private DispatcherTimer? _timer;
     private bool _isManualRun;
+    private RunEnemyObservationCollector? _enemyObservations;
 
     public ActivityWindowViewModel(ActivityKind kind, IServiceProvider services)
     {
         Kind = kind;
         _services = services;
+        _gamelog = services.GetService<GamelogClientService>();
+        if (_gamelog is not null)
+            _gamelog.CombatObserved += _OnCombatObserved;
 
         WeatherChoices = AbyssalWeather.All
             .Select((weather, index) => new ActivityChoice
@@ -88,6 +95,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <summary>Which of the two runs this window is showing. Fixed for the life of the window: a run does not turn
     /// into the other kind halfway through.</summary>
     public ActivityKind Kind { get; }
+
+    public IReadOnlyList<RunEnemyObservationViewModel> EnemyObservations => _enemyObservations?.Observations ?? [];
 
     public bool IsAbyssal => Kind == ActivityKind.Abyssal;
 
@@ -519,6 +528,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         InsideAbyssal = reading.Inside;
         LocationDisplay = character.LocationDisplay;
+        ISdeAccessor? sde = _services.GetService<ISdeAccessor>();
+        _enemyObservations = sde is null ? null : new RunEnemyObservationCollector(character.CharacterId,
+            name => sde.TryGetTypeId(name, out int typeId) ? typeId : null);
+        OnPropertyChanged(nameof(EnemyObservations));
         Refresh(DateTime.UtcNow);
     }
 
@@ -532,8 +545,18 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public void Dispose()
     {
+        if (_gamelog is not null)
+            _gamelog.CombatObserved -= _OnCombatObserved;
         _timer?.Stop();
         _timer = null;
+    }
+
+    private void _OnCombatObserved(int characterId, string target)
+    {
+        if (RunState != ActivityRunState.Running)
+            return;
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => _enemyObservations?.Record(characterId, target));
     }
 
     // ── Internals ───────────────────────────────────────────────────────────────────────────────────

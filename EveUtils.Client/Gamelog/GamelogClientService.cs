@@ -84,6 +84,7 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
 
     /// <summary>Raised when discrete metrics (bounty/location/notify) change; the UI also polls Snapshot on a timer.</summary>
     public event Action? MetricsChanged;
+    public event Action<int, string>? CombatObserved;
 
     public GamelogClientService(IServiceProvider services, IEventBus eventBus, ICharacterRegistry? registry = null,
         EveClientPresenceService? presence = null)
@@ -301,6 +302,8 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         metrics.RecordCombat(direction, amount, target, quality);
 
         var ownerId = _idByName.TryGetValue(name, out var id) ? id : (int?)null;
+        if (ownerId is { } characterId)
+            CombatObserved?.Invoke(characterId, target);
 
         using (var scope = _services.CreateScope())
         {
