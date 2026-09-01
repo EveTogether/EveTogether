@@ -222,7 +222,10 @@ message MoveMemberRequest { int64 member_id = 1; int32 role = 2; int64 wing_id =
 message SwapMembersRequest { int64 first_member_id = 1; int64 second_member_id = 2; }  // exchange two members' exact positions (stream G)
 message AssignMemberFitRequest { int64 member_id = 1; FitReferenceDto fit = 2; optional int64 composition_entry_id = 3; }  // fit absent = clear
 
-message MemberDto { int64 id = 1; int32 character_id = 2; int64 wing_id = 3; int64 squad_id = 4; int32 role = 5; bool is_external = 6; FitReferenceDto assigned_fit = 7; optional int64 assigned_composition_entry_id = 8; int32 fit_skill_verdict = 9; }  // 9 = FitSkillVerdict (FC-6 cross-client)
+// 9 = FitSkillVerdict (FC-6 cross-client). 10 = unix ms this member's client last published into the fleet, absent
+// when it never has (ET-70) — it lets a just-opened screen tell "gone" from "never heard of", which it cannot work
+// out from a live stream it has only been listening to for a second.
+message MemberDto { int64 id = 1; int32 character_id = 2; int64 wing_id = 3; int64 squad_id = 4; int32 role = 5; bool is_external = 6; FitReferenceDto assigned_fit = 7; optional int64 assigned_composition_entry_id = 8; int32 fit_skill_verdict = 9; optional int64 last_seen_ms = 10; }
 message ReportMemberFitVerdictRequest { int64 member_id = 1; int32 verdict = 2; }  // verdict = FitSkillVerdict; self-only
 message ReportMemberInGameFleetRequest { int64 member_id = 1; bool in_fleet = 2; }  // self-only in-game presence (D-126 M6)
 message ListMembersRequest { int64 fleet_id = 1; }

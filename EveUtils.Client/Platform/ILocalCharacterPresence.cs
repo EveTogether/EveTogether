@@ -12,7 +12,8 @@ namespace EveUtils.Client.Platform;
 ///
 /// The three-state answer is the whole point. Not seeing a fleet mate's EVE client is not evidence that it is
 /// closed — it is on their machine, where this client cannot look. Only a character in our own registry may be
-/// called offline; for anyone else the answer is "no idea", which stays ET-70's question to settle.
+/// called offline; for anyone else the answer is "no idea". ET-70 answers that half elsewhere — from the fleet
+/// stream and from its silence — and publishes this verdict about our own pilots onto it.
 /// </summary>
 public interface ILocalCharacterPresence
 {
@@ -21,6 +22,15 @@ public interface ILocalCharacterPresence
     /// <c>null</c> = not one of this client's characters, so nothing may be inferred either way.
     /// </summary>
     bool? IsInGame(int characterId, string? characterName);
+
+    /// <summary>
+    /// The same verdict for a character we hold only an id for — the metric publisher's case, which is handed a
+    /// participating character id and no name. Asking by id alone is not the same question asked with a null name:
+    /// on Windows the only presence evidence is the client's window title, so the name has to be resolved from the
+    /// registry first or a pilot who is plainly flying reads as logged off (the ET-71 trap). This resolves it here,
+    /// where that registry snapshot already lives, rather than growing a second copy of it at the call site.
+    /// </summary>
+    bool? IsInGame(int characterId);
 
     /// <summary>
     /// Listen for the picture changing — a pilot logging in or out, or the character list itself changing.

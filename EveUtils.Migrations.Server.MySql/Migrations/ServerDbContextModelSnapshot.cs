@@ -17,7 +17,7 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.8")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
@@ -449,6 +449,9 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                         .HasColumnType("tinyint(1)");
 
                     b.Property<DateTimeOffset>("JoinTime")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTimeOffset?>("LastSeenAt")
                         .HasColumnType("datetime(6)");
 
                     b.Property<int>("Role")

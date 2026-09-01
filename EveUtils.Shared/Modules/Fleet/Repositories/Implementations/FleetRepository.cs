@@ -109,6 +109,17 @@ internal sealed class FleetRepository(IDbContextFactory<SharedDbContext> context
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task TouchMemberSeenAsync(long fleetId, int characterId, DateTimeOffset at, CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var member = await db.Set<FleetMember>()
+            .FirstOrDefaultAsync(m => m.FleetId == fleetId && m.CharacterId == characterId, cancellationToken);
+        if (member is null)
+            return;
+        member.LastSeenAt = at;
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task DeleteAsync(long fleetId, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);

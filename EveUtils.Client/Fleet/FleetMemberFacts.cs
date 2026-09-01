@@ -1,4 +1,5 @@
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 
 namespace EveUtils.Client.Fleet;
 
@@ -18,4 +19,5 @@ public sealed record FleetMemberFacts(
     string? Location = null,
     bool IsWithCommander = false,
     DateTimeOffset? LastSampleAt = null,
-    bool TracksLiveMetrics = false);
+    bool TracksLiveMetrics = false,
+    FleetMemberPresenceState Presence = FleetMemberPresenceState.Unknown);

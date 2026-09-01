@@ -50,6 +50,11 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
 
     private const int MaxOrderValueLength = 4000;   // ClientSettingConfiguration caps a setting value at 4000
 
+    /// <summary>How often the screen re-asks who has gone quiet. A second is far finer than the ninety-second window
+    /// it is measuring against and costs one pass over the rows, so the transition lands on the row and in the badge
+    /// within a tick of becoming true rather than waiting for a sample that is, by definition, not coming.</summary>
+    public static readonly TimeSpan PresenceSweepInterval = TimeSpan.FromSeconds(1);
+
     private readonly long _fleetId;
     private readonly IFleetClient _fleets;
     private readonly IServiceProvider _services;
@@ -87,6 +92,8 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     private readonly int _creatorCharacterId;
     private readonly long? _esiFleetId;
     private readonly int? _esiFleetBossId;
+
+    private readonly DispatcherTimer _presenceSweep;
 
     private List<int> _storedOrder = [];
     private int? _commanderCharacterId;
@@ -133,6 +140,12 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         _presence = services.GetService<ILocalCharacterPresence>();
         _presenceSubscription = _presence?.Subscribe(ApplyPresence);
         ApplyPresence();
+
+        // A fleet mate's client closing announces nothing, so the only evidence is the silence that follows it and
+        // the only thing that can notice silence is a clock (ET-70).
+        _presenceSweep = new DispatcherTimer { Interval = PresenceSweepInterval };
+        _presenceSweep.Tick += (_, _) => RefreshPresence(DateTimeOffset.UtcNow);
+        _presenceSweep.Start();
     }
 
     /// <summary>
@@ -442,7 +455,10 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
                 _rosterByCharacter[member.CharacterId] = member;
                 _everOnRoster.Add(member.CharacterId);
                 _removed.Remove(member.CharacterId);   // named again: they are back, so nothing about them is stale
-                Track(member.CharacterId);
+                // The server's account of when this pilot last published, which a screen that just opened cannot have
+                // heard for itself — without it every member would read as never-heard-from for the first sweep or two
+                // and a pilot who left hours ago would be indistinguishable from one who shares nothing (ET-70).
+                Track(member.CharacterId).ServerLastSeenAt = member.LastSeenAt;
             }
 
             // …and the one thing a re-read does take away (ET-49). A pilot this roster HAS named before and does not
@@ -453,8 +469,25 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
                 _DropRow(characterId);
 
             _commanderCharacterId = commander?.CharacterId;
-            RefreshCommanderPresence();
+            RefreshPresence(DateTimeOffset.UtcNow);
         });
+    }
+
+    /// <summary>
+    /// Re-read who has gone quiet, then re-count. Public and clock-driven so a test drives it with a time it owns
+    /// instead of waiting ninety seconds; the window runs it on <see cref="PresenceSweepInterval"/>.
+    ///
+    /// It is a sweep and not a consequence of an arriving sample for one reason: the moment a pilot becomes silent is
+    /// the moment nothing arrives. A fleet that has gone entirely quiet — everyone logged for the night — publishes
+    /// nothing at all, so a screen that only recomputed on incoming samples would freeze with everybody still shown
+    /// as present, which is exactly the state this ticket exists to stop showing.
+    /// </summary>
+    public void RefreshPresence(DateTimeOffset now)
+    {
+        foreach (var tracker in _trackers.Values)
+            tracker.RefreshPresence(now);
+
+        RefreshCommanderPresence();
     }
 
     // A roster change reaches a screen that is already standing open, where ET-46's RefreshModule only fires when the
@@ -499,12 +532,23 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
             case MetricKind.Bounty:
                 Track(sample.CharacterId).Bounty = (long)sample.Value;
                 break;
+            case MetricKind.Presence:
+                // What the pilot's own client says about their game (ET-70). An out-of-range value is a newer
+                // client's state we have no reading for, and claiming nothing is the safe answer to that.
+                Track(sample.CharacterId).ReportedPresence =
+                    Enum.IsDefined((PresenceState)(int)sample.Value) ? (PresenceState)(int)sample.Value : PresenceState.Unknown;
+                break;
         }
 
         // Stamped after the switch, on the row a handled sample just created or updated: "when did we last hear from
         // this pilot" rides the same kinds the screen already draws, so a kind it ignores raises no row of its own.
         if (_trackers.TryGetValue(sample.CharacterId, out var tracker))
+        {
             tracker.LastSampleAt = DateTimeOffset.UtcNow;
+            // A sample arriving ends any silence on the spot, rather than at the next sweep a second later. That
+            // second matters: a pilot coming back must not still read as gone while their figures are already moving.
+            tracker.IsSilent = false;
+        }
 
         RefreshTotals();
         RefreshCommanderPresence();
@@ -583,8 +627,9 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
             FitName: fit?.FitName,
             Location: tracker.Location,
             IsWithCommander: tracker.IsWithCommander,
-            LastSampleAt: tracker.LastSampleAt,
-            TracksLiveMetrics: true);
+            LastSampleAt: tracker.LastHeardAt,
+            TracksLiveMetrics: true,
+            Presence: tracker.Presence);
     }
 
     // No member id means no roster row to remove (a pilot seen only through samples), and the creator can never be
@@ -696,7 +741,8 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         var commanderSystem = _commanderCharacterId is { } characterId && _trackers.TryGetValue(characterId, out var commander)
             ? commander.KnownLocation
             : null;
-        CommanderPresence = FleetCommanderPresence.From(commanderSystem, _trackers.Values.Select(t => t.KnownLocation));
+        CommanderPresence = FleetCommanderPresence.From(
+            commanderSystem, _trackers.Values.Select(t => new FleetMemberStanding(t.KnownLocation, t.IsOffline)));
 
         // Colour each member's own location off the badge that was just computed, rather than comparing systems a
         // second time — one verdict, so a green row and the badge's ratio can never disagree. The commander's own row
@@ -720,6 +766,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         // the screen closed, with nothing left to update it — the most convincing kind of stale.
         _dialogs?.CloseFleetOverlay(_fleetId);
 
+        _presenceSweep.Stop();
         _subscription.Dispose();
         _rosterSubscription.Dispose();
         _presenceSubscription?.Dispose();

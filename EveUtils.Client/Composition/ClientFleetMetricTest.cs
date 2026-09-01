@@ -57,7 +57,10 @@ public static class ClientFleetMetricTest
         captured.Clear();
 
         await publisher.PublishTickAsync(Now(), ct);
-        ok &= Check("active fleet → a dealt + a received DPS sample published", captured.Count == 2);
+        // Asserted by KIND rather than by a count. The count was pinned at 2 and has been wrong since Neut/Cap/Bounty
+        // joined the tick — a check that fails whenever a source is added tells you nothing about the one you added.
+        ok &= Check("active fleet → the tick publishes samples",
+            captured.Count > 0 && captured.All(e => e.Data.FleetId == FleetId));
 
         var dealt = captured.FirstOrDefault(e => e.Data.Kind == MetricKind.Dps);
         var received = captured.FirstOrDefault(e => e.Data.Kind == MetricKind.DpsIn);
@@ -69,6 +72,15 @@ public static class ClientFleetMetricTest
         ok &= Check("non-zero dealt DPS (outgoing combat within window)", dealt is { Data.Value: > 0 });
         ok &= Check("non-zero received DPS (incoming combat within window)", received is { Data.Value: > 0 });
         ok &= Check("event is fleet-scoped so it reroutes", dealt is IFleetScopedEvent { FleetId: FleetId });
+
+        // ET-70: the presence sample rides this same tick, and rides it EVERY tick. Its arrival is what keeps the
+        // member's server-side LastSeenAt fresh, so a tick without one would read as a client that had been closed.
+        var presence = captured.FirstOrDefault(e => e.Data.Kind == MetricKind.Presence);
+        ok &= Check("a Presence sample rides the same tick", presence is not null);
+        ok &= Check("Presence is a State kind (a label about the pilot, never a rollup)",
+            !FleetMetricCatalog.IsAggregatable(MetricKind.Presence));
+        ok &= Check("Presence carries a state this client can read",
+            presence is not null && Enum.IsDefined((PresenceState)(int)presence.Data.Value));
 
         // --- Multi-toon bundling: a second local character active in the SAME fleet must publish its
         //     own per-character samples in the SAME tick — one coordinated flush, each stamped with its own id. ---
@@ -86,8 +98,10 @@ public static class ClientFleetMetricTest
         await publisher.PublishTickAsync(Now(), ct); // ONE publish cycle
         var firstSamples = captured.Where(e => e.Data.CharacterId == Character).ToList();
         var secondSamples = captured.Where(e => e.Data.CharacterId == SecondCharacter).ToList();
-        ok &= Check("first character still publishes a dealt + received sample in the bundled tick", firstSamples.Count == 2);
-        ok &= Check("second character publishes a dealt + received sample in the same tick", secondSamples.Count == 2);
+        ok &= Check("first character still publishes its own dealt + received sample in the bundled tick",
+            firstSamples.Any(e => e.Data.Kind == MetricKind.Dps) && firstSamples.Any(e => e.Data.Kind == MetricKind.DpsIn));
+        ok &= Check("second character publishes its own dealt + received sample in the same tick",
+            secondSamples.Any(e => e.Data.Kind == MetricKind.Dps) && secondSamples.Any(e => e.Data.Kind == MetricKind.DpsIn));
         ok &= Check("every sample is stamped with a known active character (no unstamped sample)",
             captured.All(e => e.Data.CharacterId == Character || e.Data.CharacterId == SecondCharacter));
         ok &= Check("every sample is scoped to the one active fleet", captured.All(e => e.Data.FleetId == FleetId));
@@ -102,7 +116,8 @@ public static class ClientFleetMetricTest
             participation.Current.Count == 1 && participation.Current[0].CharacterId == Character);
         captured.Clear();
         await publisher.PublishTickAsync(Now(), ct);
-        ok &= Check("after one toon leaves, only the remaining toon publishes", captured.All(e => e.Data.CharacterId == Character) && captured.Count == 2);
+        ok &= Check("after one toon leaves, only the remaining toon publishes",
+            captured.Count > 0 && captured.All(e => e.Data.CharacterId == Character));
 
         // --- Left: a tick after leaving must publish nothing more. ---
         participation.Set([]);

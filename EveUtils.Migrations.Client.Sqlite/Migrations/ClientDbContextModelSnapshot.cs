@@ -394,6 +394,9 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.Property<DateTimeOffset>("JoinTime")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset?>("LastSeenAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Role")
                         .HasColumnType("INTEGER");
 

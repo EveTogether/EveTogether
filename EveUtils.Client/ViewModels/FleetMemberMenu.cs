@@ -4,6 +4,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Fleet;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 
 namespace EveUtils.Client.ViewModels;
 
@@ -28,6 +29,9 @@ public static class FleetMemberMenu
         [
             new(facts.MemberName, tooltip: "The pilot this row stands for."),
             new(_PositionLine(facts), tooltip: "Where this pilot sits in the EVE Together fleet structure."),
+            new(_PresenceLine(facts), tooltip:
+                "Whether this pilot is here at all. \"Offline\" means their EVE client is closed, or their EVE Together "
+                + "stopped reporting; \"unknown\" means we have never heard from them, which is not the same thing."),
             new(_ShipLine(facts), tooltip: "The fit this pilot is assigned to fly in this fleet."),
             new(_LocationLine(facts), tooltip: "Location sharing is opt-in per pilot; \"not sharing\" is a choice, not a fault."),
             new(_LastUpdateLine(facts, now), tooltip: "How long ago this pilot's client last published a metric sample."),
@@ -64,10 +68,20 @@ public static class FleetMemberMenu
         _ => "No fit assigned"
     };
 
-    private static string _LocationLine(FleetMemberFacts facts) => facts.Location switch
+    private static string _PresenceLine(FleetMemberFacts facts) => facts.Presence switch
     {
-        { Length: > 0 } system when facts.IsWithCommander => $"In {system} — with the FC",
-        { Length: > 0 } system => $"In {system}",
+        FleetMemberPresenceState.Online => "Online",
+        FleetMemberPresenceState.Offline => "Offline — not in game",
+        _ => "Presence unknown — this pilot's client has never reported"
+    };
+
+    // An offline pilot is not "not sharing" — nobody chose anything, they are simply not there to share. Saying so
+    // reads as a privacy choice they never made, and hides the reason the line is empty.
+    private static string _LocationLine(FleetMemberFacts facts) => facts switch
+    {
+        { Presence: FleetMemberPresenceState.Offline } => "No location — offline",
+        { Location: { Length: > 0 } system, IsWithCommander: true } => $"In {system} — with the FC",
+        { Location: { Length: > 0 } system } => $"In {system}",
         _ => "Not sharing location"
     };
 

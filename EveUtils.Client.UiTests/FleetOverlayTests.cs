@@ -108,7 +108,7 @@ public class FleetOverlayTests
         {
             // 5 of 8 known with the FC, 2 unknown — exactly what the fleet-metrics header would be showing.
             CommanderPresence = FleetCommanderPresence.From("Jita",
-                ["Jita", "Jita", "Jita", "Jita", "Jita", "Perimeter", "Perimeter", "Perimeter", null, null]),
+                FleetStandings.At("Jita", "Jita", "Jita", "Jita", "Jita", "Perimeter", "Perimeter", "Perimeter", null, null)),
         };
 
         var overlay = new FleetOverlayViewModel(fleet);
@@ -384,7 +384,7 @@ public class FleetOverlayTests
 
         var fleet = new FakeFleet
         {
-            CommanderPresence = FleetCommanderPresence.From("Jita", ["Jita", "Jita", "Perimeter", null]),
+            CommanderPresence = FleetCommanderPresence.From("Jita", FleetStandings.At("Jita", "Jita", "Perimeter", null)),
         };
         fleet.Rows.Add(Member("RaymondKrah", dpsIn: 120, neutIn: 4));
         fleet.Rows.Add(Member("Lionear", dpsIn: 812, neutIn: 6));
@@ -412,7 +412,7 @@ public class FleetOverlayTests
 
         var fleet = new FakeFleet
         {
-            CommanderPresence = FleetCommanderPresence.From("Jita", ["Jita", "Jita", "Jita"]),
+            CommanderPresence = FleetCommanderPresence.From("Jita", FleetStandings.At("Jita", "Jita", "Jita")),
         };
         fleet.Rows.Add(Member("RaymondKrah"));
         fleet.Rows.Add(Member("Lionear"));
@@ -444,7 +444,7 @@ public class FleetOverlayTests
 
         var fleet = new FakeFleet
         {
-            CommanderPresence = FleetCommanderPresence.From("Jita", ["Jita", "Jita", null, null, null]),
+            CommanderPresence = FleetCommanderPresence.From("Jita", FleetStandings.At("Jita", "Jita", null, null, null)),
         };
         fleet.Rows.Add(Member("RaymondKrah", dpsIn: 210, neutIn: 22));
         fleet.Rows.Add(Member("Lionear", dpsIn: 90));

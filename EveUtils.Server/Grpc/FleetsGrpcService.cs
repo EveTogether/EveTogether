@@ -337,6 +337,10 @@ public sealed class FleetsGrpcService(
             };
             if (member.AssignedCompositionEntryId is long entryId)
                 dto.AssignedCompositionEntryId = entryId;
+            // Absent, not zero: "never published" and "published at the epoch" have to stay different, because only
+            // one of them is grounds for calling the pilot offline (ET-70).
+            if (member.LastSeenAt is { } lastSeen)
+                dto.LastSeenMs = lastSeen.ToUnixTimeMilliseconds();
             reply.Members.Add(dto);
         }
         return reply;

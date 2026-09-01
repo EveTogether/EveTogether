@@ -17,7 +17,7 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.8")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -449,6 +449,9 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<DateTimeOffset>("JoinTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastSeenAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Role")

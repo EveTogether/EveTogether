@@ -21,6 +21,7 @@ public sealed partial class FleetShareViewModel : ObservableObject
         (MetricKind.Dps, "Live combat data (DPS, neut, cap)"),
         (MetricKind.Bounty, "Bounty earnings"),
         (MetricKind.Location, "Location"),
+        (MetricKind.Presence, "Online/offline status"),
     ];
 
     public FleetShareViewModel(string fleetName, long fleetId, IReadOnlyList<(int Id, string Name)> myCharacters, MetricShareSnapshot current)

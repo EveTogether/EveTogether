@@ -95,8 +95,12 @@ public class OfflineMemberLocationTests
 
         Assert.Equal(2, presence.InSystem);
         Assert.Equal(2, presence.Known);
-        Assert.Equal(1, presence.UnknownLocations);
-        Assert.Equal("◉ 2/2 WITH FC (1 unknown)", presence.BadgeText);
+        // Offline is its own bucket since ET-70, and not folded in with the pilots who share no position: "that one
+        // is gone" and "we have no fix on that one" are different things to tell an FC.
+        Assert.Equal(1, presence.Offline);
+        Assert.Equal(0, presence.UnknownLocations);
+        Assert.Equal(3, presence.Total);
+        Assert.Equal("◉ 2/2 WITH FC (1 offline)", presence.BadgeText);
 
         var alt = harness.Row(Alt);
         Assert.Null(alt.KnownLocation);
@@ -123,10 +127,10 @@ public class OfflineMemberLocationTests
 
         var alt = harness.Row(Alt);
         Assert.Equal("offline", alt.LocationDisplay);
-        Assert.Equal("◉ 2/2 WITH FC (1 unknown)", (await harness.WaitForPresenceAsync(p => p.Known == 2)).BadgeText);
+        Assert.Equal("◉ 2/2 WITH FC (1 offline)", (await harness.WaitForPresenceAsync(p => p.Known == 2)).BadgeText);
 
         // The pilot logs in. One announcement, and the row has its system back, is counted with the FC, and the
-        // badge's "unknown" note goes away because there is no longer anybody it does not know about.
+        // badge's note goes away because there is no longer anybody it does not know about.
         await harness.SetInGameAsync(Commander, Alt);
         Assert.False(alt.IsOffline);
         Assert.Equal("Jita", alt.LocationDisplay);
@@ -141,7 +145,7 @@ public class OfflineMemberLocationTests
         Assert.True(alt.IsOffline);
         Assert.Equal("offline", alt.LocationDisplay);
         Assert.False(alt.IsWithCommander);
-        Assert.Equal("◉ 2/2 WITH FC (1 unknown)", (await harness.WaitForPresenceAsync(p => p.Known == 2)).BadgeText);
+        Assert.Equal("◉ 2/2 WITH FC (1 offline)", (await harness.WaitForPresenceAsync(p => p.Known == 2)).BadgeText);
     }
 
     /// <summary>
