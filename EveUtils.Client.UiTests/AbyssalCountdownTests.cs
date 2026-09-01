@@ -197,7 +197,7 @@ public class AbyssalCountdownTests
         metrics.SeenInside(FirstContact);
         Assert.NotNull(metrics.AbyssalAnchor);
 
-        metrics.AbyssalWatchLost();
+        metrics.AbyssalWatchLost(null);
         Assert.Null(metrics.AbyssalAnchor);
     }
 

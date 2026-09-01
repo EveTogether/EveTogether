@@ -11,6 +11,7 @@ using EveUtils.Client.Platform;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Esi.Events;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
@@ -43,6 +44,7 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     private readonly IServiceProvider _services;
     private readonly IEventBus _eventBus;
     private readonly ICharacterRegistry? _registry;
+    private readonly EveClientPresenceService? _presence;
 
     // One sliding-window tracker per gamelog character name (the Listener: header — always present).
     private readonly ConcurrentDictionary<string, LiveDpsTracker> _trackers = new(StringComparer.OrdinalIgnoreCase);
@@ -83,17 +85,29 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     /// <summary>Raised when discrete metrics (bounty/location/notify) change; the UI also polls Snapshot on a timer.</summary>
     public event Action? MetricsChanged;
 
-    public GamelogClientService(IServiceProvider services, IEventBus eventBus, ICharacterRegistry? registry = null)
+    public GamelogClientService(IServiceProvider services, IEventBus eventBus, ICharacterRegistry? registry = null,
+        EveClientPresenceService? presence = null)
     {
         _services = services;
         _eventBus = eventBus;
         _registry = registry;
+        _presence = presence;
 
         if (_registry is not null)
         {
             _registry.RegistryChanged += () => _ = RefreshRegistryMapAsync();
             _ = RefreshRegistryMapAsync();
         }
+
+        // ET-96: the two ways a character can start needing a watch without a registry row ever changing. Both
+        // route through MapCharacter — Watch keeps its one call site — rather than opening a second path to it.
+        if (_presence is not null)
+            _presence.Changed += evidence => _ = MapPresentCharactersAsync(evidence);
+
+        // A token that quietly starts working again (ET-24 deliberately does not touch the registry for that) is
+        // the other gap: TokenRefreshedEvent only fires on a real status transition, never on the 60 s loop
+        // re-confirming a healthy token, so this cannot turn into a rebuild storm of its own.
+        _eventBus.Subscribe<TokenRefreshedEvent>(evt => _ = MapRegisteredCharacterAsync(evt.Data.CharacterId));
 
         _ = Task.Run(() => RemotePublishLoopAsync(CancellationToken.None)); // steady remote sample stream
     }
@@ -123,7 +137,7 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         {
             if (reading.SolarSystemId is not { } solarSystemId)
             {
-                metrics.AbyssalWatchLost();
+                metrics.AbyssalWatchLost(reading.Reason);
                 return;
             }
 
@@ -212,6 +226,56 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         catch
         {
             // Registry/DB not ready yet (e.g. before migration on first boot) — the next change re-runs this.
+        }
+    }
+
+    /// <summary>
+    /// ET-96: a character who signs into a client that was already running never fires <c>RegistryChanged</c> — the
+    /// registry row existed before login — so nothing used to call <see cref="MapCharacter"/> for them until the
+    /// next app start. <see cref="EveClientPresenceService.Changed"/> (ET-70's 5 s sweep) is the "this character is
+    /// in game now" signal that was missing; every registered character is checked against it rather than trusting
+    /// the evidence's own ids, because those are best-effort (window titles / launch args) and may carry a name with
+    /// no id or an id that has gone stale.
+    /// </summary>
+    private async Task MapPresentCharactersAsync(EveClientEvidence evidence)
+    {
+        if (_registry is null)
+            return;
+        try
+        {
+            foreach (var c in await _registry.GetAllAsync())
+                if (c.EsiCharacterId is { } id && evidence.Matches(c.Name, id))
+                    MapCharacter(id, c.Name);
+        }
+        catch
+        {
+            // Registry/DB not ready yet — the next 5 s sweep re-runs this.
+        }
+    }
+
+    /// <summary>
+    /// ET-96: a token that silently starts refreshing again after a spell of failing needs the same recovery — the
+    /// watch that gave up because the token stopped working stays stopped until something calls
+    /// <see cref="MapCharacter"/> again. Re-mapping on every <see cref="TokenRefreshedEvent"/> costs nothing when the
+    /// watch is already running (idempotent), and the event itself only fires on a real status change, not the 60 s
+    /// loop re-confirming a healthy token — ET-24's reason for not writing the registry on every refresh stays intact.
+    /// </summary>
+    private async Task MapRegisteredCharacterAsync(int characterId)
+    {
+        if (_registry is null || characterId <= 0)
+            return;
+        try
+        {
+            foreach (var c in await _registry.GetAllAsync())
+                if (c.EsiCharacterId == characterId)
+                {
+                    MapCharacter(characterId, c.Name);
+                    return;
+                }
+        }
+        catch
+        {
+            // Registry/DB not ready — a later refresh (or the next presence sweep) retries.
         }
     }
 

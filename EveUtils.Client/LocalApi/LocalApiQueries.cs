@@ -35,13 +35,15 @@ public sealed partial class LocalApiQueries(IServiceProvider rootServices)
 
         var running = rootServices.GetService<EveClientPresenceService>()?.Current.CharacterNames ?? new HashSet<string>();
         var idByName = await _IdByNameAsync(cancellationToken);
+        var locationMonitor = rootServices.GetService<IEsiLocationMonitor>();
 
         return running.Select(name =>
         {
+            var id = idByName.TryGetValue(name, out var resolvedId) ? resolvedId : (int?)null;
             var rates = gamelog.SampleCombat(name);
             var snapshot = gamelog.Snapshot(name);
             return new CharacterMetricsDto(
-                idByName.TryGetValue(name, out var id) ? id : null,
+                id,
                 name,
                 Running: true,
                 DpsOut: rates.Dealt,
@@ -51,7 +53,11 @@ public sealed partial class LocalApiQueries(IServiceProvider rootServices)
                 BountyTotal: snapshot.BountyTotal,
                 Kills: snapshot.Kills,
                 Location: snapshot.Location,
-                PeakDps: snapshot.PeakDealtDps);
+                PeakDps: snapshot.PeakDealtDps,
+                // ET-96: whether the ESI location watch is active right now, and why it has nothing to say when it
+                // is not showing a system — the two facts this ticket's own investigation needed a debugger for.
+                LocationWatchActive: id is { } charId && (locationMonitor?.IsWatching(charId) ?? false),
+                LocationStatus: EsiLocationReasonText.Describe(snapshot.LocationUnavailableReason));
         }).ToList();
     }
 

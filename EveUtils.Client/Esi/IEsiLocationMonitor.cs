@@ -26,4 +26,8 @@ public interface IEsiLocationMonitor
     void UiReady();
 
     void Stop(int characterId);
+
+    /// <summary>Whether a watch for this character is active right now — for diagnostics without a debugger
+    /// (ET-96: a healthy watch logs nothing, so the log alone cannot tell "running fine" from "never started").</summary>
+    bool IsWatching(int characterId);
 }

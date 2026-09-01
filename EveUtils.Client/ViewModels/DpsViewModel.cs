@@ -5,6 +5,8 @@ using Avalonia;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Controls;
+using EveUtils.Client.Esi;
+using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Dtos;
@@ -214,6 +216,17 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     private DateTime? _abyssalAnchorUtc;
 
     /// <summary>
+    /// Why the ESI location watch has nothing to report, when <see cref="Location"/> is null — set from
+    /// <see cref="EveUtils.Shared.Modules.Gamelog.Aggregation.CharacterMetricsSnapshot.LocationUnavailableReason"/>
+    /// for a local character only (ET-96). Null both when a system is known and when nothing has been heard from
+    /// the watch yet, so a pilot who simply has not had a reading land still reads as blank, not as a refusal.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LocationDisplay))]
+    [NotifyPropertyChangedFor(nameof(SystemDisplay))]
+    private EsiErrorKind? _locationUnavailableReason;
+
+    /// <summary>
     /// The location anything may rely on: the reported system, or null once we know the pilot is not in game. The
     /// badge counts this, <c>FleetCommanderPresence.IsWith</c> colours from this, and the readout below shows it —
     /// so the member who drops out of the count is exactly the member who shows no system, by construction.
@@ -222,10 +235,13 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
 
     /// <summary>The one text every location readout binds to, so the screens showing a location cannot drift
     /// apart on what follows the system name. A pilot we know to be offline reads as that instead of as a system
-    /// they left hours ago — a blank would be indistinguishable from "shares no location".</summary>
+    /// they left hours ago — a blank would be indistinguishable from "shares no location". Online with no system
+    /// falls back to why, when the watch has said why (ET-96) — otherwise it stays blank: nothing heard yet is not
+    /// itself a refusal.</summary>
     public string? LocationDisplay => IsOffline
         ? "offline"
-        : EveUtils.Shared.Modules.Gamelog.Aggregation.AbyssalSpace.Describe(Location, AbyssalAnchorUtc, DateTime.UtcNow);
+        : EveUtils.Shared.Modules.Gamelog.Aggregation.AbyssalSpace.Describe(Location, AbyssalAnchorUtc, DateTime.UtcNow)
+          ?? EsiLocationReasonText.Describe(LocationUnavailableReason);
 
     /// <summary>
     /// The system alone, dropped entirely when the pilot is offline. For the one readout that already names the

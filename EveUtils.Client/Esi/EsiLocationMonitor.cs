@@ -67,6 +67,11 @@ public sealed class EsiLocationMonitor(
             return;
         }
 
+        // A genuine (re)start, not the idempotent no-op above: this character may warn again. Without this, a
+        // watch that resumed after a silent re-auth (ET-96) and lost a second time would stay stopped and never
+        // toast — the gate from its FIRST loss would still be blocking, so the second silence would be silent too.
+        ClearWarned(characterId);
+
         _ = Task.Run(() => WatchAsync(characterId, characterName, onReading, cts.Token), CancellationToken.None);
     }
 
@@ -76,6 +81,17 @@ public sealed class EsiLocationMonitor(
             return;
         cts.Cancel();
         cts.Dispose();
+    }
+
+    /// <summary>Whether a watch for this character is active right now — for diagnostics without a debugger
+    /// (ET-96: the log alone cannot tell "running fine" from "never started", since a healthy watch logs nothing).</summary>
+    public bool IsWatching(int characterId) => _running.ContainsKey(characterId);
+
+    private void ClearWarned(int characterId)
+    {
+        lock (_warnGate)
+            foreach (var byId in _warned.Values)
+                byId.Remove(characterId);
     }
 
     /// <summary>The watch itself. <see cref="Watch"/> is only the fire-and-forget wrapper; tests drive this.</summary>
@@ -100,7 +116,7 @@ public sealed class EsiLocationMonitor(
                 else if (Fatal(result.Error?.Kind))
                 {
                     Warn(characterId, characterName, result.Error?.Kind);
-                    Lost(characterId, onReading);
+                    Lost(characterId, result.Error?.Kind, onReading);
                     return;
                 }
                 // A call our own gate withheld is not a failed read — nothing left the machine, so it is evidence of
@@ -113,7 +129,7 @@ public sealed class EsiLocationMonitor(
                 {
                     logger.LogWarning("Abyssal monitor for {CharacterId} gave up after {Failures} failed location reads.",
                         characterId, failures);
-                    Lost(characterId, onReading);
+                    Lost(characterId, result.Error?.Kind, onReading);
                     return;
                 }
 
@@ -127,7 +143,7 @@ public sealed class EsiLocationMonitor(
         catch (Exception ex)
         {
             logger.LogError(ex, "Abyssal monitor for {CharacterId} stopped on an unexpected error.", characterId);
-            Lost(characterId, onReading);
+            Lost(characterId, null, onReading);
         }
     }
 
@@ -224,11 +240,11 @@ public sealed class EsiLocationMonitor(
         }
     }
 
-    private void Lost(int characterId, Action<EsiLocationReading> onReading)
+    private void Lost(int characterId, EsiErrorKind? reason, Action<EsiLocationReading> onReading)
     {
         if (_running.TryRemove(characterId, out var cts))
             cts.Dispose();
-        onReading(EsiLocationReading.Lost(DateTime.UtcNow));
+        onReading(EsiLocationReading.Lost(reason, DateTime.UtcNow));
     }
 
     public void Dispose()

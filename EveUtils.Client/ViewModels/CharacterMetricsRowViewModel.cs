@@ -96,6 +96,7 @@ public partial class CharacterMetricsRowViewModel : ViewModelBase
         // thing from the "—" this window prints, and only the display layer may turn one into the other.
         Dps.Location = s.Location;
         Dps.AbyssalAnchorUtc = s.AbyssalAnchor;
+        Dps.LocationUnavailableReason = s.LocationUnavailableReason;
         OnPropertyChanged(nameof(LocationDisplay)); // 1 Hz path: the countdown moves even when nothing else does
         IskPerHour = s.Duration.TotalMinutes < 1 ? "—" : $"{s.IskPerHour:N0} ISK/h";
         HitRate = s.Shots == 0 ? "—" : $"{s.HitRate * 100:0}%  ({s.Hits}/{s.Shots})";

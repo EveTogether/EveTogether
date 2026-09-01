@@ -105,7 +105,12 @@ public class EsiLocationMonitorTests
         var monitor = Build(locations, out var toasts);
 
         var seen = new List<bool?>();
-        await monitor.WatchAsync(1, "RaymondKrah", reading => seen.Add(reading.Inside), CancellationToken.None);
+        EsiErrorKind? reason = null;
+        await monitor.WatchAsync(1, "RaymondKrah", reading =>
+        {
+            seen.Add(reading.Inside);
+            reason = reading.Reason;
+        }, CancellationToken.None);
 
         var toast = Assert.Single(toasts.ActionToasts);
         Assert.Equal("No location access", toast.Title);
@@ -118,6 +123,10 @@ public class EsiLocationMonitorTests
         // would only burn ESI budget. And the clock is cleared rather than left frozen on its last anchor.
         Assert.Equal(1, locations.Calls);
         Assert.Equal([null], seen);
+
+        // ET-96: the lost reading carries WHY, so a screen can tell "no permission" from every other silence
+        // instead of just going blank for the rest of the session.
+        Assert.Equal(EsiErrorKind.ScopeMissing, reason);
     }
 
     /// <summary>
@@ -176,6 +185,65 @@ public class EsiLocationMonitorTests
     }
 
     /// <summary>
+    /// ET-96: the one-warning-per-session gate must not survive a genuine restart. <see cref="EsiLocationMonitor.Lost"/>
+    /// takes the character out of the running set, so a later <see cref="EsiLocationMonitor.Watch"/> for the same id
+    /// is a real restart — and a second loss for the same reason has to be able to warn again, or the second silence
+    /// (the one ET-96 was actually about) stays completely silent.
+    /// </summary>
+    [Fact]
+    public async Task ARestartedWatch_CanWarnAgain()
+    {
+        var locations = new FakeLocationClient { Error = EsiErrorKind.ScopeMissing };
+        var monitor = Build(locations, out var toasts);
+
+        monitor.Watch(1, "RaymondKrah", _ => { });
+        for (var i = 0; i < 200 && toasts.ActionToasts.Count == 0; i++)
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        Assert.Single(toasts.ActionToasts);
+
+        monitor.Watch(1, "RaymondKrah", _ => { }); // the real restart path (ET-96 part 1/2)
+        for (var i = 0; i < 200 && toasts.ActionToasts.Count < 2; i++)
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        Assert.Equal(2, toasts.ActionToasts.Count);
+    }
+
+    /// <summary>Whether a watch is active is now something other than a debugger can see (ET-96) — this is the
+    /// fact that investigation needed one for.</summary>
+    [Fact]
+    public void IsWatching_ReflectsWhetherTheCharacterIsCurrentlyRunning()
+    {
+        var locations = new FakeLocationClient(Aphend, Aphend, Aphend);
+        var monitor = Build(locations, out _);
+
+        Assert.False(monitor.IsWatching(1));
+
+        // Watch() adds to the running set synchronously, before the poll loop's Task.Run even gets scheduled.
+        monitor.Watch(1, "RaymondKrah", _ => { });
+        Assert.True(monitor.IsWatching(1));
+
+        monitor.Stop(1);
+        Assert.False(monitor.IsWatching(1));
+    }
+
+    /// <summary>The other half: a watch that gives up (Lost) also stops reading as watching, without anyone
+    /// calling Stop() — the same fact <see cref="ARestartedWatch_CanWarnAgain"/> restarts from.</summary>
+    [Fact]
+    public async Task ALostWatch_NoLongerReadsAsWatching()
+    {
+        var locations = new FakeLocationClient { Error = EsiErrorKind.ScopeMissing };
+        var monitor = Build(locations, out _);
+
+        // No assertion of "true" right here: with PollInterval shrunk to 1 ms for the test, the fire-and-forget
+        // poll loop can reach its fatal first read and remove itself before this thread gets a second line —
+        // Watch() starting the running state synchronously is already covered by the sibling test above.
+        monitor.Watch(1, "RaymondKrah", _ => { });
+
+        for (var i = 0; i < 200 && monitor.IsWatching(1); i++)
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        Assert.False(monitor.IsWatching(1));
+    }
+
+    /// <summary>
     /// A 5xx or a timeout says nothing about where the pilot is, and dropping the clock on one is the failure that
     /// costs a ship. Only a refusal no retry can fix stops the watch immediately.
     /// </summary>
@@ -201,10 +269,18 @@ public class EsiLocationMonitorTests
         var monitor = Build(locations, out _);
 
         var seen = new List<bool?>();
-        await monitor.WatchAsync(1, "RaymondKrah", reading => seen.Add(reading.Inside), CancellationToken.None);
+        EsiErrorKind? reason = null;
+        await monitor.WatchAsync(1, "RaymondKrah", reading =>
+        {
+            seen.Add(reading.Inside);
+            reason = reading.Reason;
+        }, CancellationToken.None);
 
         Assert.Equal([null], seen);
         Assert.InRange(locations.Calls, 20, 22);
+
+        // ET-96: exhausting the failure budget carries the last failure's reason too, not just the fatal path.
+        Assert.Equal(EsiErrorKind.ServerError, reason);
     }
 
     /// <summary>

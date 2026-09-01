@@ -77,6 +77,42 @@ public class HomeDashboardTests
         Assert.True(new DpsViewModel("Offline", isSelf: true) { IsLive = false, InEve = false }.ShowOffline);
     }
 
+    /// <summary>
+    /// ET-96: "online, no system shown" used to read the same whether the location watch had no permission, could
+    /// not sign in, or simply had not heard anything yet — all three were an empty field. Once the lost reading
+    /// carries why, the field may say so; when it does not know why (no reading at all yet), it must still stay
+    /// blank rather than invent a reason.
+    /// </summary>
+    [Fact]
+    public void OnlineWithNoSystem_ShowsWhyWhenTheWatchKnows_AndStaysBlankWhenItDoesNot()
+    {
+        var noPermission = new DpsViewModel("Pilot", isSelf: true)
+        {
+            IsLocalCharacter = true, InEve = true,
+            LocationUnavailableReason = EveUtils.Shared.Modules.Esi.Http.EsiErrorKind.ScopeMissing,
+        };
+        Assert.Equal("no location access", noPermission.LocationDisplay);
+
+        var cantSignIn = new DpsViewModel("Pilot", isSelf: true)
+        {
+            IsLocalCharacter = true, InEve = true,
+            LocationUnavailableReason = EveUtils.Shared.Modules.Esi.Http.EsiErrorKind.AuthRequired,
+        };
+        Assert.Equal("sign-in expired", cantSignIn.LocationDisplay);
+
+        var nothingHeardYet = new DpsViewModel("Pilot", isSelf: true) { IsLocalCharacter = true, InEve = true };
+        Assert.Null(nothingHeardYet.LocationDisplay);
+
+        // A known system always wins over a stale reason — SeenOutside/SeenInside already clear it server-side,
+        // but the display layer must not depend on that alone.
+        var recovered = new DpsViewModel("Pilot", isSelf: true)
+        {
+            IsLocalCharacter = true, InEve = true, Location = "Jita",
+            LocationUnavailableReason = EveUtils.Shared.Modules.Esi.Http.EsiErrorKind.AuthRequired,
+        };
+        Assert.Equal("Jita", recovered.LocationDisplay);
+    }
+
     private sealed class RegistryOnly(ICharacterRegistry registry) : IServiceProvider
     {
         public object? GetService(Type serviceType) => serviceType == typeof(ICharacterRegistry) ? registry : null;
