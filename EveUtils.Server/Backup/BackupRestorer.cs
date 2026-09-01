@@ -1,10 +1,10 @@
-using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
 using EveUtils.Shared.App;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
+using ICSharpCode.SharpZipLib.Zip;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -38,19 +38,19 @@ internal sealed class BackupRestorer(
     {
         Directory.CreateDirectory(options.DataDirectory);
 
-        // The decrypted archive is the plaintext of the most sensitive file this application has. It lands beside
-        // the data it is about to replace — same volume, same permissions — and is removed in the finally below on
-        // every path, including the ones that throw.
+        // A ZIP is read from its central directory backwards, so the upload has to be seekable. It lands beside the
+        // data it is about to replace — same volume, same permissions — still encrypted, and is removed in the
+        // finally below on every path, including the ones that throw.
         var staged = Path.Combine(options.DataDirectory, $"restore-{Guid.NewGuid():N}.tmp");
         try
         {
-            await _StageAsync(upload, password, staged, cancellationToken);
+            await _StageAsync(upload, staged, cancellationToken);
             return await _RestoreStagedAsync(staged, password, cancellationToken);
         }
         catch (CryptographicException)
         {
-            // Both a wrong password and an edited byte end here: AES-GCM cannot tell them apart, and neither
-            // should the message — saying which one it was would help someone guessing.
+            // Both a wrong password and an edited byte end here, and the message says both: naming which one it
+            // was would help someone guessing.
             return Result<BackupRestoreReport>.Failure(new ResultMessage(MessageSeverity.Error,
                 MessageCodes.BackupPasswordWrong,
                 "The archive could not be decrypted. Either the password is wrong or the file has been altered."));
@@ -59,6 +59,13 @@ internal sealed class BackupRestorer(
         {
             return Result<BackupRestoreReport>.Failure(new ResultMessage(MessageSeverity.Error,
                 MessageCodes.BackupCorrupt, ex.Message));
+        }
+        catch (ZipException ex)
+        {
+            // Reached only after the archive opened and the password was proven on its manifest, so what is left is
+            // the file itself: an entry whose AES authentication code no longer matches what it holds.
+            return Result<BackupRestoreReport>.Failure(new ResultMessage(MessageSeverity.Error,
+                MessageCodes.BackupCorrupt, $"The backup archive is damaged and was not restored: {ex.Message}"));
         }
         catch (IOException ex)
         {
@@ -77,7 +84,8 @@ internal sealed class BackupRestorer(
 
     private async Task<Result<BackupRestoreReport>> _RestoreStagedAsync(string staged, string password, CancellationToken cancellationToken)
     {
-        using var zip = ZipFile.OpenRead(staged);
+        await using var file = new FileStream(staged, FileMode.Open, FileAccess.Read, FileShare.None);
+        using var zip = BackupZip.OpenReader(file, password);
         var manifest = _ReadManifest(zip);
 
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
@@ -124,22 +132,19 @@ internal sealed class BackupRestorer(
         }
     }
 
-    /// <summary>Decrypts the upload onto disk. Doing this first means the password is checked, and a truncated
-    /// upload is caught, before the archive is opened for anything else.</summary>
-    private static async Task _StageAsync(Stream upload, string password, string staged, CancellationToken cancellationToken)
+    /// <summary>Copies the upload to a seekable file, still encrypted — the plaintext of the most sensitive file
+    /// this application has never touches the disk. Nothing here inspects the bytes; that starts once the archive
+    /// can be read backwards from its central directory.</summary>
+    private static async Task _StageAsync(Stream upload, string staged, CancellationToken cancellationToken)
     {
-        await using var plaintext = BackupEnvelope.OpenReader(upload, password);
         await using var file = new FileStream(staged, FileMode.CreateNew, FileAccess.Write, FileShare.None);
         _RestrictToOwner(staged);
-        await plaintext.CopyToAsync(file, cancellationToken);
+        await upload.CopyToAsync(file, cancellationToken);
     }
 
-    private static BackupManifest _ReadManifest(ZipArchive zip)
+    private static BackupManifest _ReadManifest(ZipFile zip)
     {
-        var entry = zip.GetEntry(BackupFormat.ManifestEntry)
-            ?? throw new InvalidDataException("The archive has no manifest, so it is not an EVE Together backup.");
-
-        using var stream = entry.Open();
+        using var stream = BackupZip.OpenManifest(zip);
         return JsonSerializer.Deserialize<BackupManifest>(stream, BackupJson.Options)
             ?? throw new InvalidDataException("The archive's manifest is unreadable.");
     }
@@ -179,7 +184,7 @@ internal sealed class BackupRestorer(
     /// at all: its rows fit that schema, and the migration run on the next start carries them forward.
     /// </summary>
     private static async Task<long> _RestoreDatabaseAsync(
-        ServerDbContext db, Data.DatabaseProvider provider, ZipArchive zip, BackupManifest manifest, CancellationToken cancellationToken)
+        ServerDbContext db, Data.DatabaseProvider provider, ZipFile zip, BackupManifest manifest, CancellationToken cancellationToken)
     {
         var helper = db.GetService<ISqlGenerationHelper>();
 
@@ -201,9 +206,7 @@ internal sealed class BackupRestorer(
             var rows = 0L;
             foreach (var table in manifest.Tables)
             {
-                var entry = zip.GetEntry(table.Entry)
-                    ?? throw new InvalidDataException($"The archive is missing the entry for table '{table.Name}'.");
-                await using var stream = entry.Open();
+                await using var stream = BackupZip.OpenEntry(zip, table.Entry, $"table '{table.Name}'");
                 rows += await BackupTableWriter.ReadAsync(connection, transaction, helper, provider, stream, cancellationToken);
             }
 
@@ -221,7 +224,7 @@ internal sealed class BackupRestorer(
     /// knows by name are written; anything else the archive happens to carry is left alone rather than dropped
     /// into the data directory on an uploaded file's say-so.
     /// </summary>
-    private List<string> _RestoreFiles(ZipArchive zip, BackupManifest manifest)
+    private List<string> _RestoreFiles(ZipFile zip, BackupManifest manifest)
     {
         var restored = new List<string>();
 
@@ -234,12 +237,9 @@ internal sealed class BackupRestorer(
                 continue;
             }
 
-            var entry = zip.GetEntry(file.Entry)
-                ?? throw new InvalidDataException($"The archive is missing the entry for '{file.Name}'.");
-
             var target = Path.Combine(options.DataDirectory, name);
             var staged = target + ".restoring";
-            using (var source = entry.Open())
+            using (var source = BackupZip.OpenEntry(zip, file.Entry, $"file '{file.Name}'"))
             using (var destination = new FileStream(staged, FileMode.Create, FileAccess.Write, FileShare.None))
             {
                 _RestrictToOwner(staged);
@@ -282,7 +282,7 @@ internal sealed class BackupRestorer(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogError(ex, "Could not remove the decrypted archive at {Path}. Delete it by hand: it is readable.", path);
+            logger.LogError(ex, "Could not remove the uploaded archive at {Path}. Delete it by hand.", path);
         }
     }
 }

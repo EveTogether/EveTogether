@@ -1,17 +1,17 @@
-using System.IO.Compression;
 using System.Security.Cryptography;
+using ICSharpCode.SharpZipLib.Zip;
 
 namespace EveUtils.Server.Backup;
 
 /// <summary>
 /// Checks every entry the manifest names against its recorded SHA-256, in full, before the restore drops
 /// anything. The ticket's requirement in one place: a damaged or half-uploaded archive fails loudly instead of
-/// leaving half a restore behind. The envelope already catches a truncated file; this catches an entry that
-/// decrypts cleanly but does not hold what the manifest says it does.
+/// leaving half a restore behind. Reading each entry to its last byte is also what makes SharpZipLib check the
+/// AES authentication code on it, so an edited ciphertext is caught here as well as an edited plaintext.
 /// </summary>
 internal static class BackupArchiveVerifier
 {
-    public static void Verify(ZipArchive zip, BackupManifest manifest)
+    public static void Verify(ZipFile zip, BackupManifest manifest)
     {
         foreach (var table in manifest.Tables)
             _VerifyEntry(zip, table.Entry, table.Sha256, $"table '{table.Name}'");
@@ -28,13 +28,9 @@ internal static class BackupArchiveVerifier
         }
     }
 
-    private static void _VerifyEntry(ZipArchive zip, string entryName, string expected, string description)
+    private static void _VerifyEntry(ZipFile zip, string entryName, string expected, string description)
     {
-        var entry = zip.GetEntry(entryName)
-            ?? throw new InvalidDataException(
-                $"The backup archive is incomplete: it lists {description} but does not contain '{entryName}'.");
-
-        using var stream = entry.Open();
+        using var stream = BackupZip.OpenEntry(zip, entryName, description);
         var actual = Convert.ToHexStringLower(SHA256.HashData(stream));
         if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
         {

@@ -126,20 +126,26 @@ callback URL at that public HTTPS address.
 
 ### The backup button
 
-**Control panel → Backup.** One encrypted `.etbackup` file that rebuilds this server somewhere else: the whole
+**Control panel → Backup.** One AES-256-encrypted `.zip` that rebuilds this server somewhere else: the whole
 database plus `token-protector.key` and `server-cert.pfx`. The same page restores one. Use this rather than
 copying the data directory by hand — it takes a consistent snapshot on any of the four database engines and
 records who downloaded it.
 
+- **Open it with 7-Zip or WinRAR**, or `7z x` on Linux. **Windows Explorer cannot open it**: Explorer only
+  supports the old, broken ZipCrypto, and AES is a WinZip extension it never implemented. The encryption is
+  standard either way, so you never need EVE Together itself to look inside your own backup.
 - **You choose a password at download time and it cannot be recovered.** Without it the archive is permanently
   unreadable; with it, whoever holds the file can take over every linked character. Store it like the tokens.
+- **Use a long password — at least 20 characters, and the panel will generate one for you.** The ZIP format fixes
+  its key derivation at 1000 PBKDF2 rounds, which is next to no work per guess for anyone who steals the file.
+  Length is the only defence left, which is why the minimum is what it is.
 - **The archive does not carry your configuration.** The ESI client id and secret, the control-panel admin
   password and the database connection string are per-installation and stay out of it. Put those in place first on
   the new machine (§3), then restore. `esi-cache/` and the SDE are left out too — both rebuild themselves.
 - **Restoring is destructive.** The database is dropped and rebuilt from the archive, and the TLS certificate and
   token-protector key are replaced. Anyone who paired after the archive was taken has to pair again. Before it
   drops anything the server writes an archive of its current state into the data directory under the same
-  password, named `pre-restore-<timestamp>Z.etbackup`; that file is the way back if a restore goes wrong. It is
+  password, named `pre-restore-<timestamp>Z.zip`; that file is the way back if a restore goes wrong. It is
   kept, not cleaned up, because it may hold the only remaining copy of the previous token-protector key.
 - **An archive from a newer version of EVE Together is refused**; an older one is accepted, and the migrations
   bring the schema forward on the next start. The archive has to come from the same database engine.

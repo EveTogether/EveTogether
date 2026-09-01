@@ -51,9 +51,9 @@ internal sealed class ServerBackupService(
         logger.LogWarning(
             "Admin {Admin} is downloading a full server backup. It decrypts every stored refresh token.", adminUsername);
 
-        var archive = await exporter.WriteAsync(destination, password, cancellationToken);
-        logger.LogInformation("Backup archive written: {Size} bytes, {Tables} tables.",
-            archive.SizeBytes, archive.Manifest.Tables.Count);
+        var manifest = await exporter.WriteAsync(destination, password, cancellationToken);
+        logger.LogInformation("Backup archive written: {Tables} tables, {Rows} rows.",
+            manifest.Tables.Count, manifest.Tables.Sum(t => t.Rows));
 
         return download;
     }

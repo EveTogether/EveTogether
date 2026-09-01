@@ -1,5 +1,5 @@
-@* Static server rendering on purpose: both forms are ordinary POSTs, so the archive password never travels over
-   an interactive circuit and the download is a plain HTTP response the browser can stream to disk. *@
+@* Both forms are ordinary HTML POSTs rather than Blazor event handlers: the archive password goes up in one
+   browser-native request, and the download comes back as a plain HTTP response the browser streams to disk. *@
 @page "/backup"
 @attribute [Authorize(Policy = PanelPermissions.BackupDownload)]
 @using EveUtils.Server.Backup
@@ -30,6 +30,11 @@
             ⚠ This archive decrypts the stored refresh token of every paired character. Treat the file, and the
             password, the way you would treat the tokens themselves.
         </p>
+        <p class="dim">
+            The file is a ZIP encrypted with AES-256. <b>Windows Explorer cannot open it</b> — Explorer only knows
+            the old, broken ZipCrypto — so open it with <b>7-Zip</b> or <b>WinRAR</b>, or with <code>7z x</code> on
+            Linux.
+        </p>
 
         <form method="post" action="/backup/download">
             <AntiforgeryToken />
@@ -44,6 +49,18 @@
             <p class="dim">@BackupPasswordPolicy.Requirement</p>
             <button type="submit" class="btn accent">DOWNLOAD BACKUP</button>
         </form>
+
+        <div class="field" style="margin-top:14px">
+            <button type="button" @onclick="Generate">GENERATE A PASSWORD</button>
+        </div>
+        @if (_generated is not null)
+        {
+            <p class="warn">
+                ⚠ Copy this into both boxes and store it somewhere outside this server, now. It is shown once, it is
+                kept nowhere, and without it the archive is permanently unreadable.
+            </p>
+            <p class="fp">@_generated</p>
+        }
     </div>
 </Card>
 
@@ -123,12 +140,15 @@
     private const int RecentDownloads = 50;
 
     private IReadOnlyList<BackupDownload> _downloads = [];
+    private string? _generated;
 
     [SupplyParameterFromQuery(Name = "error")]
     public string? Error { get; set; }
 
     protected override async Task OnInitializedAsync() =>
         _downloads = await Backups.ListDownloadsAsync(RecentDownloads);
+
+    private void Generate() => _generated = BackupPasswordPolicy.Generate();
 
     private static string ErrorText(string code) => code switch
     {
