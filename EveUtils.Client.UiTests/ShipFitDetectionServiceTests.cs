@@ -92,6 +92,54 @@ public sealed class ShipFitDetectionServiceTests
         Assert.Equal(fit.Id, reading.SelectedFit?.Id);
     }
 
+    /// <summary>ET-107: the window renders the reading and nothing else, so a choice that only lands on the next
+    /// 30-second poll would leave the old fit on screen for half a minute after the player replaced it.</summary>
+    [Fact]
+    public async Task SetManualFitAsync_ShowsOnTheNextReadWithoutWaitingForAPoll()
+    {
+        LocalFitting gila = new() { Id = 7, Name = "Gila", ShipTypeId = 17715 };
+        LocalFitting other = new() { Id = 8, Name = "Second Gila", ShipTypeId = 17715 };
+        var service = Build(new FakeShipClient(new EsiCharacterShip { ShipTypeId = 17715, ShipItemId = 9, ShipName = "Gila" }),
+            [new Character("With scope", 1, ["esi-location.read_ship_type.v1"])], [gila, other]);
+        await service.RefreshAllAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(gila.Id, service.GetReading(1).SelectedFit?.Id);
+
+        await service.SetManualFitAsync(1, other.Id, TestContext.Current.CancellationToken);
+
+        ShipFitDetectionReading reading = service.GetReading(1);
+        Assert.Equal(other.Id, reading.SelectedFit?.Id);
+        Assert.Equal(ShipFitMatchReason.Manual, reading.MatchReason);
+    }
+
+    /// <summary>ET-107: unlinking is a choice, so it outlives the window that made it — the same way a chosen fit
+    /// does. Held only in a view model it would come back on the first tick after a reopen.</summary>
+    [Fact]
+    public async Task DetachFitAsync_OutlivesTheServiceAndKeepsTheAutomaticMatchOff()
+    {
+        var settings = new FakeSettingsRepository();
+        LocalFitting fit = new() { Id = 7, Name = "Gila", ShipTypeId = 17715 };
+        Character[] characters = [new Character("With scope", 1, ["esi-location.read_ship_type.v1"])];
+        var first = Build(new FakeShipClient(new EsiCharacterShip { ShipTypeId = 17715, ShipItemId = 9, ShipName = "Gila" }),
+            characters, [fit], settings);
+        await first.RefreshAllAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(fit.Id, first.GetReading(1).SelectedFit?.Id);
+
+        Assert.True((await first.DetachFitAsync(1, TestContext.Current.CancellationToken)).IsSuccess);
+        Assert.Equal(ShipFitMatchReason.Detached, first.GetReading(1).MatchReason);
+        Assert.Null(first.GetReading(1).SelectedFit);
+
+        var second = Build(new FakeShipClient(new EsiCharacterShip { ShipTypeId = 17715, ShipItemId = 10, ShipName = "Gila" }),
+            characters, [fit], settings);
+        await second.RefreshAllAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(ShipFitMatchReason.Detached, second.GetReading(1).MatchReason);
+        Assert.Null(second.GetReading(1).SelectedFit);
+
+        // And choosing again takes it back off the shelf, or unlinking would be a one-way door.
+        await second.SetManualFitAsync(1, fit.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(fit.Id, second.GetReading(1).SelectedFit?.Id);
+    }
+
     [Fact]
     public async Task SetManualFitAsync_AfterChangingHullDoesNotApplyThePreviousHullOverride()
     {
