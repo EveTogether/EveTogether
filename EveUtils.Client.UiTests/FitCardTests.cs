@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
@@ -554,6 +555,91 @@ public class FitCardTests
         // The longest names in the operator's own library run to ~58 characters.
         public string TypeName(int typeId) => $"Eifyr and Co. 'Gunslinger' Medium Projectile Turret MP-{typeId:000}";
         public string? GroupName(int typeId) => typeId == 627 ? "Cruiser" : null;
+    }
+
+    /// <summary>
+    /// The card's left-aligned lines line up as INK, not as layout rectangles. This is the one thing on the card
+    /// that needs a test rather than an eye: it regressed once for five pixels — the fit name sat five px right of
+    /// the hull name while both layout boxes read exactly 13.00, because the two lived in different containers —
+    /// and every layout-level assertion stayed green through it. Checked with a fit and a hull that start with the
+    /// same letter, which is what makes a difference unmistakable instead of arguable, and with the uploader's
+    /// avatar, which has no side bearing at all and so pins the column absolutely.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheCardsLeftEdgeLinesUp_AsInkAndNotAsLayout()
+    {
+        using var instance = TestClientInstance.Create();
+        instance.Services.GetRequiredService<IThemeService>().Apply(FactionTheme.Gallente);
+
+        var row = new FitRowViewModel(FullFit("HACKER PRO"), "Jithran", new FixedHull("Helios"));
+        var vm = new FitBrowserViewModel([new FitBrowserTabViewModel("Local", [row])]);
+        var window = new FitBrowserWindow(vm) { Width = 1100, Height = 700 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var frame = window.CaptureRenderedFrame()!;
+        var pixels = Pixels(frame, out var width);
+
+        var card = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("fitcard"));
+        var title = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "HACKER PRO");
+        var hull = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Helios");
+
+        var titleInk = FirstInkColumn(pixels, width, title, window);
+        var hullInk = FirstInkColumn(pixels, width, hull, window);
+
+        Assert.True(Math.Abs(titleInk - hullInk) <= 1,
+            $"the fit name's ink starts at {titleInk} and the hull's at {hullInk} — that gap is what the operator sees");
+
+        // And both sit on the card's own inset, so neither drifted together in the wrong place.
+        var cardLeft = (int)(card.TranslatePoint(default, window)?.X ?? 0);
+        Assert.InRange(titleInk - cardLeft, 12, 15);
+    }
+
+    private sealed class FixedHull(string hull) : ISdeNameResolver
+    {
+        public string TypeName(int typeId) => hull;
+        public string? GroupName(int typeId) => "Covert Ops";
+    }
+
+    /// <summary>The captured frame as BGRA bytes.</summary>
+    private static byte[] Pixels(WriteableBitmap frame, out int width)
+    {
+        width = frame.PixelSize.Width;
+        var buffer = new byte[width * frame.PixelSize.Height * 4];
+        var handle = System.Runtime.InteropServices.GCHandle.Alloc(buffer,
+            System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
+        {
+            frame.CopyPixels(new PixelRect(0, 0, width, frame.PixelSize.Height),
+                handle.AddrOfPinnedObject(), buffer.Length, width * 4);
+        }
+        finally
+        {
+            handle.Free();
+        }
+        return buffer;
+    }
+
+    /// <summary>The first column of the block's own band that is lit well above its background — where the reader's
+    /// eye says the line begins.</summary>
+    private static int FirstInkColumn(byte[] pixels, int width, TextBlock block, Visual root)
+    {
+        var at = block.TranslatePoint(default, root)!.Value;
+        int x0 = (int)at.X - 4, y0 = (int)at.Y, height = (int)block.Bounds.Height;
+
+        int Level(int x, int y)
+        {
+            var i = (y * width + x) * 4;
+            return Math.Max(pixels[i], Math.Max(pixels[i + 1], pixels[i + 2]));
+        }
+
+        var background = Level(x0 - 2, y0 + height / 2);
+        for (var x = x0; x < x0 + 26; x++)
+            for (var y = y0; y < y0 + height; y++)
+                if (Level(x, y) > background + 60) return x;
+
+        return -1;
     }
 
     private static FillGridPanel? CardPanel(Control root) =>
