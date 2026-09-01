@@ -137,6 +137,24 @@ public sealed class AbyssalLootCaptureTests
         Assert.False(captures[1].IsExcluded); // the repeat is back in — the first is untouched, still excluded
     }
 
+    /// <summary>The toast's Exclude/Include button is the same "vanishing exception" risk the fase-2 store path had
+    /// (review finding on fase 3): a dispatcher failure must surface as a toast, not disappear off the click.</summary>
+    [AvaloniaFact]
+    public async Task ExcludeAction_WhenTheCommandFails_ShowsAToastInsteadOfVanishing()
+    {
+        using var env = await Env.StartAsync(dispatcher => new ThrowingDispatcher(dispatcher,
+            command => command is SetRunLootCaptureExclusionCommand));
+        await env.StartRunAsync();
+
+        await env.CopyAsync(Container);
+        var offer = Assert.Single(env.Toasts.ActionToasts);
+        await env.RunActionAsync(offer, "Exclude");
+
+        var failure = Assert.Single(env.Toasts.Toasts, toast => toast.Title == "Loot not updated");
+        Assert.Contains("database is locked", failure.Message);
+        Assert.False(Assert.Single(await env.CapturesAsync()).IsExcluded); // the failed write never landed
+    }
+
     /// <summary>Two containers in one run read as two different copies, so they are both counted.</summary>
     [AvaloniaFact]
     public async Task TwoDifferentCopies_AreBothIncluded_AndAddUp()
@@ -223,24 +241,28 @@ public sealed class AbyssalLootCaptureTests
 
         public RecordingToastService Toasts { get; } = new();
 
-        private Env(TestClientInstance instance, ClipboardWatchService watch, FakeClipboardChangeSource source)
+        private Env(TestClientInstance instance, ClipboardWatchService watch, FakeClipboardChangeSource source,
+            CqrsDispatcher captureDispatcher)
         {
             _instance = instance;
             _watch = watch;
             _source = source;
-            _capture = new AbyssalLootCapture(watch, Toasts, FakeSdeAccessor.WithSampleFit(),
-                instance.Services.GetRequiredService<CqrsDispatcher>());
+            _capture = new AbyssalLootCapture(watch, Toasts, FakeSdeAccessor.WithSampleFit(), captureDispatcher);
         }
 
         private static CancellationToken Token => TestContext.Current.CancellationToken;
 
-        public static async Task<Env> StartAsync()
+        /// <param name="wrapDispatcher">Lets a test intercept the dispatcher calls <see cref="AbyssalLootCapture"/>
+        /// itself makes (e.g. to fail a specific command), without touching the real one this Env's own helpers
+        /// (StartRunAsync, CapturesAsync, ...) use.</param>
+        public static async Task<Env> StartAsync(Func<CqrsDispatcher, CqrsDispatcher>? wrapDispatcher = null)
         {
             var source = new FakeClipboardChangeSource();
             var instance = TestClientInstance.Create();
             var watch = new ClipboardWatchService(new RecordingDialogService(), instance.Services,
                 NullLogger<ClipboardWatchService>.Instance, source);
-            var env = new Env(instance, watch, source);
+            var realDispatcher = instance.Services.GetRequiredService<CqrsDispatcher>();
+            var env = new Env(instance, watch, source, wrapDispatcher?.Invoke(realDispatcher) ?? realDispatcher);
             await watch.SetEnabledAsync(true);
             return env;
         }
@@ -322,6 +344,22 @@ public sealed class AbyssalLootCaptureTests
 
         private Task<ClientDbContext> CreateDbAsync() =>
             _instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(Token);
+    }
+
+    /// <summary>Fails one specific command the way a locked database would — an exception out of the dispatcher —
+    /// so a test can prove that path is caught and shown, not swallowed.</summary>
+    private sealed class ThrowingDispatcher(CqrsDispatcher inner, Func<object, bool> shouldThrow) : CqrsDispatcher
+    {
+        public Task<TResult> Query<TResult>(IQuery<TResult> query, CancellationToken cancellationToken = default) =>
+            inner.Query(query, cancellationToken);
+
+        public Task Send(ICommand command, CancellationToken cancellationToken = default) =>
+            inner.Send(command, cancellationToken);
+
+        public Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken cancellationToken = default) =>
+            shouldThrow(command)
+                ? throw new InvalidOperationException("database is locked")
+                : inner.Send(command, cancellationToken);
     }
 
     private sealed class FakeClipboardChangeSource : IClipboardChangeSource

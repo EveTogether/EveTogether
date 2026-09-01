@@ -38,8 +38,15 @@ public sealed class AbyssalLootCapture : ISingletonService, IDisposable
     }
 
     /// <summary>The write the clipboard callback cannot wait for, so a test can — and so a dispatcher exception
-    /// (e.g. the database is locked) surfaces as a toast instead of vanishing off a fire-and-forget Task.</summary>
+    /// (e.g. the database is locked) surfaces as a toast instead of vanishing off a fire-and-forget Task.
+    /// A second capture or a toggle click can start before the first store settles, so every assignment chains
+    /// onto whatever was still pending rather than replacing it — otherwise awaiting this later would miss the
+    /// earlier one's completion (and, if it ever threw, its exception).</summary>
     internal Task LastStore { get; private set; } = Task.CompletedTask;
+
+    /// <summary>Folds <paramref name="current"/> into <see cref="LastStore"/> alongside whatever was already
+    /// pending, instead of discarding it.</summary>
+    private void _TrackLastStore(Task current) => LastStore = Task.WhenAll(LastStore, current);
 
     public void Dispose() => _subscription.Dispose();
 
@@ -68,7 +75,7 @@ public sealed class AbyssalLootCapture : ISingletonService, IDisposable
             _openFingerprint = fingerprint;
         }
 
-        LastStore = StoreAndOfferAsync(fingerprint, resolution.Lines, resolution.Unresolved.Count);
+        _TrackLastStore(StoreAndOfferAsync(fingerprint, resolution.Lines, resolution.Unresolved.Count));
     }
 
     /// <summary>Stores the capture and only then tells the player what actually happened — recorded, refused with a
@@ -138,8 +145,30 @@ public sealed class AbyssalLootCapture : ISingletonService, IDisposable
 
     /// <summary>The toast's own one-click exclude/include — the same flag <see cref="EveUtils.Client.ViewModels.Runs.RunLootViewModel"/>
     /// toggles later, so a card acted on now and a still-open list agree.</summary>
-    private void SetExcluded(Guid captureId, bool isExcluded) =>
-        LastStore = _dispatcher.Send(new SetRunLootCaptureExclusionCommand(captureId, isExcluded));
+    private void SetExcluded(Guid captureId, bool isExcluded) => _TrackLastStore(SetExcludedAsync(captureId, isExcluded));
+
+    /// <summary>Same treatment as <see cref="StoreAndOfferAsync"/>: a dispatcher exception or a clean refusal is
+    /// caught here and shown, not left to vanish off the button click that triggered it.</summary>
+    private async Task SetExcludedAsync(Guid captureId, bool isExcluded)
+    {
+        Result result;
+        try
+        {
+            result = await _dispatcher.Send(new SetRunLootCaptureExclusionCommand(captureId, isExcluded));
+        }
+        catch (Exception ex)
+        {
+            _toasts.Show("Loot not updated", $"Could not {(isExcluded ? "exclude" : "include")} this capture: {ex.Message}",
+                ToastKind.Error);
+            return;
+        }
+
+        if (!result.IsSuccess)
+        {
+            var reason = result.Messages.Count > 0 ? result.Messages[0].Text : "This capture could not be updated.";
+            _toasts.Show("Loot not updated", reason, ToastKind.Error);
+        }
+    }
 
     private void CloseOffer(string fingerprint)
     {
