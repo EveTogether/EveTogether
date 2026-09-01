@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Dialogs;
@@ -30,6 +31,10 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
 {
     /// <summary>Settings key for the user's opt-in. Absent or anything but "true" means off.</summary>
     public const string EnabledSettingKey = "clipboard.watch";
+
+    // Clipboard owners normally release a transient lock within this short bounded window.
+    private const int ClipboardReadAttempts = 3;
+    private static readonly TimeSpan ClipboardReadRetryDelay = TimeSpan.FromMilliseconds(50);
 
     private readonly IClipboardChangeSource _source;
     private readonly IDialogService _dialogs;
@@ -164,9 +169,7 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
         string? text;
         try
         {
-            // The platform source reads it where its own notification and the toplevel's clipboard disagree
-            // (Wayland); everywhere else it returns null and the toplevel is the reader, as before.
-            text = await _source.ReadTextAsync() ?? await _dialogs.GetClipboardTextAsync();
+            text = await _ReadClipboardTextAsync();
         }
         catch (Exception ex)
         {
@@ -201,6 +204,30 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
                     subscription.FeatureName, shape);
             }
         }
+    }
+
+    private async Task<string?> _ReadClipboardTextAsync()
+    {
+        for (var attempt = 1; attempt < ClipboardReadAttempts; attempt++)
+        {
+            try
+            {
+                return await _ReadClipboardTextOnceAsync();
+            }
+            catch (COMException)
+            {
+                await Task.Delay(ClipboardReadRetryDelay);
+            }
+        }
+
+        return await _ReadClipboardTextOnceAsync();
+    }
+
+    private async Task<string?> _ReadClipboardTextOnceAsync()
+    {
+        // The platform source reads it where its own notification and the toplevel's clipboard disagree
+        // (Wayland); everywhere else it returns null and the toplevel is the reader, as before.
+        return await _source.ReadTextAsync() ?? await _dialogs.GetClipboardTextAsync();
     }
 
     private async Task<bool> ReadEnabledAsync(CancellationToken cancellationToken)

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using EveUtils.Client.Runs;
@@ -254,16 +253,7 @@ public sealed class DialogService : IDialogService, ISingletonService
         var clipboard = _owner?.Clipboard;
         if (clipboard is null) return null;
 
-        try
-        {
-            return await clipboard.TryGetTextAsync();
-        }
-        catch (COMException)
-        {
-            // Windows hands the clipboard to one process at a time; the app that just copied can still hold it.
-            // A missed read is a dropped payload, which is the safe outcome here — not an error worth surfacing.
-            return null;
-        }
+        return await clipboard.TryGetTextAsync();
     }
 
     public async Task<bool> ConfirmAsync(string title, string message, string okText = "Delete")
