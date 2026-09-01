@@ -97,6 +97,25 @@ public class ActivityWindowTests
         Assert.NotEqual(scopeMissing, model.FitDetectionText);
         Assert.Equal("no fit chosen", model.FitSelectionText);
         Assert.NotNull(model.ChooseFitCommand);
+
+        model.ApplyFitDetection(ShipFitDetectionReading.Unobserved);
+        var unobserved = model.FitDetectionText;
+        model.ApplyFitDetection(new ShipFitDetectionReading(
+            ShipFitDetectionState.Observed, Anchor, 17715, 9, "Gila", null,
+            ShipFitMatchReason.AmbiguousShipType, []));
+
+        Assert.NotEqual(unobserved, model.FitDetectionText);
+    }
+
+    [Fact]
+    public void FitStats_UnreadableFit_SaysItCouldNotBeRead()
+    {
+        var model = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
+
+        model.ApplyFitStats(null, fitCouldBeRead: false);
+
+        Assert.Equal("fit could not be read", model.FitVelocityText);
+        Assert.Equal("fit could not be read", model.FitWarpSpeedText);
     }
 
     [Fact]

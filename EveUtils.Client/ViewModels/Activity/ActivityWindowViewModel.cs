@@ -361,8 +361,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         try { esi = JsonSerializer.Deserialize<EsiFitting>(fit.RawJson); }
         catch (JsonException) { esi = null; }
         FitStats? stats = esi is null ? null : await _services.GetRequiredService<IFitStatsProvider>().ComputeAsync(esi);
-        FitVelocityText = stats is null ? "no max velocity" : $"max velocity: {stats.MaxVelocity:N0} m/s";
-        FitWarpSpeedText = stats is null ? "no warp speed" : $"warp speed: {stats.WarpSpeed:N2} AU/s";
+        ApplyFitStats(stats, esi is not null);
         Refresh(DateTime.UtcNow);
     }
 
@@ -567,6 +566,19 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             _ => "ship fit is unavailable"
         };
         Refresh(DateTime.UtcNow);
+    }
+
+    internal void ApplyFitStats(FitStats? stats, bool fitCouldBeRead)
+    {
+        if (!fitCouldBeRead)
+        {
+            FitVelocityText = "fit could not be read";
+            FitWarpSpeedText = "fit could not be read";
+            return;
+        }
+
+        FitVelocityText = stats is null ? "no max velocity" : $"max velocity: {stats.MaxVelocity:N0} m/s";
+        FitWarpSpeedText = stats is null ? "no warp speed" : $"warp speed: {stats.WarpSpeed:N2} AU/s";
     }
 
     private static string _FitMatchReason(ShipFitMatchReason? reason) => reason switch
