@@ -78,6 +78,8 @@ public sealed partial class CompositionEditorViewModel : ObservableObject
     public event Action<bool>? CloseRequested;
 
     public bool IsNew => _compositionId is null;
+    // A new composition keeps its generated identity until Save() closes the window; otherwise the same
+    // composition could exist once under the new id and once under the persisted composition id.
     public string ModuleId => _compositionId is { } compositionId
         ? $"composition-editor:{compositionId}"
         : $"composition-editor:new:{_newCompositionId}";
