@@ -112,6 +112,18 @@ public class ActivityWindowTests
         Assert.NotEqual("00:00", model.ClockText);
     }
 
+    [Fact]
+    public void ApplyLocation_StaleTimestamp_RefreshesClockAtCurrentTime()
+    {
+        DateTime staleTimestamp = Anchor.AddYears(-1);
+        var model = _Filled(ActivityKind.Site);
+        model.AnchorUtc = staleTimestamp;
+
+        model.ApplyLocation(new EsiLocationReading(30000142, staleTimestamp), new DpsViewModel("Pilot", isSelf: true));
+
+        Assert.NotEqual("00:00", model.ClockText);
+    }
+
     [Theory]
     [InlineData(true, false)]
     [InlineData(true, true)]

@@ -413,7 +413,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         InsideAbyssal = reading.Inside;
         LocationDisplay = character.LocationDisplay;
-        Refresh(reading.AtUtc);
+        Refresh(DateTime.UtcNow);
     }
 
     public void AddBounty(BountyEvent bounty)
