@@ -814,7 +814,7 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<int>("Direction")
+                    b.Property<int>("Count")
                         .HasColumnType("integer");
 
                     b.Property<string>("EnemyName")
