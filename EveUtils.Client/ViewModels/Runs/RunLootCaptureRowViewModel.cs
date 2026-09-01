@@ -13,7 +13,17 @@ public sealed partial class RunLootCaptureRowViewModel : ObservableObject
     public DateTime? RepeatOfCapturedAtUtc { get; }
     public IReadOnlyList<RunLootEntryDto> Entries { get; }
 
-    [ObservableProperty] private bool _isExcluded;
+    public string CapturedAtDisplay => CapturedAtUtc.ToLocalTime().ToString("HH:mm:ss");
+
+    public string? RepeatOfDisplay => RepeatOfCapturedAtUtc is { } capturedAt
+        ? $"identical to {capturedAt.ToLocalTime():HH:mm:ss}"
+        : null;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(InOutText))]
+    private bool _isExcluded;
+
+    public string InOutText => IsExcluded ? "OUT" : "IN";
 
     public RunLootCaptureRowViewModel(RunLootCaptureDto dto, DateTime? repeatOfCapturedAtUtc)
     {

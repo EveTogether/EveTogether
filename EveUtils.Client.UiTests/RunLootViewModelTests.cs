@@ -64,6 +64,57 @@ public sealed class RunLootViewModelTests
         Assert.Equal(1, viewModel.EntriesWithoutPrice);
     }
 
+    [AvaloniaFact]
+    public async Task AStackPrice_IsCountedOnce()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await _StartRunAsync(dispatcher);
+        await _AddCaptureAsync(dispatcher, "stack", 100m, quantity: 5);
+
+        var viewModel = new RunLootViewModel(dispatcher);
+        await viewModel.RefreshAsync(Token);
+
+        Assert.Equal(100m, viewModel.LootIsk);
+        Assert.Equal(100m, viewModel.NetIsk);
+    }
+
+    [AvaloniaFact]
+    public async Task LostEntries_ReduceNetWithoutChangingLoot()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await _StartRunAsync(dispatcher);
+        await _AddCaptureAsync(dispatcher, "loot", 500m);
+        await _AddCaptureAsync(dispatcher, "filaments", 100m, LootKind.Lost, quantity: 3);
+
+        var viewModel = new RunLootViewModel(dispatcher);
+        await viewModel.RefreshAsync(Token);
+
+        Assert.Equal(500m, viewModel.LootIsk);
+        Assert.Equal(100m, viewModel.ConsumedIsk);
+        Assert.Equal(400m, viewModel.NetIsk);
+    }
+
+    [AvaloniaFact]
+    public async Task ARowWithoutAPrice_DoesNotChangeTotals()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await _StartRunAsync(dispatcher);
+        await _AddCaptureAsync(dispatcher, "priced", 100m);
+        await _AddCaptureAsync(dispatcher, "priceless", price: null);
+
+        var viewModel = new RunLootViewModel(dispatcher);
+        await viewModel.RefreshAsync(Token);
+
+        Assert.Equal(100m, viewModel.LootIsk);
+        Assert.Null(viewModel.ConsumedIsk);
+        Assert.Equal(100m, viewModel.NetIsk);
+        Assert.Equal(1, viewModel.EntriesWithoutPrice);
+        Assert.Equal("no price", viewModel.ConsumedIskDisplay);
+    }
+
     /// <summary>AC-5's label check: none of the ViewModel's exposed labels may name a valuation source — this is
     /// the clipboard's own column, not an appraisal.</summary>
     [Fact]
@@ -123,14 +174,15 @@ public sealed class RunLootViewModelTests
         Assert.True(started.IsSuccess);
     }
 
-    private static async Task _AddCaptureAsync(IDispatcher dispatcher, string contentHash, decimal? price)
+    private static async Task _AddCaptureAsync(IDispatcher dispatcher, string contentHash, decimal? price,
+        LootKind lootKind = LootKind.Gained, long quantity = 1)
     {
         Result<RunLootCaptureSaveResult> added = await dispatcher.Send(new AddRunLootCaptureCommand(new RunLootCaptureInput
         {
             CapturedAtUtc = StartedAtUtc,
             Source = LootCaptureSource.Clipboard,
             ContentHash = contentHash,
-            Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = 1, ClipboardPrice = price, LootKind = LootKind.Gained }]
+            Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = quantity, ClipboardPrice = price, LootKind = lootKind }]
         }), Token);
         Assert.True(added.IsSuccess);
     }

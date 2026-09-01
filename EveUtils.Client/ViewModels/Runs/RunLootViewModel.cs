@@ -1,10 +1,12 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Esi;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
@@ -30,6 +32,18 @@ public sealed partial class RunLootViewModel : ViewModelBase
 
     [ObservableProperty] private int _entriesWithoutPrice;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LootIskDisplay))]
+    private decimal? _lootIsk;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ConsumedIskDisplay))]
+    private decimal? _consumedIsk;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NetIskDisplay))]
+    private decimal? _netIsk;
+
     /// <summary>Set when the running-run lookup itself failed (none running, or more than one) — a state, not an
     /// empty list left to speak for itself (ET-65 AC-7).</summary>
     [ObservableProperty] private string? _runStatusMessage;
@@ -45,6 +59,12 @@ public sealed partial class RunLootViewModel : ViewModelBase
     public string EntriesWithoutPriceLabel => "Rows without a price";
 
     public string TotalIskDisplay => TotalIsk is { } value ? $"{value:N2} ISK" : "no price";
+
+    public string LootIskDisplay => _Display(LootIsk);
+
+    public string ConsumedIskDisplay => _Display(ConsumedIsk);
+
+    public string NetIskDisplay => _Display(NetIsk);
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
@@ -90,6 +110,9 @@ public sealed partial class RunLootViewModel : ViewModelBase
         return true;
     }
 
+    [RelayCommand]
+    private Task ToggleCaptureExcludedAsync(RunLootCaptureRowViewModel row) => ToggleExcludedAsync(row);
+
     /// <summary>Four states, three of them a reason rather than silence (ET-65 AC-7): watching off, an anchor
     /// present (nothing to explain), an anchor lost with a known reason, and an anchor never set (e.g. a restart —
     /// C6 point 2, no reason to report). Reuses <see cref="CharacterMetricsSnapshot.LocationUnavailableReason"/>
@@ -111,5 +134,16 @@ public sealed partial class RunLootViewModel : ViewModelBase
         decimal[] priced = [.. included.Where(entry => entry.ClipboardPrice is not null).Select(entry => entry.ClipboardPrice!.Value)];
         TotalIsk = priced.Length == 0 ? null : priced.Sum();
         EntriesWithoutPrice = included.Count(entry => entry.ClipboardPrice is null);
+        LootIsk = _Sum(included.Where(entry => entry.LootKind == LootKind.Gained));
+        ConsumedIsk = _Sum(included.Where(entry => entry.LootKind == LootKind.Lost));
+        NetIsk = LootIsk is null && ConsumedIsk is null ? null : (LootIsk ?? 0m) - (ConsumedIsk ?? 0m);
     }
+
+    private static decimal? _Sum(IEnumerable<RunLootEntryDto> entries)
+    {
+        decimal[] prices = [.. entries.Where(entry => entry.ClipboardPrice is not null).Select(entry => entry.ClipboardPrice!.Value)];
+        return prices.Length == 0 ? null : prices.Sum();
+    }
+
+    private static string _Display(decimal? value) => value is { } isk ? $"{isk:N2} ISK" : "no price";
 }
