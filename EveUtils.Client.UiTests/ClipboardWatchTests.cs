@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using EveUtils.Client.Clipboard;
+using EveUtils.Shared.Logging;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -222,6 +225,67 @@ public class ClipboardWatchTests
         Assert.Contains("from the platform", Assert.Single(delivered).Text);
         Assert.Equal(0, dialogs.ClipboardReads);
     }
+
+    [AvaloniaFact]
+    public async Task ClipboardWatch_RetriesLockedClipboard_AndDeliversTheRecognisedPayload()
+    {
+        var attempts = 0;
+        var dialogs = new RecordingDialogService
+        {
+            OnGetClipboardText = () => ++attempts < 3
+                ? Task.FromException<string?>(new COMException())
+                : Task.FromResult<string?>("KDC-304\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU")
+        };
+        var source = new FakeClipboardChangeSource();
+        using var instance = TestClientInstance.Create();
+        using var watch = new ClipboardWatchService(dialogs, instance.Services,
+            NullLogger<ClipboardWatchService>.Instance, source);
+        await watch.SetEnabledAsync(true);
+
+        var delivered = new TaskCompletionSource<ClipboardCapture>();
+        using var subscription = watch.Subscribe("Test", delivered.SetResult);
+        Copy(source);
+
+        Assert.Equal(ClipboardShape.Signature, (await delivered.Task.WaitAsync(TimeSpan.FromSeconds(1))).Shape);
+        Assert.Equal(3, attempts);
+    }
+
+    [AvaloniaFact]
+    public async Task ClipboardWatch_WhenClipboardStaysLocked_LogsTheReadFailure()
+    {
+        var store = new InMemoryLogStore();
+        using var provider = BuildLogging(store);
+        var attempts = 0;
+        var exhausted = new TaskCompletionSource();
+        var dialogs = new RecordingDialogService
+        {
+            OnGetClipboardText = () =>
+            {
+                if (++attempts == 3)
+                    exhausted.SetResult();
+
+                return Task.FromException<string?>(new COMException());
+            }
+        };
+        var source = new FakeClipboardChangeSource();
+        using var instance = TestClientInstance.Create();
+        using var watch = new ClipboardWatchService(dialogs, instance.Services,
+            provider.GetRequiredService<ILogger<ClipboardWatchService>>(), source);
+        await watch.SetEnabledAsync(true);
+
+        using var subscription = watch.Subscribe("Test", _ => { });
+        Copy(source);
+        await exhausted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        var entry = Assert.Single(store.GetAll());
+        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Equal("Could not read the clipboard after a change notification.", entry.Message);
+    }
+
+    private static ServiceProvider BuildLogging(ILogStore store) =>
+        new ServiceCollection()
+            .AddLogging(builder => builder.AddProvider(new AppLoggerProvider(store)))
+            .BuildServiceProvider();
 
     // The notification arrives off the UI thread and the read is marshalled onto it; run the posted work.
     private static void Copy(FakeClipboardChangeSource source)
