@@ -22,6 +22,8 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fittings.Dtos;
+using EveUtils.Shared.Modules.Fittings.Entities;
+using EveUtils.Shared.Modules.Fittings.Repositories;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
@@ -101,6 +103,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private bool _isManualRun;
     private int? _runCharacterId;
     private string? _runCharacterName;
+    private ShipFitDetectionReading? _fitReading;
     private RunEnemyObservationCollector? _enemyObservations;
 
     public ActivityWindowViewModel(ActivityKind kind, IServiceProvider services)
@@ -277,23 +280,18 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public ActivitySection Loot { get; } = new() { Title = "LOOT" };
 
+    /// <summary>The run's one fit (ET-107) — filled from ET-101's detection, or the reason it could not be. Never a
+    /// proposal standing beside a choice: a manual pick comes back through the same reading as its own match reason.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FitSummary))]
-    private string _fitDetectionText = "choose a character to see its fit suggestion";
+    private string _fitText = "no fit: the run has no character yet";
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FitSummary))]
-    private string _fitSelectionText = "no fit chosen";
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FitSummary))]
-    private bool _hasChosenFit;
+    /// <summary>Whether <see cref="FitText"/> names a fit. A state rather than a comparison against the text, so
+    /// rewording a line can never silently flip what the window offers.</summary>
+    [ObservableProperty] private bool _hasFit;
 
     [ObservableProperty] private string _fitVelocityText = "no max velocity";
 
     [ObservableProperty] private string _fitWarpSpeedText = "no warp speed";
-
-    public string FitSummary => HasChosenFit ? FitSelectionText : FitDetectionText;
 
     /// <summary>All six in window order — what the test walks to prove none of them is ever silent.</summary>
     public IReadOnlyList<ActivitySection> Sections { get; }
@@ -569,23 +567,64 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 .FirstOrDefault(character => character.EsiCharacterId == characterId)?.Name ?? _runCharacterName;
     }
 
+    /// <summary>
+    /// Whose fit this is. The window never asks — before START the run has no character yet, so it falls back to the
+    /// one this client is in the fleet as, exactly as the run controls do. On a solo run there is one character and
+    /// on a fleet run it is you, so the question the FIT section used to print had no one left to ask.
+    /// </summary>
+    private int? _FitCharacterId() => _runCharacterId ?? _services.GetService<IActiveFleetState>()?.CharacterId;
+
+    /// <summary>Fill the run's fit from ET-101's reading. Clock-driven like the fleet command is, so starting a run
+    /// fills it without the player confirming anything. An unlinked fit comes back through the same reading, so it
+    /// survives this window being closed and reopened mid-run.</summary>
+    public async Task RefreshFitAsync()
+    {
+        if (_FitCharacterId() is not { } characterId
+            || _services.GetService<IShipFitDetectionService>() is not { } detection)
+            return;
+
+        ShipFitDetectionReading reading = detection.GetReading(characterId);
+        if (ReferenceEquals(reading, _fitReading))
+            return;
+
+        _fitReading = reading;
+        ApplyFitDetection(reading);
+        await _LoadFitStatsAsync(reading.SelectedFit?.Id);
+    }
+
+    private async Task _LoadFitStatsAsync(int? fittingId)
+    {
+        if (fittingId is not { } id || _services.GetService<IFittingRepository>() is not { } fittings)
+        {
+            ApplyFitStats(null, fitCouldBeRead: true);
+            return;
+        }
+
+        LocalFitting? fitting = await fittings.FindByIdAsync(id);
+        EsiFitting? esi = _ReadFitting(fitting?.RawJson);
+        ApplyFitStats(
+            esi is null ? null : await _services.GetRequiredService<IFitStatsProvider>().ComputeAsync(esi),
+            fitCouldBeRead: esi is not null);
+    }
+
+    private static EsiFitting? _ReadFitting(string? rawJson)
+    {
+        if (rawJson is null)
+            return null;
+        try { return JsonSerializer.Deserialize<EsiFitting>(rawJson); }
+        catch (JsonException) { return null; }
+    }
+
     [RelayCommand]
     private async Task ChooseFitAsync()
     {
         var dialogs = _services.GetRequiredService<IDialogService>();
-        IReadOnlyList<Character> characters = await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
-        var options = characters
-            .Select(character => character.EsiCharacterId is { } id
-                ? new CharacterPickOption(id, character.Name, "local character", Enabled: true)
-                : null)
-            .OfType<CharacterPickOption>()
-            .ToList();
-        int? characterId = await dialogs.PickCharacterAsync("Choose a character's fit", options);
-        if (characterId is null)
+        if (_FitCharacterId() is not { } characterId)
+        {
+            await dialogs.ShowMessageAsync("Choose a fit",
+                "Start the run first — its character is what a fit is filed under.");
             return;
-
-        var detection = _services.GetRequiredService<IShipFitDetectionService>();
-        ApplyFitDetection(detection.GetReading(characterId.Value));
+        }
 
         var picker = new FitPickerViewModel(_services, FitPickerMode.Single, alreadyAdded: null,
             composition: null, currentFitHash: null, skillCheckCharacterId: characterId);
@@ -594,25 +633,42 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
         if (fit.LocalFittingId is null)
         {
-            await dialogs.ShowMessageAsync("Choose a local fit", "Only a local fit can override the automatic suggestion.");
+            await dialogs.ShowMessageAsync("Choose a local fit", "Only a local fit can be filed against a run.");
             return;
         }
 
-        var overrideResult = await detection.SetManualFitAsync(characterId.Value, fit.LocalFittingId);
+        var detection = _services.GetRequiredService<IShipFitDetectionService>();
+        Result overrideResult = await detection.SetManualFitAsync(characterId, fit.LocalFittingId);
         if (!overrideResult.IsSuccess)
         {
-            await dialogs.ShowMessageAsync("Fit selection", overrideResult.Messages.FirstOrDefault()?.Text ?? "Could not save the fit selection.");
+            await dialogs.ShowMessageAsync("Fit selection",
+                overrideResult.Messages.FirstOrDefault()?.Text ?? "Could not save the fit selection.");
             return;
         }
 
-        FitSelectionText = $"chosen fit: {fit.FitName}";
-        HasChosenFit = true;
-        EsiFitting? esi;
-        try { esi = JsonSerializer.Deserialize<EsiFitting>(fit.RawJson); }
-        catch (JsonException) { esi = null; }
-        FitStats? stats = esi is null ? null : await _services.GetRequiredService<IFitStatsProvider>().ComputeAsync(esi);
-        ApplyFitStats(stats, esi is not null);
-        Refresh(DateTime.UtcNow);
+        _fitReading = null;
+        await RefreshFitAsync();
+    }
+
+    /// <summary>Unlink: the run goes on without a fit. Stored by the detection service rather than held here, or
+    /// closing and reopening the window mid-run would quietly fill back in what the player just took off.</summary>
+    [RelayCommand]
+    private async Task DetachFitAsync()
+    {
+        if (_FitCharacterId() is not { } characterId
+            || _services.GetService<IShipFitDetectionService>() is not { } detection)
+            return;
+
+        Result detached = await detection.DetachFitAsync(characterId);
+        if (!detached.IsSuccess)
+        {
+            await _services.GetRequiredService<IDialogService>().ShowMessageAsync("Fit selection",
+                detached.Messages.FirstOrDefault()?.Text ?? "Could not unlink the fit.");
+            return;
+        }
+
+        _fitReading = null;
+        await RefreshFitAsync();
     }
 
     /// <summary>Begin ticking. Separate from the constructor so a test drives <see cref="Refresh"/> with a clock it
@@ -636,6 +692,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _RefreshClock(nowUtc);
         _RefreshSummaries();
         _ = RefreshFleetCommandAsync(nowUtc);
+        _ = RefreshFitAsync();
     }
 
     [RelayCommand]
@@ -1126,7 +1183,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         Activity.HeaderSummary = _ActivitySummary();
         Enemies.HeaderSummary = _EnemySummary();
-        Fit.HeaderSummary = FitSummary;
+        Fit.HeaderSummary = FitText;
         // Never "solo": nothing here can observe the absence of a fleet, only the presence of one. Without any the
         // section is hidden (IsFleetShown) and this line is not on screen at all.
         Fleet.HeaderSummary = FleetMemberCount > 1 ? FleetStatusText : "no fleet has reported in";
@@ -1138,18 +1195,23 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     internal void ApplyFitDetection(ShipFitDetectionReading reading)
     {
-        FitDetectionText = reading.State switch
+        // The four detection states of ET-101 stay four: whether a character may look at all, has not looked yet,
+        // looked and found nothing, or looked and found too much are different answers with different remedies.
+        FitText = reading.State switch
         {
-            ShipFitDetectionState.Unobserved => "ship type has not been read yet",
-            ShipFitDetectionState.ScopeMissing => "ship-type scope is missing",
+            ShipFitDetectionState.Unobserved => "no fit: ship type has not been read yet",
+            ShipFitDetectionState.ScopeMissing => "no fit: ship-type scope is missing",
+            ShipFitDetectionState.Observed when reading.MatchReason == ShipFitMatchReason.Detached =>
+                "no fit: unlinked from this run",
             ShipFitDetectionState.Observed when reading.MatchReason == ShipFitMatchReason.NoFitFound =>
-                "no known fit matches the observed ship",
+                "no fit: no known fit matches the observed ship",
             ShipFitDetectionState.Observed when reading.SelectedFit is { } fit =>
-                $"suggested fit: {fit.Name} ({_FitMatchReason(reading.MatchReason)})",
-            ShipFitDetectionState.Observed => "no single fit matches the observed ship",
-            _ => "ship fit is unavailable"
+                $"fit: {fit.Name} ({_FitMatchReason(reading.MatchReason)})",
+            ShipFitDetectionState.Observed => "no fit: no single fit matches the observed ship",
+            _ => "no fit: ship fit is unavailable"
         };
-        Refresh(DateTime.UtcNow);
+        HasFit = reading is { State: ShipFitDetectionState.Observed, SelectedFit: not null };
+        _RefreshSummaries();
     }
 
     internal void ApplyFitStats(FitStats? stats, bool fitCouldBeRead)

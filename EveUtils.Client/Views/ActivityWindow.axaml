@@ -416,12 +416,15 @@
                               IsChecked="{Binding Fit.IsExpanded, Mode=TwoWay}"/>
                 <Border Classes="sectionbody" IsVisible="{Binding Fit.IsExpanded}">
                     <StackPanel Spacing="6">
-                        <TextBlock Classes="hint" Margin="0" Text="{Binding FitDetectionText}"/>
-                        <TextBlock Classes="hint" Margin="0" Text="{Binding FitSelectionText}"/>
+                        <TextBlock Classes="hint" Margin="0" Text="{Binding FitText}"/>
                         <TextBlock Classes="hint" Margin="0" Text="{Binding FitVelocityText}"/>
                         <TextBlock Classes="hint" Margin="0" Text="{Binding FitWarpSpeedText}"/>
-                        <Button Classes="pick" Content="choose fit" HorizontalAlignment="Left"
-                                Command="{Binding ChooseFitCommand}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Button Classes="pick" Content="choose fit" Command="{Binding ChooseFitCommand}"/>
+                            <!-- Only offered once there is a fit to take off; unlinking nothing is not a state. -->
+                            <Button Classes="pick" Content="detach fit" Command="{Binding DetachFitCommand}"
+                                    IsVisible="{Binding HasFit}"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 

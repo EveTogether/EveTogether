@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -17,10 +18,12 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Esi;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Theming;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.Views;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Metrics;
@@ -81,36 +84,155 @@ public class ActivityWindowTests
         var abyssal = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
 
         Assert.DoesNotContain("ET-40", abyssal.Fit.HeaderSummary);
-        Assert.Contains("choose a character", abyssal.Fit.HeaderSummary);
+        Assert.Contains("no fit", abyssal.Fit.HeaderSummary);
         Assert.Equal("no loot captured", abyssal.Loot.HeaderSummary);
         // ACTIVITY no longer waits on anything (ET-80): with nothing copied it names the gap instead of a ticket.
         Assert.Equal("no signature", new ActivityWindowViewModel(ActivityKind.Site, _Unused()).Activity.HeaderSummary);
     }
 
+    /// <summary>ET-107 AC-3. The four detection states of ET-101 have to survive the automatic fill: in all four the
+    /// run begins without a fit, and the four reasons are four different remedies. Compared pairwise rather than only
+    /// against a keyword, so folding any two into one shared line fails here.</summary>
     [Fact]
-    public void FitDetection_ScopeMissingAndNoFitFoundStayDistinctAndUsable()
+    public void FitDetection_TheFourEmptyStatesStayFourAndEachSaysWhyItIsEmpty()
     {
         var model = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
-        model.ApplyFitDetection(ShipFitDetectionReading.ScopeMissing);
-        var scopeMissing = model.FitDetectionText;
 
-        model.ApplyFitDetection(new ShipFitDetectionReading(
-            ShipFitDetectionState.Observed, Anchor, 17715, 9, "Gila", null,
-            ShipFitMatchReason.NoFitFound, []));
+        var texts = new List<string>();
+        foreach (var reading in new[]
+        {
+            ShipFitDetectionReading.Unobserved,
+            ShipFitDetectionReading.ScopeMissing,
+            _Observed(null, ShipFitMatchReason.NoFitFound),
+            _Observed(null, ShipFitMatchReason.AmbiguousShipType),
+        })
+        {
+            model.ApplyFitDetection(reading);
+            Assert.False(model.HasFit, "the run must begin without a fit when there is nothing to fill it with");
+            texts.Add(model.FitText);
+        }
 
-        Assert.Contains("scope", scopeMissing, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("no known fit", model.FitDetectionText, StringComparison.OrdinalIgnoreCase);
-        Assert.NotEqual(scopeMissing, model.FitDetectionText);
-        Assert.Equal("no fit chosen", model.FitSelectionText);
+        Assert.Equal(4, texts.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        // The two that collapse most easily, and that mean opposite things: may this character look at all, or did it
+        // look and find nothing.
+        Assert.NotEqual(texts[1], texts[2]);
+        Assert.Contains("scope", texts[1], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no known fit", texts[2], StringComparison.OrdinalIgnoreCase);
+        Assert.All(texts, text => Assert.StartsWith("no fit:", text, StringComparison.OrdinalIgnoreCase));
         Assert.NotNull(model.ChooseFitCommand);
+    }
 
-        model.ApplyFitDetection(ShipFitDetectionReading.Unobserved);
-        var unobserved = model.FitDetectionText;
-        model.ApplyFitDetection(new ShipFitDetectionReading(
-            ShipFitDetectionState.Observed, Anchor, 17715, 9, "Gila", null,
-            ShipFitMatchReason.AmbiguousShipType, []));
+    /// <summary>ET-107 AC-1. Starting a run fills the fit from ET-101's reading — the player confirms nothing. Driven
+    /// through <see cref="ActivityWindowViewModel.Refresh"/>, which is what START itself calls.</summary>
+    [Fact]
+    public void StartingARun_FillsTheFitFromTheDetectionWithoutBeingConfirmed()
+    {
+        var model = new ActivityWindowViewModel(ActivityKind.Abyssal,
+            _WithFitDetection(_Observed(new ShipFitCandidate(7, "Escalation 3/10 - LZ", 17715), ShipFitMatchReason.ShipName)));
 
-        Assert.NotEqual(unobserved, model.FitDetectionText);
+        model.StartManualRun(Anchor);
+
+        Assert.True(model.HasFit);
+        Assert.Contains("Escalation 3/10 - LZ", model.FitText);
+        Assert.Contains("name matches the observed ship", model.FitText);
+        Assert.Equal(model.FitText, model.Fit.HeaderSummary);
+    }
+
+    /// <summary>ET-107 AC-2 and AC-4. One fit per run with its origin as a detail: a manual choice arrives through the
+    /// same reading as any other, so there is no proposal for it to stand beside and nothing to confirm.</summary>
+    [Fact]
+    public void AManualChoice_IsTheRunsFitRatherThanASecondFieldBesideAProposal()
+    {
+        var model = new ActivityWindowViewModel(ActivityKind.Abyssal,
+            _WithFitDetection(_Observed(new ShipFitCandidate(8, "Hand-picked Gila", 17715), ShipFitMatchReason.Manual)));
+
+        model.Refresh(Anchor);
+
+        Assert.True(model.HasFit);
+        Assert.StartsWith("fit: Hand-picked Gila", model.FitText);
+        Assert.Contains("manual choice", model.FitText);
+        Assert.DoesNotContain("suggest", model.FitText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(typeof(ActivityWindowViewModel).GetProperties(),
+            property => property.Name.Contains("Suggest", StringComparison.OrdinalIgnoreCase)
+                || property.Name.Contains("Chosen", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>ET-107 AC-2, the other correction. Unlinking has to hold — against the next tick, and against the
+    /// window being closed and reopened on the same run, which builds a fresh view model that adopts the open row.
+    /// A deliberate act that a reopen quietly undoes is the same fault as a run that forgets its enemies at STOP.</summary>
+    [Fact]
+    public async Task DetachingTheFit_SurvivesTheNextTickAndTheWindowBeingReopenedOnTheSameRun()
+    {
+        IServiceProvider services =
+            _WithFitDetection(_Observed(new ShipFitCandidate(7, "Escalation 3/10 - LZ", 17715), ShipFitMatchReason.ShipName));
+        var model = new ActivityWindowViewModel(ActivityKind.Abyssal, services);
+        model.StartManualRun(Anchor);
+        Assert.True(model.HasFit);
+
+        await model.DetachFitCommand.ExecuteAsync(null);
+        model.Refresh(Anchor.AddSeconds(1));
+        await model.RefreshFitAsync();
+
+        Assert.False(model.HasFit);
+        Assert.Contains("unlinked", model.FitText, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("no max velocity", model.FitVelocityText);
+
+        // Closing and reopening mid-run: a new view model over the same services, as DialogService builds one.
+        model.Dispose();
+        var reopened = new ActivityWindowViewModel(ActivityKind.Abyssal, services);
+        reopened.StartManualRun(Anchor.AddSeconds(2));
+
+        Assert.False(reopened.HasFit);
+        Assert.Contains("unlinked", reopened.FitText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static ShipFitDetectionReading _Observed(ShipFitCandidate? selected, ShipFitMatchReason reason) =>
+        new(ShipFitDetectionState.Observed, Anchor, 17715, 9, "Gila", selected, reason,
+            selected is null ? [] : [selected]);
+
+    /// <summary>A window that knows whose run it is without asking — the fleet character, the same fallback the run
+    /// controls use before START (ET-105).</summary>
+    private static IServiceProvider _WithFitDetection(ShipFitDetectionReading reading) =>
+        new ServiceCollection()
+            .AddSingleton<IShipFitDetectionService>(new FakeShipFitDetection(reading))
+            .AddSingleton<IActiveFleetState>(new FakeActiveFleet())
+            .BuildServiceProvider();
+
+    /// <summary>Stands in for the service's own store: detaching changes what every later reading says, including one
+    /// taken by a window opened after the first was closed.</summary>
+    private sealed class FakeShipFitDetection(ShipFitDetectionReading reading) : IShipFitDetectionService
+    {
+        private ShipFitDetectionReading _reading = reading;
+
+        public ShipFitDetectionReading GetReading(int characterId) => _reading;
+
+        public Task<Result> SetManualFitAsync(int characterId, int? fittingId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Result.Success());
+
+        public Task<Result> DetachFitAsync(int characterId, CancellationToken cancellationToken = default)
+        {
+            _reading = _reading with { SelectedFit = null, MatchReason = ShipFitMatchReason.Detached };
+            return Task.FromResult(Result.Success());
+        }
+    }
+
+    private sealed class FakeActiveFleet : IActiveFleetState
+    {
+        public long? ActiveFleetId => 900;
+
+        public int? CharacterId => 1;
+
+        public IReadOnlyCollection<int> ActiveCharacterIds => [1];
+
+        public string? ActiveServerAddress => null;
+
+        public bool IsActiveFleetClientOnly => true;
+
+        public void Enter(long fleetId, int characterId, string? serverAddress = null, bool clientOnly = false) { }
+
+        public void Leave() { }
+
+        public void Leave(int characterId) { }
     }
 
     [Fact]

@@ -25,6 +25,9 @@ public sealed class ShipFitDetectionService(
     ILogger<ShipFitDetectionService> logger) : BackgroundService, IShipFitDetectionService
 {
     private const string OverrideKeyPrefix = "fit-detection.override.";
+    // Stored where a fitting id goes, and no fitting has it: "the player chose no fit" is a choice, not the absence
+    // of one, and it has to outlive the window that made it.
+    private const int DetachedFitId = 0;
     // Provisional until a scoped ship response confirms this bucket's live headroom; low-headroom cycles yield instead of queueing.
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
     private readonly ConcurrentDictionary<int, ShipFitDetectionReading> _readings = new();
@@ -52,7 +55,59 @@ public sealed class ShipFitDetectionService(
             await _ClearManualFitsAsync(characterId, cancellationToken);
         }
 
+        _Reselect(characterId);
         return Result.Success();
+    }
+
+    public async Task<Result> DetachFitAsync(int characterId, CancellationToken cancellationToken = default)
+    {
+        if (!_readings.TryGetValue(characterId, out ShipFitDetectionReading? reading) || reading.ShipTypeId is not { } shipTypeId)
+            return Result.Failure(new ResultMessage(
+                MessageSeverity.Error, "SHIP_UNKNOWN", "The current ship is not known yet, so there is no fit to unlink."));
+
+        _manualFits[(characterId, shipTypeId)] = DetachedFitId;
+        await settings.UpsertAsync(_OverrideKey(characterId, shipTypeId),
+            DetachedFitId.ToString(CultureInfo.InvariantCulture), cancellationToken);
+        _Reselect(characterId);
+        return Result.Success();
+    }
+
+    /// <summary>Re-derive the stored reading against the manual fits as they now stand. Without this the choice only
+    /// shows on the next 30-second poll, and a caller that renders the reading would keep showing the old fit.</summary>
+    private void _Reselect(int characterId)
+    {
+        if (!_readings.TryGetValue(characterId, out ShipFitDetectionReading? reading) || reading.ShipTypeId is not { } shipTypeId)
+            return;
+
+        (ShipFitCandidate? selected, ShipFitMatchReason reason) =
+            _Select(characterId, shipTypeId, reading.ShipName, reading.Candidates);
+        _readings[characterId] = reading with { SelectedFit = selected, MatchReason = reason };
+    }
+
+    private (ShipFitCandidate? Selected, ShipFitMatchReason Reason) _Select(
+        int characterId, int shipTypeId, string? shipName, IReadOnlyList<ShipFitCandidate> candidates)
+    {
+        // A manual fit is stored under the ship type it belongs to, so a hit here is always for the observed ship.
+        if (_manualFits.TryGetValue((characterId, shipTypeId), out int manualFitId))
+        {
+            if (manualFitId == DetachedFitId)
+                return (null, ShipFitMatchReason.Detached);
+
+            ShipFitCandidate? manual = candidates.FirstOrDefault(candidate => candidate.Id == manualFitId);
+            return (manual, manual is null ? ShipFitMatchReason.NoFitFound : ShipFitMatchReason.Manual);
+        }
+
+        ShipFitCandidate[] nameMatches = candidates
+            .Where(candidate => string.Equals(candidate.Name, shipName, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (nameMatches.Length == 1)
+            return (nameMatches[0], ShipFitMatchReason.ShipName);
+        if (candidates.Count == 0)
+            return (null, ShipFitMatchReason.NoFitFound);
+        if (candidates.Count == 1)
+            return (candidates[0], ShipFitMatchReason.OnlyFitForShipType);
+
+        return (null, ShipFitMatchReason.AmbiguousShipType);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -126,29 +181,8 @@ public sealed class ShipFitDetectionService(
             .Select(fitting => new ShipFitCandidate(fitting.Id, fitting.Name, fitting.ShipTypeId))
             .ToArray();
 
-        ShipFitCandidate? selected = null;
-        ShipFitMatchReason reason;
-        if (_manualFits.TryGetValue((characterId, ship.ShipTypeId), out int manualFitId))
-        {
-            selected = knownFits.Where(fitting => fitting.Id == manualFitId)
-                .Select(fitting => new ShipFitCandidate(fitting.Id, fitting.Name, fitting.ShipTypeId))
-                .FirstOrDefault();
-            reason = selected is null ? ShipFitMatchReason.NoFitFound : ShipFitMatchReason.Manual;
-        }
-        else
-        {
-            ShipFitCandidate[] nameMatches = candidates
-                .Where(fitting => string.Equals(fitting.Name, ship.ShipName, StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-            if (nameMatches.Length == 1)
-                (selected, reason) = (nameMatches[0], ShipFitMatchReason.ShipName);
-            else if (candidates.Length == 0)
-                (selected, reason) = (null, ShipFitMatchReason.NoFitFound);
-            else if (candidates.Length == 1)
-                (selected, reason) = (candidates[0], ShipFitMatchReason.OnlyFitForShipType);
-            else
-                (selected, reason) = (null, ShipFitMatchReason.AmbiguousShipType);
-        }
+        (ShipFitCandidate? selected, ShipFitMatchReason reason) =
+            _Select(characterId, ship.ShipTypeId, ship.ShipName, candidates);
 
         _readings[characterId] = new ShipFitDetectionReading(
             ShipFitDetectionState.Observed,
