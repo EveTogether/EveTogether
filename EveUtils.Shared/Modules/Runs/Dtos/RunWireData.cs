@@ -14,6 +14,10 @@ public sealed class RunWireData
     public required DateTime StartedAtUtc { get; init; }
     public DateTime? StoppedAtUtc { get; init; }
     public DateTime? SavedAtUtc { get; init; }
+
+    /// <summary>Travels with the run so the "corrected or measured" verdict survives a sync (ET-98); dropping it
+    /// here would lose on the wire exactly what the column was added to keep.</summary>
+    public DateTime? TimesCorrectedAtUtc { get; init; }
     public DateTime? DeletedAtUtc { get; init; }
     public required int SiteTypeId { get; init; }
     public string? SiteName { get; init; }
@@ -42,6 +46,7 @@ public sealed class RunWireData
         StartedAtUtc = run.StartedAtUtc,
         StoppedAtUtc = run.StoppedAtUtc,
         SavedAtUtc = run.SavedAtUtc,
+        TimesCorrectedAtUtc = run.TimesCorrectedAtUtc,
         DeletedAtUtc = run.DeletedAtUtc,
         SiteTypeId = run.SiteTypeId,
         SiteName = run.SiteName,
@@ -100,6 +105,7 @@ public sealed class RunWireData
             StartedAtUtc = StartedAtUtc,
             StoppedAtUtc = StoppedAtUtc,
             SavedAtUtc = SavedAtUtc,
+            TimesCorrectedAtUtc = TimesCorrectedAtUtc,
             DeletedAtUtc = DeletedAtUtc,
             SiteTypeId = SiteTypeId,
             SiteName = SiteName,

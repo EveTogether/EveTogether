@@ -365,7 +365,7 @@ public class ActivityWindowWiringTests
         Assert.True(model.IsFleetShown);
         Assert.Equal(2, model.FleetMemberCount);
         Assert.Equal(2, model.AnchoredFleetMemberCount);
-        Assert.Equal("based on 2 of 2 members", model.Fleet.HeaderSummary);
+        Assert.Equal("based on 2 of 2 members sharing a location", model.Fleet.HeaderSummary);
     }
 
     /// <summary>A fleet run nobody pressed START for still gets its row: the envelope is what began it, and the loot

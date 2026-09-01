@@ -391,7 +391,7 @@ public class ActivityWindowTests
         Assert.Equal(ActivityRunState.NotStarted, site.RunState);
         Assert.Null(site.AnchorUtc);
         Assert.Equal(2, site.FleetMemberCount);
-        Assert.Contains("fleet of 2 members", site.Fleet.HeaderSummary);
+        Assert.Contains("based on 2 members sharing a location", site.Fleet.HeaderSummary);
     }
 
     [Fact]

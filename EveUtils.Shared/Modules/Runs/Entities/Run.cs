@@ -17,6 +17,14 @@ public sealed class Run
     public DateTime StartedAtUtc { get; set; }
     public DateTime? StoppedAtUtc { get; set; }
     public DateTime? SavedAtUtc { get; set; }
+
+    /// <summary>
+    /// When the pilot corrected this run's start or end by hand before saving it (ET-98), or null when both are as
+    /// measured. The corrected moments are written over <see cref="StartedAtUtc"/> and <see cref="StoppedAtUtc"/> —
+    /// they are the truer times and everything downstream should use them — so without this stamp nothing afterwards
+    /// could tell a measured duration from a typed one. This project keeps that difference everywhere else.
+    /// </summary>
+    public DateTime? TimesCorrectedAtUtc { get; set; }
     public DateTime? DeletedAtUtc { get; set; }
     public int SiteTypeId { get; set; }
     public string? SiteName { get; set; }
