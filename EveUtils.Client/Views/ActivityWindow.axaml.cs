@@ -30,11 +30,13 @@ public partial class ActivityWindow : OverlayWindow
         DataContext = viewModel;
     }
 
-    protected override void OnOpened(EventArgs e)
+    protected override async void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
         // Only once the window is up: a clock ticking for a window nobody opened is a clock nobody stops.
         _viewModel?.Start();
+        if (_viewModel?.RunLoot is { } runLoot)
+            await runLoot.RefreshAsync();
     }
 
     protected override void OnClosed(EventArgs e)

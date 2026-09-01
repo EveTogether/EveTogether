@@ -436,8 +436,45 @@
                             <TextBlock Text="ISK"/>
                             <TextBlock Grid.Column="1" Text="{Binding IskLabel}"/>
                         </Grid>
-                        <TextBlock Classes="hint"
-                                   Text="Waiting on ET-65. Every copy becomes its own timestamped snapshot shown beside the total, so nothing is silently summed and nothing is silently de-duplicated. Loot, spent and net stay three separate figures — a run that burned three filaments is not as rich as its gross."/>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="LOOT"/>
+                            <TextBlock Grid.Column="1" Text="{Binding RunLoot.LootIskDisplay}"/>
+                        </Grid>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="CONSUMED"/>
+                            <TextBlock Grid.Column="1" Text="{Binding RunLoot.ConsumedIskDisplay}"/>
+                        </Grid>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="NET"/>
+                            <TextBlock Grid.Column="1" Text="{Binding RunLoot.NetIskDisplay}"/>
+                        </Grid>
+                        <TextBlock Classes="hint" Text="{Binding RunLoot.RunStatusMessage}"/>
+                        <ItemsControl ItemsSource="{Binding RunLoot.Captures}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:RunLootCaptureRowViewModel">
+                                    <StackPanel Spacing="4">
+                                        <Grid Classes="kv" ColumnDefinitions="*,Auto">
+                                            <TextBlock Text="{Binding CapturedAtDisplay}"/>
+                                            <Button Grid.Column="1" Classes="pick" Content="{Binding InOutText}"
+                                                    Command="{Binding $parent[ItemsControl].((va:ActivityWindowViewModel)DataContext).RunLoot.ToggleCaptureExcludedCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+                                        <TextBlock Classes="hint" Text="{Binding RepeatOfDisplay}"/>
+                                        <ItemsControl ItemsSource="{Binding Entries}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                                        <TextBlock Text="{Binding Name}"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding Quantity}"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding ClipboardPrice, TargetNullValue='no price'}"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </Border>
 

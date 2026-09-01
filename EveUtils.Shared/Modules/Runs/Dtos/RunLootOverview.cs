@@ -1,8 +1,10 @@
+using EveUtils.Shared.Modules.Runs.Enums;
+
 namespace EveUtils.Shared.Modules.Runs.Dtos;
 
 /// <summary>One loot entry as the clipboard column showed it — <see cref="ClipboardPrice"/> is that column, not a
 /// valuation, and null means the window showed no price for the row (never treated as 0).</summary>
-public sealed record RunLootEntryDto(string Name, long? Quantity, decimal? ClipboardPrice);
+public sealed record RunLootEntryDto(string Name, long? Quantity, decimal? ClipboardPrice, LootKind LootKind);
 
 /// <summary>One clipboard snapshot on the running run, with its exclusion flag so the reader can tell a kept-but-
 /// excluded repeat from a counted capture.</summary>

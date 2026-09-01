@@ -86,6 +86,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _gamelog = services.GetService<GamelogClientService>();
         if (_gamelog is not null)
             _gamelog.CombatObserved += _OnCombatObserved;
+        RunLoot = services.GetService<CqrsDispatcher>() is { } dispatcher ? new RunLootViewModel(dispatcher) : null;
+        if (RunLoot is not null)
+            RunLoot.PropertyChanged += (_, _) => _RefreshSummaries();
 
         WeatherChoices = AbyssalWeather.All
             .Select((weather, index) => new ActivityChoice
@@ -109,6 +112,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public ActivityKind Kind { get; }
 
     public IReadOnlyList<RunEnemyObservationViewModel> EnemyObservations => _enemyObservations?.Observations ?? [];
+
+    public RunLootViewModel? RunLoot { get; }
 
     public bool IsAbyssal => Kind == ActivityKind.Abyssal;
 
@@ -423,6 +428,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         TierIndex = _Restore(settings.FirstOrDefault(s => s.Key == TierSettingKey)?.Value, Tiers.Count);
 
         _SyncChoices();
+        if (RunLoot is not null)
+            await RunLoot.RefreshAsync();
         Refresh(DateTime.UtcNow);
     }
 
@@ -792,7 +799,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         Fit.HeaderSummary = FitSummary;
         Fleet.HeaderSummary = FleetMemberCount > 1 ? FleetStatusText : "solo — no fleet";
         Bounty.HeaderSummary = BountyText;
-        Loot.HeaderSummary = "waiting on ET-65";
+        Loot.HeaderSummary = RunLoot?.Captures.Count > 0
+            ? RunLoot.NetIskDisplay
+            : RunLoot?.RunStatusMessage ?? "no loot captured";
     }
 
     internal void ApplyFitDetection(ShipFitDetectionReading reading)

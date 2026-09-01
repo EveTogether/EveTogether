@@ -147,7 +147,7 @@ public class ActivityWindowTests
 
         Assert.DoesNotContain("ET-40", abyssal.Fit.HeaderSummary);
         Assert.Contains("choose a character", abyssal.Fit.HeaderSummary);
-        Assert.Contains("ET-65", abyssal.Loot.HeaderSummary);
+        Assert.Equal("no loot captured", abyssal.Loot.HeaderSummary);
         // ACTIVITY no longer waits on anything (ET-80): with nothing copied it names the gap instead of a ticket.
         Assert.Equal("no signature", new ActivityWindowViewModel(ActivityKind.Site, _Unused()).Activity.HeaderSummary);
     }
