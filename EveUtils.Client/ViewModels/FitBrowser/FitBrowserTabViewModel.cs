@@ -88,6 +88,15 @@ public partial class FitBrowserTabViewModel : ObservableObject
         await _loader(this);
     }
 
+    /// <summary>Re-fetches a server tab's rows regardless of <see cref="IsLoaded"/> — the manual refresh button and
+    /// the post-share auto-refresh both need the current server state, not "already loaded once".</summary>
+    public async Task ReloadAsync()
+    {
+        if (IsLocal || _loader is null) return;
+        IsLoaded = true;
+        await _loader(this);
+    }
+
     partial void OnSearchChanged(string value)
     {
         CurrentPage = 1;
