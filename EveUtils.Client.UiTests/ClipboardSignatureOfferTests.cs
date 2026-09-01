@@ -215,6 +215,21 @@ public sealed class ClipboardSignatureOfferTests
         Assert.Single(env.Dialogs.ShownActivityWindows);
     }
 
+    // Tegenproef: StartRun must close its own offer, or a fresh copy of the exact same signature keeps being
+    // silently swallowed by the still-open fingerprint guard (_openFingerprint never clears without it).
+    [AvaloniaFact]
+    public async Task StartRun_ClosesItsOwnOffer_SoARecopyOfTheSameSignatureAsksAgain()
+    {
+        using var env = await Env.StartAsync();
+        const string text = "AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU";
+
+        env.Copy(text);
+        env.Toasts.ActionToasts[0].Actions[1].Run(); // "Start run"
+
+        env.Copy(text); // same payload — must ask again, not be swallowed by the guard the first card left behind
+        Assert.Equal(2, env.Toasts.ActionToasts.Count);
+    }
+
     // ── ET-80 — the ACTIVITY section, filled from the catalogue ─────────────────────────────────────
 
     [AvaloniaFact]

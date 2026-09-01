@@ -54,6 +54,10 @@ public class ClipboardWatchTests
     [InlineData("KDC-304\t中庭の亡霊\t戦闘サイト\t中庭の亡霊\t100,00%\t5,17 AE", ClipboardShape.Signature)]
     // Six fields but no percentage on the fifth is not a signature row — the anchor is load-bearing.
     [InlineData("KDC-304\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0\t2.71 AU", ClipboardShape.Unrecognised)]
+    // Raymond's own repro (2026-09-01): two copies of a Sansha Hideaway, one after another, verbatim including the
+    // comma-decimal scan percentage his client writes. Both recognise identically — the "no toast" bug is not here.
+    [InlineData("VQX-959\tCosmic Anomaly\tCombat Site\tSansha Hideaway\t100,0%\t10,93 AU", ClipboardShape.Signature)]
+    [InlineData("FOY-540\tCosmic Anomaly\tCombat Site\tSansha Hideaway\t100,0%\t9,79 AU", ClipboardShape.Signature)]
     // Ordinary things people copy all day.
     [InlineData("correct horse battery staple", ClipboardShape.Unrecognised)]
     [InlineData("https://example.test/some/page", ClipboardShape.Unrecognised)]

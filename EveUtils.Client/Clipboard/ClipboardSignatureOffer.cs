@@ -80,11 +80,17 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         lock (_gate)
         {
             // Guards the same click landing twice before the card visually closes — without it, two clicks open two
-            // windows (ET-100 AC-5).
+            // windows (ET-100 AC-5). Left set until the card's own close does its usual cleanup, so this alone does
+            // not defeat the guard above.
             if (_startedRunFingerprint == fingerprint)
                 return;
 
             _startedRunFingerprint = fingerprint;
+
+            // The offer itself is answered now, so a fresh copy of the same signature must ask again rather than be
+            // swallowed by a guard the card's own (possibly much later) close would otherwise have to clear.
+            if (_openFingerprint == fingerprint)
+                _openFingerprint = null;
         }
 
         _dialogs.ShowActivityWindow(new ActivityWindowViewModel(ActivityKind.Site, _services)
