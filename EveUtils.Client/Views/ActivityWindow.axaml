@@ -355,10 +355,14 @@
                               IsChecked="{Binding Bounty.IsExpanded, Mode=TwoWay}"/>
                 <Border Classes="sectionbody" IsVisible="{Binding Bounty.IsExpanded}">
                     <StackPanel>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="OWN CHARACTER"/>
+                            <TextBlock Grid.Column="1" Text="{Binding BountyText}"/>
+                        </Grid>
                         <TextBlock Classes="hint" Margin="0" IsVisible="{Binding IsAbyssal}"
                                    Text="Abyssal NPCs pay no bounty; the whole return is in the loot. The section stays so nobody goes looking for a figure that does not exist."/>
                         <TextBlock Classes="hint" Margin="0" IsVisible="{Binding !IsAbyssal}"
-                                   Text="From the game log: every &quot;… ISK added to next bounty payout&quot; line is one rat, and only for your own character — a bounty event carries no character, so a fleet total cannot be built. Wiring is ET-98 phase 3."/>
+                                    Text="From the game log: every &quot;… ISK added to next bounty payout&quot; line is one rat, and only for your own character — a bounty event carries no character, so a fleet total cannot be built."/>
                     </StackPanel>
                 </Border>
 

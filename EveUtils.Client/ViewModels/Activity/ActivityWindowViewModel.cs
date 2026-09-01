@@ -6,10 +6,13 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Esi;
+using EveUtils.Client.ViewModels;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
+using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Queries;
 using Microsoft.Extensions.DependencyInjection;
@@ -114,6 +117,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(LocationText))]
     private string? _solarSystem;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LocationText))]
+    [NotifyPropertyChangedFor(nameof(BountyText))]
+    [NotifyPropertyChangedFor(nameof(IsInsideAbyssal))]
+    private bool? _insideAbyssal;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LocationText))]
+    private string? _locationDisplay;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BountyText))]
+    private long _bountyIsk;
 
     /// <summary>What was looted and what was left, as a label. Without it "19 minutes" says nothing.</summary>
     [ObservableProperty]
@@ -230,9 +247,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     // ── Section bodies ──────────────────────────────────────────────────────────────────────────────
 
-    public string LocationText => IsAbyssal
+    public bool IsInsideAbyssal => InsideAbyssal ?? IsAbyssal;
+
+    public string LocationText => IsInsideAbyssal
         ? "none — an abyssal pocket has no location"
-        : SolarSystem ?? "not known yet";
+        : LocationDisplay ?? SolarSystem ?? "location unavailable";
+
+    public string BountyText => IsInsideAbyssal
+        ? "— — no bounty in abyssal space"
+        : BountyIsk > 0 ? $"{BountyIsk:N0} ISK — own character" : "no payouts yet — own character";
 
     public string SignatureTypeText => SignatureGroup ?? "not known yet";
 
@@ -386,6 +409,21 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         Refresh(receivedUtc);
     }
 
+    public void ApplyLocation(EsiLocationReading reading, DpsViewModel character)
+    {
+        InsideAbyssal = reading.Inside;
+        LocationDisplay = character.LocationDisplay;
+        Refresh(reading.AtUtc);
+    }
+
+    public void AddBounty(BountyEvent bounty)
+    {
+        if (!IsInsideAbyssal)
+            BountyIsk += bounty.Isk;
+
+        Refresh(bounty.Timestamp);
+    }
+
     public void Dispose()
     {
         _timer?.Stop();
@@ -440,7 +478,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         Activity.HeaderSummary = _ActivitySummary();
         Fit.HeaderSummary = "waiting on ET-40";
         Fleet.HeaderSummary = FleetMemberCount > 1 ? FleetStatusText : "solo — no fleet";
-        Bounty.HeaderSummary = IsAbyssal ? "— no bounty in abyssal space" : "no payouts yet";
+        Bounty.HeaderSummary = BountyText;
         Loot.HeaderSummary = "waiting on ET-65";
     }
 

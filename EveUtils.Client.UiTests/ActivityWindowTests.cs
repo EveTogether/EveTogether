@@ -14,12 +14,16 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using EveUtils.Client.Esi;
 using EveUtils.Client.Theming;
+using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.Views;
+using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
+using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -85,6 +89,65 @@ public class ActivityWindowTests
         Assert.Contains("no location", model.Activity.HeaderSummary, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("pocket", model.LocationText, StringComparison.OrdinalIgnoreCase);
         Assert.NotEqual("0", model.Bounty.HeaderSummary);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public void ActivityReadout_AbyssalAndWatchStates_NeverLeaveBountyOrLocationSilent(bool insideAbyssal, bool watchLost)
+    {
+        ActivityKind kind = insideAbyssal ? ActivityKind.Abyssal : ActivityKind.Site;
+        var model = _Filled(kind);
+        var character = new DpsViewModel("Pilot", isSelf: true)
+        {
+            IsLocalCharacter = true,
+            InEve = true,
+            Location = watchLost ? null : "Aphend",
+            LocationUnavailableReason = watchLost ? EsiErrorKind.ScopeMissing : null
+        };
+        EsiLocationReading reading = watchLost
+            ? EsiLocationReading.Lost(EsiErrorKind.ScopeMissing, Anchor)
+            : new EsiLocationReading(insideAbyssal ? 32000001 : 30000142, Anchor);
+
+        model.ApplyLocation(reading, character);
+        model.AddBounty(new BountyEvent(Anchor, 125_000));
+
+        foreach (string text in new[] { model.BountyText, model.LocationText })
+        {
+            Assert.False(string.IsNullOrWhiteSpace(text));
+            Assert.NotEqual("0", text);
+        }
+
+        if (insideAbyssal)
+        {
+            Assert.Contains("no bounty", model.BountyText, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("pocket", model.LocationText, StringComparison.OrdinalIgnoreCase);
+        }
+        else
+        {
+            Assert.Contains("own character", model.BountyText, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("125,000", model.BountyText);
+            Assert.Equal(character.LocationDisplay, model.LocationText);
+        }
+    }
+
+    [Fact]
+    public void ActivityReadout_LostWatchUsesTheDpsLocationDisplayIncludingOfflinePriority()
+    {
+        var model = _Filled(ActivityKind.Site);
+        var character = new DpsViewModel("Pilot", isSelf: true)
+        {
+            IsLocalCharacter = true,
+            InEve = false,
+            LocationUnavailableReason = EsiErrorKind.ScopeMissing
+        };
+
+        model.ApplyLocation(EsiLocationReading.Lost(EsiErrorKind.ScopeMissing, Anchor), character);
+
+        Assert.Equal("offline", character.LocationDisplay);
+        Assert.Equal(character.LocationDisplay, model.LocationText);
     }
 
     // ── The clock ───────────────────────────────────────────────────────────────────────────────────
