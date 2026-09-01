@@ -34,6 +34,9 @@ using EveUtils.Shared.Modules.Sde;
 using Microsoft.Extensions.DependencyInjection;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
+// Aliased rather than imported wholesale: that namespace also holds an ActivityKind, which would collide with the
+// window's own.
+using EnemyObservationDirection = EveUtils.Shared.Modules.Runs.Enums.EnemyObservationDirection;
 
 namespace EveUtils.Client.ViewModels.Activity;
 
@@ -708,12 +711,18 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _timer = null;
     }
 
-    private void _OnCombatObserved(int characterId, string target, DateTime observedAtUtc)
+    // The gamelog's own vocabulary translated into the run store's at this one boundary: outgoing damage is an
+    // enemy you shot at, incoming is one that shot you. Both arrive here — the event fires for either.
+    private void _OnCombatObserved(int characterId, string target, DateTime observedAtUtc, DamageDirection direction)
     {
         if (RunState != ActivityRunState.Running)
             return;
 
-        Avalonia.Threading.Dispatcher.UIThread.Post(() => _enemyObservations?.Record(characterId, target, observedAtUtc));
+        EnemyObservationDirection observed = direction is DamageDirection.Outgoing
+            ? EnemyObservationDirection.To
+            : EnemyObservationDirection.From;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            _enemyObservations?.Record(characterId, target, observedAtUtc, observed));
     }
 
     private void _StartEnemyObservations()

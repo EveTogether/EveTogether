@@ -819,7 +819,7 @@ public class ActivityWindowTests
     {
         MethodInfo handler = typeof(ActivityWindowViewModel).GetMethod("_OnCombatObserved", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("combat observation handler was not found");
-        handler.Invoke(model, [90000001, "Centii Servant", observedAtUtc]);
+        handler.Invoke(model, [90000001, "Centii Servant", observedAtUtc, DamageDirection.Outgoing]);
         Dispatcher.UIThread.RunJobs();
     }
 

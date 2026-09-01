@@ -57,7 +57,7 @@ public class GamelogHitTimestampTests
         gamelog.MapCharacter(characterId, "Pilot");
 
         DateTime? observedAt = null;
-        gamelog.CombatObserved += (_, _, at) => observedAt = at;
+        gamelog.CombatObserved += (_, _, at, _) => observedAt = at;
 
         var hitTime = new DateTime(2030, 1, 1, 12, 0, 0, DateTimeKind.Utc);
         await gamelog.AddHitAsync("Pilot", DamageDirection.Outgoing, 500, "Centii Servant", HitQuality.Hits, hitTime);
