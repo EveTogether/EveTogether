@@ -124,9 +124,33 @@ callback URL at that public HTTPS address.
 
 ## 7. Data, backups & upgrading
 
-- Everything persists in the data directory (`/data` under Docker) — **back it up as a whole**. In keeping with
-  the project's data-minimisation principle, the server stores tokens plus minimal coupling state; character
-  data is cached ephemerally (honouring the ESI TTL), not warehoused.
+### The backup button
+
+**Control panel → Backup.** One encrypted `.etbackup` file that rebuilds this server somewhere else: the whole
+database plus `token-protector.key` and `server-cert.pfx`. The same page restores one. Use this rather than
+copying the data directory by hand — it takes a consistent snapshot on any of the four database engines and
+records who downloaded it.
+
+- **You choose a password at download time and it cannot be recovered.** Without it the archive is permanently
+  unreadable; with it, whoever holds the file can take over every linked character. Store it like the tokens.
+- **The archive does not carry your configuration.** The ESI client id and secret, the control-panel admin
+  password and the database connection string are per-installation and stay out of it. Put those in place first on
+  the new machine (§3), then restore. `esi-cache/` and the SDE are left out too — both rebuild themselves.
+- **Restoring is destructive.** The database is dropped and rebuilt from the archive, and the TLS certificate and
+  token-protector key are replaced. Anyone who paired after the archive was taken has to pair again. Before it
+  drops anything the server writes an archive of its current state into the data directory under the same
+  password, named `pre-restore-<timestamp>Z.etbackup`; that file is the way back if a restore goes wrong. It is
+  kept, not cleaned up, because it may hold the only remaining copy of the previous token-protector key.
+- **An archive from a newer version of EVE Together is refused**; an older one is accepted, and the migrations
+  bring the schema forward on the next start. The archive has to come from the same database engine.
+- **After a restore the server stops itself** so it comes back up on the restored data. Under Docker the restart
+  policy does that; a bare-metal install has to be started again by hand.
+
+### The data directory
+
+- Everything persists in the data directory (`/data` under Docker), and backing it up as a whole still works. In
+  keeping with the project's data-minimisation principle, the server stores tokens plus minimal coupling state;
+  character data is cached ephemerally (honouring the ESI TTL), not warehoused.
 - **`eve-utils-server.db` and `token-protector.key` belong together.** The key decrypts the stored ESI refresh
   tokens; restore them as a pair, from the same backup. A database without its key means every paired character
   has to pair again — there is no way back.

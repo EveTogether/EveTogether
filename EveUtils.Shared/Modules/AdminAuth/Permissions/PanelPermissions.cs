@@ -19,9 +19,17 @@ public static class PanelPermissions
     public const string RolesManage = "panel.roles.manage";
     public const string SettingsManage = "panel.settings.manage";
 
+    /// <summary>Download a full server backup archive. Separate from <see cref="DataView"/> because the archive
+    /// decrypts every stored refresh token — it is the single most sensitive thing the panel can hand out.</summary>
+    public const string BackupDownload = "panel.backup.download";
+
+    /// <summary>Restore a backup archive: destructive, wipes the database and replaces the server identity.</summary>
+    public const string BackupRestore = "panel.backup.restore";
+
     public static readonly IReadOnlyList<string> All =
     [
         DashboardView, MetricsView, LogsView, AllowedManage,
         DataView, DataDelete, UsersManage, RolesManage, SettingsManage,
+        BackupDownload, BackupRestore,
     ];
 }

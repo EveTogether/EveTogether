@@ -114,6 +114,38 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.ToTable("RolePermission");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Backup.Entities.BackupDownload", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AdminUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AdminUsername")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AppVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("DownloadedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BackupDownload");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Fittings.Entities.SharedFit", b =>
                 {
                     b.Property<int>("Id")

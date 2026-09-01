@@ -1,6 +1,7 @@
 using System.Net;
 using EveUtils.Server;
 using EveUtils.Server.Auth;
+using EveUtils.Server.Backup;
 using EveUtils.Server.Components;
 using EveUtils.Shared.Modules.Fittings.Repositories;
 using EveUtils.Server.Contracts;
@@ -45,6 +46,7 @@ using EveUtils.Shared.Modules.Sync.Queries;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
@@ -163,6 +165,9 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<EsiCachePurgeServi
 builder.Services.AddHostedService(sp => sp.GetRequiredService<EveServerStatusService>()); // /status poll → drives the ESI downtime gate + outage detector server-side too
 builder.Services.AddSingleton(new ServerInfo(builder.Configuration["Server:Name"] ?? "EVE Together Server"));
 builder.Services.AddServerAuthModule(dataDirectory);
+// Backup/restore engine: the exporter, restorer and panel service carry lifetime markers and are picked up by
+// AddAutoServices above; only the data directory has to be handed in, like the modules that write into it.
+builder.Services.AddSingleton(new ServerBackupOptions(dataDirectory));
 builder.Services.AddAdminAuthModule();      // admin users/roles/RBAC catalog for the Blazor panel
 builder.Services.AddFittingsServerModule(); // SharedFit store + wire events + fit.sync gate
 builder.Services.AddFleetModule();          // fleet persistence
@@ -314,6 +319,66 @@ app.MapPost("/account/login", async (
     // The forced-change flow (redirect to /account/password) is enforced globally; land on "/" here.
     return Results.Redirect("/");
 });
+
+// Backup download. A form POST rather than anything on the Blazor circuit: the archive streams straight into the
+// response, so it is never staged on disk and an interrupted download leaves nothing readable behind (ET-99). The
+// audit row is written by the service only after the last byte.
+app.MapPost("/backup/download", async (
+    HttpContext http,
+    [FromForm] string? password,
+    [FromForm] string? confirm,
+    ServerBackupService backups,
+    CancellationToken ct) =>
+{
+    if (!BackupPasswordPolicy.IsValid(password))
+        return Results.Redirect("/backup?error=length");
+    if (!string.Equals(password, confirm, StringComparison.Ordinal))
+        return Results.Redirect("/backup?error=confirm");
+    if (!int.TryParse(http.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var adminUserId))
+        return Results.Redirect("/login");
+
+    var takenAt = DateTimeOffset.UtcNow;
+    http.Response.ContentType = "application/octet-stream";
+    http.Response.Headers.ContentDisposition = $"attachment; filename=\"{BackupFormat.DownloadFileName(takenAt)}\"";
+    // ZipArchive writes synchronously, and the response body rejects that by default. Enabled for this endpoint
+    // only; the alternative is buffering a whole database in memory to hand over in one asynchronous write.
+    if (http.Features.Get<IHttpBodyControlFeature>() is { } bodyControl)
+        bodyControl.AllowSynchronousIO = true;
+
+    await backups.WriteArchiveAsync(http.Response.Body, password!, adminUserId,
+        http.User.Identity?.Name ?? "unknown", takenAt, ct);
+    return Results.Empty;
+}).RequireAuthorization(PanelPermissions.BackupDownload);
+
+// Backup restore. Destructive: it drops the database, rebuilds it at the archive's own migration state and
+// replaces the server identity, then stops the process so it comes back up on the restored data.
+app.MapPost("/backup/restore", async (
+    HttpContext http,
+    IFormFile? archive,
+    [FromForm] string? password,
+    [FromForm] string? confirm,
+    ServerBackupService backups,
+    CancellationToken ct) =>
+{
+    if (archive is null || archive.Length == 0)
+        return Results.Redirect("/backup?error=no-file");
+    if (string.IsNullOrEmpty(password))
+        return Results.Redirect("/backup?error=no-password");
+    if (!string.Equals(confirm?.Trim(), BackupRestorePage.ConfirmationWord, StringComparison.Ordinal))
+        return Results.Redirect("/backup?error=confirm-word");
+
+    await using var upload = archive.OpenReadStream();
+    var result = await backups.RestoreAsync(upload, password, ct);
+    if (!result.IsSuccess || result.Value is not { } report)
+        return Results.Content(BackupRestorePage.Failed(result.Messages), "text/html; charset=utf-8");
+
+    // The page is written before the process goes down; the panel it came from is about to stop answering.
+    backups.ScheduleShutdownAfterRestore();
+    return Results.Content(BackupRestorePage.Succeeded(report), "text/html; charset=utf-8");
+})
+    .RequireAuthorization(PanelPermissions.BackupRestore)
+    .WithMetadata(new RequestSizeLimitAttribute(BackupUploadLimits.MaxBytes))
+    .WithMetadata(new RequestFormLimitsAttribute { MultipartBodyLengthLimit = BackupUploadLimits.MaxBytes });
 
 app.MapPost("/account/logout", async (HttpContext http) =>
 {

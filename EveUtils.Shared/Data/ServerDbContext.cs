@@ -1,4 +1,5 @@
 using EveUtils.Shared.Modules.AdminAuth;
+using EveUtils.Shared.Modules.Backup;
 using EveUtils.Shared.Modules.Fittings;
 using EveUtils.Shared.Modules.Fleet;
 using EveUtils.Shared.Modules.Gamelog;
@@ -24,5 +25,6 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options) :
         PermissionsModule.ConfigureModel(modelBuilder);      // server-only: app-permission toggles
         FleetModule.ConfigureModel(modelBuilder);            // server-only: fleets/wings/squads/members/invites
         MessagingModule.ConfigureModel(modelBuilder);        // server-only: internal mail/invite queue
+        BackupModule.ConfigureModel(modelBuilder);           // server-only: backup download audit
     }
 }
