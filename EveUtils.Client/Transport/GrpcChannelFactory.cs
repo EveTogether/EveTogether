@@ -31,6 +31,15 @@ namespace EveUtils.Client.Transport;
 public sealed class GrpcChannelFactory(IServerTrustStore trustStore) : ISingletonService, IDisposable
 {
     private readonly ConcurrentDictionary<string, GrpcChannel> _pinnedChannels = new();
+    private readonly ConcurrentDictionary<string, string> _presentedFingerprints = new();
+
+    /// <summary>
+    /// The fingerprint the server last presented on a pinned channel, matching or not. When a handshake is refused
+    /// because the certificate changed, this is the only place that value exists — the exception carries no
+    /// certificate — and it is what the user has to compare against the pin before trusting the server again (ET-95).
+    /// Null until a pinned channel to that address has actually reached a TLS handshake.
+    /// </summary>
+    public string? PresentedFingerprint(string address) => _presentedFingerprints.GetValueOrDefault(address);
 
     public PinningChannel CreateForPairing(string address)
     {
@@ -69,14 +78,19 @@ public sealed class GrpcChannelFactory(IServerTrustStore trustStore) : ISingleto
                 channel.Dispose();
     }
 
-    private static GrpcChannel BuildPinned(string address, string pinned)
+    private GrpcChannel BuildPinned(string address, string pinned)
     {
         var handler = _BuildResilientHandler((_, certificate, _, _) =>
-            certificate is not null
-            && string.Equals(
-                Convert.ToHexString(SHA256.HashData(certificate.GetRawCertData())),
-                pinned,
-                StringComparison.OrdinalIgnoreCase));
+        {
+            if (certificate is null)
+                return false;
+
+            // Recorded before the verdict, not just on a match: a refusal is exactly when the presented value is
+            // worth keeping, and the TLS exception that follows does not carry the certificate.
+            var presented = Convert.ToHexString(SHA256.HashData(certificate.GetRawCertData()));
+            _presentedFingerprints[address] = presented;
+            return string.Equals(presented, pinned, StringComparison.OrdinalIgnoreCase);
+        });
 
         return GrpcChannel.ForAddress(address, _BuildChannelOptions(handler));
     }

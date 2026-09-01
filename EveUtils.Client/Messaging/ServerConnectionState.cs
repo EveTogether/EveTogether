@@ -8,5 +8,8 @@ public enum ServerConnectionState
     Connected,
     Reconnecting,
     /// <summary>Session expired/revoked — auto-reconnect stopped; the user must re-pair.</summary>
-    SessionExpired
+    SessionExpired,
+    /// <summary>The server's TLS certificate no longer matches the pinned one — auto-reconnect stopped; the user must
+    /// check the new fingerprint and re-pair.</summary>
+    CertificateRejected
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Security.Authentication;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Transport;
@@ -24,8 +25,13 @@ namespace EveUtils.Client.Messaging;
 /// </summary>
 public sealed class ServerConnection
 {
-    // Reconnect backoff: immediate, then growing, capped at 60 s.
-    private static readonly int[] BackoffSeconds = [0, 1, 3, 7, 15, 30, 60];
+    // Reconnect backoff: immediate, then growing, capped at 30 s. The cap is not free to raise. One reconnect cycle
+    // costs ReceiveDeadline + backoff + ConnectTimeout, and for as long as it runs this character publishes nothing,
+    // so every other client reads them as silent. FleetMemberPresence.SilentAfter (90 s, ET-70) is the budget that
+    // has to hold: 45 + 30 + 5 = 80 s does, 45 + 60 + 5 = 110 s would have dropped a pilot who is flying perfectly
+    // well off every other client's fleet screen. The 60 s step this table used to end on was never reached because
+    // the backoff could not grow past 1 s (ET-95) — fixing that is what made the cap matter.
+    internal static readonly int[] BackoffSeconds = [0, 1, 3, 7, 15, 30];
 
     // After this many consecutive failed reconnects, drop the cached channel and rebuild it: a long-lived channel can
     // wedge on a dead connection after a server restart (esp. through the Cloudflare tunnel) and never recover on its
@@ -38,6 +44,7 @@ public sealed class ServerConnection
     private readonly IClientSessionStore _sessionStore;
     private readonly IEventTypeRegistry _registry;
     private readonly IServiceProvider _services;
+    private readonly IServerTrustStore _trustStore;
     private readonly ILogger<ServerConnection> _logger;
 
     private readonly SemaphoreSlim _writeGate = new(1, 1);
@@ -59,6 +66,7 @@ public sealed class ServerConnection
         _sessionStore = sessionStore;
         _registry = registry;
         _services = services;
+        _trustStore = services.GetRequiredService<IServerTrustStore>();
         _logger = services.GetRequiredService<ILogger<ServerConnection>>();
     }
 
@@ -104,7 +112,7 @@ public sealed class ServerConnection
     private static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(2);
 
     // Max time to confirm a channel is reachable before reporting Connected (gates out unreachable couplings).
-    private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
+    internal static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>Writes an envelope up this server's stream. No-op until attached (not yet connected). A write that
     /// exceeds <see cref="WriteTimeout"/> (an unreachable server) fails fast as a <see cref="TimeoutException"/> so
@@ -142,8 +150,12 @@ public sealed class ServerConnection
 
     /// <summary>
     /// Managed connect + auto-reconnect. Attaches the bidi stream; when it drops, reconnects with
-    /// an increasing backoff up to 60 s, until cancelled. Attaches with the preferred character's session
+    /// an increasing backoff up to 30 s, until cancelled. Attaches with the preferred character's session
     /// when given (e.g. the just-paired char), else the most recent.
+    /// <para>Two failures end the loop instead of retrying, because no further attempt could succeed: a refresh the
+    /// server rejects (<see cref="ServerConnectionState.SessionExpired"/>) and a certificate the pin refuses
+    /// (<see cref="ServerConnectionState.CertificateRejected"/>). Both are shown to the user; everything else is
+    /// transient and retried.</para>
     /// </summary>
     private async Task ConnectLoopAsync(CancellationToken cancellationToken)
     {
@@ -170,6 +182,8 @@ public sealed class ServerConnection
                 // without this a coupled-but-unreachable server would sit in Connected and stall the shared
                 // outbound bus on every write (the bus fans each publish to all servers at once). If it can't
                 // connect within the window, this throws → reconnect with backoff, never marked Connected/live.
+                // It proves reachability and nothing more: it reports Ready as soon as the socket is up, with the
+                // TLS handshake still ahead of it — which is why the backoff reset below cannot live here (ET-95).
                 using (var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
                 {
                     connectCts.CancelAfter(ConnectTimeout);
@@ -182,9 +196,12 @@ public sealed class ServerConnection
                 using var call = client.Attach(headers, cancellationToken: cancellationToken);
                 _call = call;
                 SetState(ServerConnectionState.Connected);
-                attempt = 0; // reset backoff on a successful connect
 
-                await ReadLoopAsync(call, cancellationToken);
+                // The backoff resets on the first message off the wire, not here: attaching only means the socket
+                // and the stream object exist. A server presenting a certificate the pin refuses got this far every
+                // round, so resetting here pinned the backoff at 1 s, kept every failure at Warning and left the
+                // channel rebuild (which tests attempt) permanently unreachable (ET-95).
+                await ReadLoopAsync(call, () => attempt = 0, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -212,6 +229,23 @@ public sealed class ServerConnection
                         return;
                 }
             }
+            catch (Exception ex) when (IsCertificateRejected(ex))
+            {
+                // The certificate the server presents no longer matches the fingerprint pinned at pairing. Unlike
+                // everything in the transient branch below, the next attempt is refused in exactly the same way, so
+                // this stops instead of retrying — and says so, with the fingerprint the server offers now. A silent
+                // stop would be no improvement on the invisible 1 Hz loop it replaces: this is the one value the
+                // user has to check against the server itself before trusting it again.
+                _logger.LogError(ex,
+                    "Bus connection to {Server} (character {Character}) stopped: the server's TLS certificate does not "
+                    + "match the pinned one. Pinned {Pinned}, now presented {Presented}. Re-pair only once you have "
+                    + "confirmed the new fingerprint with the server itself.",
+                    _serverAddress, _characterId,
+                    _trustStore.GetFingerprint(_serverAddress) ?? "(none)",
+                    _channelFactory.PresentedFingerprint(_serverAddress) ?? "(unknown)");
+                SetState(ServerConnectionState.CertificateRejected);
+                return;
+            }
             catch (Exception ex)
             {
                 // Transient (network/server down/dropped stream) → reconnect with backoff. Log the first drop (we were
@@ -235,10 +269,39 @@ public sealed class ServerConnection
             // on its own — drop it so the next attempt builds a fresh one (what a client restart did, now automatic).
             if (attempt % ReconnectAttemptsBeforeChannelReset == 0)
             {
-                _logger.LogWarning("Bus connection to {Server} still down after {Attempt} attempts; rebuilding the channel.", _serverAddress, attempt);
+                // Damped like the failure above, and for the same reason: the counter used to be stuck at 1, so this
+                // rebuild never happened at all (ET-95). Now that it does, it repeats for as long as the server stays
+                // down — say it once per outage at Warning, then keep it at Debug rather than filling the log window.
+                if (attempt == ReconnectAttemptsBeforeChannelReset)
+                    _logger.LogWarning("Bus connection to {Server} still down after {Attempt} attempts; rebuilding the channel.", _serverAddress, attempt);
+                else
+                    _logger.LogDebug("Bus connection to {Server} still down after {Attempt} attempts; rebuilding the channel again.", _serverAddress, attempt);
                 _channelFactory.Invalidate(_serverAddress);
             }
         }
+    }
+
+    /// <summary>
+    /// Whether a failed attach was refused because the server's certificate did not match the pin. Classified on the
+    /// exception chain rather than the status code, because gRPC reports a refused handshake as
+    /// <see cref="StatusCode.Internal"/> — the same status it gives anything it cannot place, so the code cannot tell
+    /// the two apart. The <see cref="AuthenticationException"/> the TLS stack threw is the reliable marker, and on an
+    /// <see cref="RpcException"/> it hangs off <c>Status.DebugException</c>, not <c>InnerException</c>.
+    /// <para>Deliberately narrow: <c>PermissionDenied</c> and <c>Unimplemented</c> read as permanent but also come
+    /// from a proxy that is briefly serving something else, and a wrong verdict here costs the user a connection that
+    /// stays down until they act.</para>
+    /// </summary>
+    internal static bool IsCertificateRejected(Exception? ex)
+    {
+        for (var current = ex; current is not null; current = current.InnerException)
+        {
+            if (current is AuthenticationException)
+                return true;
+            if (current is RpcException rpc && rpc.Status.DebugException is { } debug && debug != rpc
+                && IsCertificateRejected(debug))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>Outcome of a server-session refresh attempt: distinguishes a definitive rejection
@@ -362,16 +425,28 @@ public sealed class ServerConnection
     // Max idle on the stream before treating the server as gone. The server pushes a keepalive every ~15s,
     // so this tolerates ~3 missed pings — enough to ride out jitter, short enough that a vanished server (a restart
     // behind the tunnel, where transport keepalive can't see the dead origin) is reconnected instead of wedging.
-    private static readonly TimeSpan ReceiveDeadline = TimeSpan.FromSeconds(45);
+    internal static readonly TimeSpan ReceiveDeadline = TimeSpan.FromSeconds(45);
 
-    private async Task ReadLoopAsync(AsyncDuplexStreamingCall<ClientEnvelope, ServerEnvelope> call, CancellationToken cancellationToken)
+    private async Task ReadLoopAsync(
+        AsyncDuplexStreamingCall<ClientEnvelope, ServerEnvelope> call,
+        Action onFirstMessage,
+        CancellationToken cancellationToken)
     {
         // Exceptions bubble to ConnectLoopAsync, which reconnects with backoff. A clean end of the stream
         // (server closed it) returns normally → the loop treats it as a disconnect too. The receive-deadline turns
         // a silently half-open stream into a reconnect rather than a wedge in Connected.
         var reader = call.ResponseStream;
+        var isFirst = true;
         while (await BusStreamReader.MoveNextWithDeadlineAsync(reader, ReceiveDeadline, cancellationToken))
         {
+            if (isFirst)
+            {
+                // A keepalive counts: anything that arrived proves the whole path — socket, TLS, session, attach —
+                // and that is what earns the reconnect counter its reset. Nothing before this point does (ET-95).
+                isFirst = false;
+                onFirstMessage();
+            }
+
             var server = reader.Current;
             if (BusKeepAlive.IsKeepAlive(server.Event))
                 continue; // liveness only — its arrival already reset the deadline

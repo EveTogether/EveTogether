@@ -15,10 +15,18 @@ public static class FleetMemberPresence
     /// <summary>
     /// How long a pilot's client may say nothing before we call them gone. Samples arrive at 1 Hz, so this is 90
     /// missed ones — deliberately far past the grooming's 30-60 s, because the transport itself is allowed to be
-    /// quieter than that while everything is fine: <c>ServerConnection.ReceiveDeadline</c> gives a half-open stream
-    /// 45 s before it is even noticed, and the reconnect that follows costs up to another 5 s connecting. A threshold
-    /// under a minute would therefore drop a pilot who is flying perfectly well off the screen on one network hiccup,
-    /// which is precisely what this must not do.
+    /// quieter than that while everything is fine. One full reconnect cycle in <c>ServerConnection</c> is the sum of
+    /// three of its constants, not two: <c>ReceiveDeadline</c> gives a half-open stream 45 s before it is even
+    /// noticed, <c>BackoffSeconds</c> then waits out its current step, and <c>ConnectTimeout</c> allows another 5 s
+    /// to reconnect. At the 30 s top of that backoff table the worst cycle is 45 + 30 + 5 = 80 s, and this threshold
+    /// is what leaves it room. A threshold under a minute would drop a pilot who is flying perfectly well off the
+    /// screen on one network hiccup, which is precisely what this must not do.
+    ///
+    /// <para>That makes the two numbers a pair: raising the backoff cap past 40 s pushes the worst cycle past this
+    /// threshold, and a pilot whose client is merely between reconnect attempts would read as offline. The cap was
+    /// 60 s when this was first written, but the backoff could not actually grow past its second step (ET-95), so the
+    /// arithmetic held by accident. Fixing the backoff meant capping it at 30 s; change one of the two and re-derive
+    /// the other.</para>
     ///
     /// This is not the clock that asks whether a figure is current — that is
     /// <c>FleetOverlayViewModel.StaleAfter</c>, five seconds, and it is a different question with a different answer.
