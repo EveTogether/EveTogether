@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
@@ -16,6 +17,8 @@ using Avalonia.Threading;
 using EveUtils.Client.Theming;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.Views;
+using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.Extensions.DependencyInjection;
@@ -153,6 +156,158 @@ public class ActivityWindowTests
         Assert.Equal("ELAPSED", model.ClockLabel);
         Assert.Equal("73:04", model.ClockText);   // past the hour rather than wrapping — a site is bounded by nothing
         Assert.Equal("still running", model.EndText);
+    }
+
+    [Fact]
+    public void FleetEnvelope_RebasesAnchorsBeforeTakingTheEarliest_AndCountsOnlyAnchoredMembers()
+    {
+        DateTime received = Anchor.AddMinutes(8);
+        var model = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
+
+        model.ApplyFleetEnvelope(
+        [
+            new MetricSample(1, 7, MetricKind.Location, 0, 1_000_000, AbyssalAnchorMs: 700_000),
+            new MetricSample(2, 7, MetricKind.Location, 0, 5_000_000, AbyssalAnchorMs: 4_731_000),
+            new MetricSample(3, 7, MetricKind.Location, 0, 1_000_000)
+        ], received);
+
+        Assert.Equal(received.AddSeconds(-300), model.AnchorUtc);
+        Assert.Equal(2, model.AnchoredFleetMemberCount);
+        Assert.Equal(3, model.FleetMemberCount);
+        Assert.Contains("2 of 3", model.Fleet.HeaderSummary);
+    }
+
+    [Fact]
+    public void FleetEnvelope_ExpiredAnchorsStillCountUnlikeMissingAnchors()
+    {
+        DateTime received = Anchor.AddMinutes(8);
+        var model = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
+
+        model.ApplyFleetEnvelope(
+        [
+            new MetricSample(1, 7, MetricKind.Location, 0, 1_500_000, AbyssalAnchorMs: 300_000),
+            new MetricSample(2, 7, MetricKind.Location, 0, 1_000_000)
+        ], received);
+
+        Assert.Equal(received.AddMinutes(-20), model.AnchorUtc);
+        Assert.Equal(1, model.AnchoredFleetMemberCount);
+        Assert.Equal(2, model.FleetMemberCount);
+    }
+
+    [Fact]
+    public void SiteRuns_CountFleetMembersWithoutAcceptingAutomaticAnchors()
+    {
+        MetricSample automaticAnchor = new(1, 7, MetricKind.Location, 0, 1_000_000, AbyssalAnchorMs: 700_000);
+        var site = new ActivityWindowViewModel(ActivityKind.Site, _Unused());
+
+        site.ApplyFleetEnvelope(
+        [
+            automaticAnchor,
+            new MetricSample(2, 7, MetricKind.Location, 0, 1_000_000)
+        ], Anchor.AddMinutes(8));
+
+        Assert.Equal(ActivityRunState.NotStarted, site.RunState);
+        Assert.Null(site.AnchorUtc);
+        Assert.Equal(2, site.FleetMemberCount);
+        Assert.Contains("fleet of 2 members", site.Fleet.HeaderSummary);
+    }
+
+    [Fact]
+    public void ManualStart_PreservesKnownFleetMembership()
+    {
+        var model = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
+
+        model.ApplyFleetEnvelope(
+        [
+            new MetricSample(1, 7, MetricKind.Location, 0, 1_000_000, AbyssalAnchorMs: 700_000),
+            new MetricSample(2, 7, MetricKind.Location, 0, 1_000_000)
+        ], Anchor.AddMinutes(8));
+        model.StartManualRun(Anchor.AddMinutes(2));
+
+        Assert.Equal(2, model.FleetMemberCount);
+        Assert.Equal(1, model.AnchoredFleetMemberCount);
+    }
+
+    [Fact]
+    public void StoppedRuns_RejectAutomaticAnchors()
+    {
+        MetricSample automaticAnchor = new(1, 7, MetricKind.Location, 0, 1_000_000, AbyssalAnchorMs: 700_000);
+        var stopped = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
+        stopped.ApplyFleetEnvelope([automaticAnchor], Anchor.AddMinutes(8));
+        DateTime automaticStart = stopped.AnchorUtc ?? throw new InvalidOperationException("Automatic anchor did not start the run.");
+        stopped.StopRun(Anchor.AddMinutes(4));
+
+        stopped.ApplyFleetEnvelope([automaticAnchor], Anchor.AddMinutes(8));
+
+        Assert.Equal(ActivityRunState.Stopped, stopped.RunState);
+        Assert.Equal(automaticStart, stopped.AnchorUtc);
+    }
+
+    [Fact]
+    public void FleetEnvelope_WithoutAnchorsReportsTheGapWithoutStartingARun()
+    {
+        var model = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
+
+        model.ApplyFleetEnvelope([new MetricSample(1, 7, MetricKind.Location, 0, 1_000_000)], Anchor.AddMinutes(8));
+
+        Assert.Equal(ActivityRunState.NotStarted, model.RunState);
+        Assert.Equal(0, model.AnchoredFleetMemberCount);
+        Assert.Equal(1, model.FleetMemberCount);
+    }
+
+    [Fact]
+    public void ManualRun_AutomaticEnvelopeDoesNotSilentlyMoveTheStart()
+    {
+        var model = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
+        DateTime manualStart = Anchor.AddMinutes(2);
+        model.StartManualRun(manualStart);
+
+        model.ApplyFleetEnvelope(
+        [new MetricSample(1, 7, MetricKind.Location, 0, 1_000_000, AbyssalAnchorMs: 100_000)], Anchor.AddMinutes(8));
+
+        Assert.Equal(ActivityRunState.Running, model.RunState);
+        Assert.Equal(manualStart, model.AnchorUtc);
+        Assert.Equal(manualStart.ToLocalTime().ToString("HH:mm:ss"), model.StartText);
+    }
+
+    [Fact]
+    public void AutomaticEnvelope_ManualStartOverridesTheSuggestion()
+    {
+        var model = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
+        DateTime received = Anchor.AddMinutes(8);
+
+        model.ApplyFleetEnvelope(
+        [new MetricSample(1, 7, MetricKind.Location, 0, 1_000_000, AbyssalAnchorMs: 700_000)], received);
+
+        Assert.Equal("estimated from fleet", model.RunOriginText);
+        Assert.True(model.IsStartButtonVisible);
+        Assert.Equal("OVERRIDE START", model.StartButtonText);
+
+        model.StartManualRun(Anchor.AddMinutes(5));
+
+        Assert.Equal("manual", model.RunOriginText);
+        Assert.Equal(Anchor.AddMinutes(5), model.AnchorUtc);
+        Assert.False(model.IsStartButtonVisible);
+    }
+
+    [Fact]
+    public void ManualRun_StartStopAndRestart_UsesThreeDistinctStatesAndKeepsStoppedFigures()
+    {
+        var model = new ActivityWindowViewModel(ActivityKind.Site, _Unused());
+
+        Assert.Equal(ActivityRunState.NotStarted, model.RunState);
+        model.StartManualRun(Anchor);
+        model.Refresh(Anchor.AddMinutes(9));
+        model.StopRun(Anchor.AddMinutes(9));
+        model.Refresh(Anchor.AddMinutes(12));
+
+        Assert.Equal(ActivityRunState.Stopped, model.RunState);
+        Assert.Equal("09:00", model.ClockText);
+        Assert.Equal(Anchor.AddMinutes(9).ToLocalTime().ToString("HH:mm:ss"), model.EndText);
+
+        model.StartManualRun(Anchor.AddMinutes(12));
+        Assert.Equal(ActivityRunState.Running, model.RunState);
+        Assert.Equal(Anchor.AddMinutes(12), model.AnchorUtc);
     }
 
     // ── AC-3 — weather and tier, in two clicks, remembered ──────────────────────────────────────────
@@ -378,6 +533,34 @@ public class ActivityWindowTests
         asking.Close();
     }
 
+    [AvaloniaFact]
+    public void TheWindowRenders_NotStarted_Running_AndStopped()
+    {
+        var notStarted = _Open(new ActivityWindowViewModel(ActivityKind.Site, _Unused()), expanded: true);
+        Assert.NotNull(notStarted.CaptureRenderedFrame());
+        Assert.True(_Button(notStarted, "StartRunButton").IsVisible);
+        Assert.False(_Button(notStarted, "StopRunButton").IsVisible);
+        OverlayShots.Capture(notStarted, "eveutils-activity-not-started");
+        notStarted.Close();
+
+        var runningModel = new ActivityWindowViewModel(ActivityKind.Site, _Unused());
+        runningModel.StartManualRun(DateTime.UtcNow.AddMinutes(-6));
+        var running = _Open(runningModel, expanded: true);
+        Assert.NotNull(running.CaptureRenderedFrame());
+        Assert.False(_Button(running, "StartRunButton").IsVisible);
+        Assert.True(_Button(running, "StopRunButton").IsVisible);
+        OverlayShots.Capture(running, "eveutils-activity-running");
+        running.Close();
+
+        runningModel.StopRun(DateTime.UtcNow);
+        var stopped = _Open(runningModel, expanded: true);
+        Assert.NotNull(stopped.CaptureRenderedFrame());
+        Assert.True(_Button(stopped, "StartRunButton").IsVisible);
+        Assert.False(_Button(stopped, "StopRunButton").IsVisible);
+        OverlayShots.Capture(stopped, "eveutils-activity-stopped");
+        stopped.Close();
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>A provider nothing in these tests reaches into: only the setting round-trip touches the client DI,
@@ -415,8 +598,14 @@ public class ActivityWindowTests
         var window = new ActivityWindow(model);
         window.Show();
         Dispatcher.UIThread.RunJobs();
+        window.Width = 560;
+        window.Height = 560;
+        Dispatcher.UIThread.RunJobs();
         return window;
     }
+
+    private static Button _Button(ActivityWindow window, string name) =>
+        window.FindControl<Button>(name) ?? throw new InvalidOperationException($"{name} was not rendered");
 
     /// <summary>Every colour the frame actually contains. Exact matches only: an accent that is on screen is on
     /// screen at full strength somewhere, and a softened or antialiased near-miss proves nothing either way.</summary>

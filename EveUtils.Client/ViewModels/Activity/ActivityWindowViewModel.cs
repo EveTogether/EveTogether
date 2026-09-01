@@ -7,6 +7,8 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Shared.Cqrs;
+using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Queries;
@@ -49,6 +51,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     private readonly IServiceProvider _services;
     private DispatcherTimer? _timer;
+    private bool _isManualRun;
 
     public ActivityWindowViewModel(ActivityKind kind, IServiceProvider services)
     {
@@ -85,6 +88,26 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <summary>The envelope START — the earliest moment anyone in the run could be proved to be in it. Solo for
     /// now; phase 2 takes the <c>Min()</c> over the fleet's re-based anchors and counts how many it is based on.</summary>
     [ObservableProperty] private DateTime? _anchorUtc;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ClockHint))]
+    [NotifyPropertyChangedFor(nameof(IsStartButtonVisible))]
+    [NotifyPropertyChangedFor(nameof(IsStopButtonVisible))]
+    [NotifyPropertyChangedFor(nameof(RunOriginText))]
+    [NotifyPropertyChangedFor(nameof(StartButtonText))]
+    private ActivityRunState _runState;
+
+    [ObservableProperty] private DateTime? _stoppedAtUtc;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ClockHint))]
+    [NotifyPropertyChangedFor(nameof(FleetStatusText))]
+    private int _fleetMemberCount = 1;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ClockHint))]
+    [NotifyPropertyChangedFor(nameof(FleetStatusText))]
+    private int _anchoredFleetMemberCount;
 
     /// <summary>The solar system the run is in. Always null in the abyss — a pocket has no location, and the window
     /// says so rather than leaving the field blank.</summary>
@@ -178,14 +201,32 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public string HeaderTitle => IsAbyssal ? "ABYSSAL RUN" : "SITE RUN";
 
+    public bool IsStartButtonVisible => RunState != ActivityRunState.Running || !_isManualRun;
+
+    public bool IsStopButtonVisible => RunState == ActivityRunState.Running;
+
+    public string FleetStatusText => FleetMemberCount > 1
+        ? IsAbyssal
+            ? $"based on {AnchoredFleetMemberCount} of {FleetMemberCount} members"
+            : $"fleet of {FleetMemberCount} members"
+        : "solo";
+
+    public string RunOriginText => RunState == ActivityRunState.NotStarted
+        ? "not started"
+        : _isManualRun ? "manual" : "estimated from fleet";
+
+    public string StartButtonText => RunState == ActivityRunState.Running ? "OVERRIDE START" : "START";
+
     /// <summary>
     /// What the clock does not say on its face. <c>AbyssalSpace.Describe</c> writes a "+" for this; here it is a
     /// sentence under the figure instead, which is where it ended up after the first round of review.
     /// </summary>
     public string ClockHint => IsAbyssal
-        ? "Solo: the envelope is your own run. The clock is a floor — the moment of entry cannot be observed, "
+        ? $"{FleetStatusText}: the envelope is the earliest anchored run. The clock is a floor — the moment of entry cannot be observed, "
           + "so this is at most what is left."
-        : "Solo: the envelope is your own run.";
+        : RunState == ActivityRunState.Stopped
+            ? "Stopped runs retain their figures; start creates a new run."
+            : "Manual start and stop are the only source for a site run.";
 
     // ── Section bodies ──────────────────────────────────────────────────────────────────────────────
 
@@ -282,6 +323,69 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [RelayCommand]
     private void OpenPicker() => IsPickerOpen = true;
 
+    [RelayCommand]
+    private void StartRun() => StartManualRun(DateTime.UtcNow);
+
+    [RelayCommand]
+    private void StopRun() => StopRun(DateTime.UtcNow);
+
+    public void StartManualRun(DateTime nowUtc)
+    {
+        AnchorUtc = nowUtc;
+        StoppedAtUtc = null;
+        // A stopped manual result is final; a later ESI anchor cannot reopen it.
+        _isManualRun = true;
+        RunState = ActivityRunState.Running;
+        OnPropertyChanged(nameof(IsStartButtonVisible));
+        OnPropertyChanged(nameof(RunOriginText));
+        OnPropertyChanged(nameof(StartButtonText));
+        Refresh(nowUtc);
+    }
+
+    public void StopRun(DateTime nowUtc)
+    {
+        if (RunState != ActivityRunState.Running)
+            return;
+
+        StoppedAtUtc = nowUtc;
+        RunState = ActivityRunState.Stopped;
+        Refresh(nowUtc);
+    }
+
+    public void ApplyFleetEnvelope(IReadOnlyList<MetricSample> samples, DateTime receivedUtc)
+    {
+        List<MetricSample> members = samples
+            .Where(sample => sample.Kind == MetricKind.Location)
+            .GroupBy(sample => sample.CharacterId)
+            .Select(group => group.OrderByDescending(sample => sample.UnixMs).First())
+            .ToList();
+
+        FleetMemberCount = members.Count;
+
+        if (!IsAbyssal)
+        {
+            AnchoredFleetMemberCount = 0;
+            Refresh(receivedUtc);
+            return;
+        }
+
+        List<DateTime> anchors = members
+            .Select(sample => AbyssalSpace.AnchorFromWire(sample.AbyssalAnchorMs, sample.UnixMs, receivedUtc))
+            .OfType<DateTime>()
+            .ToList();
+
+        AnchoredFleetMemberCount = anchors.Count;
+
+        if (RunState != ActivityRunState.Stopped && !_isManualRun && anchors.Count > 0)
+        {
+            AnchorUtc = anchors.Min();
+            StoppedAtUtc = null;
+            RunState = ActivityRunState.Running;
+        }
+
+        Refresh(receivedUtc);
+    }
+
     public void Dispose()
     {
         _timer?.Stop();
@@ -292,7 +396,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     private void _RefreshClock(DateTime nowUtc)
     {
-        ClockLabel = IsAbyssal ? "TIME LEFT" : "ELAPSED";
+        DateTime effectiveNow = StoppedAtUtc ?? nowUtc;
+        ClockLabel = IsAbyssal
+            ? RunState == ActivityRunState.Stopped ? "TIME LEFT AT STOP" : "TIME LEFT"
+            : "ELAPSED";
 
         if (AnchorUtc is not { } start)
         {
@@ -308,21 +415,21 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         if (!IsAbyssal)
         {
-            ClockText = _Elapsed(nowUtc - start);
+            ClockText = _Elapsed(effectiveNow - start);
             IsClockWarning = false;
             IsClockCritical = false;
-            EndText = "still running";
+            EndText = StoppedAtUtc is { } stopped ? _LocalTime(stopped) : "still running";
             return;
         }
 
         // END is the deadline, not the moment the last pilot got out: at RunLimit the ship and the pod are gone,
         // and that is the only end time worth putting on screen while the run is still going.
-        EndText = _LocalTime(start + AbyssalSpace.RunLimit);
+        EndText = StoppedAtUtc is { } stoppedAt ? _LocalTime(stoppedAt) : _LocalTime(start + AbyssalSpace.RunLimit);
 
         // No remaining time is the loudest state there is, not the absence of one: past the deadline we are already
         // wrong about something, and a lifted `null <= CriticalAt` would quietly have shown that in the resting
         // colour.
-        var remaining = AbyssalSpace.Remaining(start, nowUtc);
+        var remaining = AbyssalSpace.Remaining(start, effectiveNow);
         ClockText = remaining is { } left ? _Elapsed(left) : NoClock;
         IsClockCritical = remaining is null || remaining <= CriticalAt;
         IsClockWarning = remaining > CriticalAt && remaining <= WarningAt;
@@ -332,7 +439,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         Activity.HeaderSummary = _ActivitySummary();
         Fit.HeaderSummary = "waiting on ET-40";
-        Fleet.HeaderSummary = "solo — no fleet";
+        Fleet.HeaderSummary = FleetMemberCount > 1 ? FleetStatusText : "solo — no fleet";
         Bounty.HeaderSummary = IsAbyssal ? "— no bounty in abyssal space" : "no payouts yet";
         Loot.HeaderSummary = "waiting on ET-65";
     }
