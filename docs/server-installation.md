@@ -79,8 +79,10 @@ Set `Esi__CallbackUri`, `Server__Name` and the database settings in the compose 
 docker compose pull && docker compose up -d && docker compose logs -f
 ```
 
-> Until the image is published, build locally instead: uncomment `build: .` in the compose file and run
-> `docker compose up -d --build` (skip the pull). If you change `Server__HttpsPort`, match the compose port mapping.
+> Prefer to build from source instead of pulling the published image? Add a `docker-compose.override.yml`
+> next to `docker-compose.yml` with `build: .` and `pull_policy: never` — Compose reads it automatically,
+> so `docker compose up -d --build` builds your checkout instead. Neither the override file nor your `.env`
+> is committed. If you change `Server__HttpsPort`, match the compose port mapping.
 
 ### docker run
 

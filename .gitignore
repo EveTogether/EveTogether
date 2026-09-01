@@ -22,6 +22,10 @@ appsettings.Development.json
 appsettings.Staging.json
 appsettings.Production.json
 
+# Local Docker Compose overrides + env (may contain secrets) — the committed docker-compose.yml stays image-based
+docker-compose.override.yml
+.env
+
 # Qodana — generated scan report + cache (never commit)
 qodana.sarif.json
 .qodana/
