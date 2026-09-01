@@ -77,6 +77,26 @@ public class ActivityWindowTests
         Assert.Equal(lineTime, observation.LastObservedAtUtc);
     }
 
+    /// <summary>
+    /// The window translates the gamelog's direction into the run store's, and does not assume one. An enemy that
+    /// only shot at you is stored as <c>From</c>; one you shot at is <c>To</c>. The combat feed fires for both.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(DamageDirection.Outgoing, EveUtils.Shared.Modules.Runs.Enums.EnemyObservationDirection.To)]
+    [InlineData(DamageDirection.Incoming, EveUtils.Shared.Modules.Runs.Enums.EnemyObservationDirection.From)]
+    public void ObservedCombat_KeepsTheDirectionItWasSeenIn(
+        DamageDirection observed, EveUtils.Shared.Modules.Runs.Enums.EnemyObservationDirection expected)
+    {
+        using ServiceProvider services = _ObservationServices();
+        var model = new ActivityWindowViewModel(ActivityKind.Site, services);
+        model.StartManualRun(Anchor);
+        model.ApplyLocation(new EsiLocationReading(30000142, Anchor), _Character());
+
+        _ObserveCombat(model, Anchor.AddMinutes(1), observed);
+
+        Assert.Equal(expected, Assert.Single(model.EnemyObservations).Direction);
+    }
+
     [AvaloniaFact]
     public void AutomaticAbyssalRun_CollectsCombat()
     {
@@ -815,11 +835,12 @@ public class ActivityWindowTests
 
     private static void _ObserveCombat(ActivityWindowViewModel model) => _ObserveCombat(model, Anchor.AddMinutes(1));
 
-    private static void _ObserveCombat(ActivityWindowViewModel model, DateTime observedAtUtc)
+    private static void _ObserveCombat(ActivityWindowViewModel model, DateTime observedAtUtc,
+        DamageDirection direction = DamageDirection.Outgoing)
     {
         MethodInfo handler = typeof(ActivityWindowViewModel).GetMethod("_OnCombatObserved", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("combat observation handler was not found");
-        handler.Invoke(model, [90000001, "Centii Servant", observedAtUtc, DamageDirection.Outgoing]);
+        handler.Invoke(model, [90000001, "Centii Servant", observedAtUtc, direction]);
         Dispatcher.UIThread.RunJobs();
     }
 

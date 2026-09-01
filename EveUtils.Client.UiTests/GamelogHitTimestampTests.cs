@@ -64,4 +64,27 @@ public class GamelogHitTimestampTests
 
         Assert.Equal(hitTime, observedAt);
     }
+
+    /// <summary>
+    /// The feed fires for <b>both</b> directions — the gamelog carries <c>250 to Centii Scavenger</c> and
+    /// <c>1 from Centii Servant</c> alike — and hands each subscriber the real one. Without this a rat that only
+    /// ever shot at you would be stored as one you shot at, which is a fact nobody measured.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(DamageDirection.Outgoing)]
+    [InlineData(DamageDirection.Incoming)]
+    public async Task CombatObservation_CarriesTheRealDamageDirection(DamageDirection direction)
+    {
+        using var instance = TestClientInstance.Create();
+        var gamelog = instance.Services.GetRequiredService<GamelogClientService>();
+        gamelog.MapCharacter(90000123, "Pilot");
+
+        DamageDirection? observed = null;
+        gamelog.CombatObserved += (_, _, _, d) => observed = d;
+
+        await gamelog.AddHitAsync("Pilot", direction, 500, "Centii Servant", HitQuality.Hits,
+            new DateTime(2030, 1, 1, 12, 0, 0, DateTimeKind.Utc));
+
+        Assert.Equal(direction, observed);
+    }
 }
