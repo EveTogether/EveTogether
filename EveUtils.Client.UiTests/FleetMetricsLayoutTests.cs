@@ -72,11 +72,13 @@ public class FleetMetricsLayoutTests
     // Enough members to fill the widest row the grid ever draws (four columns at 1400), so "does the last column end
     // flush with the panel" is a question the fixture can actually answer. A half-empty last row is the panel doing
     // its job — it keeps the empty columns — not a strip of whitespace.
-    private static FakeFleetClient CrowdedRoster() => new()
+    private static FakeFleetClient CrowdedRoster() => RosterOf(8);
+
+    private static FakeFleetClient RosterOf(int members) => new()
     {
         Members = [
             new FleetMemberInfo(1, Commander, -1, -1, FleetRole.FleetCommander, false),
-            .. Enumerable.Range(0, 7).Select(i =>
+            .. Enumerable.Range(0, members - 1).Select(i =>
                 new FleetMemberInfo(i + 2, Member + i, 1, 1, FleetRole.SquadMember, false)),
         ],
     };
@@ -560,6 +562,62 @@ public class FleetMetricsLayoutTests
         Assert.All(cards, c => Assert.True(
             c.Width >= Math.Min(panel.Bounds.Width, 318) - 1,
             $"a card fell below the minimum in a panel of {panel.Bounds.Width}: {c.Width}"));
+    }
+
+    /// <summary>
+    /// The cards start at the TOP of the list, not floating in the middle of it. A panel whose
+    /// <c>ArrangeOverride</c> hands back less than the rect it was given is centred in the remainder — Avalonia's
+    /// <c>ArrangeCore</c> puts <c>VerticalAlignment.Stretch</c> on the same branch as <c>Center</c> — which parked a
+    /// five-card grid halfway down its viewport, with a gap between the legend and the first row and a smaller one
+    /// underneath. The <see cref="WrapPanel"/> this replaced returned its full arrange size and never tripped it.
+    /// Measured at the panel, not at the ItemsControl: everything above it stayed at Y=0 the whole time.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(Shell.OwnWindow)]
+    [InlineData(Shell.DockedTab)]
+    public async Task GridLayout_StartsAtTheTop_WhenTheCardsDoNotFillTheViewport(Shell shell)
+    {
+        using var instance = CreateInstance();
+
+        // Five members over three columns at 1000: two rows of cards, shorter than the viewport. The operator's case.
+        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Grid, shell, 1000, RosterOf(5));
+
+        ItemsControl host = MemberHost(root, vm);
+        FillGridPanel panel = Assert.Single(host.GetVisualDescendants().OfType<FillGridPanel>());
+        Assert.True(panel.DesiredSize.Height < panel.Bounds.Height,
+            "this only bites when the cards are shorter than the viewport, and here they are not");
+
+        Assert.Equal(0, panel.Bounds.Y, 1);
+        Assert.Equal(0, (panel.TranslatePoint(default, host) ?? new Point(0, -1)).Y, 1);
+
+        Control first = Assert.IsAssignableFrom<Control>(host.ContainerFromIndex(0));
+        Assert.Equal(0, (first.TranslatePoint(default, host) ?? new Point(0, -1)).Y, 1);
+    }
+
+    /// <summary>The other side of that rule: filling the viewport must not cost the rows below the fold. A grid
+    /// taller than its viewport still reports the taller extent and still scrolls to the cards underneath.</summary>
+    [AvaloniaFact]
+    public async Task GridLayout_StillScrolls_WhenTheCardsOutgrowTheViewport()
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Grid, Shell.OwnWindow, 1000, RosterOf(12));
+
+        ItemsControl host = MemberHost(root, vm);
+        ScrollViewer scroller = root.GetVisualDescendants().OfType<ScrollViewer>()
+            .First(s => s.GetVisualDescendants().Contains(host));
+
+        Assert.True(scroller.Extent.Height > scroller.Viewport.Height,
+            $"twelve cards should outgrow the viewport, got extent {scroller.Extent.Height} in {scroller.Viewport.Height}");
+
+        Control first = Assert.IsAssignableFrom<Control>(host.ContainerFromIndex(0));
+        double before = (first.TranslatePoint(default, root) ?? default).Y;
+
+        scroller.Offset = scroller.Offset.WithY(120);
+        Dispatcher.UIThread.RunJobs();
+        root.UpdateLayout();
+
+        Assert.Equal(120, scroller.Offset.Y, 1);
+        Assert.Equal(before - 120, (first.TranslatePoint(default, root) ?? default).Y, 1);
     }
 
     // ET-108's real trap: the drop marker used to read the PANEL TYPE to decide whether it stands between two

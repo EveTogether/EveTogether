@@ -179,6 +179,51 @@ public class FillGridPanelTests
         Assert.Equal(90 + 40, panel.DesiredSize.Height, Tolerance);
     }
 
+    /// <summary>
+    /// The rows start at the TOP of whatever rect the panel is handed, and the panel takes that whole rect. A control
+    /// whose <c>ArrangeOverride</c> hands back LESS than it was given is centred in the remainder — Avalonia's
+    /// <c>ArrangeCore</c> puts <c>VerticalAlignment.Stretch</c> on the same branch as <c>Center</c> — which parked a
+    /// grid shorter than its viewport halfway down it, with a gap above the first row. Measure still reports the
+    /// content height: that is what a scroller's extent is built from, and it must not be inflated to the viewport.
+    /// </summary>
+    [AvaloniaFact]
+    public void TakesTheWholeHeightItIsGiven_SoShortContentStaysAtTheTop()
+    {
+        var panel = new FillGridPanel { MinItemWidth = 100, ColumnSpacing = 0, RowSpacing = 0 };
+        for (var i = 0; i < 2; i++)
+            panel.Children.Add(new Border { Height = 100 });
+
+        panel.Measure(new Size(200, 500));
+        panel.Arrange(new Rect(0, 0, 200, 500));
+
+        Assert.Equal(100, panel.DesiredSize.Height, Tolerance);
+        Assert.Equal(500, panel.Bounds.Height, Tolerance);
+        Assert.Equal(0, panel.Bounds.Y, Tolerance);
+        Assert.All(panel.Children, c => Assert.Equal(0, c.Bounds.Y, Tolerance));
+    }
+
+    /// <summary>The other side of the same rule: content taller than the rect must not be squashed into it, because
+    /// the rows below the fold are what there is to scroll to.</summary>
+    [AvaloniaFact]
+    public void KeepsItsContentHeight_WhenTheRowsOutgrowTheRect()
+    {
+        var panel = new FillGridPanel { MinItemWidth = 100, ColumnSpacing = 0, RowSpacing = 0 };
+        for (var i = 0; i < 8; i++)
+            panel.Children.Add(new Border { Height = 100 });
+
+        // Unbounded height, the way a ScrollContentPresenter measures a child it intends to scroll: a bounded
+        // measure would have the framework clamp DesiredSize to the viewport before the panel is ever consulted.
+        panel.Measure(new Size(200, double.PositiveInfinity));
+
+        // Four rows of 100 in two columns — the measure the scroller turns into its extent.
+        Assert.Equal(400, panel.DesiredSize.Height, Tolerance);
+
+        // Arranged at its full extent, the way a ScrollContentPresenter arranges a child it cannot fit.
+        panel.Arrange(new Rect(0, 0, 200, 400));
+        Assert.Equal(400, panel.Bounds.Height, Tolerance);
+        Assert.Equal(300, panel.Children[6].Bounds.Y, Tolerance);
+    }
+
     /// <summary>An unbounded width has no leftover to divide, so every card falls back to its minimum instead of to
     /// infinity — a horizontal scroller must not be handed a card of NaN width.</summary>
     [AvaloniaFact]

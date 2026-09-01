@@ -118,7 +118,14 @@ public sealed class FillGridPanel : Panel
             rowHeight = Math.Max(rowHeight, child.DesiredSize.Height);
         }
 
-        return new Size(finalSize.Width, top + rowHeight);
+        // Take the WHOLE rect that was offered, not just the part the rows fill. A panel that hands back less than
+        // it was given is centred in the remainder: Avalonia's ArrangeCore treats VerticalAlignment.Stretch on the
+        // same branch as Center, so returning the content height parked a short grid halfway down its viewport with
+        // a gap above the first row. Reporting the full height is also what WrapPanel did here before.
+        // Only the ARRANGE size: MeasureOverride still reports the content height, which is what the scroller's
+        // extent and its scrollbar are built from — so a grid taller than the viewport still scrolls, and there
+        // finalSize.Height already IS the content height (the presenter arranges its child at max(desired, viewport)).
+        return new Size(finalSize.Width, Math.Max(finalSize.Height, top + rowHeight));
     }
 
     /// <summary>How many columns of at least <see cref="MinItemWidth"/> fit in <paramref name="available"/>. Never
