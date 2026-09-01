@@ -37,10 +37,9 @@ using EveUtils.Shared.Modules.Settings.Queries;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.Extensions.DependencyInjection;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
-using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 // Aliased rather than imported wholesale: that namespace also holds an ActivityKind, which would collide with the
 // window's own.
-using EnemyObservationDirection = EveUtils.Shared.Modules.Runs.Enums.EnemyObservationDirection;
+using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 
 namespace EveUtils.Client.ViewModels.Activity;
 
@@ -137,7 +136,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             .Select((strategy, index) => new ActivityChoice { Index = index, Label = strategy })
             .ToList();
 
-        Sections = [Activity, Fit, Fleet, Bounty, Loot];
+        Sections = [Activity, Enemies, Fit, Fleet, Bounty, Loot];
         Refresh(DateTime.UtcNow);
     }
 
@@ -262,9 +261,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(HasShipRestriction))]
     private IReadOnlyList<SdeSite> _matchedSites = [];
 
-    // ── The five sections ───────────────────────────────────────────────────────────────────────────
+    // ── The six sections ────────────────────────────────────────────────────────────────────────────
 
     public ActivitySection Activity { get; } = new() { Title = "ACTIVITY", IsExpanded = true };
+
+    /// <summary>One row per enemy type, on its own rather than inside ACTIVITY: a site's worth of rats pushed every
+    /// other section under the fold (ET-115).</summary>
+    public ActivitySection Enemies { get; } = new() { Title = "ENEMIES" };
 
     public ActivitySection Fit { get; } = new() { Title = "FIT" };
 
@@ -292,7 +295,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public string FitSummary => HasChosenFit ? FitSelectionText : FitDetectionText;
 
-    /// <summary>All five in window order — what the test walks to prove none of them is ever silent.</summary>
+    /// <summary>All six in window order — what the test walks to prove none of them is ever silent.</summary>
     public IReadOnlyList<ActivitySection> Sections { get; }
 
     // ── Weather and tier ────────────────────────────────────────────────────────────────────────────
@@ -752,7 +755,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     }
 
     /// <summary>Stop the clock. The stored run stays open until SAVE or DISCARD: loot is copied out of the wreck
-    /// after the last rat, and it belongs to the run that produced it.</summary>
+    /// after the last rat, and it belongs to the run that produced it. The enemy list stays for the same reason and
+    /// more so — its count is typed by hand, and nobody types it while still being shot at (ET-115).</summary>
     public void StopRun(DateTime nowUtc)
     {
         if (RunState != ActivityRunState.Running)
@@ -760,8 +764,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         StoppedAtUtc = nowUtc;
         RunState = ActivityRunState.Stopped;
-        _enemyObservations = null;
-        OnPropertyChanged(nameof(EnemyObservations));
         Refresh(nowUtc);
     }
 
@@ -830,6 +832,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         }
 
         RunState = ActivityRunState.Saved;
+        _EndEnemyObservations();
         if (RunLoot is not null)
             await RunLoot.RefreshAsync();
         Refresh(nowUtc);
@@ -876,8 +879,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         RunState = ActivityRunState.NotStarted;
         _bounties.Clear();
         BountyIsk = 0;
-        _enemyObservations = null;
-        OnPropertyChanged(nameof(EnemyObservations));
+        _EndEnemyObservations();
         if (RunLoot is not null)
             await RunLoot.RefreshAsync();
         Refresh(nowUtc);
@@ -1008,18 +1010,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _timer = null;
     }
 
-    // The gamelog's own vocabulary translated into the run store's at this one boundary: outgoing damage is an
-    // enemy you shot at, incoming is one that shot you. Both arrive here — the event fires for either.
+    // The event fires for damage either way — "250 to Centii Scavenger" and "1 from Centii Servant" alike — and both
+    // are the same kind of enemy, so the direction is dropped here rather than carried into the list (ET-115).
     private void _OnCombatObserved(int characterId, string target, DateTime observedAtUtc, DamageDirection direction)
     {
         if (RunState != ActivityRunState.Running)
             return;
 
-        EnemyObservationDirection observed = direction is DamageDirection.Outgoing
-            ? EnemyObservationDirection.To
-            : EnemyObservationDirection.From;
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            _enemyObservations?.Record(characterId, target, observedAtUtc, observed));
+            _enemyObservations?.Record(characterId, target, observedAtUtc));
     }
 
     private void _StartEnemyObservations()
@@ -1031,7 +1030,23 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _enemyObservations = sde is null || _runCharacterId is null ? null
             : new RunEnemyObservationCollector(_runCharacterId.Value,
                 name => sde.TryGetTypeId(name, out int typeId) ? typeId : null);
+        if (_enemyObservations is not null)
+            // Only the summary: re-announcing the list itself while a count is being typed would rebind the editor
+            // under the cursor. The rows are an ObservableCollection — the list keeps itself up to date.
+            _enemyObservations.Changed += _RefreshSummaries;
         OnPropertyChanged(nameof(EnemyObservations));
+        _RefreshSummaries();
+    }
+
+    /// <summary>Let go of the list, once the run it belongs to is committed or thrown away.</summary>
+    private void _EndEnemyObservations()
+    {
+        if (_enemyObservations is not null)
+            _enemyObservations.Changed -= _RefreshSummaries;
+
+        _enemyObservations = null;
+        OnPropertyChanged(nameof(EnemyObservations));
+        _RefreshSummaries();
     }
 
     // ── Internals ───────────────────────────────────────────────────────────────────────────────────
@@ -1086,6 +1101,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private void _RefreshSummaries()
     {
         Activity.HeaderSummary = _ActivitySummary();
+        Enemies.HeaderSummary = _EnemySummary();
         Fit.HeaderSummary = FitSummary;
         // Never "solo": nothing here can observe the absence of a fleet, only the presence of one. Without any the
         // section is hidden (IsFleetShown) and this line is not on screen at all.
@@ -1142,6 +1158,19 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         return Weather is { } weather && TierIndex is { } tier
             ? $"{Tiers[tier]} T{tier} · {weather.Name} · no location"
             : "not set yet · no location";
+    }
+
+    /// <summary>Shut, the section still has to answer both halves of the question it exists for: which kinds were
+    /// seen, and how many of them carry a count. A count of zero is not stored (ET-106), so "seen" and "counted"
+    /// are different numbers and the header is the only place they are both visible.</summary>
+    private string _EnemySummary()
+    {
+        int types = EnemyObservations.Count;
+        if (types == 0)
+            return RunState == ActivityRunState.NotStarted ? "no run watched yet" : "no enemies seen yet";
+
+        int counted = EnemyObservations.Count(observation => observation.IsCounted);
+        return $"{types} {(types == 1 ? "type" : "types")} · {(counted == 0 ? "none counted" : $"{counted} counted")}";
     }
 
     /// <summary>The shut header carries what the run demands, not only what it is called — the same description the

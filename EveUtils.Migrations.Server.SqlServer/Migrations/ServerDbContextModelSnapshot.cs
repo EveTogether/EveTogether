@@ -870,7 +870,7 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<int>("Direction")
+                    b.Property<int>("Count")
                         .HasColumnType("int");
 
                     b.Property<string>("EnemyName")
