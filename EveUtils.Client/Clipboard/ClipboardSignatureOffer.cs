@@ -20,6 +20,9 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
     private readonly IToastService _toasts;
     private readonly ISdeAccessor _sde;
     private readonly IDialogService _dialogs;
+
+    // Only here because ActivityWindowViewModel's constructor asks for one; a factory is the upgrade once a second
+    // caller needs the same thing.
     private readonly IServiceProvider _services;
     private readonly Lock _gate = new();
     private readonly IDisposable _subscription;
