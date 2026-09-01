@@ -69,13 +69,28 @@ public class FleetMetricsLayoutTests
         ],
     };
 
+    // Enough members to fill the widest row the grid ever draws (four columns at 1400), so "does the last column end
+    // flush with the panel" is a question the fixture can actually answer. A half-empty last row is the panel doing
+    // its job — it keeps the empty columns — not a strip of whitespace.
+    private static FakeFleetClient CrowdedRoster() => RosterOf(8);
+
+    private static FakeFleetClient RosterOf(int members) => new()
+    {
+        Members = [
+            new FleetMemberInfo(1, Commander, -1, -1, FleetRole.FleetCommander, false),
+            .. Enumerable.Range(0, members - 1).Select(i =>
+                new FleetMemberInfo(i + 2, Member + i, 1, 1, FleetRole.SquadMember, false)),
+        ],
+    };
+
     // Every render assertion needs the roster pre-fill to have landed, otherwise it asserts against an empty list.
-    private static async Task<FleetMetricsViewModel> BuildViewModelAsync(TestClientInstance instance, IFleetClient fleets)
+    private static async Task<FleetMetricsViewModel> BuildViewModelAsync(
+        TestClientInstance instance, IFleetClient fleets, int expectedMembers = 2)
     {
         var vm = new FleetMetricsViewModel(instance.Services, fleets, Op);
-        for (var i = 0; i < 100 && vm.Members.Count < 2; i++)
+        for (var i = 0; i < 100 && vm.Members.Count < expectedMembers; i++)
             await Task.Delay(20);
-        Assert.Equal(2, vm.Members.Count);
+        Assert.Equal(expectedMembers, vm.Members.Count);
         return vm;
     }
 
@@ -100,17 +115,23 @@ public class FleetMetricsLayoutTests
 
     // A screen on a fleet whose members share a location and a bounty, so every field the list shows has something to
     // show and its absence in a denser layout means the layout dropped it, not that the data was missing.
+    private static Task<(Window Root, FleetMetricsViewModel Vm)> ShowAsync(
+        TestClientInstance instance, FleetMetricsLayout layout, Shell shell) =>
+        ShowAsync(instance, layout, shell, 900);
+
     private static async Task<(Window Root, FleetMetricsViewModel Vm)> ShowAsync(
-        TestClientInstance instance, FleetMetricsLayout layout, Shell shell)
+        TestClientInstance instance, FleetMetricsLayout layout, Shell shell, double width,
+        FakeFleetClient? fleets = null)
     {
-        var vm = await BuildViewModelAsync(instance, Roster());
+        fleets ??= Roster();
+        var vm = await BuildViewModelAsync(instance, fleets, fleets.Members.Count);
         var bus = instance.Services.GetRequiredService<IEventBus>();
         await PublishAsync(bus, vm, MetricKind.Location, "Jita");
         await PublishAsync(bus, vm, MetricKind.Bounty, null, 5_000_000);
 
         vm.SetLayoutCommand.Execute(layout);
 
-        var window = new FleetMetricsWindow(vm) { Width = 900, Height = 620 };
+        var window = new FleetMetricsWindow(vm) { Width = width, Height = 620 };
         Window root = window;
         if (shell is Shell.DockedTab)
         {
@@ -122,7 +143,7 @@ public class FleetMetricsLayoutTests
 
             // Stand the reparented content in a plain window: the module's own window is deliberately not the host,
             // which is exactly what this path has to survive.
-            root = new Window { Width = 900, Height = 620, Content = Assert.Single(display.HostTabs).Content };
+            root = new Window { Width = width, Height = 620, Content = Assert.Single(display.HostTabs).Content };
         }
 
         root.Show();
@@ -202,16 +223,23 @@ public class FleetMetricsLayoutTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    // A point just inside a row's leading edge — above its middle in a stacked layout, left of it in the grid — so
-    // the drop lands in front of that row rather than behind it.
+    // A point just inside a row's leading edge — above its middle in a stacked layout, left of it when the cards
+    // stand beside each other — so the drop lands in front of that row rather than behind it. Read off where the
+    // containers landed, the same rule the window's own drop marker follows.
     private static Point LeadingEdgeOf(ItemsControl host, Visual root, int index)
     {
         Control container = Assert.IsAssignableFrom<Control>(host.ContainerFromIndex(index));
         Point centre = CentreOf(host, root, index);
-        return host.ItemsPanelRoot is WrapPanel
+        return SideBySide(host)
             ? new Point(centre.X - container.Bounds.Width / 4, centre.Y)
             : new Point(centre.X, centre.Y - container.Bounds.Height / 4);
     }
+
+    // Whether the first two containers share a row rather than stack.
+    private static bool SideBySide(ItemsControl host) =>
+        host.ItemsPanelRoot is { Children.Count: >= 2 } panel
+        && panel.Children[1].Bounds.X > panel.Children[0].Bounds.X
+        && panel.Children[1].Bounds.Y < panel.Children[0].Bounds.Bottom;
 
     private static Point CentreOf(ItemsControl host, Visual root, int index)
     {
@@ -408,7 +436,7 @@ public class FleetMetricsLayoutTests
         Assert.DoesNotContain(texts, t => t.Contains("ISK", StringComparison.Ordinal));
 
         AssertRowsAreTemplated(root, vm, FleetMetricsLayout.Grid);
-        Assert.Single(MemberHost(root, vm).GetVisualDescendants().OfType<WrapPanel>());
+        Assert.Single(MemberHost(root, vm).GetVisualDescendants().OfType<FillGridPanel>());
     }
 
     // A squeezed graph reads as nothing at all, so the grid card owes its graph real vertical range — the reason the
@@ -427,6 +455,207 @@ public class FleetMetricsLayoutTests
             $"a grid graph needs vertical range to be read at all, got {graph.Bounds.Height}");
         Assert.True(graph.Bounds.Width / graph.Bounds.Height < 6,
             $"a grid graph flatter than 6:1 is a band, not a graph (got {graph.Bounds.Width}x{graph.Bounds.Height})");
+    }
+
+    /// <summary>
+    /// ET-108. A card is at its widest one pixel before a second column fits — just under twice the minimum, 643px
+    /// here — while its height stays 176. That is the "flattened band" the card's own comment warns about, so it was
+    /// rendered and looked at before the height was left alone: at that stand the graph is 621x100 (6.2:1) and all
+    /// four lines are still cleanly separated, because <see cref="DpsGraph"/> plots at a FIXED time density. A wider
+    /// graph shows a longer timeline at the same vertical range; it does not stretch the same curve flat. The 100px
+    /// of vertical range — the thing that makes four lines readable — is identical at every width.
+    ///
+    /// So the invariant that matters on a card that can double in width is the graph's HEIGHT, not its aspect ratio.
+    /// Growing the height along with the width (318:176) would put the widest card at 356px tall — one card per row
+    /// on a 620-high window, which is the density the grid layout exists for, spent on nothing.
+    /// </summary>
+    // The two hosts reserve different chrome around the card panel — the window keeps 30px for its margin and
+    // scrollbar, the docked tab 28 — so the last single-column width differs by two between them. Both land the
+    // panel itself on 643, one pixel short of a second 318.
+    [AvaloniaTheory]
+    [InlineData(Shell.OwnWindow, 673)]
+    [InlineData(Shell.DockedTab, 671)]
+    public async Task GridLayout_KeepsTheGraphsVerticalRange_EvenOnTheWidestCard(Shell shell, int width)
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Grid, shell, width, CrowdedRoster());
+
+        ItemsControl host = MemberHost(root, vm);
+        Assert.False(SideBySide(host), $"{width} should still be a single column of cards");
+
+        Rect card = Assert.IsAssignableFrom<Control>(host.ContainerFromIndex(0)).Bounds;
+        Assert.True(card.Width > 600, $"this is meant to be the widest a card gets, got {card.Width}");
+
+        DpsGraph graph = host.GetVisualDescendants().OfType<DpsGraph>().First();
+        Assert.True(graph.Bounds.Height >= 70,
+            $"the widest card lost the graph's vertical range, got {graph.Bounds.Height}");
+    }
+
+    // ET-108. The card width is a minimum now, not a size: whatever the window is, the cards divide the row between
+    // them and no strip of whitespace is left on the right. 520 is the window's own MinWidth, 720 its default.
+    [AvaloniaTheory]
+    [InlineData(520, Shell.OwnWindow)]
+    [InlineData(720, Shell.OwnWindow)]
+    [InlineData(1000, Shell.OwnWindow)]
+    [InlineData(1400, Shell.OwnWindow)]
+    [InlineData(520, Shell.DockedTab)]
+    [InlineData(720, Shell.DockedTab)]
+    [InlineData(1000, Shell.DockedTab)]
+    [InlineData(1400, Shell.DockedTab)]
+    public async Task GridLayout_FillsTheWidth_LeavingNoStripOnTheRight(int width, Shell shell)
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Grid, shell, width, CrowdedRoster());
+
+        AssertGridFillsItsWidth(root, vm);
+    }
+
+    // The third presentation path. A card grid measured while docked and then floated must divide the NEW width, not
+    // keep the columns it was arranged with in the tab.
+    [AvaloniaFact]
+    public async Task GridLayout_FillsTheWidth_AfterADockToFloatMigration()
+    {
+        using var instance = CreateInstance();
+        FakeFleetClient fleets = CrowdedRoster();
+        var vm = await BuildViewModelAsync(instance, fleets, fleets.Members.Count);
+        vm.SetLayoutCommand.Execute(FleetMetricsLayout.Grid);
+
+        var display = new FakeDisplay { IsFloating = false };
+        var host = new ModuleHostService();
+        host.SetOwner(new Window());
+        host.SetHost(display);
+        var window = new FleetMetricsWindow(vm) { Width = 1000, Height = 620 };
+        host.Open(window, "FLEET METRICS", "fleet", "fleet-metrics");
+
+        var docked = new Window { Width = 560, Height = 620, Content = Assert.Single(display.HostTabs).Content };
+        docked.Show();
+        Dispatcher.UIThread.RunJobs();
+        docked.UpdateLayout();
+        AssertGridFillsItsWidth(docked, vm);
+
+        // Hand the content back before floating it: this stand-in host is only here so the docked tab has somewhere
+        // to lay out, and SwitchMode reparents the very same DockPanel into the module's own window.
+        docked.Content = null;
+        docked.Close();
+        Dispatcher.UIThread.RunJobs();
+
+        display.IsFloating = true;
+        host.SwitchMode();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        AssertGridFillsItsWidth(window, vm);
+        window.Close();
+    }
+
+    // The cards divide the panel: the last column ends flush with it, and none is narrower than the minimum unless
+    // the panel itself is (the narrow docked tab, where one column takes the whole width).
+    private static void AssertGridFillsItsWidth(Control root, FleetMetricsViewModel vm)
+    {
+        ItemsControl host = MemberHost(root, vm);
+        FillGridPanel panel = Assert.Single(host.GetVisualDescendants().OfType<FillGridPanel>());
+        Rect[] cards = panel.Children.Select(c => c.Bounds).ToArray();
+
+        Assert.NotEmpty(cards);
+        Assert.True(panel.Bounds.Width > 0, "the card panel rendered with no width");
+        Assert.Equal(panel.Bounds.Width, cards.Max(c => c.Right), 1);
+        Assert.All(cards, c => Assert.True(
+            c.Width >= Math.Min(panel.Bounds.Width, 318) - 1,
+            $"a card fell below the minimum in a panel of {panel.Bounds.Width}: {c.Width}"));
+    }
+
+    /// <summary>
+    /// The cards start at the TOP of the list, not floating in the middle of it. A panel whose
+    /// <c>ArrangeOverride</c> hands back less than the rect it was given is centred in the remainder — Avalonia's
+    /// <c>ArrangeCore</c> puts <c>VerticalAlignment.Stretch</c> on the same branch as <c>Center</c> — which parked a
+    /// five-card grid halfway down its viewport, with a gap between the legend and the first row and a smaller one
+    /// underneath. The <see cref="WrapPanel"/> this replaced returned its full arrange size and never tripped it.
+    /// Measured at the panel, not at the ItemsControl: everything above it stayed at Y=0 the whole time.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(Shell.OwnWindow)]
+    [InlineData(Shell.DockedTab)]
+    public async Task GridLayout_StartsAtTheTop_WhenTheCardsDoNotFillTheViewport(Shell shell)
+    {
+        using var instance = CreateInstance();
+
+        // Five members over three columns at 1000: two rows of cards, shorter than the viewport. The operator's case.
+        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Grid, shell, 1000, RosterOf(5));
+
+        ItemsControl host = MemberHost(root, vm);
+        FillGridPanel panel = Assert.Single(host.GetVisualDescendants().OfType<FillGridPanel>());
+        Assert.True(panel.DesiredSize.Height < panel.Bounds.Height,
+            "this only bites when the cards are shorter than the viewport, and here they are not");
+
+        Assert.Equal(0, panel.Bounds.Y, 1);
+        Assert.Equal(0, (panel.TranslatePoint(default, host) ?? new Point(0, -1)).Y, 1);
+
+        Control first = Assert.IsAssignableFrom<Control>(host.ContainerFromIndex(0));
+        Assert.Equal(0, (first.TranslatePoint(default, host) ?? new Point(0, -1)).Y, 1);
+    }
+
+    /// <summary>The other side of that rule: filling the viewport must not cost the rows below the fold. A grid
+    /// taller than its viewport still reports the taller extent and still scrolls to the cards underneath.</summary>
+    [AvaloniaFact]
+    public async Task GridLayout_StillScrolls_WhenTheCardsOutgrowTheViewport()
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Grid, Shell.OwnWindow, 1000, RosterOf(12));
+
+        ItemsControl host = MemberHost(root, vm);
+        ScrollViewer scroller = root.GetVisualDescendants().OfType<ScrollViewer>()
+            .First(s => s.GetVisualDescendants().Contains(host));
+
+        Assert.True(scroller.Extent.Height > scroller.Viewport.Height,
+            $"twelve cards should outgrow the viewport, got extent {scroller.Extent.Height} in {scroller.Viewport.Height}");
+
+        Control first = Assert.IsAssignableFrom<Control>(host.ContainerFromIndex(0));
+        double before = (first.TranslatePoint(default, root) ?? default).Y;
+
+        scroller.Offset = scroller.Offset.WithY(120);
+        Dispatcher.UIThread.RunJobs();
+        root.UpdateLayout();
+
+        Assert.Equal(120, scroller.Offset.Y, 1);
+        Assert.Equal(before - 120, (first.TranslatePoint(default, root) ?? default).Y, 1);
+    }
+
+    // ET-108's real trap: the drop marker used to read the PANEL TYPE to decide whether it stands between two
+    // columns or between two rows, which breaks silently the moment the panel is swapped. It reads the containers'
+    // own positions now — so a grid wide enough for two columns marks vertically...
+    [AvaloniaTheory]
+    [InlineData(Shell.OwnWindow)]
+    [InlineData(Shell.DockedTab)]
+    public async Task Drag_MarksBetweenColumns_WhenTheGridCardsStandSideBySide(Shell shell)
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Grid, shell, 900);
+        Assert.True(SideBySide(MemberHost(root, vm)), "900 should still give the grid two columns");
+
+        HoldRow(root, vm, from: 1, to: 0);
+
+        Border marker = Marker(root);
+        Assert.True(marker.IsVisible, "nothing shows where the member would land");
+        Assert.True(marker.Height > marker.Width,
+            $"the drop marker lies flat between two side-by-side cards ({marker.Width}x{marker.Height})");
+    }
+
+    // ...and the same grid squeezed to a single column marks horizontally, like the stacked layouts it now resembles.
+    [AvaloniaTheory]
+    [InlineData(FleetMetricsLayout.Grid)]
+    [InlineData(FleetMetricsLayout.List)]
+    public async Task Drag_MarksBetweenRows_WhenTheCardsAreStacked(FleetMetricsLayout layout)
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, layout, Shell.DockedTab, 420);
+        Assert.False(SideBySide(MemberHost(root, vm)), "420 is too narrow for two columns of anything");
+
+        HoldRow(root, vm, from: 1, to: 0);
+
+        Border marker = Marker(root);
+        Assert.True(marker.IsVisible, "nothing shows where the member would land");
+        Assert.True(marker.Width > marker.Height,
+            $"the drop marker stands upright between two stacked rows ({marker.Width}x{marker.Height})");
     }
 
     // Compact gives up the graph — that is what buys the density — and the bounty. Every live figure stays: a full

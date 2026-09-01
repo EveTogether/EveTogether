@@ -99,9 +99,22 @@ public partial class FleetMetricsWindow : ChromedWindow
 
     private FleetMetricsViewModel? ViewModel => DataContext as FleetMetricsViewModel;
 
-    // Grid lays its cards out across the row, so its drop marker stands between two columns; the stacked layouts
-    // want it between two rows. Read off the panel that is actually there rather than off the layout enum.
-    private bool DragsHorizontally => _members?.ItemsPanelRoot is WrapPanel;
+    // Cards standing beside each other want their drop marker between two columns; rows stacked under each other
+    // want it between two rows. Read off where the containers actually landed rather than off the panel type or the
+    // layout enum: the grid fills the width it is given (ET-108), so in a narrow host it falls back to a single
+    // column of cards — and there the marker belongs between rows like everywhere else.
+    private bool DragsHorizontally
+    {
+        get
+        {
+            if (_members?.ItemsPanelRoot is not { Children.Count: >= 2 } panel)
+                return false;
+
+            Rect first = panel.Children[0].Bounds;
+            Rect second = panel.Children[1].Bounds;
+            return second.X > first.X && second.Y < first.Bottom;
+        }
+    }
 
     private void OnMemberPointerPressed(object? sender, PointerPressedEventArgs e)
     {
