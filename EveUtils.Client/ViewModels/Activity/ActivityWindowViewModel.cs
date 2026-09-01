@@ -97,6 +97,17 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(LootStrategyText))]
     private string? _lootStrategy;
 
+    /// <summary>What the copied signature's own text said it was (ET-100) — the raw scan-window field, not
+    /// anything the SDE could enrich it to. Always null in the abyss; a filament carries no signature.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SignatureTypeText))]
+    private string? _signatureGroup;
+
+    /// <summary>The signature's name once fully scanned — same field, same source as <see cref="SignatureGroup"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SignatureSiteText))]
+    private string? _signatureName;
+
     // ── The five sections ───────────────────────────────────────────────────────────────────────────
 
     public ActivitySection Activity { get; } = new() { Title = "ACTIVITY", IsExpanded = true };
@@ -181,6 +192,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public string LocationText => IsAbyssal
         ? "none — an abyssal pocket has no location"
         : SolarSystem ?? "not known yet";
+
+    public string SignatureTypeText => SignatureGroup ?? "not known yet";
+
+    public string SignatureSiteText => SignatureName ?? "not known yet";
 
     public string TierText => TierIndex is { } tier
         ? $"{Tiers[tier]} (Tier {tier})"

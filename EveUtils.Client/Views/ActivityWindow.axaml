@@ -255,6 +255,17 @@
                             </Grid>
                         </StackPanel>
 
+                        <StackPanel IsVisible="{Binding !IsAbyssal}">
+                            <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                                <TextBlock Text="TYPE"/>
+                                <TextBlock Grid.Column="1" Text="{Binding SignatureTypeText}"/>
+                            </Grid>
+                            <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                                <TextBlock Text="SITE"/>
+                                <TextBlock Grid.Column="1" Text="{Binding SignatureSiteText}"/>
+                            </Grid>
+                        </StackPanel>
+
                         <Grid Classes="kv" ColumnDefinitions="Auto,*">
                             <TextBlock Text="LOCATION"/>
                             <TextBlock Grid.Column="1" Text="{Binding LocationText}"/>
@@ -313,7 +324,7 @@
                         <TextBlock Classes="hint" IsVisible="{Binding IsAbyssal}"
                                    Text="Weather and tier cannot be detected — not from the game log and not from ESI. They are set here, and the last choice stays because you usually fly the same tier several runs in a row. The resist penalty is rolled per site, so it is shown as the band it can land in."/>
                         <TextBlock Classes="hint" IsVisible="{Binding !IsAbyssal}"
-                                   Text="Type, site and signature come from the copied signature through the SDE — waiting on ET-80. The loot strategy is what explains the duration; without it, &quot;19 minutes&quot; says nothing."/>
+                                   Text="Type and site come straight from the copied signature. Anything more the SDE could add — faction, DED rating — waits on ET-80. The loot strategy is what explains the duration; without it, &quot;19 minutes&quot; says nothing."/>
                     </StackPanel>
                 </Border>
 
