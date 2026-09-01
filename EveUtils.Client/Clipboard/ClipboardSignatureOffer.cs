@@ -64,7 +64,8 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         // ET-100 testopener: ET-98's window (merged same day) has no way in otherwise. Not the abyssal opener (that
         // needs a filament, not a signature) and not final — a later opener may replace or keep this. Needs exactly
         // one fully-scanned row: half-scanned opens empty, 2+ rows is a menu a toast is the wrong surface for.
-        var recognised = rows.Where(row => row.Group is not null && row.Name is not null).ToList();
+        // Wormholes are excluded for now; only combat sites, including anomalies, start activities.
+        var recognised = rows.Where(row => row.Group is "Combat Site" && row.Name is not null).ToList();
         if (recognised is [{ } row])
             actions.Add(new ToastAction("Start run", () => StartRun(fingerprint, row), ToastActionStyle.Affirmative));
 

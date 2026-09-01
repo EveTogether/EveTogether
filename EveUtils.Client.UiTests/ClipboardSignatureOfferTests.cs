@@ -86,7 +86,7 @@ public sealed class ClipboardSignatureOfferTests
     // ── ET-100 — the "Start run" button on the signature toast ──────────────────────────────────────
 
     [AvaloniaFact]
-    public async Task ExactlyOneFullyScannedRow_ShowsStartRunButton_Affirmative()
+    public async Task FullyScannedCombatSite_ShowsStartRunButton_Affirmative()
     {
         using var env = await Env.StartAsync();
 
@@ -98,6 +98,17 @@ public sealed class ClipboardSignatureOfferTests
         Assert.Equal(ToastActionStyle.Affirmative, offer.Actions[1].Style);
     }
 
+    [AvaloniaFact]
+    public async Task FullyScannedAnomaly_ShowsStartRunButton()
+    {
+        using var env = await Env.StartAsync();
+
+        env.Copy("AAA-001\tCosmic Anomaly\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU");
+
+        var offer = Assert.Single(env.Toasts.ActionToasts);
+        Assert.Equal(new[] { "Close", "Start run" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
+    }
+
     // AC-1 tegenproef: the same single row, but under the scan threshold — Group/Name null is the normal
     // not-yet-scanned state, and a button on it would open an empty window.
     [AvaloniaFact]
@@ -106,6 +117,17 @@ public sealed class ClipboardSignatureOfferTests
         using var env = await Env.StartAsync();
 
         env.Copy("CCC-003\tCosmic Signature\t\t\t25.0%\t-");
+
+        var offer = Assert.Single(env.Toasts.ActionToasts);
+        Assert.Equal(new[] { "Close" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
+    }
+
+    [AvaloniaFact]
+    public async Task FullyScannedWormhole_ShowsNoStartRunButton()
+    {
+        using var env = await Env.StartAsync();
+
+        env.Copy("QLY-810\tCosmic Signature\tWormhole\tUnstable Wormhole\t100.0%\t11.66 AU");
 
         var offer = Assert.Single(env.Toasts.ActionToasts);
         Assert.Equal(new[] { "Close" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
