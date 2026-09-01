@@ -86,9 +86,30 @@ public class ActivityWindowTests
         var model = _Filled(ActivityKind.Abyssal);
 
         Assert.Contains("no bounty", model.Bounty.HeaderSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("— no bounty in abyssal space", model.BountyText);
         Assert.Contains("no location", model.Activity.HeaderSummary, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("pocket", model.LocationText, StringComparison.OrdinalIgnoreCase);
         Assert.NotEqual("0", model.Bounty.HeaderSummary);
+    }
+
+    [Fact]
+    public void ActivityReadout_BeforeLocationReading_SaysNotKnownYet()
+    {
+        var model = new ActivityWindowViewModel(ActivityKind.Site, _Unused());
+
+        Assert.Equal("not known yet", model.LocationText);
+    }
+
+    [Fact]
+    public void AddBounty_StaleTimestamp_RefreshesClockAtCurrentTime()
+    {
+        DateTime staleTimestamp = Anchor.AddYears(-1);
+        var model = _Filled(ActivityKind.Site);
+        model.AnchorUtc = staleTimestamp;
+
+        model.AddBounty(new BountyEvent(staleTimestamp, 125_000));
+
+        Assert.NotEqual("00:00", model.ClockText);
     }
 
     [Theory]

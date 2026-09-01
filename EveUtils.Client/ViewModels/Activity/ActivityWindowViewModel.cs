@@ -251,10 +251,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public string LocationText => IsInsideAbyssal
         ? "none — an abyssal pocket has no location"
-        : LocationDisplay ?? SolarSystem ?? "location unavailable";
+        : LocationDisplay ?? SolarSystem ?? "not known yet";
 
     public string BountyText => IsInsideAbyssal
-        ? "— — no bounty in abyssal space"
+        ? "— no bounty in abyssal space"
         : BountyIsk > 0 ? $"{BountyIsk:N0} ISK — own character" : "no payouts yet — own character";
 
     public string SignatureTypeText => SignatureGroup ?? "not known yet";
@@ -421,7 +421,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (!IsInsideAbyssal)
             BountyIsk += bounty.Isk;
 
-        Refresh(bounty.Timestamp);
+        Refresh(DateTime.UtcNow);
     }
 
     public void Dispose()
