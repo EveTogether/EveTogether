@@ -24,6 +24,7 @@ using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
+using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,6 +41,32 @@ namespace EveUtils.Client.UiTests;
 public class ActivityWindowTests
 {
     private static readonly DateTime Anchor = new(2026, 9, 1, 20, 0, 0, DateTimeKind.Utc);
+
+    [AvaloniaFact]
+    public void StartBeforeLocation_FirstLocationReading_CollectsCombat()
+    {
+        using ServiceProvider services = _ObservationServices();
+        var model = new ActivityWindowViewModel(ActivityKind.Site, services);
+        model.StartManualRun(Anchor);
+        model.ApplyLocation(new EsiLocationReading(30000142, Anchor), _Character());
+
+        _ObserveCombat(model);
+
+        Assert.Single(model.EnemyObservations);
+    }
+
+    [AvaloniaFact]
+    public void AutomaticAbyssalRun_CollectsCombat()
+    {
+        using ServiceProvider services = _ObservationServices();
+        var model = new ActivityWindowViewModel(ActivityKind.Abyssal, services);
+        model.ApplyLocation(new EsiLocationReading(30000142, Anchor), _Character());
+        model.ApplyFleetEnvelope([new MetricSample(90000001, 7, MetricKind.Location, 0, 1_000_000, AbyssalAnchorMs: 700_000)], Anchor);
+
+        _ObserveCombat(model);
+
+        Assert.Single(model.EnemyObservations);
+    }
 
     // ── AC-1 — every section says something, open or shut ───────────────────────────────────────────
 
@@ -757,6 +784,20 @@ public class ActivityWindowTests
         new(1263, name, null, null, null, null, null, ded, restricted || groups is not null, groups ?? []);
 
     private static IServiceProvider _Unused() => new ServiceCollection().BuildServiceProvider();
+
+    private static ServiceProvider _ObservationServices() => new ServiceCollection()
+        .AddSingleton<ISdeAccessor>(new FakeSdeAccessor().Add(17155, "Centii Servant", 135, 11))
+        .BuildServiceProvider();
+
+    private static DpsViewModel _Character() => new DpsViewModel("Pilot", isSelf: true) { CharacterId = 90000001 };
+
+    private static void _ObserveCombat(ActivityWindowViewModel model)
+    {
+        MethodInfo handler = typeof(ActivityWindowViewModel).GetMethod("_OnCombatObserved", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("combat observation handler was not found");
+        handler.Invoke(model, [90000001, "Centii Servant"]);
+        Dispatcher.UIThread.RunJobs();
+    }
 
     private static ActivityWindowViewModel _Filled(ActivityKind kind) => _Filled(kind, Anchor);
 

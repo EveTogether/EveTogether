@@ -523,6 +523,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             AnchorUtc = anchors.Min();
             StoppedAtUtc = null;
             RunState = ActivityRunState.Running;
+            _StartEnemyObservations();
         }
 
         Refresh(receivedUtc);
@@ -533,6 +534,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         InsideAbyssal = reading.Inside;
         LocationDisplay = character.LocationDisplay;
         _enemyObservationCharacterId = character.CharacterId;
+        if (RunState == ActivityRunState.Running)
+            _StartEnemyObservations();
         Refresh(DateTime.UtcNow);
     }
 
@@ -562,6 +565,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     private void _StartEnemyObservations()
     {
+        if (_enemyObservations is not null)
+            return;
+
         ISdeAccessor? sde = _services.GetService<ISdeAccessor>();
         _enemyObservations = sde is null || _enemyObservationCharacterId is null ? null
             : new RunEnemyObservationCollector(_enemyObservationCharacterId.Value,
