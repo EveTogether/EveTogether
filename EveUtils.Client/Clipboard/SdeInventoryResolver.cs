@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Sde;
 
@@ -22,5 +23,15 @@ public static class SdeInventoryResolver
         }
 
         return (lines, unresolved);
+    }
+
+    internal static (IReadOnlyList<(AppraisalLine Line, ClipboardInventoryItem Item)> Lines, IReadOnlyList<string> Unresolved)
+        ResolveUniqueCandidate(IReadOnlyList<ClipboardInventoryItem> candidates, ISdeAccessor sde, out bool hasNoSdeMatch)
+    {
+        var resolution = Resolve(candidates, sde);
+        hasNoSdeMatch = resolution.Lines.Count == 0;
+        return resolution.Lines.Count == 1
+            ? resolution
+            : ([], candidates.Select(candidate => candidate.Name).ToList());
     }
 }

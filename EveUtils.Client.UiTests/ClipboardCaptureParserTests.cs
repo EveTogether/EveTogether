@@ -56,6 +56,18 @@ public sealed class ClipboardCaptureParserTests
     }
 
     [Fact]
+    public void ParseInventory_SingleAmbiguousRow_OffersCandidatesWithoutGuessing()
+    {
+        const string text = "Ultraviolet M\t1\tFrequency Crystal\tMedium\t\t1 m3\t2.350,77 ISK";
+
+        Assert.Empty(ClipboardInventoryParser.Parse(text));
+        Assert.Collection(ClipboardInventoryParser.ParseAmbiguousNameCandidates(text),
+            candidate => Assert.Equal("Ultraviolet M", candidate.Name),
+            candidate => Assert.Equal("Frequency Crystal", candidate.Name),
+            candidate => Assert.Equal("Medium", candidate.Name));
+    }
+
+    [Fact]
     public void ParseInventory_IconsRowsAndAmbiguousNumber_LeavesOptionalValuesEmpty()
     {
         const string text = "Entropic Radiation Sink I Blueprint\t\t\r\nTriglavian Survey Database\t682\t\r\nCrystalline Isogen-10\t209\t\r\nUncertain Price\t\t1.234 ISK";
