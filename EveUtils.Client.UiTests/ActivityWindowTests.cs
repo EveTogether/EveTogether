@@ -55,6 +55,28 @@ public class ActivityWindowTests
         Assert.Single(model.EnemyObservations);
     }
 
+    /// <summary>
+    /// The window passes the gamelog line's own time straight through to the observation, rather than stamping the
+    /// moment it happened to handle the event (ET-105's storage seam). EVE flushes its log in chunks, so a single
+    /// poll can carry several seconds of combat; a handler that reached for <c>DateTime.UtcNow</c> would file that
+    /// whole batch at one instant and put a time in the database that nobody measured.
+    /// </summary>
+    [AvaloniaFact]
+    public void ObservedCombat_IsStoredAtTheGamelogsOwnTime_NotWhenItWasHandled()
+    {
+        using ServiceProvider services = _ObservationServices();
+        var model = new ActivityWindowViewModel(ActivityKind.Site, services);
+        model.StartManualRun(Anchor);
+        model.ApplyLocation(new EsiLocationReading(30000142, Anchor), _Character());
+        DateTime lineTime = Anchor.AddMinutes(3).AddSeconds(7);
+
+        _ObserveCombat(model, lineTime);
+
+        RunEnemyObservationViewModel observation = Assert.Single(model.EnemyObservations);
+        Assert.Equal(lineTime, observation.FirstObservedAtUtc);
+        Assert.Equal(lineTime, observation.LastObservedAtUtc);
+    }
+
     [AvaloniaFact]
     public void AutomaticAbyssalRun_CollectsCombat()
     {
@@ -791,11 +813,13 @@ public class ActivityWindowTests
 
     private static DpsViewModel _Character() => new DpsViewModel("Pilot", isSelf: true) { CharacterId = 90000001 };
 
-    private static void _ObserveCombat(ActivityWindowViewModel model)
+    private static void _ObserveCombat(ActivityWindowViewModel model) => _ObserveCombat(model, Anchor.AddMinutes(1));
+
+    private static void _ObserveCombat(ActivityWindowViewModel model, DateTime observedAtUtc)
     {
         MethodInfo handler = typeof(ActivityWindowViewModel).GetMethod("_OnCombatObserved", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("combat observation handler was not found");
-        handler.Invoke(model, [90000001, "Centii Servant", Anchor.AddMinutes(1)]);
+        handler.Invoke(model, [90000001, "Centii Servant", observedAtUtc]);
         Dispatcher.UIThread.RunJobs();
     }
 
