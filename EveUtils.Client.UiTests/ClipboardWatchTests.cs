@@ -41,8 +41,7 @@ public class ClipboardWatchTests
     // Inventory, icons view: only two fields, and the second one is often empty. A "needs several columns" rule
     // would throw this away, so the column count cannot be what tells an inventory from other tab-separated text.
     [InlineData("Entropic Radiation Sink I Blueprint\t\r\nTriglavian Survey Database\t682", ClipboardShape.Inventory)]
-    // A single stack is one row, so it stays unrecognised: one tabbed line is not a table (known limit, ET-57).
-    [InlineData("Triglavian Survey Database\t682", ClipboardShape.Unrecognised)]
+    [InlineData("Triglavian Survey Database\t682", ClipboardShape.Inventory)]
     // Ragged rows are not a table either — this is what rules out most pasted prose that happens to hold a tab.
     [InlineData("Agitated Exotic Filament\t1\tAbyssal Filaments\r\nBaryon Exotic Plasma S Blueprint\t", ClipboardShape.Unrecognised)]
     // Signature: a single copied signature is enough on its own (ET-79 AC-1).
@@ -56,7 +55,7 @@ public class ClipboardWatchTests
     // recognise (ET-79 AC-3) — this stands in for a non-English client capture until one is measured (§7).
     [InlineData("KDC-304\t中庭の亡霊\t戦闘サイト\t中庭の亡霊\t100,00%\t5,17 AE", ClipboardShape.Signature)]
     // Six fields but no percentage on the fifth is not a signature row — the anchor is load-bearing.
-    [InlineData("KDC-304\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0\t2.71 AU", ClipboardShape.Unrecognised)]
+    [InlineData("KDC-304\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0\t2.71 AU", ClipboardShape.Inventory)]
     // Raymond's own repro (2026-09-01): two copies of a Sansha Hideaway, one after another, verbatim including the
     // comma-decimal scan percentage his client writes. Both recognise identically — the "no toast" bug is not here.
     [InlineData("VQX-959\tCosmic Anomaly\tCombat Site\tSansha Hideaway\t100,0%\t10,93 AU", ClipboardShape.Signature)]

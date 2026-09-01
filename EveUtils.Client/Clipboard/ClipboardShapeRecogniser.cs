@@ -11,7 +11,7 @@ namespace EveUtils.Client.Clipboard;
 /// </summary>
 public static partial class ClipboardShapeRecogniser
 {
-    private const int MinimumInventoryRows = 2;
+    private const int MinimumInventoryRows = 1;
 
     /// <summary>
     /// EVE's own fit export always writes <c>[Ship, Fit name]</c>. <c>IFitTextImporter.Detect</c> accepts any text
@@ -78,7 +78,7 @@ public static partial class ClipboardShapeRecogniser
 
     // An inventory copy carries whichever columns the window happened to show, so there is no header row to key
     // on: the only stable signal is the table shape — more than one row, every row cut into the same number of
-    // tab-separated fields.
+    // tab-separated fields; one row relies on the SDE candidate gate before storage.
     private static bool IsInventoryTable(string text)
     {
         var expectedTabs = -1;
