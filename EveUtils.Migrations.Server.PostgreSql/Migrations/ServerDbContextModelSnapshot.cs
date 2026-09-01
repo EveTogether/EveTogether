@@ -704,6 +704,223 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.ToTable("PermissionToggle");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.Run", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ActivityKind")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("CharacterId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FitContentHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("FitNameSnapshot")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("GroupCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("IsPayoutEligible")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastPushedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("SavedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Signature")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("SiteName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<int>("SiteTypeId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SolarSystemId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("State")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("StoppedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SyncState")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GroupCode", "CharacterId");
+
+                    b.ToTable("Run");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunBountyEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Isk")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId");
+
+                    b.ToTable("RunBountyEntry");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunEnemyObservation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Direction")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EnemyName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<int>("EnemyTypeId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("FirstObservedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("LastObservedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId");
+
+                    b.ToTable("RunEnemyObservation");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunLootCapture", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CapturedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId");
+
+                    b.ToTable("RunLootCapture");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunLootEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("ClipboardPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("ItemTypeId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LootKind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<long?>("Quantity")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("RunLootCaptureId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("Volume")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunLootCaptureId");
+
+                    b.ToTable("RunLootEntry");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunParameter", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ObservedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ParameterKey")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TypedValue")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId");
+
+                    b.ToTable("RunParameter");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.ServerAuth.Entities.AllowedCharacter", b =>
                 {
                     b.Property<int>("Id")
@@ -1063,6 +1280,61 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunBountyEntry", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", "Run")
+                        .WithMany("BountyEntries")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunEnemyObservation", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", "Run")
+                        .WithMany("EnemyObservations")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunLootCapture", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", "Run")
+                        .WithMany("LootCaptures")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunLootEntry", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.Runs.Entities.RunLootCapture", "RunLootCapture")
+                        .WithMany("Entries")
+                        .HasForeignKey("RunLootCaptureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RunLootCapture");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunParameter", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", "Run")
+                        .WithMany("Parameters")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.ServerAuth.Entities.ServerSession", b =>
                 {
                     b.HasOne("EveUtils.Shared.Modules.ServerAuth.Entities.SyncedCharacter", "SyncedCharacter")
@@ -1095,6 +1367,22 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.Navigation("Permissions");
 
                     b.Navigation("UserRoles");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.Run", b =>
+                {
+                    b.Navigation("BountyEntries");
+
+                    b.Navigation("EnemyObservations");
+
+                    b.Navigation("LootCaptures");
+
+                    b.Navigation("Parameters");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunLootCapture", b =>
+                {
+                    b.Navigation("Entries");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Ships.Entities.Ship", b =>

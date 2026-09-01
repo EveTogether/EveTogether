@@ -17,6 +17,16 @@ public static class RunsModule
         modelBuilder.ApplyConfiguration(new ActivitySummaryConfiguration());
     }
 
+    public static void ConfigureServerModel(ModelBuilder modelBuilder)
+    {
+        modelBuilder.ApplyConfiguration(new RunConfiguration());
+        modelBuilder.ApplyConfiguration(new RunLootCaptureConfiguration());
+        modelBuilder.ApplyConfiguration(new RunLootEntryConfiguration());
+        modelBuilder.ApplyConfiguration(new RunBountyEntryConfiguration());
+        modelBuilder.ApplyConfiguration(new RunEnemyObservationConfiguration());
+        modelBuilder.ApplyConfiguration(new RunParameterConfiguration());
+    }
+
     public static IServiceCollection AddRunsModule(this IServiceCollection services)
     {
         return services;

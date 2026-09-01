@@ -17,7 +17,7 @@ public sealed class RunStorageTests
     private static readonly DateTime StartedAtUtc = new(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
 
     [AvaloniaFact]
-    public async Task LocalRun_WithoutServer_PersistsAndBuildsSummary()
+    public async Task LocalRun_WithoutServer_PersistsBuildsSummaryAndRemainsPending()
     {
         using var instance = TestClientInstance.Create();
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
@@ -51,7 +51,7 @@ public sealed class RunStorageTests
         ActivitySummary summary = Assert.Single(await db.Set<ActivitySummary>().ToListAsync(cancellationToken));
         Run run = Assert.Single(await db.Set<Run>().ToListAsync(cancellationToken));
         Assert.Null(run.GroupCode);
-        Assert.Equal(RunSyncState.Local, run.SyncState);
+        Assert.Equal(RunSyncState.Pending, run.SyncState);
         Assert.Equal(run.Id, summary.RunId);
         Assert.Equal(120m, summary.LootIskGained);
         Assert.Equal(20m, summary.LootIskLost);

@@ -288,6 +288,7 @@ app.MapGrpcService<PairingService>();
 app.MapGrpcService<SessionService>();
 app.MapGrpcService<EventBusStreamService>();
 app.MapGrpcService<FittingsGrpcService>();
+app.MapGrpcService<RunsGrpcService>();
 app.MapGrpcService<FleetsGrpcService>();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode(); // Blazor admin panel at "/"
 app.MapHub<DpsHub>("/hubs/dps");                                // live DPS stream hub
