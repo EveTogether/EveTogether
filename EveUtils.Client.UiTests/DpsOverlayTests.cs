@@ -38,7 +38,7 @@ public class DpsOverlayTests
         Assert.NotNull(frame);
         Assert.Equal(460, frame!.PixelSize.Width);
         Assert.Equal(260, frame.PixelSize.Height);
-        frame.Save("/tmp/eveutils-dps-overlay.png");
+        frame.Save("/tmp/eveutils-dps-overlay.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -57,7 +57,7 @@ public class DpsOverlayTests
         var frame = window.CaptureRenderedFrame();
 
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-dps-overlay-bounty-location.png");
+        frame!.Save("/tmp/eveutils-dps-overlay-bounty-location.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -79,7 +79,7 @@ public class DpsOverlayTests
 
         Assert.NotNull(after);
         Assert.Equal(20, tracker.Dealt);
-        after!.Save("/tmp/eveutils-dps-overlay-live.png");
+        after!.Save("/tmp/eveutils-dps-overlay-live.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -136,7 +136,7 @@ public class DpsOverlayTests
 
         Assert.NotNull(frame);
         Assert.True(tracker.Dealt < 800); // EMA still trailing the step-down, not snapped to 0
-        frame!.Save("/tmp/eveutils-dps-overlay-ema.png");
+        frame!.Save("/tmp/eveutils-dps-overlay-ema.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 }

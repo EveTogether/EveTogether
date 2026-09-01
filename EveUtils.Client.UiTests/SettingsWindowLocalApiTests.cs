@@ -38,7 +38,7 @@ public class SettingsWindowLocalApiTests
         window.FindControl<Avalonia.Controls.ListBox>("CategoryNav")!.SelectedIndex = 3;
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-settings-localapi.png");
+        frame!.Save("/tmp/eveutils-settings-localapi.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
     }
 
     private sealed class StubLocalApi(LocalApiStatusSnapshot status) : ILocalApiServer

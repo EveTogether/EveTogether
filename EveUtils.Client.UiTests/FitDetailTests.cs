@@ -597,12 +597,12 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-skills-required.png");
+        frame!.Save("/tmp/eveutils-skills-required.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
 
         vm.MatchInGameRate = true;   // 1:1-with-in-game comparison rate (~25 SP/min generic baseline)
         var inGameFrame = window.CaptureRenderedFrame();
         Assert.NotNull(inGameFrame);
-        inGameFrame!.Save("/tmp/eveutils-skills-required-ingame.png");
+        inGameFrame!.Save("/tmp/eveutils-skills-required-ingame.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -623,7 +623,7 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-weather-selector.png");
+        frame!.Save("/tmp/eveutils-weather-selector.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -639,7 +639,7 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fit-detail-metadata.png");
+        frame!.Save("/tmp/eveutils-fit-detail-metadata.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -1107,7 +1107,7 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-storage-panel.png");
+        frame!.Save("/tmp/eveutils-storage-panel.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -1233,7 +1233,7 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fit-detail.png");
+        frame!.Save("/tmp/eveutils-fit-detail.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
     }
 
     [AvaloniaFact]
@@ -1262,6 +1262,6 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fit-detail-structure.png");
+        frame!.Save("/tmp/eveutils-fit-detail-structure.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
     }
 }

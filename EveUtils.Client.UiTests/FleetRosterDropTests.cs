@@ -192,7 +192,7 @@ public class FleetRosterDropTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-roster-drag.png");
+        frame!.Save("/tmp/eveutils-roster-drag.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 

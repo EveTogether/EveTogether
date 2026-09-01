@@ -66,7 +66,7 @@ public class EveWorkbenchFitImportTests
         var client = ClientReturning(HttpStatusCode.OK,
             """{"Eft":"[Miasmos, Ore Hauler]\nDamage Control II\n","Error":false,"Message":null}""");
 
-        var result = await client.FetchEftAsync(Guid.Parse(FitId));
+        var result = await client.FetchEftAsync(Guid.Parse(FitId), TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
         Assert.StartsWith("[Miasmos, Ore Hauler]", result.Value);
@@ -80,7 +80,7 @@ public class EveWorkbenchFitImportTests
         var client = ClientReturning(HttpStatusCode.OK,
             """{"Eft":null,"Error":true,"Message":"Invalid fittingId received"}""");
 
-        var result = await client.FetchEftAsync(Guid.Parse(FitId));
+        var result = await client.FetchEftAsync(Guid.Parse(FitId), TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(MessageCodes.NotFound, result.Messages.Single().Code);
@@ -94,7 +94,7 @@ public class EveWorkbenchFitImportTests
         var client = ClientReturning(HttpStatusCode.OK,
             """{"Eft":"[Miasmos, Ore Hauler]\n","Error":true,"Message":"Invalid fittingId received"}""");
 
-        var result = await client.FetchEftAsync(Guid.Parse(FitId));
+        var result = await client.FetchEftAsync(Guid.Parse(FitId), TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
     }
@@ -104,7 +104,7 @@ public class EveWorkbenchFitImportTests
     {
         var client = ClientReturning(HttpStatusCode.BadGateway, "");
 
-        var result = await client.FetchEftAsync(Guid.Parse(FitId));
+        var result = await client.FetchEftAsync(Guid.Parse(FitId), TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
         Assert.Contains("502", result.Messages.Single().Text);
@@ -115,7 +115,7 @@ public class EveWorkbenchFitImportTests
     {
         var client = ClientThrowing(new HttpRequestException("no such host"));
 
-        var result = await client.FetchEftAsync(Guid.Parse(FitId));
+        var result = await client.FetchEftAsync(Guid.Parse(FitId), TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(MessageCodes.ServerError, result.Messages.Single().Code);
@@ -126,7 +126,7 @@ public class EveWorkbenchFitImportTests
     {
         var client = ClientThrowing(new TaskCanceledException("timed out"));
 
-        var result = await client.FetchEftAsync(Guid.Parse(FitId));
+        var result = await client.FetchEftAsync(Guid.Parse(FitId), TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(MessageCodes.Timeout, result.Messages.Single().Code);

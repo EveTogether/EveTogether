@@ -219,7 +219,7 @@ public class CompositionsViewModelTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-compositions.png");
+        frame!.Save("/tmp/eveutils-compositions.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 }

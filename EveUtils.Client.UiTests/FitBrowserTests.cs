@@ -269,7 +269,7 @@ public class FitBrowserTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fit-browser.png");
+        frame!.Save("/tmp/eveutils-fit-browser.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
     }
 
     [Fact]
@@ -312,7 +312,7 @@ public class FitBrowserTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fit-browser-manage.png");
+        frame!.Save("/tmp/eveutils-fit-browser-manage.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
     }
 
     [AvaloniaFact]
@@ -323,7 +323,7 @@ public class FitBrowserTests
         dialog.Show();
         var frame = dialog.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fit-metadata-dialog.png");
+        frame!.Save("/tmp/eveutils-fit-metadata-dialog.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         dialog.Close();
     }
 

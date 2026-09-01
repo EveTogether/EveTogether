@@ -66,7 +66,7 @@ public class ClientOnlyFleetRosterTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-roster.png");
+        frame!.Save("/tmp/eveutils-roster.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
 
         // DISBAND (the Local-tab DISBAND button path).
         var disbanded = await fleetService.DisbandFleetAsync(fleetId, Owner);
