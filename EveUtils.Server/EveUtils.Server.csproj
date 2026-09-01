@@ -17,6 +17,10 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
     <PackageReference Include="Microting.EntityFrameworkCore.MySql" Version="10.0.10" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!-- The only way to write a WinZip-AES ZIP from .NET: System.IO.Compression has no encryption at all.
+         MIT, so it sits under the AGPL without friction. The package id is SharpZipLib; ICSharpCode.SharpZipLib
+         is the pre-1.0 id, last published in 2013. -->
+    <PackageReference Include="SharpZipLib" Version="1.4.2" />
   </ItemGroup>
 
   <PropertyGroup>

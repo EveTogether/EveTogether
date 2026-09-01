@@ -1,10 +1,11 @@
 namespace EveUtils.Server.Backup;
 
 /// <summary>
-/// The on-disk shape of a server backup archive (<c>.etbackup</c>), in one place because every byte of it is a
-/// compatibility promise: once an admin has downloaded an archive, every later build has to be able to read it.
+/// The on-disk shape of a server backup archive, in one place because every byte of it is a compatibility promise:
+/// once an admin has downloaded an archive, every later build has to be able to read it.
 ///
-/// A file is an encrypted envelope (see <see cref="BackupEnvelope"/>) whose plaintext is a ZIP:
+/// The file is an ordinary ZIP encrypted with WinZip AES-256 (see <see cref="BackupZip"/>), so 7-Zip and WinRAR
+/// open it with nothing but the password. Inside:
 /// <code>
 /// manifest.json                       written last, read first (random access)
 /// database/000.&lt;Table&gt;.jsonl       one file per table; the number is the insert order
@@ -16,11 +17,11 @@ namespace EveUtils.Server.Backup;
 /// </summary>
 internal static class BackupFormat
 {
-    /// <summary>Content layout version, in the manifest. Bumped when the ZIP layout or the row encoding changes;
-    /// separate from the envelope's own version, which covers only the crypto framing.</summary>
-    public const int ContentVersion = 1;
+    /// <summary>Archive layout version, in the manifest. Version 1 was the <c>.etbackup</c> container ET-99 wrapped
+    /// around this same ZIP; it existed for a matter of hours and is not read by anything (ET-102).</summary>
+    public const int ContentVersion = 2;
 
-    public const string FileExtension = ".etbackup";
+    public const string FileExtension = ".zip";
 
     public const string ManifestEntry = "manifest.json";
     public const string DatabaseEntryPrefix = "database/";

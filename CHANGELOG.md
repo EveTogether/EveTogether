@@ -17,8 +17,12 @@ taken from the matching `## vX.Y.Z` section below.
 - **The server control panel can now take a backup and put one back.** One encrypted file holds everything a server
   needs to be rebuilt somewhere else: the whole database, the key that decrypts the stored ESI refresh tokens, and
   the TLS certificate your clients pinned. Restoring it on a fresh install brings the server back with every linked
-  character still connected. The archive is always encrypted with a password you choose at download time, and that
-  password cannot be recovered. Your configuration — the ESI client id and secret, the admin password, the database
+  character still connected. The archive is an ordinary **AES-256-encrypted ZIP**: open it with 7-Zip or WinRAR and
+  you can see exactly what is in your own backup, without EVE Together. Windows Explorer cannot open it — Explorer
+  only supports the old, broken ZipCrypto. Because the ZIP format fixes its key derivation at 1000 rounds, the
+  strength of an archive is the strength of its password: the panel asks for at least 20 characters and offers to
+  generate one, shown once. That password cannot be recovered. Your configuration — the ESI client id and secret,
+  the admin password, the database
   connection string — deliberately stays out of the archive, and the panel says so. Restoring is destructive, asks
   you to confirm in so many words, keeps an archive of what it replaced, and restarts the server afterwards.
 - Characters whose location EVE Together may not read now produce **one** message naming them all, instead of one

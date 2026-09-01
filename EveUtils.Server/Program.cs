@@ -338,7 +338,7 @@ app.MapPost("/backup/download", async (
         return Results.Redirect("/login");
 
     var takenAt = DateTimeOffset.UtcNow;
-    http.Response.ContentType = "application/octet-stream";
+    http.Response.ContentType = "application/zip";
     http.Response.Headers.ContentDisposition = $"attachment; filename=\"{BackupFormat.DownloadFileName(takenAt)}\"";
     // ZipArchive writes synchronously, and the response body rejects that by default. Enabled for this endpoint
     // only; the alternative is buffering a whole database in memory to hand over in one asynchronous write.
