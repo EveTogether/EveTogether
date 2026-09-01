@@ -32,7 +32,7 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
     /// <summary>Settings key for the user's opt-in. Absent or anything but "true" means off.</summary>
     public const string EnabledSettingKey = "clipboard.watch";
 
-    // Clipboard owners normally release a transient lock within this short bounded window.
+    // These chosen, unmeasured retry values are the first setting to raise if clipboard locks persist.
     private const int ClipboardReadAttempts = 3;
     private static readonly TimeSpan ClipboardReadRetryDelay = TimeSpan.FromMilliseconds(50);
 
