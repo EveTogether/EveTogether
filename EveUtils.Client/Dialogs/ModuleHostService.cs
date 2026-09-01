@@ -18,7 +18,7 @@ public sealed class ModuleHostService
         public required Window Window;
         public required Control Content;
         public required string Title;
-        public string? Id;        // stable de-dupe identity (e.g. one per fleet); falls back to Title when null
+        public required string Id;
         public bool Shown;        // window currently shown (floating)
         public HostTab? Tab;      // docked tab wrapper
     }
@@ -41,16 +41,14 @@ public sealed class ModuleHostService
             module.Window.Close(); // fires Closed → OnWindowClosed drops it from the set
     }
 
-    /// <summary>Open a feature window as a module. Re-opening the same module just re-selects it; identity is
-    /// <paramref name="moduleId"/> when given (so several instances of one window type — e.g. one roster per fleet —
-    /// stay distinct even when their titles match), otherwise the title. <paramref name="moduleKey"/> tags the rail
-    /// group so the rail can highlight the active tab's module.</summary>
-    public void Open(Window window, string title, string? moduleKey = null, string? moduleId = null)
+    /// <summary>Open a feature window as a module. Re-opening the same module id re-selects it. <paramref
+    /// name="moduleKey"/> tags the rail group so the rail can highlight the active tab's module.</summary>
+    public void Open(Window window, string title, string? moduleKey, string moduleId)
     {
         if (_owner is null) return;
         if (_host is null) { window.Show(_owner); return; }   // no host wired (e.g. some tests)
 
-        var existing = _modules.FirstOrDefault(m => moduleId is not null ? m.Id == moduleId : m.Title == title);
+        var existing = _modules.FirstOrDefault(m => m.Id == moduleId);
         if (existing is not null)
         {
             // The module is already open, so the caller's freshly built window and view-model are surplus. Give the

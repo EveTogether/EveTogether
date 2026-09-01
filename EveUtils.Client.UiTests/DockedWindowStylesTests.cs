@@ -42,7 +42,7 @@ public class DockedWindowStylesTests
             var host = new ModuleHostService();
             host.SetOwner(new Window());
             host.SetHost(display);
-            host.Open(window, "MODULE", "test");
+            host.Open(window, "MODULE", "test", "module");
 
             // The module's own window is deliberately not the host — stand the stolen content in a plain one.
             content = (Control)Assert.Single(display.HostTabs).Content!;
