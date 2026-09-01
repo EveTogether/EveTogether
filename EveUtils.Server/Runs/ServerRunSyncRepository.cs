@@ -8,26 +8,34 @@ namespace EveUtils.Server.Runs;
 
 internal sealed class ServerRunSyncRepository(IDbContextFactory<ServerDbContext> contextFactory) : IRunSyncRepository, IScopedService
 {
-    public async Task<DateTime> UpsertAsync(Run run, CancellationToken cancellationToken = default)
+    public async Task<DateTime?> UpsertAsync(Run run, CancellationToken cancellationToken = default)
     {
+        await using ServerDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        int? revision = await db.Set<Run>().Where(candidate => candidate.Id == run.Id)
+            .Select(candidate => (int?)candidate.Revision).SingleOrDefaultAsync(cancellationToken);
+        if (revision is { } currentRevision && currentRevision > run.Revision)
+            return null;
+
         DateTime pushedAtUtc = DateTime.UtcNow;
         run.LastPushedAtUtc = pushedAtUtc;
-
-        await using ServerDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
         await db.Set<Run>().Where(candidate => candidate.Id == run.Id).ExecuteDeleteAsync(cancellationToken);
         db.Set<Run>().Add(run);
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return pushedAtUtc;
     }
 
     public async Task<IReadOnlyList<Run>> ListChangedAsync(
-        IReadOnlyCollection<string> groupCodes, DateTime sinceUtc, CancellationToken cancellationToken = default)
+        long characterId, IReadOnlyCollection<string> groupCodes, DateTime sinceUtc, CancellationToken cancellationToken = default)
     {
         await using ServerDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
         return await db.Set<Run>()
             .AsNoTracking()
             .Where(run => run.GroupCode != null && groupCodes.Contains(run.GroupCode) &&
-                          run.LastPushedAtUtc.HasValue && run.LastPushedAtUtc.Value > sinceUtc)
+                          run.LastPushedAtUtc.HasValue && run.LastPushedAtUtc.Value > sinceUtc &&
+                          db.Set<Run>().Any(member => member.CharacterId == characterId &&
+                              member.GroupCode == run.GroupCode && !member.DeletedAtUtc.HasValue))
             .Include(run => run.LootCaptures)
                 .ThenInclude(capture => capture.Entries)
             .Include(run => run.BountyEntries)

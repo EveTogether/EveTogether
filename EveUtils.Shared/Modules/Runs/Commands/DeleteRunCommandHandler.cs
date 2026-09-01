@@ -16,7 +16,8 @@ internal sealed class DeleteRunCommandHandler(IDbContextFactory<ClientDbContext>
         int changed = await db.Set<Run>().Where(run => run.Id == command.RunId && !run.DeletedAtUtc.HasValue)
             .ExecuteUpdateAsync(properties => properties
                 .SetProperty(run => run.DeletedAtUtc, command.DeletedAtUtc)
-                .SetProperty(run => run.SyncState, RunSyncState.Pending)
+                .SetProperty(run => run.SyncState,
+                    run => run.SyncState == RunSyncState.Local ? RunSyncState.Local : RunSyncState.Pending)
                 .SetProperty(run => run.Revision, run => run.Revision + 1), cancellationToken);
         return changed == 0
             ? Result.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound, "The run no longer exists.", "Runs"))

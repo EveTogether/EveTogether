@@ -10,12 +10,12 @@ using RunsGrpc = EveUtils.Grpc.Runs;
 namespace EveUtils.Client.Transport;
 
 public sealed class ServerRunSyncClient(
-    GrpcChannelFactory channelFactory, IClientSessionStore sessionStore, ServerSessionRefresher refresher) : ISingletonService
+    GrpcChannelFactory channelFactory, IClientSessionStore sessionStore, ServerSessionRefresher refresher) : IServerRunSyncClient, ISingletonService
 {
     private static readonly JsonSerializerOptions SerializerOptions = new() { ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles };
 
     public async Task<(bool Accepted, string Message, DateTime? LastPushedAtUtc)> PushAsync(
-        string serverAddress, RunWirePayload payload, int actingCharacterId, CancellationToken cancellationToken = default)
+        string serverAddress, RunWirePayload payload, long actingCharacterId, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -30,10 +30,14 @@ public sealed class ServerRunSyncClient(
         {
             return (false, $"Run sync failed: {exception.Status.Detail}", null);
         }
+        catch (InvalidOperationException exception)
+        {
+            return (false, $"Run sync failed: {exception.Message}", null);
+        }
     }
 
     public async Task<(bool Accepted, string Message, IReadOnlyList<RunWirePayload> Runs)> PullAsync(
-        string serverAddress, IReadOnlyCollection<string> groupCodes, DateTime sinceUtc, int actingCharacterId,
+        string serverAddress, IReadOnlyCollection<string> groupCodes, DateTime sinceUtc, long actingCharacterId,
         CancellationToken cancellationToken = default)
     {
         try
@@ -55,12 +59,20 @@ public sealed class ServerRunSyncClient(
         {
             return (false, $"Run sync failed: {exception.Status.Detail}", []);
         }
+        catch (InvalidOperationException exception)
+        {
+            return (false, $"Run sync failed: {exception.Message}", []);
+        }
     }
 
-    private async Task<TReply> _InvokeAsync<TReply>(string serverAddress, int actingCharacterId,
+    private async Task<TReply> _InvokeAsync<TReply>(string serverAddress, long actingCharacterId,
         Func<RunsGrpc.RunsClient, Metadata, AsyncUnaryCall<TReply>> rpc, CancellationToken cancellationToken)
     {
-        ClientSessionTokens? session = await sessionStore.LoadForCharacterAsync(serverAddress, actingCharacterId, cancellationToken);
+        if (actingCharacterId is < int.MinValue or > int.MaxValue)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "The character id cannot be paired with a server session."));
+
+        int sessionCharacterId = (int)actingCharacterId;
+        ClientSessionTokens? session = await sessionStore.LoadForCharacterAsync(serverAddress, sessionCharacterId, cancellationToken);
         if (session is null)
             throw new RpcException(new Status(StatusCode.Unauthenticated, "Not authenticated — pair with the server first."));
 
@@ -71,7 +83,7 @@ public sealed class ServerRunSyncClient(
         }
         catch (RpcException exception) when (exception.StatusCode == StatusCode.Unauthenticated)
         {
-            ClientSessionTokens? refreshed = await refresher.RefreshAsync(serverAddress, actingCharacterId, cancellationToken);
+            ClientSessionTokens? refreshed = await refresher.RefreshAsync(serverAddress, sessionCharacterId, cancellationToken);
             if (refreshed is null)
                 throw;
             return await rpc(client, _BearerHeaders(refreshed.AccessToken));
