@@ -34,19 +34,27 @@ public sealed class AbyssalLootCapture : ISingletonService, IDisposable
 
         IReadOnlyList<ClipboardInventoryItem> items = ClipboardInventoryParser.Parse(capture.Text);
         var resolution = SdeInventoryResolver.Resolve(items, _sde);
-        if (resolution.Lines.Count * 2 <= items.Count)
-            return; // A strict majority prevents an incidental EVE name from turning a copied table into loot.
+        if (resolution.Lines.Count == 0)
+        {
+            _toasts.Show("Loot not recognised",
+                $"None of the {resolution.Unresolved.Count} copied names is a known item type. Copy rows from an EVE inventory window.",
+                ToastKind.Error);
+            return;
+        }
 
         var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(capture.Text)));
         lock (_gate)
         {
+            // Suppress only while its card stays open, so copying after dismissal asks again.
             if (_openFingerprint == fingerprint)
                 return;
 
             _openFingerprint = fingerprint;
         }
 
-        _toasts.Show("Loot copied", $"Recognised {resolution.Lines.Count} EVE item type(s) from this inventory.",
+        string message = $"Recognised {resolution.Lines.Count} EVE item type(s) from this inventory."
+            + (resolution.Unresolved.Count > 0 ? $" {resolution.Unresolved.Count} name(s) were not recognised." : string.Empty);
+        _toasts.Show("Loot copied", message,
             ToastKind.Information, [new ToastAction("Close", () => CloseOffer(fingerprint))],
             () => CloseOffer(fingerprint), FeatureName);
     }

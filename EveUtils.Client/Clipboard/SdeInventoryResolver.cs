@@ -14,7 +14,7 @@ public static class SdeInventoryResolver
         foreach (ClipboardInventoryItem item in items)
         {
             if (sde.TryGetTypeId(item.Name, out int typeId))
-                lines.Add(new AppraisalLine(typeId, item.Name, item.Quantity ?? 1));
+                lines.Add(new AppraisalLine(typeId, item.Name, item.Quantity ?? 1)); // no quantity column = one of it
             else
                 unresolved.Add(item.Name);
         }

@@ -33,23 +33,28 @@ public sealed class AbyssalLootCaptureTests
     [InlineData("Budget rent\t1200\r\nCloud storage\t80")]
     [InlineData("Product name\t19\r\nAnnual subscription\t12")]
     [InlineData("Alice\t1\r\nBob\t2")]
-    public async Task InventoryWithoutEveTypes_IsRejected(string text)
+    public async Task InventoryWithoutEveTypes_ExplainsWhyItIsRejected(string text)
     {
         using var env = await Env.StartAsync();
 
         env.Copy(text);
 
         Assert.Empty(env.Toasts.ActionToasts);
+        var rejection = Assert.Single(env.Toasts.Toasts);
+        Assert.Equal("Loot not recognised", rejection.Title);
+        Assert.Contains("None of the 2 copied names is a known item type", rejection.Message);
     }
 
     [AvaloniaFact]
-    public async Task InventoryWithOnlyHalfKnownTypes_IsRejected()
+    public async Task InventoryWithOneKnownType_OffersLootAndNamesUnresolvedRows()
     {
         using var env = await Env.StartAsync();
 
         env.Copy("Rifter\t1\r\nBudget rent\t2");
 
-        Assert.Empty(env.Toasts.ActionToasts);
+        var offer = Assert.Single(env.Toasts.ActionToasts);
+        Assert.Contains("1 EVE item type(s)", offer.Message);
+        Assert.Contains("1 name(s) were not recognised", offer.Message);
     }
 
     [AvaloniaFact]
