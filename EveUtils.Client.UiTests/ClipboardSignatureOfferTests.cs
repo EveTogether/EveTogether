@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
@@ -16,6 +17,11 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public sealed class ClipboardSignatureOfferTests
 {
+    /// <summary>Raymond's own clipboard, byte for byte: real tabs, and the comma decimals his client writes. Kept
+    /// unwashed on purpose — a tidied fixture would stop proving the parser survives the thing it actually meets.</summary>
+    private const string MeasuredHomefrontLine =
+        "IMM-760	Cosmic Anomaly	Homefront Operation Site - Combat Site	Suspicious Signal: Secure the Intel	100,0%	0,50 AU";
+
     [AvaloniaFact]
     public async Task UnmatchedSignatureName_StatesEnglishOnlyMatching_NotThatTheSiteIsMissing()
     {
@@ -114,7 +120,7 @@ public sealed class ClipboardSignatureOfferTests
     {
         using var env = await Env.StartAsync();
 
-        env.Copy("IMM-760	Cosmic Anomaly	Homefront Operation Site - Combat Site	Suspicious Signal: Secure the Intel	100,0%	0,50 AU");
+        env.Copy(MeasuredHomefrontLine);
 
         var offer = Assert.Single(env.Toasts.ActionToasts);
         Assert.Equal(new[] { "Close", "Start run" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
@@ -209,8 +215,69 @@ public sealed class ClipboardSignatureOfferTests
         Assert.Single(env.Dialogs.ShownActivityWindows);
     }
 
-    private static SdeSite Site(int dungeonId, string name, string? archetype = null, string? faction = null, int? ded = null, bool restricted = false) =>
-        new(dungeonId, name, archetype is null ? null : 1, archetype, faction is null ? null : 1, faction, null, ded, restricted, []);
+    // ── ET-80 — the ACTIVITY section, filled from the catalogue ─────────────────────────────────────
+
+    [AvaloniaFact]
+    public async Task StartRunFromTheMeasuredLine_FillsTheActivitySectionFromTheCatalogue()
+    {
+        using var env = await Env.StartAsync();
+        env.Sde.AddSite(Site(1263, "Suspicious Signal: Secure the Intel", archetype: "Homefront Operations",
+            faction: "Caldari State", ded: 4, restricted: true,
+            groups: [new SdeGroup(420, 6, "Destroyer", true), new SdeGroup(25, 6, "Frigate", true)]));
+
+        env.Copy(MeasuredHomefrontLine);
+        env.Toasts.ActionToasts[0].Actions[1].Run(); // "Start run"
+
+        var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
+        // TYPE stays the scan window's own words: the SDE carries no scanner-type mapping to enrich it with.
+        Assert.Equal("Homefront Operation Site - Combat Site", opened.SignatureTypeText);
+        Assert.Equal("Suspicious Signal: Secure the Intel", opened.SignatureSiteText);
+        Assert.Equal("Destroyer, Frigate", opened.ShipRestrictionText);
+        Assert.Equal("DED 4 of 10", opened.ThreatText);
+        Assert.Equal("Suspicious Signal: Secure the Intel · DED 4", opened.Activity.HeaderSummary);
+        Assert.DoesNotContain("ET-80", opened.Activity.HeaderSummary);
+    }
+
+    // Tegenproef: a site the catalogue does not carry. Every field says which state it is in — none goes blank, and
+    // none of them invents a rating or reads "no entry" as "no restriction".
+    [AvaloniaFact]
+    public async Task StartRunForASiteTheCatalogueDoesNotCarry_SaysSo_RatherThanLeavingTheFieldsEmpty()
+    {
+        using var env = await Env.StartAsync(); // catalogue deliberately empty
+
+        env.Copy(MeasuredHomefrontLine);
+        env.Toasts.ActionToasts[0].Actions[1].Run();
+
+        var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
+        Assert.Equal("Suspicious Signal: Secure the Intel — no catalogue entry under this English name",
+            opened.SignatureSiteText);
+        Assert.Equal("not known — no catalogue entry under this name", opened.ShipRestrictionText);
+        Assert.Equal("not known — no catalogue entry under this name", opened.ThreatText);
+        Assert.DoesNotContain("DED 0", opened.ThreatText);
+        Assert.DoesNotContain("no ship restriction", opened.ShipRestrictionText);
+        Assert.Equal("Suspicious Signal: Secure the Intel", opened.Activity.HeaderSummary);
+    }
+
+    // The known limitation, pinned rather than assumed: the catalogue stores site names in English only, so the same
+    // site copied from a client in another language cannot be matched — and the window blames the match, not the site.
+    [AvaloniaFact]
+    public async Task TheCatalogueIsMatchedByEnglishNameOnly_AndTheWindowNamesThatAsTheReason()
+    {
+        using var env = await Env.StartAsync();
+        env.Sde.AddSite(Site(1263, "Suspicious Signal: Secure the Intel", ded: 4));
+
+        env.Copy("IMM-760	Cosmic Anomaly	Homefront Operation Site - Combat Site	Signal suspect : sécuriser les renseignements	100,0%	0,50 AU");
+        env.Toasts.ActionToasts[0].Actions[1].Run();
+
+        var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
+        Assert.Contains("English", opened.SignatureSiteText);
+        Assert.DoesNotContain("DED 4", opened.ThreatText);
+    }
+
+    private static SdeSite Site(int dungeonId, string name, string? archetype = null, string? faction = null,
+        int? ded = null, bool restricted = false, IReadOnlyList<SdeGroup>? groups = null) =>
+        new(dungeonId, name, archetype is null ? null : 1, archetype, faction is null ? null : 1, faction, null, ded,
+            restricted, groups ?? []);
 
     private sealed class Env : IDisposable
     {

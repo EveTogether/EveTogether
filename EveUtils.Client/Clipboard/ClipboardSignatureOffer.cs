@@ -90,7 +90,8 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         _dialogs.ShowActivityWindow(new ActivityWindowViewModel(ActivityKind.Site, _services)
         {
             SignatureGroup = row.Group,
-            SignatureName = row.Name
+            SignatureName = row.Name,
+            MatchedSites = MatchSites(row.Name!)
         });
     }
 
@@ -131,19 +132,21 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
 
     private string DescribeSignature(string signatureId, string name)
     {
-        // English-only exact match (ET-79 AC-4b: the multi-language alias table is an open decision). A miss does
-        // not prove the site is missing from the catalogue, so the toast says that honestly instead of the
-        // stronger, unearned "not in the site catalogue".
-        var matches = _sde.SearchSites(nameQuery: name)
-            .Where(site => string.Equals(site.Name, name, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
+        var matches = MatchSites(name);
         if (matches.Count == 0)
             return $"{signatureId} · {name} — site names are matched in English only";
 
         var suffix = DescribeMatches(matches);
         return suffix.Length == 0 ? $"{signatureId} · {name}" : $"{signatureId} · {name} — {suffix}";
     }
+
+    /// <summary>The one route from a copied site name into the catalogue — the toast and the window it opens must
+    /// not answer differently. English-only exact match (ET-79 AC-4b: the multi-language alias table is an open
+    /// decision); a miss does not prove the site is missing, so neither caller says it is.</summary>
+    private IReadOnlyList<SdeSite> MatchSites(string name) =>
+        _sde.SearchSites(nameQuery: name)
+            .Where(site => string.Equals(site.Name, name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
 
     // Never fabricates a field the SDE does not carry and never picks one match over another (ET-79 AC-5): folds
     // matches that show the same thing into one, and for anything that still differs shows only what they share

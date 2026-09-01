@@ -273,6 +273,16 @@
                                 <TextBlock Text="SITE"/>
                                 <TextBlock Grid.Column="1" Text="{Binding SignatureSiteText}"/>
                             </Grid>
+                            <!-- ET-80 — what the catalogue adds over the copied line: what the run demands. SHIPS
+                                 sits above THREAT because it is the one that can turn you away at the gate. -->
+                            <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                                <TextBlock Text="SHIPS"/>
+                                <TextBlock Grid.Column="1" Text="{Binding ShipRestrictionText}"/>
+                            </Grid>
+                            <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                                <TextBlock Text="THREAT"/>
+                                <TextBlock Grid.Column="1" Text="{Binding ThreatText}"/>
+                            </Grid>
                         </StackPanel>
 
                         <Grid Classes="kv" ColumnDefinitions="Auto,*">

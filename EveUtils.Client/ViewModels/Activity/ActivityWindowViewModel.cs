@@ -13,6 +13,7 @@ using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
+using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Queries;
 using Microsoft.Extensions.DependencyInjection;
@@ -148,6 +149,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(SignatureSiteText))]
     private string? _signatureName;
 
+    /// <summary>What the site catalogue carries under <see cref="SignatureName"/> (ET-80). Empty is the ordinary
+    /// case rather than a fault — the match is on the English name only, so a miss cannot prove the site is absent —
+    /// and so is more than one, since 218 catalogue names are shared by 613 dungeons. Nothing below ever picks one.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SignatureSiteText))]
+    [NotifyPropertyChangedFor(nameof(ThreatText))]
+    [NotifyPropertyChangedFor(nameof(ShipRestrictionText))]
+    private IReadOnlyList<SdeSite> _matchedSites = [];
+
     // ── The five sections ───────────────────────────────────────────────────────────────────────────
 
     public ActivitySection Activity { get; } = new() { Title = "ACTIVITY", IsExpanded = true };
@@ -259,7 +269,33 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public string SignatureTypeText => SignatureGroup ?? "not known yet";
 
-    public string SignatureSiteText => SignatureName ?? "not known yet";
+    public string SignatureSiteText => SignatureName is not { } name
+        ? "not known yet"
+        : MatchedSites.Count switch
+        {
+            0 => $"{name} — no catalogue entry under this English name",
+            1 => name,
+            var count => $"{name} — {count} catalogue entries share this name"
+        };
+
+    /// <summary>What the run demands of the ship you are in — the one fact here that can turn you away at the gate,
+    /// so it is stated before you warp rather than discovered after.</summary>
+    public string ShipRestrictionText => MatchedSites.Count == 0
+        ? "not known — no catalogue entry under this name"
+        : MatchedSites.Select(_ShipRule).Distinct().ToList() is [{ } only]
+            ? only
+            : "the entries sharing this name disagree on their ship restriction";
+
+    /// <summary>Never says "unrated": only 38 of the catalogue's sites state a rating at all, so an absent one is a
+    /// fact about the catalogue and is worded as one.</summary>
+    public string ThreatText => MatchedSites.Count == 0
+        ? "not known — no catalogue entry under this name"
+        : MatchedSites.Select(site => site.DedRating).Distinct().ToList() switch
+        {
+            [{ } ded] => $"DED {ded} of 10",
+            [null] => "no DED rating in the catalogue",
+            _ => "the entries sharing this name disagree on their DED rating"
+        };
 
     public string TierText => TierIndex is { } tier
         ? $"{Tiers[tier]} (Tier {tier})"
@@ -473,6 +509,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         IsClockWarning = remaining > CriticalAt && remaining <= WarningAt;
     }
 
+    // The signature arrives after construction, from the object initialiser the toast opens the window with — so the
+    // shut ACTIVITY header has to be worked out again then, not only on the next clock tick.
+    partial void OnSignatureNameChanged(string? value) => _RefreshSummaries();
+
+    partial void OnMatchedSitesChanged(IReadOnlyList<SdeSite> value) => _RefreshSummaries();
+
     private void _RefreshSummaries()
     {
         Activity.HeaderSummary = _ActivitySummary();
@@ -485,12 +527,36 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private string _ActivitySummary()
     {
         if (!IsAbyssal)
-            return SolarSystem is { } system ? $"waiting on ET-80 · {system}" : "waiting on ET-80";
+            return string.Join(" · ", new[] { SignatureName ?? "no signature", _ShortDemand(), SolarSystem }
+                .Where(part => part is not null));
 
         return Weather is { } weather && TierIndex is { } tier
             ? $"{Tiers[tier]} T{tier} · {weather.Name} · no location"
             : "not set yet · no location";
     }
+
+    /// <summary>The shut header carries what the run demands, not only what it is called. Silent when the entries
+    /// sharing the name do not agree — a demand is worth nothing if it might be the neighbour's.</summary>
+    private string? _ShortDemand()
+    {
+        if (MatchedSites.Count == 0)
+            return null;
+
+        if (MatchedSites.Select(site => site.DedRating).Distinct().ToList() is [{ } ded])
+            return $"DED {ded}";
+
+        return MatchedSites.All(site => site.IsShipRestricted) ? "ship-restricted" : null;
+    }
+
+    /// <summary>A restricted site whose allow-list resolves to no groups is restricted all the same — a handful of
+    /// the catalogue's type lists express themselves per hull, and reading that as "anything goes" is the one
+    /// mistake here that costs a ship.</summary>
+    private static string _ShipRule(SdeSite site) =>
+        !site.IsShipRestricted
+            ? "no ship restriction in the catalogue"
+            : site.AllowedShipGroups is []
+                ? "restricted, but the catalogue does not state it as ship groups"
+                : string.Join(", ", site.AllowedShipGroups.Select(group => group.Name).Order());
 
     private void _AfterChoice()
     {
