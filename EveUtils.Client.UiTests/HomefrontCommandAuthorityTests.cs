@@ -185,6 +185,9 @@ public sealed class HomefrontCommandAuthorityTests
         DateTime now = DateTime.UtcNow;
 
         window.StartManualRun(now);
+        // The two assertions around the loop are what stop this from checking nothing: on its own, "the count did
+        // not go up" is also satisfied by a count that never left zero — it passed on a window wired to no source at
+        // all. Do not simplify back to the middle assertion alone.
         int afterFirstTick = client.Esi.CharFleetReads;
         Assert.True(afterFirstTick > 0, "no read was made at all — this would pass on a window wired to nothing");
 
