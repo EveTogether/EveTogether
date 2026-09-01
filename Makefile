@@ -105,15 +105,21 @@ clean-test-data: ## Wipe the isolated server + client test data dirs (fresh DB/c
 # Target-specific exports (cross-platform: Make exports the var into the recipe's environment on any OS, where a
 # `VAR=value cmd` prefix would need a POSIX shell). Only the test targets get the isolated data dir / instance;
 # `make server` and `make client` are deliberately absent here and keep using the real anchored data.
-test-server test-routing test-message test-fleet test-fleet-structure test-fleet-discovery \
+test-unit test-server test-routing test-message test-fleet test-fleet-structure test-fleet-discovery \
 test-fleet-invite test-fleet-participation test-fleet-cleanup test-fleet-active-guard test-fit-dedup test-fleet-autoplace test-sde test-fit-parse: \
 	export EVEUTILS_SERVER_DATA_DIR := $(SERVER_TEST_DATA)
 
-test-client smoke test-esi test-gamelog test-fleet-client test-fleet-metric test-remote: \
+test-unit test-client test-integration smoke test-esi test-gamelog test-fleet-client test-fleet-metric test-remote: \
 	export EVEUTILS_INSTANCE := $(CLIENT_TEST_INSTANCE)
 
-.PHONY: test
-test: test-server test-client ## Run all headless test suites
+.PHONY: test test-unit test-integration
+test: test-unit test-server test-client ## Run every test runnable on a clean checkout
+
+test-unit: ## Run every xUnit test suite
+	dotnet test $(SLN) -c $(CONFIG)
+
+# Requires a paired dev server configured with Server:DevTestToken, so it stays outside `test`.
+test-integration: test-fleet-client test-fleet-metric test-remote ## Run paired server/client integration suites
 
 .PHONY: test-server
 test-server: ## Run every server-side headless test suite
@@ -134,9 +140,6 @@ test-client: ## Run every client-side headless test suite (isolated test instanc
 	$(DOTNET_RUN_CLIENT_TEST) -- --smoke
 	$(DOTNET_RUN_CLIENT_TEST) -- --esi-test
 	$(DOTNET_RUN_CLIENT_TEST) -- --gamelog-test
-	$(DOTNET_RUN_CLIENT_TEST) -- --fleet-client-test
-	$(DOTNET_RUN_CLIENT_TEST) -- --fleet-metric-test
-	$(DOTNET_RUN_CLIENT_TEST) -- --remote-test
 
 # Individual suites — `make test-message`, `make test-esi`, etc.
 .PHONY: test-routing test-message test-fleet test-fleet-structure test-fleet-discovery \
