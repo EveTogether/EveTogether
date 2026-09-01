@@ -146,7 +146,7 @@ public class FitBrowserTests
         Assert.Equal(new[] { "HiSlot0", "HiSlot2" }, high.Items.Select(i => i.Flag).ToArray());
         Assert.Equal(new[] { 2, 3 }, high.Items.Select(i => i.TypeId).ToArray());
 
-        // Drone bay sums stacked quantity; the grid's module count is fitted slots only (high 2 + mid 1 + low 2 + rig 1 = 6).
+        // Drone bay sums stacked quantity; the row's module count is fitted slots only (high 2 + mid 1 + low 2 + rig 1 = 6).
         Assert.Equal(5, detail.SlotGroups.First(g => g.Category == FitSlotCategory.Drone).Count);
         Assert.Equal(6, new FitRowViewModel(fit, "Tester", FallbackNameResolver.Instance).ModuleCount);
     }
@@ -246,10 +246,10 @@ public class FitBrowserTests
         dialog.Close();
     }
 
-    /// <summary>a row exposes the per-rack module counts, the per-module tooltip lines (name-resolved) and
-    /// the uploader; with no image provider nothing is fetched.</summary>
+    /// <summary>a row exposes its per-rack module lines (name-resolved), the uploader and the hull class; with no
+    /// image provider nothing is fetched.</summary>
     [Fact]
-    public void Row_CountsModulesPerRack_AndExposesUploader()
+    public void Row_ExposesRackLines_AndUploader()
     {
         var fit = Fit("Brawler", 627,
             (2, "HiSlot0", 1), (2, "HiSlot1", 1),
@@ -257,13 +257,12 @@ public class FitBrowserTests
             (627, "LoSlot0", 1), (627, "LoSlot1", 1), (627, "LoSlot2", 1));
         var row = new FitRowViewModel(fit, "Vaelor Kestrane", new StubNames());
 
-        Assert.Equal(2, row.HighCount);
-        Assert.Equal(1, row.MidCount);
-        Assert.Equal(3, row.LowCount);
         Assert.Equal("Vaelor Kestrane", row.Uploader);
         Assert.Equal(2, row.HighModules.Count);
+        Assert.Single(row.MidModules);
+        Assert.Equal(3, row.LowModules.Count);
         Assert.Equal("125mm Railgun II", row.HighModules[0].Name);   // StubNames maps type id 2
-        Assert.False(row.HasHullImage);                              // no image provider → nothing loaded
+        Assert.False(row.HasHullRender);                             // no image provider → nothing loaded
         Assert.Equal("Cruiser", row.HullClass);                      // hull-class label from the SDE group
         Assert.True(row.HasHullClass);
     }

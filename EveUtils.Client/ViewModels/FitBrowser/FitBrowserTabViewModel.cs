@@ -10,9 +10,9 @@ namespace EveUtils.Client.ViewModels.FitBrowser;
 
 /// <summary>
 /// One tab in the fit-browser: the fits of one source (the Local library or a coupled server), with name-search and
-/// client-side paging (10/25/50/100), shown as cards or as a table depending on the browser's density. The selected
-/// row drives the shared detail panel. Like <see cref="FittingsTabViewModel"/>, server tabs load their rows lazily on
-/// first selection, and a page pulls in its own images rather than the whole library's.
+/// client-side paging (10/25/50/100), shown as a grid of cards. The selected row drives the shared detail panel.
+/// Like <see cref="FittingsTabViewModel"/>, server tabs load their rows lazily on first selection, and a page pulls
+/// in its own images rather than the whole library's.
 /// </summary>
 public partial class FitBrowserTabViewModel : ObservableObject
 {
@@ -22,7 +22,7 @@ public partial class FitBrowserTabViewModel : ObservableObject
     public bool IsLocal { get; }
     public string? ServerAddress { get; }
 
-    /// <summary>Page of rows currently shown in the grid (after search + paging).</summary>
+    /// <summary>Page of rows currently shown in the card grid (after search + paging).</summary>
     public ObservableCollection<FitRowViewModel> PagedRows { get; } = [];
 
     [ObservableProperty] private string _search = "";
@@ -161,17 +161,12 @@ public partial class FitBrowserTabViewModel : ObservableObject
     /// and duplicate pilots into a single download each, so a slow or unreachable image server delays pictures and
     /// nothing else on the screen. Turning the page starts the next one's; a row that already has its images does
     /// nothing.
-    ///
-    /// Both hull sizes are asked for: the card's full render and the table's row icon. Which density is showing is
-    /// the window's business, not the tab's, and switching between them must not leave one of the two blank — the
-    /// 64px icon is under 2 KB, a cheaper answer than plumbing the density down here.
     /// </summary>
     private void FillPage(IReadOnlyList<FitRowViewModel> page)
     {
         foreach (var row in page)
         {
             _ = row.LoadHullRenderAsync();
-            _ = row.LoadHullImageAsync();
             _ = row.LoadUploaderPortraitAsync();
         }
     }

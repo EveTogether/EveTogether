@@ -16,8 +16,7 @@ using EveUtils.Shared.Modules.Market.Repositories;
 namespace EveUtils.Client.ViewModels.FitBrowser;
 
 /// <summary>
-/// One fit in the browser, drawn either as a card or as a table row — the two densities read the same row, so a fit
-/// carries one set of figures however it is shown. Uniform across the Local and server tabs: a Local fit and a
+/// One fit in the browser, drawn as a card. Uniform across the Local and server tabs: a Local fit and a
 /// server-shared fit map to the same properties. Carries the parsed <see cref="EsiFitting"/> so the detail panel can
 /// be built on selection without re-reading storage, plus the hull render, the racks, the uploader and the price.
 /// Everything expensive — the render, the uploader's portrait, the equipment icons — loads on demand, so a fit that
@@ -56,7 +55,7 @@ public sealed partial class FitRowViewModel : ViewModelBase
     public string Source { get; }
 
     /// <summary>Who put this fit here — the creator (owning character) on the Local tab, the sharer on a server tab
-    /// . Same value as <see cref="Source"/>, named for the Uploader column.</summary>
+    /// . Same value as <see cref="Source"/>, named for the card's uploader row.</summary>
     public string Uploader => Source;
 
     public EsiFitting Fit { get; }
@@ -65,19 +64,16 @@ public sealed partial class FitRowViewModel : ViewModelBase
     /// key off it. Null for a server-shared row that has not been downloaded locally.</summary>
     public int? LocalFitId { get; }
 
-    /// <summary>Module count per rack: shown as "x modules" with a per-module tooltip.</summary>
-    public int HighCount { get; }
-    public int MidCount { get; }
-    public int LowCount { get; }
-
-    /// <summary>Per-rack module lines for the column tooltips (icon + name); icons load on demand.</summary>
+    /// <summary>The three module racks as the fit carries them: one line per fitted module, in slot order, ungrouped.
+    /// <see cref="Racks"/> stacks these into what the popover draws, so identical modules fold there and not
+    /// here.</summary>
     public IReadOnlyList<FitModuleLineViewModel> HighModules { get; }
     public IReadOnlyList<FitModuleLineViewModel> MidModules { get; }
     public IReadOnlyList<FitModuleLineViewModel> LowModules { get; }
 
     /// <summary>Every rack the fit actually carries — high/mid/low plus rigs, subsystems, services, drones,
     /// fighters and cargo — for the card's single equipment popover. Empty racks are left out, so the popover shows
-    /// no heading with nothing under it. The first three reuse the lists the table columns already built.</summary>
+    /// no heading with nothing under it.</summary>
     public IReadOnlyList<FitRackViewModel> Racks { get; }
 
     /// <summary>The popover's left column: the three module racks, which is what "what is on this fit" usually
@@ -92,15 +88,7 @@ public sealed partial class FitRowViewModel : ViewModelBase
     /// leaving an empty one.</summary>
     public bool HasOtherRacks => OtherRacks.Count > 0;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasHullImage))]
-    private Bitmap? _hullImage;
-
-    public bool HasHullImage => HullImage is not null;
-
-    /// <summary>The big hull render behind a card, at <see cref="RenderSize"/>. Separate from
-    /// <see cref="HullImage"/>: the table's 32px circle and the card's full-bleed band are different images and the
-    /// provider caches them under different keys, so neither pays for the other.</summary>
+    /// <summary>The big hull render behind a card, at <see cref="RenderSize"/>.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasHullRender))]
     private Bitmap? _hullRender;
@@ -120,12 +108,12 @@ public sealed partial class FitRowViewModel : ViewModelBase
     private readonly IMarketPriceRepository? _prices;
 
     /// <summary>Summed ISK value of the fit, or null until <see cref="LoadPriceAsync"/> populates it (no repo / empty
-    /// price cache leaves it null → the column shows a placeholder).</summary>
+    /// price cache leaves it null → the card shows a placeholder).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PriceLabel))]
     private double? _price;
 
-    /// <summary>The fit value formatted for the Price avg. column, or "—" while it is still unknown.</summary>
+    /// <summary>The fit value formatted for the card, or "—" while it is still unknown.</summary>
     public string PriceLabel => Price is { } value ? IskFormat.Short(value) : "—";
 
     // ── the uploader's portrait, beside their name on the card ──
@@ -212,9 +200,6 @@ public sealed partial class FitRowViewModel : ViewModelBase
         HighModules = BuildRack(fit, names, FitSlotCategory.High);
         MidModules = BuildRack(fit, names, FitSlotCategory.Medium);
         LowModules = BuildRack(fit, names, FitSlotCategory.Low);
-        HighCount = HighModules.Count;
-        MidCount = MidModules.Count;
-        LowCount = LowModules.Count;
 
         Racks = BuildRacks(fit, names);
         ModuleRacks = Racks.Where(rack => rack.Category is
@@ -251,8 +236,8 @@ public sealed partial class FitRowViewModel : ViewModelBase
     /// <summary>
     /// Collapses a rack's identical modules onto one line with a count. Six turrets are how a fit is flown but not
     /// how it is read: listed one per line they are six rows of the same words, and they are what made the popover
-    /// longer than the screen it has to sit on. The table's per-rack counts are built from the ungrouped lists and
-    /// are unaffected — "6 modules" there still means six modules.
+    /// longer than the screen it has to sit on. The stacking happens here, on a copy — <see cref="HighModules"/> and
+    /// its two siblings keep one line per fitted module.
     /// </summary>
     private static List<FitModuleLineViewModel> Stack(IReadOnlyList<FitModuleLineViewModel> lines)
     {
@@ -279,19 +264,13 @@ public sealed partial class FitRowViewModel : ViewModelBase
         FitSlotCategory.Drone, FitSlotCategory.Fighter, FitSlotCategory.Cargo
     ];
 
-    /// <summary>Loads the hull render for the row icon. Gated on the images setting: the provider itself does not
-    /// check it, so an ungated call fetches from CCP with images switched off.</summary>
-    public Task LoadHullImageAsync() =>
-        LoadImageAsync(64, bitmap => HullImage = bitmap);
-
-    /// <summary>Loads the card's full-size hull render — on demand, so a page nobody opens fetches nothing.</summary>
-    public Task LoadHullRenderAsync() =>
-        LoadImageAsync(RenderSize, bitmap => HullRender = bitmap);
-
-    private async Task LoadImageAsync(int size, Action<Bitmap?> assign)
+    /// <summary>Loads the card's full-size hull render — on demand, so a page nobody opens fetches nothing. Gated on
+    /// the images setting: the provider itself does not check it, so an ungated call fetches from CCP with images
+    /// switched off.</summary>
+    public async Task LoadHullRenderAsync()
     {
         if (_images is null || !await _images.AreImagesEnabledAsync()) return;
-        assign(await _images.GetImageAsync(ShipTypeId, TypeImageKind.Render, size));
+        HullRender = await _images.GetImageAsync(ShipTypeId, TypeImageKind.Render, RenderSize);
     }
 
     /// <summary>Loads the uploader's ESI portrait for the card — on demand, like the rest. The provider enforces the
@@ -329,21 +308,6 @@ public sealed partial class FitRowViewModel : ViewModelBase
         foreach (var item in Fit.Items)
             total += averages.GetValueOrDefault(item.TypeId) * item.Quantity;
         Price = total;
-    }
-
-    /// <summary>Loads the per-module icons for one rack's tooltip — on demand, so a row that is never hovered fetches
-    /// nothing.</summary>
-    public async Task LoadRackIconsAsync(FitSlotCategory rack)
-    {
-        IReadOnlyList<FitModuleLineViewModel> lines = rack switch
-        {
-            FitSlotCategory.High => HighModules,
-            FitSlotCategory.Medium => MidModules,
-            FitSlotCategory.Low => LowModules,
-            _ => []
-        };
-        foreach (var line in lines)
-            await line.LoadImageAsync();
     }
 
     private async Task InvokeExportAsync(Func<IFitExportActions, FitExportRequest, Task> action)

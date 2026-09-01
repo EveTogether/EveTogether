@@ -26,7 +26,7 @@ using Xunit;
 namespace EveUtils.Client.UiTests;
 
 /// <summary>
-/// The fit browser's card density (ET-110): a grid of cards over the same rows the table shows, each carrying the
+/// The fit browser's card grid (ET-110, the browser's only density since ET-112): each card carries the
 /// hull render with the fit's name and hull over it, who uploaded it, what it is worth, and one popover with
 /// everything fitted. What is pinned down here is what the design leans on and what would fail silently — images
 /// fetched only for the page on screen, the card staying whole with CCP images switched off, the uploader's avatar
@@ -85,11 +85,9 @@ public class FitCardTests
         var row = new FitRowViewModel(FullFit(), "Tester", new StubNames(), images: images);
 
         await row.LoadHullRenderAsync();
-        await row.LoadHullImageAsync();
 
         Assert.Empty(images.Requested);
         Assert.False(row.HasHullRender);
-        Assert.False(row.HasHullImage);
     }
 
     /// <summary>The card asks for a render size the CCP image server actually serves. <c>render</c> answers
@@ -225,11 +223,11 @@ public class FitCardTests
     /// <summary>
     /// A rack folds its identical modules onto one line with a count. Six of the same turret is how the fit flies
     /// but not how it reads — listed one per line they were six rows of the same words, and they were what pushed
-    /// the popover past the height of the screen it has to sit on. The table's per-rack counts are built from the
-    /// ungrouped lists and must not move with it: "6 modules" there still means six modules.
+    /// the popover past the height of the screen it has to sit on. The folding happens on a copy: the rack lists the
+    /// row builds from the fit keep one line per fitted module.
     /// </summary>
     [Fact]
-    public void Popover_FoldsIdenticalModulesOntoOneLine_WithoutMovingTheTablesCounts()
+    public void Popover_FoldsIdenticalModulesOntoOneLine_WithoutMovingTheRowsRackLists()
     {
         var fit = Fit("Sixgun", 627,
             (2, "HiSlot0", 1), (2, "HiSlot1", 1), (2, "HiSlot2", 1),
@@ -248,8 +246,7 @@ public class FitCardTests
         var drones = row.Racks.Single(rack => rack.Category is FitSlotCategory.Drone);
         Assert.Equal(8, Assert.Single(drones.Lines).Quantity);
 
-        // The table's rack column is untouched: it still lists and counts every fitted module separately.
-        Assert.Equal(6, row.HighCount);
+        // The source list is untouched: it still holds every fitted module separately.
         Assert.Equal(6, row.HighModules.Count);
         Assert.All(row.HighModules, line => Assert.Equal(1, line.Quantity));
     }
@@ -272,8 +269,8 @@ public class FitCardTests
             images.Requested.Count(r => r.Kind == TypeImageKind.Icon));
     }
 
-    /// <summary>Only the page on screen fetches. A library of 40 fits pulls one page's worth of renders, row icons
-    /// and portraits, not forty — the whole point of doing this per page instead of per library.</summary>
+    /// <summary>Only the page on screen fetches. A library of 40 fits pulls one page's worth of renders and
+    /// portraits, not forty — the whole point of doing this per page instead of per library.</summary>
     [Fact]
     public void OnlyThePageOnScreen_FetchesItsImages()
     {
@@ -287,8 +284,8 @@ public class FitCardTests
         _ = new FitBrowserTabViewModel("Local", rows);   // the default page is 25
 
         Assert.Equal(25, portraits.Requested.Count);
-        Assert.Equal(25, images.Requested.Count(r => r.Size == FitRowViewModel.RenderSize));
-        Assert.Equal(25, images.Requested.Count(r => r.Size == 64));   // the table's row icon
+        Assert.Equal(25, images.Requested.Count);   // one render per fit on the page, and nothing else
+        Assert.All(images.Requested, r => Assert.Equal(FitRowViewModel.RenderSize, r.Size));
         Assert.All(portraits.Requested, r => Assert.InRange(r.CharacterId, 101, 125));
     }
 
@@ -326,41 +323,6 @@ public class FitCardTests
         Assert.Equal(TextWrapping.Wrap, title.TextWrapping);
         Assert.Equal(TextTrimming.None, title.TextTrimming);
         window.Close();
-    }
-
-    // ── the density ──────────────────────────────────────────────────────────────────────────────────────────
-
-    /// <summary>Cards are the default, and a chosen density is handed to the caller to remember.</summary>
-    [Fact]
-    public void Density_DefaultsToCards_AndHandsAChoiceBackToBeRemembered()
-    {
-        FitBrowserLayout? saved = null;
-        var vm = new FitBrowserViewModel([new FitBrowserTabViewModel("Local", new List<FitRowViewModel>())],
-            saveLayout: layout => { saved = layout; return Task.CompletedTask; });
-
-        Assert.True(vm.IsCardLayout);
-        Assert.False(vm.IsListLayout);
-
-        vm.SetLayoutCommand.Execute(FitBrowserLayout.List);
-
-        Assert.True(vm.IsListLayout);
-        Assert.Equal(FitBrowserLayout.List, saved);
-    }
-
-    /// <summary>A remembered density that lands after the user has already clicked must not overwrite that click —
-    /// the restore is asynchronous and the click is not.</summary>
-    [Fact]
-    public async Task Density_RestoreDoesNotOverwriteAChoiceThatBeatIt()
-    {
-        var gate = new TaskCompletionSource<FitBrowserLayout?>();
-        var vm = new FitBrowserViewModel([new FitBrowserTabViewModel("Local", new List<FitRowViewModel>())],
-            loadLayout: () => gate.Task);
-
-        vm.SetLayoutCommand.Execute(FitBrowserLayout.List);
-        gate.SetResult(FitBrowserLayout.Cards);   // the stored value the click replaced
-        await Task.Yield();
-
-        Assert.True(vm.IsListLayout);
     }
 
     // ── the grid, on every presentation path ─────────────────────────────────────────────────────────────────
@@ -455,26 +417,18 @@ public class FitCardTests
         window.Close();
     }
 
-    /// <summary>One density is on screen at a time. The table is not removed — it is what a column sort and a
-    /// price comparison still need — but it must not be laid out underneath the cards.</summary>
+    /// <summary>The cards are the browser's only density (ET-112): the table and the CARDS/LIST switch that chose
+    /// between them are gone, so nothing but the card grid is laid out over the rows.</summary>
     [AvaloniaTheory]
     [InlineData(Shell.OwnWindow)]
     [InlineData(Shell.DockedTab)]
-    public void OneDensityShowsAtATime(Shell shell)
+    public void TheCardGridIsTheOnlyDensity(Shell shell)
     {
         using var instance = TestClientInstance.Create();
-        var vm = BrowserOf(4);
-        var root = Show(instance, vm, shell, 1100);
+        var root = Show(instance, BrowserOf(4), shell, 1100);
 
         Assert.NotNull(CardPanel(root));
-        Assert.DoesNotContain(root.GetVisualDescendants().OfType<DataGrid>(), grid => grid.IsVisible);
-
-        vm.SetLayoutCommand.Execute(FitBrowserLayout.List);
-        Dispatcher.UIThread.RunJobs();
-        ((Control)root).UpdateLayout();
-
-        Assert.Contains(root.GetVisualDescendants().OfType<DataGrid>(), grid => grid.IsVisible);
-        Assert.Null(CardPanel(root));
+        Assert.Empty(root.GetVisualDescendants().OfType<DataGrid>());
     }
 
     /// <summary>
