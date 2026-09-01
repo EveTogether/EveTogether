@@ -726,9 +726,16 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<string>("FormerGroupCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("GroupCode")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("IsParticipant")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsPayoutEligible")
                         .HasColumnType("boolean");

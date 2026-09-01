@@ -6,19 +6,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
-internal sealed class UnlinkRunFromGroupCodeCommandHandler(IDbContextFactory<ClientDbContext> contextFactory)
-    : ICommandHandler<UnlinkRunFromGroupCodeCommand, Result>
+internal sealed class DiscardRunCommandHandler(IDbContextFactory<ClientDbContext> contextFactory)
+    : ICommandHandler<DiscardRunCommand, Result>
 {
-    public async Task<Result> Handle(UnlinkRunFromGroupCodeCommand command, CancellationToken cancellationToken = default)
+    public async Task<Result> Handle(DiscardRunCommand command, CancellationToken cancellationToken = default)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        Run? run = await db.Set<Run>().FirstOrDefaultAsync(candidate => candidate.Id == command.RunId, cancellationToken);
+        Run? run = await db.Set<Run>()
+            .FirstOrDefaultAsync(candidate => candidate.Id == command.RunId && !candidate.DeletedAtUtc.HasValue,
+                cancellationToken);
         if (run is null)
             return Result.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound,
                 "The run no longer exists.", "Runs"));
 
-        run.UnlinkFromGroup(command.RecordFormerGroup);
-        run.Revision++;
+        RunDiscard.Apply(run, command.StoppedAtUtc);
         await db.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }

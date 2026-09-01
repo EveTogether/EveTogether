@@ -41,4 +41,50 @@ public class GamelogHitTimestampTests
         // test's real wall clock, far from 2030, so even DpsAt(2030+4 s) would already read 0 — red without the fix.)
         Assert.Equal(0, DpsAt(hitTime.AddSeconds(6)));
     }
+
+    /// <summary>
+    /// The same rule for the enemy-observation feed (ET-105's storage seam): subscribers are handed the log line's
+    /// own time, so what ends up in a saved run's observations is what was witnessed. Without it the run would
+    /// carry first/last times that look like a measurement but are only the moment the file was polled — and a
+    /// later room-boundary analysis (ET-55) reads exactly that gap.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task CombatObservation_CarriesTheLogTimestamp_NotProcessingTime()
+    {
+        using var instance = TestClientInstance.Create();
+        var gamelog = instance.Services.GetRequiredService<GamelogClientService>();
+        const int characterId = 90000123;
+        gamelog.MapCharacter(characterId, "Pilot");
+
+        DateTime? observedAt = null;
+        gamelog.CombatObserved += (_, _, at, _) => observedAt = at;
+
+        var hitTime = new DateTime(2030, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        await gamelog.AddHitAsync("Pilot", DamageDirection.Outgoing, 500, "Centii Servant", HitQuality.Hits, hitTime);
+
+        Assert.Equal(hitTime, observedAt);
+    }
+
+    /// <summary>
+    /// The feed fires for <b>both</b> directions — the gamelog carries <c>250 to Centii Scavenger</c> and
+    /// <c>1 from Centii Servant</c> alike — and hands each subscriber the real one. Without this a rat that only
+    /// ever shot at you would be stored as one you shot at, which is a fact nobody measured.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(DamageDirection.Outgoing)]
+    [InlineData(DamageDirection.Incoming)]
+    public async Task CombatObservation_CarriesTheRealDamageDirection(DamageDirection direction)
+    {
+        using var instance = TestClientInstance.Create();
+        var gamelog = instance.Services.GetRequiredService<GamelogClientService>();
+        gamelog.MapCharacter(90000123, "Pilot");
+
+        DamageDirection? observed = null;
+        gamelog.CombatObserved += (_, _, _, d) => observed = d;
+
+        await gamelog.AddHitAsync("Pilot", direction, 500, "Centii Servant", HitQuality.Hits,
+            new DateTime(2030, 1, 1, 12, 0, 0, DateTimeKind.Utc));
+
+        Assert.Equal(direction, observed);
+    }
 }

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
@@ -168,7 +169,16 @@ public sealed class RecordingDialogService : IDialogService
     /// overlay above — a test asserts the toast's Start-run action reached the service without a real window.</summary>
     public List<ActivityWindowViewModel> ShownActivityWindows { get; } = [];
 
-    public void ShowActivityWindow(ActivityWindowViewModel viewModel) => ShownActivityWindows.Add(viewModel);
+    /// <summary>The trigger each window was asked for under — what a test reads to prove a fleet-commander start
+    /// never asked for focus (ET-105 AC-2).</summary>
+    public List<RunWindowOpenTrigger> ShownActivityWindowTriggers { get; } = [];
+
+    public void ShowActivityWindow(ActivityWindowViewModel viewModel,
+        RunWindowOpenTrigger trigger = RunWindowOpenTrigger.LocalUser)
+    {
+        ShownActivityWindows.Add(viewModel);
+        ShownActivityWindowTriggers.Add(trigger);
+    }
     public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, EveUtils.Client.Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, EveUtils.Client.Notifications.ToastPosition toastPosition = EveUtils.Client.Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = EveUtils.Client.LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", EveUtils.Client.LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, EveUtils.Client.Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0) => throw NotUsed();
 
     /// <summary>

@@ -8,6 +8,7 @@ public sealed class RunWireData
     public required Guid Id { get; init; }
     public required long CharacterId { get; init; }
     public string? GroupCode { get; init; }
+    public string? FormerGroupCode { get; init; }
     public required ActivityKind ActivityKind { get; init; }
     public required RunState State { get; init; }
     public required DateTime StartedAtUtc { get; init; }
@@ -19,6 +20,7 @@ public sealed class RunWireData
     public int? SolarSystemId { get; init; }
     public string? Signature { get; init; }
     public required RunRole Role { get; init; }
+    public required bool IsParticipant { get; init; }
     public required bool IsPayoutEligible { get; init; }
     public string? FitContentHash { get; init; }
     public string? FitNameSnapshot { get; init; }
@@ -34,6 +36,7 @@ public sealed class RunWireData
         Id = run.Id,
         CharacterId = run.CharacterId,
         GroupCode = run.GroupCode,
+        FormerGroupCode = run.FormerGroupCode,
         ActivityKind = run.ActivityKind,
         State = run.State,
         StartedAtUtc = run.StartedAtUtc,
@@ -45,6 +48,7 @@ public sealed class RunWireData
         SolarSystemId = run.SolarSystemId,
         Signature = run.Signature,
         Role = run.Role,
+        IsParticipant = run.IsParticipant,
         IsPayoutEligible = run.IsPayoutEligible,
         FitContentHash = run.FitContentHash,
         FitNameSnapshot = run.FitNameSnapshot,
@@ -90,6 +94,7 @@ public sealed class RunWireData
             Id = Id,
             CharacterId = CharacterId,
             GroupCode = GroupCode,
+            FormerGroupCode = FormerGroupCode,
             ActivityKind = ActivityKind,
             State = State,
             StartedAtUtc = StartedAtUtc,
@@ -101,6 +106,7 @@ public sealed class RunWireData
             SolarSystemId = SolarSystemId,
             Signature = Signature,
             Role = Role,
+            IsParticipant = IsParticipant,
             IsPayoutEligible = IsPayoutEligible,
             FitContentHash = FitContentHash,
             FitNameSnapshot = FitNameSnapshot,

@@ -1,6 +1,7 @@
 <v:OverlayWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:va="using:EveUtils.Client.ViewModels.Activity"
+        xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="560" d:DesignHeight="560"
@@ -234,9 +235,19 @@
                                 IsVisible="{Binding IsStartButtonVisible}" Command="{Binding StartRunCommand}"/>
                         <Button x:Name="StopRunButton" Classes="pick" Content="STOP"
                                 IsVisible="{Binding IsStopButtonVisible}" Command="{Binding StopRunCommand}"/>
+                        <!-- Saving is every member's own; discarding is the FC's and ends the run on every
+                             member's machine, so it confirms first (ET-105). -->
+                        <Button x:Name="SaveRunButton" Classes="pick" Content="SAVE"
+                                IsVisible="{Binding IsSaveButtonVisible}" Command="{Binding SaveRunCommand}"/>
+                        <Button x:Name="DiscardRunButton" Classes="pick" Content="DISCARD"
+                                IsVisible="{Binding IsDiscardButtonVisible}" Command="{Binding DiscardRunCommand}"/>
                     </StackPanel>
                 </Grid>
                 <TextBlock Classes="hint" Margin="0" Text="{Binding ClockHint}"/>
+                <!-- Why there are no run controls, when there are none. An unknown fleet boss is a state, not
+                     silence — the same rule as ET-65 AC-7. -->
+                <TextBlock x:Name="CommandStatusText" Classes="hint" Margin="0"
+                           IsVisible="{Binding IsCommandStatusShown}" Text="{Binding CommandStatusText}"/>
             </StackPanel>
         </Border>
 
@@ -375,8 +386,31 @@
                 <ToggleButton Classes="section" Content="{Binding Fleet}"
                               IsChecked="{Binding Fleet.IsExpanded, Mode=TwoWay}"/>
                 <Border Classes="sectionbody" IsVisible="{Binding Fleet.IsExpanded}">
-                    <TextBlock Classes="hint" Margin="0"
-                               Text="A fleet activity is: in a fleet and in the same place. The envelope over every member's re-based anchor, and the count of how many members it is based on, is ET-98 phase 2."/>
+                    <StackPanel>
+                        <TextBlock Classes="hint" Margin="0"
+                                   Text="A fleet activity is: in a fleet and in the same place. The envelope over every member's re-based anchor, and the count of how many members it is based on, is ET-98 phase 2."/>
+                        <!-- Two columns because they are two facts: who flew the site, and who takes a share of it.
+                             A pilot can be the first without the second — the hauler who fetched ore (ET-105). -->
+                        <ItemsControl ItemsSource="{Binding Participants}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vr:RunParticipantViewModel">
+                                    <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding CharacterName}"/>
+                                            <TextBlock Classes="hint" Margin="0" Text="{Binding StandingText}"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" VerticalAlignment="Center"
+                                                   Text="{Binding PayoutDisplay}"/>
+                                        <CheckBox Grid.Column="2" Margin="8,0,0,0" Content="share"
+                                                  IsChecked="{Binding IsPayoutEligible, Mode=TwoWay}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Classes="hint" Margin="0" TextWrapping="Wrap"
+                                   IsVisible="{Binding Participants.Count}"
+                                   Text="{Binding PayoutExpectationLabel}"/>
+                    </StackPanel>
                 </Border>
 
                 <ToggleButton Classes="section" Content="{Binding Bounty}"

@@ -36,6 +36,7 @@ internal sealed class StartRunCommandHandler(IDbContextFactory<ClientDbContext> 
             SolarSystemId = command.SolarSystemId,
             Signature = command.Signature,
             Role = command.Role,
+            IsParticipant = command.IsParticipant,
             IsPayoutEligible = command.IsPayoutEligible,
             FitContentHash = command.FitContentHash,
             FitNameSnapshot = command.FitNameSnapshot,

@@ -749,9 +749,16 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("FormerGroupCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("GroupCode")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsParticipant")
+                        .HasColumnType("INTEGER");
 
                     b.Property<bool>("IsPayoutEligible")
                         .HasColumnType("INTEGER");

@@ -172,6 +172,9 @@ sealed class Program
 
         _ = Services.GetRequiredService<EveUtils.Client.Fleet.FleetRunGroupCodeCoordinator>();
 
+        // Brings the run window up on every member's screen when the FC starts — without taking focus (ET-105).
+        _ = Services.GetRequiredService<EveUtils.Client.Runs.FleetRunWindowPresenter>();
+
         // Fleet metric publisher: shares the active fleet's metrics at ~1 Hz. GUI mode only —
         // the headless test drives the tick itself.
         Services.GetRequiredService<EveUtils.Client.Fleet.FleetMetricPublisher>().Start();
