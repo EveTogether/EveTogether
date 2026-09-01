@@ -295,9 +295,15 @@ public sealed partial class FitRowViewModel : ViewModelBase
             await rack.LoadIconsAsync();
     }
 
+    private Task? _priceLoad;
+
     /// <summary>Estimates the fit value from the cached ESI average prices (hull + every item × quantity) — same
-    /// sum as the fit-detail header. On demand; a missing repo or an unpopulated cache leaves the placeholder.</summary>
-    public async Task LoadPriceAsync()
+    /// sum as the fit-detail header. On demand; a missing repo or an unpopulated cache leaves the placeholder.
+    /// The work runs once and every later caller gets that same task back, so ordering the browser by price waits on
+    /// the fetch the row already started instead of asking the cache a second time.</summary>
+    public Task LoadPriceAsync() => _priceLoad ??= LoadPriceCoreAsync();
+
+    private async Task LoadPriceCoreAsync()
     {
         if (_prices is null) return;
         var typeIds = Fit.Items.Select(item => item.TypeId).Append(ShipTypeId).Distinct().ToList();

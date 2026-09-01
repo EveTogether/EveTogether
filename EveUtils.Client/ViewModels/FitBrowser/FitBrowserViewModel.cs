@@ -27,6 +27,13 @@ public partial class FitBrowserViewModel : ObservableObject, IRefreshableModule
     private readonly Func<Task>? _importText;
     private readonly Func<Task>? _importEsfLink;
     private readonly Func<Task>? _refresh;
+    private readonly Func<FitSortChoice, Task>? _saveSort;
+    private bool _sortChosen;
+    private bool _applySortSuspended;
+
+    /// <summary>The setting the chosen order is remembered under. A key of its own: the CARDS/LIST preference this
+    /// screen used to keep was removed with the table (ET-112) and must not come back to life here.</summary>
+    public const string SortSettingKey = "ui.fit-browser.sort";
 
     public FitBrowserViewModel(
         IEnumerable<FitBrowserTabViewModel> tabs,
@@ -34,15 +41,100 @@ public partial class FitBrowserViewModel : ObservableObject, IRefreshableModule
         Func<Task>? importEsi = null,
         Func<Task>? importText = null,
         Func<Task>? importEsfLink = null,
-        Func<Task>? refresh = null)
+        Func<Task>? refresh = null,
+        Func<Task<FitSortChoice?>>? loadSort = null,
+        Func<FitSortChoice, Task>? saveSort = null)
     {
         _openDetail = openDetail;
         _importEsi = importEsi;
         _importText = importText;
         _importEsfLink = importEsfLink;
         _refresh = refresh;
+        _saveSort = saveSort;
+        // A server coupled while the browser is open gets its tab appended straight to this collection
+        // (MainWindowViewModel's RefreshAsync), so the order is handed to tabs as they arrive rather than only here.
+        Tabs.CollectionChanged += (_, e) =>
+        {
+            foreach (var tab in e.NewItems?.OfType<FitBrowserTabViewModel>() ?? [])
+                tab.ApplySort(Sort, SortDescending);
+        };
         foreach (var tab in tabs) Tabs.Add(tab);
         SelectedTab = Tabs.FirstOrDefault();
+        if (loadSort is not null) _ = RestoreSortAsync(loadSort);
+    }
+
+    // ── the order, for every tab at once ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>What the cards are ordered by. The browser's, not a tab's: changing source keeps your order.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SortLabel))]
+    [NotifyPropertyChangedFor(nameof(IsSortByName))]
+    [NotifyPropertyChangedFor(nameof(IsSortByPrice))]
+    [NotifyPropertyChangedFor(nameof(IsSortByHullClass))]
+    private FitSortOrder _sort = FitSortOrder.Name;
+
+    [ObservableProperty] private bool _sortDescending;
+
+    /// <summary>What the sort button says, so the chosen order is readable without opening the menu.</summary>
+    public string SortLabel => Sort switch
+    {
+        FitSortOrder.Price => "Price",
+        FitSortOrder.HullClass => "Hull class",
+        _ => "Fit name"
+    };
+
+    public bool IsSortByName => Sort is FitSortOrder.Name;
+    public bool IsSortByPrice => Sort is FitSortOrder.Price;
+    public bool IsSortByHullClass => Sort is FitSortOrder.HullClass;
+
+    /// <summary>Order by this field, and remember it for the next session.</summary>
+    [RelayCommand]
+    private void SetSort(FitSortOrder sort)
+    {
+        _sortChosen = true;
+        if (sort == Sort) return;
+
+        Sort = sort;
+        SaveSort();
+    }
+
+    /// <summary>Turn the current order round.</summary>
+    [RelayCommand]
+    private void ToggleSortDirection()
+    {
+        _sortChosen = true;
+        SortDescending = !SortDescending;
+        SaveSort();
+    }
+
+    partial void OnSortChanged(FitSortOrder value) => ApplySort();
+
+    partial void OnSortDescendingChanged(bool value) => ApplySort();
+
+    private void ApplySort()
+    {
+        if (_applySortSuspended) return;
+        foreach (var tab in Tabs) tab.ApplySort(Sort, SortDescending);
+    }
+
+    private void SaveSort()
+    {
+        if (_saveSort is not null) _ = _saveSort(new FitSortChoice(Sort, SortDescending));
+    }
+
+    /// <summary>Restores the remembered order. It lands asynchronously, so a choice that beat it wins — restoring
+    /// must never overwrite what the user just picked with the value that pick replaced. Both halves are set before
+    /// anything is applied, so the cards are re-ordered once rather than once per half.</summary>
+    private async Task RestoreSortAsync(Func<Task<FitSortChoice?>> loadSort)
+    {
+        var stored = await loadSort();
+        if (stored is not { } choice || _sortChosen) return;
+
+        _applySortSuspended = true;
+        Sort = choice.Order;
+        SortDescending = choice.Descending;
+        _applySortSuspended = false;
+        ApplySort();
     }
 
     /// <summary>

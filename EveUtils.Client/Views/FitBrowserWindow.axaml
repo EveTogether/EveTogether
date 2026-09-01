@@ -110,13 +110,89 @@
                 <DataTemplate x:DataType="fb:FitBrowserTabViewModel">
                     <DockPanel Margin="0,8,0,0">
 
-                        <!-- Search + page-size -->
-                        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,6">
-                            <TextBox Grid.Column="0" Text="{Binding Search}" PlaceholderText="Search by name or tag…"
+                        <!-- Search + order + page-size. The order is the browser's and not this tab's, so it is read
+                             off the window's view-model the way the density switch used to be. -->
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <!-- The cap is on the COLUMN, not on the box: a box with a MaxWidth is centred in
+                                     whatever it is given, which leaves a gap on the left of a left-hand control. A
+                                     capped star column ends where the box ends, so the order sits right beside it.
+                                     Still a star, with a floor, so a narrow docked tab shrinks the search instead of
+                                     pushing the order off the edge. -->
+                                <ColumnDefinition Width="*" MinWidth="160" MaxWidth="520"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding Search}"
+                                     PlaceholderText="Search by fit, hull, class, tag or uploader…"
+                                     ToolTip.Tip="Matches everything the card shows: the fit's name, its hull and class, its tags, and who put it there"
                                      VerticalContentAlignment="Center" FontSize="12"/>
-                            <TextBlock Grid.Column="1" Text="Per page" VerticalAlignment="Center"
+
+                            <TextBlock Grid.Column="1" Text="Sort" VerticalAlignment="Center"
                                        Margin="10,0,6,0" FontSize="11" Foreground="{DynamicResource TextAccentBrush}"/>
-                            <ComboBox Grid.Column="2" MinWidth="70"
+                            <!-- The button says what the order IS, so the choice is readable without opening the
+                                 menu; the menu marks the same one again for whoever does open it. -->
+                            <Button Grid.Column="2" MinWidth="94"
+                                    Content="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).SortLabel}"
+                                    ToolTip.Tip="What the cards are ordered by">
+                                <Button.Flyout>
+                                    <MenuFlyout>
+                                        <TextBlock Classes="menuHeader" Text="SORT BY" IsHitTestVisible="False"/>
+                                        <MenuItem Header="Fit name"
+                                                  Command="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).SetSortCommand}"
+                                                  CommandParameter="{x:Static fb:FitSortOrder.Name}">
+                                            <MenuItem.Icon>
+                                                <mi:MaterialIcon Kind="Check"
+                                                                 IsVisible="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).IsSortByName}"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <MenuItem Header="Price"
+                                                  Command="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).SetSortCommand}"
+                                                  CommandParameter="{x:Static fb:FitSortOrder.Price}">
+                                            <MenuItem.Icon>
+                                                <mi:MaterialIcon Kind="Check"
+                                                                 IsVisible="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).IsSortByPrice}"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <MenuItem Header="Hull class"
+                                                  Command="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).SetSortCommand}"
+                                                  CommandParameter="{x:Static fb:FitSortOrder.HullClass}">
+                                            <MenuItem.Icon>
+                                                <mi:MaterialIcon Kind="Check"
+                                                                 IsVisible="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).IsSortByHullClass}"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                            <!-- Direction on its own button rather than as six menu rows: three fields × two ways is
+                                 a list you have to read, one arrow is a thing you can see. -->
+                            <Button Grid.Column="3" Margin="4,0,0,0" Padding="7,4"
+                                    Command="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).ToggleSortDirectionCommand}"
+                                    Foreground="{DynamicResource TextAccentBrush}">
+                                <Panel>
+                                    <mi:MaterialIcon Classes="icon-sm" Kind="ArrowUp"
+                                                     IsVisible="{Binding !$parent[TabControl].((fb:FitBrowserViewModel)DataContext).SortDescending}"/>
+                                    <mi:MaterialIcon Classes="icon-sm" Kind="ArrowDown"
+                                                     IsVisible="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).SortDescending}"/>
+                                </Panel>
+                                <ToolTip.Tip>
+                                    <StackPanel>
+                                        <TextBlock Text="Ascending — click to reverse"
+                                                   IsVisible="{Binding !$parent[TabControl].((fb:FitBrowserViewModel)DataContext).SortDescending}"/>
+                                        <TextBlock Text="Descending — click to reverse"
+                                                   IsVisible="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).SortDescending}"/>
+                                    </StackPanel>
+                                </ToolTip.Tip>
+                            </Button>
+
+                            <TextBlock Grid.Column="5" Text="Per page" VerticalAlignment="Center"
+                                       Margin="14,0,6,0" FontSize="11" Foreground="{DynamicResource TextAccentBrush}"/>
+                            <ComboBox Grid.Column="6" MinWidth="70"
                                       ItemsSource="{x:Static fb:FitBrowserTabViewModel.PageSizeOptions}"
                                       SelectedItem="{Binding PageSize}"/>
                         </Grid>
