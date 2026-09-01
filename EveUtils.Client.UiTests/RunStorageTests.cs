@@ -339,6 +339,36 @@ public sealed class RunStorageTests
         Assert.InRange(stored.StartedAtUtc, receivedAtUtc.AddMinutes(-16), receivedAtUtc.AddMinutes(-14));
     }
 
+    [AvaloniaFact]
+    public void RunWireData_ExcludedLootCapture_PreservesExclusion()
+    {
+        var run = new Run
+        {
+            Id = Guid.CreateVersion7(),
+            CharacterId = 90000001,
+            ActivityKind = ActivityKind.Site,
+            State = RunState.Saved,
+            StartedAtUtc = StartedAtUtc,
+            SiteTypeId = 1234,
+            Revision = 1
+        };
+        run.LootCaptures.Add(new RunLootCapture
+        {
+            Id = Guid.CreateVersion7(),
+            RunId = run.Id,
+            CapturedAtUtc = StartedAtUtc,
+            Source = LootCaptureSource.Clipboard,
+            ContentHash = "capture",
+            IsExcluded = true
+        });
+
+        Run roundTripped = RunWireData.FromEntity(run).ToEntity();
+
+        RunLootCapture capture = Assert.Single(roundTripped.LootCaptures);
+        Assert.Equal("capture", capture.ContentHash);
+        Assert.True(capture.IsExcluded);
+    }
+
     private static async Task _SaveSoloRun(IDispatcher dispatcher, CancellationToken cancellationToken)
     {
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,

@@ -24,7 +24,7 @@ public sealed class RunWireData
     public string? FitNameSnapshot { get; init; }
     public DateTime? LastPushedAtUtc { get; init; }
     public required int Revision { get; init; }
-    public required IReadOnlyList<RunLootCaptureInput> LootCaptures { get; init; }
+    public required IReadOnlyList<RunLootCaptureWireData> LootCaptures { get; init; }
     public required IReadOnlyList<RunBountyEntryInput> BountyEntries { get; init; }
     public required IReadOnlyList<RunEnemyObservationInput> EnemyObservations { get; init; }
     public required IReadOnlyList<RunParameterInput> Parameters { get; init; }
@@ -50,10 +50,12 @@ public sealed class RunWireData
         FitNameSnapshot = run.FitNameSnapshot,
         LastPushedAtUtc = run.LastPushedAtUtc,
         Revision = run.Revision,
-        LootCaptures = run.LootCaptures.Select(capture => new RunLootCaptureInput
+        LootCaptures = run.LootCaptures.Select(capture => new RunLootCaptureWireData
         {
             CapturedAtUtc = capture.CapturedAtUtc,
             Source = capture.Source,
+            ContentHash = capture.ContentHash,
+            IsExcluded = capture.IsExcluded,
             Entries = capture.Entries.Select(entry => new RunLootEntryInput
             {
                 ItemTypeId = entry.ItemTypeId,
@@ -105,9 +107,17 @@ public sealed class RunWireData
             LastPushedAtUtc = LastPushedAtUtc,
             Revision = Revision
         };
-        foreach (RunLootCaptureInput capture in LootCaptures)
+        foreach (RunLootCaptureWireData capture in LootCaptures)
         {
-            var entity = new RunLootCapture { Id = Guid.CreateVersion7(), RunId = run.Id, CapturedAtUtc = capture.CapturedAtUtc, Source = capture.Source };
+            var entity = new RunLootCapture
+            {
+                Id = Guid.CreateVersion7(),
+                RunId = run.Id,
+                CapturedAtUtc = capture.CapturedAtUtc,
+                Source = capture.Source,
+                ContentHash = capture.ContentHash,
+                IsExcluded = capture.IsExcluded
+            };
             foreach (RunLootEntryInput entry in capture.Entries)
                 entity.Entries.Add(new RunLootEntry
                 {
