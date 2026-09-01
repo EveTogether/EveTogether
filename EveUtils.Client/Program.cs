@@ -170,6 +170,8 @@ sealed class Program
             return;
         }
 
+        _ = Services.GetRequiredService<EveUtils.Client.Fleet.FleetRunGroupCodeCoordinator>();
+
         // Fleet metric publisher: shares the active fleet's metrics at ~1 Hz. GUI mode only —
         // the headless test drives the tick itself.
         Services.GetRequiredService<EveUtils.Client.Fleet.FleetMetricPublisher>().Start();

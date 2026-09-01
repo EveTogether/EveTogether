@@ -21,7 +21,13 @@ internal sealed partial class LinkRunToGroupCodeCommandHandler(IDbContextFactory
         if (run is null)
             return Result.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound,
                 "The run no longer exists.", "Runs"));
+        if (run.GroupCode is { } existingGroupCode && !string.Equals(existingGroupCode, command.GroupCode,
+                StringComparison.Ordinal))
+            return Result.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
+                "A run is already linked to another group code.", "Runs"));
 
+        if (run.GroupCode == command.GroupCode)
+            return Result.Success();
         run.GroupCode = command.GroupCode;
         run.Revision++;
         await db.SaveChangesAsync(cancellationToken);

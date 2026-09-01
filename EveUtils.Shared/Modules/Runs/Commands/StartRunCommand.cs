@@ -16,4 +16,6 @@ public sealed record StartRunCommand(
     RunRole Role = RunRole.Member,
     bool IsPayoutEligible = true,
     string? FitContentHash = null,
-    string? FitNameSnapshot = null) : ICommand<Result<Guid>>;
+    string? FitNameSnapshot = null,
+    long? FleetId = null,
+    bool IsFleetCommander = false) : ICommand<Result<Guid>>;
