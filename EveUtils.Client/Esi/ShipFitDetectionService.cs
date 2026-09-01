@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Fittings.Entities;
 using EveUtils.Shared.Modules.Fittings.Repositories;
@@ -20,12 +21,13 @@ public sealed class ShipFitDetectionService(
     IFittingRepository fittings,
     ISettingRepository settings,
     IEsiAvailabilityState availability,
+    IEsiRateLimitMonitor rateLimits,
     ILogger<ShipFitDetectionService> logger) : BackgroundService, IShipFitDetectionService
 {
     private const string OverrideKeyPrefix = "fit-detection.override.";
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
     private readonly ConcurrentDictionary<int, ShipFitDetectionReading> _readings = new();
-    private readonly ConcurrentDictionary<int, int> _manualFits = new();
+    private readonly ConcurrentDictionary<(int CharacterId, int ShipTypeId), int> _manualFits = new();
     private readonly Lock _overrideLoadGate = new();
     private Task? _loadOverridesTask;
 
@@ -41,13 +43,12 @@ public sealed class ShipFitDetectionService(
                 return Result.Failure(new ResultMessage(
                     MessageSeverity.Error, "FITTING_NOT_FOUND", "The selected fitting no longer exists."));
 
-            _manualFits[characterId] = id;
-            await settings.UpsertAsync(_OverrideKey(characterId), id.ToString(CultureInfo.InvariantCulture), cancellationToken);
+            _manualFits[(characterId, fitting.ShipTypeId)] = id;
+            await settings.UpsertAsync(_OverrideKey(characterId, fitting.ShipTypeId), id.ToString(CultureInfo.InvariantCulture), cancellationToken);
         }
         else
         {
-            _manualFits.TryRemove(characterId, out _);
-            await settings.UpsertAsync(_OverrideKey(characterId), string.Empty, cancellationToken);
+            await _ClearManualFitsAsync(characterId, cancellationToken);
         }
 
         return Result.Success();
@@ -96,6 +97,12 @@ public sealed class ShipFitDetectionService(
                 continue;
             }
 
+            if (rateLimits.GetBucket($"app:{characterId}")?.ShouldYieldNonEssentialCall(DateTimeOffset.UtcNow) is true)
+            {
+                logger.LogDebug("Skipping current-ship poll for {CharacterId}: ESI bucket has low headroom.", characterId);
+                continue;
+            }
+
             await RefreshCharacterAsync(characterId, cancellationToken);
         }
     }
@@ -120,7 +127,7 @@ public sealed class ShipFitDetectionService(
 
         ShipFitCandidate? selected = null;
         ShipFitMatchReason reason;
-        if (_manualFits.TryGetValue(characterId, out int manualFitId))
+        if (_manualFits.TryGetValue((characterId, ship.ShipTypeId), out int manualFitId))
         {
             selected = knownFits.Where(fitting => fitting.Id == manualFitId)
                 .Select(fitting => new ShipFitCandidate(fitting.Id, fitting.Name, fitting.ShipTypeId))
@@ -166,14 +173,32 @@ public sealed class ShipFitDetectionService(
         IReadOnlyList<ClientSetting> stored = await settings.ListAsync(cancellationToken);
         foreach (ClientSetting setting in stored)
         {
-            if (!setting.Key.StartsWith(OverrideKeyPrefix, StringComparison.Ordinal) ||
-                !int.TryParse(setting.Key[OverrideKeyPrefix.Length..], NumberStyles.None, CultureInfo.InvariantCulture, out int characterId) ||
+            string[] keyParts = setting.Key.StartsWith(OverrideKeyPrefix, StringComparison.Ordinal)
+                ? setting.Key[OverrideKeyPrefix.Length..].Split('.')
+                : [];
+            if (keyParts.Length != 2 ||
+                !int.TryParse(keyParts[0], NumberStyles.None, CultureInfo.InvariantCulture, out int characterId) ||
+                !int.TryParse(keyParts[1], NumberStyles.None, CultureInfo.InvariantCulture, out int shipTypeId) ||
                 !int.TryParse(setting.Value, NumberStyles.None, CultureInfo.InvariantCulture, out int fittingId))
                 continue;
 
-            _manualFits[characterId] = fittingId;
+            _manualFits[(characterId, shipTypeId)] = fittingId;
         }
     }
 
-    private static string _OverrideKey(int characterId) => OverrideKeyPrefix + characterId.ToString(CultureInfo.InvariantCulture);
+    private async Task _ClearManualFitsAsync(int characterId, CancellationToken cancellationToken)
+    {
+        foreach ((int CharacterId, int ShipTypeId) key in _manualFits.Keys.Where(key => key.CharacterId == characterId))
+            _manualFits.TryRemove(key, out _);
+
+        IReadOnlyList<ClientSetting> stored = await settings.ListAsync(cancellationToken);
+        foreach (ClientSetting setting in stored.Where(setting => setting.Key.StartsWith(_OverrideKeyPrefix(characterId), StringComparison.Ordinal)))
+            await settings.UpsertAsync(setting.Key, string.Empty, cancellationToken);
+    }
+
+    private static string _OverrideKeyPrefix(int characterId) =>
+        OverrideKeyPrefix + characterId.ToString(CultureInfo.InvariantCulture) + ".";
+
+    private static string _OverrideKey(int characterId, int shipTypeId) =>
+        _OverrideKeyPrefix(characterId) + shipTypeId.ToString(CultureInfo.InvariantCulture);
 }

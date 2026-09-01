@@ -77,4 +77,11 @@ public sealed class EsiBucketState(string key)
 
         return TimeSpan.Zero;
     }
+
+    /// <summary>Whether a non-essential poll should yield this bucket to urgent ESI work.</summary>
+    public bool ShouldYieldNonEssentialCall(DateTimeOffset now) =>
+        IsErrorLimited(now) ||
+        (ErrorRemaining is > 0 and <= ErrorWarnThreshold && ErrorResetAt is { } reset && reset > now) ||
+        BucketRemaining is > 0 and <= BucketWarnThreshold ||
+        BucketBlockedUntil is { } blockedUntil && blockedUntil > now;
 }

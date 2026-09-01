@@ -1,5 +1,6 @@
 using EveUtils.Client.Esi;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Fittings.Entities;
 using EveUtils.Shared.Modules.Fittings.Repositories;
@@ -74,10 +75,45 @@ public sealed class ShipFitDetectionServiceTests
         Assert.Equal(fit.Id, reading.SelectedFit?.Id);
     }
 
+    [Fact]
+    public async Task SetManualFitAsync_AfterChangingHullDoesNotApplyThePreviousHullOverride()
+    {
+        var settings = new FakeSettingsRepository();
+        LocalFitting gila = new() { Id = 7, Name = "Abyss Gila", ShipTypeId = 17715 };
+        LocalFitting loki = new() { Id = 8, Name = "Armor Loki", ShipTypeId = 29990 };
+        var first = Build(new FakeShipClient(new EsiCharacterShip { ShipTypeId = 17715, ShipItemId = 9, ShipName = "Gila" }), [], [gila, loki], settings);
+
+        await first.SetManualFitAsync(1, gila.Id, TestContext.Current.CancellationToken);
+
+        var second = Build(new FakeShipClient(new EsiCharacterShip { ShipTypeId = 29990, ShipItemId = 10, ShipName = "Loki" }),
+            [new Character("With scope", 1, ["esi-location.read_ship_type.v1"])], [gila, loki], settings);
+        await second.RefreshAllAsync(TestContext.Current.CancellationToken);
+
+        ShipFitDetectionReading reading = second.GetReading(1);
+        Assert.Equal(ShipFitMatchReason.OnlyFitForShipType, reading.MatchReason);
+        Assert.Equal(loki.Id, reading.SelectedFit?.Id);
+    }
+
+    [Fact]
+    public async Task RefreshAllAsync_LowBucketHeadroomSkipsTheNonEssentialShipPoll()
+    {
+        var monitor = new EsiRateLimitMonitor(NullLogger<EsiRateLimitMonitor>.Instance);
+        monitor.RecordBucket("app:1", "/characters/{id}/ship/",
+            new EsiRateLimitHeaders(99, DateTimeOffset.UtcNow.AddSeconds(60), "character", 150, 5, 145, null), 200);
+        var ships = new FakeShipClient(new EsiCharacterShip { ShipTypeId = 17715, ShipItemId = 9, ShipName = "Gila" });
+        var service = Build(ships, [new Character("With scope", 1, ["esi-location.read_ship_type.v1"])], [], rateLimits: monitor);
+
+        await service.RefreshAllAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, ships.Calls);
+        Assert.Equal(ShipFitDetectionState.Unobserved, service.GetReading(1).State);
+    }
+
     private static ShipFitDetectionService Build(FakeShipClient ships, IReadOnlyList<Character> characters,
-        IReadOnlyList<LocalFitting> fittings, FakeSettingsRepository? settings = null) =>
+        IReadOnlyList<LocalFitting> fittings, FakeSettingsRepository? settings = null, IEsiRateLimitMonitor? rateLimits = null) =>
         new(ships, new FakeCharacterRegistry(characters), new FakeFittingRepository(fittings), settings ?? new FakeSettingsRepository(),
-            new EsiAvailabilityState(), NullLogger<ShipFitDetectionService>.Instance);
+            new EsiAvailabilityState(), rateLimits ?? new EsiRateLimitMonitor(NullLogger<EsiRateLimitMonitor>.Instance),
+            NullLogger<ShipFitDetectionService>.Instance);
 
     private sealed class FakeShipClient(EsiCharacterShip ship) : IEsiCharacterShipClient
     {
