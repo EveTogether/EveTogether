@@ -834,6 +834,9 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.Property<int>("SyncState")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("TimesCorrectedAtUtc")
+                        .HasColumnType("datetime(6)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("GroupCode", "CharacterId");

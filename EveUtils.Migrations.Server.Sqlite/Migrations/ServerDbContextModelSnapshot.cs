@@ -795,6 +795,9 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.Property<int>("SyncState")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("TimesCorrectedAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("GroupCode", "CharacterId");

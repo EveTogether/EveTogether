@@ -834,6 +834,9 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                     b.Property<int>("SyncState")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("TimesCorrectedAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.HasKey("Id");
 
                     b.HasIndex("GroupCode", "CharacterId");
