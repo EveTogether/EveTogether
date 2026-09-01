@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace EveUtils.Client.Clipboard;
 
 /// <summary>
-/// Reads scan-list rows; the id (column 0), site type (column 2) and name (column 3) are the only values the toast needs.
+/// Reads the id, site type and name required by the toast; kind, scan percentage and distance are left unparsed because the toast does not show them.
 /// </summary>
 public static class ClipboardSignatureParser
 {

@@ -109,6 +109,28 @@ public sealed class ClipboardSignatureOfferTests
         Assert.Equal(new[] { "Close", "Start run" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
     }
 
+    [AvaloniaFact]
+    public async Task FullyScannedHomefrontOperationSite_ShowsStartRunButton()
+    {
+        using var env = await Env.StartAsync();
+
+        env.Copy("IMM-760	Cosmic Anomaly	Homefront Operation Site - Combat Site	Suspicious Signal: Secure the Intel	100,0%	0,50 AU");
+
+        var offer = Assert.Single(env.Toasts.ActionToasts);
+        Assert.Equal(new[] { "Close", "Start run" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
+    }
+
+    [AvaloniaFact]
+    public async Task FullyScannedNonEnglishCombatSite_ShowsNoStartRunButton()
+    {
+        using var env = await Env.StartAsync();
+
+        env.Copy("AAA-001	Anomalie cosmique	Site de combat	Haunted Yard	100,0%	0,50 AU");
+
+        var offer = Assert.Single(env.Toasts.ActionToasts);
+        Assert.Equal(new[] { "Close" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
+    }
+
     // AC-1 tegenproef: the same single row, but under the scan threshold — Group/Name null is the normal
     // not-yet-scanned state, and a button on it would open an empty window.
     [AvaloniaFact]

@@ -64,14 +64,16 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         // ET-100 testopener: ET-98's window (merged same day) has no way in otherwise. Not the abyssal opener (that
         // needs a filament, not a signature) and not final — a later opener may replace or keep this. Needs exactly
         // one fully-scanned row: half-scanned opens empty, 2+ rows is a menu a toast is the wrong surface for.
-        // Wormholes are excluded for now; only combat sites, including anomalies, start activities.
-        var recognised = rows.Where(row => row.Group is "Combat Site" && row.Name is not null).ToList();
+        var recognised = rows.Where(row => IsActivitySite(row.Group) && row.Name is not null).ToList();
         if (recognised is [{ } row])
             actions.Add(new ToastAction("Start run", () => StartRun(fingerprint, row), ToastActionStyle.Affirmative));
 
         _toasts.Show("Signature copied", BuildMessage(rows), ToastKind.Information, actions,
             () => CloseOffer(fingerprint), FeatureName);
     }
+
+    // Wormholes are excluded for now; English-only site labels are a known limitation until a locale alias source exists.
+    private static bool IsActivitySite(string? siteType) => siteType is "Combat Site" or "Homefront Operation Site - Combat Site";
 
     private void StartRun(string fingerprint, ClipboardSignatureRow row)
     {
