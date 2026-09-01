@@ -73,7 +73,7 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
     }
 
     // Wormholes are excluded for now; English-only site labels are a known limitation until a locale alias source exists.
-    private static bool IsActivitySite(string? siteType) => siteType is "Combat Site" or "Homefront Operation Site - Combat Site";
+    private static bool IsActivitySite(string? siteType) => siteType?.EndsWith("Combat Site", StringComparison.Ordinal) is true;
 
     private void StartRun(string fingerprint, ClipboardSignatureRow row)
     {
