@@ -125,8 +125,10 @@
                 </Setter>
             </Style>
 
-            <!-- Grid: cards side by side, every live figure the list carries. Only the bounty goes — it is a session
-                 roll-up, not a live combat signal, and the header already totals it. The figures sit ABOVE the graph
+            <!-- Grid: cards side by side, every figure the list carries — the bounty included (ET-114). It used to be
+                 the one thing this density dropped, on the argument that a session roll-up is not a live combat signal
+                 and the header already totals it; the operator wants it per character in every density, so that trade
+                 is off. Do not "restore" it: the per-member figure is the point. The figures sit ABOVE the graph
                  rather than beside it: squeezed into a side column the graph loses the vertical range that makes four
                  lines readable, and an unreadable graph is worth less than the members it costs. Fewer cards per
                  screen than a figures-only card is the deliberate price. -->
@@ -163,13 +165,32 @@
                                             <TextBlock Text="{Binding Character}" FontWeight="SemiBold" FontSize="11.5"
                                                        TextTrimming="CharacterEllipsis"
                                                        Foreground="{StaticResource TextBrightBrush}"/>
-                                            <TextBlock Classes="location" Classes.withfc="{Binding IsWithCommander}"
-                                                       Classes.offline="{Binding IsOffline}"
-                                                       FontSize="10.5"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       IsVisible="{Binding LocationDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                                       Text="{Binding LocationDisplay, StringFormat='◉ {0}'}"
-                                                       ToolTip.Tip="Current solar system (location sharing)"/>
+                                            <!-- Location and bounty share the line, next to each other, as they do in
+                                                 the list row and the pop-out. The location's column is starred so it
+                                                 trims rather than push the ISK figure off a narrow card, but CAPPED so
+                                                 that on the widest card (643px, ET-108) the two stay one block instead
+                                                 of drifting to opposite edges. 200px is far past the longest thing
+                                                 LocationDisplay produces ("◉ location unavailable"), so the cap only
+                                                 ever bites on the gap, never on the text. -->
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" MaxWidth="200"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Classes="location" Classes.withfc="{Binding IsWithCommander}"
+                                                           Classes.offline="{Binding IsOffline}"
+                                                           FontSize="10.5"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           IsVisible="{Binding LocationDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                           Text="{Binding LocationDisplay, StringFormat='◉ {0}'}"
+                                                           ToolTip.Tip="Current solar system (location sharing)"/>
+                                                <TextBlock Grid.Column="1" FontSize="10.5" Margin="8,0,0,0"
+                                                           Foreground="#FFE0B25A"
+                                                           IsVisible="{Binding HasBounty}"
+                                                           Text="{Binding BountyText, StringFormat='◇ {0}'}"
+                                                           ToolTip.Tip="Bounty earned this session (bounty sharing)"/>
+                                            </Grid>
                                         </StackPanel>
                                         <Button Grid.Column="1" Padding="6,1" Margin="8,0,0,0"
                                                 VerticalAlignment="Top" ToolTip.Tip="Pop out this graph"
@@ -204,10 +225,12 @@
                 </Setter>
             </Style>
 
-            <!-- Compact: one line per member, for a fleet you scan rather than read. Carries every live figure the
-                 list does — a line has the width for all four — and gives up only the graph (below this row height a
-                 graph reads as noise, and it is what buys the density) and the bounty. The pop-out stays: it is the
-                 way back to one member's graph without leaving this density. -->
+            <!-- Compact: one line per member, for a fleet you scan rather than read. Carries every figure the list
+                 does — the four live ones and the bounty (ET-114) — and gives up only the graph: below this row height
+                 a graph reads as noise, and dropping it is what buys the density. The bounty used to go with it, on
+                 the argument that a session roll-up is not a live combat signal and the header already totals it; the
+                 operator wants it per character in every density, so that trade is off. Do not "restore" it. The
+                 pop-out stays: it is the way back to one member's graph without leaving this density. -->
             <Style Selector="ItemsControl.compact">
                 <Setter Property="ItemTemplate">
                     <Setter.Value>
@@ -218,8 +241,32 @@
                                                  ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>
                                 </Border.ContextMenu>
                                 <!-- Identity and figures stay one tight block on the left however wide the window gets:
-                                     a row you scan is a row your eye should not have to travel. -->
-                                <Grid ColumnDefinitions="156,116,82,74,74,82,*,Auto">
+                                     a row you scan is a row your eye should not have to travel.
+
+                                     Name and location are starred-with-a-cap rather than fixed at 156/116. At any
+                                     width where the whole block fits they hit their caps and the row looks exactly as
+                                     it did when they were fixed; below that they give ground first, so the six figures
+                                     and the pop-out stay on screen instead of being silently cut off the right-hand
+                                     end. That mattered once the bounty arrived (ET-114): the fixed block went from 584
+                                     to 676, and measured on a docked tab the row needs ~742px where it used to need
+                                     ~650 — a 720-wide tab would have lost NEUT and the pop-out button. The trailing
+                                     star is what keeps the button on the right edge on a wide window; the weights
+                                     decide who shrinks first when there is not enough to go round. The minimums stop
+                                     that from running away: a row of figures nobody can put a name to is worth less
+                                     than a trimmed name, so below ~626px the identity holds its ground and the row
+                                     goes back to clipping on the right, which is what it did at those widths anyway. -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="3*" MinWidth="96" MaxWidth="156"/>
+                                        <ColumnDefinition Width="2*" MinWidth="64" MaxWidth="116"/>
+                                        <ColumnDefinition Width="82"/>
+                                        <ColumnDefinition Width="74"/>
+                                        <ColumnDefinition Width="74"/>
+                                        <ColumnDefinition Width="82"/>
+                                        <ColumnDefinition Width="92"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{Binding Character}" FontWeight="SemiBold"
                                                FontSize="12" VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis"
@@ -247,7 +294,20 @@
                                                HorizontalAlignment="Right"
                                                Foreground="#FFB07EE0"
                                                Text="{Binding Neut, StringFormat='NEUT {0}'}"/>
-                                    <Button Grid.Column="7" Padding="6,0" Margin="10,0,0,0"
+                                    <!-- A FIXED column, not Auto: every row builds its own grid, so an Auto column
+                                         would take the chip's own ~70px on a member who has earned something and 0 on
+                                         the member below him, and everything to its right would step sideways row by
+                                         row. Right-aligned like the figures it follows, at the location's font rather
+                                         than the mono of the live figures — it is a session roll-up and reads as the
+                                         same chip the list and the pop-out show. 92 is the widest thing CompactIsk
+                                         can produce ("◇ 999.99B ISK", ~78) plus a gutter in the figures' own key. -->
+                                    <TextBlock Grid.Column="6" FontSize="11" VerticalAlignment="Center"
+                                               HorizontalAlignment="Right"
+                                               Foreground="#FFE0B25A"
+                                               IsVisible="{Binding HasBounty}"
+                                               Text="{Binding BountyText, StringFormat='◇ {0}'}"
+                                               ToolTip.Tip="Bounty earned this session (bounty sharing)"/>
+                                    <Button Grid.Column="8" Padding="6,0" Margin="10,0,0,0"
                                             VerticalAlignment="Center" ToolTip.Tip="Pop out this graph"
                                             Command="{Binding $parent[ItemsControl].((vm:FleetMetricsViewModel)DataContext).PopOutCommand}"
                                             CommandParameter="{Binding}">
