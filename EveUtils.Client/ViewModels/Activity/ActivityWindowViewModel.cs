@@ -2,13 +2,19 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.ViewModels;
+using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Shared.Cqrs;
+using EveUtils.Shared.Identity;
+using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
@@ -160,6 +166,24 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public ActivitySection Loot { get; } = new() { Title = "LOOT" };
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FitSummary))]
+    private string _fitDetectionText = "choose a character to see its fit suggestion";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FitSummary))]
+    private string _fitSelectionText = "no fit chosen";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FitSummary))]
+    private bool _hasChosenFit;
+
+    [ObservableProperty] private string _fitVelocityText = "no max velocity";
+
+    [ObservableProperty] private string _fitWarpSpeedText = "no warp speed";
+
+    public string FitSummary => HasChosenFit ? FitSelectionText : FitDetectionText;
+
     /// <summary>All five in window order — what the test walks to prove none of them is ever silent.</summary>
     public IReadOnlyList<ActivitySection> Sections { get; }
 
@@ -292,6 +316,52 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         TierIndex = _Restore(settings.FirstOrDefault(s => s.Key == TierSettingKey)?.Value, Tiers.Count);
 
         _SyncChoices();
+        Refresh(DateTime.UtcNow);
+    }
+
+    [RelayCommand]
+    private async Task ChooseFitAsync()
+    {
+        var dialogs = _services.GetRequiredService<IDialogService>();
+        IReadOnlyList<Character> characters = await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
+        var options = characters
+            .Select(character => character.EsiCharacterId is { } id
+                ? new CharacterPickOption(id, character.Name, "local character", Enabled: true)
+                : null)
+            .OfType<CharacterPickOption>()
+            .ToList();
+        int? characterId = await dialogs.PickCharacterAsync("Choose a character's fit", options);
+        if (characterId is null)
+            return;
+
+        var detection = _services.GetRequiredService<IShipFitDetectionService>();
+        ApplyFitDetection(detection.GetReading(characterId.Value));
+
+        var picker = new FitPickerViewModel(_services, FitPickerMode.Single, alreadyAdded: null,
+            composition: null, currentFitHash: null, skillCheckCharacterId: characterId);
+        FitReferenceInfo? fit = await dialogs.PickFitAsync(picker);
+        if (fit is null)
+            return;
+        if (fit.LocalFittingId is null)
+        {
+            await dialogs.ShowMessageAsync("Choose a local fit", "Only a local fit can override the automatic suggestion.");
+            return;
+        }
+
+        var overrideResult = await detection.SetManualFitAsync(characterId.Value, fit.LocalFittingId);
+        if (!overrideResult.IsSuccess)
+        {
+            await dialogs.ShowMessageAsync("Fit selection", overrideResult.Messages.FirstOrDefault()?.Text ?? "Could not save the fit selection.");
+            return;
+        }
+
+        FitSelectionText = $"chosen fit: {fit.FitName}";
+        HasChosenFit = true;
+        EsiFitting? esi;
+        try { esi = JsonSerializer.Deserialize<EsiFitting>(fit.RawJson); }
+        catch (JsonException) { esi = null; }
+        FitStats? stats = esi is null ? null : await _services.GetRequiredService<IFitStatsProvider>().ComputeAsync(esi);
+        ApplyFitStats(stats, esi is not null);
         Refresh(DateTime.UtcNow);
     }
 
@@ -476,11 +546,48 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private void _RefreshSummaries()
     {
         Activity.HeaderSummary = _ActivitySummary();
-        Fit.HeaderSummary = "waiting on ET-40";
+        Fit.HeaderSummary = FitSummary;
         Fleet.HeaderSummary = FleetMemberCount > 1 ? FleetStatusText : "solo — no fleet";
         Bounty.HeaderSummary = BountyText;
         Loot.HeaderSummary = "waiting on ET-65";
     }
+
+    internal void ApplyFitDetection(ShipFitDetectionReading reading)
+    {
+        FitDetectionText = reading.State switch
+        {
+            ShipFitDetectionState.Unobserved => "ship type has not been read yet",
+            ShipFitDetectionState.ScopeMissing => "ship-type scope is missing",
+            ShipFitDetectionState.Observed when reading.MatchReason == ShipFitMatchReason.NoFitFound =>
+                "no known fit matches the observed ship",
+            ShipFitDetectionState.Observed when reading.SelectedFit is { } fit =>
+                $"suggested fit: {fit.Name} ({_FitMatchReason(reading.MatchReason)})",
+            ShipFitDetectionState.Observed => "no single fit matches the observed ship",
+            _ => "ship fit is unavailable"
+        };
+        Refresh(DateTime.UtcNow);
+    }
+
+    internal void ApplyFitStats(FitStats? stats, bool fitCouldBeRead)
+    {
+        if (!fitCouldBeRead)
+        {
+            FitVelocityText = "fit could not be read";
+            FitWarpSpeedText = "fit could not be read";
+            return;
+        }
+
+        FitVelocityText = stats is null ? "no max velocity" : $"max velocity: {stats.MaxVelocity:N0} m/s";
+        FitWarpSpeedText = stats is null ? "no warp speed" : $"warp speed: {stats.WarpSpeed:N2} AU/s";
+    }
+
+    private static string _FitMatchReason(ShipFitMatchReason? reason) => reason switch
+    {
+        ShipFitMatchReason.ShipName => "name matches the observed ship",
+        ShipFitMatchReason.OnlyFitForShipType => "only known fit for this ship type",
+        ShipFitMatchReason.Manual => "manual choice",
+        _ => "automatic suggestion"
+    };
 
     private string _ActivitySummary()
     {
