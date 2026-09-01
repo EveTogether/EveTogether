@@ -32,10 +32,10 @@ using ICqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 namespace EveUtils.Client.UiTests;
 
 /// <summary>
-/// The fleet-metrics window trades detail per member for members per screen: list (everything), grid (cards, no
-/// cap/neut/bounty figures) and compact (one line, no graph either). The chosen density is a whole-install
-/// preference, so it survives closing the window and the client. Whatever the density, the commander-presence badge
-/// stays in the header.
+/// The fleet-metrics window trades room per member for members per screen: list (full rows), grid (cards, one size
+/// down) and compact (one line, no graph). Since ET-114 the graph is the only thing any density gives up — every
+/// figure, the bounty included, shows in all three. The chosen density is a whole-install preference, so it survives
+/// closing the window and the client. Whatever the density, the commander-presence badge stays in the header.
 /// </summary>
 public class FleetMetricsLayoutTests
 {
@@ -417,11 +417,12 @@ public class FleetMetricsLayoutTests
         AssertRowsAreTemplated(root, vm, FleetMetricsLayout.List);
     }
 
-    // Grid gives up the bounty only: every live combat figure survives, one size down, and the graph comes along.
+    // Grid gives up nothing but room: every figure the list carries survives, one size down, and the graph comes
+    // along. ET-114 put the bounty back — it was the one figure this density used to drop.
     [AvaloniaTheory]
     [InlineData(Shell.OwnWindow)]
     [InlineData(Shell.DockedTab)]
-    public async Task GridLayout_DropsOnlyTheBounty_AndKeepsEveryLiveFigureBesideTheGraph(Shell shell)
+    public async Task GridLayout_KeepsEveryFigureTheListCarries_BesideTheGraph(Shell shell)
     {
         using var instance = CreateInstance();
         var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Grid, shell);
@@ -433,7 +434,7 @@ public class FleetMetricsLayoutTests
         Assert.True(HasFigure(texts, "CAP"));
         Assert.True(HasFigure(texts, "NEUT"));
         Assert.Contains(texts, t => t.StartsWith("◉ Jita", StringComparison.Ordinal));
-        Assert.DoesNotContain(texts, t => t.Contains("ISK", StringComparison.Ordinal));
+        Assert.Contains(texts, t => t.StartsWith("◇ ", StringComparison.Ordinal) && t.EndsWith("ISK", StringComparison.Ordinal));
 
         AssertRowsAreTemplated(root, vm, FleetMetricsLayout.Grid);
         Assert.Single(MemberHost(root, vm).GetVisualDescendants().OfType<FillGridPanel>());
@@ -658,12 +659,12 @@ public class FleetMetricsLayoutTests
             $"the drop marker stands upright between two stacked rows ({marker.Width}x{marker.Height})");
     }
 
-    // Compact gives up the graph — that is what buys the density — and the bounty. Every live figure stays: a full
-    // row has the width for all four.
+    // Compact gives up the graph — that is what buys the density — and nothing else. Every figure stays, the bounty
+    // included since ET-114: a full row has the width for all six.
     [AvaloniaTheory]
     [InlineData(Shell.OwnWindow)]
     [InlineData(Shell.DockedTab)]
-    public async Task CompactLayout_DropsTheGraphAndTheBounty_ButKeepsEveryLiveFigure(Shell shell)
+    public async Task CompactLayout_DropsOnlyTheGraph_AndKeepsEveryFigure(Shell shell)
     {
         using var instance = CreateInstance();
         var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Compact, shell);
@@ -676,11 +677,73 @@ public class FleetMetricsLayoutTests
         Assert.True(HasFigure(texts, "CAP"));
         Assert.True(HasFigure(texts, "NEUT"));
         Assert.Contains(texts, t => t.StartsWith("◉ Jita", StringComparison.Ordinal));
-        Assert.DoesNotContain(texts, t => t.Contains("ISK", StringComparison.Ordinal));
+        Assert.Contains(texts, t => t.StartsWith("◇ ", StringComparison.Ordinal) && t.EndsWith("ISK", StringComparison.Ordinal));
         AssertRowsAreTemplated(root, vm, FleetMetricsLayout.Compact);
 
         // No graphs left to explain, so the line legend goes with them.
         Assert.False(vm.ShowsGraphs);
+    }
+
+    /// <summary>
+    /// ET-114's alignment guard. Every compact row builds its own grid, so the bounty column has to be a FIXED width:
+    /// were it Auto it would be ~70 wide on a member who has earned something and 0 on the member below him, and
+    /// everything to its right would step sideways row by row. Rendered with one member earning and one not, which is
+    /// the case that shows it.
+    ///
+    /// At 720 on purpose. Wider than that the trailing star still has slack and quietly swallows the difference, so an
+    /// Auto column would pass — the fault only surfaces at the widths where the row is already tight, which is
+    /// precisely where it would be seen.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(Shell.OwnWindow)]
+    [InlineData(Shell.DockedTab)]
+    public async Task CompactLayout_KeepsItsColumnsAligned_WhenOnlySomeMembersHaveABounty(Shell shell)
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Compact, shell, 720);
+
+        // One earner, one not — the bounty chip disappears on the second row, its column must not.
+        vm.Members[1].Bounty = 0;
+        Dispatcher.UIThread.RunJobs();
+        root.UpdateLayout();
+
+        var withBounty = RowBlocks(root, vm, 0);
+        var without = RowBlocks(root, vm, 1);
+
+        Assert.Contains(withBounty, t => t.Text?.StartsWith("◇ ", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(without, t => t.Text?.StartsWith("◇ ", StringComparison.Ordinal) == true);
+
+        foreach (var label in new[] { "◉", "OUT", "IN", "CAP", "NEUT" })
+            Assert.Equal(LeftEdgeOfText(withBounty, label), LeftEdgeOfText(without, label), 1);
+
+        // The pop-out button follows the bounty column, so it is what an Auto column would actually shift.
+        Assert.Equal(PopOutLeftEdge(root, vm, 0), PopOutLeftEdge(root, vm, 1), 1);
+    }
+
+    // Every visible TextBlock in one member's row.
+    private static IReadOnlyList<TextBlock> RowBlocks(Control root, FleetMetricsViewModel vm, int index)
+    {
+        Control container = Assert.IsAssignableFrom<Control>(MemberHost(root, vm).ContainerFromIndex(index));
+        return container.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsVisible).ToList();
+    }
+
+    private static double LeftEdgeOfText(IReadOnlyList<TextBlock> blocks, string label)
+    {
+        TextBlock block = blocks.First(t => t.Text?.StartsWith(label, StringComparison.Ordinal) == true);
+        return OffsetInRow(block, $"'{label}'");
+    }
+
+    private static double PopOutLeftEdge(Control root, FleetMetricsViewModel vm, int index)
+    {
+        Control container = Assert.IsAssignableFrom<Control>(MemberHost(root, vm).ContainerFromIndex(index));
+        return OffsetInRow(container.GetVisualDescendants().OfType<Button>().First(), "the pop-out button");
+    }
+
+    private static double OffsetInRow(Visual child, string what)
+    {
+        Visual row = child.GetVisualAncestors().OfType<Border>().First(b => b.Classes.Contains("memberrow"));
+        return child.TranslatePoint(new Point(0, 0), row)?.X
+               ?? throw new InvalidOperationException($"{what} is not in the row");
     }
 
     // Density is the whole point of the compact layout, so measure the rendered row rather than trust the template.
@@ -1056,9 +1119,11 @@ public class FleetMetricsLayoutTests
         vm.Dispose();
     }
 
+    // The hint the operator reads above the list has to describe the density he is looking at. Since ET-114 the graph
+    // is the only thing a density drops, so neither line may go on promising the bounty somewhere else.
     [AvaloniaTheory]
-    [InlineData(FleetMetricsLayout.Grid, "The bounty figure shows in the list view")]
-    [InlineData(FleetMetricsLayout.Compact, "Graphs and the bounty figure show in the list view")]
+    [InlineData(FleetMetricsLayout.Grid, "every figure plus the graph")]
+    [InlineData(FleetMetricsLayout.Compact, "Graphs show in the list and grid views")]
     public async Task LayoutHint_NamesWhatTheDensityDrops(FleetMetricsLayout layout, string dropped)
     {
         using var instance = CreateInstance();
@@ -1067,6 +1132,7 @@ public class FleetMetricsLayoutTests
         vm.SetLayoutCommand.Execute(layout);
 
         Assert.Contains(dropped, vm.LayoutHint, StringComparison.Ordinal);
+        Assert.DoesNotContain("bounty figure shows in the list", vm.LayoutHint, StringComparison.OrdinalIgnoreCase);
         vm.Dispose();
     }
 }

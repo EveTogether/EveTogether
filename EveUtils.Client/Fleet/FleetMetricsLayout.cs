@@ -10,9 +10,9 @@ public enum FleetMetricsLayout
     /// <summary>One full-width row per member: every figure plus the live graph. The default.</summary>
     List = 0,
 
-    /// <summary>Cards side by side: every live figure plus the graph, one size down. No bounty.</summary>
+    /// <summary>Cards side by side: every figure the list carries, plus the graph, one size down.</summary>
     Grid = 1,
 
-    /// <summary>One thin line per member: every live figure, no graph and no bounty.</summary>
+    /// <summary>One thin line per member: every figure the list carries, without the graph.</summary>
     Compact = 2
 }

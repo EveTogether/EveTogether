@@ -209,14 +209,15 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     public bool ShowsGraphs => Layout is not FleetMetricsLayout.Compact;
 
     /// <summary>Spells out what the current layout drops against the list, so trading detail for density is never a
-    /// silent trade.</summary>
+    /// silent trade. Since ET-114 the only thing any density drops is the graph — every figure, the bounty included,
+    /// shows in all three — so the grid line names what it costs instead: room per card.</summary>
     public string LayoutHint => Layout switch
     {
         FleetMetricsLayout.Grid =>
-            "Grid: every live figure plus the graph, per card. The bounty figure shows in the list view.",
+            "Grid: every figure plus the graph, per card, one size down.",
         FleetMetricsLayout.Compact =>
-            "Compact: every live figure on one line per member. Graphs and the bounty figure show in the list view.",
-        _ => "One live graph per active member; location shows when shared.",
+            "Compact: every figure on one line per member. Graphs show in the list and grid views.",
+        _ => "One live graph per active member; location and bounty show when shared.",
     };
 
     /// <summary>Switch the member layout and remember it for the next session.</summary>
