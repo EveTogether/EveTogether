@@ -51,7 +51,7 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
         }
         foreach (RunBountyEntryInput bounty in command.BountyEntries)
             db.Set<RunBountyEntry>().Add(new RunBountyEntry { Id = Guid.CreateVersion7(), RunId = run.Id, OccurredAtUtc = bounty.OccurredAtUtc, Isk = bounty.Isk });
-        foreach (RunEnemyObservationInput observation in command.EnemyObservations)
+        foreach (RunEnemyObservationInput observation in command.EnemyObservations.Where(observation => observation.Count > 0))
             db.Set<RunEnemyObservation>().Add(new RunEnemyObservation
             {
                 Id = Guid.CreateVersion7(),
