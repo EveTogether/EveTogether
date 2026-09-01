@@ -797,17 +797,21 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         {
             var fit = TryParseFit(f.RawJson);
             if (fit is null) continue;
-            var ownerName = Characters.FirstOrDefault(c => c.OwnerId == f.OwnerId)?.Name ?? f.OwnerId;
+            // The owning character, when there is one: it carries both the name shown as the uploader and the ESI id
+            // the card's avatar needs. CharacterId is 0 for a gamelog-only pilot, and an imported fit may match no
+            // character at all — the card then falls back to the uploader's initial.
+            var owner = Characters.FirstOrDefault(c => c.OwnerId == f.OwnerId);
             // local DB id drives export; hull/module icons via the type-image provider; the per-row
             // export dropdown reaches the shared seam with the picker + status sink; edit/delete metadata
             // (fit-metadata) reach back to the browser composition through the callbacks
-            var row = new FitRowViewModel(fit, ownerName, names, f.Id, _services!.GetService<ITypeImageProvider>(),
+            var row = new FitRowViewModel(fit, owner?.Name ?? f.OwnerId, names, f.Id, _services!.GetService<ITypeImageProvider>(),
                 _fitExportActions, BuildPickOptions, status => FittingsStatus = status,
                 _services!.GetService<IMarketPriceRepository>(), onEditMetadata, onDelete, tags: f.Tags,
-                stats: _services!.GetService<IFitStatsProvider>());
-            // The render and the Dogma figures are the page's business, not the library's: the browser pulls them in
-            // for the fits it is actually showing (FitBrowserTabViewModel.FillPageAsync). A library of 148 fits used
-            // to fetch 148 renders here, of which one page-worth was ever looked at.
+                portraits: _services!.GetService<ICharacterPortraitProvider>(),
+                uploaderCharacterId: owner?.CharacterId ?? 0);
+            // The images are the page's business, not the library's: the browser pulls them in for the fits it is
+            // actually showing (FitBrowserTabViewModel.FillPage). A library of 148 fits used to fetch 148 renders
+            // here, of which one page-worth was ever looked at.
             _ = row.LoadPriceAsync();       // estimated fit value from the cached ESI prices, on demand
             rows.Add(row);
         }
@@ -836,7 +840,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             if (fit is null) continue;
             var row = new FitRowViewModel(fit, sf.SharedByCharacterName, names, null, _services!.GetService<ITypeImageProvider>(),
                 prices: _services!.GetService<IMarketPriceRepository>(),
-                stats: _services!.GetService<IFitStatsProvider>());
+                portraits: _services!.GetService<ICharacterPortraitProvider>(),
+                uploaderCharacterId: sf.SharedByCharacterId);   // a shared fit always names a real character
             _ = row.LoadPriceAsync();       // estimated fit value from the cached ESI prices, on demand
             rows.Add(row);
         }

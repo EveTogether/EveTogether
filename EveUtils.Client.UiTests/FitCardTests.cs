@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -16,7 +18,6 @@ using EveUtils.Client.Imaging;
 using EveUtils.Client.Theming;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.Views;
-using EveUtils.Shared.Modules.Dogma;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -25,10 +26,11 @@ namespace EveUtils.Client.UiTests;
 
 /// <summary>
 /// The fit browser's card density (ET-110): a grid of cards over the same rows the table shows, each carrying the
-/// hull render with the fit's name over it, the three Dogma figures and one popover with everything fitted. What is
-/// pinned down here is what the design leans on and what would fail silently — the figures arriving off the UI
-/// thread and only for the page on screen, the card staying whole with CCP images switched off, the popover holding
-/// no empty rack, and the grid dividing its width on all three presentation paths.
+/// hull render with the fit's name and hull over it, who uploaded it, what it is worth, and one popover with
+/// everything fitted. What is pinned down here is what the design leans on and what would fail silently — images
+/// fetched only for the page on screen, the card staying whole with CCP images switched off, the uploader's avatar
+/// falling back rather than showing an empty frame, the popover holding no empty rack and never clipping a name,
+/// and the grid dividing its width on all three presentation paths.
 /// </summary>
 public class FitCardTests
 {
@@ -68,143 +70,6 @@ public class FitCardTests
             Requested.Add((typeId, kind, size));
             return Task.FromResult<Bitmap?>(null);
         }
-    }
-
-    private sealed class StubStats(FitStats? stats = null) : IFitStatsProvider
-    {
-        public int Calls;
-        public int RanOnThread;
-        public readonly List<string> Fits = [];
-
-        public Task<FitStats?> ComputeAsync(EsiFitting fit, CancellationToken cancellationToken = default)
-        {
-            Interlocked.Increment(ref Calls);
-            lock (Fits) Fits.Add(fit.Name);
-            RanOnThread = Environment.CurrentManagedThreadId;
-            return Task.FromResult<FitStats?>(stats ?? Stats(dps: 412.4, ehp: 38_412, speed: 1234.6));
-        }
-
-        public Task<FitStats?> ComputeAsync(EsiFitting fit, IReadOnlyList<ModuleInput> modules,
-            int? tacticalModeTypeId = null, IReadOnlyList<DroneInput>? activeDrones = null,
-            IReadOnlyList<ImplantInput>? boosters = null, SkillSource? skills = null,
-            DamageProfile? profile = null, WeatherInput? weather = null,
-            IReadOnlyList<FighterInput>? activeFighters = null, CancellationToken cancellationToken = default) =>
-            ComputeAsync(fit, cancellationToken);
-    }
-
-    private static FitStats Stats(double dps, double ehp, double speed)
-    {
-        var layer = new ResistLayer(0, 0, 0, 0);
-        return new FitStats(
-            TotalDps: dps, WeaponDps: dps, DroneDps: 0,
-            CpuUsed: 0, CpuOutput: 0, PowerUsed: 0, PowerOutput: 0,
-            DroneBayUsed: 0, DroneBayAvailable: 0, DroneBandwidthUsed: 0, DroneBandwidthAvailable: 0,
-            CalibrationUsed: 0, CalibrationAvailable: 0,
-            Ehp: ehp, ShieldEhp: 0, ArmorEhp: 0, StructureEhp: 0,
-            ShieldResists: layer, ArmorResists: layer, StructureResists: layer,
-            CapacitorStable: true, CapacitorStablePercent: 0, CapacitorDepletesInSeconds: 0,
-            CapacitorCapacity: 0, CapacitorDelta: 0, CapacitorRecharge: 0,
-            TargetingRange: 0, ScanResolution: 0, MaxLockedTargets: 0, SensorStrength: 0,
-            MaxVelocity: speed, Mass: 0, Agility: 0, AlignTime: 0, WarpSpeed: 0, SignatureRadius: 0,
-            ActiveDroneCount: 0, MiningYield: 0, ModuleContributions: []);
-    }
-
-    // ── the figures ──────────────────────────────────────────────────────────────────────────────────────────
-
-    /// <summary>Until the engine answers, a card reads dashes rather than zeroes: a fit whose DPS is genuinely 0
-    /// (a hauler) and a fit that has not been computed yet must not look the same.</summary>
-    [Fact]
-    public async Task Figures_ReadAsDashes_UntilTheEngineAnswers()
-    {
-        var row = new FitRowViewModel(ModulesOnlyFit(), "Tester", new StubNames(), stats: new StubStats());
-
-        Assert.False(row.HasStats);
-        Assert.Equal("— dps", row.DpsLabel);
-        Assert.Equal("— ehp", row.EhpLabel);
-        Assert.Equal("— m/s", row.SpeedLabel);
-
-        await row.LoadStatsAsync();
-
-        Assert.True(row.HasStats);
-        Assert.Equal("412 dps", row.DpsLabel);
-        Assert.Equal("38k ehp", row.EhpLabel);
-        Assert.Equal("1235 m/s", row.SpeedLabel);
-    }
-
-    /// <summary>
-    /// The figures are computed off the UI thread. Measured on the real engine over the operator's 148 fits, one
-    /// fit costs a median 13 ms (p90 22, worst 41) and a page of 25 around 450 ms — run where the cards are drawn
-    /// that is a visible stall on every page turn, and nothing about the result would look wrong afterwards.
-    /// </summary>
-    [AvaloniaFact]
-    public async Task Figures_AreComputedOffTheUiThread()
-    {
-        var engine = new StubStats();
-        var row = new FitRowViewModel(ModulesOnlyFit(), "Tester", new StubNames(), stats: engine);
-        var uiThread = Environment.CurrentManagedThreadId;   // an AvaloniaFact body runs on the UI thread
-
-        await row.LoadStatsAsync();
-
-        Assert.Equal(1, engine.Calls);
-        Assert.True(Dispatcher.UIThread.CheckAccess(), "the test itself should be back on the UI thread");
-        Assert.NotEqual(uiThread, engine.RanOnThread);
-        Assert.True(row.HasStats);   // and the result still lands on the row
-    }
-
-    /// <summary>A fit is measured once. Paging back and forth over the same rows must not re-run the engine.</summary>
-    [Fact]
-    public async Task Figures_AreComputedOncePerFit()
-    {
-        var engine = new StubStats();
-        var row = new FitRowViewModel(ModulesOnlyFit(), "Tester", new StubNames(), stats: engine);
-
-        await row.LoadStatsAsync();
-        await row.LoadStatsAsync();
-        await row.LoadStatsAsync();
-
-        Assert.Equal(1, engine.Calls);
-    }
-
-    /// <summary>EHP is compacted so the figures line holds three readouts at the card's minimum width — a
-    /// battleship's raw 92 401 would be the widest thing on it and push the speed off the card.</summary>
-    [Theory]
-    [InlineData(412d, "412 ehp")]
-    [InlineData(3_840d, "3.8k ehp")]
-    [InlineData(38_412d, "38k ehp")]
-    [InlineData(1_240_000d, "1.2m ehp")]
-    public async Task Ehp_IsCompacted_SoTheFiguresLineFits(double ehp, string expected)
-    {
-        var row = new FitRowViewModel(ModulesOnlyFit(), "Tester", new StubNames(),
-            stats: new StubStats(Stats(dps: 0, ehp: ehp, speed: 0)));
-        await row.LoadStatsAsync();
-
-        Assert.Equal(expected, row.EhpLabel);
-    }
-
-    /// <summary>Only the page on screen is measured. A library of 40 fits costs one page of engine runs, not 40 —
-    /// the whole point of doing this per page instead of per library. Turning the page measures the next one, and
-    /// coming back measures nothing at all.</summary>
-    [Fact]
-    public async Task OnlyThePageOnScreen_IsMeasured()
-    {
-        var engine = new StubStats();
-        var rows = Enumerable.Range(1, 40)
-            .Select(i => new FitRowViewModel(ModulesOnlyFit($"Fit {i:00}"), "Tester", new StubNames(), stats: engine))
-            .ToList();
-
-        var tab = new FitBrowserTabViewModel("Local", rows);   // the default page is 25
-        await WaitForAsync(() => tab.PagedRows.All(row => row.HasStats));
-
-        Assert.Equal(25, engine.Calls);
-        Assert.All(rows.Skip(25), row => Assert.False(row.HasStats));
-
-        tab.NextPageCommand.Execute(null);
-        await WaitForAsync(() => tab.PagedRows.All(row => row.HasStats));
-        Assert.Equal(40, engine.Calls);
-
-        tab.PrevPageCommand.Execute(null);
-        await Task.Delay(50, TestContext.Current.CancellationToken);
-        Assert.Equal(40, engine.Calls);   // a fit is measured once, however often you page past it
     }
 
     // ── images off ───────────────────────────────────────────────────────────────────────────────────────────
@@ -255,6 +120,58 @@ public class FitCardTests
         var unknown = new FitRowViewModel(Fit("Mystery", 999, (1, "HiSlot0", 1)), "Tester", FallbackNameResolver.Instance);
         Assert.False(unknown.HasHullClass);
         Assert.Equal("TYPE 999", unknown.HullWatermark);
+    }
+
+    // ── the uploader's avatar ────────────────────────────────────────────────────────────────────────────────
+
+    private sealed class RecordingPortraits : ICharacterPortraitProvider
+    {
+        public readonly List<(int CharacterId, int Size)> Requested = [];
+
+        public Task<Bitmap?> GetPortraitAsync(int characterId, int size, CancellationToken cancellationToken = default)
+        {
+            Requested.Add((characterId, size));
+            // The real provider answers null for a character id of 0 and when images are off; it never throws.
+            return Task.FromResult<Bitmap?>(null);
+        }
+    }
+
+    /// <summary>
+    /// Not every row has a character behind its uploader name, so the avatar is asked for only when there is an id
+    /// to ask about. A server-shared fit always names one; a local fit owned by a gamelog-only pilot has no ESI id
+    /// (<c>CharacterViewModel.CharacterId</c> is 0 for those) and an imported fit may match no character at all.
+    /// Those rows keep their initial rather than firing a request that could only 404.
+    /// </summary>
+    [Fact]
+    public async Task TheAvatar_IsOnlyFetchedForARowThatHasACharacter()
+    {
+        var portraits = new RecordingPortraits();
+        var known = new FitRowViewModel(FullFit(), "Vaelor Kestrane", new StubNames(),
+            portraits: portraits, uploaderCharacterId: 2112625428);
+        var anonymous = new FitRowViewModel(FullFit(), "Imported", new StubNames(), portraits: portraits);
+
+        await known.LoadUploaderPortraitAsync();
+        await anonymous.LoadUploaderPortraitAsync();
+
+        var request = Assert.Single(portraits.Requested);
+        Assert.Equal(2112625428, request.CharacterId);
+        // portrait serves 32/64/128/256/512 and rejects the rest with HTTP 400 — checked, like the hull render.
+        Assert.Equal(64, request.Size);
+        Assert.Contains(request.Size, new[] { 32, 64, 128, 256, 512 });
+    }
+
+    /// <summary>Every row has something to show in the circle, so a row without a portrait is not an empty frame —
+    /// and the name after it starts in the same place on every card.</summary>
+    [Theory]
+    [InlineData("Vaelor Kestrane", "V")]
+    [InlineData("imported", "I")]
+    [InlineData("", "?")]
+    public void WithoutAPortrait_TheCircleCarriesTheUploadersInitial(string uploader, string expected)
+    {
+        var row = new FitRowViewModel(FullFit(), uploader, new StubNames());
+
+        Assert.False(row.HasUploaderPortrait);
+        Assert.Equal(expected, row.UploaderInitial);
     }
 
     // ── the popover ──────────────────────────────────────────────────────────────────────────────────────────
@@ -352,6 +269,62 @@ public class FitCardTests
         Assert.Contains(images.Requested, r => r.Kind == TypeImageKind.Icon);
         Assert.Equal(row.Racks.Sum(rack => rack.VisibleLines.Count),
             images.Requested.Count(r => r.Kind == TypeImageKind.Icon));
+    }
+
+    /// <summary>Only the page on screen fetches. A library of 40 fits pulls one page's worth of renders, row icons
+    /// and portraits, not forty — the whole point of doing this per page instead of per library.</summary>
+    [Fact]
+    public void OnlyThePageOnScreen_FetchesItsImages()
+    {
+        var images = new RecordingImages(enabled: true);
+        var portraits = new RecordingPortraits();
+        var rows = Enumerable.Range(1, 40)
+            .Select(i => new FitRowViewModel(ModulesOnlyFit($"Fit {i:00}"), "Tester", new StubNames(),
+                images: images, portraits: portraits, uploaderCharacterId: 100 + i))
+            .ToList();
+
+        _ = new FitBrowserTabViewModel("Local", rows);   // the default page is 25
+
+        Assert.Equal(25, portraits.Requested.Count);
+        Assert.Equal(25, images.Requested.Count(r => r.Size == FitRowViewModel.RenderSize));
+        Assert.Equal(25, images.Requested.Count(r => r.Size == 64));   // the table's row icon
+        Assert.All(portraits.Requested, r => Assert.InRange(r.CharacterId, 101, 125));
+    }
+
+    /// <summary>
+    /// The card trims a long fit name to fit the card; the popover is then the only place left to read it, so it
+    /// carries the name in full and wraps rather than trimming again.
+    /// </summary>
+    [AvaloniaFact]
+    public void ThePopover_CarriesTheFitsFullName()
+    {
+        using var instance = TestClientInstance.Create();
+        instance.Services.GetRequiredService<IThemeService>().Apply(FactionTheme.Gallente);
+
+        const string longName = "Superior + Standard Sleeper Cache + Hisec Combat Site Stratios";
+        var row = new FitRowViewModel(FullFit(longName), "Tester", new StubNames());
+        var vm = new FitBrowserViewModel([new FitBrowserTabViewModel("Local", [row])]);
+        var window = new FitBrowserWindow(vm) { Width = 1100, Height = 660 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var card = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("fitcard"));
+
+        // On the card the name is trimmed — that is deliberate and stays.
+        var onCard = card.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == longName);
+        Assert.Equal(TextTrimming.CharacterEllipsis, onCard.TextTrimming);
+
+        // In the popover it is the title, in full, wrapping instead of trimming.
+        var tip = (Control)ToolTip.GetTip(card)!;
+        ToolTip.SetTip(card, null);
+        ((ISetLogicalParent)tip).SetParent(null);
+        tip.DataContext = row;
+
+        var title = tip.GetLogicalDescendants().OfType<TextBlock>().First(t => t.Text == longName);
+        Assert.Equal(TextWrapping.Wrap, title.TextWrapping);
+        Assert.Equal(TextTrimming.None, title.TextTrimming);
+        window.Close();
     }
 
     // ── the density ──────────────────────────────────────────────────────────────────────────────────────────
@@ -600,9 +573,4 @@ public class FitCardTests
             $"a card fell below the minimum in a panel of {panel.Bounds.Width}: {c.Width}"));
     }
 
-    private static async Task WaitForAsync(Func<bool> condition)
-    {
-        for (var i = 0; i < 200 && !condition(); i++) await Task.Delay(10, TestContext.Current.CancellationToken);
-        Assert.True(condition(), "the page never finished filling in");
-    }
 }

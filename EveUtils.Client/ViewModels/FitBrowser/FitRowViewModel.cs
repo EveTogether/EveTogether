@@ -20,8 +20,8 @@ namespace EveUtils.Client.ViewModels.FitBrowser;
 /// carries one set of figures however it is shown. Uniform across the Local and server tabs: a Local fit and a
 /// server-shared fit map to the same properties. Carries the parsed <see cref="EsiFitting"/> so the detail panel can
 /// be built on selection without re-reading storage, plus the hull render, the racks, the uploader and the price.
-/// Everything expensive — the render, the equipment icons, the Dogma figures — loads on demand, so a fit that is
-/// never paged to and never hovered costs nothing beyond its name.
+/// Everything expensive — the render, the uploader's portrait, the equipment icons — loads on demand, so a fit that
+/// is never paged to and never hovered costs nothing beyond its name.
 /// </summary>
 public sealed partial class FitRowViewModel : ViewModelBase
 {
@@ -128,32 +128,24 @@ public sealed partial class FitRowViewModel : ViewModelBase
     /// <summary>The fit value formatted for the Price avg. column, or "—" while it is still unknown.</summary>
     public string PriceLabel => Price is { } value ? IskFormat.Short(value) : "—";
 
-    // ── the card's three headline figures, from the Dogma engine ──
-    private readonly IFitStatsProvider? _statsProvider;
-    private Task? _statsLoad;
+    // ── the uploader's portrait, beside their name on the card ──
+    private readonly ICharacterPortraitProvider? _portraits;
 
-    /// <summary>The computed fit, or null until <see cref="LoadStatsAsync"/> has run (and permanently null when the
-    /// SDE has not been imported — the card then keeps its dashes).</summary>
+    /// <summary>The uploader's ESI character id, or 0 when there is no character behind the name. A local fit
+    /// owned by a gamelog-only pilot has no ESI id (<see cref="CharacterViewModel.CharacterId"/> is 0 for those),
+    /// and an imported fit whose owner matches no known character has no character at all — both then fall back to
+    /// <see cref="UploaderInitial"/> rather than showing an empty frame. Server-shared rows always have one.</summary>
+    public int UploaderCharacterId { get; }
+
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasStats))]
-    [NotifyPropertyChangedFor(nameof(DpsLabel))]
-    [NotifyPropertyChangedFor(nameof(EhpLabel))]
-    [NotifyPropertyChangedFor(nameof(SpeedLabel))]
-    private FitStats? _stats;
+    [NotifyPropertyChangedFor(nameof(HasUploaderPortrait))]
+    private Bitmap? _uploaderPortrait;
 
-    public bool HasStats => Stats is not null;
+    public bool HasUploaderPortrait => UploaderPortrait is not null;
 
-    public string DpsLabel => Stats is { } stats ? $"{stats.TotalDps:0} dps" : "— dps";
-    public string EhpLabel => Stats is { } stats ? $"{Compact(stats.Ehp)} ehp" : "— ehp";
-    public string SpeedLabel => Stats is { } stats ? $"{stats.MaxVelocity:0} m/s" : "— m/s";
-
-    /// <summary>EHP as it fits a card: a battleship's 90-odd thousand would otherwise be the widest thing on the
-    /// figures line and push the other two off it.</summary>
-    private static string Compact(double value) =>
-        value >= 1_000_000 ? $"{value / 1_000_000:0.#}m"
-        : value >= 10_000 ? $"{value / 1000:0}k"
-        : value >= 1000 ? $"{value / 1000:0.#}k"
-        : $"{value:0}";
+    /// <summary>First letter of the uploader's name, shown in place of the portrait when there is no character id,
+    /// when images are off, or when the fetch fails — the same fallback the fleet rows use.</summary>
+    public string UploaderInitial => string.IsNullOrEmpty(Uploader) ? "?" : Uploader[..1].ToUpperInvariant();
 
     // ── per-row export dropdown via the shared seam (same actions as the fit-detail header) ──
     private readonly IFitExportActions? _exportActions;
@@ -184,14 +176,15 @@ public sealed partial class FitRowViewModel : ViewModelBase
         Func<string, IReadOnlyList<CharacterPickOption>>? exportPickOptions = null,
         Action<string>? reportExportStatus = null, IMarketPriceRepository? prices = null,
         Func<int, Task>? onEditMetadata = null, Func<int, Task>? onDelete = null, string? tags = null,
-        IFitStatsProvider? stats = null)
+        ICharacterPortraitProvider? portraits = null, int uploaderCharacterId = 0)
     {
         Fit = fit;
         LocalFitId = localFitId;
         Tags = (tags ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         _images = images;
         _prices = prices;
-        _statsProvider = stats;
+        _portraits = portraits;
+        UploaderCharacterId = uploaderCharacterId;
         _exportActions = exportActions;
         _exportPickOptions = exportPickOptions ?? (_ => []);
         _reportExportStatus = reportExportStatus ?? (_ => { });
@@ -298,24 +291,20 @@ public sealed partial class FitRowViewModel : ViewModelBase
         assign(await _images.GetImageAsync(ShipTypeId, TypeImageKind.Render, size));
     }
 
-    /// <summary>
-    /// Computes this fit's dps/ehp/speed. Off the UI thread and at most once per row: one fit measured out at a
-    /// median 13 ms (p90 22, worst 41) on the Dogma engine, so a page of 25 asked for in one go is close to half a
-    /// second — long enough to be felt as a stutter if it ran where the cards are drawn. The caller walks the page
-    /// so the figures land card by card; until one lands the card shows its dashes and is otherwise complete.
-    /// </summary>
-    public Task LoadStatsAsync()
+    /// <summary>Loads the uploader's ESI portrait for the card — on demand, like the rest. The provider enforces the
+    /// images setting itself and answers null for a character id of 0, so a row without a character behind its
+    /// uploader name simply keeps its initial.</summary>
+    public async Task LoadUploaderPortraitAsync()
     {
-        if (_statsProvider is null || Stats is not null) return Task.CompletedTask;
-        return _statsLoad ??= RunStatsAsync();
+        if (_portraits is null || UploaderCharacterId <= 0) return;
+        UploaderPortrait = await _portraits.GetPortraitAsync(UploaderCharacterId, PortraitSize);
     }
 
-    private async Task RunStatsAsync()
-    {
-        var provider = _statsProvider!;
-        // Task.Run, not a bare await: ComputeAsync runs the engine synchronously on the calling thread.
-        Stats = await Task.Run(() => provider.ComputeAsync(Fit));
-    }
+    /// <summary>The size asked of the image server for an uploader's portrait. <c>portrait</c> serves
+    /// 32/64/128/256/512 and rejects anything else with HTTP 400 (checked, same as the hull render): 64 is the
+    /// smallest that stays clean in the card's 18px circle once a display scales, and it is the size the fleet rows
+    /// already ask for, so the two share a cache entry.</summary>
+    public const int PortraitSize = 64;
 
     /// <summary>Loads every rack's icons for the card's equipment popover — on the first hover, never before.</summary>
     public async Task LoadPopoverIconsAsync()

@@ -20,10 +20,10 @@
         <DockPanel.Resources>
             <!-- The narrowest a fit card may get. A MINIMUM, not a size: FillGridPanel divides whatever is left
                  over the columns that fit, so a card runs from 250 to just under twice that. 250 is what puts four
-                 cards across the browser's default 1100 (the panel is 1052, so four columns of 255) while the
-                 figures line still reads: "193 dps 69k ehp 1234 m/s" is about 215px of mono at 12, against 231px of
-                 card inside the padding. Five columns would be 202 and the figures no longer fit — rendered and
-                 checked, not assumed. -->
+                 cards across the browser's default 1100 — the panel is 1052, so four columns of 255 — and 255 is
+                 where the caption still reads: "Harbinger Navy Issue · Combat Battlecruiser", the longest hull and
+                 class pair in the operator's library, fits on one line with nothing trimmed. Rendered and checked at
+                 each step rather than derived. -->
             <sys:Double x:Key="FitCardMinWidth">250</sys:Double>
         </DockPanel.Resources>
 
@@ -77,7 +77,7 @@
                         Margin="0,0,6,0">
                     <StackPanel Orientation="Horizontal">
                         <Button Content="CARDS" Classes="viewtab" Classes.active="{Binding IsCardLayout}"
-                                ToolTip.Tip="Cards: hull render, fit name, dps / ehp / speed and the fit value"
+                                ToolTip.Tip="Cards: the hull render with the fit name and ship over it, who uploaded it and what it is worth"
                                 Command="{Binding SetLayoutCommand}"
                                 CommandParameter="{x:Static fb:FitBrowserLayout.Cards}"/>
                         <Button Content="LIST" Classes="viewtab" Classes.active="{Binding IsListLayout}"
@@ -204,8 +204,8 @@
                                                          down the left, everything the fit hauls down the right, and
                                                          a battleship with a full hold stays a popover instead of a
                                                          column taller than the screen. -->
-                                                    <Panel>
-                                                        <Panel.Styles>
+                                                    <StackPanel Spacing="9">
+                                                        <StackPanel.Styles>
                                                             <!-- One rack, drawn the same in either column. -->
                                                             <Style Selector="ItemsControl.racks">
                                                                 <Setter Property="ItemTemplate">
@@ -249,7 +249,21 @@
                                                                     </Setter.Value>
                                                                 </Setter>
                                                             </Style>
-                                                        </Panel.Styles>
+                                                        </StackPanel.Styles>
+                                                        <!-- The fit's name in full. The card trims it to fit the
+                                                             card, and this is where you look to find out what a
+                                                             trimmed one actually says — so it wraps rather than
+                                                             trimming again. -->
+                                                        <StackPanel Spacing="2">
+                                                            <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Bold"
+                                                                       TextWrapping="Wrap"
+                                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                                            <TextBlock FontSize="10.5" Foreground="{DynamicResource TextDimBrush}"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       Text="{Binding ShipTypeLabel}"/>
+                                                        </StackPanel>
+                                                        <Border Height="1" Background="{DynamicResource DividerBrush}"/>
+
                                                         <!-- A fit that carries only modules gets one column, sized to
                                                              it, rather than a second empty one. -->
                                                         <ItemsControl Classes="racks" ItemsSource="{Binding ModuleRacks}"
@@ -266,10 +280,10 @@
                                                             <ItemsControl Grid.Column="0" Classes="racks" ItemsSource="{Binding ModuleRacks}"/>
                                                             <ItemsControl Grid.Column="2" Classes="racks" ItemsSource="{Binding OtherRacks}"/>
                                                         </Grid>
-                                                    </Panel>
+                                                    </StackPanel>
                                                 </ToolTip.Tip>
 
-                                                <Grid RowDefinitions="Auto,Auto,Auto">
+                                                <Grid RowDefinitions="Auto,Auto">
 
                                                     <!-- 1. The hull, with the fit's name and what ship it is over it.
                                                          The caption lives HERE rather than in the block below, which
@@ -279,7 +293,7 @@
                                                          size — 14% more ship, and less empty band beside it. Both
                                                          caption lines sit inside the scrim, so they read over a lit
                                                          nebula as well as over a dark one. -->
-                                                    <Panel Grid.Row="0" Height="194">
+                                                    <Panel Grid.Row="0" Height="168">
                                                         <!-- The plate under the render. It is not a placeholder for
                                                              a missing picture: with CCP images switched off this IS
                                                              the header, so it carries its own gradient and a dim
@@ -320,10 +334,19 @@
                                                                 <BlurEffect Radius="34"/>
                                                             </Image.Effect>
                                                         </Image>
-                                                        <!-- Uniform, not UniformToFill: the whole hull, never a slice
-                                                             of one. -->
-                                                        <Image Source="{Binding HullRender}" IsVisible="{Binding HasHullRender}"
-                                                               Stretch="Uniform"/>
+                                                        <!-- The sharp render, cropped to fill — but never cropped to
+                                                             a strip. A card runs from 250 wide to just under twice
+                                                             that while the band's height is fixed, so "fill the
+                                                             band" means a 1.5:1 crop on a narrow card and a 2.4:1
+                                                             one on a wide docked tab, and at 2.4:1 a hull comes out
+                                                             as a slab of hull. Capping the sharp image at 1.6x the
+                                                             band height keeps the crop somewhere a ship survives;
+                                                             past that the card is filled by the blurred copy behind
+                                                             it, which is what that copy is for. -->
+                                                        <Border MaxWidth="270" HorizontalAlignment="Center" ClipToBounds="True"
+                                                                IsVisible="{Binding HasHullRender}">
+                                                            <Image Source="{Binding HullRender}" Stretch="UniformToFill"/>
+                                                        </Border>
                                                         <!-- Scrim. The renders are opaque JPEGs with a lit nebula
                                                              behind the hull, bright enough in places to swallow white
                                                              text, so the name gets its own darkness rather than
@@ -418,28 +441,33 @@
                                                     </Panel>
 
 
-                                                    <!-- 2. The three figures from the Dogma engine. They arrive a
-                                                         beat after the card (the engine takes ~13 ms a fit); until
-                                                         then each reads as a dash, so the line never reflows. -->
-                                                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="14"
-                                                                Margin="12,9,12,0">
-                                                        <TextBlock Classes="mono" FontSize="12" Text="{Binding DpsLabel}"
-                                                                   Foreground="{DynamicResource AccentBrightBrush}"
-                                                                   ToolTip.Tip="Damage per second, all skills at level 5"/>
-                                                        <TextBlock Classes="mono" FontSize="12" Text="{Binding EhpLabel}"
-                                                                   Foreground="{StaticResource TextBrush}"
-                                                                   ToolTip.Tip="Effective hitpoints against a uniform damage profile"/>
-                                                        <TextBlock Classes="mono" FontSize="12" Text="{Binding SpeedLabel}"
-                                                                   Foreground="{StaticResource TextBrush}"
-                                                                   ToolTip.Tip="Maximum velocity"/>
-                                                    </StackPanel>
-
-                                                    <!-- 3. Who put it here, and what it costs. -->
-                                                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="12,8,12,10">
-                                                        <TextBlock Grid.Column="0" Text="{Binding Uploader}" FontSize="11"
+                                                    <!-- 2. Who put it here, and what it costs. -->
+                                                    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="12,9,12,10">
+                                                        <!-- The uploader's portrait. Not every row has one: a local
+                                                             fit owned by a gamelog-only pilot has no ESI id, and an
+                                                             imported fit may match no character at all. Those keep
+                                                             the initial, which is also what a row falls back to with
+                                                             images switched off — the provider gates on that setting
+                                                             itself. The circle is drawn either way, so the name
+                                                             starts at the same place on every card. -->
+                                                        <Border Grid.Column="0" Width="18" Height="18" CornerRadius="9"
+                                                                Margin="0,0,7,0" ClipToBounds="True"
+                                                                VerticalAlignment="Center"
+                                                                Background="{DynamicResource AccentSoftBrush}">
+                                                            <Panel>
+                                                                <TextBlock Text="{Binding UploaderInitial}" FontSize="9.5"
+                                                                           FontWeight="SemiBold"
+                                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                           Foreground="{DynamicResource TextAccentBrush}"/>
+                                                                <Image Source="{Binding UploaderPortrait}"
+                                                                       IsVisible="{Binding HasUploaderPortrait}"
+                                                                       Stretch="UniformToFill"/>
+                                                            </Panel>
+                                                        </Border>
+                                                        <TextBlock Grid.Column="1" Text="{Binding Uploader}" FontSize="11"
                                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                                                    Foreground="{DynamicResource TextAccentBrush}"/>
-                                                        <TextBlock Grid.Column="1" Text="{Binding PriceLabel}" FontSize="11.5"
+                                                        <TextBlock Grid.Column="2" Text="{Binding PriceLabel}" FontSize="11.5"
                                                                    FontWeight="SemiBold" Margin="10,0,0,0"
                                                                    VerticalAlignment="Center"
                                                                    Foreground="{StaticResource ValueBrush}"
