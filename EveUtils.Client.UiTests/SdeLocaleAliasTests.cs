@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.IO.Compression;
+using EveUtils.Client.Clipboard;
 using EveUtils.Shared.Modules.Fittings.Services.Parsers;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Sde.Import;
@@ -64,6 +65,24 @@ public sealed class SdeLocaleAliasTests : IDisposable
         Assert.Equal(100, typeId);
         Assert.True(sde.TryGetTypeId("Bar", out var bar));
         Assert.Equal(200, bar);
+    }
+
+    [Fact]
+    public void InventoryResolver_ResolvesLocalizedTypeNames()
+    {
+        var sde = BuildStore(
+            """{"_key":587,"groupID":25,"name":{"en":"Rifter","de":"Wieselflink","fr":"Rifter VF"},"published":true,"mass":1,"volume":1,"capacity":1}""");
+
+        var (lines, unresolved) = SdeInventoryResolver.Resolve(
+        [
+            new ClipboardInventoryItem("Wieselflink", 2, null, null),
+            new ClipboardInventoryItem("rifter vf", 1, null, null),
+        ], sde);
+
+        Assert.Collection(lines,
+            line => Assert.Equal((587, "Wieselflink", 2), (line.TypeId, line.Name, line.Quantity)),
+            line => Assert.Equal((587, "rifter vf", 1), (line.TypeId, line.Name, line.Quantity)));
+        Assert.Empty(unresolved);
     }
 
     [Fact]

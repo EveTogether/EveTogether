@@ -123,15 +123,7 @@ public partial class AppraisalViewModel : ViewModelBase
                 return;
             }
 
-            List<AppraisalLine> lines = [];
-            List<string> unresolved = [];
-            foreach (var item in parsed)
-            {
-                if (_sde.TryGetTypeId(item.Name, out var typeId))
-                    lines.Add(new AppraisalLine(typeId, item.Name, item.Quantity ?? 1));   // no quantity column = one of it
-                else
-                    unresolved.Add(item.Name);
-            }
+            var (lines, unresolved) = SdeInventoryResolver.Resolve(parsed, _sde);
 
             if (lines.Count == 0)
             {
