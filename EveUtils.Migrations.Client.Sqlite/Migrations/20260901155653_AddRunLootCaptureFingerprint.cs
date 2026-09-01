@@ -1,0 +1,40 @@
+﻿using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace EveUtils.Migrations.Client.Sqlite.Migrations
+{
+    /// <inheritdoc />
+    public partial class AddRunLootCaptureFingerprint : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.AddColumn<string>(
+                name: "ContentHash",
+                table: "RunLootCapture",
+                type: "TEXT",
+                maxLength: 64,
+                nullable: true);
+
+            migrationBuilder.AddColumn<bool>(
+                name: "IsExcluded",
+                table: "RunLootCapture",
+                type: "INTEGER",
+                nullable: false,
+                defaultValue: false);
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.DropColumn(
+                name: "ContentHash",
+                table: "RunLootCapture");
+
+            migrationBuilder.DropColumn(
+                name: "IsExcluded",
+                table: "RunLootCapture");
+        }
+    }
+}

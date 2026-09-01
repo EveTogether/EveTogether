@@ -80,8 +80,8 @@ public sealed class SdeLocaleAliasTests : IDisposable
         ], sde);
 
         Assert.Collection(lines,
-            line => Assert.Equal((587, "Wieselflink", 2), (line.TypeId, line.Name, line.Quantity)),
-            line => Assert.Equal((587, "rifter vf", 1), (line.TypeId, line.Name, line.Quantity)));
+            line => Assert.Equal((587, "Wieselflink", 2), (line.Line.TypeId, line.Line.Name, line.Line.Quantity)),
+            line => Assert.Equal((587, "rifter vf", 1), (line.Line.TypeId, line.Line.Name, line.Line.Quantity)));
         Assert.Empty(unresolved);
     }
 

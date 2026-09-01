@@ -8,6 +8,7 @@ public sealed class RunLootCaptureConfiguration : IEntityTypeConfiguration<RunLo
     public void Configure(EntityTypeBuilder<RunLootCapture> builder)
     {
         builder.HasKey(capture => capture.Id);
+        builder.Property(capture => capture.ContentHash).HasMaxLength(64);
         builder.HasOne(capture => capture.Run)
             .WithMany(run => run.LootCaptures)
             .HasForeignKey(capture => capture.RunId)

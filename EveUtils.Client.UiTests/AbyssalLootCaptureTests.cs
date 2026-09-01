@@ -1,23 +1,38 @@
 using System;
+using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using EveUtils.Client.Clipboard;
+using EveUtils.Shared.Cqrs;
+using EveUtils.Shared.Data;
+using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Runs.Commands;
+using EveUtils.Shared.Modules.Runs.Entities;
+using EveUtils.Shared.Modules.Runs.Enums;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
 namespace EveUtils.Client.UiTests;
 
 public sealed class AbyssalLootCaptureTests
 {
+    private const string Container = "Rifter\t1\t0,10 m3\t100,00 ISK\r\nDamage Control II\t2\t0,20 m3\t250,50 ISK";
+    private const string SecondContainer = "Nanite Repair Paste\t5\t0,50 m3\t400,00 ISK\r\nEMP S\t100\t1,00 m3\t50,00 ISK";
+    private const string ContainerWithAPricelessRow = "Rifter\t1\t0,10 m3\t100,00 ISK\r\nDamage Control II\t2\t0,20 m3\t";
+
     [AvaloniaFact]
     public async Task InventoryWithKnownEveTypes_OffersLoot_AndSuppressesAnOpenDuplicate()
     {
         using var env = await Env.StartAsync();
         const string text = "Rifter\t1\r\nDamage Control II\t2";
 
-        env.Copy(text);
-        env.Copy(text);
+        await env.CopyAsync(text);
+        await env.CopyAsync(text);
 
         var offer = Assert.Single(env.Toasts.ActionToasts);
         Assert.Equal("Loot copied", offer.Title);
@@ -25,7 +40,7 @@ public sealed class AbyssalLootCaptureTests
         Assert.Equal(["Close"], Array.ConvertAll(offer.Actions.ToArray(), action => action.Label));
 
         offer.Actions[0].Run();
-        env.Copy(text);
+        await env.CopyAsync(text);
         Assert.Equal(2, env.Toasts.ActionToasts.Count);
     }
 
@@ -37,7 +52,7 @@ public sealed class AbyssalLootCaptureTests
     {
         using var env = await Env.StartAsync();
 
-        env.Copy(text);
+        await env.CopyAsync(text);
 
         Assert.Empty(env.Toasts.ActionToasts);
         var rejection = Assert.Single(env.Toasts.Toasts);
@@ -50,7 +65,7 @@ public sealed class AbyssalLootCaptureTests
     {
         using var env = await Env.StartAsync();
 
-        env.Copy("Rifter\t1\r\nBudget rent\t2");
+        await env.CopyAsync("Rifter\t1\r\nBudget rent\t2");
 
         var offer = Assert.Single(env.Toasts.ActionToasts);
         Assert.Contains("1 EVE item type(s)", offer.Message);
@@ -62,17 +77,113 @@ public sealed class AbyssalLootCaptureTests
     {
         using var env = await Env.StartAsync();
 
-        env.Copy("[Rifter, Solo]\r\nDamage Control II");
+        await env.CopyAsync("[Rifter, Solo]\r\nDamage Control II");
 
         Assert.Empty(env.Toasts.ActionToasts);
     }
 
+    /// <summary>The same window copied twice: both captures are kept, the repeat is excluded, and the run is worth
+    /// one copy. Silently dropping the repeat and silently adding it are both wrong, so both are asserted.</summary>
+    [AvaloniaFact]
+    public async Task TheSameWindowCopiedTwice_KeepsBothCaptures_AndCountsOne()
+    {
+        using var env = await Env.StartAsync();
+        await env.StartRunAsync();
+
+        await env.CopyAsync(Container);
+        env.CloseOffer();
+        await env.CopyAsync(Container);
+
+        IReadOnlyList<RunLootCapture> captures = await env.CapturesAsync();
+        Assert.Equal(2, captures.Count);
+        Assert.False(captures[0].IsExcluded);
+        Assert.True(captures[1].IsExcluded);
+        Assert.Equal(captures[0].ContentHash, captures[1].ContentHash);
+        Assert.Equal(2, captures[1].Entries.Count);   // an excluded capture keeps its rows, so it can be put back in
+
+        ActivitySummary summary = await env.SaveAndRebuildAsync();
+        Assert.Equal(350.50m, summary.LootIskGained);
+        Assert.Equal(3, summary.LootItemCount);
+        Assert.Equal(0.30m, summary.LootVolume);
+    }
+
+    /// <summary>Two containers in one run read as two different copies, so they are both counted.</summary>
+    [AvaloniaFact]
+    public async Task TwoDifferentCopies_AreBothIncluded_AndAddUp()
+    {
+        using var env = await Env.StartAsync();
+        await env.StartRunAsync();
+
+        await env.CopyAsync(Container);
+        env.CloseOffer();
+        await env.CopyAsync(SecondContainer);
+
+        IReadOnlyList<RunLootCapture> captures = await env.CapturesAsync();
+        Assert.Equal(2, captures.Count);
+        Assert.All(captures, capture => Assert.False(capture.IsExcluded));
+
+        ActivitySummary summary = await env.SaveAndRebuildAsync();
+        Assert.Equal(800.50m, summary.LootIskGained);
+        Assert.Equal(108, summary.LootItemCount);
+        Assert.Equal(1.80m, summary.LootVolume);
+    }
+
+    /// <summary>A row the window showed no price for stays a row without a price, never a zero.</summary>
+    [AvaloniaFact]
+    public async Task ARowWithoutAPrice_IsVisible_AndMovesNoTotal()
+    {
+        using var env = await Env.StartAsync();
+        await env.StartRunAsync();
+
+        await env.CopyAsync(ContainerWithAPricelessRow);
+
+        RunLootCapture capture = Assert.Single(await env.CapturesAsync());
+        Assert.Null(Assert.Single(capture.Entries, entry => entry.Name == "Damage Control II").ClipboardPrice);
+
+        ActivitySummary summary = await env.SaveAndRebuildAsync();
+        Assert.Equal(100.00m, summary.LootIskGained);
+        Assert.Equal(1, summary.LootEntriesWithoutPrice);
+        Assert.Equal(3, summary.LootItemCount);
+    }
+
+    /// <summary>Rebuilding reads the exclusions back off the runs, so putting the repeat back in raises the total by
+    /// exactly that copy and taking it out again returns it.</summary>
+    [AvaloniaFact]
+    public async Task RebuildingAfterAnExclusionChanges_FollowsTheFlag()
+    {
+        using var env = await Env.StartAsync();
+        await env.StartRunAsync();
+        await env.CopyAsync(Container);
+        env.CloseOffer();
+        await env.CopyAsync(Container);
+
+        Assert.Equal(350.50m, (await env.SaveAndRebuildAsync()).LootIskGained);
+        await env.SetRepeatExcludedAsync(excluded: false);
+        Assert.Equal(701.00m, (await env.RebuildAsync()).LootIskGained);
+        await env.SetRepeatExcludedAsync(excluded: true);
+        Assert.Equal(350.50m, (await env.RebuildAsync()).LootIskGained);
+    }
+
+    [AvaloniaFact]
+    public async Task WithoutARunningRun_TheLootIsNotRecorded()
+    {
+        using var env = await Env.StartAsync();
+
+        await env.CopyAsync(Container);
+
+        Assert.Empty(await env.CapturesAsync());
+    }
+
     private sealed class Env : IDisposable
     {
+        private static readonly DateTime StartedAtUtc = new(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
+
         private readonly TestClientInstance _instance;
         private readonly ClipboardWatchService _watch;
         private readonly AbyssalLootCapture _capture;
         private readonly FakeClipboardChangeSource _source;
+
+        private Guid _runId;
 
         public RecordingToastService Toasts { get; } = new();
 
@@ -81,8 +192,11 @@ public sealed class AbyssalLootCaptureTests
             _instance = instance;
             _watch = watch;
             _source = source;
-            _capture = new AbyssalLootCapture(watch, Toasts, FakeSdeAccessor.WithSampleFit());
+            _capture = new AbyssalLootCapture(watch, Toasts, FakeSdeAccessor.WithSampleFit(),
+                instance.Services.GetRequiredService<CqrsDispatcher>());
         }
+
+        private static CancellationToken Token => TestContext.Current.CancellationToken;
 
         public static async Task<Env> StartAsync()
         {
@@ -95,11 +209,60 @@ public sealed class AbyssalLootCaptureTests
             return env;
         }
 
-        public void Copy(string text)
+        public async Task CopyAsync(string text)
         {
             _source.ClipboardText = text;
             _source.RaiseChanged();
-            Dispatcher.UIThread.RunJobs();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            await _capture.LastStore;
+        }
+
+        /// <summary>Copying the same text again only asks a second time once the first card is gone.</summary>
+        public void CloseOffer() => Toasts.ActionToasts[^1].Actions[0].Run();
+
+        public async Task StartRunAsync()
+        {
+            Result<Guid> started = await Send(new StartRunCommand(90000001, ActivityKind.Abyssal, StartedAtUtc,
+                1234, "Abyssal Deadspace", 30000142));
+            Assert.True(started.IsSuccess);
+            _runId = started.Value;
+        }
+
+        public async Task<IReadOnlyList<RunLootCapture>> CapturesAsync()
+        {
+            await using ClientDbContext db = await CreateDbAsync();
+            return await db.Set<RunLootCapture>()
+                .AsNoTracking()
+                .Include(capture => capture.Entries)
+                .OrderBy(capture => capture.CapturedAtUtc)
+                .ToListAsync(Token);
+        }
+
+        public async Task<ActivitySummary> SaveAndRebuildAsync()
+        {
+            Result saved = await Send(new SaveRunCommand(_runId, StartedAtUtc.AddMinutes(15),
+                StartedAtUtc.AddMinutes(16), [], [], [], []));
+            Assert.True(saved.IsSuccess);
+            return await RebuildAsync();
+        }
+
+        public async Task<ActivitySummary> RebuildAsync()
+        {
+            Result<int> rebuilt = await Send(new RebuildActivitySummariesCommand());
+            Assert.True(rebuilt.IsSuccess);
+            await using ClientDbContext db = await CreateDbAsync();
+            return Assert.Single(await db.Set<ActivitySummary>().AsNoTracking().ToListAsync(Token));
+        }
+
+        /// <summary>Stands in for the one click that phase 3 adds.</summary>
+        public async Task SetRepeatExcludedAsync(bool excluded)
+        {
+            await using ClientDbContext db = await CreateDbAsync();
+            List<RunLootCapture> captures = await db.Set<RunLootCapture>()
+                .OrderBy(capture => capture.CapturedAtUtc)
+                .ToListAsync(Token);
+            captures[^1].IsExcluded = excluded;
+            await db.SaveChangesAsync(Token);
         }
 
         public void Dispose()
@@ -108,6 +271,12 @@ public sealed class AbyssalLootCaptureTests
             _watch.Dispose();
             _instance.Dispose();
         }
+
+        private Task<TResult> Send<TResult>(ICommand<TResult> command) =>
+            _instance.Services.GetRequiredService<CqrsDispatcher>().Send(command, Token);
+
+        private Task<ClientDbContext> CreateDbAsync() =>
+            _instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(Token);
     }
 
     private sealed class FakeClipboardChangeSource : IClipboardChangeSource
