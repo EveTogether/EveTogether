@@ -163,6 +163,8 @@ public static class ClientServices
         services.AddSingleton<CharacterInfoRefreshService>(); // on-start + hourly affiliation refresh for all known characters
         services.AddSingleton<EsiFleetSyncService>(); // 5 s boss-side roster mirror for linked in-game fleets
         services.AddSingleton<EsiSelfReportService>(); // 60 s member self-report for coupled server-fleets we're a non-boss member of
+        services.AddSingleton<ShipFitDetectionService>(); // 30 s current-ship cache shared by fit readers
+        services.AddSingleton<IShipFitDetectionService>(serviceProvider => serviceProvider.GetRequiredService<ShipFitDetectionService>());
         services.AddSingleton<SkillRefreshService>(); // on-start + 120 s (ESI skill-endpoint TTL) skill+queue refresh for all coupled characters
         services.AddSingleton<ImplantRefreshService>(); // on-start + 120 s implant refresh for all coupled characters
         services.AddSingleton<EveUtils.Client.Platform.EveClientPresenceService>(); // 5 s sweep for running EVE clients → character-list badge
