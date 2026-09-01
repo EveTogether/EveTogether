@@ -34,7 +34,7 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public class FitCardTests
 {
-    private const double CardMinWidth = 250;   // FitCardMinWidth in FitBrowserWindow.axaml
+    private const double CardMinWidth = 202;   // FitCardMinWidth in FitBrowserWindow.axaml
 
     private static EsiFitting Fit(string name, int shipTypeId, params (int TypeId, string Flag, int Qty)[] items) =>
         new(0, name, "", shipTypeId, items.Select(i => new EsiFittingItem(i.TypeId, i.Flag, i.Qty)).ToList());

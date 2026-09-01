@@ -23,6 +23,12 @@ public static class TestAppBuilder
 {
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<App>()
+            // The face the real client starts in (Program.cs). Without it every headless capture came out in the
+            // platform's default font, so anything read off a rendered frame — spacing, optical alignment, whether a
+            // figure still fits its column — was being judged in a typeface no user ever sees. Found in ET-110: an
+            // alignment the operator could see on his build measured as perfect here, and AppraisalToolTests was
+            // green over a column that really does clip its amount.
+            .WithInterFont()
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions
             {
