@@ -14,6 +14,23 @@ namespace EveUtils.Client.UiTests;
 public sealed class ShipFitDetectionServiceTests
 {
     [Fact]
+    public async Task RefreshAllAsync_ShipWithoutAMatchingFitStillExposesTheObservedShip()
+    {
+        var ships = new FakeShipClient(new EsiCharacterShip { ShipTypeId = 17715, ShipItemId = 9, ShipName = "Gila" });
+        var service = Build(ships, [new Character("With scope", 1, ["esi-location.read_ship_type.v1"])], []);
+
+        await service.RefreshAllAsync(TestContext.Current.CancellationToken);
+
+        ShipFitDetectionReading reading = service.GetReading(1);
+        Assert.Equal(ShipFitDetectionState.Observed, reading.State);
+        Assert.Equal(17715, reading.ShipTypeId);
+        Assert.Equal(9, reading.ShipItemId);
+        Assert.Equal("Gila", reading.ShipName);
+        Assert.Equal(ShipFitMatchReason.NoFitFound, reading.MatchReason);
+        Assert.NotNull(reading.ObservedAtUtc);
+    }
+
+    [Fact]
     public async Task RefreshAllAsync_UnobservedScopeMissingAndNoFitFoundStayDistinct()
     {
         var ships = new FakeShipClient(new EsiCharacterShip { ShipTypeId = 17715, ShipItemId = 9, ShipName = "Gila" });
@@ -107,6 +124,23 @@ public sealed class ShipFitDetectionServiceTests
 
         Assert.Equal(0, ships.Calls);
         Assert.Equal(ShipFitDetectionState.Unobserved, service.GetReading(1).State);
+    }
+
+    [Fact]
+    public async Task RefreshAllAsync_NoCharacterWithTheNewScopeLeavesTheRestOfTheAppOnTheScopeMissingPath()
+    {
+        var ships = new FakeShipClient(new EsiCharacterShip { ShipTypeId = 17715, ShipItemId = 9, ShipName = "Gila" });
+        var service = Build(ships,
+        [
+            new Character("First", 1, []),
+            new Character("Second", 2, []),
+        ], []);
+
+        await service.RefreshAllAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, ships.Calls);
+        Assert.Equal(ShipFitDetectionState.ScopeMissing, service.GetReading(1).State);
+        Assert.Equal(ShipFitDetectionState.ScopeMissing, service.GetReading(2).State);
     }
 
     private static ShipFitDetectionService Build(FakeShipClient ships, IReadOnlyList<Character> characters,

@@ -25,6 +25,7 @@ public sealed class ShipFitDetectionService(
     ILogger<ShipFitDetectionService> logger) : BackgroundService, IShipFitDetectionService
 {
     private const string OverrideKeyPrefix = "fit-detection.override.";
+    // Provisional until a scoped ship response confirms this bucket's live headroom; low-headroom cycles yield instead of queueing.
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
     private readonly ConcurrentDictionary<int, ShipFitDetectionReading> _readings = new();
     private readonly ConcurrentDictionary<(int CharacterId, int ShipTypeId), int> _manualFits = new();
