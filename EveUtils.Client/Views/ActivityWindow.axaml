@@ -195,7 +195,10 @@
                         <TextBlock Text="SET TIER + WEATHER"/>
                     </Border>
                     <Border Classes="chip dim">
-                        <TextBlock Text="SOLO"/>
+                        <TextBlock Text="{Binding FleetStatusText}"/>
+                    </Border>
+                    <Border Classes="chip dim">
+                        <TextBlock Text="{Binding RunOriginText}"/>
                     </Border>
                 </WrapPanel>
 
@@ -210,7 +213,7 @@
         <Border DockPanel.Dock="Top" Padding="14,13,14,15" BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource BorderBrush}">
             <StackPanel Spacing="12">
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
                     <StackPanel Grid.Column="0" Spacing="4">
                         <TextBlock Classes="label" Text="{Binding ClockLabel}"/>
                         <TextBlock x:Name="ClockFigure" Classes="clockfigure"
@@ -225,6 +228,12 @@
                         <TextBlock Classes="clockmeta">
                             <Run Text="END "/><Run Classes="figure" Text="{Binding EndText}"/>
                         </TextBlock>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Spacing="4" VerticalAlignment="Bottom">
+                        <Button x:Name="StartRunButton" Classes="pick" Content="{Binding StartButtonText}"
+                                IsVisible="{Binding IsStartButtonVisible}" Command="{Binding StartRunCommand}"/>
+                        <Button x:Name="StopRunButton" Classes="pick" Content="STOP"
+                                IsVisible="{Binding IsStopButtonVisible}" Command="{Binding StopRunCommand}"/>
                     </StackPanel>
                 </Grid>
                 <TextBlock Classes="hint" Margin="0" Text="{Binding ClockHint}"/>
