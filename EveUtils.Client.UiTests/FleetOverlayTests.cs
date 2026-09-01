@@ -381,16 +381,18 @@ public class FleetOverlayTests
     {
         using var instance = TestClientInstance.Create();
         instance.Services.GetRequiredService<IThemeService>().Apply(FactionTheme.Gallente);
+        // Anchor samples at opening time because the window refreshes against the wall clock.
+        var now = DateTime.UtcNow;
 
         var fleet = new FakeFleet
         {
             CommanderPresence = FleetCommanderPresence.From("Jita", FleetStandings.At("Jita", "Jita", "Perimeter", null)),
         };
-        fleet.Rows.Add(Member("RaymondKrah", dpsIn: 120, neutIn: 4));
-        fleet.Rows.Add(Member("Lionear", dpsIn: 812, neutIn: 6));
-        fleet.Rows.Add(Member("Tarek Vex", dpsIn: 60, neutIn: 74));
+        fleet.Rows.Add(Member("RaymondKrah", dpsIn: 120, neutIn: 4, lastSampleAt: now));
+        fleet.Rows.Add(Member("Lionear", dpsIn: 812, neutIn: 6, lastSampleAt: now));
+        fleet.Rows.Add(Member("Tarek Vex", dpsIn: 60, neutIn: 74, lastSampleAt: now));
 
-        var (window, overlay) = Open(fleet);
+        var (window, overlay) = Open(fleet, now);
 
         Assert.False(overlay.IsQuiet);
         Assert.Equal("Lionear", Text(window, "IncomingName"));
@@ -409,16 +411,17 @@ public class FleetOverlayTests
     {
         using var instance = TestClientInstance.Create();
         instance.Services.GetRequiredService<IThemeService>().Apply(FactionTheme.Gallente);
+        var now = DateTime.UtcNow;
 
         var fleet = new FakeFleet
         {
             CommanderPresence = FleetCommanderPresence.From("Jita", FleetStandings.At("Jita", "Jita", "Jita")),
         };
-        fleet.Rows.Add(Member("RaymondKrah"));
-        fleet.Rows.Add(Member("Lionear"));
-        fleet.Rows.Add(Member("Tarek Vex"));
+        fleet.Rows.Add(Member("RaymondKrah", lastSampleAt: now));
+        fleet.Rows.Add(Member("Lionear", lastSampleAt: now));
+        fleet.Rows.Add(Member("Tarek Vex", lastSampleAt: now));
 
-        var (window, overlay) = Open(fleet);
+        var (window, overlay) = Open(fleet, now);
 
         Assert.True(overlay.IsQuiet);
         Assert.Equal("—", Text(window, "IncomingName"));
@@ -437,8 +440,9 @@ public class FleetOverlayTests
     {
         using var instance = TestClientInstance.Create();
         instance.Services.GetRequiredService<IThemeService>().Apply(FactionTheme.Gallente);
+        var now = DateTime.UtcNow;
 
-        var offline = Member("Tarek Vex", dpsIn: 900, neutIn: 300);
+        var offline = Member("Tarek Vex", dpsIn: 900, neutIn: 300, lastSampleAt: now);
         offline.IsLocalCharacter = true;
         offline.InEve = false;
 
@@ -446,11 +450,11 @@ public class FleetOverlayTests
         {
             CommanderPresence = FleetCommanderPresence.From("Jita", FleetStandings.At("Jita", "Jita", null, null, null)),
         };
-        fleet.Rows.Add(Member("RaymondKrah", dpsIn: 210, neutIn: 22));
-        fleet.Rows.Add(Member("Lionear", dpsIn: 90));
+        fleet.Rows.Add(Member("RaymondKrah", dpsIn: 210, neutIn: 22, lastSampleAt: now));
+        fleet.Rows.Add(Member("Lionear", dpsIn: 90, lastSampleAt: now));
         fleet.Rows.Add(offline);
 
-        var (window, overlay) = Open(fleet);
+        var (window, overlay) = Open(fleet, now);
 
         Assert.Equal("RaymondKrah", Text(window, "IncomingName"));
         Assert.Equal("RaymondKrah", Text(window, "NeutedName"));
@@ -466,12 +470,13 @@ public class FleetOverlayTests
     {
         using var instance = TestClientInstance.Create();
         instance.Services.GetRequiredService<IThemeService>().Apply(FactionTheme.Gallente);
+        var now = DateTime.UtcNow;
 
         var fleet = new FakeFleet { FleetName = "Sunday Roam — Amarr staging" };
-        fleet.Rows.Add(Member("Lionear", dpsIn: 1240, neutIn: 12));
-        fleet.Rows.Add(Member("Constantine Frostwalker", dpsIn: 300, neutIn: 96));
+        fleet.Rows.Add(Member("Lionear", dpsIn: 1240, neutIn: 12, lastSampleAt: now));
+        fleet.Rows.Add(Member("Constantine Frostwalker", dpsIn: 300, neutIn: 96, lastSampleAt: now));
 
-        var (window, overlay) = Open(fleet, width: 250, height: 140);   // the window's minimum
+        var (window, overlay) = Open(fleet, now, width: 250, height: 140);   // the window's minimum
 
         Assert.Equal("Lionear", Text(window, "IncomingName"));
         Assert.Equal("Constantine Frostwalker", Text(window, "NeutedName"));
@@ -568,10 +573,10 @@ public class FleetOverlayTests
     // ---- helpers ---------------------------------------------------------------------------------------------------
 
     private static (FleetOverlayWindow Window, FleetOverlayViewModel Overlay) Open(
-        FakeFleet fleet, int width = 340, int height = 164)
+        FakeFleet fleet, DateTime now, int width = 340, int height = 164)
     {
         var overlay = new FleetOverlayViewModel(fleet);
-        overlay.Refresh(Now);
+        overlay.Refresh(now);
 
         var window = new FleetOverlayWindow(overlay) { Width = width, Height = height };
         window.Show();
