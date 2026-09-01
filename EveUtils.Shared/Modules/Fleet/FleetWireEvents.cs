@@ -37,6 +37,13 @@ public sealed class FleetWireEvents : IWireEventCatalog
             return new FleetMetricEvent(payload, characterId);
         });
 
+        registry.Register("fleet.run-group", (payloadJson, characterId) =>
+        {
+            var payload = JsonSerializer.Deserialize<RunGroupCodeStart>(payloadJson)
+                          ?? throw new InvalidOperationException("Invalid fleet.run-group payload.");
+            return new FleetRunGroupCodeEvent(payload, characterId);
+        });
+
         // Fleet lifecycle/membership change pushed by the server to a fleet's members, so an open fleet list, roster
         // and the metrics participation refresh live instead of only on a reconnect/restart.
         registry.Register("fleet.changed", (payloadJson, characterId) =>
