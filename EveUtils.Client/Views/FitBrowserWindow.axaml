@@ -269,10 +269,17 @@
                                                     </Panel>
                                                 </ToolTip.Tip>
 
-                                                <Grid RowDefinitions="Auto,Auto,Auto,Auto">
+                                                <Grid RowDefinitions="Auto,Auto,Auto">
 
-                                                    <!-- 1. The hull, full bleed, with the fit's name over it. -->
-                                                    <Panel Grid.Row="0" Height="170">
+                                                    <!-- 1. The hull, with the fit's name and what ship it is over it.
+                                                         The caption lives HERE rather than in the block below, which
+                                                         is what buys the band its height: the same card total leaves
+                                                         194 for the picture instead of 170, and since the render is
+                                                         fitted whole (not cropped) the band's height IS the ship's
+                                                         size — 14% more ship, and less empty band beside it. Both
+                                                         caption lines sit inside the scrim, so they read over a lit
+                                                         nebula as well as over a dark one. -->
+                                                    <Panel Grid.Row="0" Height="194">
                                                         <!-- The plate under the render. It is not a placeholder for
                                                              a missing picture: with CCP images switched off this IS
                                                              the header, so it carries its own gradient and a dim
@@ -297,19 +304,31 @@
                                                                    HorizontalAlignment="Center" VerticalAlignment="Center"
                                                                    TextAlignment="Center" TextWrapping="Wrap"
                                                                    Foreground="{DynamicResource AccentBrightBrush}"/>
+                                                        <!-- The render, painted twice. A CCP render is an opaque
+                                                             square JPEG with its own lit background baked in, so
+                                                             fitting it whole into a band wider than it is tall leaves
+                                                             a gap either side — and set against the flat plate that
+                                                             reads as a photo pasted into a hole, with a hard seam
+                                                             down each edge (rendered, compared, and that is exactly
+                                                             what it looked like). Painting the same render blurred
+                                                             and filling underneath lets its own nebula run out to the
+                                                             card's edges instead. Costs nothing worth measuring: a
+                                                             page of 25 composes in 3-5 ms under software Skia. -->
                                                         <Image Source="{Binding HullRender}" IsVisible="{Binding HasHullRender}"
                                                                Stretch="UniformToFill" Opacity="0.72">
                                                             <Image.Effect>
                                                                 <BlurEffect Radius="34"/>
                                                             </Image.Effect>
                                                         </Image>
+                                                        <!-- Uniform, not UniformToFill: the whole hull, never a slice
+                                                             of one. -->
                                                         <Image Source="{Binding HullRender}" IsVisible="{Binding HasHullRender}"
                                                                Stretch="Uniform"/>
                                                         <!-- Scrim. The renders are opaque JPEGs with a lit nebula
                                                              behind the hull, bright enough in places to swallow white
                                                              text, so the name gets its own darkness rather than
                                                              hoping for a dark ship. -->
-                                                        <Border VerticalAlignment="Bottom" Height="78">
+                                                        <Border VerticalAlignment="Bottom" Height="96">
                                                             <Border.Background>
                                                                 <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
                                                                     <GradientStop Offset="0" Color="#00000000"/>
@@ -318,10 +337,28 @@
                                                                 </LinearGradientBrush>
                                                             </Border.Background>
                                                         </Border>
-                                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Bottom"
-                                                                   Margin="12,0,12,9" FontSize="15" FontWeight="Bold"
-                                                                   TextTrimming="CharacterEllipsis"
-                                                                   Foreground="{StaticResource TextBrightBrush}"/>
+                                                        <StackPanel VerticalAlignment="Bottom" Margin="12,0,12,9" Spacing="2">
+                                                            <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="Bold"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                                            <!-- A Grid, not a horizontal StackPanel: a StackPanel
+                                                                 hands each child its full desired width and lets the
+                                                                 overflow run off the card, which is how "Harbinger
+                                                                 Navy Issue · Combat Battlecruiser" came out sliced at
+                                                                 the border with no ellipsis. Here the hull takes what
+                                                                 it needs up to 150 and the class trims into the rest;
+                                                                 both end in an ellipsis rather than at the edge. -->
+                                                            <Grid ColumnDefinitions="Auto,*">
+                                                                <TextBlock Grid.Column="0" Text="{Binding ShipTypeLabel}" FontSize="11"
+                                                                           FontWeight="SemiBold" MaxWidth="150"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           Foreground="{StaticResource TextBrush}"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding HullClass}" IsVisible="{Binding HasHullClass}"
+                                                                           FontSize="10.5" VerticalAlignment="Center" Margin="6,0,0,0"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           Foreground="{DynamicResource TextAccentBrush}"/>
+                                                            </Grid>
+                                                        </StackPanel>
 
                                                         <!-- A hairline under the band. Invisible against a render (the
                                                              scrim already ends in black there) and the thing that makes
@@ -380,30 +417,12 @@
                                                         </Border>
                                                     </Panel>
 
-                                                    <!-- 2. What it is: hull, then the class that hull belongs to. -->
-                                                    <!-- A Grid, not a horizontal StackPanel: a StackPanel hands each
-                                                         child its full desired width and lets the overflow run off
-                                                         the card, so "Harbinger Navy Issue · Combat Battlecruiser"
-                                                         came out sliced at the border with no ellipsis. Here the
-                                                         hull takes what it needs up to two thirds of the line and
-                                                         the class trims into what is left; both end in an ellipsis
-                                                         rather than at the edge. -->
-                                                    <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Margin="12,9,12,0">
-                                                        <TextBlock Grid.Column="0" Text="{Binding ShipTypeLabel}" FontSize="12"
-                                                                   FontWeight="SemiBold" MaxWidth="150"
-                                                                   TextTrimming="CharacterEllipsis"
-                                                                   Foreground="{StaticResource TextBrightBrush}"/>
-                                                        <TextBlock Grid.Column="1" Text="{Binding HullClass}" IsVisible="{Binding HasHullClass}"
-                                                                   FontSize="11" VerticalAlignment="Center" Margin="7,0,0,0"
-                                                                   TextTrimming="CharacterEllipsis"
-                                                                   Foreground="{DynamicResource TextDimBrush}"/>
-                                                    </Grid>
 
-                                                    <!-- 3. The three figures from the Dogma engine. They arrive a
+                                                    <!-- 2. The three figures from the Dogma engine. They arrive a
                                                          beat after the card (the engine takes ~13 ms a fit); until
                                                          then each reads as a dash, so the line never reflows. -->
-                                                    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="14"
-                                                                Margin="12,7,12,0">
+                                                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="14"
+                                                                Margin="12,9,12,0">
                                                         <TextBlock Classes="mono" FontSize="12" Text="{Binding DpsLabel}"
                                                                    Foreground="{DynamicResource AccentBrightBrush}"
                                                                    ToolTip.Tip="Damage per second, all skills at level 5"/>
@@ -415,8 +434,8 @@
                                                                    ToolTip.Tip="Maximum velocity"/>
                                                     </StackPanel>
 
-                                                    <!-- 4. Who put it here, and what it costs. -->
-                                                    <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="12,8,12,10">
+                                                    <!-- 3. Who put it here, and what it costs. -->
+                                                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="12,8,12,10">
                                                         <TextBlock Grid.Column="0" Text="{Binding Uploader}" FontSize="11"
                                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                                                    Foreground="{DynamicResource TextAccentBrush}"/>
