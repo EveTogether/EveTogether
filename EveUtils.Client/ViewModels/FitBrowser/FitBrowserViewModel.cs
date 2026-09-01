@@ -12,7 +12,7 @@ namespace EveUtils.Client.ViewModels.FitBrowser;
 
 /// <summary>
 /// View-model for the FITS fit-browser window: one tab per source (Local first, then a tab per coupled
-/// server). Selecting a server tab loads its rows lazily; double-clicking a row opens the radial
+/// server). Selecting a server tab loads its rows lazily; clicking a card opens the radial
 /// detail window via the injected <c>openDetail</c> callback. The view-model is pure — the rows, server
 /// loaders and detail opener are supplied by <see cref="MainWindowViewModel"/>, so it stays unit-testable.
 /// </summary>
@@ -27,11 +27,13 @@ public partial class FitBrowserViewModel : ObservableObject, IRefreshableModule
     private readonly Func<Task>? _importText;
     private readonly Func<Task>? _importEsfLink;
     private readonly Func<Task>? _refresh;
-    private readonly Func<FitBrowserLayout, Task>? _saveLayout;
-    private bool _layoutChosen;
+    private readonly Func<FitSortChoice, Task>? _saveSort;
+    private bool _sortChosen;
+    private bool _applySortSuspended;
 
-    /// <summary>The setting the chosen density is remembered under.</summary>
-    public const string LayoutSettingKey = "ui.fit-browser.layout";
+    /// <summary>The setting the chosen order is remembered under. A key of its own: the CARDS/LIST preference this
+    /// screen used to keep was removed with the table (ET-112) and must not come back to life here.</summary>
+    public const string SortSettingKey = "ui.fit-browser.sort";
 
     public FitBrowserViewModel(
         IEnumerable<FitBrowserTabViewModel> tabs,
@@ -40,48 +42,99 @@ public partial class FitBrowserViewModel : ObservableObject, IRefreshableModule
         Func<Task>? importText = null,
         Func<Task>? importEsfLink = null,
         Func<Task>? refresh = null,
-        Func<Task<FitBrowserLayout?>>? loadLayout = null,
-        Func<FitBrowserLayout, Task>? saveLayout = null)
+        Func<Task<FitSortChoice?>>? loadSort = null,
+        Func<FitSortChoice, Task>? saveSort = null)
     {
         _openDetail = openDetail;
         _importEsi = importEsi;
         _importText = importText;
         _importEsfLink = importEsfLink;
         _refresh = refresh;
-        _saveLayout = saveLayout;
+        _saveSort = saveSort;
+        // A server coupled while the browser is open gets its tab appended straight to this collection
+        // (MainWindowViewModel's RefreshAsync), so the order is handed to tabs as they arrive rather than only here.
+        Tabs.CollectionChanged += (_, e) =>
+        {
+            foreach (var tab in e.NewItems?.OfType<FitBrowserTabViewModel>() ?? [])
+                tab.ApplySort(Sort, SortDescending);
+        };
         foreach (var tab in tabs) Tabs.Add(tab);
         SelectedTab = Tabs.FirstOrDefault();
-        if (loadLayout is not null) _ = RestoreLayoutAsync(loadLayout);
+        if (loadSort is not null) _ = RestoreSortAsync(loadSort);
     }
 
-    /// <summary>How the fits are drawn. Cards by default — the hull render is what a fit is recognised by; the
-    /// table is a click away for sorting a column or reading prices side by side.</summary>
+    // ── the order, for every tab at once ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>What the cards are ordered by. The browser's, not a tab's: changing source keeps your order.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsCardLayout))]
-    [NotifyPropertyChangedFor(nameof(IsListLayout))]
-    private FitBrowserLayout _layout = FitBrowserLayout.Cards;
+    [NotifyPropertyChangedFor(nameof(SortLabel))]
+    [NotifyPropertyChangedFor(nameof(IsSortByName))]
+    [NotifyPropertyChangedFor(nameof(IsSortByPrice))]
+    [NotifyPropertyChangedFor(nameof(IsSortByHullClass))]
+    private FitSortOrder _sort = FitSortOrder.Name;
 
-    public bool IsCardLayout => Layout is FitBrowserLayout.Cards;
-    public bool IsListLayout => Layout is FitBrowserLayout.List;
+    [ObservableProperty] private bool _sortDescending;
 
-    /// <summary>Switch the density and remember it for the next session.</summary>
-    [RelayCommand]
-    private void SetLayout(FitBrowserLayout layout)
+    /// <summary>What the sort button says, so the chosen order is readable without opening the menu.</summary>
+    public string SortLabel => Sort switch
     {
-        _layoutChosen = true;
-        if (layout == Layout) return;
+        FitSortOrder.Price => "Price",
+        FitSortOrder.HullClass => "Hull class",
+        _ => "Fit name"
+    };
 
-        Layout = layout;
-        if (_saveLayout is not null) _ = _saveLayout(layout);
+    public bool IsSortByName => Sort is FitSortOrder.Name;
+    public bool IsSortByPrice => Sort is FitSortOrder.Price;
+    public bool IsSortByHullClass => Sort is FitSortOrder.HullClass;
+
+    /// <summary>Order by this field, and remember it for the next session.</summary>
+    [RelayCommand]
+    private void SetSort(FitSortOrder sort)
+    {
+        _sortChosen = true;
+        if (sort == Sort) return;
+
+        Sort = sort;
+        SaveSort();
     }
 
-    /// <summary>Restores the remembered density. It lands asynchronously, so a click that beat it wins — restoring
-    /// must never overwrite the choice the user just made with the value that choice replaced (same rule as
-    /// <see cref="FleetMetricsViewModel"/>'s).</summary>
-    private async Task RestoreLayoutAsync(Func<Task<FitBrowserLayout?>> loadLayout)
+    /// <summary>Turn the current order round.</summary>
+    [RelayCommand]
+    private void ToggleSortDirection()
     {
-        var stored = await loadLayout();
-        if (stored is { } layout && !_layoutChosen) Layout = layout;
+        _sortChosen = true;
+        SortDescending = !SortDescending;
+        SaveSort();
+    }
+
+    partial void OnSortChanged(FitSortOrder value) => ApplySort();
+
+    partial void OnSortDescendingChanged(bool value) => ApplySort();
+
+    private void ApplySort()
+    {
+        if (_applySortSuspended) return;
+        foreach (var tab in Tabs) tab.ApplySort(Sort, SortDescending);
+    }
+
+    private void SaveSort()
+    {
+        if (_saveSort is not null) _ = _saveSort(new FitSortChoice(Sort, SortDescending));
+    }
+
+    /// <summary>Restores the remembered order. It lands asynchronously, so a choice that beat it wins — restoring
+    /// must never overwrite what the user just picked with the value that pick replaced. Both halves are set before
+    /// anything is applied, so the cards are re-ordered once rather than once per half.</summary>
+    private async Task RestoreSortAsync(Func<Task<FitSortChoice?>> loadSort)
+    {
+        var stored = await loadSort();
+        if (stored is not { } choice || _sortChosen) return;
+
+        _applySortSuspended = true;
+        Sort = choice.Order;
+        SortDescending = choice.Descending;
+        _applySortSuspended = false;
+        ApplySort();
     }
 
     /// <summary>
@@ -121,7 +174,7 @@ public partial class FitBrowserViewModel : ObservableObject, IRefreshableModule
         if (value is not null) _ = value.EnsureLoadedAsync();
     }
 
-    /// <summary>Opens the radial detail window for a row (double-clicked in the grid).</summary>
+    /// <summary>Opens the radial detail window for a row (its card was clicked).</summary>
     [RelayCommand]
     private async Task OpenDetail(FitRowViewModel? row)
     {

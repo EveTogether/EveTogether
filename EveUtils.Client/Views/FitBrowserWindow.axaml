@@ -34,19 +34,6 @@
         </DockPanel.Resources>
 
         <DockPanel.Styles>
-            <!-- Density switcher, the same control fleet metrics uses — one pattern for "how much per screen". -->
-            <Style Selector="Button.viewtab">
-                <Setter Property="FontSize" Value="9.5"/>
-                <Setter Property="LetterSpacing" Value="1.4"/>
-                <Setter Property="Padding" Value="11,4"/>
-                <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="BorderThickness" Value="0"/>
-            </Style>
-            <Style Selector="Button.viewtab.active">
-                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
-            </Style>
-
             <!-- The app-wide ToolTip style caps every tooltip at 420 (Themes/EveUtils.axaml), which is right for a
                  one-line hint and far too narrow for the card's equipment popover: two columns of EVE module names
                  want roughly 640, and the overflow was CLIPPED, cutting names mid-word. Raised here, on the fit
@@ -57,6 +44,19 @@
                  cut. -->
             <Style Selector="ToolTip">
                 <Setter Property="MaxWidth" Value="680"/>
+            </Style>
+
+            <!-- The two halves of the sort control. A Button in this app is vertically CENTRED and as tall as its own
+                 padding makes it (measured: 30 for the app-wide 14,7, and 22 for an icon on a smaller padding, beside
+                 a 32 search box) — so matching the row by choosing a padding is guesswork that comes apart the moment
+                 anyone touches the font. These stretch instead: no vertical padding of their own, so the pair is
+                 exactly as tall as whatever else stands in this row, and it follows if that ever changes.
+                 The outer Border draws the one outline; these carry none. Square, like every control in this theme. -->
+            <Style Selector="Button.sortpart">
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="VerticalAlignment" Value="Stretch"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Padding" Value="12,0"/>
             </Style>
 
             <!-- The card lifts on hover, so it reads as the thing you are about to open. -->
@@ -79,21 +79,6 @@
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
                 <Button Content="REFRESH" FontSize="10" Command="{Binding RefreshCommand}"
                         ToolTip.Tip="Re-fetch the selected tab: Local re-reads your library, a server tab re-fetches its shared fits."/>
-                <!-- Window-level, beside the import action rather than inside a tab: the density is how you want to
-                     read fits, not a property of one source. -->
-                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" VerticalAlignment="Center"
-                        Margin="0,0,6,0">
-                    <StackPanel Orientation="Horizontal">
-                        <Button Content="CARDS" Classes="viewtab" Classes.active="{Binding IsCardLayout}"
-                                ToolTip.Tip="Cards: the hull render with the fit name and ship over it, who uploaded it and what it is worth"
-                                Command="{Binding SetLayoutCommand}"
-                                CommandParameter="{x:Static fb:FitBrowserLayout.Cards}"/>
-                        <Button Content="LIST" Classes="viewtab" Classes.active="{Binding IsListLayout}"
-                                ToolTip.Tip="Table: every column side by side, sortable — for comparing fits rather than recognising one"
-                                Command="{Binding SetLayoutCommand}"
-                                CommandParameter="{x:Static fb:FitBrowserLayout.List}"/>
-                    </StackPanel>
-                </Border>
                 <!-- Single import dropdown (D-188 FBX-6): same Button+MenuFlyout pattern + theming as the export menu -->
                 <Button IsVisible="{Binding CanImport}"
                         ToolTip.Tip="Import a fit from EVE, EFT/DNA text or an eveship.fit link">
@@ -138,13 +123,100 @@
                 <DataTemplate x:DataType="fb:FitBrowserTabViewModel">
                     <DockPanel Margin="0,8,0,0">
 
-                        <!-- Search + page-size -->
-                        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,6">
-                            <TextBox Grid.Column="0" Text="{Binding Search}" PlaceholderText="Search by name or tag…"
+                        <!-- Search + order + page-size. The order is the browser's and not this tab's, so it is read
+                             off the window's view-model the way the density switch used to be. -->
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <!-- The cap is on the COLUMN, not on the box: a box with a MaxWidth is centred in
+                                     whatever it is given, which leaves a gap on the left of a left-hand control. A
+                                     capped star column ends where the box ends, so the order sits right beside it.
+                                     Still a star, with a floor, so a narrow docked tab shrinks the search instead of
+                                     pushing the order off the edge. -->
+                                <ColumnDefinition Width="*" MinWidth="160" MaxWidth="520"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding Search}"
+                                     PlaceholderText="Search by fit, hull, class, tag or uploader…"
+                                     ToolTip.Tip="Matches everything the card shows: the fit's name, its hull and class, its tags, and who put it there"
                                      VerticalContentAlignment="Center" FontSize="12"/>
-                            <TextBlock Grid.Column="1" Text="Per page" VerticalAlignment="Center"
+
+                            <TextBlock Grid.Column="1" Text="Sort" VerticalAlignment="Center"
                                        Margin="10,0,6,0" FontSize="11" Foreground="{DynamicResource TextAccentBrush}"/>
-                            <ComboBox Grid.Column="2" MinWidth="70"
+                            <!-- Field and direction are ONE control in two halves: no gap, one outline around the
+                                 pair, a hairline where they meet. Its height comes from the row rather than from its
+                                 own padding — see Button.sortpart — so it stands exactly as tall as the search box
+                                 beside it and stays that way if the font or the padding ever moves. -->
+                            <Border Grid.Column="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                            <StackPanel Orientation="Horizontal">
+                            <!-- The button says what the order IS, so the choice is readable without opening the
+                                 menu; the menu marks the same one again for whoever does open it. The minimum width
+                                 is what keeps the arrow from sliding about as the label changes length. -->
+                            <Button Classes="sortpart" MinWidth="92"
+                                    Content="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).SortLabel}"
+                                    ToolTip.Tip="What the cards are ordered by">
+                                <Button.Flyout>
+                                    <MenuFlyout>
+                                        <TextBlock Classes="menuHeader" Text="SORT BY" IsHitTestVisible="False"/>
+                                        <MenuItem Header="Fit name"
+                                                  Command="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).SetSortCommand}"
+                                                  CommandParameter="{x:Static fb:FitSortOrder.Name}">
+                                            <MenuItem.Icon>
+                                                <mi:MaterialIcon Kind="Check"
+                                                                 IsVisible="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).IsSortByName}"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <MenuItem Header="Price"
+                                                  Command="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).SetSortCommand}"
+                                                  CommandParameter="{x:Static fb:FitSortOrder.Price}">
+                                            <MenuItem.Icon>
+                                                <mi:MaterialIcon Kind="Check"
+                                                                 IsVisible="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).IsSortByPrice}"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <MenuItem Header="Hull class"
+                                                  Command="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).SetSortCommand}"
+                                                  CommandParameter="{x:Static fb:FitSortOrder.HullClass}">
+                                            <MenuItem.Icon>
+                                                <mi:MaterialIcon Kind="Check"
+                                                                 IsVisible="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).IsSortByHullClass}"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                            <!-- The seam. Drawn rather than left as a gap, so the pair reads as one control with two
+                                 halves instead of two buttons that happen to touch. -->
+                            <Border Width="1" Background="{DynamicResource BorderBrush}"/>
+                            <!-- Direction as the second half rather than as six menu rows: three fields × two ways is
+                                 a list you have to read, one arrow is a thing you can see. -->
+                            <Button Classes="sortpart" Padding="9,0"
+                                    Command="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).ToggleSortDirectionCommand}"
+                                    Foreground="{DynamicResource TextAccentBrush}">
+                                <Panel>
+                                    <mi:MaterialIcon Classes="icon-sm" Kind="ArrowUp"
+                                                     IsVisible="{Binding !$parent[TabControl].((fb:FitBrowserViewModel)DataContext).SortDescending}"/>
+                                    <mi:MaterialIcon Classes="icon-sm" Kind="ArrowDown"
+                                                     IsVisible="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).SortDescending}"/>
+                                </Panel>
+                                <ToolTip.Tip>
+                                    <StackPanel>
+                                        <TextBlock Text="Ascending — click to reverse"
+                                                   IsVisible="{Binding !$parent[TabControl].((fb:FitBrowserViewModel)DataContext).SortDescending}"/>
+                                        <TextBlock Text="Descending — click to reverse"
+                                                   IsVisible="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).SortDescending}"/>
+                                    </StackPanel>
+                                </ToolTip.Tip>
+                            </Button>
+                            </StackPanel>
+                            </Border>
+
+                            <TextBlock Grid.Column="4" Text="Per page" VerticalAlignment="Center"
+                                       Margin="14,0,6,0" FontSize="11" Foreground="{DynamicResource TextAccentBrush}"/>
+                            <ComboBox Grid.Column="5" MinWidth="70"
                                       ItemsSource="{x:Static fb:FitBrowserTabViewModel.PageSizeOptions}"
                                       SelectedItem="{Binding PageSize}"/>
                         </Grid>
@@ -176,15 +248,13 @@
                             </Button>
                         </Grid>
 
-                        <!-- Two densities over one row set: the card grid you recognise a fit in, and the table
-                             (D-188 FBX-4) you compare fits in. Which one shows is the browser's density, so it is
-                             read off the window's view-model rather than the tab's. -->
+                        <!-- The card grid over the tab's rows — the browser's one density since ET-112 took the
+                             table out. -->
                         <Panel>
                             <TextBlock Text="No fits here yet." IsVisible="{Binding IsEmpty}"
                                        Foreground="{DynamicResource TextAccentBrush}" Margin="2,8"/>
 
-                            <Panel IsVisible="{Binding !IsEmpty}">
-                            <ScrollViewer IsVisible="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).IsCardLayout}">
+                            <ScrollViewer IsVisible="{Binding !IsEmpty}">
                                 <ItemsControl ItemsSource="{Binding PagedRows}">
                                     <ItemsControl.ItemsPanel>
                                         <!-- Fills the row rather than leaving a strip of whitespace on the right:
@@ -401,7 +471,7 @@
                                                         <Border VerticalAlignment="Bottom" Height="1"
                                                                 Background="{DynamicResource DividerBrush}"/>
 
-                                                        <!-- The table's two row menus, kept on the card. Top right,
+                                                        <!-- Export and manage, per fit. Top right,
                                                              over the render, so they never crowd the readouts, on their
                                                              own darkening — a nebula can be bright enough to swallow
                                                              an unbacked glyph. -->
@@ -491,213 +561,6 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                             </ScrollViewer>
-
-                            <DataGrid x:CompileBindings="False"
-                                      IsVisible="{Binding $parent[TabControl].DataContext.IsListLayout}"
-                                      ItemsSource="{Binding PagedRows}"
-                                      SelectedItem="{Binding SelectedRow}"
-                                      DoubleTapped="OnRowDoubleTapped"
-                                      AutoGenerateColumns="False" IsReadOnly="True"
-                                      SelectionMode="Single"
-                                      CanUserReorderColumns="False" CanUserResizeColumns="True"
-                                      CanUserSortColumns="True">
-                                <DataGrid.Columns>
-
-                                    <!-- Hull: round render + name -->
-                                    <DataGridTemplateColumn Header="HULL" Width="210" CanUserSort="True" SortMemberPath="ShipTypeLabel">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center" Margin="0,3">
-                                                    <Border Width="32" Height="32" CornerRadius="16" ClipToBounds="True"
-                                                            Background="#12FFFFFF" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                                                        <Image Source="{Binding HullImage}" IsVisible="{Binding HasHullImage}" Stretch="UniformToFill"/>
-                                                    </Border>
-                                                    <TextBlock Text="{Binding ShipTypeLabel}" VerticalAlignment="Center"
-                                                               Foreground="{StaticResource TextBrightBrush}" FontWeight="SemiBold"/>
-                                                    <!-- Hull class (e.g. "Frigate") from the SDE group, hidden until resolved (D-188) -->
-                                                    <TextBlock Text="{Binding HullClass}" IsVisible="{Binding HasHullClass}"
-                                                               VerticalAlignment="Center" FontSize="11"
-                                                               Foreground="{DynamicResource TextDimBrush}"/>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
-
-                                    <!-- Fit name -->
-                                    <DataGridTextColumn Header="FIT NAME" Binding="{Binding Name}" Width="*"/>
-
-                                    <!-- High / Medium / Low: "x modules" + per-module tooltip (icons load on hover) -->
-                                    <DataGridTemplateColumn Header="HIGH" Width="105" CanUserSort="True" SortMemberPath="HighCount">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <StackPanel Orientation="Horizontal" Spacing="5" Tag="High" Cursor="Hand"
-                                                            VerticalAlignment="Center" HorizontalAlignment="Left"
-                                                            PointerEntered="OnRackPointerEntered" ToolTip.ShowDelay="250">
-                                                    <TextBlock Text="{Binding HighCount, StringFormat='{}{0} modules'}"
-                                                               FontSize="12" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
-                                                    <mi:MaterialIcon Classes="icon-sm" Kind="ChevronDown"
-                                                                     Foreground="{DynamicResource TextAccentBrush}"/>
-                                                    <ToolTip.Tip>
-                                                        <StackPanel MinWidth="200">
-                                                            <TextBlock Text="HIGH SLOTS" FontSize="9" FontWeight="SemiBold" LetterSpacing="1.4"
-                                                                       Foreground="{DynamicResource TextDimBrush}" Margin="2,0,0,7"/>
-                                                            <ItemsControl ItemsSource="{Binding HighModules}">
-                                                                <ItemsControl.ItemTemplate>
-                                                                    <DataTemplate>
-                                                                        <StackPanel Orientation="Horizontal" Spacing="9" Margin="0,3">
-                                                                            <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Width="22" Height="22"/>
-                                                                            <TextBlock Text="{Binding Name}" FontSize="12" VerticalAlignment="Center"
-                                                                                       Foreground="{StaticResource TextBrush}"/>
-                                                                        </StackPanel>
-                                                                    </DataTemplate>
-                                                                </ItemsControl.ItemTemplate>
-                                                            </ItemsControl>
-                                                        </StackPanel>
-                                                    </ToolTip.Tip>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
-
-                                    <DataGridTemplateColumn Header="MEDIUM" Width="105" CanUserSort="True" SortMemberPath="MidCount">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <StackPanel Orientation="Horizontal" Spacing="5" Tag="Medium" Cursor="Hand"
-                                                            VerticalAlignment="Center" HorizontalAlignment="Left"
-                                                            PointerEntered="OnRackPointerEntered" ToolTip.ShowDelay="250">
-                                                    <TextBlock Text="{Binding MidCount, StringFormat='{}{0} modules'}"
-                                                               FontSize="12" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
-                                                    <mi:MaterialIcon Classes="icon-sm" Kind="ChevronDown"
-                                                                     Foreground="{DynamicResource TextAccentBrush}"/>
-                                                    <ToolTip.Tip>
-                                                        <StackPanel MinWidth="200">
-                                                            <TextBlock Text="MID SLOTS" FontSize="9" FontWeight="SemiBold" LetterSpacing="1.4"
-                                                                       Foreground="{DynamicResource TextDimBrush}" Margin="2,0,0,7"/>
-                                                            <ItemsControl ItemsSource="{Binding MidModules}">
-                                                                <ItemsControl.ItemTemplate>
-                                                                    <DataTemplate>
-                                                                        <StackPanel Orientation="Horizontal" Spacing="9" Margin="0,3">
-                                                                            <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Width="22" Height="22"/>
-                                                                            <TextBlock Text="{Binding Name}" FontSize="12" VerticalAlignment="Center"
-                                                                                       Foreground="{StaticResource TextBrush}"/>
-                                                                        </StackPanel>
-                                                                    </DataTemplate>
-                                                                </ItemsControl.ItemTemplate>
-                                                            </ItemsControl>
-                                                        </StackPanel>
-                                                    </ToolTip.Tip>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
-
-                                    <DataGridTemplateColumn Header="LOW" Width="105" CanUserSort="True" SortMemberPath="LowCount">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <StackPanel Orientation="Horizontal" Spacing="5" Tag="Low" Cursor="Hand"
-                                                            VerticalAlignment="Center" HorizontalAlignment="Left"
-                                                            PointerEntered="OnRackPointerEntered" ToolTip.ShowDelay="250">
-                                                    <TextBlock Text="{Binding LowCount, StringFormat='{}{0} modules'}"
-                                                               FontSize="12" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
-                                                    <mi:MaterialIcon Classes="icon-sm" Kind="ChevronDown"
-                                                                     Foreground="{DynamicResource TextAccentBrush}"/>
-                                                    <ToolTip.Tip>
-                                                        <StackPanel MinWidth="200">
-                                                            <TextBlock Text="LOW SLOTS" FontSize="9" FontWeight="SemiBold" LetterSpacing="1.4"
-                                                                       Foreground="{DynamicResource TextDimBrush}" Margin="2,0,0,7"/>
-                                                            <ItemsControl ItemsSource="{Binding LowModules}">
-                                                                <ItemsControl.ItemTemplate>
-                                                                    <DataTemplate>
-                                                                        <StackPanel Orientation="Horizontal" Spacing="9" Margin="0,3">
-                                                                            <Image Source="{Binding Image}" IsVisible="{Binding HasImage}" Width="22" Height="22"/>
-                                                                            <TextBlock Text="{Binding Name}" FontSize="12" VerticalAlignment="Center"
-                                                                                       Foreground="{StaticResource TextBrush}"/>
-                                                                        </StackPanel>
-                                                                    </DataTemplate>
-                                                                </ItemsControl.ItemTemplate>
-                                                            </ItemsControl>
-                                                        </StackPanel>
-                                                    </ToolTip.Tip>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
-
-                                    <!-- Price avg. (D-188 FBX-5): summed ESI average_price over hull + items × qty -->
-                                    <DataGridTemplateColumn Header="PRICE AVG." Width="120" CanUserSort="True" SortMemberPath="Price">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding PriceLabel}" VerticalAlignment="Center"
-                                                           HorizontalAlignment="Right" Margin="0,0,12,0" FontWeight="SemiBold"
-                                                           Foreground="{StaticResource ValueBrush}"/>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
-
-                                    <!-- Uploader = the sharer; only meaningful on a server tab. Local fits are all yours
-                                         (and imports have no character), so the column is hidden there (D-188). -->
-                                    <DataGridTextColumn Header="UPLOADER" Binding="{Binding Uploader}" Width="170"
-                                                        IsVisible="{Binding !IsLocal}"/>
-
-                                    <!-- Per-row export dropdown (same four actions + styling as the fit-detail header) -->
-                                    <DataGridTemplateColumn Header="EXPORT" Width="92">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <Button IsVisible="{Binding CanExport}" HorizontalAlignment="Center"
-                                                        Padding="9,3" Foreground="{DynamicResource TextAccentBrush}"
-                                                        ToolTip.Tip="Export this fit">
-                                                    <mi:MaterialIcon Kind="TrayArrowDown"/>
-                                                    <Button.Flyout>
-                                                        <MenuFlyout>
-                                                            <TextBlock Classes="menuHeader" Text="EXPORT FIT" IsHitTestVisible="False"/>
-                                                            <MenuItem Header="Share to server…" Command="{Binding ShareToServerCommand}">
-                                                                <MenuItem.Icon><mi:MaterialIcon Kind="CloudUploadOutline"/></MenuItem.Icon>
-                                                            </MenuItem>
-                                                            <MenuItem Header="Push to EVE (in-game)…" Command="{Binding PushToEveCommand}">
-                                                                <MenuItem.Icon><mi:MaterialIcon Kind="SendOutline"/></MenuItem.Icon>
-                                                            </MenuItem>
-                                                            <Separator/>
-                                                            <MenuItem Header="Copy eveship.fit link" Command="{Binding CopyEveshipLinkCommand}">
-                                                                <MenuItem.Icon><mi:MaterialIcon Kind="LinkVariant"/></MenuItem.Icon>
-                                                            </MenuItem>
-                                                            <MenuItem Header="Open EFT window…" Command="{Binding OpenEftWindowCommand}">
-                                                                <MenuItem.Icon><mi:MaterialIcon Kind="TextBoxOutline"/></MenuItem.Icon>
-                                                            </MenuItem>
-                                                        </MenuFlyout>
-                                                    </Button.Flyout>
-                                                </Button>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
-
-                                    <!-- Manage (fit-metadata): edit name/tags/description + delete, on local fits only -->
-                                    <DataGridTemplateColumn Header="" Width="48">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <Button IsVisible="{Binding CanManage}" HorizontalAlignment="Center"
-                                                        Padding="9,3" Foreground="{DynamicResource TextAccentBrush}"
-                                                        ToolTip.Tip="Manage this fit">
-                                                    <mi:MaterialIcon Kind="DotsHorizontal"/>
-                                                    <Button.Flyout>
-                                                        <MenuFlyout>
-                                                            <TextBlock Classes="menuHeader" Text="FIT" IsHitTestVisible="False"/>
-                                                            <MenuItem Header="Edit details…" Command="{Binding EditMetadataCommand}">
-                                                                <MenuItem.Icon><mi:MaterialIcon Kind="PencilOutline"/></MenuItem.Icon>
-                                                            </MenuItem>
-                                                            <Separator/>
-                                                            <MenuItem Header="Delete" Command="{Binding DeleteCommand}">
-                                                                <MenuItem.Icon><mi:MaterialIcon Kind="TrashCanOutline"/></MenuItem.Icon>
-                                                            </MenuItem>
-                                                        </MenuFlyout>
-                                                    </Button.Flyout>
-                                                </Button>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
-
-                                </DataGrid.Columns>
-                            </DataGrid>
-                            </Panel>
                         </Panel>
                     </DockPanel>
                 </DataTemplate>

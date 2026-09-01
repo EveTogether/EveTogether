@@ -670,28 +670,27 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             importText: () => ImportThenMaybeOpenAsync(ImportFitText),
             importEsfLink: () => ImportThenMaybeOpenAsync(ImportFitEsfLink),
             refresh: RefreshAsync,
-            loadLayout: LoadFitBrowserLayoutAsync,
-            saveLayout: SaveFitBrowserLayoutAsync);
+            loadSort: LoadFitBrowserSortAsync,
+            saveSort: SaveFitBrowserSortAsync);
         _dialogs.ShowFitBrowser(viewModel);
     }
 
-    /// <summary>The browser's remembered density, or null when it was never chosen (or was written by a newer
-    /// client) — the Cards default then stands.</summary>
-    private async Task<FitBrowserLayout?> LoadFitBrowserLayoutAsync()
+    /// <summary>The browser's remembered order, or null when it was never chosen (or was written by a newer
+    /// client) — the Fit name default then stands.</summary>
+    private async Task<FitSortChoice?> LoadFitBrowserSortAsync()
     {
         if (_services is null) return null;
         using var scope = _services.CreateScope();
         var settings = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Query(new GetSettingsQuery());
-        return Enum.TryParse(settings.FirstOrDefault(s => s.Key == FitBrowserViewModel.LayoutSettingKey)?.Value,
-            ignoreCase: true, out FitBrowserLayout stored) ? stored : null;
+        return FitSortChoice.Parse(settings.FirstOrDefault(s => s.Key == FitBrowserViewModel.SortSettingKey)?.Value);
     }
 
-    private async Task SaveFitBrowserLayoutAsync(FitBrowserLayout layout)
+    private async Task SaveFitBrowserSortAsync(FitSortChoice choice)
     {
         if (_services is null) return;
         using var scope = _services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<IDispatcher>()
-            .Send(new SetSettingCommand(FitBrowserViewModel.LayoutSettingKey, layout.ToString().ToLowerInvariant()));
+            .Send(new SetSettingCommand(FitBrowserViewModel.SortSettingKey, choice.ToSetting()));
     }
 
     // Set when the fit-browser builds its Local tab; lets the detail window's in-place metadata edit refresh that tab.
