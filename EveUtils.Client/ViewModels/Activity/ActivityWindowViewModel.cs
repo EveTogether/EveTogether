@@ -174,11 +174,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(FitSummary))]
     private string _fitSelectionText = "no fit chosen";
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FitSummary))]
+    private bool _hasChosenFit;
+
     [ObservableProperty] private string _fitVelocityText = "no max velocity";
 
     [ObservableProperty] private string _fitWarpSpeedText = "no warp speed";
 
-    public string FitSummary => FitSelectionText != "no fit chosen" ? FitSelectionText : FitDetectionText;
+    public string FitSummary => HasChosenFit ? FitSelectionText : FitDetectionText;
 
     /// <summary>All five in window order — what the test walks to prove none of them is ever silent.</summary>
     public IReadOnlyList<ActivitySection> Sections { get; }
@@ -352,6 +356,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         }
 
         FitSelectionText = $"chosen fit: {fit.FitName}";
+        HasChosenFit = true;
         EsiFitting? esi;
         try { esi = JsonSerializer.Deserialize<EsiFitting>(fit.RawJson); }
         catch (JsonException) { esi = null; }
