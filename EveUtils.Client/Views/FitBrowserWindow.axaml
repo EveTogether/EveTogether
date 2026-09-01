@@ -46,6 +46,19 @@
                 <Setter Property="MaxWidth" Value="680"/>
             </Style>
 
+            <!-- The two halves of the sort control. A Button in this app is vertically CENTRED and as tall as its own
+                 padding makes it (measured: 30 for the app-wide 14,7, and 22 for an icon on a smaller padding, beside
+                 a 32 search box) — so matching the row by choosing a padding is guesswork that comes apart the moment
+                 anyone touches the font. These stretch instead: no vertical padding of their own, so the pair is
+                 exactly as tall as whatever else stands in this row, and it follows if that ever changes.
+                 The outer Border draws the one outline; these carry none. Square, like every control in this theme. -->
+            <Style Selector="Button.sortpart">
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="VerticalAlignment" Value="Stretch"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Padding" Value="12,0"/>
+            </Style>
+
             <!-- The card lifts on hover, so it reads as the thing you are about to open. -->
             <Style Selector="Border.fitcard">
                 <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
@@ -122,7 +135,6 @@
                                 <ColumnDefinition Width="*" MinWidth="160" MaxWidth="520"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -134,9 +146,16 @@
 
                             <TextBlock Grid.Column="1" Text="Sort" VerticalAlignment="Center"
                                        Margin="10,0,6,0" FontSize="11" Foreground="{DynamicResource TextAccentBrush}"/>
+                            <!-- Field and direction are ONE control in two halves: no gap, one outline around the
+                                 pair, a hairline where they meet. Its height comes from the row rather than from its
+                                 own padding — see Button.sortpart — so it stands exactly as tall as the search box
+                                 beside it and stays that way if the font or the padding ever moves. -->
+                            <Border Grid.Column="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                            <StackPanel Orientation="Horizontal">
                             <!-- The button says what the order IS, so the choice is readable without opening the
-                                 menu; the menu marks the same one again for whoever does open it. -->
-                            <Button Grid.Column="2" MinWidth="94"
+                                 menu; the menu marks the same one again for whoever does open it. The minimum width
+                                 is what keeps the arrow from sliding about as the label changes length. -->
+                            <Button Classes="sortpart" MinWidth="92"
                                     Content="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).SortLabel}"
                                     ToolTip.Tip="What the cards are ordered by">
                                 <Button.Flyout>
@@ -169,9 +188,12 @@
                                     </MenuFlyout>
                                 </Button.Flyout>
                             </Button>
-                            <!-- Direction on its own button rather than as six menu rows: three fields × two ways is
+                            <!-- The seam. Drawn rather than left as a gap, so the pair reads as one control with two
+                                 halves instead of two buttons that happen to touch. -->
+                            <Border Width="1" Background="{DynamicResource BorderBrush}"/>
+                            <!-- Direction as the second half rather than as six menu rows: three fields × two ways is
                                  a list you have to read, one arrow is a thing you can see. -->
-                            <Button Grid.Column="3" Margin="4,0,0,0" Padding="7,4"
+                            <Button Classes="sortpart" Padding="9,0"
                                     Command="{Binding $parent[TabControl].((fb:FitBrowserViewModel)DataContext).ToggleSortDirectionCommand}"
                                     Foreground="{DynamicResource TextAccentBrush}">
                                 <Panel>
@@ -189,10 +211,12 @@
                                     </StackPanel>
                                 </ToolTip.Tip>
                             </Button>
+                            </StackPanel>
+                            </Border>
 
-                            <TextBlock Grid.Column="5" Text="Per page" VerticalAlignment="Center"
+                            <TextBlock Grid.Column="4" Text="Per page" VerticalAlignment="Center"
                                        Margin="14,0,6,0" FontSize="11" Foreground="{DynamicResource TextAccentBrush}"/>
-                            <ComboBox Grid.Column="6" MinWidth="70"
+                            <ComboBox Grid.Column="5" MinWidth="70"
                                       ItemsSource="{x:Static fb:FitBrowserTabViewModel.PageSizeOptions}"
                                       SelectedItem="{Binding PageSize}"/>
                         </Grid>
