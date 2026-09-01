@@ -117,7 +117,7 @@ public sealed class GamelogWatcherService : ISingletonService
                             await _gamelog.AddHitAsync(item.Character, c.Direction, c.Amount, c.Target, c.Quality, c.Timestamp, cancellationToken);
                             break;
                         case BountyEvent b:
-                            await _gamelog.AddBountyAsync(item.Character, b.Isk);
+                            await _gamelog.AddBountyAsync(item.Character, b);
                             break;
                         case MiningEvent m:
                             await _gamelog.AddMiningAsync(item.Character, m);

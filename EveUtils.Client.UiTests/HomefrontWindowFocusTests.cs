@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
@@ -153,6 +156,42 @@ public sealed class HomefrontWindowFocusTests
         Dispatcher.UIThread.RunJobs();
 
         Assert.Empty(dialogs.ShownActivityWindowTriggers);
+    }
+
+    // ── Dialogs opened while the run overlay is up ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// The run window is <c>Topmost</c> and every dialog is owned by the main window, so the fit picker opened
+    /// behind it and looked like nothing had happened. Each dialog is raised on its way out instead — the owner, and
+    /// with it which window the dialog blocks, is untouched.
+    ///
+    /// <b>Z-order itself cannot be asserted here.</b> The headless platform keeps an empty <c>Windows</c> collection
+    /// and models neither activation nor stacking, so a test that "checked" which window is in front would be green
+    /// whatever this code did. What is checked instead is that no dialog leaves <see cref="DialogService"/> without
+    /// going through that one seam — the thing that would go missing in a revert, or be forgotten by the next dialog
+    /// added. That the picker now lands in front is a desktop observation, and is recorded as one.
+    /// </summary>
+    [Fact]
+    public void EveryDialogIsRaisedOverTheRunOverlay()
+    {
+        string source = File.ReadAllText(_SourcePath("EveUtils.Client/Dialogs/DialogService.cs"));
+
+        foreach (string line in source.Split('\n').Where(line => line.Contains(".ShowDialog", StringComparison.Ordinal)))
+            Assert.Contains("_Over(", line, StringComparison.Ordinal);
+
+        // And the seam is the one that raises: a rename that lost the Topmost would leave the calls looking right.
+        Assert.Contains("dialog.Topmost = true", source, StringComparison.Ordinal);
+    }
+
+    private static string _SourcePath(string relative)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "EVE-Together.slnx")))
+            directory = directory.Parent;
+
+        return Path.Combine(
+            directory?.FullName ?? throw new InvalidOperationException("the solution root is not above the test binary"),
+            relative);
     }
 
     private static Window _Owner(out DialogService dialogs)

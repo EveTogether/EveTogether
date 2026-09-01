@@ -211,7 +211,7 @@
                             ToolTip.Tip="Neither weather nor tier can be detected — set them in the ACTIVITY section">
                         <TextBlock Text="SET TIER + WEATHER"/>
                     </Border>
-                    <Border Classes="chip dim">
+                    <Border Classes="chip dim" IsVisible="{Binding IsFleetShown}">
                         <TextBlock Text="{Binding FleetStatusText}"/>
                     </Border>
                     <Border Classes="chip dim">
@@ -312,7 +312,7 @@
                             </Grid>
                         </StackPanel>
 
-                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsLocationShown}">
                             <TextBlock Text="LOCATION"/>
                             <TextBlock Grid.Column="1" Text="{Binding LocationText}"/>
                         </Grid>
@@ -415,6 +415,9 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Gone rather than empty when no fleet has ever reported in: a FLEET section standing open on a solo
+                     run reads as a measurement, and nothing here can measure the absence of a fleet. -->
+                <StackPanel x:Name="FleetSection" IsVisible="{Binding IsFleetShown}">
                 <ToggleButton Classes="section" Content="{Binding Fleet}"
                               IsChecked="{Binding Fleet.IsExpanded, Mode=TwoWay}"/>
                 <Border Classes="sectionbody" IsVisible="{Binding Fleet.IsExpanded}">
@@ -442,6 +445,7 @@
                                    Text="{Binding PayoutExpectationLabel}"/>
                     </StackPanel>
                 </Border>
+                </StackPanel>
 
                 <ToggleButton Classes="section" Content="{Binding Bounty}"
                               IsChecked="{Binding Bounty.IsExpanded, Mode=TwoWay}"/>
