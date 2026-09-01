@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
@@ -58,12 +59,22 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public const string TierSettingKey = "ui.activity.tier";
 
+    /// <summary>Remembered for the same reason as the tier: you loot the same way several runs in a row.</summary>
+    public const string LootStrategySettingKey = "ui.activity.lootstrategy";
+
     /// <summary>Once a second. The readout is a clock, and a clock cannot be read faster than it ticks.</summary>
     public static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(1);
 
     /// <summary>The seven abyssal tiers, index = the T-number the filament is sold under.</summary>
     public static IReadOnlyList<string> Tiers { get; } =
         ["Tranquil", "Calm", "Agitated", "Fierce", "Raging", "Chaotic", "Cataclysmic"];
+
+    /// <summary>How much of the pocket you opened. The two runs loot in different vocabularies, so they get
+    /// different lists rather than one that half fits each.</summary>
+    public static IReadOnlyList<string> AbyssalLootStrategies { get; } =
+        ["bioadaptive only", "bioadaptive + triglavian", "all cans"];
+
+    public static IReadOnlyList<string> SiteLootStrategies { get; } = ["blitzed", "cleared", "full clear"];
 
     // Amber then red, on the last five and the last two minutes. Both are enough time to leave, which is the only
     // decision the clock exists to inform.
@@ -103,6 +114,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             .Select((tier, index) => new ActivityChoice { Index = index, Label = tier })
             .ToList();
 
+        LootStrategyChoices = LootStrategies
+            .Select((strategy, index) => new ActivityChoice { Index = index, Label = strategy })
+            .ToList();
+
         Sections = [Activity, Fit, Fleet, Bounty, Loot];
         Refresh(DateTime.UtcNow);
     }
@@ -136,7 +151,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(IsDiscardButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsSaveButtonVisible))]
     [NotifyPropertyChangedFor(nameof(RunOriginText))]
-    [NotifyPropertyChangedFor(nameof(StartButtonText))]
     private ActivityRunState _runState;
 
     // ── Who may steer the shared run ────────────────────────────────────────────────────────────────
@@ -194,20 +208,26 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(BountyText))]
     private long _bountyIsk;
 
-    /// <summary>What was looted and what was left, as a label. Without it "19 minutes" says nothing.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(LootStrategyText))]
-    private string? _lootStrategy;
+    /// <summary>What was looted and what was left. Without it "19 minutes" says nothing — which is why it is set
+    /// here rather than only displayed.</summary>
+    [ObservableProperty] private string? _lootStrategy;
+
+    public IReadOnlyList<ActivityChoice> LootStrategyChoices { get; }
+
+    /// <summary>The list this run's kind loots by.</summary>
+    public IReadOnlyList<string> LootStrategies => IsAbyssal ? AbyssalLootStrategies : SiteLootStrategies;
 
     /// <summary>What the copied signature's own text said it was (ET-100) — the raw scan-window field, not
     /// anything the SDE could enrich it to. Always null in the abyss; a filament carries no signature.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SignatureTypeText))]
+    [NotifyPropertyChangedFor(nameof(HasSignature))]
     private string? _signatureGroup;
 
     /// <summary>The signature's name once fully scanned — same field, same source as <see cref="SignatureGroup"/>.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SignatureSiteText))]
+    [NotifyPropertyChangedFor(nameof(HasSignature))]
     private string? _signatureName;
 
     /// <summary>What the site catalogue carries under <see cref="SignatureName"/> (ET-80). Empty is the ordinary
@@ -215,8 +235,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// and so is more than one, since 218 catalogue names are shared by 613 dungeons. Nothing below ever picks one.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SignatureSiteText))]
-    [NotifyPropertyChangedFor(nameof(ThreatText))]
     [NotifyPropertyChangedFor(nameof(ShipRestrictionText))]
+    [NotifyPropertyChangedFor(nameof(HasShipRestriction))]
     private IReadOnlyList<SdeSite> _matchedSites = [];
 
     // ── The five sections ───────────────────────────────────────────────────────────────────────────
@@ -308,15 +328,18 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public string HeaderTitle => IsAbyssal ? "ABYSSAL RUN" : "SITE RUN";
 
     // Start, stop and discard steer the run for everybody in it, so all three hang off the same authority (AC-4).
-    public bool IsStartButtonVisible =>
-        Authority.CanControl && (RunState != ActivityRunState.Running || !_isManualRun);
+    // Start and stop are the same slot seen from two sides and never both apply: a run that is going can only be
+    // stopped, and offering to re-start it over itself is what put START next to a ticking clock.
+    public bool IsStartButtonVisible => Authority.CanControl && RunState != ActivityRunState.Running;
 
     public bool IsStopButtonVisible => Authority.CanControl && RunState == ActivityRunState.Running;
 
     public bool IsDiscardButtonVisible => Authority.CanControl && RunState != ActivityRunState.NotStarted;
 
-    /// <summary>Saving is every member's own, never the FC's alone: each pilot commits their own part of the run.</summary>
-    public bool IsSaveButtonVisible => RunId is not null && RunState == ActivityRunState.Stopped;
+    /// <summary>Saving is every member's own, never the FC's alone: each pilot commits their own part of the run.
+    /// It hangs on the state and not on whether a run row exists yet — a stopped run with nowhere to save to is a
+    /// fault to report, not a button to hide.</summary>
+    public bool IsSaveButtonVisible => RunState == ActivityRunState.Stopped;
 
     /// <summary>Why the controls are absent, when they are. Silence would be indistinguishable from a bug, and an
     /// unknown fleet boss is a state worth naming rather than an empty corner (ET-65 AC-7's rule, applied here).</summary>
@@ -342,8 +365,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         ? "not started"
         : _isManualRun ? "manual" : "estimated from fleet";
 
-    public string StartButtonText => RunState == ActivityRunState.Running ? "OVERRIDE START" : "START";
-
     /// <summary>
     /// What the clock does not say on its face. <c>AbyssalSpace.Describe</c> writes a "+" for this; here it is a
     /// sentence under the figure instead, which is where it ended up after the first round of review.
@@ -367,35 +388,28 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         ? "— no bounty in abyssal space"
         : BountyIsk > 0 ? $"{BountyIsk:N0} ISK — own character" : "no payouts yet — own character";
 
+    /// <summary>Whether there is a copied signature behind this run at all. A run started by hand has none, and a
+    /// row that can only ever read "not known yet" is worse than no row.</summary>
+    public bool HasSignature => SignatureGroup is not null || SignatureName is not null;
+
     public string SignatureTypeText => SignatureGroup ?? "not known yet";
 
+    /// <summary>The site, described by what every catalogue match agrees it is — archetype, faction, DED, whether
+    /// it turns you away at the gate. Silent about anything they disagree on, and silent about the catalogue
+    /// itself: how many rows happen to share an English name is our problem, not the reader's.</summary>
     public string SignatureSiteText => SignatureName is not { } name
         ? "not known yet"
-        : MatchedSites.Count switch
-        {
-            0 => $"{name} — no catalogue entry under this English name",
-            1 => name,
-            var count => $"{name} — {count} catalogue entries share this name"
-        };
+        : SdeSiteDescription.DescribeCommon(MatchedSites) is { Length: > 0 } common
+            ? $"{name} — {common}"
+            : name;
 
-    /// <summary>What the run demands of the ship you are in — the one fact here that can turn you away at the gate,
-    /// so it is stated before you warp rather than discovered after.</summary>
-    public string ShipRestrictionText => MatchedSites.Count == 0
-        ? "not known — no catalogue entry under this name"
-        : MatchedSites.Select(_ShipRule).Distinct().ToList() is [{ } only]
-            ? only
-            : "the entries sharing this name disagree on their ship restriction";
+    /// <summary>The hulls the site lets in, when every match names the same ones — the one fact here that can turn
+    /// you away at the gate, so it is stated before you warp rather than discovered after. Null when there is
+    /// nothing to add over <see cref="SignatureSiteText"/>, which already carries "ship-restricted" itself.</summary>
+    public string? ShipRestrictionText =>
+        MatchedSites.Select(_ShipRule).Distinct().ToList() is [{ } only] ? only : null;
 
-    /// <summary>Never says "unrated": only 38 of the catalogue's sites state a rating at all, so an absent one is a
-    /// fact about the catalogue and is worded as one.</summary>
-    public string ThreatText => MatchedSites.Count == 0
-        ? "not known — no catalogue entry under this name"
-        : MatchedSites.Select(site => site.DedRating).Distinct().ToList() switch
-        {
-            [{ } ded] => $"DED {ded} of 10",
-            [null] => "no DED rating in the catalogue",
-            _ => "the entries sharing this name disagree on their DED rating"
-        };
+    public bool HasShipRestriction => ShipRestrictionText is not null;
 
     public string TierText => TierIndex is { } tier
         ? $"{Tiers[tier]} (Tier {tier})"
@@ -407,12 +421,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         ? $"{weather.Bonus} · {_PenaltyRange(tier)} {weather.PenaltyTarget}"
         : "not set";
 
-    public string LootStrategyText => LootStrategy ?? "not set";
-
     /// <summary>The caption over every ISK figure in the loot section. It names its own source on purpose: the
     /// figures are whatever price column happened to be in the EVE loot window at the moment of the copy, and the
     /// window has no way to price anything itself.</summary>
-    public string IskLabel => "ISK — price as it stood in the copied clipboard column";
+    public string IskLabel => "Prices are the clipboard column as it stood at the copy.";
 
     // ── Lifecycle ───────────────────────────────────────────────────────────────────────────────────
 
@@ -426,6 +438,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         WeatherIndex = _Restore(settings.FirstOrDefault(s => s.Key == WeatherSettingKey)?.Value,
             AbyssalWeather.All.Count);
         TierIndex = _Restore(settings.FirstOrDefault(s => s.Key == TierSettingKey)?.Value, Tiers.Count);
+
+        // A remembered strategy from the other kind of run addresses nothing here, so it reads as unset — the same
+        // rule the two indices get.
+        string? strategy = settings.FirstOrDefault(s => s.Key == LootStrategySettingKey)?.Value;
+        LootStrategy = LootStrategies.Contains(strategy) ? strategy : null;
 
         _SyncChoices();
         if (RunLoot is not null)
@@ -516,6 +533,17 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         await _PersistAsync(TierSettingKey, index.ToString(CultureInfo.InvariantCulture));
     }
 
+    /// <summary>Pressing the strategy that is already set clears it — the row has no other way back to unset, and
+    /// a wrong label on a saved run is worse than none.</summary>
+    [RelayCommand]
+    private async Task SelectLootStrategyAsync(int index)
+    {
+        LootStrategy = LootStrategy == LootStrategies[index] ? null : LootStrategies[index];
+        _SyncChoices();
+        Refresh(DateTime.UtcNow);
+        await _PersistAsync(LootStrategySettingKey, LootStrategy ?? string.Empty);
+    }
+
     [RelayCommand]
     private async Task ClearWeatherAndTierAsync()
     {
@@ -546,7 +574,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _StartEnemyObservations();
         OnPropertyChanged(nameof(IsStartButtonVisible));
         OnPropertyChanged(nameof(RunOriginText));
-        OnPropertyChanged(nameof(StartButtonText));
         Refresh(nowUtc);
     }
 
@@ -609,7 +636,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private async Task SaveRunAsync()
     {
         if (RunId is not { } runId)
+        {
+            _services.GetService<IToastService>()?.Show("Run not saved",
+                "This run was never registered, so there is nothing to save it to.", ToastKind.Error);
             return;
+        }
 
         DateTime nowUtc = DateTime.UtcNow;
         using var scope = _services.CreateScope();
@@ -852,28 +883,19 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             : "not set yet · no location";
     }
 
-    /// <summary>The shut header carries what the run demands, not only what it is called. Silent when the entries
-    /// sharing the name do not agree — a demand is worth nothing if it might be the neighbour's.</summary>
-    private string? _ShortDemand()
-    {
-        if (MatchedSites.Count == 0)
-            return null;
+    /// <summary>The shut header carries what the run demands, not only what it is called — the same description the
+    /// site line and the toast use, so the three cannot drift apart. Silent when the entries sharing the name do
+    /// not agree: a demand is worth nothing if it might be the neighbour's.</summary>
+    private string? _ShortDemand() =>
+        SdeSiteDescription.DescribeCommon(MatchedSites) is { Length: > 0 } common ? common : null;
 
-        if (MatchedSites.Select(site => site.DedRating).Distinct().ToList() is [{ } ded])
-            return $"DED {ded}";
-
-        return MatchedSites.All(site => site.IsShipRestricted) ? "ship-restricted" : null;
-    }
-
-    /// <summary>A restricted site whose allow-list resolves to no groups is restricted all the same — a handful of
-    /// the catalogue's type lists express themselves per hull, and reading that as "anything goes" is the one
-    /// mistake here that costs a ship.</summary>
-    private static string _ShipRule(SdeSite site) =>
-        !site.IsShipRestricted
-            ? "no ship restriction in the catalogue"
-            : site.AllowedShipGroups is []
-                ? "restricted, but the catalogue does not state it as ship groups"
-                : string.Join(", ", site.AllowedShipGroups.Select(group => group.Name).Order());
+    /// <summary>The hulls a site names, or null when it names none. A restricted site whose allow-list resolves to
+    /// no groups says nothing here and stays "ship-restricted" on the site line — reading it as "anything goes" is
+    /// the one mistake here that costs a ship.</summary>
+    private static string? _ShipRule(SdeSite site) =>
+        site is { IsShipRestricted: true, AllowedShipGroups: not [] }
+            ? string.Join(", ", site.AllowedShipGroups.Select(group => group.Name).Order())
+            : null;
 
     private void _AfterChoice()
     {
@@ -891,6 +913,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         foreach (var choice in TierChoices)
             choice.IsSelected = choice.Index == TierIndex;
+
+        foreach (var choice in LootStrategyChoices)
+            choice.IsSelected = choice.Label == LootStrategy;
     }
 
     private async Task _PersistAsync(string key, string value)

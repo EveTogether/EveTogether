@@ -230,7 +230,7 @@ public sealed class ClipboardSignatureOfferTests
         Assert.Equal(2, env.Toasts.ActionToasts.Count);
     }
 
-    // ── ET-80 — the ACTIVITY section, filled from the catalogue ─────────────────────────────────────
+    // ── The ACTIVITY section, filled from the catalogue ─────────────────────────────────────────────
 
     [AvaloniaFact]
     public async Task StartRunFromTheMeasuredLine_FillsTheActivitySectionFromTheCatalogue()
@@ -246,17 +246,18 @@ public sealed class ClipboardSignatureOfferTests
         var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
         // TYPE stays the scan window's own words: the SDE carries no scanner-type mapping to enrich it with.
         Assert.Equal("Homefront Operation Site - Combat Site", opened.SignatureTypeText);
-        Assert.Equal("Suspicious Signal: Secure the Intel", opened.SignatureSiteText);
+        // One description, and the toast that opened this window used the same one.
+        Assert.Equal("Suspicious Signal: Secure the Intel — Homefront Operations · Caldari State · DED 4 · ship-restricted",
+            opened.SignatureSiteText);
         Assert.Equal("Destroyer, Frigate", opened.ShipRestrictionText);
-        Assert.Equal("DED 4 of 10", opened.ThreatText);
-        Assert.Equal("Suspicious Signal: Secure the Intel · DED 4", opened.Activity.HeaderSummary);
-        Assert.DoesNotContain("ET-80", opened.Activity.HeaderSummary);
+        Assert.Equal("Suspicious Signal: Secure the Intel · Homefront Operations · Caldari State · DED 4 · ship-restricted",
+            opened.Activity.HeaderSummary);
     }
 
-    // Tegenproef: a site the catalogue does not carry. Every field says which state it is in — none goes blank, and
-    // none of them invents a rating or reads "no entry" as "no restriction".
+    // Tegenproef: a site the catalogue does not carry. The window says what it knows — the name — and nothing about
+    // the shape of our own catalogue, which tells the pilot nothing he can act on.
     [AvaloniaFact]
-    public async Task StartRunForASiteTheCatalogueDoesNotCarry_SaysSo_RatherThanLeavingTheFieldsEmpty()
+    public async Task StartRunForASiteTheCatalogueDoesNotCarry_ShowsTheNameAndNothingAboutOurCatalogue()
     {
         using var env = await Env.StartAsync(); // catalogue deliberately empty
 
@@ -264,29 +265,32 @@ public sealed class ClipboardSignatureOfferTests
         env.Toasts.ActionToasts[0].Actions[1].Run();
 
         var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
-        Assert.Equal("Suspicious Signal: Secure the Intel — no catalogue entry under this English name",
-            opened.SignatureSiteText);
-        Assert.Equal("not known — no catalogue entry under this name", opened.ShipRestrictionText);
-        Assert.Equal("not known — no catalogue entry under this name", opened.ThreatText);
-        Assert.DoesNotContain("DED 0", opened.ThreatText);
-        Assert.DoesNotContain("no ship restriction", opened.ShipRestrictionText);
+        Assert.Equal("Suspicious Signal: Secure the Intel", opened.SignatureSiteText);
         Assert.Equal("Suspicious Signal: Secure the Intel", opened.Activity.HeaderSummary);
+        Assert.DoesNotContain("catalogue", opened.SignatureSiteText, StringComparison.OrdinalIgnoreCase);
+
+        // And no row is shown that could only say it knows nothing.
+        Assert.Null(opened.ShipRestrictionText);
+        Assert.False(opened.HasShipRestriction);
     }
 
     // The known limitation, pinned rather than assumed: the catalogue stores site names in English only, so the same
-    // site copied from a client in another language cannot be matched — and the window blames the match, not the site.
+    // site copied from a client in another language cannot be matched. The toast says that at the copy, where it is
+    // still actionable; the window that follows shows the site, not our matching trouble.
     [AvaloniaFact]
-    public async Task TheCatalogueIsMatchedByEnglishNameOnly_AndTheWindowNamesThatAsTheReason()
+    public async Task TheCatalogueIsMatchedByEnglishNameOnly_AndTheToastNamesThatAsTheReason()
     {
         using var env = await Env.StartAsync();
         env.Sde.AddSite(Site(1263, "Suspicious Signal: Secure the Intel", ded: 4));
 
         env.Copy("IMM-760	Cosmic Anomaly	Homefront Operation Site - Combat Site	Signal suspect : sécuriser les renseignements	100,0%	0,50 AU");
+        Assert.Contains("English", env.Toasts.ActionToasts[0].Message);
+
         env.Toasts.ActionToasts[0].Actions[1].Run();
 
         var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
-        Assert.Contains("English", opened.SignatureSiteText);
-        Assert.DoesNotContain("DED 4", opened.ThreatText);
+        Assert.Equal("Signal suspect : sécuriser les renseignements", opened.SignatureSiteText);
+        Assert.DoesNotContain("DED 4", opened.SignatureSiteText);
     }
 
     private static SdeSite Site(int dungeonId, string name, string? archetype = null, string? faction = null,

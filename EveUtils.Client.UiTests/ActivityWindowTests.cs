@@ -10,10 +10,12 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using EveUtils.Client.Clipboard;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Theming;
 using EveUtils.Client.ViewModels;
@@ -484,15 +486,105 @@ public class ActivityWindowTests
         model.ApplyFleetEnvelope(
         [new MetricSample(1, 7, MetricKind.Location, 0, 1_000_000, AbyssalAnchorMs: 700_000)], received);
 
+        // The estimate starts the run, so it is a run: stop is the only thing left to do to it, whoever put the
+        // clock on the screen. Offering START next to a ticking clock is what Raymond saw.
         Assert.Equal("estimated from fleet", model.RunOriginText);
-        Assert.True(model.IsStartButtonVisible);
-        Assert.Equal("OVERRIDE START", model.StartButtonText);
+        Assert.False(model.IsStartButtonVisible);
+        Assert.True(model.IsStopButtonVisible);
 
         model.StartManualRun(Anchor.AddMinutes(5));
 
         Assert.Equal("manual", model.RunOriginText);
         Assert.Equal(Anchor.AddMinutes(5), model.AnchorUtc);
         Assert.False(model.IsStartButtonVisible);
+    }
+
+    // ── The four buttons, against every state the run can be in ─────────────────────────────────────
+
+    [Theory]
+    [InlineData(ActivityRunState.NotStarted, true, false, false, false)]
+    [InlineData(ActivityRunState.Running, false, true, false, true)]
+    [InlineData(ActivityRunState.Stopped, true, false, true, true)]
+    public void TheRunControls_ShowExactlyWhatTheStateAllows(ActivityRunState state,
+        bool start, bool stop, bool save, bool discard)
+    {
+        var model = _InState(state);
+
+        Assert.Equal(state, model.RunState);
+        Assert.Equal(start, model.IsStartButtonVisible);
+        Assert.Equal(stop, model.IsStopButtonVisible);
+        Assert.Equal(save, model.IsSaveButtonVisible);
+        Assert.Equal(discard, model.IsDiscardButtonVisible);
+
+        // Start and stop are the same slot seen from two sides, and the window puts them in one cell: both on at
+        // once would draw them over each other.
+        Assert.False(model.IsStartButtonVisible && model.IsStopButtonVisible);
+    }
+
+    [Fact]
+    public void AStoppedRunCanAlwaysBeSaved_WhetherOrNotARunRowExistsYet()
+    {
+        // Saving is the whole point of stopping, so the button hangs on the state. A stopped run with nowhere to
+        // save to is a fault the command reports — never a button quietly missing from the corner.
+        var model = _InState(ActivityRunState.Stopped);
+
+        Assert.Null(model.RunId);
+        Assert.True(model.IsSaveButtonVisible);
+    }
+
+    [Fact]
+    public void SavingDoesNotMoveTheButtons_ASavedRunIsStillAStoppedOne()
+    {
+        var model = _InState(ActivityRunState.Stopped);
+        (bool start, bool stop, bool save, bool discard) before =
+            (model.IsStartButtonVisible, model.IsStopButtonVisible, model.IsSaveButtonVisible, model.IsDiscardButtonVisible);
+
+        model.SaveRunCommand.Execute(null);
+
+        Assert.Equal(ActivityRunState.Stopped, model.RunState);
+        Assert.Equal(before,
+            (model.IsStartButtonVisible, model.IsStopButtonVisible, model.IsSaveButtonVisible, model.IsDiscardButtonVisible));
+    }
+
+    [Theory]
+    [InlineData(ActivityRunState.NotStarted)]
+    [InlineData(ActivityRunState.Running)]
+    [InlineData(ActivityRunState.Stopped)]
+    public void WithoutTheCommand_TheThreeSharedControlsGoAway_AndSayWhy(ActivityRunState state)
+    {
+        var denied = _InState(state);
+        denied.ApplyFleetCommand(fleetId: 7, fleetBossCharacterId: 1, actingCharacterId: 2);
+
+        Assert.False(denied.IsStartButtonVisible);
+        Assert.False(denied.IsStopButtonVisible);
+        Assert.False(denied.IsDiscardButtonVisible);
+        Assert.True(denied.IsCommandStatusShown);
+        Assert.False(string.IsNullOrWhiteSpace(denied.CommandStatusText));
+
+        // Saving is this pilot's own part of the run and is never the FC's to withhold.
+        Assert.Equal(state == ActivityRunState.Stopped, denied.IsSaveButtonVisible);
+
+        var unknown = _InState(state);
+        unknown.ApplyFleetCommand(fleetId: 7, fleetBossCharacterId: null, actingCharacterId: 2);
+
+        Assert.False(unknown.IsStartButtonVisible);
+        Assert.False(unknown.IsStopButtonVisible);
+        Assert.False(unknown.IsDiscardButtonVisible);
+        Assert.True(unknown.IsCommandStatusShown);
+        Assert.NotEqual(denied.CommandStatusText, unknown.CommandStatusText);
+    }
+
+    private static ActivityWindowViewModel _InState(ActivityRunState state)
+    {
+        var model = new ActivityWindowViewModel(ActivityKind.Site, _Unused());
+        if (state is ActivityRunState.NotStarted)
+            return model;
+
+        model.StartManualRun(Anchor);
+        if (state is ActivityRunState.Stopped)
+            model.StopRun(Anchor.AddMinutes(9));
+
+        return model;
     }
 
     [Fact]
@@ -607,6 +699,63 @@ public class ActivityWindowTests
         Assert.Equal(5, model.WeatherChoices.Count);
         Assert.Equal(7, model.TierChoices.Count);
         Assert.All(model.WeatherChoices, choice => Assert.False(string.IsNullOrWhiteSpace(choice.Tooltip)));
+    }
+
+    // ── The loot strategy: a label you can set, not one that only reports it is unset ────────────────
+
+    [Fact]
+    public void EveryKindOffersTheStrategiesItActuallyLootsBy()
+    {
+        var abyssal = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
+        var site = new ActivityWindowViewModel(ActivityKind.Site, _Unused());
+
+        Assert.NotEmpty(abyssal.LootStrategyChoices);
+        Assert.NotEmpty(site.LootStrategyChoices);
+        Assert.NotEqual(
+            abyssal.LootStrategyChoices.Select(choice => choice.Label),
+            site.LootStrategyChoices.Select(choice => choice.Label));
+        Assert.All(abyssal.LootStrategyChoices, choice => Assert.False(choice.IsSelected));
+    }
+
+    [AvaloniaFact]
+    public async Task TheLootStrategy_IsSet_Unset_AndRemembered()
+    {
+        using var instance = TestClientInstance.Create();
+
+        var first = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
+        await first.LoadAsync();
+        Assert.Null(first.LootStrategy);
+
+        await first.SelectLootStrategyCommand.ExecuteAsync(1);
+        Assert.Equal(ActivityWindowViewModel.SiteLootStrategies[1], first.LootStrategy);
+        Assert.True(first.LootStrategyChoices[1].IsSelected);
+
+        var second = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
+        await second.LoadAsync();
+        Assert.Equal(ActivityWindowViewModel.SiteLootStrategies[1], second.LootStrategy);
+        Assert.True(second.LootStrategyChoices[1].IsSelected);
+
+        // The row has no other way back: pressing the answer again is how you take it back.
+        await second.SelectLootStrategyCommand.ExecuteAsync(1);
+        Assert.Null(second.LootStrategy);
+
+        var third = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
+        await third.LoadAsync();
+        Assert.Null(third.LootStrategy);
+    }
+
+    [AvaloniaFact]
+    public async Task AStrategyRememberedFromTheOtherKindOfRun_ReadsAsUnset()
+    {
+        using var instance = TestClientInstance.Create();
+        await instance.Services.GetRequiredService<ISettingRepository>()
+            .UpsertAsync(ActivityWindowViewModel.LootStrategySettingKey, ActivityWindowViewModel.SiteLootStrategies[0]);
+
+        var abyssal = new ActivityWindowViewModel(ActivityKind.Abyssal, instance.Services);
+        await abyssal.LoadAsync();
+
+        Assert.Null(abyssal.LootStrategy);
+        Assert.All(abyssal.LootStrategyChoices, choice => Assert.False(choice.IsSelected));
     }
 
     [Fact]
@@ -743,8 +892,7 @@ public class ActivityWindowTests
     {
         var notStarted = _Open(new ActivityWindowViewModel(ActivityKind.Site, _Unused()), expanded: true);
         Assert.NotNull(notStarted.CaptureRenderedFrame());
-        Assert.True(_Button(notStarted, "StartRunButton").IsVisible);
-        Assert.False(_Button(notStarted, "StopRunButton").IsVisible);
+        _AssertButtons(notStarted, start: true, stop: false, save: false, discard: false);
         OverlayShots.Capture(notStarted, "eveutils-activity-not-started");
         notStarted.Close();
 
@@ -752,66 +900,149 @@ public class ActivityWindowTests
         runningModel.StartManualRun(DateTime.UtcNow.AddMinutes(-6));
         var running = _Open(runningModel, expanded: true);
         Assert.NotNull(running.CaptureRenderedFrame());
-        Assert.False(_Button(running, "StartRunButton").IsVisible);
-        Assert.True(_Button(running, "StopRunButton").IsVisible);
+        _AssertButtons(running, start: false, stop: true, save: false, discard: true);
         OverlayShots.Capture(running, "eveutils-activity-running");
         running.Close();
 
         runningModel.StopRun(DateTime.UtcNow);
         var stopped = _Open(runningModel, expanded: true);
         Assert.NotNull(stopped.CaptureRenderedFrame());
-        Assert.True(_Button(stopped, "StartRunButton").IsVisible);
-        Assert.False(_Button(stopped, "StopRunButton").IsVisible);
+        _AssertButtons(stopped, start: true, stop: false, save: true, discard: true);
         OverlayShots.Capture(stopped, "eveutils-activity-stopped");
         stopped.Close();
+    }
+
+    /// <summary>The four controls as the window actually renders them, and the cells they sit in — equal width and
+    /// equal spacing is what stops the block moving under the pointer when the run changes state. The width itself
+    /// is the markup's; what this holds is that all four share it.</summary>
+    private static void _AssertButtons(ActivityWindow window, bool start, bool stop, bool save, bool discard)
+    {
+        Assert.Equal(start, _Button(window, "StartRunButton").IsVisible);
+        Assert.Equal(stop, _Button(window, "StopRunButton").IsVisible);
+        Assert.Equal(save, _Button(window, "SaveRunButton").IsVisible);
+        Assert.Equal(discard, _Button(window, "DiscardRunButton").IsVisible);
+
+        var cells = new[] { "StartRunButton", "StopRunButton", "SaveRunButton", "DiscardRunButton" }
+            .Select(name => _Button(window, name))
+            .ToList();
+
+        // No button carries a margin of its own and none sizes itself: the row's cells do both, which is what
+        // makes the widths and the gaps equal whichever of them is on.
+        Assert.All(cells, button => Assert.Equal(HorizontalAlignment.Stretch, button.HorizontalAlignment));
+        Assert.All(cells, button => Assert.Equal(new Thickness(0), button.Margin));
+
+        Assert.Equal(Grid.GetColumn(cells[0]), Grid.GetColumn(cells[1]));            // start and stop, one slot
+        Assert.NotEqual(Grid.GetColumn(cells[2]), Grid.GetColumn(cells[3]));         // save and discard, two
+
+        var row = Assert.IsType<Grid>(cells[0].Parent);
+        var widths = new[] { 0, 2, 3 }.Select(column => row.ColumnDefinitions[column].Width).Distinct().ToList();
+        Assert.Single(widths);
+        Assert.True(row.ColumnDefinitions[1].Width.Value > 0, "the group boundary between steering and ending is gone");
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>A provider nothing in these tests reaches into: only the setting round-trip touches the client DI,
     /// and it uses a real <see cref="TestClientInstance"/>.</summary>
-    // ── ET-80 — what the catalogue adds, and what it refuses to guess ───────────────────────────────
+    // ── The site, described by what it is — never by the shape of our catalogue ─────────────────────
 
     [Fact]
-    public void AMatchedSiteWithNeitherRatingNorRestriction_SaysTheCatalogueCarriesNone_NotZeroAndNotUnrated()
+    public void AMatchedSiteThatDemandsNothing_SaysOnlyItsName_NotWhatTheCatalogueIsMissing()
     {
         var model = _Site(_Entry("Haunted Yard"));
 
         Assert.Equal("Haunted Yard", model.SignatureSiteText);
-        Assert.Equal("no DED rating in the catalogue", model.ThreatText);
-        Assert.Equal("no ship restriction in the catalogue", model.ShipRestrictionText);
-        Assert.DoesNotContain("0", model.ThreatText);
         Assert.Equal("Haunted Yard", model.Activity.HeaderSummary);
+        Assert.False(model.HasShipRestriction);
+        Assert.Null(model.ShipRestrictionText);
     }
 
     // The branch that costs a ship if it collapses into the unrestricted one: a handful of the catalogue's type
-    // lists state their restriction per hull, so a restricted site can resolve to no groups at all.
+    // lists state their restriction per hull, so a restricted site can resolve to no groups at all. It names no
+    // hulls, so the SHIPS row has nothing to add — but the site line still says you are restricted.
     [Fact]
     public void ARestrictedSiteWhoseAllowListResolvesToNoGroups_StaysRestricted_AndIsNeverReadAsAnythingGoes()
     {
         var model = _Site(_Entry("Sleeper Cache", restricted: true));
 
-        Assert.Equal("restricted, but the catalogue does not state it as ship groups", model.ShipRestrictionText);
-        Assert.NotEqual("no ship restriction in the catalogue", model.ShipRestrictionText);
+        Assert.Equal("Sleeper Cache — ship-restricted", model.SignatureSiteText);
+        Assert.False(model.HasShipRestriction);
         Assert.Equal("Sleeper Cache · ship-restricted", model.Activity.HeaderSummary);
     }
 
     [Fact]
-    public void SeveralCatalogueEntriesSharingAName_ReportTheDisagreement_RatherThanPickingOne()
+    public void ASiteThatNamesItsHulls_PutsThemInTheirOwnRow()
+    {
+        var model = _Site(_Entry("Limited Sleeper Cache", groups: [new SdeGroup(25, 6, "Frigate", true)]));
+
+        Assert.True(model.HasShipRestriction);
+        Assert.Equal("Frigate", model.ShipRestrictionText);
+        Assert.Equal("Limited Sleeper Cache — ship-restricted", model.SignatureSiteText);
+    }
+
+    [Fact]
+    public void SeveralCatalogueEntriesSharingAName_ShowWhatTheyShare_AndSayNothingAboutTheCatalogue()
     {
         var model = _Site(
             _Entry("SCC Secure Key Storage", ded: 4, restricted: true),
             _Entry("SCC Secure Key Storage", ded: 8, groups: [new SdeGroup(25, 6, "Frigate", true)]));
 
-        Assert.Equal("SCC Secure Key Storage — 2 catalogue entries share this name", model.SignatureSiteText);
-        Assert.Equal("the entries sharing this name disagree on their DED rating", model.ThreatText);
-        Assert.Equal("the entries sharing this name disagree on their ship restriction", model.ShipRestrictionText);
-        Assert.DoesNotContain("DED 4", model.ThreatText);
-        Assert.DoesNotContain("DED 8", model.ThreatText);
-        // The ratings disagree so no DED is claimed, but both entries are restricted — which ships is the open
-        // question, whether you are restricted at all is not, and the shut header keeps the half that holds.
+        // Both are restricted, so that holds; the ratings disagree, so no DED is claimed. What is never said is
+        // how many rows our own catalogue happens to carry — that is our problem, not the pilot's.
+        Assert.Equal("SCC Secure Key Storage — ship-restricted", model.SignatureSiteText);
+        Assert.DoesNotContain("catalogue", model.SignatureSiteText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("entries", model.SignatureSiteText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DED", model.SignatureSiteText, StringComparison.Ordinal);
+
+        // Which hulls is the open question, so the row that would answer it stays away rather than picking one.
+        Assert.False(model.HasShipRestriction);
         Assert.Equal("SCC Secure Key Storage · ship-restricted", model.Activity.HeaderSummary);
     }
+
+    [Fact]
+    public void TheSiteLine_TheShutHeader_AndTheToast_AllDescribeTheSiteTheSameWay()
+    {
+        // One description, three readers. Two of them drifting apart is how the window ended up telling Raymond
+        // about our catalogue while the toast told him about his site.
+        var matches = new[] { _Entry("Angel Hideaway", ded: 3, restricted: true) };
+        var model = _Site(matches);
+
+        Assert.Equal($"Angel Hideaway — {SdeSiteDescription.DescribeCommon(matches)}", model.SignatureSiteText);
+        Assert.Equal($"Angel Hideaway · {SdeSiteDescription.DescribeCommon(matches)}", model.Activity.HeaderSummary);
+        Assert.Equal(SdeSiteDescription.DescribeMatches(matches), SdeSiteDescription.DescribeCommon(matches));
+    }
+
+    // ── Nothing on screen names one of our tickets ──────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(ActivityKind.Abyssal)]
+    [InlineData(ActivityKind.Site)]
+    public void NoTextTheUserCanRead_EverNamesATicket(ActivityKind kind)
+    {
+        var model = _Filled(kind);
+        model.SignatureGroup = "Combat Site";
+        model.SignatureName = "Sansha Hideaway";
+        model.MatchedSites = [_Entry("Sansha Hideaway", ded: 4), _Entry("Sansha Hideaway", restricted: true)];
+        model.StartManualRun(Anchor);
+        model.Refresh(Anchor.AddMinutes(3));
+
+        foreach (var text in _ExposedText(model).Concat(model.LootStrategyChoices.Select(choice => choice.Label)))
+            Assert.DoesNotMatch(TicketNumber, text);
+    }
+
+    [Fact]
+    public void NoMarkupTheUserCanRead_EverNamesATicket()
+    {
+        // Every view, not only this one: the two that reached the screen today were both plain Text="…", and the
+        // comment above them is not what the user reads.
+        foreach (var view in Directory.EnumerateFiles(_SourcePath("EveUtils.Client"), "*.axaml", SearchOption.AllDirectories))
+            foreach (Match attribute in Regex.Matches(File.ReadAllText(view),
+                         @"(?:Text|Content|ToolTip\.Tip|Header|Watermark|Title)\s*=\s*""([^""]*)"""))
+                Assert.False(Regex.IsMatch(attribute.Groups[1].Value, TicketNumber),
+                    $"{Path.GetFileName(view)} shows the reader a ticket number: {attribute.Value}");
+    }
+
+    private const string TicketNumber = @"\bET-\d";
 
     private static ActivityWindowViewModel _Site(params SdeSite[] matches) =>
         new(ActivityKind.Site, _Unused())

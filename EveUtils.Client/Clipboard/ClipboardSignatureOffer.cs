@@ -142,7 +142,7 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         if (matches.Count == 0)
             return $"{signatureId} · {name} — site names are matched in English only";
 
-        var suffix = DescribeMatches(matches);
+        var suffix = SdeSiteDescription.DescribeMatches(matches);
         return suffix.Length == 0 ? $"{signatureId} · {name}" : $"{signatureId} · {name} — {suffix}";
     }
 
@@ -154,51 +154,4 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
             .Where(site => string.Equals(site.Name, name, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-    // Never fabricates a field the SDE does not carry and never picks one match over another (ET-79 AC-5): folds
-    // matches that show the same thing into one, and for anything that still differs shows only what they share
-    // plus how many variants there are.
-    private static string DescribeMatches(IReadOnlyList<SdeSite> matches)
-    {
-        var distinctDescriptions = matches.Select(DescribeOne).Distinct().ToList();
-        if (distinctDescriptions.Count == 1)
-            return distinctDescriptions[0];
-
-        var shared = DescribeShared(matches);
-        var variants = $"{distinctDescriptions.Count} variants";
-        return shared.Length == 0 ? variants : $"{shared} · {variants}";
-    }
-
-    private static string DescribeOne(SdeSite site)
-    {
-        var facts = new List<string>();
-        if (site.ArchetypeName is not null)
-            facts.Add(site.ArchetypeName);
-        if (IsKnownFaction(site.FactionName))
-            facts.Add(site.FactionName!);
-        if (site.DedRating is { } ded)
-            facts.Add($"DED {ded}");
-        if (site.IsShipRestricted)
-            facts.Add("ship-restricted");
-
-        return string.Join(" · ", facts);
-    }
-
-    // Shares only what every remaining match agrees on; anything the matches disagree on is left out rather than
-    // guessed at (ET-79 AC-5).
-    private static string DescribeShared(IReadOnlyList<SdeSite> matches)
-    {
-        var facts = new List<string>();
-        if (matches.Select(s => s.ArchetypeName).Distinct().ToList() is [{ } archetype])
-            facts.Add(archetype);
-        if (matches.Select(s => IsKnownFaction(s.FactionName) ? s.FactionName : null).Distinct().ToList() is [{ } faction])
-            facts.Add(faction);
-        if (matches.Select(s => s.DedRating).Distinct().ToList() is [{ } ded])
-            facts.Add($"DED {ded}");
-        if (matches.Select(s => s.IsShipRestricted).Distinct().ToList() is [true])
-            facts.Add("ship-restricted");
-
-        return string.Join(" · ", facts);
-    }
-
-    private static bool IsKnownFaction(string? factionName) => factionName is not (null or "Unknown");
 }
