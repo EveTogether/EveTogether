@@ -1,10 +1,26 @@
 using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Shared.Modules.Runs.Dtos;
 using Xunit;
 
 namespace EveUtils.Client.UiTests;
 
 public sealed class RunEnemyObservationCollectorTests
 {
+    [Fact]
+    public void Input_NewObservation_DefaultsToZero()
+    {
+        var input = new RunEnemyObservationInput
+        {
+            EnemyTypeId = 17155,
+            EnemyName = "Centii Servant",
+            Direction = Shared.Modules.Runs.Enums.EnemyObservationDirection.To,
+            FirstObservedAtUtc = DateTime.UtcNow,
+            LastObservedAtUtc = DateTime.UtcNow
+        };
+
+        Assert.Equal(0, input.Count);
+    }
+
     [Fact]
     public void Record_NpcSeenTwice_AddsOneEditableObservation()
     {

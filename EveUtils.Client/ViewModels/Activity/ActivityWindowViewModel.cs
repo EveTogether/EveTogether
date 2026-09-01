@@ -65,6 +65,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private readonly GamelogClientService? _gamelog;
     private DispatcherTimer? _timer;
     private bool _isManualRun;
+    private int? _enemyObservationCharacterId;
     private RunEnemyObservationCollector? _enemyObservations;
 
     public ActivityWindowViewModel(ActivityKind kind, IServiceProvider services)
@@ -474,6 +475,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // A stopped manual result is final; a later ESI anchor cannot reopen it.
         _isManualRun = true;
         RunState = ActivityRunState.Running;
+        _StartEnemyObservations();
         OnPropertyChanged(nameof(IsStartButtonVisible));
         OnPropertyChanged(nameof(RunOriginText));
         OnPropertyChanged(nameof(StartButtonText));
@@ -487,6 +489,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         StoppedAtUtc = nowUtc;
         RunState = ActivityRunState.Stopped;
+        _enemyObservations = null;
+        OnPropertyChanged(nameof(EnemyObservations));
         Refresh(nowUtc);
     }
 
@@ -528,10 +532,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         InsideAbyssal = reading.Inside;
         LocationDisplay = character.LocationDisplay;
-        ISdeAccessor? sde = _services.GetService<ISdeAccessor>();
-        _enemyObservations = sde is null ? null : new RunEnemyObservationCollector(character.CharacterId,
-            name => sde.TryGetTypeId(name, out int typeId) ? typeId : null);
-        OnPropertyChanged(nameof(EnemyObservations));
+        _enemyObservationCharacterId = character.CharacterId;
         Refresh(DateTime.UtcNow);
     }
 
@@ -557,6 +558,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() => _enemyObservations?.Record(characterId, target));
+    }
+
+    private void _StartEnemyObservations()
+    {
+        ISdeAccessor? sde = _services.GetService<ISdeAccessor>();
+        _enemyObservations = sde is null || _enemyObservationCharacterId is null ? null
+            : new RunEnemyObservationCollector(_enemyObservationCharacterId.Value,
+                name => sde.TryGetTypeId(name, out int typeId) ? typeId : null);
+        OnPropertyChanged(nameof(EnemyObservations));
     }
 
     // ── Internals ───────────────────────────────────────────────────────────────────────────────────

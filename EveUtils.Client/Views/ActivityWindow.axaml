@@ -299,7 +299,8 @@
                                 <DataTemplate DataType="va:RunEnemyObservationViewModel">
                                     <Grid Classes="kv" ColumnDefinitions="*,Auto">
                                         <TextBlock Text="{Binding EnemyName}"/>
-                                        <TextBox Grid.Column="1" Width="52" Text="{Binding Count, Mode=TwoWay}"/>
+                                        <NumericUpDown Grid.Column="1" Width="72" Minimum="0" Maximum="999" Increment="1"
+                                                       FormatString="0" Value="{Binding Count, Mode=TwoWay}"/>
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
