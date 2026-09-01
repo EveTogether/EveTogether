@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using EveUtils.Client.ViewModels;
+using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Modules.Esi;
@@ -24,6 +25,7 @@ public sealed class DialogService : IDialogService, ISingletonService
     private readonly ModuleHostService _moduleHost = new();
     private readonly Dictionary<string, DpsOverlayWindow> _dpsOverlays = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<long, FleetOverlayWindow> _fleetOverlays = new();
+    private ActivityWindow? _activityWindow;
     private readonly List<Window> _infoPopouts = new(); // non-modal type-info cards, shown ownerless
 
     public void SetOwner(Window owner)
@@ -94,10 +96,28 @@ public sealed class DialogService : IDialogService, ISingletonService
             overlay.Close();   // fires Closed → drops itself from _fleetOverlays
     }
 
+    public void ShowActivityWindow(ActivityWindowViewModel viewModel)
+    {
+        if (_owner is null) return;
+
+        // Only one run is ever tracked at a time (ET-98): re-opening focuses it instead of stacking a second,
+        // same rule as the DPS and fleet overlays above — and what makes ET-100's double-click AC hold.
+        if (_activityWindow is { } existing)
+        {
+            existing.Activate();
+            return;
+        }
+
+        _activityWindow = new ActivityWindow(viewModel);
+        _activityWindow.Closed += (_, _) => _activityWindow = null;
+        _activityWindow.Show();
+    }
+
     /// <summary>Open pop-out windows independent of the main window: floating modules + DPS overlays + fleet
     /// overlays + info cards. Used by the main window's close handler to decide whether to confirm before quitting.</summary>
     public int OpenPopoutCount =>
-        _dpsOverlays.Count + _fleetOverlays.Count + _moduleHost.FloatingWindowCount + _infoPopouts.Count;
+        _dpsOverlays.Count + _fleetOverlays.Count + (_activityWindow is null ? 0 : 1)
+        + _moduleHost.FloatingWindowCount + _infoPopouts.Count;
 
     /// <summary>Close every open pop-out window — called when the main window is closing so leftover ownerless
     /// windows don't keep the app alive.</summary>
@@ -107,6 +127,7 @@ public sealed class DialogService : IDialogService, ISingletonService
             overlay.Close();
         foreach (var overlay in _fleetOverlays.Values.ToList())
             overlay.Close();
+        _activityWindow?.Close();
         foreach (var info in _infoPopouts.ToList())
             info.Close();
         _moduleHost.CloseFloatingWindows();

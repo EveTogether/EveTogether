@@ -1,5 +1,6 @@
 using EveUtils.Client.Theming;
 using EveUtils.Client.ViewModels;
+using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
@@ -131,6 +132,10 @@ public interface IDialogService
     /// reads from goes away: its figures come from that screen's member rows, so without it the window would stand
     /// there for good showing the last frame before the screen closed. A no-op when nothing is open for the fleet.</summary>
     void CloseFleetOverlay(long fleetId);
+
+    /// <summary>Pops the activity window (ET-98) into its own topmost overlay. Non-modal; only one is ever open —
+    /// re-opening focuses the run already up instead of stacking a second, same rule as the two overlays above.</summary>
+    void ShowActivityWindow(ActivityWindowViewModel viewModel);
 
     /// <summary>
     /// Opens the settings module: a docked tab in docked mode, a floating window otherwise — non-modal so it

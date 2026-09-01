@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using EveUtils.Client.Dialogs;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
@@ -17,15 +19,21 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
 
     private readonly IToastService _toasts;
     private readonly ISdeAccessor _sde;
+    private readonly IDialogService _dialogs;
+    private readonly IServiceProvider _services;
     private readonly Lock _gate = new();
     private readonly IDisposable _subscription;
 
     private string? _openFingerprint;
+    private string? _startedRunFingerprint;
 
-    public ClipboardSignatureOffer(ClipboardWatchService clipboardWatch, IToastService toasts, ISdeAccessor sde)
+    public ClipboardSignatureOffer(ClipboardWatchService clipboardWatch, IToastService toasts, ISdeAccessor sde,
+        IDialogService dialogs, IServiceProvider services)
     {
         _toasts = toasts;
         _sde = sde;
+        _dialogs = dialogs;
+        _services = services;
         _subscription = clipboardWatch.Subscribe(FeatureName, OnCapture);
     }
 
@@ -48,9 +56,36 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         }
 
         var rows = ClipboardSignatureParser.Parse(capture.Text);
-        _toasts.Show("Signature copied", BuildMessage(rows), ToastKind.Information,
-            [new ToastAction("Close", () => CloseOffer(fingerprint))],
+        var actions = new List<ToastAction> { new("Close", () => CloseOffer(fingerprint)) };
+
+        // ET-100 testopener: ET-98's window (merged same day) has no way in otherwise. Not the abyssal opener (that
+        // needs a filament, not a signature) and not final — a later opener may replace or keep this. Needs exactly
+        // one fully-scanned row: half-scanned opens empty, 2+ rows is a menu a toast is the wrong surface for.
+        var recognised = rows.Where(row => row.Group is not null && row.Name is not null).ToList();
+        if (recognised is [{ } row])
+            actions.Add(new ToastAction("Start run", () => StartRun(fingerprint, row), ToastActionStyle.Affirmative));
+
+        _toasts.Show("Signature copied", BuildMessage(rows), ToastKind.Information, actions,
             () => CloseOffer(fingerprint), FeatureName);
+    }
+
+    private void StartRun(string fingerprint, ClipboardSignatureRow row)
+    {
+        lock (_gate)
+        {
+            // Guards the same click landing twice before the card visually closes — without it, two clicks open two
+            // windows (ET-100 AC-5).
+            if (_startedRunFingerprint == fingerprint)
+                return;
+
+            _startedRunFingerprint = fingerprint;
+        }
+
+        _dialogs.ShowActivityWindow(new ActivityWindowViewModel(ActivityKind.Site, _services)
+        {
+            SignatureGroup = row.Group,
+            SignatureName = row.Name
+        });
     }
 
     private void CloseOffer(string fingerprint)
@@ -59,6 +94,8 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         {
             if (_openFingerprint == fingerprint)
                 _openFingerprint = null;
+            if (_startedRunFingerprint == fingerprint)
+                _startedRunFingerprint = null;
         }
     }
 

@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using EveUtils.Client.Clipboard;
+using EveUtils.Client.Notifications;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -82,6 +83,88 @@ public sealed class ClipboardSignatureOfferTests
         Assert.Equal(2, env.Toasts.ActionToasts.Count);
     }
 
+    // ── ET-100 — the "Start run" button on the signature toast ──────────────────────────────────────
+
+    [AvaloniaFact]
+    public async Task ExactlyOneFullyScannedRow_ShowsStartRunButton_Affirmative()
+    {
+        using var env = await Env.StartAsync();
+
+        env.Copy("AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU\r\n" +
+                 "CCC-003\tCosmic Signature\t\t\t25.0%\t-");
+
+        var offer = Assert.Single(env.Toasts.ActionToasts);
+        Assert.Equal(new[] { "Close", "Start run" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
+        Assert.Equal(ToastActionStyle.Affirmative, offer.Actions[1].Style);
+    }
+
+    // AC-1 tegenproef: the same single row, but under the scan threshold — Group/Name null is the normal
+    // not-yet-scanned state, and a button on it would open an empty window.
+    [AvaloniaFact]
+    public async Task TheOneRowUnderTheScanThreshold_ShowsNoStartRunButton()
+    {
+        using var env = await Env.StartAsync();
+
+        env.Copy("CCC-003\tCosmic Signature\t\t\t25.0%\t-");
+
+        var offer = Assert.Single(env.Toasts.ActionToasts);
+        Assert.Equal(new[] { "Close" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
+    }
+
+    // AC-2: two or more recognised rows is a menu, and a toast is the wrong surface for one.
+    [AvaloniaFact]
+    public async Task TwoRecognisedRows_ShowsNoStartRunButton()
+    {
+        using var env = await Env.StartAsync();
+
+        env.Copy("AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU\r\n" +
+                 "BBB-002\tCosmic Signature\tCombat Site\tGuardian's Gala\t100.0%\t1.10 AU");
+
+        var offer = Assert.Single(env.Toasts.ActionToasts);
+        Assert.Equal(new[] { "Close" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
+    }
+
+    // AC-6: a copy with no recognised rows at all keeps behaving exactly as ET-79 left it.
+    [AvaloniaFact]
+    public async Task CopyWithNoRecognisedRows_IsUnchangedFromET79()
+    {
+        using var env = await Env.StartAsync();
+
+        env.Copy("CCC-003\tCosmic Signature\t\t\t25.0%\t-\r\nDDD-004\tCosmic Signature\t\t\t10.0%\t-");
+
+        var offer = Assert.Single(env.Toasts.ActionToasts);
+        Assert.Equal(new[] { "Close" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
+        Assert.Equal("2 more not fully scanned yet", offer.Message);
+    }
+
+    // AC-3: the window opens with what the clipboard actually said, not a placeholder.
+    [AvaloniaFact]
+    public async Task ClickingStartRun_OpensTheActivityWindow_WithTheRowsGroupAndName()
+    {
+        using var env = await Env.StartAsync();
+        env.Copy("AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU");
+
+        env.Toasts.ActionToasts[0].Actions[1].Run(); // "Start run"
+
+        var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
+        Assert.Equal(EveUtils.Client.ViewModels.Activity.ActivityKind.Site, opened.Kind);
+        Assert.Equal("Combat Site", opened.SignatureGroup);
+        Assert.Equal("Haunted Yard", opened.SignatureName);
+    }
+
+    // AC-5 tegenproef: without the started-run guard, this opens two.
+    [AvaloniaFact]
+    public async Task ClickingStartRunTwice_OnTheSameCard_OpensOnlyOneWindow()
+    {
+        using var env = await Env.StartAsync();
+        env.Copy("AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU");
+
+        env.Toasts.ActionToasts[0].Actions[1].Run();
+        env.Toasts.ActionToasts[0].Actions[1].Run();
+
+        Assert.Single(env.Dialogs.ShownActivityWindows);
+    }
+
     private static SdeSite Site(int dungeonId, string name, string? archetype = null, string? faction = null, int? ded = null, bool restricted = false) =>
         new(dungeonId, name, archetype is null ? null : 1, archetype, faction is null ? null : 1, faction, null, ded, restricted, []);
 
@@ -96,12 +179,14 @@ public sealed class ClipboardSignatureOfferTests
 
         public FakeSdeAccessor Sde { get; } = new();
 
+        public RecordingDialogService Dialogs { get; } = new();
+
         private Env(TestClientInstance instance, ClipboardWatchService watch, FakeClipboardChangeSource source)
         {
             _instance = instance;
             _watch = watch;
             _source = source;
-            _offer = new ClipboardSignatureOffer(watch, Toasts, Sde);
+            _offer = new ClipboardSignatureOffer(watch, Toasts, Sde, Dialogs, instance.Services);
         }
 
         public static async Task<Env> StartAsync()
