@@ -19,10 +19,12 @@
              tab in the main window, and anything left on the window is dropped there (ET-42). -->
         <DockPanel.Resources>
             <!-- The narrowest a fit card may get. A MINIMUM, not a size: FillGridPanel divides whatever is left
-                 over the columns that fit, so a card runs from 296 to just under twice that. Chosen against the
-                 render band above it — at 296 the band is 296x150, about the 2:1 crop an EVE render survives with
-                 the hull still whole; much narrower and the ship is a sliver between two nebula edges. -->
-            <sys:Double x:Key="FitCardMinWidth">296</sys:Double>
+                 over the columns that fit, so a card runs from 250 to just under twice that. 250 is what puts four
+                 cards across the browser's default 1100 (the panel is 1052, so four columns of 255) while the
+                 figures line still reads: "193 dps 69k ehp 1234 m/s" is about 215px of mono at 12, against 231px of
+                 card inside the padding. Five columns would be 202 and the figures no longer fit — rendered and
+                 checked, not assumed. -->
+            <sys:Double x:Key="FitCardMinWidth">250</sys:Double>
         </DockPanel.Resources>
 
         <DockPanel.Styles>
@@ -37,6 +39,18 @@
             <Style Selector="Button.viewtab.active">
                 <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+
+            <!-- The app-wide ToolTip style caps every tooltip at 420 (Themes/EveUtils.axaml), which is right for a
+                 one-line hint and far too narrow for the card's equipment popover: two columns of EVE module names
+                 want roughly 640, and the overflow was CLIPPED, cutting names mid-word. Raised here, on the fit
+                 browser's own content root, so no other screen's tooltips get wider. On the content and not the
+                 window for the usual reason (ET-42): docked, this DockPanel is what gets reparented.
+                 The popover does not depend on this landing — its columns share whatever width they are given and
+                 trim with an ellipsis — so if this style ever stops reaching the tooltip the names get shorter, not
+                 cut. -->
+            <Style Selector="ToolTip">
+                <Setter Property="MaxWidth" Value="680"/>
             </Style>
 
             <!-- The card lifts on hover, so it reads as the thing you are about to open. -->
@@ -190,8 +204,8 @@
                                                          down the left, everything the fit hauls down the right, and
                                                          a battleship with a full hold stays a popover instead of a
                                                          column taller than the screen. -->
-                                                    <StackPanel Orientation="Horizontal" Spacing="20">
-                                                        <StackPanel.Styles>
+                                                    <Panel>
+                                                        <Panel.Styles>
                                                             <!-- One rack, drawn the same in either column. -->
                                                             <Style Selector="ItemsControl.racks">
                                                                 <Setter Property="ItemTemplate">
@@ -235,17 +249,30 @@
                                                                     </Setter.Value>
                                                                 </Setter>
                                                             </Style>
-                                                        </StackPanel.Styles>
-                                                        <ItemsControl Classes="racks" ItemsSource="{Binding ModuleRacks}" Width="248"/>
-                                                        <ItemsControl Classes="racks" ItemsSource="{Binding OtherRacks}" Width="248"
-                                                                      IsVisible="{Binding HasOtherRacks}"/>
-                                                    </StackPanel>
+                                                        </Panel.Styles>
+                                                        <!-- A fit that carries only modules gets one column, sized to
+                                                             it, rather than a second empty one. -->
+                                                        <ItemsControl Classes="racks" ItemsSource="{Binding ModuleRacks}"
+                                                                      MaxWidth="330" IsVisible="{Binding !HasOtherRacks}"/>
+                                                        <!-- Star columns, not fixed widths. A fixed width is what
+                                                             cut "Small Emission Scop" in half: the pair wanted more
+                                                             than the ToolTip's MaxWidth and the overflow was clipped
+                                                             rather than trimmed, because each column believed it had
+                                                             room it did not have. Sharing whatever the popover is
+                                                             given means the columns are never wider than the tooltip,
+                                                             so a name that still does not fit ends in an ellipsis. -->
+                                                        <Grid ColumnDefinitions="*,20,*" MaxWidth="640"
+                                                              IsVisible="{Binding HasOtherRacks}">
+                                                            <ItemsControl Grid.Column="0" Classes="racks" ItemsSource="{Binding ModuleRacks}"/>
+                                                            <ItemsControl Grid.Column="2" Classes="racks" ItemsSource="{Binding OtherRacks}"/>
+                                                        </Grid>
+                                                    </Panel>
                                                 </ToolTip.Tip>
 
                                                 <Grid RowDefinitions="Auto,Auto,Auto,Auto">
 
                                                     <!-- 1. The hull, full bleed, with the fit's name over it. -->
-                                                    <Panel Grid.Row="0" Height="150">
+                                                    <Panel Grid.Row="0" Height="170">
                                                         <!-- The plate under the render. It is not a placeholder for
                                                              a missing picture: with CCP images switched off this IS
                                                              the header, so it carries its own gradient and a dim
@@ -271,7 +298,13 @@
                                                                    TextAlignment="Center" TextWrapping="Wrap"
                                                                    Foreground="{DynamicResource AccentBrightBrush}"/>
                                                         <Image Source="{Binding HullRender}" IsVisible="{Binding HasHullRender}"
-                                                               Stretch="UniformToFill"/>
+                                                               Stretch="UniformToFill" Opacity="0.72">
+                                                            <Image.Effect>
+                                                                <BlurEffect Radius="34"/>
+                                                            </Image.Effect>
+                                                        </Image>
+                                                        <Image Source="{Binding HullRender}" IsVisible="{Binding HasHullRender}"
+                                                               Stretch="Uniform"/>
                                                         <!-- Scrim. The renders are opaque JPEGs with a lit nebula
                                                              behind the hull, bright enough in places to swallow white
                                                              text, so the name gets its own darkness rather than
@@ -348,16 +381,23 @@
                                                     </Panel>
 
                                                     <!-- 2. What it is: hull, then the class that hull belongs to. -->
-                                                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="7"
-                                                                Margin="12,9,12,0">
-                                                        <TextBlock Text="{Binding ShipTypeLabel}" FontSize="12" FontWeight="SemiBold"
+                                                    <!-- A Grid, not a horizontal StackPanel: a StackPanel hands each
+                                                         child its full desired width and lets the overflow run off
+                                                         the card, so "Harbinger Navy Issue · Combat Battlecruiser"
+                                                         came out sliced at the border with no ellipsis. Here the
+                                                         hull takes what it needs up to two thirds of the line and
+                                                         the class trims into what is left; both end in an ellipsis
+                                                         rather than at the edge. -->
+                                                    <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Margin="12,9,12,0">
+                                                        <TextBlock Grid.Column="0" Text="{Binding ShipTypeLabel}" FontSize="12"
+                                                                   FontWeight="SemiBold" MaxWidth="150"
                                                                    TextTrimming="CharacterEllipsis"
                                                                    Foreground="{StaticResource TextBrightBrush}"/>
-                                                        <TextBlock Text="{Binding HullClass}" IsVisible="{Binding HasHullClass}"
-                                                                   FontSize="11" VerticalAlignment="Center"
+                                                        <TextBlock Grid.Column="1" Text="{Binding HullClass}" IsVisible="{Binding HasHullClass}"
+                                                                   FontSize="11" VerticalAlignment="Center" Margin="7,0,0,0"
                                                                    TextTrimming="CharacterEllipsis"
                                                                    Foreground="{DynamicResource TextDimBrush}"/>
-                                                    </StackPanel>
+                                                    </Grid>
 
                                                     <!-- 3. The three figures from the Dogma engine. They arrive a
                                                          beat after the card (the engine takes ~13 ms a fit); until

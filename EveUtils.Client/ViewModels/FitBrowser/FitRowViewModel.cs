@@ -247,9 +247,33 @@ public sealed partial class FitRowViewModel : ViewModelBase
                 FitSlotCategory.Low => LowModules,
                 _ => BuildRack(fit, names, category)
             };
-            if (lines.Count > 0) racks.Add(new FitRackViewModel(category, lines));
+            if (lines.Count > 0) racks.Add(new FitRackViewModel(category, Stack(lines)));
         }
         return racks;
+    }
+
+    /// <summary>
+    /// Collapses a rack's identical modules onto one line with a count. Six turrets are how a fit is flown but not
+    /// how it is read: listed one per line they are six rows of the same words, and they are what made the popover
+    /// longer than the screen it has to sit on. The table's per-rack counts are built from the ungrouped lists and
+    /// are unaffected — "6 modules" there still means six modules.
+    /// </summary>
+    private static List<FitModuleLineViewModel> Stack(IReadOnlyList<FitModuleLineViewModel> lines)
+    {
+        var stacked = new List<FitModuleLineViewModel>();
+        var byType = new Dictionary<int, int>();   // type id -> index in stacked
+
+        foreach (var line in lines)
+        {
+            if (byType.TryGetValue(line.TypeId, out var at))
+                stacked[at] = stacked[at].Plus(line.Quantity);
+            else
+            {
+                byType[line.TypeId] = stacked.Count;
+                stacked.Add(line);
+            }
+        }
+        return stacked;
     }
 
     private static readonly FitSlotCategory[] PopoverRacks =

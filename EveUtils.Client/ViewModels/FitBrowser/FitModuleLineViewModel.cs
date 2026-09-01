@@ -39,6 +39,12 @@ public sealed partial class FitModuleLineViewModel : ViewModelBase
         Quantity = quantity;
     }
 
+    /// <summary>The same line carrying <paramref name="extra"/> more of the item — how a rack folds its duplicate
+    /// modules onto one line. A fresh instance rather than a mutation: the ungrouped lines are still on screen in
+    /// the table's rack tooltips.</summary>
+    public FitModuleLineViewModel Plus(int extra) =>
+        new(TypeId, Name, _images, Quantity + extra) { Image = Image };
+
     public async Task LoadImageAsync() =>
         Image = _images is null ? null : await _images.GetImageAsync(TypeId, TypeImageKind.Icon, 32);
 }

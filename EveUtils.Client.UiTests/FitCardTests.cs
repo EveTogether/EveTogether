@@ -32,7 +32,7 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public class FitCardTests
 {
-    private const double CardMinWidth = 296;   // FitCardMinWidth in FitBrowserWindow.axaml
+    private const double CardMinWidth = 250;   // FitCardMinWidth in FitBrowserWindow.axaml
 
     private static EsiFitting Fit(string name, int shipTypeId, params (int TypeId, string Flag, int Qty)[] items) =>
         new(0, name, "", shipTypeId, items.Select(i => new EsiFittingItem(i.TypeId, i.Flag, i.Qty)).ToList());
@@ -304,6 +304,38 @@ public class FitCardTests
         Assert.Equal(12, rack.Count);   // the heading still tells the truth
     }
 
+    /// <summary>
+    /// A rack folds its identical modules onto one line with a count. Six of the same turret is how the fit flies
+    /// but not how it reads — listed one per line they were six rows of the same words, and they were what pushed
+    /// the popover past the height of the screen it has to sit on. The table's per-rack counts are built from the
+    /// ungrouped lists and must not move with it: "6 modules" there still means six modules.
+    /// </summary>
+    [Fact]
+    public void Popover_FoldsIdenticalModulesOntoOneLine_WithoutMovingTheTablesCounts()
+    {
+        var fit = Fit("Sixgun", 627,
+            (2, "HiSlot0", 1), (2, "HiSlot1", 1), (2, "HiSlot2", 1),
+            (2, "HiSlot3", 1), (2, "HiSlot4", 1), (7, "HiSlot5", 1),
+            (8, "DroneBay", 5), (8, "DroneBay", 3));
+        var row = new FitRowViewModel(fit, "Tester", new StubNames());
+
+        var high = row.Racks.Single(rack => rack.Category is FitSlotCategory.High);
+        Assert.Equal(2, high.Lines.Count);            // five turrets on one line, the launcher on the next
+        Assert.Equal(5, high.Lines[0].Quantity);
+        Assert.Equal("×5", high.Lines[0].QuantityLabel);
+        Assert.Equal(1, high.Lines[1].Quantity);
+        Assert.Equal(6, high.Count);                  // the heading still counts modules, not lines
+
+        // Two drone stacks of the same type read as one line of eight.
+        var drones = row.Racks.Single(rack => rack.Category is FitSlotCategory.Drone);
+        Assert.Equal(8, Assert.Single(drones.Lines).Quantity);
+
+        // The table's rack column is untouched: it still lists and counts every fitted module separately.
+        Assert.Equal(6, row.HighCount);
+        Assert.Equal(6, row.HighModules.Count);
+        Assert.All(row.HighModules, line => Assert.Equal(1, line.Quantity));
+    }
+
     /// <summary>The popover's icons load on the first hover, not with the card: a page of cards nobody hovers
     /// fetches its hull renders and nothing else.</summary>
     [Fact]
@@ -469,6 +501,86 @@ public class FitCardTests
 
         Assert.Contains(root.GetVisualDescendants().OfType<DataGrid>(), grid => grid.IsVisible);
         Assert.Null(CardPanel(root));
+    }
+
+    /// <summary>
+    /// The popover never draws outside the width it is given. It used to: the two columns had a fixed width, the
+    /// pair wanted more than the ToolTip's <c>MaxWidth</c>, and the overflow was clipped — module names came out cut
+    /// mid-word ("Small Emission Scop") with no ellipsis, because each column believed it had room it did not have.
+    /// Checked at the width the app-wide tooltip cap would give (the floor, if the scoped override below ever stops
+    /// reaching the tooltip) and at the one this screen asks for.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(420)]
+    [InlineData(680)]
+    public void ThePopover_StaysInsideTheWidthItIsGiven(double cap)
+    {
+        using var instance = TestClientInstance.Create();
+        instance.Services.GetRequiredService<IThemeService>().Apply(FactionTheme.Gallente);
+
+        // Long names in every rack — the shape that overflowed.
+        var row = new FitRowViewModel(FullFit(), "Tester", new LongNames());
+        var vm = new FitBrowserViewModel([new FitBrowserTabViewModel("Local", [row])]);
+        var window = new FitBrowserWindow(vm) { Width = 1100, Height = 660 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var card = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("fitcard"));
+        var tip = (Control)ToolTip.GetTip(card)!;
+        ToolTip.SetTip(card, null);
+        ((ISetLogicalParent)tip).SetParent(null);
+        tip.DataContext = row;
+        window.Close();
+
+        // Headless cannot open a real tooltip popup ("no overlay layer"), so the tip is stood in the constraint the
+        // tooltip would impose. Same content, same cap.
+        var host = new Border { MaxWidth = cap, Padding = new Thickness(11, 9), Child = tip };
+        var stand = new Window { Width = 900, Height = 900, Content = new Panel { Children = { host } } };
+        stand.Show();
+        Dispatcher.UIThread.RunJobs();
+        stand.UpdateLayout();
+
+        Assert.True(host.Bounds.Width <= cap, $"the popover took {host.Bounds.Width} of a {cap} cap");
+        foreach (var text in tip.GetVisualDescendants().OfType<TextBlock>())
+        {
+            var right = text.TranslatePoint(new Point(text.Bounds.Width, 0), host)?.X ?? 0;
+            Assert.True(right <= host.Bounds.Width + 0.5,
+                $"'{text.Text}' reaches {right:F0} in a popover {host.Bounds.Width:F0} wide — it would be cut, not trimmed");
+        }
+        stand.Close();
+    }
+
+    /// <summary>
+    /// The equipment popover is wider than a one-line hint, so this screen raises the app-wide 420 tooltip cap on
+    /// its own content root. On the CONTENT and not the window (ET-42): docked, that DockPanel is what gets
+    /// reparented, and a style left on the window would be dropped — the popover would silently fall back to the
+    /// narrow cap in the docked tab only.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(Shell.OwnWindow)]
+    [InlineData(Shell.DockedTab)]
+    public void ThePopoversWidthOverride_TravelsWithTheContent(Shell shell)
+    {
+        using var instance = TestClientInstance.Create();
+        var root = Show(instance, BrowserOf(2), shell, 1100);
+
+        // The content root that carries this screen's styles — the DockPanel ModuleHostService reparents.
+        // The window's own Content, not the first DockPanel in the tree: ChromedWindow's template builds one of its
+        // own for the titlebar, and that one is above the content and carries none of this screen's styles.
+        var content = root as DockPanel ?? (DockPanel)((ContentControl)root).Content!;
+        var probe = new ToolTip();
+        content.Children.Add(probe);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(680, probe.MaxWidth);   // 420 is the app-wide value this has to beat
+    }
+
+    private sealed class LongNames : ISdeNameResolver
+    {
+        // The longest names in the operator's own library run to ~58 characters.
+        public string TypeName(int typeId) => $"Eifyr and Co. 'Gunslinger' Medium Projectile Turret MP-{typeId:000}";
+        public string? GroupName(int typeId) => typeId == 627 ? "Cruiser" : null;
     }
 
     private static FillGridPanel? CardPanel(Control root) =>
