@@ -635,6 +635,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _RefreshLocation(nowUtc);
         _RefreshClock(nowUtc);
         _RefreshSummaries();
+        _ = RefreshFleetCommandAsync(nowUtc);
     }
 
     [RelayCommand]
@@ -777,6 +778,29 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         FleetId = fleetId;
         Authority = RunControlAuthority.From(fleetId, fleetBossCharacterId, actingCharacterId);
+    }
+
+    /// <summary>
+    /// Where the two halves of that question come from. The fleet is the one this client is participating in —
+    /// what the run is filed under and what a discard fans out over. The boss is whoever ESI reports commands it at
+    /// this moment, via <see cref="FleetBossTracker"/>; null when ESI cannot say, which lands on
+    /// <see cref="RunControlAuthorityLevel.Unknown"/> and says so on screen rather than handing a destructive button
+    /// to everybody. Run on the tick, like the location is, so a handover moves the controls on its own.
+    /// </summary>
+    public async Task RefreshFleetCommandAsync(DateTime nowUtc)
+    {
+        IActiveFleetState? fleet = _services.GetService<IActiveFleetState>();
+        // Before START the run has no character yet, so fall back to the one this client is in the fleet as —
+        // otherwise a multi-character client could not reach START to resolve it.
+        int? actingCharacterId = _runCharacterId ?? fleet?.CharacterId;
+        if (actingCharacterId is not { } characterId || _services.GetService<FleetBossTracker>() is not { } bosses)
+        {
+            ApplyFleetCommand(fleet?.ActiveFleetId, null, actingCharacterId);
+            return;
+        }
+
+        await bosses.RefreshAsync(characterId, nowUtc);
+        ApplyFleetCommand(fleet?.ActiveFleetId, bosses.BossOf(characterId), characterId);
     }
 
     /// <summary>
