@@ -260,10 +260,14 @@
                                         <!-- Fills the row rather than leaving a strip of whitespace on the right:
                                              as many columns of at least the minimum as fit, the remainder divided
                                              over them (ET-108). The gaps live on the panel, so the card carries no
-                                             layout arithmetic of its own. -->
+                                             layout arithmetic of its own.
+                                             The virtualising one, because a fit card is expensive to build and a
+                                             page holds up to a hundred of them while about fifteen are on screen
+                                             (ET-116). Same grid, same arithmetic — it just does not build the rows
+                                             below the fold, and keeps the ones that scroll off for the next page. -->
                                         <ItemsPanelTemplate>
-                                            <ctl:FillGridPanel MinItemWidth="{StaticResource FitCardMinWidth}"
-                                                               ColumnSpacing="10" RowSpacing="10"/>
+                                            <ctl:VirtualizingFillGridPanel MinItemWidth="{StaticResource FitCardMinWidth}"
+                                                                           ColumnSpacing="10" RowSpacing="10"/>
                                         </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>

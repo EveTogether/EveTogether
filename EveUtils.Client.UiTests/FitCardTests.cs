@@ -431,6 +431,66 @@ public class FitCardTests
         Assert.Empty(root.GetVisualDescendants().OfType<DataGrid>());
     }
 
+    // ── ET-116: a page of cards costs what the window shows, not what the page size says ──────────────────────
+
+    /// <summary>
+    /// A page of 100 does not become a hundred card visuals. Building a fit card is the browser's whole cost —
+    /// measured at roughly 10 ms each, and none of it layout — so a page size of 100 used to take 530 ms to put up
+    /// while about fifteen of the cards were on screen. Checked on both presentation paths, because the docked tab
+    /// is the shorter viewport and would be the one to quietly fall back to building everything.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(Shell.OwnWindow)]
+    [InlineData(Shell.DockedTab)]
+    public void APageOfAHundred_BuildsOnlyTheCardsTheWindowShows(Shell shell)
+    {
+        using var instance = TestClientInstance.Create();
+        var browser = BrowserOf(100);
+        browser.Tabs[0].PageSize = 100;
+        var root = Show(instance, browser, shell, 1100);
+
+        var panel = CardPanel(root);
+        Assert.NotNull(panel);
+        Assert.NotEmpty(Cards(panel!));
+        Assert.True(Cards(panel!).Length <= 40,
+            $"{Cards(panel!).Length} of the 100 cards on the page were built — the grid is not virtualising");
+    }
+
+    /// <summary>
+    /// Turning the page puts the SAME card visuals back with different fits on them. This is what makes a page turn
+    /// cost ~40 ms instead of ~250: the containers come out of the panel's recycle pool with their contents intact
+    /// and only the data changes. It is asserted as identity because it cannot be seen — when it regressed, the
+    /// grid looked exactly right and was exactly as slow as before.
+    /// </summary>
+    [AvaloniaFact]
+    public void TurningThePage_ReusesTheCardVisualsRatherThanBuildingThemAgain()
+    {
+        using var instance = TestClientInstance.Create();
+        var browser = BrowserOf(60);
+        var tab = browser.Tabs[0];
+        tab.PageSize = 25;
+        var root = Show(instance, browser, Shell.OwnWindow, 1100);
+
+        var panel = CardPanel(root)!;
+        var before = Cards(panel).SelectMany(c => c.GetVisualDescendants().OfType<Border>())
+            .Where(b => b.Classes.Contains("fitcard")).ToList();
+        Assert.NotEmpty(before);
+
+        tab.NextPageCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        ((Window)root).UpdateLayout();
+
+        var after = Cards(panel).SelectMany(c => c.GetVisualDescendants().OfType<Border>())
+            .Where(b => b.Classes.Contains("fitcard")).ToList();
+
+        Assert.NotEmpty(after);
+        Assert.All(after, card => Assert.Contains(card, before));
+
+        // …and they are showing the second page, not the first one they were built for.
+        var names = Cards(panel).Select(c => ((FitRowViewModel)c.DataContext!).Name).ToList();
+        Assert.All(names, name => Assert.DoesNotContain(name, new[] { "Fit 01", "Fit 02", "Fit 03" }));
+    }
+
     /// <summary>
     /// The popover never draws outside the width it is given. It used to: the two columns had a fixed width, the
     /// pair wanted more than the ToolTip's <c>MaxWidth</c>, and the overflow was clipped — module names came out cut
@@ -596,15 +656,24 @@ public class FitCardTests
         return -1;
     }
 
-    private static FillGridPanel? CardPanel(Control root) =>
-        root.GetVisualDescendants().OfType<FillGridPanel>().FirstOrDefault(panel => panel.IsEffectivelyVisible);
+    /// <summary>The grid the browser lays its cards out on. Virtualising since ET-116 — it builds the rows the
+    /// viewport touches and keeps the rest in a recycle pool — but the grid it draws is the same one, so everything
+    /// asserted about the columns here is asserted about the panel the browser actually uses.</summary>
+    private static VirtualizingFillGridPanel? CardPanel(Control root) =>
+        root.GetVisualDescendants().OfType<VirtualizingFillGridPanel>()
+            .FirstOrDefault(panel => panel.IsEffectivelyVisible);
+
+    /// <summary>The cards standing on screen. The pool's containers are children of the panel too, hidden, so
+    /// "the cards" is the visible ones.</summary>
+    private static Control[] Cards(VirtualizingFillGridPanel panel) =>
+        panel.Children.Where(c => c.IsVisible).ToArray();
 
     private static void AssertCardsFillTheWidth(Control root)
     {
         var panel = CardPanel(root);
         Assert.NotNull(panel);
 
-        Rect[] cards = panel!.Children.Select(c => c.Bounds).ToArray();
+        Rect[] cards = Cards(panel!).Select(c => c.Bounds).ToArray();
         Assert.NotEmpty(cards);
         Assert.True(panel.Bounds.Width > 0, "the card panel rendered with no width");
         Assert.Equal(panel.Bounds.Width, cards.Max(c => c.Right), 1);
