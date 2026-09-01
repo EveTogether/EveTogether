@@ -1,9 +1,15 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Events;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 
 namespace EveUtils.Client.UiTests;
 
@@ -108,6 +114,45 @@ public sealed class HomefrontWindowFocusTests
 
         dialogs.CloseAllPopouts();
         owner.Close();
+    }
+
+    // ── The path that actually opens it on a member's machine ───────────────────────────────────────
+
+    /// <summary>
+    /// The fleet commander's start reaches this member and asks for the window under the remote trigger — the only
+    /// caller that may, and the reason the rule above is ever exercised in the running app.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheFleetCommandersStart_AsksForTheWindowWithoutFocus()
+    {
+        var dialogs = new RecordingDialogService();
+        using var instance = TestClientInstance.Create(services => services.AddSingleton<IDialogService>(dialogs));
+        var bus = instance.Services.GetRequiredService<IEventBus>();
+        using var presenter = new FleetRunWindowPresenter(bus, dialogs, instance.Services);
+
+        bus.PublishAsync(new FleetRunGroupCodeEvent(new RunGroupCodeStart(4242, StoredActivityKind.Site, "HF-F0CU",
+            DateTime.UtcNow, IsFleetCommander: true))).GetAwaiter().GetResult();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(RunWindowOpenTrigger.RemoteFleetCommander,
+            Assert.Single(dialogs.ShownActivityWindowTriggers));
+    }
+
+    /// <summary>A member's own start is their own business and opens nothing on anybody else's screen. Without this
+    /// the presenter could fire on every start and the test above would still pass.</summary>
+    [AvaloniaFact]
+    public void AMembersOwnStart_OpensNothingOnOtherScreens()
+    {
+        var dialogs = new RecordingDialogService();
+        using var instance = TestClientInstance.Create(services => services.AddSingleton<IDialogService>(dialogs));
+        var bus = instance.Services.GetRequiredService<IEventBus>();
+        using var presenter = new FleetRunWindowPresenter(bus, dialogs, instance.Services);
+
+        bus.PublishAsync(new FleetRunGroupCodeEvent(new RunGroupCodeStart(4242, StoredActivityKind.Site, "HF-F0CU",
+            DateTime.UtcNow, IsFleetCommander: false))).GetAwaiter().GetResult();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Empty(dialogs.ShownActivityWindowTriggers);
     }
 
     private static Window _Owner(out DialogService dialogs)
