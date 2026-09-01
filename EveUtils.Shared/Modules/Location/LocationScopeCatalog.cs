@@ -12,6 +12,7 @@ namespace EveUtils.Shared.Modules.Location;
 public static class LocationScopeCatalog
 {
     public const string ReadLocation = "esi-location.read_location.v1";
+    public const string ReadShipType = "esi-location.read_ship_type.v1";
 
     public static IEsiScopeCatalog Catalog { get; } = new LocationEsiScopeCatalogImpl();
 
@@ -21,6 +22,9 @@ public static class LocationScopeCatalog
         [
             new EsiScopeRequirement(ReadLocation, EsiScopeTarget.Client, "Location",
                 "See which solar system you are in, so the abyssal countdown can tell when you are out again.",
+                OptIn: true),
+            new EsiScopeRequirement(ReadShipType, EsiScopeTarget.Client, "Current ship",
+                "See which ship you are flying, so EVE Together can identify a matching known fit.",
                 OptIn: true),
         ];
     }

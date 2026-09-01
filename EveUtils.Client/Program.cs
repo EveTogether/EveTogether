@@ -53,6 +53,7 @@ sealed class Program
         RunResilient(Services.GetRequiredService<CharacterInfoRefreshService>().StartAsync(refreshCts.Token), "character-info-refresh");
         RunResilient(Services.GetRequiredService<EveUtils.Client.Esi.EsiFleetSyncService>().StartAsync(refreshCts.Token), "esi-fleet-sync");
         RunResilient(Services.GetRequiredService<EveUtils.Client.Esi.EsiSelfReportService>().StartAsync(refreshCts.Token), "esi-self-report");
+        RunResilient(Services.GetRequiredService<EveUtils.Client.Esi.ShipFitDetectionService>().StartAsync(refreshCts.Token), "ship-fit-detection");
         RunResilient(Services.GetRequiredService<EveUtils.Client.Skills.SkillRefreshService>().StartAsync(refreshCts.Token), "skill-refresh");
         RunResilient(Services.GetRequiredService<EveUtils.Client.Implants.ImplantRefreshService>().StartAsync(refreshCts.Token), "implant-refresh");
         RunResilient(Services.GetRequiredService<EveUtils.Client.Platform.EveClientPresenceService>().StartAsync(refreshCts.Token), "eve-client-presence");
