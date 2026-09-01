@@ -9,25 +9,21 @@ using Microsoft.EntityFrameworkCore;
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 internal sealed class AddRunLootCaptureCommandHandler(IDbContextFactory<ClientDbContext> contextFactory)
-    : ICommandHandler<AddRunLootCaptureCommand, Result<DateTime?>>
+    : ICommandHandler<AddRunLootCaptureCommand, Result<RunLootCaptureSaveResult>>
 {
-    public async Task<Result<DateTime?>> Handle(AddRunLootCaptureCommand command, CancellationToken cancellationToken = default)
+    public async Task<Result<RunLootCaptureSaveResult>> Handle(AddRunLootCaptureCommand command, CancellationToken cancellationToken = default)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
         // Nothing names the run a clipboard copy belongs to, so one running run is the only unambiguous answer;
         // guessing between two would file loot under the wrong one.
-        List<Run> running = await db.Set<Run>()
-            .AsNoTracking()
-            .Where(run => run.State == RunState.Running && !run.DeletedAtUtc.HasValue)
-            .ToListAsync(cancellationToken);
-        if (running.Count == 0)
-            return Result<DateTime?>.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound,
-                "No run is running, so this loot was not recorded.", "Runs"));
-        if (running.Count > 1)
-            return Result<DateTime?>.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
-                $"{running.Count} runs are running, so this loot was not recorded against any of them.", "Runs"));
+        (Run? run, int runningCount) = await RunningRunLookup.FindAsync(db, cancellationToken);
+        if (run is null)
+            return Result<RunLootCaptureSaveResult>.Failure(runningCount == 0
+                ? new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound,
+                    "No run is running, so this loot was not recorded.", "Runs")
+                : new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
+                    $"{runningCount} runs are running, so this loot was not recorded against any of them.", "Runs"));
 
-        Run run = running[0];
         DateTime? repeatOf = command.Capture.ContentHash is not { } hash
             ? null
             : await db.Set<RunLootCapture>()
@@ -58,6 +54,6 @@ internal sealed class AddRunLootCaptureCommandHandler(IDbContextFactory<ClientDb
             });
         db.Set<RunLootCapture>().Add(entity);
         await db.SaveChangesAsync(cancellationToken);
-        return Result<DateTime?>.Success(repeatOf);
+        return Result<RunLootCaptureSaveResult>.Success(new RunLootCaptureSaveResult(entity.Id, repeatOf));
     }
 }

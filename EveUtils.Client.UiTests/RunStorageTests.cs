@@ -71,7 +71,7 @@ public sealed class RunStorageTests
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
 
-        Result<DateTime?> added = await dispatcher.Send(new AddRunLootCaptureCommand(new RunLootCaptureInput
+        Result<RunLootCaptureSaveResult> added = await dispatcher.Send(new AddRunLootCaptureCommand(new RunLootCaptureInput
         {
             CapturedAtUtc = StartedAtUtc,
             Source = LootCaptureSource.Clipboard,

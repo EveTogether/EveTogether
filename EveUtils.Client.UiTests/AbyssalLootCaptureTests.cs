@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using EveUtils.Client.Clipboard;
+using EveUtils.Client.Notifications;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Messaging;
@@ -29,6 +30,7 @@ public sealed class AbyssalLootCaptureTests
     public async Task InventoryWithKnownEveTypes_OffersLoot_AndSuppressesAnOpenDuplicate()
     {
         using var env = await Env.StartAsync();
+        await env.StartRunAsync();
         const string text = "Rifter\t1\r\nDamage Control II\t2";
 
         await env.CopyAsync(text);
@@ -37,9 +39,9 @@ public sealed class AbyssalLootCaptureTests
         var offer = Assert.Single(env.Toasts.ActionToasts);
         Assert.Equal("Loot copied", offer.Title);
         Assert.Contains("2 EVE item type(s)", offer.Message);
-        Assert.Equal(["Close"], Array.ConvertAll(offer.Actions.ToArray(), action => action.Label));
+        Assert.Equal(["Exclude", "Close"], Array.ConvertAll(offer.Actions.ToArray(), action => action.Label));
 
-        offer.Actions[0].Run();
+        env.CloseOffer();
         await env.CopyAsync(text);
         Assert.Equal(2, env.Toasts.ActionToasts.Count);
     }
@@ -64,6 +66,7 @@ public sealed class AbyssalLootCaptureTests
     public async Task InventoryWithOneKnownType_OffersLootAndNamesUnresolvedRows()
     {
         using var env = await Env.StartAsync();
+        await env.StartRunAsync();
 
         await env.CopyAsync("Rifter\t1\r\nBudget rent\t2");
 
@@ -94,6 +97,10 @@ public sealed class AbyssalLootCaptureTests
         env.CloseOffer();
         await env.CopyAsync(Container);
 
+        var repeat = Assert.Single(env.Toasts.ActionToasts, toast => toast.Title == "Loot copy repeated");
+        Assert.Contains("Identical to the copy at", repeat.Message);
+        Assert.Equal(["Include", "Close"], Array.ConvertAll(repeat.Actions.ToArray(), action => action.Label));
+
         IReadOnlyList<RunLootCapture> captures = await env.CapturesAsync();
         Assert.Equal(2, captures.Count);
         Assert.False(captures[0].IsExcluded);
@@ -105,6 +112,29 @@ public sealed class AbyssalLootCaptureTests
         Assert.Equal(350.50m, summary.LootIskGained);
         Assert.Equal(3, summary.LootItemCount);
         Assert.Equal(0.30m, summary.LootVolume);
+    }
+
+    /// <summary>The toast's own buttons round-trip through the real dispatcher, not just a local flag: "Exclude" on
+    /// a fresh capture flips its stored flag, and "Include" on a repeat's card flips it back.</summary>
+    [AvaloniaFact]
+    public async Task ToastActions_ExcludeAndInclude_RoundTripThroughTheCommand()
+    {
+        using var env = await Env.StartAsync();
+        await env.StartRunAsync();
+
+        await env.CopyAsync(Container);
+        var offer = Assert.Single(env.Toasts.ActionToasts);
+        await env.RunActionAsync(offer, "Exclude");
+        Assert.True(Assert.Single(await env.CapturesAsync()).IsExcluded);
+
+        env.CloseOffer();
+        await env.CopyAsync(Container); // same content again → a repeat, stored excluded by default
+        var repeat = Assert.Single(env.Toasts.ActionToasts, toast => toast.Title == "Loot copy repeated");
+        await env.RunActionAsync(repeat, "Include");
+
+        IReadOnlyList<RunLootCapture> captures = await env.CapturesAsync();
+        Assert.Equal(2, captures.Count);
+        Assert.False(captures[1].IsExcluded); // the repeat is back in — the first is untouched, still excluded
     }
 
     /// <summary>Two containers in one run read as two different copies, so they are both counted.</summary>
@@ -164,14 +194,20 @@ public sealed class AbyssalLootCaptureTests
         Assert.Equal(350.50m, (await env.RebuildAsync()).LootIskGained);
     }
 
+    /// <summary>The toast must not claim success it did not earn (ET-65 phase 3 review finding): without a running
+    /// run, nothing is stored and the player is told why, not shown the same "Loot copied" card as a success.</summary>
     [AvaloniaFact]
-    public async Task WithoutARunningRun_TheLootIsNotRecorded()
+    public async Task WithoutARunningRun_TheLootIsNotRecorded_AndTheToastSaysSo()
     {
         using var env = await Env.StartAsync();
 
         await env.CopyAsync(Container);
 
         Assert.Empty(await env.CapturesAsync());
+        Assert.Empty(env.Toasts.ActionToasts);
+        var rejection = Assert.Single(env.Toasts.Toasts);
+        Assert.Equal("Loot not recorded", rejection.Title);
+        Assert.Contains("No run is running", rejection.Message);
     }
 
     private sealed class Env : IDisposable
@@ -218,7 +254,16 @@ public sealed class AbyssalLootCaptureTests
         }
 
         /// <summary>Copying the same text again only asks a second time once the first card is gone.</summary>
-        public void CloseOffer() => Toasts.ActionToasts[^1].Actions[0].Run();
+        public void CloseOffer() => Toasts.ActionToasts[^1].Actions.First(action => action.Label == "Close").Run();
+
+        /// <summary>Runs one of a shown toast's buttons and waits for whatever dispatcher call it made.</summary>
+        public async Task RunActionAsync(
+            (string Title, string? Message, ToastKind Kind, IReadOnlyList<ToastAction> Actions, string? ReplacementKey) toast,
+            string label)
+        {
+            toast.Actions.First(action => action.Label == label).Run();
+            await _capture.LastStore;
+        }
 
         public async Task StartRunAsync()
         {

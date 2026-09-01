@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using EveUtils.Client.Notifications;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.DependencyInjection;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
@@ -36,7 +37,8 @@ public sealed class AbyssalLootCapture : ISingletonService, IDisposable
         _subscription = clipboardWatch.Subscribe(FeatureName, OnCapture);
     }
 
-    /// <summary>The write the clipboard callback cannot wait for, so a test can.</summary>
+    /// <summary>The write the clipboard callback cannot wait for, so a test can — and so a dispatcher exception
+    /// (e.g. the database is locked) surfaces as a toast instead of vanishing off a fire-and-forget Task.</summary>
     internal Task LastStore { get; private set; } = Task.CompletedTask;
 
     public void Dispose() => _subscription.Dispose();
@@ -59,42 +61,85 @@ public sealed class AbyssalLootCapture : ISingletonService, IDisposable
         var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(capture.Text)));
         lock (_gate)
         {
-            // Suppress only while its card stays open, so copying after dismissal asks again.
+            // Suppress only while its card stays open, so copying after dismissal — or a failed save — asks again.
             if (_openFingerprint == fingerprint)
                 return;
 
             _openFingerprint = fingerprint;
         }
 
-        LastStore = StoreAsync(fingerprint, resolution.Lines);
+        LastStore = StoreAndOfferAsync(fingerprint, resolution.Lines, resolution.Unresolved.Count);
+    }
 
-        string message = $"Recognised {resolution.Lines.Count} EVE item type(s) from this inventory."
-            + (resolution.Unresolved.Count > 0 ? $" {resolution.Unresolved.Count} name(s) were not recognised." : string.Empty);
-        _toasts.Show("Loot copied", message,
-            ToastKind.Information, [new ToastAction("Close", () => CloseOffer(fingerprint))],
+    /// <summary>Stores the capture and only then tells the player what actually happened — recorded, refused with a
+    /// reason, or kept as an excluded repeat — instead of announcing "recognised" before the save is known to have
+    /// worked (ET-65 AC-5/AC-7 review finding).</summary>
+    private async Task StoreAndOfferAsync(string fingerprint,
+        IReadOnlyList<(AppraisalLine Line, ClipboardInventoryItem Item)> lines, int unresolvedCount)
+    {
+        Result<RunLootCaptureSaveResult> result;
+        try
+        {
+            result = await _dispatcher.Send(new AddRunLootCaptureCommand(new RunLootCaptureInput
+            {
+                CapturedAtUtc = DateTime.UtcNow,
+                Source = LootCaptureSource.Clipboard,
+                ContentHash = fingerprint,
+                Entries =
+                [
+                    .. lines.Select(resolved => new RunLootEntryInput
+                    {
+                        ItemTypeId = resolved.Line.TypeId,
+                        Name = resolved.Line.Name,
+                        Quantity = resolved.Line.Quantity,
+                        // The clipboard columns as they stood in the window, not a valuation.
+                        Volume = resolved.Item.Volume,
+                        ClipboardPrice = resolved.Item.Price,
+                        LootKind = LootKind.Gained
+                    })
+                ]
+            }));
+        }
+        catch (Exception ex)
+        {
+            CloseOffer(fingerprint);
+            _toasts.Show("Loot not recorded", $"Saving this copy failed: {ex.Message}", ToastKind.Error);
+            return;
+        }
+
+        if (!result.IsSuccess)
+        {
+            CloseOffer(fingerprint);
+            var reason = result.Messages.Count > 0 ? result.Messages[0].Text : "This copy was not recorded.";
+            _toasts.Show("Loot not recorded", reason, ToastKind.Error);
+            return;
+        }
+
+        RunLootCaptureSaveResult saved = result.Value!;
+        var unresolvedSuffix = unresolvedCount > 0 ? $" {unresolvedCount} name(s) were not recognised." : string.Empty;
+
+        if (saved.RepeatOfCapturedAtUtc is { } repeatOf)
+        {
+            _toasts.Show("Loot copy repeated",
+                $"Identical to the copy at {repeatOf:HH:mm:ss} — kept, but excluded from the run's total.{unresolvedSuffix}",
+                ToastKind.Information,
+                [new ToastAction("Include", () => SetExcluded(saved.CaptureId, isExcluded: false)),
+                    new ToastAction("Close", () => CloseOffer(fingerprint))],
+                () => CloseOffer(fingerprint), FeatureName);
+            return;
+        }
+
+        _toasts.Show("Loot copied", $"Recognised {lines.Count} EVE item type(s) from this inventory.{unresolvedSuffix}",
+            ToastKind.Information,
+            [new ToastAction("Exclude", () => SetExcluded(saved.CaptureId, isExcluded: true)),
+                new ToastAction("Close", () => CloseOffer(fingerprint))],
             () => CloseOffer(fingerprint), FeatureName);
     }
 
-    private Task StoreAsync(string fingerprint, IReadOnlyList<(AppraisalLine Line, ClipboardInventoryItem Item)> lines) =>
-        _dispatcher.Send(new AddRunLootCaptureCommand(new RunLootCaptureInput
-        {
-            CapturedAtUtc = DateTime.UtcNow,
-            Source = LootCaptureSource.Clipboard,
-            ContentHash = fingerprint,
-            Entries =
-            [
-                .. lines.Select(resolved => new RunLootEntryInput
-                {
-                    ItemTypeId = resolved.Line.TypeId,
-                    Name = resolved.Line.Name,
-                    Quantity = resolved.Line.Quantity,
-                    // The clipboard columns as they stood in the window, not a valuation.
-                    Volume = resolved.Item.Volume,
-                    ClipboardPrice = resolved.Item.Price,
-                    LootKind = LootKind.Gained
-                })
-            ]
-        }));
+    /// <summary>The toast's own one-click exclude/include — the same flag <see cref="EveUtils.Client.ViewModels.Runs.RunLootViewModel"/>
+    /// toggles later, so a card acted on now and a still-open list agree.</summary>
+    private void SetExcluded(Guid captureId, bool isExcluded) =>
+        LastStore = _dispatcher.Send(new SetRunLootCaptureExclusionCommand(captureId, isExcluded));
 
     private void CloseOffer(string fingerprint)
     {
