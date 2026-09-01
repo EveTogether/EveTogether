@@ -15,7 +15,7 @@
         x:DataType="vm:MainWindowViewModel"
         x:Name="RootWindow"
         Icon="/Assets/eve-together.ico"
-        Width="1100" Height="720"
+        Width="1100" Height="720" MinHeight="400"
         WindowStartupLocation="CenterScreen"
         Title="EVE Together — Client">
 
@@ -170,7 +170,7 @@
             <Border Grid.Column="0" Classes="rail" Width="92" x:Name="Rail">
                 <DockPanel>
                     <!-- Bottom: dock/float + chars toggles (always reachable) + (rail-only) window controls -->
-                    <StackPanel DockPanel.Dock="Bottom" Spacing="0">
+                    <StackPanel x:Name="RailBottomBlock" DockPanel.Dock="Bottom" Spacing="0">
                         <Border Classes="rail-divider"/>
                         <Button Classes="railitem" Command="{Binding ToggleDockModeCommand}"
                                 ToolTip.Tip="Dock / undock: switch all modules between the docked host and floating windows">
@@ -204,8 +204,9 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- Top: module launcher -->
-                    <StackPanel DockPanel.Dock="Top" Spacing="2">
+                    <!-- Top: module launcher, scrollable so it shrinks instead of drawing over the bottom block when the window is short (ET-84). -->
+                    <ScrollViewer x:Name="RailLauncherScroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="2">
                         <Button Classes="railitem" Classes.active="{Binding IsFitsActive}"
                                 Command="{Binding LaunchModuleCommand}" CommandParameter="fits" ToolTip.Tip="Fittings">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
@@ -297,6 +298,7 @@
                             </StackPanel>
                         </Button>
                     </StackPanel>
+                    </ScrollViewer>
                 </DockPanel>
             </Border>
 
