@@ -167,6 +167,32 @@ public sealed class RunGroupCodeTests
     }
 
     [AvaloniaFact]
+    public async Task HomefrontStarts_ConsecutiveRuns_KeepSeparateCodes()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        _ = instance.Services.GetRequiredService<FleetRunGroupCodeCoordinator>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> firstStarted = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142, FleetId: 42, IsFleetCommander: true), cancellationToken);
+        Result firstSaved = await dispatcher.Send(new SaveRunCommand(firstStarted.Value, StartedAtUtc.AddMinutes(15),
+            StartedAtUtc.AddMinutes(16), [], [], [], []), cancellationToken);
+        Result<Guid> secondStarted = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site,
+            StartedAtUtc.AddHours(1), 1234, "Homefront", 30000142, FleetId: 42, IsFleetCommander: true), cancellationToken);
+
+        Assert.True(firstStarted.IsSuccess);
+        Assert.True(firstSaved.IsSuccess);
+        Assert.True(secondStarted.IsSuccess);
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(cancellationToken);
+        List<Run> runs = await db.Set<Run>().OrderBy(run => run.StartedAtUtc).ToListAsync(cancellationToken);
+        Assert.Equal(2, runs.Count);
+        Assert.NotNull(runs[0].GroupCode);
+        Assert.NotNull(runs[1].GroupCode);
+        Assert.NotEqual(runs[0].GroupCode, runs[1].GroupCode);
+    }
+
+    [AvaloniaFact]
     public async Task UnlinkRunFromGroupCode_CorrectedParticipant_PreservesRun()
     {
         using var instance = TestClientInstance.Create();

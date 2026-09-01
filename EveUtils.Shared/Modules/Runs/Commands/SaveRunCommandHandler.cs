@@ -4,11 +4,12 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Events;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
-internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> contextFactory)
+internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus)
     : ICommandHandler<SaveRunCommand, Result>
 {
     public async Task<Result> Handle(SaveRunCommand command, CancellationToken cancellationToken = default)
@@ -83,6 +84,7 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
         if (savedRuns == 0)
             return Result.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
                 "A saved run cannot be saved again.", "Runs"));
+        await eventBus.PublishAsync(new RunSavedEvent(command.RunId), EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 }

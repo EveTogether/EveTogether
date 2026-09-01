@@ -17,18 +17,21 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
     private readonly SemaphoreSlim _reconcileGate = new(1, 1);
     private readonly IDispatcher _dispatcher;
     private readonly IDisposable _runStartedSubscription;
+    private readonly IDisposable _runSavedSubscription;
     private readonly IDisposable _groupCodeSubscription;
 
     public FleetRunGroupCodeCoordinator(IEventBus eventBus, IDispatcher dispatcher)
     {
         _dispatcher = dispatcher;
         _runStartedSubscription = eventBus.Subscribe<RunStartedEvent>(_OnRunStartedAsync);
+        _runSavedSubscription = eventBus.Subscribe<RunSavedEvent>(_OnRunSavedAsync);
         _groupCodeSubscription = eventBus.Subscribe<FleetRunGroupCodeEvent>(_OnGroupCodeAsync);
     }
 
     public void Dispose()
     {
         _runStartedSubscription.Dispose();
+        _runSavedSubscription.Dispose();
         _groupCodeSubscription.Dispose();
         _reconcileGate.Dispose();
     }
@@ -48,6 +51,22 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
         }
 
         await _ReconcileAsync(run, cancellationToken);
+    }
+
+    private Task _OnRunSavedAsync(RunSavedEvent integrationEvent, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            RunningRun? run = _runs.Values.FirstOrDefault(candidate => candidate.RunId == integrationEvent.Data);
+            if (run is null)
+                return Task.CompletedTask;
+
+            _runs.Remove((run.FleetId, run.ActivityKind, run.CharacterId));
+            if (!_runs.Values.Any(candidate => candidate.FleetId == run.FleetId && candidate.ActivityKind == run.ActivityKind))
+                _candidates.Remove((run.FleetId, run.ActivityKind));
+        }
+
+        return Task.CompletedTask;
     }
 
     private async Task _OnGroupCodeAsync(FleetRunGroupCodeEvent integrationEvent, CancellationToken cancellationToken)

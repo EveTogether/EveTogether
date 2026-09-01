@@ -47,7 +47,7 @@ internal sealed class StartRunCommandHandler(IDbContextFactory<ClientDbContext> 
             command.FleetId, groupCode, command.IsFleetCommander), EventTarget.Local, cancellationToken);
         if (command.FleetId is { } fleetId && groupCode is not null)
             await eventBus.PublishAsync(new FleetRunGroupCodeEvent(new RunGroupCodeStart(fleetId, command.ActivityKind,
-                groupCode, command.StartedAtUtc, command.IsFleetCommander), (int)command.CharacterId), EventTarget.Both,
+                groupCode, command.StartedAtUtc, command.IsFleetCommander), checked((int)command.CharacterId)), EventTarget.Both,
                 cancellationToken);
         return Result<Guid>.Success(id);
     }
