@@ -363,7 +363,7 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
         Func<string, IReadOnlyList<CharacterPickOption>>? exportPickOptions = null,
         string? description = null, string? tags = null,
         ICharacterAttributesRepository? attributesRepository = null, IToastService? toasts = null,
-        Func<int, Task<FitMetadataDraft?>>? onEditMetadata = null)
+        Func<int, Task<FitMetadataDraft?>>? onEditMetadata = null, Func<string, Task>? onSharedToServer = null)
     {
         _fit = fit;
         _onEditMetadata = onEditMetadata;
@@ -471,6 +471,7 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
         _exportActions = exportActions;
         _localFitId = localFitId;
         _exportPickOptions = exportPickOptions ?? (_ => Array.Empty<CharacterPickOption>());
+        _onSharedToServer = onSharedToServer;
         ShareToServerCommand   = new AsyncRelayCommand(() => InvokeExportAsync((a, r) => a.ShareToServerAsync(r)), () => CanExport);
         PushToEveCommand       = new AsyncRelayCommand(() => InvokeExportAsync((a, r) => a.PushToEveAsync(r)), () => CanExport);
         CopyEveshipLinkCommand = new AsyncRelayCommand(() => InvokeExportAsync((a, r) => a.CopyEveshipLinkAsync(r)), () => CanExport);
@@ -482,6 +483,7 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
     private readonly IFitExportActions? _exportActions;
     private readonly int? _localFitId;
     private readonly Func<string, IReadOnlyList<CharacterPickOption>> _exportPickOptions;
+    private readonly Func<string, Task>? _onSharedToServer;
 
     /// <summary>True when this fit can be exported — it has a local DB id and the seam is wired.</summary>
     public bool CanExport => _exportActions is not null && _localFitId is not null;
@@ -540,7 +542,8 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
     private async Task InvokeExportAsync(Func<IFitExportActions, FitExportRequest, Task> action)
     {
         if (_exportActions is null || _localFitId is null) return;
-        var request = new FitExportRequest(_localFitId.Value, Name, _exportPickOptions, status => ExportStatus = status);
+        var request = new FitExportRequest(_localFitId.Value, Name, _exportPickOptions,
+            status => ExportStatus = status, _onSharedToServer);
         await action(_exportActions, request);
     }
 

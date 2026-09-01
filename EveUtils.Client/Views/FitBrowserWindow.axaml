@@ -77,6 +77,8 @@
                            FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap" MaxWidth="700"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+                <Button Content="REFRESH" FontSize="10" Command="{Binding RefreshCommand}"
+                        ToolTip.Tip="Re-fetch the selected tab: Local re-reads your library, a server tab re-fetches its shared fits."/>
                 <!-- Window-level, beside the import action rather than inside a tab: the density is how you want to
                      read fits, not a property of one source. -->
                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" VerticalAlignment="Center"

@@ -105,6 +105,17 @@ public partial class FitBrowserViewModel : ObservableObject, IRefreshableModule
     [RelayCommand]
     private async Task ImportEsfLink() { if (_importEsfLink is not null) await _importEsfLink(); }
 
+    /// <summary>Manual refresh of the selected tab: the Local tab re-reads the DB (and picks up any newly coupled
+    /// server, same as <see cref="RefreshModule"/>); a server tab re-fetches regardless of whether it was already
+    /// loaded — a refresh that only re-shows cached rows would look like it worked while showing stale data.</summary>
+    [RelayCommand]
+    private async Task Refresh()
+    {
+        if (SelectedTab is null) return;
+        if (SelectedTab.IsLocal) { if (_refresh is not null) await _refresh(); }
+        else await SelectedTab.ReloadAsync();
+    }
+
     partial void OnSelectedTabChanged(FitBrowserTabViewModel? value)
     {
         if (value is not null) _ = value.EnsureLoadedAsync();

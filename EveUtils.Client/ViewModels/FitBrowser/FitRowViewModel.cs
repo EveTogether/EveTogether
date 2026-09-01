@@ -151,6 +151,7 @@ public sealed partial class FitRowViewModel : ViewModelBase
     private readonly IFitExportActions? _exportActions;
     private readonly Func<string, IReadOnlyList<CharacterPickOption>> _exportPickOptions;
     private readonly Action<string> _reportExportStatus;
+    private readonly Func<string, Task>? _onSharedToServer;
 
     /// <summary>True when this row can be exported — it is a local fit and the seam is wired (server rows can't).</summary>
     public bool CanExport => _exportActions is not null && LocalFitId is not null;
@@ -176,7 +177,8 @@ public sealed partial class FitRowViewModel : ViewModelBase
         Func<string, IReadOnlyList<CharacterPickOption>>? exportPickOptions = null,
         Action<string>? reportExportStatus = null, IMarketPriceRepository? prices = null,
         Func<int, Task>? onEditMetadata = null, Func<int, Task>? onDelete = null, string? tags = null,
-        ICharacterPortraitProvider? portraits = null, int uploaderCharacterId = 0)
+        ICharacterPortraitProvider? portraits = null, int uploaderCharacterId = 0,
+        Func<string, Task>? onSharedToServer = null)
     {
         Fit = fit;
         LocalFitId = localFitId;
@@ -188,6 +190,7 @@ public sealed partial class FitRowViewModel : ViewModelBase
         _exportActions = exportActions;
         _exportPickOptions = exportPickOptions ?? (_ => []);
         _reportExportStatus = reportExportStatus ?? (_ => { });
+        _onSharedToServer = onSharedToServer;
         _onEditMetadata = onEditMetadata;
         _onDelete = onDelete;
         ShareToServerCommand   = new AsyncRelayCommand(() => InvokeExportAsync((a, r) => a.ShareToServerAsync(r)), () => CanExport);
@@ -346,7 +349,7 @@ public sealed partial class FitRowViewModel : ViewModelBase
     private async Task InvokeExportAsync(Func<IFitExportActions, FitExportRequest, Task> action)
     {
         if (_exportActions is null || LocalFitId is null) return;
-        var request = new FitExportRequest(LocalFitId.Value, Name, _exportPickOptions, _reportExportStatus);
+        var request = new FitExportRequest(LocalFitId.Value, Name, _exportPickOptions, _reportExportStatus, _onSharedToServer);
         await action(_exportActions, request);
     }
 

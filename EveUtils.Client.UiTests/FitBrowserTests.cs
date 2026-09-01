@@ -7,6 +7,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Fittings;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Modules.Fittings.Dtos;
@@ -320,5 +321,90 @@ public class FitBrowserTests
 
         var noImports = new FitBrowserViewModel(new[] { new FitBrowserTabViewModel("Local", new List<FitRowViewModel>()) });
         Assert.False(noImports.CanImport);
+    }
+
+    /// <summary>A server tab's manual reload re-fetches even when it was already loaded — the whole point of the
+    /// refresh button is to bypass the lazy "only once" load, otherwise it would silently keep showing stale rows.</summary>
+    [Fact]
+    public async Task ServerTab_ReloadAsync_RefetchesEvenWhenAlreadyLoaded()
+    {
+        var loadCount = 0;
+        var tab = new FitBrowserTabViewModel("Server", "srv-addr", t =>
+        {
+            loadCount++;
+            t.SetRows(Array.Empty<FitRowViewModel>());
+            return Task.CompletedTask;
+        });
+
+        await tab.EnsureLoadedAsync();
+        Assert.Equal(1, loadCount);
+        await tab.EnsureLoadedAsync();               // already loaded -> no second fetch
+        Assert.Equal(1, loadCount);
+
+        await tab.ReloadAsync();                      // manual refresh -> forces a re-fetch
+        Assert.Equal(2, loadCount);
+    }
+
+    /// <summary>The fit-browser's refresh button reloads whichever tab is selected: the Local tab through the
+    /// injected refresh (same one <see cref="IRefreshableModule.RefreshModule"/> uses), a server tab by re-fetching
+    /// regardless of <see cref="FitBrowserTabViewModel.IsLoaded"/>.</summary>
+    [Fact]
+    public async Task RefreshCommand_LocalTab_UsesTheInjectedRefresh()
+    {
+        var refreshCalled = 0;
+        var localTab = new FitBrowserTabViewModel("Local", Array.Empty<FitRowViewModel>());
+        var vm = new FitBrowserViewModel(new[] { localTab }, refresh: () => { refreshCalled++; return Task.CompletedTask; });
+
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, refreshCalled);
+    }
+
+    [Fact]
+    public async Task RefreshCommand_ServerTab_ForcesReloadRegardlessOfIsLoaded()
+    {
+        var loadCount = 0;
+        var serverTab = new FitBrowserTabViewModel("Srv", "srv-addr", t =>
+        {
+            loadCount++;
+            t.SetRows(Array.Empty<FitRowViewModel>());
+            return Task.CompletedTask;
+        });
+        await serverTab.EnsureLoadedAsync();          // already loaded before the browser is even opened
+        var vm = new FitBrowserViewModel(new[] { serverTab });
+
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, loadCount);
+    }
+
+    /// <summary>A local row's share command carries the fit-browser's post-share refresh callback through to
+    /// <see cref="FitExportRequest.OnSharedToServer"/> — the seam that lets a successful share reload the target
+    /// server's tab. Regression guard for the row-based share path having no way to trigger that refresh.</summary>
+    [Fact]
+    public async Task Row_SharesTheOnSharedToServerCallback_WithTheExportRequest()
+    {
+        FitExportRequest? captured = null;
+        var stubActions = new StubExportActions { OnShare = r => captured = r };
+        var refreshed = new List<string>();
+        var row = new FitRowViewModel(Fit("Brawler", 627, (2, "HiSlot0", 1)), "Tester", new StubNames(),
+            localFitId: 7, exportActions: stubActions,
+            onSharedToServer: addr => { refreshed.Add(addr); return Task.CompletedTask; });
+
+        await ((IAsyncRelayCommand)row.ShareToServerCommand).ExecuteAsync(null);
+
+        Assert.NotNull(captured);
+        Assert.NotNull(captured!.OnSharedToServer);
+        await captured.OnSharedToServer!("srv-addr");
+        Assert.Equal(new[] { "srv-addr" }, refreshed);
+    }
+
+    private sealed class StubExportActions : IFitExportActions
+    {
+        public Action<FitExportRequest>? OnShare { get; set; }
+        public Task ShareToServerAsync(FitExportRequest request) { OnShare?.Invoke(request); return Task.CompletedTask; }
+        public Task PushToEveAsync(FitExportRequest request) => Task.CompletedTask;
+        public Task CopyEveshipLinkAsync(FitExportRequest request) => Task.CompletedTask;
+        public Task OpenEftWindowAsync(FitExportRequest request) => Task.CompletedTask;
     }
 }

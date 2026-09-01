@@ -611,14 +611,25 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         // the Local-tab refresh are in scope; the rows reach back through these callbacks. localTab is assigned below —
         // the callbacks only fire on a later user action, by which point it is set.
         FitBrowserTabViewModel localTab = null!;
-        async Task ReloadLocalAsync() => localTab.SetRows(await BuildLocalFitRowsAsync(names, EditFitMetadataAsync, DeleteFitAsync));
+        FitBrowserViewModel viewModel = null!;
+        // After a successful share, refresh the matching server tab so the shared fit shows up — one fit-browser
+        // wide, so both the per-row share and the fit-detail window's share reach the same tab regardless of which
+        // one triggered it (OnSharedToServer, FitExportActions.ShareToServerAsync).
+        async Task RefreshServerTabAsync(string targetAddress)
+        {
+            var tab = viewModel.Tabs.FirstOrDefault(t => t.ServerAddress == targetAddress);
+            if (tab is not null) await tab.ReloadAsync();
+        }
+        _refreshServerFitBrowserTab = RefreshServerTabAsync;
+
+        async Task ReloadLocalAsync() => localTab.SetRows(await BuildLocalFitRowsAsync(names, EditFitMetadataAsync, DeleteFitAsync, RefreshServerTabAsync));
         async Task EditFitMetadataAsync(int localFitId) => await EditLocalFitMetadataAsync(localFitId, ReloadLocalAsync);
         async Task DeleteFitAsync(int localFitId) => await DeleteLocalFitByIdAsync(localFitId, ReloadLocalAsync);
         // Hand the Local-tab refresh to the detail window's in-place metadata edit (OpenFitDetailAsync, opened from here).
         _reloadLocalFits = ReloadLocalAsync;
 
         localTab = new FitBrowserTabViewModel(
-            "Local library", await BuildLocalFitRowsAsync(names, EditFitMetadataAsync, DeleteFitAsync), names);
+            "Local library", await BuildLocalFitRowsAsync(names, EditFitMetadataAsync, DeleteFitAsync, RefreshServerTabAsync), names);
         var tabs = new List<FitBrowserTabViewModel> { localTab };
 
         var sessionStore = _services.GetRequiredService<IClientSessionStore>();
@@ -638,7 +649,6 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 await OpenFitDetailAsync(row);
         }
 
-        FitBrowserViewModel viewModel = null!;
         // The browser is one module for the whole app (ET-48): re-opening FITS re-selects this standing instance and
         // calls this instead of building a fresh one, so a fit imported elsewhere or a server coupled meanwhile
         // still shows up — additive on the server tabs, same as ET-46's RefreshModule.
@@ -686,6 +696,10 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
     // Set when the fit-browser builds its Local tab; lets the detail window's in-place metadata edit refresh that tab.
     private Func<Task>? _reloadLocalFits;
+
+    // Set when the fit-browser opens; lets the detail window's own "Share to server…" refresh the matching server
+    // tab too, the same way a per-row share in the browser grid does.
+    private Func<string, Task>? _refreshServerFitBrowserTab;
 
     private const string SkillModeSettingKey = "fit-detail.skill-mode";   // remembered selector mode ("all:5"/"char:42")
     private const string ImplantModeSettingKey = "fit-detail.implant-mode";   // remembered implant source ("fit"/"char:42")
@@ -743,7 +757,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             metadata?.Tags,
             _services.GetService<ICharacterAttributesRepository>(),   // SP/time rate for the Skills Required panel
             _services.GetService<IToastService>(),                    // toast on a refused module activation (cloak conflict)
-            onEditMetadata);                                          // in-place edit of the fit's name/notes/tags (local fits)
+            onEditMetadata,                                           // in-place edit of the fit's name/notes/tags (local fits)
+            _refreshServerFitBrowserTab);                             // refresh the browser's server tab after a share (null if the browser was never opened this session)
         await viewModel.InitializeAsync();
         _dialogs.ShowFitDetail(viewModel);
         _ = viewModel.LoadImagesAsync();   // opt-in CCP images pop in after the window shows
@@ -786,7 +801,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private ISdeNameResolver FitNames() => FitNameResolverFactory.For(_services);
 
     private async Task<List<FitRowViewModel>> BuildLocalFitRowsAsync(
-        ISdeNameResolver names, Func<int, Task>? onEditMetadata = null, Func<int, Task>? onDelete = null)
+        ISdeNameResolver names, Func<int, Task>? onEditMetadata = null, Func<int, Task>? onDelete = null,
+        Func<string, Task>? onSharedToServer = null)
     {
         using var scope = _services!.CreateScope();
         var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
@@ -808,7 +824,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 _fitExportActions, BuildPickOptions, status => FittingsStatus = status,
                 _services!.GetService<IMarketPriceRepository>(), onEditMetadata, onDelete, tags: f.Tags,
                 portraits: _services!.GetService<ICharacterPortraitProvider>(),
-                uploaderCharacterId: owner?.CharacterId ?? 0);
+                uploaderCharacterId: owner?.CharacterId ?? 0,
+                onSharedToServer: onSharedToServer);
             // The images are the page's business, not the library's: the browser pulls them in for the fits it is
             // actually showing (FitBrowserTabViewModel.FillPage). A library of 148 fits used to fetch 148 renders
             // here, of which one page-worth was ever looked at.

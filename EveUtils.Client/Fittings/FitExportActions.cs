@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Messaging;
+using EveUtils.Client.Notifications;
 using EveUtils.Client.Transport;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.DependencyInjection;
@@ -55,16 +56,27 @@ public sealed class FitExportActions(IServiceProvider services) : IFitExportActi
     public async Task ShareToServerAsync(FitExportRequest request)
     {
         var dialogs = services.GetRequiredService<IDialogService>();
+        var toasts = services.GetService<IToastService>();
+
+        // Every outcome below — success, rejection, cancellation, no connection — goes through here so none of
+        // them can vanish silently: the status sink (a window's own status text, when the caller has one) and a
+        // toast (visible regardless of which window triggered the share, or whether it is still open) share the
+        // same message, never two different ones.
+        void Report(string message, ToastKind kind = ToastKind.Warning, string title = "Share to server")
+        {
+            request.ReportStatus(message);
+            toasts?.Show(title, message, kind);
+        }
 
         // Need the raw ESI JSON to share — look the fit up by id (owner-independent).
         var repo = services.GetRequiredService<IFittingRepository>();
         var local = await repo.FindByIdAsync(request.FitId);
-        if (local is null) { request.ReportStatus("Fit not found locally."); return; }
+        if (local is null) { Report("Fit not found locally."); return; }
 
         // pick from ALL coupled servers, regardless of which character owns the fit.
         var sessionStore = services.GetRequiredService<IClientSessionStore>();
         var servers = await sessionStore.ListServersAsync();
-        if (servers.Count == 0) { request.ReportStatus("Not coupled to any server — couple a character first."); return; }
+        if (servers.Count == 0) { Report("Not coupled to any server — couple a character first."); return; }
 
         var serverRegistry = services.GetService<IServerRegistry>();
         string targetAddress;
@@ -79,40 +91,70 @@ public sealed class FitExportActions(IServiceProvider services) : IFitExportActi
                 options.Add(new ServerPickOption(addr,
                     serverRegistry is null ? addr : await serverRegistry.DisplayNameAsync(addr)));
             var chosen = await dialogs.SelectServerAsync($"Share '{local.Name}' to which server?", options);
-            if (chosen is null) { request.ReportStatus("Share cancelled."); return; }
+            if (chosen is null) { Report("Share cancelled.", ToastKind.Information); return; }
             targetAddress = chosen;
         }
 
         var busConnector = services.GetService<IRemoteBusConnector>();
         if (busConnector?.StateFor(targetAddress) != ServerConnectionState.Connected)
         {
-            request.ReportStatus("Not connected to that server.");
+            Report("Not connected to that server.");
             return;
         }
 
-        // share as which coupled character on that server (the "shared by" identity + the session used).
-        var shareAs = 0;
+        // share as which coupled character on that server (the "shared by" identity + the session used). With
+        // exactly one coupled character there is nothing to ask — but that character's id (not 0) still has to
+        // travel as the acting identity, and its name is worth naming in the result.
         var coupled = await sessionStore.LoadAllAsync(targetAddress);
+        int shareAs;
+        string? sharedAsName;
         if (coupled.Count > 1)
         {
             var charOptions = coupled
                 .Select(s => new CharacterPickOption(s.CharacterId, s.CharacterName, "coupled", Enabled: true))
                 .ToList();
             var picked = await dialogs.PickCharacterAsync($"Share '{local.Name}' as which character?", charOptions);
-            if (picked is null) { request.ReportStatus("Share cancelled."); return; }
-            shareAs = picked.Value;
+            if (picked is null) { Report("Share cancelled.", ToastKind.Information); return; }
+            (shareAs, sharedAsName) = ResolveShareIdentity(coupled, picked);
+        }
+        else
+        {
+            (shareAs, sharedAsName) = ResolveShareIdentity(coupled, null);
         }
 
         request.ReportStatus($"Sharing '{local.Name}' via server…");
         var fitShare = services.GetRequiredService<ServerFitShareClient>();
         var (accepted, message) = await fitShare.ShareAsync(
             targetAddress, local.EsiFittingId, local.Name, local.ShipTypeId, local.RawJson, shareAs);
-        request.ReportStatus(accepted ? $"'{local.Name}' shared." : $"Share rejected: {message}");
+
+        if (accepted)
+        {
+            var resultMessage = sharedAsName is null ? $"'{local.Name}' shared." : $"'{local.Name}' shared as {sharedAsName}.";
+            Report(resultMessage, ToastKind.Success, "Fit shared");
+        }
+        else
+        {
+            Report($"Share rejected: {message}", ToastKind.Error, "Share rejected");
+        }
 
         // Refresh the matching server tab so the shared fit shows up. The seam has no tab state, so the
         // caller that owns one wires it via OnSharedToServer.
         if (accepted && request.OnSharedToServer is not null)
             await request.OnSharedToServer(targetAddress);
+    }
+
+    /// <summary>
+    /// Resolves the "shared by" identity for a share: the picked character when the user chose one, otherwise the
+    /// single coupled character when there is exactly one (id 0 would silently mis-attribute the share), otherwise
+    /// unresolved (0, no name) — a coupled-character list of 0 shouldn't happen once the caller reached this point,
+    /// but stays inert rather than guessing.
+    /// </summary>
+    internal static (int ShareAs, string? SharedAsName) ResolveShareIdentity(
+        IReadOnlyList<ClientSessionTokens> coupled, int? picked)
+    {
+        if (picked is { } id)
+            return (id, coupled.FirstOrDefault(s => s.CharacterId == id)?.CharacterName);
+        return coupled.Count == 1 ? (coupled[0].CharacterId, coupled[0].CharacterName) : (0, null);
     }
 
     public async Task CopyEveshipLinkAsync(FitExportRequest request)
