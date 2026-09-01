@@ -153,7 +153,7 @@ public class EveClientPresenceTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(Path.Combine(Path.GetTempPath(), "eveutils-client-presence-dot.png"));
+        frame!.Save(Path.Combine(Path.GetTempPath(), "eveutils-client-presence-dot.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 }

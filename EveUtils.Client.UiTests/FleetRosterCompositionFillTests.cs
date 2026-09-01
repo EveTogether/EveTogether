@@ -126,7 +126,7 @@ public class FleetRosterCompositionFillTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-roster-composition-fill.png");
+        frame!.Save("/tmp/eveutils-roster-composition-fill.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 

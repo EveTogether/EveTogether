@@ -105,7 +105,7 @@ public class FleetCompositionCouplingTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-roster-composition.png");
+        frame!.Save("/tmp/eveutils-roster-composition.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 }

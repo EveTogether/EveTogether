@@ -31,7 +31,7 @@ public class SmokeTests
         Assert.NotNull(frame);
         Assert.Equal(200, frame!.PixelSize.Width);
         Assert.Equal(100, frame.PixelSize.Height);
-        frame.Save("/tmp/eveutils-headless-smoke.png");
+        frame.Save("/tmp/eveutils-headless-smoke.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
     }
 
     [AvaloniaFact]

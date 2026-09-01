@@ -29,7 +29,7 @@ public class ChromedWindowTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(Path.Combine(Path.GetTempPath(), "eveutils-chromed-window.png"));
+        frame!.Save(Path.Combine(Path.GetTempPath(), "eveutils-chromed-window.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 }

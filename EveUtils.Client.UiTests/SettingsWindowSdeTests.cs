@@ -27,6 +27,6 @@ public class SettingsWindowSdeTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-settings-sde.png");   // also shows the new DATA FOLDER section + "Show Data Folder"
+        frame!.Save("/tmp/eveutils-settings-sde.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());   // also shows the new DATA FOLDER section + "Show Data Folder"
     }
 }

@@ -116,7 +116,7 @@ public class FleetsBrowserCardTests
         Dispatcher.UIThread.RunJobs();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fleets-browser-cards.png");
+        frame!.Save("/tmp/eveutils-fleets-browser-cards.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 }

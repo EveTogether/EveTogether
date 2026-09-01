@@ -60,7 +60,7 @@ public class EsiMetricsViewTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-esi-metrics.png");
+        frame!.Save("/tmp/eveutils-esi-metrics.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
     }
 
     [AvaloniaFact]

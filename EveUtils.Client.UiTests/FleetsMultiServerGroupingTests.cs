@@ -69,7 +69,7 @@ public class FleetsMultiServerGroupingTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fleets-multiserver.png");
+        frame!.Save("/tmp/eveutils-fleets-multiserver.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
     }
 
     private static FleetInfo Fleet(long id, string name, int creator, FleetVisibility visibility) =>
