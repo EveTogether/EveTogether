@@ -93,6 +93,17 @@ taken from the matching `## vX.Y.Z` section below.
   `docker-compose.yml` already references instead of building it from source.
 
 ### Changed
+- **The self-hosted server no longer keeps its identity in the build output.** Its data directory — database, TLS
+  certificate, token-protector key — used to sit inside `bin/`, where a rebuild, a `dotnet clean` or a fresh clone
+  silently took it away and every paired character was lost for good. It now defaults to the per-user data folder
+  (`%LOCALAPPDATA%\EveUtils.Server`, `~/.local/share/EveUtils.Server`), and can be set with `Server:DataDirectory`
+  next to the existing `EVEUTILS_SERVER_DATA_DIR`. A bare-metal server started on the default moves an older
+  installation's data across on first start. Docker installs already used `/data` and are unaffected.
+- **The server refuses to start on an identity it just invented.** If it had to generate a new token-protector key
+  while characters are still paired, their stored refresh tokens can no longer be decrypted — so it stops and says
+  so instead of coming up and losing them quietly. Restore the key that belongs with the database, or start once
+  with `--accept-new-identity` to accept the new identity and pair everyone again. A regenerated TLS certificate
+  does not stop the server; it is logged, and clients re-pair.
 - The two buttons at the end of a coupled-server row — the gear and **DECOUPLE** — are the same height now.
   Each used to be as tall as whatever it contained, an icon against smaller text, so the pair never quite lined up.
   The fighter bay's reserve rows are the same pairing and follow the same rule.

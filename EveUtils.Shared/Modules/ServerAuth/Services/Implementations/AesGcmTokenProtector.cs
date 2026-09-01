@@ -16,21 +16,32 @@ internal sealed class AesGcmTokenProtector : ITokenProtector
 
     private readonly byte[] _key;
 
+    /// <summary>
+    /// True when the key file did not exist and a new one was generated here. The server refuses to start on a
+    /// generated key while characters are already paired against the previous one (ET-94) — their refresh tokens
+    /// would be permanently undecryptable.
+    /// </summary>
+    public bool KeyWasCreated { get; }
+
+    /// <summary>Where the key lives, so a start that is refused over <see cref="KeyWasCreated"/> can undo it.</summary>
+    public string KeyPath { get; }
+
     public AesGcmTokenProtector(string dataDirectory)
     {
         Directory.CreateDirectory(dataDirectory);
-        var keyPath = Path.Combine(dataDirectory, "token-protector.key");
-        if (File.Exists(keyPath))
+        KeyPath = Path.Combine(dataDirectory, "token-protector.key");
+        if (File.Exists(KeyPath))
         {
-            _key = File.ReadAllBytes(keyPath);
+            _key = File.ReadAllBytes(KeyPath);
         }
         else
         {
+            KeyWasCreated = true;
             _key = RandomNumberGenerator.GetBytes(32);
-            File.WriteAllBytes(keyPath, _key);
+            File.WriteAllBytes(KeyPath, _key);
             if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
             {
-                try { File.SetUnixFileMode(keyPath, UnixFileMode.UserRead | UnixFileMode.UserWrite); }
+                try { File.SetUnixFileMode(KeyPath, UnixFileMode.UserRead | UnixFileMode.UserWrite); }
                 catch (IOException) { }
             }
         }

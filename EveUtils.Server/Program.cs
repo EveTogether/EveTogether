@@ -66,13 +66,18 @@ builder.WebHost.UseStaticWebAssets();
 // Self-signed TLS cert (generated on first start) — one HTTPS endpoint serving gRPC (HTTP/2) next to
 // Blazor/SignalR (HTTP/1.1) via ALPN. The client pins the fingerprint during pairing (TOFU).
 var httpsPort = builder.Configuration.GetValue("Server:HttpsPort", 7443);
-// Data dir holds the DB, TLS cert, app-log, ESI cache and auth store. Anchored to the binary by default
-// (so `dotnet run` and Rider share one DB, d3cfa5f). EVEUTILS_SERVER_DATA_DIR overrides it to an isolated
-// throwaway location so the headless test suites never touch the real anchored DB (test isolation).
-var dataDirectory = Environment.GetEnvironmentVariable("EVEUTILS_SERVER_DATA_DIR") is { Length: > 0 } dataDirOverride
-    ? dataDirOverride
-    : Path.Combine(AppContext.BaseDirectory, "data");
-var certificate = new SelfSignedCertProvider(dataDirectory).GetOrCreate();
+// Data dir holds the DB, TLS cert, token-protector key, app-log, ESI cache and auth store — the server's permanent
+// identity. EVEUTILS_SERVER_DATA_DIR (Docker's /data volume, and the headless suites' throwaway isolation) wins over
+// Server:DataDirectory; with neither set it lands in the per-user data folder rather than in the build output, where
+// a `dotnet clean` used to take the token-protector key with it (ET-94).
+var dataLocation = ServerDataDirectory.Resolve(
+    Environment.GetEnvironmentVariable(ServerDataDirectory.EnvironmentVariableName),
+    builder.Configuration[ServerDataDirectory.ConfigurationKey]);
+var dataDirectory = dataLocation.Path;
+// Before anything writes a cert, key or DB into the new location: an installation that still lives in the build
+// output moves across as a whole. Once the new location is non-empty this is a no-op, so it runs exactly once.
+var dataMigration = ServerDataDirectory.MigrateLegacyContents(dataLocation, ServerDataDirectory.LegacyDirectory);
+var certificate = new SelfSignedCertProvider(dataDirectory).GetOrCreate(out var certificateCreated);
 var certificateInfo = new ServerCertificateInfo(SelfSignedCertProvider.Fingerprint(certificate));
 
 builder.WebHost.ConfigureKestrel(options =>
@@ -204,6 +209,36 @@ app.UseStaticFiles();  // serves wwwroot (the DPS stream page)
 app.UseAuthentication(); // admin-panel cookie auth
 app.UseAuthorization();
 app.UseAntiforgery();  // required by the interactive Blazor components
+
+// Logged here rather than where they happen: the data directory is resolved and the certificate is loaded before
+// the host — and therefore its logger — exists.
+app.Logger.LogInformation("Server data directory: {DataDirectory} (from {Source})", dataDirectory, dataLocation.Source);
+if (dataMigration.Ran)
+{
+    // Per item rather than one summary line: this runs once in the life of an installation and is the only record
+    // the operator has that a live server's identity arrived intact.
+    app.Logger.LogWarning(
+        "Moved the server data directory out of the build output: {Legacy} -> {DataDirectory}.",
+        ServerDataDirectory.LegacyDirectory, dataDirectory);
+    foreach (var entry in dataMigration.Moved)
+    {
+        app.Logger.LogWarning("Moved {Entry} to {Destination}", entry, Path.Combine(dataDirectory, entry));
+    }
+
+    foreach (var entry in dataMigration.LeftBehind)
+    {
+        app.Logger.LogWarning(
+            "Left {Entry} behind in {Legacy}: it could not be moved. It rebuilds itself and can be deleted.",
+            entry, ServerDataDirectory.LegacyDirectory);
+    }
+}
+
+if (certificateCreated)
+{
+    app.Logger.LogWarning(
+        "Generated a NEW self-signed TLS certificate in {DataDirectory}. Every client that pinned the previous " +
+        "fingerprint must pair again. If that is unexpected, restore server-cert.pfx from backup.", dataDirectory);
+}
 
 app.Logger.LogInformation("Server TLS cert fingerprint (pin this during pairing): {Fingerprint}", certificateInfo.Fingerprint);
 
@@ -353,6 +388,22 @@ using (var scope = app.Services.CreateScope())
         db.Database.Migrate();
     }
 
+    // First thing after the database is reachable: the token-protector key was created or loaded back at
+    // registration time (eager), and only here can that be weighed against the characters already paired. A
+    // generated key next to existing pairings means their refresh tokens are gone — stop before anything else
+    // touches them (ET-94).
+    var serverAuthRepository = scope.ServiceProvider.GetRequiredService<IServerAuthRepository>();
+    var syncedCharacters = await serverAuthRepository.ListSyncedAsync();
+    var tokenKeyState = scope.ServiceProvider.GetRequiredService<TokenProtectorKeyState>();
+    var newIdentityAccepted = args.Contains(NewIdentityGuard.AcceptSwitch)
+        || app.Configuration.GetValue(NewIdentityGuard.AcceptConfigurationKey, false);
+    if (NewIdentityGuard.ShouldRefuseStart(tokenKeyState.KeyWasCreated, syncedCharacters.Count, newIdentityAccepted))
+    {
+        app.Logger.LogCritical("{Refusal}", NewIdentityGuard.RefusalMessage(dataDirectory, syncedCharacters.Count));
+        NewIdentityGuard.DiscardGeneratedKey(tokenKeyState.KeyPath);
+        return 1;
+    }
+
     // Backfill the fit content-hash for shared fits stored before the column existed, so they take part in dedup.
     await scope.ServiceProvider.GetRequiredService<ISharedFitRepository>().BackfillContentHashesAsync();
 
@@ -363,7 +414,6 @@ using (var scope = app.Services.CreateScope())
     }
 
     // Seed the pairing allowed-list from config (Esi:AllowedCharacters) so the configured character can pair.
-    var serverAuthRepository = scope.ServiceProvider.GetRequiredService<IServerAuthRepository>();
     var allowedNames = app.Configuration.GetSection("Esi:AllowedCharacters").Get<string[]>() ?? [];
     await serverAuthRepository.EnsureAllowedSeedAsync(allowedNames);
 

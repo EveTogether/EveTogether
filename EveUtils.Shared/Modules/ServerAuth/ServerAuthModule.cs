@@ -25,7 +25,11 @@ public static class ServerAuthModule
     // which needs the data directory (a factory binding that can't be a plain marker).
     public static IServiceCollection AddServerAuthModule(this IServiceCollection services, string dataDirectory)
     {
-        services.AddSingleton<ITokenProtector>(new AesGcmTokenProtector(dataDirectory));
+        // Constructed eagerly, so the key file exists long before the database is reachable. Its created-or-loaded
+        // verdict is published separately for the startup guard to pick up once it is (ET-94).
+        var protector = new AesGcmTokenProtector(dataDirectory);
+        services.AddSingleton<ITokenProtector>(protector);
+        services.AddSingleton(new TokenProtectorKeyState(protector.KeyWasCreated, protector.KeyPath));
         return services;
     }
 }

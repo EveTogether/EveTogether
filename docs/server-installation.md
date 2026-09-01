@@ -36,14 +36,30 @@ Configure via **environment variables**. Nested keys use a double underscore (`_
 | `Esi__Scopes__0`, `__1`, … | no | Requested ESI scopes. |
 | `Esi__AllowedCharacters__0`, … | no | Characters allowed to pair, seeded on first start (enforced by default — see [§6](#6-first-run)). |
 | `Database__Provider` | no | `Sqlite` (default), `MySql`, `SqlServer` or `PostgreSql`. |
-| `ConnectionStrings__Sqlite` | no | Defaults to `Data Source=/data/eve-utils-server.db`. |
+| `ConnectionStrings__Sqlite` | no | Defaults to `Data Source=eve-utils-server.db`; a relative file is placed in the data directory. |
 | `ConnectionStrings__MySql` / `__SqlServer` / `__PostgreSql` | depends | Connection string for the chosen provider. |
 | `Server__Name` | no | Display name shown to clients. |
 | `Server__HttpsPort` | no | HTTPS port inside the container (default `7443`). |
 | `Server__AdminSeedPassword` | **yes** (outside Development) | Initial Blazor control-panel admin password. Change it after first login. |
+| `EVEUTILS_SERVER_DATA_DIR` | no | Data directory. Set to `/data` in the image — leave it alone under Docker. |
+| `Server__DataDirectory` | no | Data directory, used only when `EVEUTILS_SERVER_DATA_DIR` is unset. |
+| `Server__AcceptNewIdentity` | no | `true` accepts a regenerated token-protector key — see [§7](#7-data-backups--upgrading). Never leave it on. |
 
-The `/data` directory holds the SQLite database, TLS certificate, app log, ESI cache and auth store —
-mount a volume there to persist it.
+### Data directory
+
+The data directory holds the SQLite database, TLS certificate, token-protector key, app log, ESI cache and
+SDE. It is resolved in this order:
+
+1. `EVEUTILS_SERVER_DATA_DIR` — what the Docker image sets (`/data`); mount a volume there to persist it.
+2. `Server__DataDirectory`.
+3. Neither set: the per-user data folder — `%LOCALAPPDATA%\EveUtils.Server` on Windows,
+   `$XDG_DATA_HOME/EveUtils.Server` (usually `~/.local/share/EveUtils.Server`) on Linux and macOS.
+
+The default deliberately sits outside the build output, so a rebuild or a `dotnet clean` cannot take the
+server's identity with it. A bare-metal installation from before this change kept its data in
+`<build output>/data`; on the first start on the default the server **moves** that folder's contents to the
+new location and logs what it moved. It does not do that when you point it somewhere explicitly with either
+setting — move the files yourself in that case.
 
 ## 4. Run
 
@@ -106,7 +122,16 @@ callback URL at that public HTTPS address.
 
 ## 7. Data, backups & upgrading
 
-- Everything persists in the `/data` volume — **back it up**. In keeping with the project's data-minimisation
-  principle, the server stores tokens plus minimal coupling state; character data is cached ephemerally
-  (honouring the ESI TTL), not warehoused.
+- Everything persists in the data directory (`/data` under Docker) — **back it up as a whole**. In keeping with
+  the project's data-minimisation principle, the server stores tokens plus minimal coupling state; character
+  data is cached ephemerally (honouring the ESI TTL), not warehoused.
+- **`eve-utils-server.db` and `token-protector.key` belong together.** The key decrypts the stored ESI refresh
+  tokens; restore them as a pair, from the same backup. A database without its key means every paired character
+  has to pair again — there is no way back.
+- `server-cert.pfx` is worth restoring too: without it the server presents a new TLS fingerprint and every client
+  that pinned the old one has to pair again. `esi-cache/` and `sde/` rebuild themselves and need no backup.
+- **The server refuses to start** when it has generated a new `token-protector.key` while characters are still
+  paired — that combination means their refresh tokens can no longer be read. Restore the matching key, or, if the
+  new identity is really what you want, start once with `--accept-new-identity` (or `Server__AcceptNewIdentity=true`)
+  and pair every character again.
 - **Upgrade:** `docker compose pull && docker compose up -d`. Database migrations apply automatically on start.
