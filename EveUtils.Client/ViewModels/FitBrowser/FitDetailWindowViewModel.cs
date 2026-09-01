@@ -201,6 +201,9 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
     private bool _suppressImplantApply;             // true while we set SelectedImplantMode programmatically
 
     public string Name { get; private set; }
+    public string ModuleId => _localFitId is { } localFitId
+        ? $"fit-detail:local:{localFitId}"
+        : $"fit-detail:esi:{_fit.FittingId}";
     public string ShipName { get; }
 
     // ── Fit-metadata: the user's notes + tags. Shown in the header and editable in place via the Edit-details

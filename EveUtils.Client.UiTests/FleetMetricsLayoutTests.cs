@@ -118,7 +118,7 @@ public class FleetMetricsLayoutTests
             var host = new ModuleHostService();
             host.SetOwner(new Window());
             host.SetHost(display);
-            host.Open(window, "FLEET METRICS", "fleet");
+            host.Open(window, "FLEET METRICS", "fleet", "fleet-metrics");
 
             // Stand the reparented content in a plain window: the module's own window is deliberately not the host,
             // which is exactly what this path has to survive.
@@ -141,7 +141,7 @@ public class FleetMetricsLayoutTests
             var host = new ModuleHostService();
             host.SetOwner(new Window());
             host.SetHost(display);
-            host.Open(window, "FLEET METRICS", "fleet");
+            host.Open(window, "FLEET METRICS", "fleet", "fleet-metrics");
             root = new Window { Width = 900, Height = 620, Content = Assert.Single(display.HostTabs).Content };
         }
 
@@ -636,7 +636,7 @@ public class FleetMetricsLayoutTests
         host.SetOwner(new Window());
         host.SetHost(display);
         var window = new FleetMetricsWindow(vm) { Width = 900, Height = 620 };
-        host.Open(window, "FLEET METRICS", "fleet");
+            host.Open(window, "FLEET METRICS", "fleet", "fleet-metrics");
 
         // Docked → floating: the service hands the content back to the module's own window and shows it.
         display.IsFloating = true;

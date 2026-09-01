@@ -153,7 +153,7 @@ public class FleetMemberMenuTests
             var host = new ModuleHostService();
             host.SetOwner(new Window());
             host.SetHost(display);
-            host.Open(window, "FLEET METRICS", "fleet");
+            host.Open(window, "FLEET METRICS", "fleet", "fleet-metrics");
             root = new Window { Width = 900, Height = 620, Content = Assert.Single(display.HostTabs).Content };
         }
 

@@ -30,6 +30,7 @@ public sealed partial class CompositionEditorViewModel : ObservableObject
     private readonly ITypeImageProvider? _images;
     private readonly FleetCompositionDetail? _snapshot;
     private readonly long? _compositionId;
+    private readonly Guid _newCompositionId = Guid.NewGuid();
 
     private CompositionEditorViewModel(IServiceProvider services, IFleetCompositionClient client, FleetCompositionDetail? snapshot,
         bool isReadOnly = false)
@@ -77,6 +78,9 @@ public sealed partial class CompositionEditorViewModel : ObservableObject
     public event Action<bool>? CloseRequested;
 
     public bool IsNew => _compositionId is null;
+    public string ModuleId => _compositionId is { } compositionId
+        ? $"composition-editor:{compositionId}"
+        : $"composition-editor:new:{_newCompositionId}";
 
     /// <summary>Read-only view (someone else's composition) — the edit affordances and save are hidden.</summary>
     public bool IsReadOnly { get; }

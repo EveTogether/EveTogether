@@ -79,13 +79,30 @@ public class ModuleNavigationTests
 
         // Two fleets share the roster window TITLE but carry distinct module ids → two distinct tabs. Before the fix
         // the title-only de-dupe collapsed them into one, so MANAGE on fleet B re-selected fleet A's stale roster.
-        host.Open(Roster(), "FLEET ROSTER", "fleet", moduleId: "fleet-roster:1");
-        host.Open(Roster(), "FLEET ROSTER", "fleet", moduleId: "fleet-roster:2");
+        host.Open(Roster(), "FLEET ROSTER", "fleet", "fleet-roster:1");
+        host.Open(Roster(), "FLEET ROSTER", "fleet", "fleet-roster:2");
         Assert.Equal(2, fake.HostTabs.Count);
 
         // Re-opening fleet 1 re-selects its existing tab — no third tab.
-        host.Open(Roster(), "FLEET ROSTER", "fleet", moduleId: "fleet-roster:1");
+        host.Open(Roster(), "FLEET ROSTER", "fleet", "fleet-roster:1");
         Assert.Equal(2, fake.HostTabs.Count);
+    }
+
+    [AvaloniaFact]
+    public void ModuleHost_SameTitleWithDistinctModuleIds_HostsBothViewModels()
+    {
+        var fake = new FakeDisplay { IsFloating = false };
+        var host = new ModuleHostService();
+        host.SetOwner(new Window());
+        host.SetHost(fake);
+
+        var first = new ProbeModule();
+        var second = new ProbeModule();
+        host.Open(new Window { Content = new Border(), DataContext = first }, "FIT DETAIL", "fits", "fit-detail:1");
+        host.Open(new Window { Content = new Border(), DataContext = second }, "FIT DETAIL", "fits", "fit-detail:2");
+
+        Assert.Equal(2, fake.HostTabs.Count);
+        Assert.Same(second, fake.HostTabs[1].Content.DataContext);
     }
 
     /// <summary>A module view-model that records the two things re-opening has to do to it (ET-46).</summary>
@@ -111,11 +128,11 @@ public class ModuleNavigationTests
         host.SetHost(fake);
 
         var standing = new ProbeModule();
-        host.Open(new Window { Content = new Border(), DataContext = standing }, "PROBE", moduleId: "probe:1");
+        host.Open(new Window { Content = new Border(), DataContext = standing }, "PROBE", null, "probe:1");
         Assert.Equal(0, standing.Refreshed);
 
         var duplicate = new ProbeModule();
-        host.Open(new Window { Content = new Border(), DataContext = duplicate }, "PROBE", moduleId: "probe:1");
+        host.Open(new Window { Content = new Border(), DataContext = duplicate }, "PROBE", null, "probe:1");
 
         Assert.Single(fake.HostTabs);
         Assert.Equal(1, standing.Refreshed);
@@ -136,8 +153,8 @@ public class ModuleNavigationTests
         host.SetHost(fake);
 
         var shared = new ProbeModule();
-        host.Open(new Window { Content = new Border(), DataContext = shared }, "PROBE", moduleId: "probe:1");
-        host.Open(new Window { Content = new Border(), DataContext = shared }, "PROBE", moduleId: "probe:1");
+        host.Open(new Window { Content = new Border(), DataContext = shared }, "PROBE", null, "probe:1");
+        host.Open(new Window { Content = new Border(), DataContext = shared }, "PROBE", null, "probe:1");
 
         Assert.False(shared.Disposed);
         Assert.Equal(1, shared.Refreshed);
@@ -160,7 +177,7 @@ public class ModuleNavigationTests
     }
 
     [AvaloniaFact]
-    public void Docked_CompositionEditor_HostsAsTab_AndCancelDismisses()
+    public void Docked_TwoNewCompositionEditors_HostBoth_AndResolveBothTasks()
     {
         using var instance = TestClientInstance.Create();
         var fake = new FakeDisplay { IsFloating = false };
@@ -171,21 +188,57 @@ public class ModuleNavigationTests
         var client = new LocalFleetCompositionClient(
             instance.Services.GetRequiredService<ClientFleetService>(),
             instance.Services.GetRequiredService<IFleetCompositionRepository>(), 95400001);
-        var editor = CompositionEditorViewModel.ForNew(instance.Services, client);
+        var first = CompositionEditorViewModel.ForNew(instance.Services, client);
+        var second = CompositionEditorViewModel.ForNew(instance.Services, client);
+        var firstTask = dialogs.ShowCompositionEditorAsync(first);
+        var secondTask = dialogs.ShowCompositionEditorAsync(second);
+        Assert.Equal(2, fake.HostTabs.Count);
+        Assert.Same(second, fake.HostTabs[1].Content.DataContext);
 
-        // The editor opens as a docked tab (a hosted module), not a modal dialog window.
-        var task = dialogs.ShowCompositionEditorAsync(editor);
-        Assert.Single(fake.HostTabs);
-        Assert.Equal("compositions", fake.HostTabs[0].ModuleKey);
-        Assert.NotNull(fake.HostTabs[0].Content);
-        Assert.False(task.IsCompleted);            // stays open until the editor closes
-
-        // Cancel raises CloseRequested(false) → the host dismisses the tab and the task resolves false (no reload).
-        editor.CancelCommand.Execute(null);
+        first.CancelCommand.Execute(null);
         Dispatcher.UIThread.RunJobs();
-        Assert.True(task.IsCompleted);
-        Assert.False(task.Result);
+        Assert.True(firstTask.IsCompleted);
+        Assert.False(secondTask.IsCompleted);
+
+        second.CancelCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(secondTask.IsCompleted);
+        Assert.False(secondTask.Result);
         Assert.Empty(fake.HostTabs);
+    }
+
+    [AvaloniaFact]
+    public async Task Docked_SavedNewComposition_ClosesBeforePersistedCompositionReopens()
+    {
+        using var instance = TestClientInstance.Create();
+        var fake = new FakeDisplay { IsFloating = false };
+        var dialogs = new DialogService();
+        dialogs.SetOwner(new Window());
+        dialogs.SetHost(fake);
+        var client = new LocalFleetCompositionClient(
+            instance.Services.GetRequiredService<ClientFleetService>(),
+            instance.Services.GetRequiredService<IFleetCompositionRepository>(), 95400001);
+        var created = CompositionEditorViewModel.ForNew(instance.Services, client);
+        created.Name = "Transition doctrine";
+
+        var saveTask = dialogs.ShowCompositionEditorAsync(created);
+        await created.SaveCommand.ExecuteAsync(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(saveTask.IsCompleted);
+        Assert.True(saveTask.Result);
+        Assert.Empty(fake.HostTabs);
+
+        var saved = Assert.Single(await client.ListAsync());
+        var detail = await client.GetAsync(saved.Id);
+        Assert.NotNull(detail);
+        var reopened = CompositionEditorViewModel.ForExisting(instance.Services, client, detail);
+        var reopenTask = dialogs.ShowCompositionEditorAsync(reopened);
+
+        Assert.Single(fake.HostTabs);
+        reopened.CancelCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(reopenTask.IsCompleted);
     }
 
     [AvaloniaFact]
