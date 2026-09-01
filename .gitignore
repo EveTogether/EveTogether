@@ -36,3 +36,4 @@ Thumbs.db
 
 # AI-assistant local settings (per machine, may contain local paths)
 .claude/settings.local.json
+graphify-out/

@@ -5,6 +5,7 @@ using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Gamelog;
 using EveUtils.Shared.Modules.Market;
 using EveUtils.Shared.Modules.Messaging.Entities;
+using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Settings;
 using EveUtils.Shared.Modules.Skills;
 using EveUtils.Shared.Modules.Implants;
@@ -25,6 +26,7 @@ public sealed class ClientDbContext(DbContextOptions<ClientDbContext> options) :
         SkillsModule.ConfigureModel(modelBuilder);             // client-only imported character skills
         ImplantsModule.ConfigureModel(modelBuilder);           // client-only imported character implants
         FittingsModule.ConfigureClientModel(modelBuilder);     // client-local fittings
+        RunsModule.ConfigureClientModel(modelBuilder);         // client-local activity runs and derived summaries
         FleetModule.ConfigureClientModel(modelBuilder);        // client-only fleets: same Shared entities + IsClientOnly
         modelBuilder.ApplyConfiguration(new LocalCharacterConfiguration()); // client-local character registry
         modelBuilder.ApplyConfiguration(new CoupledServerConfiguration());      // client-local coupled servers + trust
