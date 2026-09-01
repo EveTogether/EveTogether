@@ -92,13 +92,23 @@ public class FitBrowserTests
         Assert.Equal(4, tab.PageCount);
     }
 
+    /// <summary>Types a term and lets its round straight through. Searching waits for a quiet spell (ET-113), which
+    /// is behaviour of its own — <see cref="Search_WaitsForAQuietSpell_DropsSupersededRounds_AndLandsTheLastKeystroke"/>
+    /// covers the waiting; every other test only cares what the search comes up with.</summary>
+    private static async Task SearchAsync(FitBrowserTabViewModel tab, string term)
+    {
+        tab.Wait = static (_, _) => Task.CompletedTask;
+        tab.Search = term;
+        await tab.SearchRound;
+    }
+
     [Fact]
-    public void Search_FiltersByName_CaseInsensitive_AndResetsPage()
+    public async Task Search_FiltersByName_CaseInsensitive_AndResetsPage()
     {
         var rows = new[] { Row("Thorax PVE"), Row("Thorax PVP"), Row("Rifter Tackle"), Row("Catalyst Gank") };
         var tab = new FitBrowserTabViewModel("Local", rows) { CurrentPage = 1 };
 
-        tab.Search = "thorax";
+        await SearchAsync(tab, "thorax");
 
         Assert.Equal(2, tab.FilteredCount);
         Assert.Equal(2, tab.PagedRows.Count);
@@ -114,7 +124,7 @@ public class FitBrowserTests
     [InlineData("thorax", "Thorax Roam")]     // the hull, which here is also in the name
     [InlineData("cruiser", "Thorax Roam")]    // the hull class from the SDE group, in neither name nor tag
     [InlineData("vaelor", "Thorax Roam")]     // who put it there
-    public void Search_MatchesEverythingTheCardShows(string term, string expected)
+    public async Task Search_MatchesEverythingTheCardShows(string term, string expected)
     {
         var names = new StubNames();
         var pvp = new FitRowViewModel(Fit("Thorax Roam", 627, (1, "HiSlot0", 1)), "Vaelor Kestrane",
@@ -123,10 +133,72 @@ public class FitBrowserTests
             names, tags: "mining, isk");
         var tab = new FitBrowserTabViewModel("Local", new[] { pvp, mining }, names);
 
-        tab.Search = term;
+        await SearchAsync(tab, term);
 
         Assert.Equal(1, tab.FilteredCount);
         Assert.Equal(expected, Assert.Single(tab.PagedRows).Name);
+    }
+
+    /// <summary>
+    /// The two halves of the debounce that a still screen cannot show (ET-113). Filtering per keystroke made the
+    /// typing lag, so a keystroke now starts a round that waits for the box to go quiet; this holds every round's
+    /// wait open on purpose and checks both things that have to be true of it. One: a round that has been
+    /// superseded never reaches the page, even if its wait is released afterwards — otherwise the work merely
+    /// stacks up somewhere else. Two: the last keystroke always lands, so someone who types and stops gets their
+    /// own result and not the previous syllable's. An emptied box skips the wait entirely and shows everything
+    /// again straight away.
+    /// </summary>
+    [Fact]
+    public async Task Search_WaitsForAQuietSpell_DropsSupersededRounds_AndLandsTheLastKeystroke()
+    {
+        var rows = new[] { Row("Thorax PVE"), Row("Thorax PVP"), Row("Rifter Tackle"), Row("Catalyst Gank") };
+        var tab = new FitBrowserTabViewModel("Local", rows);
+
+        var rebuilds = 0;
+        tab.PagedRows.CollectionChanged += (_, _) => rebuilds++;
+
+        // Every round hands its wait to the test, which decides when the box has been quiet long enough.
+        var waits = new List<(TaskCompletionSource Release, CancellationToken Token)>();
+        tab.Wait = (_, token) =>
+        {
+            var release = new TaskCompletionSource();
+            token.Register(() => release.TrySetCanceled(token));
+            waits.Add((release, token));
+            return release.Task;
+        };
+
+        tab.Search = "t";
+        tab.Search = "th";
+        tab.Search = "tho";
+        tab.Search = "thor";
+
+        // The box itself keeps up — it is the filtering that waits, not the typing.
+        Assert.Equal("thor", tab.Search);
+        Assert.Equal(0, rebuilds);
+        Assert.Equal(4, tab.PagedRows.Count);   // the page has not been touched once
+
+        // The first three rounds were superseded and were stopped there and then; releasing their wait afterwards
+        // must not put a page for "t", "th" or "tho" on screen.
+        Assert.Equal(4, waits.Count);
+        Assert.All(waits.Take(3), w => Assert.True(w.Token.IsCancellationRequested));
+        foreach (var (release, _) in waits.Take(3)) release.TrySetResult();
+        Assert.Equal(0, rebuilds);
+
+        // Only the last keystroke's round is still alive, and letting it through lands that keystroke's result.
+        Assert.False(waits[3].Token.IsCancellationRequested);
+        waits[3].Release.SetResult();
+        await tab.SearchRound;
+
+        Assert.Equal(2, tab.FilteredCount);
+        Assert.Equal(2, tab.PagedRows.Count);
+        Assert.All(tab.PagedRows, r => Assert.StartsWith("Thorax", r.Name));
+
+        // Clearing the box does not wait: there is no stream of keystrokes behind it to collapse.
+        var handedOut = waits.Count;
+        tab.Search = "";
+        Assert.Equal(handedOut, waits.Count);
+        Assert.Equal(4, tab.FilteredCount);
+        Assert.Equal(4, tab.PagedRows.Count);
     }
 
     [Fact]
@@ -356,13 +428,16 @@ public class FitBrowserTests
         var browser = new FitBrowserViewModel([tab]);
         var order = () => tab.PagedRows.Select(r => r.Name).ToArray();
 
-        var rebuilt = new TaskCompletionSource();
+        // The re-order arrives on the thread the price fetch finished on, and it rebuilds the page in two steps —
+        // a Reset that empties it, then an Add per row. Waking on the Reset would let this test read the page
+        // half-built, so it counts Resets (that is what "once" means) but waits for the last Add, and hands itself
+        // back asynchronously so the rebuilding thread is finished with the collection before it looks at it.
+        var rebuilt = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var rebuilds = 0;
         tab.PagedRows.CollectionChanged += (_, e) =>
         {
-            if (e.Action is not NotifyCollectionChangedAction.Reset) return;
-            rebuilds++;
-            rebuilt.TrySetResult();
+            if (e.Action is NotifyCollectionChangedAction.Reset) rebuilds++;
+            if (rebuilds > 0 && tab.PagedRows.Count == rows.Length) rebuilt.TrySetResult();
         };
 
         browser.SetSortCommand.Execute(FitSortOrder.Price);
