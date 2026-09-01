@@ -708,12 +708,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _timer = null;
     }
 
-    private void _OnCombatObserved(int characterId, string target)
+    private void _OnCombatObserved(int characterId, string target, DateTime observedAtUtc)
     {
         if (RunState != ActivityRunState.Running)
             return;
 
-        Avalonia.Threading.Dispatcher.UIThread.Post(() => _enemyObservations?.Record(characterId, target));
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => _enemyObservations?.Record(characterId, target, observedAtUtc));
     }
 
     private void _StartEnemyObservations()

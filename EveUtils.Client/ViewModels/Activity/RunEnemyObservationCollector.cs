@@ -8,8 +8,10 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
 {
     public ObservableCollection<RunEnemyObservationViewModel> Observations { get; } = [];
 
-    public void Record(int observedCharacterId, string target) => Record(observedCharacterId, target, DateTime.UtcNow);
-
+    /// <summary><paramref name="observedAtUtc"/> is the gamelog line's own time, and there is deliberately no
+    /// overload that defaults it to "now": EVE flushes its log in chunks, so a single poll can carry several
+    /// seconds of combat, and stamping the batch with the read time would file it all at one instant. A time
+    /// nobody measured is worse than no time at all.</summary>
     public void Record(int observedCharacterId, string target, DateTime observedAtUtc)
     {
         if (observedCharacterId != characterId || typeIdResolver(target) is not int enemyTypeId)

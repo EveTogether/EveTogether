@@ -84,7 +84,10 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
 
     /// <summary>Raised when discrete metrics (bounty/location/notify) change; the UI also polls Snapshot on a timer.</summary>
     public event Action? MetricsChanged;
-    public event Action<int, string>? CombatObserved;
+    /// <summary>Character, target, and the gamelog line's OWN time — never the moment we read it, for the same
+    /// reason the hit itself is placed at that time (see <see cref="AddHitAsync"/>): EVE flushes in chunks, so one
+    /// poll can carry several seconds of combat. A subscriber that stamps "now" would file them all at one instant.</summary>
+    public event Action<int, string, DateTime>? CombatObserved;
 
     public GamelogClientService(IServiceProvider services, IEventBus eventBus, ICharacterRegistry? registry = null,
         EveClientPresenceService? presence = null)
@@ -303,7 +306,7 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
 
         var ownerId = _idByName.TryGetValue(name, out var id) ? id : (int?)null;
         if (ownerId is { } characterId)
-            CombatObserved?.Invoke(characterId, target);
+            CombatObserved?.Invoke(characterId, target, at);
 
         using (var scope = _services.CreateScope())
         {
