@@ -1,3 +1,4 @@
+using EveUtils.Client.Runs;
 using EveUtils.Client.Theming;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
@@ -134,8 +135,11 @@ public interface IDialogService
     void CloseFleetOverlay(long fleetId);
 
     /// <summary>Pops the activity window (ET-98) into its own topmost overlay. Non-modal; only one is ever open —
-    /// re-opening focuses the run already up instead of stacking a second, same rule as the two overlays above.</summary>
-    void ShowActivityWindow(ActivityWindowViewModel viewModel);
+    /// re-opening focuses the run already up instead of stacking a second, same rule as the two overlays above.
+    /// <paramref name="trigger"/> decides whether focus may be taken: a run the fleet commander started comes up
+    /// on the other members' machines without touching the keyboard (ET-105 AC-2).</summary>
+    void ShowActivityWindow(ActivityWindowViewModel viewModel,
+        RunWindowOpenTrigger trigger = RunWindowOpenTrigger.LocalUser);
 
     /// <summary>
     /// Opens the settings module: a docked tab in docked mode, a floating window otherwise — non-modal so it

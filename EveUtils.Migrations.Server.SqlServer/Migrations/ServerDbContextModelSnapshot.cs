@@ -726,9 +726,16 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<string>("FormerGroupCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("GroupCode")
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
+
+                    b.Property<bool>("IsParticipant")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsPayoutEligible")
                         .HasColumnType("bit");

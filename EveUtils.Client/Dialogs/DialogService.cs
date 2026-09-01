@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
@@ -96,22 +97,47 @@ public sealed class DialogService : IDialogService, ISingletonService
             overlay.Close();   // fires Closed → drops itself from _fleetOverlays
     }
 
-    public void ShowActivityWindow(ActivityWindowViewModel viewModel)
+    public void ShowActivityWindow(ActivityWindowViewModel viewModel,
+        RunWindowOpenTrigger trigger = RunWindowOpenTrigger.LocalUser)
     {
         if (_owner is null) return;
 
         // Only one run is ever tracked at a time (ET-98): re-opening focuses it instead of stacking a second,
-        // same rule as the DPS and fleet overlays above — and what makes ET-100's double-click AC hold.
-        if (_activityWindow is { } existing)
+        // same rule as the DPS and fleet overlays above — and what makes ET-100's double-click AC hold. Whether
+        // focus may be taken at all is RunWindowPresentation's call, never this method's (ET-105 AC-2).
+        switch (RunWindowPresentation.Decide(trigger, _activityWindow is not null))
         {
-            existing.Activate();
-            return;
-        }
+            case RunWindowActivation.LeaveAsIs:
+                return;
 
-        _activityWindow = new ActivityWindow(viewModel);
-        _activityWindow.Closed += (_, _) => _activityWindow = null;
-        _activityWindow.Show();
+            case RunWindowActivation.Activate when _activityWindow is { } existing:
+                existing.Activate();
+                return;
+
+            case RunWindowActivation.Activate:
+                _activityWindow = _Open(viewModel, showActivated: true);
+                return;
+
+            default:
+                _activityWindow = _Open(viewModel, showActivated: false);
+                return;
+        }
     }
+
+    /// <summary><c>ShowActivated</c> is Avalonia's own "put it up without taking the keyboard" — set before
+    /// <c>Show()</c>, which is the only moment it is read. No platform focus call is involved.</summary>
+    private ActivityWindow _Open(ActivityWindowViewModel viewModel, bool showActivated)
+    {
+        var window = new ActivityWindow(viewModel) { ShowActivated = showActivated };
+        window.Closed += (_, _) => _activityWindow = null;
+        window.Show();
+        return window;
+    }
+
+    /// <summary>The activity window currently up, if any — the same one <see cref="OpenPopoutCount"/> counts.
+    /// Readable so the no-focus rule (ET-105 AC-2) can be asserted on the window this service really built, rather
+    /// than on a second copy of the decision that could drift away from it.</summary>
+    public Window? ActivityWindow => _activityWindow;
 
     /// <summary>Open pop-out windows independent of the main window: floating modules + DPS overlays + fleet
     /// overlays + info cards. Used by the main window's close handler to decide whether to confirm before quitting.</summary>

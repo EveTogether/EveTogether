@@ -1,6 +1,7 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Events;
@@ -19,6 +20,7 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
     private readonly IDisposable _runStartedSubscription;
     private readonly IDisposable _runSavedSubscription;
     private readonly IDisposable _groupCodeSubscription;
+    private readonly IDisposable _discardedSubscription;
 
     public FleetRunGroupCodeCoordinator(IEventBus eventBus, IDispatcher dispatcher)
     {
@@ -26,6 +28,7 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
         _runStartedSubscription = eventBus.Subscribe<RunStartedEvent>(_OnRunStartedAsync);
         _runSavedSubscription = eventBus.Subscribe<RunSavedEvent>(_OnRunSavedAsync);
         _groupCodeSubscription = eventBus.Subscribe<FleetRunGroupCodeEvent>(_OnGroupCodeAsync);
+        _discardedSubscription = eventBus.Subscribe<FleetRunDiscardedEvent>(_OnDiscardedAsync);
     }
 
     public void Dispose()
@@ -33,6 +36,7 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
         _runStartedSubscription.Dispose();
         _runSavedSubscription.Dispose();
         _groupCodeSubscription.Dispose();
+        _discardedSubscription.Dispose();
         _reconcileGate.Dispose();
     }
 
@@ -67,6 +71,30 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// The fleet commander ended the run. Every client applies it to its own rows only — the command matches on the
+    /// group code, and the only runs in this database are this pilot's, so no machine ever writes another's data.
+    /// A member who already saved keeps their run; it is merely unlinked (ET-105 AC-1).
+    /// </summary>
+    private async Task _OnDiscardedAsync(FleetRunDiscardedEvent integrationEvent, CancellationToken cancellationToken)
+    {
+        RunGroupDiscard discard = integrationEvent.Data;
+        await _dispatcher.Send(new DiscardRunsInGroupCommand(discard.GroupCode, discard.DiscardedAtUtc),
+            cancellationToken);
+
+        lock (_gate)
+        {
+            foreach (var key in _runs
+                .Where(entry => entry.Value.FleetId == discard.FleetId
+                                && entry.Value.ActivityKind == discard.ActivityKind)
+                .Select(entry => entry.Key)
+                .ToList())
+                _runs.Remove(key);
+
+            _candidates.Remove((discard.FleetId, discard.ActivityKind));
+        }
     }
 
     private async Task _OnGroupCodeAsync(FleetRunGroupCodeEvent integrationEvent, CancellationToken cancellationToken)

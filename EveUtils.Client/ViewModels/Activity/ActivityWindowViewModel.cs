@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
@@ -11,13 +12,19 @@ using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Gamelog;
+using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Runs.Commands;
+using EveUtils.Shared.Modules.Runs.Control;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Sde.Dtos;
@@ -26,6 +33,7 @@ using EveUtils.Shared.Modules.Settings.Queries;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.Extensions.DependencyInjection;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
+using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 
 namespace EveUtils.Client.ViewModels.Activity;
 
@@ -101,6 +109,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public bool IsAbyssal => Kind == ActivityKind.Abyssal;
 
+    /// <summary>The same kind as the run store names it. Two enums, deliberately mapped rather than cast: they are
+    /// separate types and a silent reordering of either would otherwise file runs under the wrong activity.</summary>
+    public StoredActivityKind StoredKind => IsAbyssal ? StoredActivityKind.Abyssal : StoredActivityKind.Site;
+
     // ── The run, as far as this phase knows it ──────────────────────────────────────────────────────
     // Settable rather than sourced: phase 1 is the frame, and the two later phases feed these from the fleet's
     // re-based anchors and from ESI. Everything below reads honestly when they are still null.
@@ -113,9 +125,34 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(ClockHint))]
     [NotifyPropertyChangedFor(nameof(IsStartButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsStopButtonVisible))]
+    [NotifyPropertyChangedFor(nameof(IsDiscardButtonVisible))]
+    [NotifyPropertyChangedFor(nameof(IsSaveButtonVisible))]
     [NotifyPropertyChangedFor(nameof(RunOriginText))]
     [NotifyPropertyChangedFor(nameof(StartButtonText))]
     private ActivityRunState _runState;
+
+    // ── Who may steer the shared run ────────────────────────────────────────────────────────────────
+    // Re-tested on every change rather than captured at start: an FC handover mid-run moves the buttons with it
+    // (ET-105). RunControlAuthority is the only place that decides; everything here just binds to it.
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsStartButtonVisible))]
+    [NotifyPropertyChangedFor(nameof(IsStopButtonVisible))]
+    [NotifyPropertyChangedFor(nameof(IsDiscardButtonVisible))]
+    [NotifyPropertyChangedFor(nameof(IsCommandStatusShown))]
+    [NotifyPropertyChangedFor(nameof(CommandStatusText))]
+    private RunControlAuthority _authority = RunControlAuthority.From(null, null, null);
+
+    /// <summary>The run row this window is writing to, once one has been started. Null for a window that is only
+    /// showing the frame.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSaveButtonVisible))]
+    private Guid? _runId;
+
+    /// <summary>The fleet this run belongs to, or null when soloing.</summary>
+    [ObservableProperty] private long? _fleetId;
+
+    [ObservableProperty] private string? _groupCode;
 
     [ObservableProperty] private DateTime? _stoppedAtUtc;
 
@@ -262,9 +299,30 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public string HeaderTitle => IsAbyssal ? "ABYSSAL RUN" : "SITE RUN";
 
-    public bool IsStartButtonVisible => RunState != ActivityRunState.Running || !_isManualRun;
+    // Start, stop and discard steer the run for everybody in it, so all three hang off the same authority (AC-4).
+    public bool IsStartButtonVisible =>
+        Authority.CanControl && (RunState != ActivityRunState.Running || !_isManualRun);
 
-    public bool IsStopButtonVisible => RunState == ActivityRunState.Running;
+    public bool IsStopButtonVisible => Authority.CanControl && RunState == ActivityRunState.Running;
+
+    public bool IsDiscardButtonVisible => Authority.CanControl && RunState != ActivityRunState.NotStarted;
+
+    /// <summary>Saving is every member's own, never the FC's alone: each pilot commits their own part of the run.</summary>
+    public bool IsSaveButtonVisible => RunId is not null && RunState == ActivityRunState.Stopped;
+
+    /// <summary>Why the controls are absent, when they are. Silence would be indistinguishable from a bug, and an
+    /// unknown fleet boss is a state worth naming rather than an empty corner (ET-65 AC-7's rule, applied here).</summary>
+    public bool IsCommandStatusShown => !Authority.CanControl;
+
+    public string CommandStatusText => Authority.StatusText;
+
+    // ── Who was on the run ──────────────────────────────────────────────────────────────────────────
+
+    public ObservableCollection<RunParticipantViewModel> Participants { get; } = [];
+
+    /// <summary>Shown over every payout figure. The window reports an expectation, and never implies EVE's own
+    /// payout rule follows our exclusions.</summary>
+    public string PayoutExpectationLabel => RunPayoutSplit.ExpectationLabel;
 
     public string FleetStatusText => FleetMemberCount > 1
         ? IsAbyssal
@@ -492,6 +550,101 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _enemyObservations = null;
         OnPropertyChanged(nameof(EnemyObservations));
         Refresh(nowUtc);
+    }
+
+    /// <summary>
+    /// Re-test who may steer this run against the fleet boss ESI reports right now. Called whenever the roster or
+    /// the boss changes, not once at start: a handover mid-run moves the controls to the new FC and takes them off
+    /// the old one, and that is an ordinary state change (ET-105). <paramref name="fleetBossCharacterId"/> null
+    /// means ESI cannot say — the controls go away and say why, rather than appearing for everybody.
+    /// </summary>
+    public void ApplyFleetCommand(long? fleetId, int? fleetBossCharacterId, int? actingCharacterId)
+    {
+        FleetId = fleetId;
+        Authority = RunControlAuthority.From(fleetId, fleetBossCharacterId, actingCharacterId);
+    }
+
+    /// <summary>
+    /// Take a character out of the ISK split, or put them back in. Never touches their participation: they flew the
+    /// site either way and their loot stays recorded (ET-105 AC-3).
+    /// </summary>
+    public async Task<bool> SetPayoutEligibilityAsync(RunParticipantViewModel participant, bool isPayoutEligible)
+    {
+        using var scope = _services.CreateScope();
+        Result result = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+            .Send(new SetRunPayoutEligibilityCommand(participant.RunId, isPayoutEligible));
+        if (!result.IsSuccess)
+            return false;
+
+        participant.IsPayoutEligible = isPayoutEligible;
+        RecomputePayout();
+        return true;
+    }
+
+    /// <summary>Redivide the expected ISK over whoever still takes a share.</summary>
+    public void RecomputePayout() => RunPayoutSplit.Apply([.. Participants], TotalLootIsk);
+
+    /// <summary>What there is to divide, as far as the loot section knows. Null while nothing is priced — never 0,
+    /// which would read as "there was nothing" (ET-65 AC-5's rule).</summary>
+    [ObservableProperty] private decimal? _totalLootIsk;
+
+    partial void OnTotalLootIskChanged(decimal? value) => RecomputePayout();
+
+    /// <summary>
+    /// This member commits their own part of the run — every member's own button, never the FC's (ET-105). The
+    /// enemy observations are converted here: ET-106 left that seam open so the run would have one lifecycle
+    /// rather than two.
+    /// </summary>
+    [RelayCommand]
+    private async Task SaveRunAsync()
+    {
+        if (RunId is not { } runId)
+            return;
+
+        DateTime nowUtc = DateTime.UtcNow;
+        using var scope = _services.CreateScope();
+        Result result = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new SaveRunCommand(
+            runId, StoppedAtUtc ?? nowUtc, nowUtc, [], [], _enemyObservations?.ToInputs() ?? [], []));
+        if (!result.IsSuccess)
+            _services.GetService<IToastService>()?.Show("Run not saved",
+                result.Messages.FirstOrDefault()?.Text ?? "Could not save this run.", ToastKind.Error);
+    }
+
+    /// <summary>
+    /// End the shared run for everyone in it. Confirmed first, because it reaches every other member's machine —
+    /// and it still takes nothing from them: a member who already saved keeps their run, unlinked from the group
+    /// (ET-105 AC-1).
+    /// </summary>
+    [RelayCommand]
+    private async Task DiscardRunAsync()
+    {
+        if (!Authority.CanControl || RunId is not { } runId)
+            return;
+
+        var dialogs = _services.GetRequiredService<IDialogService>();
+        if (!await dialogs.ConfirmAsync("Discard this run?",
+                "This ends the run for every member of the fleet. Nobody loses what they already saved — their run "
+                + "stays, on its own, no longer part of this group.", "Discard"))
+            return;
+
+        DateTime nowUtc = DateTime.UtcNow;
+        using var scope = _services.CreateScope();
+        var dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
+        Result discarded = await dispatcher.Send(new DiscardRunCommand(runId, nowUtc));
+        if (!discarded.IsSuccess)
+        {
+            _services.GetService<IToastService>()?.Show("Run not discarded",
+                discarded.Messages.FirstOrDefault()?.Text ?? "Could not discard this run.", ToastKind.Error);
+            return;
+        }
+
+        if (FleetId is { } fleetId && GroupCode is { } groupCode)
+            await _services.GetRequiredService<IEventBus>().PublishAsync(
+                new FleetRunDiscardedEvent(new RunGroupDiscard(fleetId, StoredKind, groupCode, nowUtc)),
+                EventTarget.Both);
+
+        StopRun(nowUtc);
+        GroupCode = null;
     }
 
     public void ApplyFleetEnvelope(IReadOnlyList<MetricSample> samples, DateTime receivedUtc)

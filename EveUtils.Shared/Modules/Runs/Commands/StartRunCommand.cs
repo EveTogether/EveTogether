@@ -14,6 +14,7 @@ public sealed record StartRunCommand(
     string? GroupCode = null,
     string? Signature = null,
     RunRole Role = RunRole.Member,
+    bool IsParticipant = true,
     bool IsPayoutEligible = true,
     string? FitContentHash = null,
     string? FitNameSnapshot = null,
