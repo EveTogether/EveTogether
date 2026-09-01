@@ -73,9 +73,9 @@ public sealed class RunWireData
         BountyEntries = run.BountyEntries.Select(entry => new RunBountyEntryInput { OccurredAtUtc = entry.OccurredAtUtc, Isk = entry.Isk }).ToList(),
         EnemyObservations = run.EnemyObservations.Select(observation => new RunEnemyObservationInput
         {
+            Count = observation.Count,
             EnemyTypeId = observation.EnemyTypeId,
             EnemyName = observation.EnemyName,
-            Direction = observation.Direction,
             FirstObservedAtUtc = observation.FirstObservedAtUtc,
             LastObservedAtUtc = observation.LastObservedAtUtc
         }).ToList(),
@@ -145,9 +145,9 @@ public sealed class RunWireData
             {
                 Id = Guid.CreateVersion7(),
                 RunId = run.Id,
+                Count = observation.Count,
                 EnemyTypeId = observation.EnemyTypeId,
                 EnemyName = observation.EnemyName,
-                Direction = observation.Direction,
                 FirstObservedAtUtc = observation.FirstObservedAtUtc,
                 LastObservedAtUtc = observation.LastObservedAtUtc
             });

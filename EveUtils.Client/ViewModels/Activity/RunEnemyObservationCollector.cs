@@ -1,12 +1,15 @@
 using System.Collections.ObjectModel;
 using EveUtils.Shared.Modules.Runs.Dtos;
-using EveUtils.Shared.Modules.Runs.Enums;
 
 namespace EveUtils.Client.ViewModels.Activity;
 
 public sealed class RunEnemyObservationCollector(int characterId, Func<string, int?> typeIdResolver)
 {
     public ObservableCollection<RunEnemyObservationViewModel> Observations { get; } = [];
+
+    /// <summary>Raised when a row appears or its count changes — a header summary is only true if it is recomputed
+    /// then, and nothing else tells the window a count was typed.</summary>
+    public event Action? Changed;
 
     /// <summary>
     /// Record one observed enemy.
@@ -16,25 +19,25 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
     /// and stamping the batch with the read time would file it all at one instant. A time nobody measured is worse
     /// than no time at all.
     ///
-    /// <paramref name="direction"/> must likewise come from the log line rather than be assumed. An enemy is keyed
-    /// on <em>type and direction together</em>, so a rat you shot and a rat that shot you are two rows, each with
-    /// its own first/last window. Folding them into one row would have to drop or invent one of the two directions,
-    /// and the later one would silently overwrite the earlier.
+    /// An enemy is keyed on <em>type alone</em>. The question this list answers is which kind of enemy and how many;
+    /// which way the damage went is not part of it, so a rat you shot and a rat that shot you are one row whose
+    /// window spans both sightings (ET-115). Nothing is added up here either: the count stays the player's.
     /// </summary>
-    public void Record(int observedCharacterId, string target, DateTime observedAtUtc,
-        EnemyObservationDirection direction)
+    public void Record(int observedCharacterId, string target, DateTime observedAtUtc)
     {
         if (observedCharacterId != characterId || typeIdResolver(target) is not int enemyTypeId)
             return;
 
-        if (Observations.FirstOrDefault(observation =>
-                observation.EnemyTypeId == enemyTypeId && observation.Direction == direction) is { } seen)
+        if (Observations.FirstOrDefault(observation => observation.EnemyTypeId == enemyTypeId) is { } seen)
         {
             seen.Observe(observedAtUtc);
             return;
         }
 
-        Observations.Add(new RunEnemyObservationViewModel(enemyTypeId, target, observedAtUtc, direction));
+        var added = new RunEnemyObservationViewModel(enemyTypeId, target, observedAtUtc);
+        added.PropertyChanged += (_, _) => Changed?.Invoke();
+        Observations.Add(added);
+        Changed?.Invoke();
     }
 
     /// <summary>The seam ET-106 left to ET-105: what the window watched, in the shape <c>SaveRunCommand</c> stores.</summary>
@@ -45,7 +48,6 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
             Count = observation.Count,
             EnemyTypeId = observation.EnemyTypeId,
             EnemyName = observation.EnemyName,
-            Direction = observation.Direction,
             FirstObservedAtUtc = observation.FirstObservedAtUtc,
             LastObservedAtUtc = observation.LastObservedAtUtc
         })

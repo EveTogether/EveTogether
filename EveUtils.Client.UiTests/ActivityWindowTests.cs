@@ -54,7 +54,7 @@ public class ActivityWindowTests
     {
         var model = new ActivityWindowViewModel(kind, _Unused());
 
-        Assert.Equal(5, model.Sections.Count);
+        Assert.Equal(6, model.Sections.Count);
         foreach (var section in model.Sections)
             Assert.False(string.IsNullOrWhiteSpace(section.HeaderSummary),
                 $"{section.Title} is silent with its body shut on an empty {kind} run");

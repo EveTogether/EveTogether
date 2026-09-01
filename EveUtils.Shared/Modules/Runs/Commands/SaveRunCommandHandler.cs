@@ -57,9 +57,9 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
             {
                 Id = Guid.CreateVersion7(),
                 RunId = run.Id,
+                Count = observation.Count,
                 EnemyTypeId = observation.EnemyTypeId,
                 EnemyName = observation.EnemyName,
-                Direction = observation.Direction,
                 FirstObservedAtUtc = observation.FirstObservedAtUtc,
                 LastObservedAtUtc = observation.LastObservedAtUtc
             });

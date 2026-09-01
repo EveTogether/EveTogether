@@ -26,7 +26,7 @@
              unlike ChromedWindow — does not bind its own brushes to resource observables, so DynamicResource on the
              faction-swappable keys is the only thing that re-tints this window when the faction changes. -->
         <DockPanel.Resources>
-            <!-- One header for all five sections: caret, fixed-width title, and the summary hard right. The summary
+            <!-- One header for all six sections: caret, fixed-width title, and the summary hard right. The summary
                  is why a folded section is still worth having on screen. -->
             <DataTemplate x:Key="SectionHeader" DataType="va:ActivitySection">
                 <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
@@ -271,7 +271,7 @@
             </StackPanel>
         </Border>
 
-        <!-- ══ The five sections ══ each says something with its body shut, so folding the window down never costs
+        <!-- ══ The six sections ══ each says something with its body shut, so folding the window down never costs
              the reader the answer — only the detail behind it. -->
         <ScrollViewer HorizontalScrollBarVisibility="Disabled">
             <StackPanel>
@@ -336,18 +336,6 @@
                             </ItemsControl>
                         </Grid>
 
-                        <ItemsControl ItemsSource="{Binding EnemyObservations}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="va:RunEnemyObservationViewModel">
-                                    <Grid Classes="kv" ColumnDefinitions="*,Auto">
-                                        <TextBlock Text="{Binding EnemyName}"/>
-                                        <NumericUpDown Grid.Column="1" Width="72" Minimum="0" Maximum="999" Increment="1"
-                                                       FormatString="0" Value="{Binding Count, Mode=TwoWay}"/>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
                         <!-- ── The manual entry ── the only field in this window the user fills in, because nothing
                              can detect it. Answered, it folds behind one line: twelve buttons standing open under a
                              question nobody is asking any more would be the loudest thing in the section. -->
@@ -400,6 +388,28 @@
                         </StackPanel>
 
                     </StackPanel>
+                </Border>
+
+                <!-- Its own section, folded by default: a site's worth of rats inside ACTIVITY pushed FIT, FLEET,
+                     BOUNTY and LOOT under the fold. The count is typed after the fight, so the rows outlive STOP. -->
+                <ToggleButton Classes="section" Content="{Binding Enemies}"
+                              IsChecked="{Binding Enemies.IsExpanded, Mode=TwoWay}"/>
+                <Border Classes="sectionbody" IsVisible="{Binding Enemies.IsExpanded}">
+                    <ItemsControl x:Name="EnemyList" ItemsSource="{Binding EnemyObservations}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="va:RunEnemyObservationViewModel">
+                                <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                    <TextBlock Text="{Binding EnemyName}" VerticalAlignment="Center"/>
+                                    <!-- Seen is not counted, and only a counted row is saved (ET-106) — the row has
+                                         to say which of the two it is. -->
+                                    <TextBlock Grid.Column="1" Classes="hint" Margin="0" VerticalAlignment="Center"
+                                               Text="{Binding CountStateText}"/>
+                                    <NumericUpDown Grid.Column="2" Width="72" Minimum="0" Maximum="999" Increment="1"
+                                                   FormatString="0" Value="{Binding Count, Mode=TwoWay}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </Border>
 
                 <ToggleButton Classes="section" Content="{Binding Fit}"

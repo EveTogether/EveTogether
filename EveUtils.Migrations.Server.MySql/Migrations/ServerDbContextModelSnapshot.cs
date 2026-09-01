@@ -814,7 +814,7 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("char(36)");
 
-                    b.Property<int>("Direction")
+                    b.Property<int>("Count")
                         .HasColumnType("int");
 
                     b.Property<string>("EnemyName")
