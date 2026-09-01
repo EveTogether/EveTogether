@@ -37,6 +37,17 @@ service Fittings {
   rpc DeleteSharedFit (DeleteSharedFitRequest) returns (DeleteSharedFitReply);
 }
 
+// --- Run synchronization (ET-104): synchronous accept/deny; the payload is a source run only. ---
+service Runs {
+  rpc PushRun (PushRunRequest) returns (RunActionReply);
+  rpc PullRuns (PullRunsRequest) returns (PullRunsReply);
+}
+
+message PushRunRequest { string payload_json = 1; }
+message PullRunsRequest { repeated string group_codes = 1; string since_utc = 2; }
+message RunActionReply { bool accepted = 1; string message = 2; string last_pushed_at_utc = 3; }
+message PullRunsReply { bool accepted = 1; string message = 2; repeated string payload_json = 3; }
+
 message DeleteSharedFitRequest { int32 id = 1; }
 message DeleteSharedFitReply { bool accepted = 1; string message = 2; }
 

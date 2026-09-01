@@ -4,6 +4,7 @@ using EveUtils.Shared.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace EveUtils.Migrations.Server.MySql.Migrations
 {
     [DbContext(typeof(ServerDbContext))]
-    partial class ServerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260901154905_AddRunSyncStorage")]
+    partial class AddRunSyncStorage
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -842,13 +845,6 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
 
                     b.Property<DateTime>("CapturedAtUtc")
                         .HasColumnType("datetime(6)");
-
-                    b.Property<string>("ContentHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
-
-                    b.Property<bool>("IsExcluded")
-                        .HasColumnType("tinyint(1)");
 
                     b.Property<Guid>("RunId")
                         .HasColumnType("char(36)");

@@ -80,6 +80,8 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
                 .SetProperty(candidate => candidate.State, RunState.Saved)
                 .SetProperty(candidate => candidate.StoppedAtUtc, command.StoppedAtUtc)
                 .SetProperty(candidate => candidate.SavedAtUtc, command.SavedAtUtc)
+                .SetProperty(candidate => candidate.SyncState,
+                    candidate => candidate.SyncState == RunSyncState.Local ? RunSyncState.Local : RunSyncState.Pending)
                 .SetProperty(candidate => candidate.Revision, candidate => candidate.Revision + 1), cancellationToken);
         if (savedRuns == 0)
             return Result.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,

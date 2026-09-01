@@ -11,7 +11,7 @@ namespace EveUtils.Server.Tests;
 /// creates. Returns <see cref="ServerDbContext"/> typed as <see cref="SharedDbContext"/> for the Shared repositories
 /// that depend on <c>IDbContextFactory&lt;SharedDbContext&gt;</c>.
 /// </summary>
-internal sealed class SqliteServerDbContextFactory : IDbContextFactory<SharedDbContext>, IDisposable
+internal sealed class SqliteServerDbContextFactory : IDbContextFactory<SharedDbContext>, IDbContextFactory<ServerDbContext>, IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly DbContextOptions<ServerDbContext> _options;
@@ -29,6 +29,8 @@ internal sealed class SqliteServerDbContextFactory : IDbContextFactory<SharedDbC
     }
 
     public SharedDbContext CreateDbContext() => new ServerDbContext(_options);
+
+    ServerDbContext IDbContextFactory<ServerDbContext>.CreateDbContext() => new ServerDbContext(_options);
 
     public void Dispose() => _connection.Dispose();
 }

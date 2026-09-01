@@ -5,6 +5,7 @@ using EveUtils.Shared.Modules.Fleet;
 using EveUtils.Shared.Modules.Gamelog;
 using EveUtils.Shared.Modules.Messaging;
 using EveUtils.Shared.Modules.Permissions;
+using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.ServerAuth;
 using EveUtils.Shared.Modules.Sync;
 using Microsoft.EntityFrameworkCore;
@@ -26,5 +27,6 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options) :
         FleetModule.ConfigureModel(modelBuilder);            // server-only: fleets/wings/squads/members/invites
         MessagingModule.ConfigureModel(modelBuilder);        // server-only: internal mail/invite queue
         BackupModule.ConfigureModel(modelBuilder);           // server-only: backup download audit
+        RunsModule.ConfigureServerModel(modelBuilder);       // server stores source runs, never ActivitySummary
     }
 }
