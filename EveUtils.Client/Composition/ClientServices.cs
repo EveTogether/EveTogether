@@ -15,6 +15,7 @@ using EveUtils.Shared.App;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Runtime;
 using EveUtils.Shared.Modules.Fittings;
+using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Cqrs.Permissions;
@@ -147,6 +148,7 @@ public static class ClientServices
         services.AddSingleton<ICharacterRegistry>(sp =>
             new EfCharacterRegistry(sp.GetRequiredService<IDbContextFactory<SharedDbContext>>())); // SQLite-backed
         services.AddFittingsModule();    // fittings import/push + ESI client + scope catalog
+        services.AddRunsModule();
         services.AddModuleEsiScopes(SkillsScopeCatalog.Catalog); // esi-skills read_skills + read_skillqueue
         services.AddModuleEsiScopes(ImplantsScopeCatalog.Catalog); // esi-clones read_implants
         services.AddModuleEsiScopes(FleetsScopeCatalog.Catalog); // esi-fleets read/write (opt-in, Q1) for in-game fleet coupling
