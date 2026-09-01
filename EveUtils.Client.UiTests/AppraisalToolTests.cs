@@ -612,25 +612,25 @@ public sealed class AppraisalToolTests(ITestOutputHelper output)
 
         Assert.True(byHeader["NAME"] >= 180, $"NAME bottomed out at {byHeader["NAME"]:0}px, not its 180px minimum");
         Assert.Equal(90, byHeader["QTY"]);
-        Assert.Equal(130, byHeader["PRICE EACH"]);
-        Assert.Equal(130, byHeader["TOTAL"]);
+        Assert.Equal(160, byHeader["PRICE EACH"]);
+        Assert.Equal(170, byHeader["TOTAL"]);
 
-        // Below the columns' combined minimum (180+90+130+130=530) the grid has to give way somewhere, and it must
+        // Below the columns' combined minimum (180+90+160+170=600) the grid has to give way somewhere, and it must
         // be the scrollbar, not one of the columns just pinned above (ET-90's "prefer horizontal scroll" — confirmed
         // by hand against the renders saved above, where the DataGrid's own horizontal scrollbar sits at the bottom
         // of the grid's row area rather than snug under the last row).
         var hScroll = grid.GetVisualDescendants().OfType<ScrollBar>().Single(bar => bar.Orientation == Orientation.Horizontal);
-        var shortfall = 180 + 90 + 130 + 130 - grid.Bounds.Width;
+        var shortfall = 180 + 90 + 160 + 170 - grid.Bounds.Width;
         if (shortfall > 0)
             Assert.True(hScroll.Maximum > 0, $"the grid was {shortfall:0}px short but its scrollbar reports Maximum={hScroll.Maximum}");
         else
             Assert.Equal(0, hScroll.Maximum);
 
         // Bounds, not text: a squeezed TextBlock keeps its full Text and renders an ellipsis rather than vanishing.
-        // The DataGrid cell's own padding costs the TextBlock a fixed ~3px versus its DesiredSize even with the
-        // column at its full pinned width and room to spare (confirmed identical at 760/900/1100, and against the
-        // saved renders above, which show the figure whole) — a real squeeze is an order of magnitude larger, as
-        // the pre-fix measurements were (TOTAL down to 36px against a >100px desired).
+        // This assertion is the reason the money columns were re-measured in ET-110: it was written and calibrated
+        // while the headless app rendered in the platform's default face instead of Inter, and under Inter the same
+        // billion-ISK total wanted 119px in a cell that handed it 106 — so the figure was being clipped on screen
+        // while this stayed green. The columns are pinned against measured Inter widths now.
         var totalCell = grid.GetVisualDescendants().OfType<TextBlock>()
             .Single(block => block.Text == tritanium.TotalDisplay);
         Assert.True(totalCell.Bounds.Width >= totalCell.DesiredSize.Width - 5,

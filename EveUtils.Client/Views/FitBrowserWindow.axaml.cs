@@ -1,8 +1,10 @@
 using System;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.ViewModels.FitBrowser;
 
@@ -34,6 +36,28 @@ public partial class FitBrowserWindow : ChromedWindow, IHostableModuleWindow
     {
         if (DataContext is FitBrowserViewModel vm && vm.SelectedTab?.SelectedRow is { } row)
             vm.OpenDetailCommand.Execute(row);
+    }
+
+    /// <summary>Opens a card's fit. A card is one thing that opens one window, so a single click does it — the
+    /// table keeps its double-click, where a click is how you select a row. Clicks that started inside the card's
+    /// own buttons are left alone: the export and manage menus must not open the fit behind them.</summary>
+    private void OnCardTapped(object? sender, TappedEventArgs e)
+    {
+        if (e.Source is Visual source && source.FindAncestorOfType<Button>(includeSelf: true) is not null) return;
+
+        if (sender is Control { DataContext: FitRowViewModel row } && DataContext is FitBrowserViewModel vm)
+        {
+            if (vm.SelectedTab is { } tab) tab.SelectedRow = row;
+            vm.OpenDetailCommand.Execute(row);
+        }
+    }
+
+    /// <summary>Loads the equipment icons for a card's popover the first time the cursor enters that card — a card
+    /// nobody hovers fetches no module images at all.</summary>
+    private void OnCardPointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control { DataContext: FitRowViewModel row })
+            _ = row.LoadPopoverIconsAsync();
     }
 
     /// <summary>Loads a rack's per-module icons the first time the cursor enters its "x modules" cell, so the tooltip

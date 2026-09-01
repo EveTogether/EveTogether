@@ -27,6 +27,11 @@ public partial class FitBrowserViewModel : ObservableObject, IRefreshableModule
     private readonly Func<Task>? _importText;
     private readonly Func<Task>? _importEsfLink;
     private readonly Func<Task>? _refresh;
+    private readonly Func<FitBrowserLayout, Task>? _saveLayout;
+    private bool _layoutChosen;
+
+    /// <summary>The setting the chosen density is remembered under.</summary>
+    public const string LayoutSettingKey = "ui.fit-browser.layout";
 
     public FitBrowserViewModel(
         IEnumerable<FitBrowserTabViewModel> tabs,
@@ -34,15 +39,49 @@ public partial class FitBrowserViewModel : ObservableObject, IRefreshableModule
         Func<Task>? importEsi = null,
         Func<Task>? importText = null,
         Func<Task>? importEsfLink = null,
-        Func<Task>? refresh = null)
+        Func<Task>? refresh = null,
+        Func<Task<FitBrowserLayout?>>? loadLayout = null,
+        Func<FitBrowserLayout, Task>? saveLayout = null)
     {
         _openDetail = openDetail;
         _importEsi = importEsi;
         _importText = importText;
         _importEsfLink = importEsfLink;
         _refresh = refresh;
+        _saveLayout = saveLayout;
         foreach (var tab in tabs) Tabs.Add(tab);
         SelectedTab = Tabs.FirstOrDefault();
+        if (loadLayout is not null) _ = RestoreLayoutAsync(loadLayout);
+    }
+
+    /// <summary>How the fits are drawn. Cards by default — the hull render is what a fit is recognised by; the
+    /// table is a click away for sorting a column or reading prices side by side.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsCardLayout))]
+    [NotifyPropertyChangedFor(nameof(IsListLayout))]
+    private FitBrowserLayout _layout = FitBrowserLayout.Cards;
+
+    public bool IsCardLayout => Layout is FitBrowserLayout.Cards;
+    public bool IsListLayout => Layout is FitBrowserLayout.List;
+
+    /// <summary>Switch the density and remember it for the next session.</summary>
+    [RelayCommand]
+    private void SetLayout(FitBrowserLayout layout)
+    {
+        _layoutChosen = true;
+        if (layout == Layout) return;
+
+        Layout = layout;
+        if (_saveLayout is not null) _ = _saveLayout(layout);
+    }
+
+    /// <summary>Restores the remembered density. It lands asynchronously, so a click that beat it wins — restoring
+    /// must never overwrite the choice the user just made with the value that choice replaced (same rule as
+    /// <see cref="FleetMetricsViewModel"/>'s).</summary>
+    private async Task RestoreLayoutAsync(Func<Task<FitBrowserLayout?>> loadLayout)
+    {
+        var stored = await loadLayout();
+        if (stored is { } layout && !_layoutChosen) Layout = layout;
     }
 
     /// <summary>

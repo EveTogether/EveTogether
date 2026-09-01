@@ -179,20 +179,31 @@
                                      scroll horizontally instead when the sum of minimums does not fit. It matters
                                      more than it did pre-ET-90: right-aligned (below), a squeeze eats the leading
                                      digits first, and a total that loses its front reads as a much smaller number,
-                                     not as an obviously-cut-off one. -->
+                                     not as an obviously-cut-off one.
+
+                                     The pinned widths are measured against the font the app actually renders in.
+                                     They used to be 130/130, set when the headless renders came out in the
+                                     platform's default face rather than Inter (ET-110 fixed that in TestAppBuilder):
+                                     in Inter a cell of 130 hands its TextBlock 106 while a billion-ISK total wants
+                                     119, so the figure really was being clipped on screen while the test that
+                                     guarded it stayed green. Measured at FontSize 11 in Inter, the text alone is
+                                     85px for a billion, 97px for a hundred billion and 105px for a trillion, and
+                                     the DataGrid cell's own chrome costs another 24. 160 and 170 hold a hundred
+                                     billion each and a trillion respectively; the sum of the minimums is 600
+                                     against the window's own 760, so nothing starts scrolling that did not. -->
                                 <DataGridTextColumn Binding="{Binding QuantityDisplay}" Width="90" MinWidth="90"
                                                     SortMemberPath="Quantity" CellStyleClasses="money">
                                     <DataGridTextColumn.Header>
                                         <TextBlock Text="QTY" HorizontalAlignment="Right"/>
                                     </DataGridTextColumn.Header>
                                 </DataGridTextColumn>
-                                <DataGridTextColumn Binding="{Binding UnitPriceDisplay}" Width="130" MinWidth="130"
+                                <DataGridTextColumn Binding="{Binding UnitPriceDisplay}" Width="160" MinWidth="160"
                                                     SortMemberPath="UnitPrice" CellStyleClasses="money">
                                     <DataGridTextColumn.Header>
                                         <TextBlock Text="PRICE EACH" HorizontalAlignment="Right"/>
                                     </DataGridTextColumn.Header>
                                 </DataGridTextColumn>
-                                <DataGridTextColumn Binding="{Binding TotalDisplay}" Width="130" MinWidth="130"
+                                <DataGridTextColumn Binding="{Binding TotalDisplay}" Width="170" MinWidth="170"
                                                     SortMemberPath="Total" CellStyleClasses="money">
                                     <DataGridTextColumn.Header>
                                         <TextBlock Text="TOTAL" HorizontalAlignment="Right"/>
