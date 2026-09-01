@@ -169,6 +169,9 @@ public sealed class RemoteBusConnectionManager(
         if (list.Contains(ServerConnectionState.Connected)) return ServerConnectionState.Connected;
         if (list.Contains(ServerConnectionState.Connecting)) return ServerConnectionState.Connecting;
         if (list.Contains(ServerConnectionState.Reconnecting)) return ServerConnectionState.Reconnecting;
+        // Ahead of SessionExpired: a refused certificate applies to the whole server rather than to one character's
+        // pairing, and re-pairing is pointless until the user has decided the new certificate is the server's.
+        if (list.Contains(ServerConnectionState.CertificateRejected)) return ServerConnectionState.CertificateRejected;
         if (list.Contains(ServerConnectionState.SessionExpired)) return ServerConnectionState.SessionExpired;
         return ServerConnectionState.Disconnected;
     }

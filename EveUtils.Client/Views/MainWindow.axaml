@@ -105,6 +105,18 @@
             </StackPanel>
         </Border>
 
+        <!-- ── Refused server certificate (ET-95) ── The reconnect loop stops on this instead of retrying, so without
+             the banner the link would simply go quiet. It carries the two fingerprints because deciding whether the
+             certificate legitimately changed is the user's call and nothing else can make it for them. ── -->
+        <Border DockPanel.Dock="Top" IsVisible="{Binding IsServerCertificateAlert}" Background="#33CC4444"
+                BorderBrush="{StaticResource RedBrush}" BorderThickness="0,0,0,1" Padding="14,8">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <mi:MaterialIcon Classes="icon-lg" Kind="ShieldAlertOutline" Foreground="{StaticResource RedBrush}"/>
+                <SelectableTextBlock Text="{Binding ServerCertificateAlertMessage}" Foreground="{StaticResource TextBrightBrush}"
+                                     FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
         <!-- ── Update-ready banner (ET-32) ── A downloaded package that is never applied leaves the app running the
              old build forever, so this stays put until the user restarts or dismisses it — unlike the offer toast,
              which only has to carry news. ── -->

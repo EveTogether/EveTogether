@@ -138,6 +138,12 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     [ObservableProperty] private bool _isServerPairingAlert;
     [ObservableProperty] private string _serverPairingAlertMessage = "";
 
+    // And again for a server whose TLS certificate no longer matches its pin (ET-95). Its own slot rather than a
+    // second reason for the one above: this one carries the fingerprints the user has to compare, and the two can
+    // stand at once (one server refused, another lapsed) without either message swallowing the other.
+    [ObservableProperty] private bool _isServerCertificateAlert;
+    [ObservableProperty] private string _serverCertificateAlertMessage = "";
+
     private static readonly IBrush OnlineStatusBrush = new SolidColorBrush(Color.Parse("#FF6FCF97"));
     private static readonly IBrush VipStatusBrush = new SolidColorBrush(Color.Parse("#FFE0B341"));
     private static readonly IBrush OfflineStatusBrush = new SolidColorBrush(Color.Parse("#FFCC4444"));
@@ -843,12 +849,21 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         RefreshServerPairingAlert();
     }
 
-    /// <summary>Re-derives the lapsed-pairing banner from the links as they now stand. Called on every state change
-    /// and after the character list is rebuilt, so the banner appears without waiting for a state change to happen to
-    /// fire, and clears itself the moment the pairing is good again.</summary>
-    public void RefreshServerPairingAlert() =>
+    /// <summary>Re-derives both server banners — a lapsed pairing and a refused certificate — from the links as they
+    /// now stand. Called on every state change and after the character list is rebuilt, so a banner appears without
+    /// waiting for a state change to happen to fire, and clears itself the moment the link is good again.</summary>
+    public void RefreshServerPairingAlert()
+    {
+        var links = Characters.SelectMany(c => c.ServerLinks).ToList();
+
         (IsServerPairingAlert, ServerPairingAlertMessage) = ServerPairingAlert.For(
-            Characters.SelectMany(c => c.ServerLinks).Select(l => (l.DisplayName, l.State)));
+            links.Select(l => (l.DisplayName, l.State)));
+
+        (IsServerCertificateAlert, ServerCertificateAlertMessage) = ServerCertificateAlert.For(
+            links.Where(l => l.State is ServerConnectionState.CertificateRejected)
+                 .Select(l => new ServerCertificateAlert.RejectedCertificate(
+                     l.DisplayName, GetServerFingerprint(l.Address), GetPresentedServerFingerprint(l.Address))));
+    }
 
     // Lazy-load a server tab the first time it is shown.
     partial void OnSelectedFittingsTabChanged(FittingsTabViewModel? value)
@@ -1277,6 +1292,11 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// <summary>The pinned TLS cert fingerprint for a server, shown in the trust dialog.</summary>
     public string? GetServerFingerprint(string serverAddress) =>
         _services?.GetRequiredService<IServerTrustStore>().GetFingerprint(serverAddress);
+
+    /// <summary>The fingerprint that server last presented, whether it matched the pin or not — the second half of
+    /// the comparison the certificate banner asks the user to make (ET-95).</summary>
+    private string? GetPresentedServerFingerprint(string serverAddress) =>
+        _services?.GetRequiredService<GrpcChannelFactory>().PresentedFingerprint(serverAddress);
 
     /// <summary>Show the server info/trust dialog for a coupled-server link. Returns true if the
     /// user pressed Decouple inside it.</summary>

@@ -27,11 +27,12 @@ public partial class ServerLinkViewModel : ObservableObject
 
     public string StatusLabel => State switch
     {
-        ServerConnectionState.Connected      => "connected",
-        ServerConnectionState.Connecting     => "connecting…",
-        ServerConnectionState.Reconnecting   => "reconnecting…",
-        ServerConnectionState.SessionExpired => "session expired — re-pair",
-        _                                    => "disconnected"
+        ServerConnectionState.Connected           => "connected",
+        ServerConnectionState.Connecting          => "connecting…",
+        ServerConnectionState.Reconnecting        => "reconnecting…",
+        ServerConnectionState.SessionExpired      => "session expired — re-pair",
+        ServerConnectionState.CertificateRejected => "certificate changed — check and re-pair",
+        _                                         => "disconnected"
     };
 
     /// <summary>Amber chip: the link is not healthy, but nothing the user has to act on — it is dropped or coming
@@ -39,19 +40,23 @@ public partial class ServerLinkViewModel : ObservableObject
     public bool HasIssue => State is ServerConnectionState.Reconnecting
                                   or ServerConnectionState.Disconnected;
 
-    /// <summary>Red chip: the pairing itself is no longer valid and only the user can fix it (re-pair). Shown as soon
-    /// as the app knows — the 30s heartbeat finds an access token the server refuses and cannot silently refresh
-    /// (ET-77) — rather than leaving the user to discover it on a save that comes back "Not authenticated".</summary>
-    public bool HasExpired => State is ServerConnectionState.SessionExpired;
+    /// <summary>Red chip: the coupling is no longer usable and only the user can fix it. Either the pairing itself
+    /// lapsed — the 30s heartbeat finds an access token the server refuses and cannot silently refresh (ET-77) —
+    /// or the server now presents a certificate the pin refuses (ET-95). Both stop the reconnect loop, so the chip is
+    /// the only thing on the card that still says anything about that server.</summary>
+    public bool HasExpired => State is ServerConnectionState.SessionExpired
+                                    or ServerConnectionState.CertificateRejected;
 
     /// <summary>The chip's icon for the character card: a cloud when healthy, a struck-through cloud when the pairing
     /// has lapsed, a warning on any other issue. These were emoji in the label text (☁️ / ⚠️), which Windows draws in
     /// full colour out of a separate font — two bright pictograms beside 9.5px grey text (ET-74).</summary>
     public MaterialIconKind ChipIcon => State switch
     {
-        ServerConnectionState.SessionExpired => MaterialIconKind.CloudOffOutline,
-        _ when HasIssue                      => MaterialIconKind.AlertOutline,
-        _                                    => MaterialIconKind.CloudOutline
+        ServerConnectionState.SessionExpired      => MaterialIconKind.CloudOffOutline,
+        // A cert that no longer matches is a trust question, not an expiry — the shield says which of the two it is.
+        ServerConnectionState.CertificateRejected => MaterialIconKind.ShieldAlertOutline,
+        _ when HasIssue                           => MaterialIconKind.AlertOutline,
+        _                                         => MaterialIconKind.CloudOutline
     };
 
     /// <summary>Tooltip shown when hovering the per-server icon: server name + live status.</summary>

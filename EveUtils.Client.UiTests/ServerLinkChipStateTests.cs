@@ -27,6 +27,19 @@ public class ServerLinkChipStateTests
         Assert.Contains("re-pair", link.LinkTooltip);
     }
 
+    [Fact]
+    public void CertificateRejected_IsRed_AndSaysWhichOfTheTwoProblemsItIs()
+    {
+        // Also permanent, also the user's to fix, but a different question: an expired pairing just needs coupling
+        // again, a changed certificate needs deciding whether to trust it at all first (ET-95).
+        var link = Link(ServerConnectionState.CertificateRejected);
+
+        Assert.True(link.HasExpired);
+        Assert.False(link.HasIssue);
+        Assert.Equal(MaterialIconKind.ShieldAlertOutline, link.ChipIcon);
+        Assert.Contains("certificate", link.LinkTooltip);
+    }
+
     [Theory]
     [InlineData(ServerConnectionState.Reconnecting)]
     [InlineData(ServerConnectionState.Disconnected)]
