@@ -6,6 +6,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        xmlns:sys="using:System"
         mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="560"
         x:Class="EveUtils.Client.Views.FleetMetricsWindow"
         x:DataType="vm:FleetMetricsViewModel"
@@ -15,6 +16,16 @@
         Title="Fleet metrics">
 
     <DockPanel Margin="14">
+
+        <!-- On the CONTENT for the same reason the styles below are: the docked tab is handed this DockPanel, and a
+             resource left on the window would not travel with it. -->
+        <DockPanel.Resources>
+            <!-- The narrowest a grid card may get. Measured, not chosen freely: at 318 the default 720-wide window
+                 still fits two cards per row and the graph below keeps roughly the list graph's proportions instead
+                 of a flattened band. A MINIMUM, not a size — the row divides whatever is left over these columns
+                 (see FillGridPanel), so a card is anywhere from 318 to just under twice that. -->
+            <sys:Double x:Key="FleetMetricsCardMinWidth">318</sys:Double>
+        </DockPanel.Resources>
 
         <!-- These styles belong to the CONTENT, not to the window. Docked is the default shell: ModuleHostService
              does not show this window, it lifts this DockPanel out and reparents it into a tab in the main window.
@@ -122,15 +133,26 @@
             <Style Selector="ItemsControl.grid">
                 <Setter Property="ItemsPanel">
                     <Setter.Value>
-                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                        <!-- Fills the row instead of leaving a strip of whitespace on the right: as many columns of
+                             at least the minimum as fit, the remainder divided over them. The gaps live on the panel
+                             rather than on the card's Margin, so the same arithmetic that lays the columns out is the
+                             one that accounts for them. -->
+                        <ItemsPanelTemplate>
+                            <ctl:FillGridPanel MinItemWidth="{StaticResource FleetMetricsCardMinWidth}"
+                                               ColumnSpacing="8" RowSpacing="8"/>
+                        </ItemsPanelTemplate>
                     </Setter.Value>
                 </Setter>
                 <Setter Property="ItemTemplate">
                     <Setter.Value>
                         <DataTemplate x:DataType="vm:DpsViewModel">
-                            <!-- Sized so the default 720-wide window still fits two cards per row, and the graph below
-                                 keeps roughly the list graph's proportions instead of a flattened band. -->
-                            <Border Classes="panel memberrow" Classes.dragging="{Binding IsDragging}" Width="318" Height="176" Margin="0,0,8,8" Cursor="SizeAll">
+                            <!-- No Width and no Margin: the card takes the width and the gaps from the panel above,
+                                 whose MinItemWidth is where the 318 now lives. The HEIGHT stays fixed while the width
+                                 can grow to just under twice the minimum. Rendered at that widest stand (ET-108) the
+                                 graph is 621x100 and all four lines are still cleanly separated — DpsGraph plots at a
+                                 fixed time density, so a wider card shows a longer timeline at the same vertical
+                                 range rather than the same curve stretched flat. -->
+                            <Border Classes="panel memberrow" Classes.dragging="{Binding IsDragging}" Height="176" Cursor="SizeAll">
                                 <Border.ContextMenu>
                                     <ContextMenu ItemsSource="{Binding MemberMenu}"
                                                  ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>
