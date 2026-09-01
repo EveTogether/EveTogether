@@ -83,6 +83,9 @@ public sealed class RunEnemyObservationCollectorTests
 
         RunEnemyObservationViewModel servant =
             Assert.Single(collector.Observations, row => row.EnemyTypeId == 17155);
+        // Both, and do not drop the second for reading like the first. NotEqual rules one wrong answer out;
+        // Equal states what the right one is. Measured: a collector that counted its own sightings reached 2, not
+        // 3 — NotEqual(3) stayed green through it and only Equal(0) went red.
         Assert.NotEqual(3, servant.Count);
         Assert.Equal(0, servant.Count);
 
