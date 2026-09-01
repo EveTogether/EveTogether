@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -16,6 +17,8 @@ namespace EveUtils.Client.ViewModels.FitBrowser;
 ///
 /// The order is the browser's, not the tab's: <see cref="FitBrowserViewModel"/> owns the choice and pushes it into
 /// every tab through <see cref="ApplySort"/>, so switching source does not switch order.
+///
+/// Searching waits for a quiet spell rather than running on every keystroke — see <see cref="SearchQuiet"/>.
 /// </summary>
 public partial class FitBrowserTabViewModel : ObservableObject
 {
@@ -150,7 +153,86 @@ public partial class FitBrowserTabViewModel : ObservableObject
         await _loader(this);
     }
 
+    /// <summary>
+    /// How quiet the search box has to go before the filter runs. Filtering per keystroke made the typing itself
+    /// lag: one round that lands a full page of cards is around 320 ms on the operator's 148-fit library, so a
+    /// fast typist stacked up rounds far faster than they could be served.
+    ///
+    /// 250 ms is the ticket's guideline and it survives being measured against what a round costs: it is longer
+    /// than the gap between keystrokes at any realistic typing speed (a brisk 60 wpm is ~200 ms apart, and the
+    /// gaps inside a word are shorter still), so a word typed straight through filters once at the end instead of
+    /// once per letter. Going much shorter would let the gaps inside a word through again and bring the stacking
+    /// back; going much longer would be felt as the screen ignoring you, and there is no room for that on top of
+    /// the round's own 320 ms.
+    /// </summary>
+    public static readonly TimeSpan SearchQuiet = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>How the quiet spell is waited out. Real time in the app; a test replaces it so it can hold a round
+    /// open and release it on purpose rather than sleeping and hoping.</summary>
+    public Func<TimeSpan, CancellationToken, Task> Wait { get; set; } =
+        static (quiet, token) => Task.Delay(quiet, token);
+
+    /// <summary>The filter round the last keystroke started — the quiet spell plus the rebuild it leads to.
+    /// Completed when nothing is pending. Exposed so a test can await the round instead of racing it.</summary>
+    public Task SearchRound { get; private set; } = Task.CompletedTask;
+
+    private CancellationTokenSource? _round;
+
     partial void OnSearchChanged(string value)
+    {
+        Supersede();
+
+        // An emptied box is not a search being typed, it is the whole library being asked for back, so it does not
+        // wait. Nothing follows it that a wait could collapse.
+        if (string.IsNullOrEmpty(value))
+        {
+            FilterNow();
+            return;
+        }
+
+        var round = new CancellationTokenSource();
+        _round = round;
+        SearchRound = RunSearchRoundAsync(round.Token);
+    }
+
+    /// <summary>
+    /// Stops the round the previous keystroke started. That covers both halves of the problem: a round still waiting
+    /// out its quiet spell is dropped, and a round that has waited but not yet committed is stopped before it builds
+    /// a page for a term the typist has already moved past.
+    ///
+    /// The source is disposed here rather than inside the round: cancelling runs the round's continuation on this
+    /// very stack, so a round that disposed the source it was handed would be disposing it from within its own
+    /// <see cref="CancellationTokenSource.Cancel()"/>.
+    /// </summary>
+    private void Supersede()
+    {
+        var round = _round;
+        _round = null;
+        SearchRound = Task.CompletedTask;
+        if (round is null) return;
+
+        round.Cancel();
+        round.Dispose();
+    }
+
+    /// <summary>Waits for the typing to stop, then filters — unless another keystroke arrived first, in which case
+    /// this round is abandoned without touching the page. The wait resumes on the context the keystroke came in on,
+    /// which is the UI thread, so the rebuild happens where the cards live.</summary>
+    private async Task RunSearchRoundAsync(CancellationToken token)
+    {
+        try
+        {
+            await Wait(SearchQuiet, token);
+            if (token.IsCancellationRequested) return;   // typed again while the wait was being handed back
+            FilterNow();
+        }
+        catch (OperationCanceledException)
+        {
+            // superseded — the keystroke that cancelled this round owns the next one
+        }
+    }
+
+    private void FilterNow()
     {
         CurrentPage = 1;
         Refresh();
@@ -194,9 +276,12 @@ public partial class FitBrowserTabViewModel : ObservableObject
         if (CurrentPage > PageCount) CurrentPage = PageCount;
 
         var page = _filtered.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
-        PagedRows.Clear();
-        foreach (var row in page) PagedRows.Add(row);
-        FillPage(page);
+        if (!IsAlreadyShowing(page))
+        {
+            PagedRows.Clear();
+            foreach (var row in page) PagedRows.Add(row);
+            FillPage(page);
+        }
 
         OnPropertyChanged(nameof(FilteredCount));
         OnPropertyChanged(nameof(TotalCount));
@@ -205,6 +290,20 @@ public partial class FitBrowserTabViewModel : ObservableObject
         OnPropertyChanged(nameof(CanPrev));
         OnPropertyChanged(nameof(CanNext));
         OnPropertyChanged(nameof(PageInfo));
+    }
+
+    /// <summary>
+    /// Whether the page just worked out is the one already on screen, row for row. Emptying and refilling
+    /// <see cref="PagedRows"/> throws away a card's visual and builds it again, measured at roughly 13 ms per card
+    /// — so a refresh that arrives at the same page (a keystroke that narrows nothing, a page-size set to what it
+    /// already was, an order re-applied) is worth not doing at all rather than doing invisibly.
+    /// </summary>
+    private bool IsAlreadyShowing(List<FitRowViewModel> page)
+    {
+        if (page.Count != PagedRows.Count) return false;
+        for (var i = 0; i < page.Count; i++)
+            if (!ReferenceEquals(page[i], PagedRows[i])) return false;
+        return true;
     }
 
     /// <summary>
