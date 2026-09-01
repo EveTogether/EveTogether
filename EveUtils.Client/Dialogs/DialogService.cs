@@ -133,6 +133,21 @@ public sealed class DialogService : IDialogService, ISingletonService
         return window;
     }
 
+    /// <summary>
+    /// Every modal here is owned by the main window, and the run overlay is <c>Topmost</c> — so with a run on screen
+    /// a dialog opened behind it, and the fit picker went missing. The dialog is raised instead of the overlay
+    /// lowered: the owner, and with it which window the dialog blocks, stays exactly as it was, and the overlay keeps
+    /// the one property it is there for. Z-order is a real windowing question, so this can only be seen on a desktop;
+    /// what a test can hold is that no dialog leaves here unraised.
+    /// </summary>
+    private T _Over<T>(T dialog) where T : Window
+    {
+        if (_activityWindow is not null)
+            dialog.Topmost = true;
+
+        return dialog;
+    }
+
     /// <summary>The activity window currently up, if any — the same one <see cref="OpenPopoutCount"/> counts.
     /// Readable so the no-focus rule (ET-105 AC-2) can be asserted on the window this service really built, rather
     /// than on a second copy of the decision that could drift away from it.</summary>
@@ -164,7 +179,7 @@ public sealed class DialogService : IDialogService, ISingletonService
     {
         if (_owner is null) return (false, false);
         var dialog = new MessageBoxWindow(title, message, confirm: true, okText: okText, optOutText: optOutText);
-        var confirmed = await dialog.ShowDialog<bool>(_owner);
+        var confirmed = await _Over(dialog).ShowDialog<bool>(_owner);
         return (confirmed, dialog.OptOutChecked);
     }
 
@@ -173,73 +188,73 @@ public sealed class DialogService : IDialogService, ISingletonService
     {
         if (_owner is null) return null;
         var dialog = new ScopeSelectionWindow(available, preselected);
-        return await dialog.ShowDialog<IReadOnlyList<string>?>(_owner);
+        return await _Over(dialog).ShowDialog<IReadOnlyList<string>?>(_owner);
     }
 
     public async Task<IReadOnlyList<int>?> SelectFittingsAsync(IReadOnlyList<EsiFitting> fits)
     {
         if (_owner is null) return null;
         var dialog = new FitImportWindow(fits);
-        return await dialog.ShowDialog<IReadOnlyList<int>?>(_owner);
+        return await _Over(dialog).ShowDialog<IReadOnlyList<int>?>(_owner);
     }
 
     public async Task<int?> PickCharacterAsync(string prompt, IReadOnlyList<CharacterPickOption> options)
     {
         if (_owner is null) return null;
         var dialog = new CharacterPickerWindow(prompt, options);
-        return await dialog.ShowDialog<int?>(_owner);
+        return await _Over(dialog).ShowDialog<int?>(_owner);
     }
 
     public async Task<IReadOnlyList<int>?> PickCharactersAsync(string prompt, IReadOnlyList<CharacterPickOption> options)
     {
         if (_owner is null) return null;
         var dialog = new CharacterPickerWindow(prompt, options, multiSelect: true);
-        return await dialog.ShowDialog<IReadOnlyList<int>?>(_owner);
+        return await _Over(dialog).ShowDialog<IReadOnlyList<int>?>(_owner);
     }
 
     public async Task<CoupleServerResult?> CoupleServerAsync(Func<string, CancellationToken, Task<string?>> probeServerName)
     {
         if (_owner is null) return null;
         var dialog = new CoupleServerWindow(probeServerName);
-        return await dialog.ShowDialog<CoupleServerResult?>(_owner);
+        return await _Over(dialog).ShowDialog<CoupleServerResult?>(_owner);
     }
 
     public async Task<string?> SelectServerAsync(string prompt, IReadOnlyList<ServerPickOption> options)
     {
         if (_owner is null) return null;
         var dialog = new ServerPickerWindow(prompt, options);
-        return await dialog.ShowDialog<string?>(_owner);
+        return await _Over(dialog).ShowDialog<string?>(_owner);
     }
 
     public async Task ShowMessageAsync(string title, string message)
     {
         if (_owner is null) return;
         var dialog = new MessageBoxWindow(title, message);
-        await dialog.ShowDialog(_owner);
+        await _Over(dialog).ShowDialog(_owner);
     }
 
     public async Task<string?> ImportFitTextAsync(string? initialText = null)
     {
         if (_owner is null) return null;
-        return await new FitTextImportWindow(initialText).ShowDialog<string?>(_owner);
+        return await _Over(new FitTextImportWindow(initialText)).ShowDialog<string?>(_owner);
     }
 
     public async Task<string?> ImportFitEsfLinkAsync()
     {
         if (_owner is null) return null;
-        return await new FitEsfImportWindow().ShowDialog<string?>(_owner);
+        return await _Over(new FitEsfImportWindow()).ShowDialog<string?>(_owner);
     }
 
     public async Task<FitMetadataDraft?> EditFitMetadataAsync(FitMetadataDraft current)
     {
         if (_owner is null) return null;
-        return await new FitMetadataDialog(current).ShowDialog<FitMetadataDraft?>(_owner);
+        return await _Over(new FitMetadataDialog(current)).ShowDialog<FitMetadataDraft?>(_owner);
     }
 
     public async Task ShowFitExportAsync(string fitName, string eft, string dna, string eveshipUrl)
     {
         if (_owner is null) return;
-        await new FitExportWindow(fitName, eft, dna, eveshipUrl).ShowDialog(_owner);
+        await _Over(new FitExportWindow(fitName, eft, dna, eveshipUrl)).ShowDialog(_owner);
     }
 
     public async Task SetClipboardTextAsync(string text)
@@ -260,21 +275,21 @@ public sealed class DialogService : IDialogService, ISingletonService
     {
         if (_owner is null) return false;
         var dialog = new MessageBoxWindow(title, message, confirm: true, okText: okText);
-        return await dialog.ShowDialog<bool>(_owner);
+        return await _Over(dialog).ShowDialog<bool>(_owner);
     }
 
     public async Task ShowCharacterAsync(CharacterDialogViewModel viewModel)
     {
         if (_owner is null) return;
         var dialog = new CharacterWindow(viewModel);
-        await dialog.ShowDialog(_owner);
+        await _Over(dialog).ShowDialog(_owner);
     }
 
     public async Task<bool> ShowServerTrustAsync(string displayName, string address, string fingerprint, string statusLabel)
     {
         if (_owner is null) return false;
         var dialog = new ServerTrustWindow(displayName, address, fingerprint, statusLabel);
-        return await dialog.ShowDialog<bool>(_owner);
+        return await _Over(dialog).ShowDialog<bool>(_owner);
     }
 
     public void ShowFleets(FleetsViewModel viewModel) =>
@@ -289,7 +304,7 @@ public sealed class DialogService : IDialogService, ISingletonService
     public async Task<bool> ShowFleetSharingAsync(FleetShareViewModel viewModel)
     {
         if (_owner is null) return false;
-        return await new FleetShareWindow(viewModel).ShowDialog<bool>(_owner);
+        return await _Over(new FleetShareWindow(viewModel)).ShowDialog<bool>(_owner);
     }
 
     public void ShowMetrics(MetricsWindowViewModel viewModel) =>
@@ -298,20 +313,20 @@ public sealed class DialogService : IDialogService, ISingletonService
     public async Task ShowAboutAsync(AboutViewModel viewModel)
     {
         if (_owner is null) return;
-        await new AboutWindow(viewModel).ShowDialog(_owner);
+        await _Over(new AboutWindow(viewModel)).ShowDialog(_owner);
     }
 
     public async Task<bool> ShowUpdateAvailableAsync(string installedVersion, Updates.AppRelease release)
     {
         if (_owner is null) return false;
-        return await new UpdateAvailableWindow(installedVersion, release).ShowDialog<bool>(_owner);
+        return await _Over(new UpdateAvailableWindow(installedVersion, release)).ShowDialog<bool>(_owner);
     }
 
     public async Task<Fleet.FleetEditResult?> EditFleetAsync(Fleet.FleetInfo? existing)
     {
         if (_owner is null) return null;
         var dialog = existing is null ? new FleetEditWindow() : new FleetEditWindow(existing);
-        return await dialog.ShowDialog<Fleet.FleetEditResult?>(_owner);
+        return await _Over(dialog).ShowDialog<Fleet.FleetEditResult?>(_owner);
     }
 
     // The composition editor opens as a hosted module (docked tab when docked, floating window when floating) rather
@@ -336,13 +351,13 @@ public sealed class DialogService : IDialogService, ISingletonService
     public async Task<IReadOnlyList<Fleet.FitReferenceInfo>?> ShowFitPickerAsync(FitPickerViewModel viewModel)
     {
         if (_owner is null) return null;
-        return await new FitPickerWindow(viewModel).ShowDialog<IReadOnlyList<Fleet.FitReferenceInfo>?>(_owner);
+        return await _Over(new FitPickerWindow(viewModel)).ShowDialog<IReadOnlyList<Fleet.FitReferenceInfo>?>(_owner);
     }
 
     public async Task<Fleet.FitReferenceInfo?> PickFitAsync(FitPickerViewModel viewModel)
     {
         if (_owner is null) return null;
-        return await new FitPickerWindow(viewModel).ShowDialog<Fleet.FitReferenceInfo?>(_owner);
+        return await _Over(new FitPickerWindow(viewModel)).ShowDialog<Fleet.FitReferenceInfo?>(_owner);
     }
 
     public void ShowInbox(InboxViewModel viewModel)
@@ -369,13 +384,13 @@ public sealed class DialogService : IDialogService, ISingletonService
     public async Task ShowPresetExportAsync(PresetExportViewModel viewModel)
     {
         if (_owner is null) return;
-        await new PresetExportWindow(viewModel).ShowDialog(_owner);
+        await _Over(new PresetExportWindow(viewModel)).ShowDialog(_owner);
     }
 
     public async Task<bool> ShowPresetImportAsync(PresetImportViewModel viewModel)
     {
         if (_owner is null) return false;
-        await new PresetImportWindow(viewModel).ShowDialog(_owner);
+        await _Over(new PresetImportWindow(viewModel)).ShowDialog(_owner);
         return viewModel.Applied;   // the window's own buttons never decide this — what was written does
     }
 
@@ -409,28 +424,28 @@ public sealed class DialogService : IDialogService, ISingletonService
     {
         if (_owner is null) return null;
         var dialog = new FleetInviteWindow(fleetName, options);
-        return await dialog.ShowDialog<FleetInviteResult?>(_owner);
+        return await _Over(dialog).ShowDialog<FleetInviteResult?>(_owner);
     }
 
     public async Task<int?> AddExternalMemberAsync(Fleet.IExternalCharacterLookup lookup)
     {
         if (_owner is null) return null;
         var dialog = new AddExternalMemberWindow(lookup);
-        return await dialog.ShowDialog<int?>(_owner);
+        return await _Over(dialog).ShowDialog<int?>(_owner);
     }
 
     public async Task<string?> PromptTextAsync(string title, string header, string? defaultValue = null)
     {
         if (_owner is null) return null;
         var dialog = new TextPromptWindow(title, header, defaultValue);
-        return await dialog.ShowDialog<string?>(_owner);
+        return await _Over(dialog).ShowDialog<string?>(_owner);
     }
 
     public async Task<bool> ConfirmStartFleetAsync(string fleetName, int unlinkedCount)
     {
         if (_owner is null) return false;
         var dialog = new StartFleetEsiPromptWindow(fleetName, unlinkedCount);
-        return await dialog.ShowDialog<bool>(_owner);
+        return await _Over(dialog).ShowDialog<bool>(_owner);
     }
 
     public void ShowRoster(FleetRosterViewModel viewModel) =>
@@ -451,6 +466,6 @@ public sealed class DialogService : IDialogService, ISingletonService
     {
         if (_owner is null) return;
         // Modal: blocks interaction while the static-data store is (re)built; the window closes itself on success.
-        await new SdeProgressWindow(viewModel).ShowDialog(_owner);
+        await _Over(new SdeProgressWindow(viewModel)).ShowDialog(_owner);
     }
 }

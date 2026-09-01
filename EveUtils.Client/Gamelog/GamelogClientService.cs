@@ -96,6 +96,11 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     /// </summary>
     public event Action<int, string, DateTime, DamageDirection>? CombatObserved;
 
+    /// <summary>Character name and the payout line, at the gamelog's own time — same rule as
+    /// <see cref="CombatObserved"/>. The name is the key because that is what a gamelog line carries; a pilot with no
+    /// ESI id still earns bounties.</summary>
+    public event Action<string, BountyEvent>? BountyObserved;
+
     public GamelogClientService(IServiceProvider services, IEventBus eventBus, ICharacterRegistry? registry = null,
         EveClientPresenceService? presence = null)
     {
@@ -471,12 +476,13 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
 
     /// <summary>Record a bounty payout (one kill); persisted across restarts. If the character is
     /// participating in a fleet right now, the payout is also added to that fleet's per-run bounty (fleet meter).</summary>
-    public async Task AddBountyAsync(string characterName, long isk)
+    public async Task AddBountyAsync(string characterName, BountyEvent bounty)
     {
         var name = Resolve(characterName);
         await EnsureSeededAsync(name);
-        Metrics(name).RecordBounty(isk);
-        AddFleetRunBounty(name, isk);
+        Metrics(name).RecordBounty(bounty.Isk);
+        AddFleetRunBounty(name, bounty.Isk);
+        BountyObserved?.Invoke(name, bounty);
         MetricsChanged?.Invoke();
         await PersistAsync(name);
     }

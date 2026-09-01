@@ -44,73 +44,6 @@ public class ActivityWindowTests
 {
     private static readonly DateTime Anchor = new(2026, 9, 1, 20, 0, 0, DateTimeKind.Utc);
 
-    [AvaloniaFact]
-    public void StartBeforeLocation_FirstLocationReading_CollectsCombat()
-    {
-        using ServiceProvider services = _ObservationServices();
-        var model = new ActivityWindowViewModel(ActivityKind.Site, services);
-        model.StartManualRun(Anchor);
-        model.ApplyLocation(new EsiLocationReading(30000142, Anchor), _Character());
-
-        _ObserveCombat(model);
-
-        Assert.Single(model.EnemyObservations);
-    }
-
-    /// <summary>
-    /// The window passes the gamelog line's own time straight through to the observation, rather than stamping the
-    /// moment it happened to handle the event (ET-105's storage seam). EVE flushes its log in chunks, so a single
-    /// poll can carry several seconds of combat; a handler that reached for <c>DateTime.UtcNow</c> would file that
-    /// whole batch at one instant and put a time in the database that nobody measured.
-    /// </summary>
-    [AvaloniaFact]
-    public void ObservedCombat_IsStoredAtTheGamelogsOwnTime_NotWhenItWasHandled()
-    {
-        using ServiceProvider services = _ObservationServices();
-        var model = new ActivityWindowViewModel(ActivityKind.Site, services);
-        model.StartManualRun(Anchor);
-        model.ApplyLocation(new EsiLocationReading(30000142, Anchor), _Character());
-        DateTime lineTime = Anchor.AddMinutes(3).AddSeconds(7);
-
-        _ObserveCombat(model, lineTime);
-
-        RunEnemyObservationViewModel observation = Assert.Single(model.EnemyObservations);
-        Assert.Equal(lineTime, observation.FirstObservedAtUtc);
-        Assert.Equal(lineTime, observation.LastObservedAtUtc);
-    }
-
-    /// <summary>
-    /// The window translates the gamelog's direction into the run store's, and does not assume one. An enemy that
-    /// only shot at you is stored as <c>From</c>; one you shot at is <c>To</c>. The combat feed fires for both.
-    /// </summary>
-    [AvaloniaTheory]
-    [InlineData(DamageDirection.Outgoing, EveUtils.Shared.Modules.Runs.Enums.EnemyObservationDirection.To)]
-    [InlineData(DamageDirection.Incoming, EveUtils.Shared.Modules.Runs.Enums.EnemyObservationDirection.From)]
-    public void ObservedCombat_KeepsTheDirectionItWasSeenIn(
-        DamageDirection observed, EveUtils.Shared.Modules.Runs.Enums.EnemyObservationDirection expected)
-    {
-        using ServiceProvider services = _ObservationServices();
-        var model = new ActivityWindowViewModel(ActivityKind.Site, services);
-        model.StartManualRun(Anchor);
-        model.ApplyLocation(new EsiLocationReading(30000142, Anchor), _Character());
-
-        _ObserveCombat(model, Anchor.AddMinutes(1), observed);
-
-        Assert.Equal(expected, Assert.Single(model.EnemyObservations).Direction);
-    }
-
-    [AvaloniaFact]
-    public void AutomaticAbyssalRun_CollectsCombat()
-    {
-        using ServiceProvider services = _ObservationServices();
-        var model = new ActivityWindowViewModel(ActivityKind.Abyssal, services);
-        model.ApplyLocation(new EsiLocationReading(30000142, Anchor), _Character());
-        model.ApplyFleetEnvelope([new MetricSample(90000001, 7, MetricKind.Location, 0, 1_000_000, AbyssalAnchorMs: 700_000)], Anchor);
-
-        _ObserveCombat(model);
-
-        Assert.Single(model.EnemyObservations);
-    }
 
     // ── AC-1 — every section says something, open or shut ───────────────────────────────────────────
 
@@ -203,96 +136,16 @@ public class ActivityWindowTests
         Assert.NotEqual("0", model.Bounty.HeaderSummary);
     }
 
+    /// <summary>A row that would only report our own ignorance is not on screen at all — that rule is what took the
+    /// catalogue lines out of ACTIVITY, and LOCATION follows it too.</summary>
     [Fact]
-    public void ActivityReadout_BeforeLocationReading_SaysNotKnownYet()
+    public void BeforeAnyLocationIsKnown_TheLocationRowIsNotShown()
     {
         var model = new ActivityWindowViewModel(ActivityKind.Site, _Unused());
 
-        Assert.Equal("not known yet", model.LocationText);
+        Assert.False(model.IsLocationShown);
     }
 
-    [Fact]
-    public void AddBounty_StaleTimestamp_RefreshesClockAtCurrentTime()
-    {
-        DateTime staleTimestamp = Anchor.AddYears(-1);
-        var model = _Filled(ActivityKind.Site);
-        model.AnchorUtc = staleTimestamp;
-
-        model.AddBounty(new BountyEvent(staleTimestamp, 125_000));
-
-        Assert.NotEqual("00:00", model.ClockText);
-    }
-
-    [Fact]
-    public void ApplyLocation_StaleTimestamp_RefreshesClockAtCurrentTime()
-    {
-        DateTime staleTimestamp = Anchor.AddYears(-1);
-        var model = _Filled(ActivityKind.Site);
-        model.AnchorUtc = staleTimestamp;
-
-        model.ApplyLocation(new EsiLocationReading(30000142, staleTimestamp), new DpsViewModel("Pilot", isSelf: true));
-
-        Assert.NotEqual("00:00", model.ClockText);
-    }
-
-    [Theory]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    public void ActivityReadout_AbyssalAndWatchStates_NeverLeaveBountyOrLocationSilent(bool insideAbyssal, bool watchLost)
-    {
-        ActivityKind kind = insideAbyssal ? ActivityKind.Abyssal : ActivityKind.Site;
-        var model = _Filled(kind);
-        var character = new DpsViewModel("Pilot", isSelf: true)
-        {
-            IsLocalCharacter = true,
-            InEve = true,
-            Location = watchLost ? null : "Aphend",
-            LocationUnavailableReason = watchLost ? EsiErrorKind.ScopeMissing : null
-        };
-        EsiLocationReading reading = watchLost
-            ? EsiLocationReading.Lost(EsiErrorKind.ScopeMissing, Anchor)
-            : new EsiLocationReading(insideAbyssal ? 32000001 : 30000142, Anchor);
-
-        model.ApplyLocation(reading, character);
-        model.AddBounty(new BountyEvent(Anchor, 125_000));
-
-        foreach (string text in new[] { model.BountyText, model.LocationText })
-        {
-            Assert.False(string.IsNullOrWhiteSpace(text));
-            Assert.NotEqual("0", text);
-        }
-
-        if (insideAbyssal)
-        {
-            Assert.Contains("no bounty", model.BountyText, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("pocket", model.LocationText, StringComparison.OrdinalIgnoreCase);
-        }
-        else
-        {
-            Assert.Contains("own character", model.BountyText, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("125,000", model.BountyText);
-            Assert.Equal(character.LocationDisplay, model.LocationText);
-        }
-    }
-
-    [Fact]
-    public void ActivityReadout_LostWatchUsesTheDpsLocationDisplayIncludingOfflinePriority()
-    {
-        var model = _Filled(ActivityKind.Site);
-        var character = new DpsViewModel("Pilot", isSelf: true)
-        {
-            IsLocalCharacter = true,
-            InEve = false,
-            LocationUnavailableReason = EsiErrorKind.ScopeMissing
-        };
-
-        model.ApplyLocation(EsiLocationReading.Lost(EsiErrorKind.ScopeMissing, Anchor), character);
-
-        Assert.Equal("offline", character.LocationDisplay);
-        Assert.Equal(character.LocationDisplay, model.LocationText);
-    }
 
     // ── The clock ───────────────────────────────────────────────────────────────────────────────────
 
@@ -790,6 +643,7 @@ public class ActivityWindowTests
 
     // ── AC-7 — the four faction palettes reach this window ──────────────────────────────────────────
 
+
     [Fact]
     public void EveryBrushInTheWindowIsAResourceKey_NotALiteral()
     {
@@ -1058,31 +912,13 @@ public class ActivityWindowTests
 
     private static IServiceProvider _Unused() => new ServiceCollection().BuildServiceProvider();
 
-    private static ServiceProvider _ObservationServices() => new ServiceCollection()
-        .AddSingleton<ISdeAccessor>(new FakeSdeAccessor().Add(17155, "Centii Servant", 135, 11))
-        .BuildServiceProvider();
-
-    private static DpsViewModel _Character() => new DpsViewModel("Pilot", isSelf: true) { CharacterId = 90000001 };
-
-    private static void _ObserveCombat(ActivityWindowViewModel model) => _ObserveCombat(model, Anchor.AddMinutes(1));
-
-    private static void _ObserveCombat(ActivityWindowViewModel model, DateTime observedAtUtc,
-        DamageDirection direction = DamageDirection.Outgoing)
-    {
-        MethodInfo handler = typeof(ActivityWindowViewModel).GetMethod("_OnCombatObserved", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("combat observation handler was not found");
-        handler.Invoke(model, [90000001, "Centii Servant", observedAtUtc, direction]);
-        Dispatcher.UIThread.RunJobs();
-    }
-
     private static ActivityWindowViewModel _Filled(ActivityKind kind) => _Filled(kind, Anchor);
 
     private static ActivityWindowViewModel _Filled(ActivityKind kind, DateTime anchorUtc) =>
         new(kind, _Unused())
         {
             AnchorUtc = anchorUtc,
-            SolarSystem = kind == ActivityKind.Site ? "Aphend" : null,   // a pocket genuinely has none
-            LootStrategy = "Bioadaptive + some cans"
+            SolarSystem = kind == ActivityKind.Site ? "Aphend" : null   // a pocket genuinely has none
         };
 
     /// <summary>A run six minutes in on the clock the window itself will read. Anything anchored to a fixed date

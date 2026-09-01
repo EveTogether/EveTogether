@@ -14,6 +14,7 @@ using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Platform;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Runs;
@@ -26,6 +27,8 @@ using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Control;
+using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Sde.Dtos;
@@ -45,10 +48,10 @@ namespace EveUtils.Client.ViewModels.Activity;
 /// The activity window (ET-98): a run you are still flying, rather than a form you fill in once it is over. That is
 /// the whole difference from every other tracker, and it is why the clock is the largest thing on it.
 ///
-/// This is phase 1 — the frame. The clock, the envelope, the five sections and the manual weather/tier entry are
-/// here; the fleet <c>Min()</c> over re-based anchors is phase 2 and the bounty/location wiring is phase 3. Sections
-/// that wait on another ticket carry that in their summary rather than sample data, because a screenshot of invented
-/// numbers is indistinguishable from a screenshot of real ones.
+/// START creates the stored <c>Run</c> and the window follows that row from there — the clock, the loot, the enemies
+/// and the bounties all hang off one id, so "a run is running" means the same thing here as it does in the database.
+/// STOP only stops the clock: the row stays open until SAVE or DISCARD, so loot copied after the last rat still
+/// lands on the run it came from.
 /// </summary>
 public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposable
 {
@@ -85,9 +88,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     private readonly IServiceProvider _services;
     private readonly GamelogClientService? _gamelog;
+    private readonly IDisposable? _metricSubscription;
+
+    // The bounty lines seen while this run was running, with their own times — what SAVE writes as the run's
+    // RunBountyEntry rows, and what the section adds up meanwhile.
+    private readonly List<RunBountyEntryInput> _bounties = [];
+
+    // The fleet's latest location sample per member, so the envelope is re-taken over the whole fleet on every
+    // sample rather than over whichever one happened to arrive last.
+    private readonly Dictionary<int, MetricSample> _fleetLocations = [];
+
     private DispatcherTimer? _timer;
     private bool _isManualRun;
-    private int? _enemyObservationCharacterId;
+    private int? _runCharacterId;
+    private string? _runCharacterName;
     private RunEnemyObservationCollector? _enemyObservations;
 
     public ActivityWindowViewModel(ActivityKind kind, IServiceProvider services)
@@ -96,7 +110,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _services = services;
         _gamelog = services.GetService<GamelogClientService>();
         if (_gamelog is not null)
+        {
             _gamelog.CombatObserved += _OnCombatObserved;
+            _gamelog.BountyObserved += _OnBountyObserved;
+        }
+
+        _metricSubscription = services.GetService<IEventBus>()?.Subscribe<FleetMetricEvent>(_OnFleetMetric);
         RunLoot = services.GetService<CqrsDispatcher>() is { } dispatcher ? new RunLootViewModel(dispatcher) : null;
         if (RunLoot is not null)
             RunLoot.PropertyChanged += (_, _) => _RefreshSummaries();
@@ -136,12 +155,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// separate types and a silent reordering of either would otherwise file runs under the wrong activity.</summary>
     public StoredActivityKind StoredKind => IsAbyssal ? StoredActivityKind.Abyssal : StoredActivityKind.Site;
 
-    // ── The run, as far as this phase knows it ──────────────────────────────────────────────────────
-    // Settable rather than sourced: phase 1 is the frame, and the two later phases feed these from the fleet's
-    // re-based anchors and from ESI. Everything below reads honestly when they are still null.
+    // ── The run ─────────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>The envelope START — the earliest moment anyone in the run could be proved to be in it. Solo for
-    /// now; phase 2 takes the <c>Min()</c> over the fleet's re-based anchors and counts how many it is based on.</summary>
+    /// <summary>The envelope START — the earliest moment anyone in the run could be proved to be in it: the stored
+    /// run's own <c>StartedAtUtc</c> when a pilot pressed START, and the <c>Min()</c> over the fleet's re-based
+    /// anchors when the fleet's samples put it earlier.</summary>
     [ObservableProperty] private DateTime? _anchorUtc;
 
     [ObservableProperty]
@@ -171,8 +189,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(IsSaveButtonVisible))]
     private Guid? _runId;
 
-    /// <summary>The fleet this run belongs to, or null when soloing.</summary>
-    [ObservableProperty] private long? _fleetId;
+    /// <summary>The fleet this run belongs to, or null when the window was never told of one.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFleetShown))]
+    private long? _fleetId;
 
     [ObservableProperty] private string? _groupCode;
 
@@ -192,16 +212,19 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// says so rather than leaving the field blank.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(LocationText))]
+    [NotifyPropertyChangedFor(nameof(IsLocationShown))]
     private string? _solarSystem;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(LocationText))]
+    [NotifyPropertyChangedFor(nameof(IsLocationShown))]
     [NotifyPropertyChangedFor(nameof(BountyText))]
     [NotifyPropertyChangedFor(nameof(IsInsideAbyssal))]
     private bool? _insideAbyssal;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(LocationText))]
+    [NotifyPropertyChangedFor(nameof(IsLocationShown))]
     private string? _locationDisplay;
 
     [ObservableProperty]
@@ -334,7 +357,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public bool IsStopButtonVisible => Authority.CanControl && RunState == ActivityRunState.Running;
 
-    public bool IsDiscardButtonVisible => Authority.CanControl && RunState != ActivityRunState.NotStarted;
+    /// <summary>A saved run is committed; there is nothing left to throw away, and RunDiscard would not take it back
+    /// either (ET-105 AC-1).</summary>
+    public bool IsDiscardButtonVisible =>
+        Authority.CanControl && RunState is ActivityRunState.Running or ActivityRunState.Stopped;
 
     /// <summary>Saving is every member's own, never the FC's alone: each pilot commits their own part of the run.
     /// It hangs on the state and not on whether a run row exists yet — a stopped run with nowhere to save to is a
@@ -359,7 +385,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         ? IsAbyssal
             ? $"based on {AnchoredFleetMemberCount} of {FleetMemberCount} members"
             : $"fleet of {FleetMemberCount} members"
-        : "solo";
+        : "no other member has reported in yet";
+
+    /// <summary>
+    /// Whether there is a fleet to show at all. Nothing here may claim "solo": the window is never told the pilot
+    /// is alone, it is only ever told about a fleet — by the commander's own start (which sets
+    /// <see cref="FleetId"/>) or by a member's sample arriving on the bus. Without either, the section is not
+    /// collapsed but gone, because an empty FLEET section reads as a measurement and it is not one.
+    /// </summary>
+    public bool IsFleetShown => FleetId is not null || _fleetLocations.Count > 0 || Participants.Count > 0;
 
     public string RunOriginText => RunState == ActivityRunState.NotStarted
         ? "not started"
@@ -370,8 +404,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// sentence under the figure instead, which is where it ended up after the first round of review.
     /// </summary>
     public string ClockHint => IsAbyssal
-        ? $"{FleetStatusText}: the envelope is the earliest anchored run. The clock is a floor — the moment of entry cannot be observed, "
-          + "so this is at most what is left."
+        ? (FleetMemberCount > 1 ? $"{FleetStatusText}: the envelope is the earliest anchored run. " : string.Empty)
+          + "The clock is a floor — the moment of entry cannot be observed, so this is at most what is left."
         : RunState == ActivityRunState.Stopped
             ? "Stopped runs retain their figures; start creates a new run."
             : "Manual start and stop are the only source for a site run.";
@@ -383,6 +417,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public string LocationText => IsInsideAbyssal
         ? "none — an abyssal pocket has no location"
         : LocationDisplay ?? SolarSystem ?? "not known yet";
+
+    /// <summary>Shown only once there is a system to show. "not known yet" is a line about us, not about where he
+    /// is, and the row is hidden instead.</summary>
+    public bool IsLocationShown => IsInsideAbyssal || LocationDisplay is not null || SolarSystem is not null;
 
     public string BountyText => IsInsideAbyssal
         ? "— no bounty in abyssal space"
@@ -428,8 +466,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     // ── Lifecycle ───────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Restore the remembered weather and tier. Separate from the constructor so the window can be built
-    /// synchronously and a test can assert the round-trip without racing anything.</summary>
+    /// <summary>Restore the remembered weather and tier, find out whose run this is, and attach to the run that is
+    /// already running if there is one. Separate from the constructor so the window can be built synchronously and a
+    /// test can assert the round-trip without racing anything.</summary>
     public async Task LoadAsync()
     {
         using var scope = _services.CreateScope();
@@ -445,9 +484,86 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         LootStrategy = LootStrategies.Contains(strategy) ? strategy : null;
 
         _SyncChoices();
+        await _ResolveCharacterAsync(mayAsk: false);
+        await _AdoptRunningRunAsync();
         if (RunLoot is not null)
             await RunLoot.RefreshAsync();
         Refresh(DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// Whose run this is. The registry has no "active character" by design — an action picks one at the moment it
+    /// happens — so one local character answers it outright and several ask, once, at START. Everything the window
+    /// then attributes to a pilot (bounties, location, enemies, the stored run) hangs off this one answer.
+    /// </summary>
+    private async Task<bool> _ResolveCharacterAsync(bool mayAsk)
+    {
+        if (_runCharacterId is not null)
+            return true;
+
+        if (_services.GetService<ICharacterRegistry>() is not { } registry)
+            return false;
+
+        List<Character> known = (await registry.GetAllAsync())
+            .Where(character => character.EsiCharacterId is not null)
+            .ToList();
+
+        Character? chosen = known is [{ } only] ? only : null;
+        if (chosen is null && mayAsk && known.Count > 1
+            && _services.GetService<IDialogService>() is { } dialogs)
+        {
+            int? picked = await dialogs.PickCharacterAsync("Whose run is this?",
+                [.. known.Select(character => new CharacterPickOption(
+                    character.EsiCharacterId!.Value, character.Name, "local character", Enabled: true))]);
+            chosen = known.FirstOrDefault(character => character.EsiCharacterId == picked);
+        }
+
+        if (chosen is null)
+            return false;
+
+        _runCharacterId = chosen.EsiCharacterId;
+        _runCharacterName = chosen.Name;
+        return true;
+    }
+
+    /// <summary>
+    /// Attach to the run the store already has open, rather than opening a second one beside it. Reopening the
+    /// window mid-run, or opening it after one was left unsaved, must land on the same row the loot is filed under —
+    /// two rows running at once is exactly the state <c>RunningRunLookup</c> refuses to guess between.
+    /// </summary>
+    private async Task<bool> _AdoptRunningRunAsync()
+    {
+        if (_services.GetService<CqrsDispatcher>() is null)
+            return false;
+
+        using var scope = _services.CreateScope();
+        Result<RunningRunDto> running = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+            .Query(new GetRunningRunQuery());
+        if (!running.IsSuccess || running.Value is not { } run || run.ActivityKind != StoredKind)
+            return false;
+
+        RunId = run.Id;
+        AnchorUtc = run.StartedAtUtc;
+        StoppedAtUtc = null;
+        GroupCode ??= run.GroupCode;
+        _isManualRun = true;
+        RunState = ActivityRunState.Running;
+        await _AdoptCharacterAsync(checked((int)run.CharacterId));
+        _StartEnemyObservations();
+        return true;
+    }
+
+    /// <summary>The stored run names its character by id; the gamelog knows pilots by name. Both are needed, so the
+    /// id is taken back through the registry rather than left half-resolved.</summary>
+    private async Task _AdoptCharacterAsync(int characterId)
+    {
+        if (_runCharacterId == characterId && _runCharacterName is not null)
+            return;
+
+        _runCharacterId = characterId;
+        if (_services.GetService<ICharacterRegistry>() is { } registry)
+            _runCharacterName = (await registry.GetAllAsync())
+                .FirstOrDefault(character => character.EsiCharacterId == characterId)?.Name ?? _runCharacterName;
     }
 
     [RelayCommand]
@@ -513,6 +629,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// under the timer.</summary>
     public void Refresh(DateTime nowUtc)
     {
+        _RefreshLocation(nowUtc);
         _RefreshClock(nowUtc);
         _RefreshSummaries();
     }
@@ -558,18 +675,44 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [RelayCommand]
     private void OpenPicker() => IsPickerOpen = true;
 
+    /// <summary>The button. Creating the stored run is the whole of it — without that row there is no run for the
+    /// loot, the bounties or the enemies to hang off, and the clock would be counting on its own.</summary>
     [RelayCommand]
-    private void StartRun() => StartManualRun(DateTime.UtcNow);
+    private async Task StartRunAsync()
+    {
+        DateTime nowUtc = DateTime.UtcNow;
+        if (await _AdoptRunningRunAsync())
+        {
+            if (RunLoot is not null)
+                await RunLoot.RefreshAsync();
+            Refresh(nowUtc);
+            return;
+        }
+
+        if (!await _ResolveCharacterAsync(mayAsk: true))
+        {
+            _services.GetService<IToastService>()?.Show("Run not started",
+                "No local character to file this run under. Add one first.", ToastKind.Error);
+            return;
+        }
+
+        StartManualRun(nowUtc);
+        await _StoreRunAsync(nowUtc);
+    }
 
     [RelayCommand]
     private void StopRun() => StopRun(DateTime.UtcNow);
 
+    /// <summary>Move the window to a running run on the clock. <see cref="StartRunAsync"/> is what also gives it a
+    /// row in the store; the fleet envelope calls this too, for a run nobody pressed a button for.</summary>
     public void StartManualRun(DateTime nowUtc)
     {
         AnchorUtc = nowUtc;
         StoppedAtUtc = null;
         // A stopped manual result is final; a later ESI anchor cannot reopen it.
         _isManualRun = true;
+        _bounties.Clear();
+        BountyIsk = 0;
         RunState = ActivityRunState.Running;
         _StartEnemyObservations();
         OnPropertyChanged(nameof(IsStartButtonVisible));
@@ -577,6 +720,39 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         Refresh(nowUtc);
     }
 
+    /// <summary>Create the <c>Run</c> row this window writes to. The site's own facts travel with it, so a saved run
+    /// still knows which signature it was flown on.</summary>
+    private async Task _StoreRunAsync(DateTime startedAtUtc)
+    {
+        if (_runCharacterId is not { } characterId || _services.GetService<CqrsDispatcher>() is null)
+            return;
+
+        using var scope = _services.CreateScope();
+        Result<Guid> started = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(
+            new StartRunCommand(characterId, StoredKind, startedAtUtc,
+                // No type id: a signature names a dungeon, and the catalogue's DungeonId is not the type id this
+                // column holds. The name travels instead.
+                SiteTypeId: 0,
+                SiteName: SignatureName,
+                SolarSystemId: null,
+                GroupCode: GroupCode,
+                Signature: SignatureGroup,
+                FleetId: FleetId));
+        if (!started.IsSuccess)
+        {
+            _services.GetService<IToastService>()?.Show("Run not started",
+                started.Messages.FirstOrDefault()?.Text ?? "Could not start this run.", ToastKind.Error);
+            return;
+        }
+
+        RunId = started.Value;
+        if (RunLoot is not null)
+            await RunLoot.RefreshAsync();
+        Refresh(DateTime.UtcNow);
+    }
+
+    /// <summary>Stop the clock. The stored run stays open until SAVE or DISCARD: loot is copied out of the wreck
+    /// after the last rat, and it belongs to the run that produced it.</summary>
     public void StopRun(DateTime nowUtc)
     {
         if (RunState != ActivityRunState.Running)
@@ -645,10 +821,18 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         DateTime nowUtc = DateTime.UtcNow;
         using var scope = _services.CreateScope();
         Result result = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new SaveRunCommand(
-            runId, StoppedAtUtc ?? nowUtc, nowUtc, [], [], _enemyObservations?.ToInputs() ?? [], []));
+            runId, StoppedAtUtc ?? nowUtc, nowUtc, [], _bounties, _enemyObservations?.ToInputs() ?? [], []));
         if (!result.IsSuccess)
+        {
             _services.GetService<IToastService>()?.Show("Run not saved",
                 result.Messages.FirstOrDefault()?.Text ?? "Could not save this run.", ToastKind.Error);
+            return;
+        }
+
+        RunState = ActivityRunState.Saved;
+        if (RunLoot is not null)
+            await RunLoot.RefreshAsync();
+        Refresh(nowUtc);
     }
 
     /// <summary>
@@ -684,8 +868,38 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 new FleetRunDiscardedEvent(new RunGroupDiscard(fleetId, StoredKind, groupCode, nowUtc)),
                 EventTarget.Both);
 
-        StopRun(nowUtc);
+        // Thrown away means gone from this window too: the next START is a new run, not a second attempt at this one.
+        RunId = null;
         GroupCode = null;
+        AnchorUtc = null;
+        StoppedAtUtc = null;
+        RunState = ActivityRunState.NotStarted;
+        _bounties.Clear();
+        BountyIsk = 0;
+        _enemyObservations = null;
+        OnPropertyChanged(nameof(EnemyObservations));
+        if (RunLoot is not null)
+            await RunLoot.RefreshAsync();
+        Refresh(nowUtc);
+    }
+
+    /// <summary>
+    /// A fleet member's sample, straight off the bus <c>FleetMetricPublisher</c> puts them on. Held per member so
+    /// the envelope is re-taken over the whole fleet each time, not over the one sample that just arrived — which is
+    /// also the only way the FLEET section can say anything at all: nothing else tells this window a fleet exists.
+    /// </summary>
+    private void _OnFleetMetric(FleetMetricEvent integrationEvent)
+    {
+        MetricSample sample = integrationEvent.Data;
+        if (sample.Kind != MetricKind.Location || (FleetId is { } fleetId && sample.FleetId != fleetId))
+            return;
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            _fleetLocations[sample.CharacterId] = sample;
+            OnPropertyChanged(nameof(IsFleetShown));
+            ApplyFleetEnvelope([.. _fleetLocations.Values], DateTime.UtcNow);
+        });
     }
 
     public void ApplyFleetEnvelope(IReadOnlyList<MetricSample> samples, DateTime receivedUtc)
@@ -712,39 +926,84 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         AnchoredFleetMemberCount = anchors.Count;
 
-        if (RunState != ActivityRunState.Stopped && !_isManualRun && anchors.Count > 0)
+        if (RunState is not (ActivityRunState.Stopped or ActivityRunState.Saved) && !_isManualRun && anchors.Count > 0)
         {
             AnchorUtc = anchors.Min();
             StoppedAtUtc = null;
             RunState = ActivityRunState.Running;
             _StartEnemyObservations();
+            // A run nobody pressed START for still needs its row, or the loot has nothing to attach to.
+            if (RunId is null)
+                _ = _BeginEstimatedRunAsync(AnchorUtc.Value);
         }
 
         Refresh(receivedUtc);
     }
 
-    public void ApplyLocation(EsiLocationReading reading, DpsViewModel character)
+    private async Task _BeginEstimatedRunAsync(DateTime anchorUtc)
     {
-        InsideAbyssal = reading.Inside;
-        LocationDisplay = character.LocationDisplay;
-        _enemyObservationCharacterId = character.CharacterId;
-        if (RunState == ActivityRunState.Running)
-            _StartEnemyObservations();
-        Refresh(DateTime.UtcNow);
+        if (await _AdoptRunningRunAsync() || !await _ResolveCharacterAsync(mayAsk: false))
+            return;
+
+        await _StoreRunAsync(anchorUtc);
     }
 
-    public void AddBounty(BountyEvent bounty)
+    /// <summary>
+    /// Every bounty line this pilot's gamelog writes while the run is going, at the line's own time — the run's
+    /// <c>RunBountyEntry</c> rows, which SAVE hands straight to the store. Filtered by character because the section
+    /// says "own character" and this client watches every pilot's log at once.
+    /// </summary>
+    private void _OnBountyObserved(string characterName, BountyEvent bounty)
     {
-        if (!IsInsideAbyssal)
-            BountyIsk += bounty.Isk;
+        if (RunState != ActivityRunState.Running || IsInsideAbyssal
+            || !string.Equals(characterName, _runCharacterName, StringComparison.OrdinalIgnoreCase))
+            return;
 
-        Refresh(DateTime.UtcNow);
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            _bounties.Add(new RunBountyEntryInput { OccurredAtUtc = bounty.Timestamp, Isk = bounty.Isk });
+            BountyIsk += bounty.Isk;
+            Refresh(DateTime.UtcNow);
+        });
+    }
+
+    /// <summary>
+    /// Where the pilot is, from the one place the app already knows it: the gamelog service's own snapshot, which
+    /// carries the system its jump/undock lines wrote and the abyssal anchor ESI observed. Read on the tick rather
+    /// than pushed, so the abyssal countdown moves with the clock like every other readout of it.
+    /// </summary>
+    private void _RefreshLocation(DateTime nowUtc)
+    {
+        if (_gamelog is null || _runCharacterName is null)
+            return;
+
+        CharacterMetricsSnapshot snapshot = _gamelog.Snapshot(_runCharacterName);
+        if (snapshot.AbyssalAnchor is not null)
+            InsideAbyssal = true;
+        else if (snapshot.Location is not null && snapshot.LocationUnavailableReason is null)
+            InsideAbyssal = false;
+
+        // Same rule as DpsViewModel.LocationDisplay, and for the same reason (ET-71): a pilot known to be out of the
+        // game reads as that, never as the system they undocked in hours ago.
+        bool offline = _runCharacterId is { } characterId
+            && _services.GetService<ILocalCharacterPresence>()?.IsInGame(characterId, _runCharacterName) is false;
+
+        SolarSystem = offline ? null : snapshot.Location;
+        LocationDisplay = offline
+            ? "offline"
+            : AbyssalSpace.Describe(snapshot.Location, snapshot.AbyssalAnchor, nowUtc)
+              ?? EsiLocationReasonText.Describe(snapshot.LocationUnavailableReason);
     }
 
     public void Dispose()
     {
         if (_gamelog is not null)
+        {
             _gamelog.CombatObserved -= _OnCombatObserved;
+            _gamelog.BountyObserved -= _OnBountyObserved;
+        }
+
+        _metricSubscription?.Dispose();
         _timer?.Stop();
         _timer = null;
     }
@@ -769,8 +1028,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
 
         ISdeAccessor? sde = _services.GetService<ISdeAccessor>();
-        _enemyObservations = sde is null || _enemyObservationCharacterId is null ? null
-            : new RunEnemyObservationCollector(_enemyObservationCharacterId.Value,
+        _enemyObservations = sde is null || _runCharacterId is null ? null
+            : new RunEnemyObservationCollector(_runCharacterId.Value,
                 name => sde.TryGetTypeId(name, out int typeId) ? typeId : null);
         OnPropertyChanged(nameof(EnemyObservations));
     }
@@ -828,7 +1087,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         Activity.HeaderSummary = _ActivitySummary();
         Fit.HeaderSummary = FitSummary;
-        Fleet.HeaderSummary = FleetMemberCount > 1 ? FleetStatusText : "solo — no fleet";
+        // Never "solo": nothing here can observe the absence of a fleet, only the presence of one. Without any the
+        // section is hidden (IsFleetShown) and this line is not on screen at all.
+        Fleet.HeaderSummary = FleetMemberCount > 1 ? FleetStatusText : "no fleet has reported in";
         Bounty.HeaderSummary = BountyText;
         Loot.HeaderSummary = RunLoot?.Captures.Count > 0
             ? RunLoot.NetIskDisplay

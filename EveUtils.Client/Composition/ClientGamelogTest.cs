@@ -10,6 +10,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Events;
+using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Gamelog.Repositories;
 using EveUtils.Shared.Modules.Settings.Commands;
 using Microsoft.Extensions.DependencyInjection;
@@ -123,11 +124,11 @@ public static class ClientGamelogTest
             const int runPilotId = 95001;
             const long runFleet = 77;
             gamelog.MapCharacter(runPilotId, "RunPilot");
-            await gamelog.AddBountyAsync("RunPilot", 1_000_000); // earned before participating
+            await gamelog.AddBountyAsync("RunPilot", new BountyEvent(DateTime.UtcNow, 1_000_000)); // earned before participating
             ok &= Check("bounty before joining the fleet is not in the fleet meter",
                 FleetMetric(gamelog, runPilotId, MetricKind.Bounty, runFleet) == 0);
             participation.Set([new FleetParticipant(runPilotId, runFleet, ClientOnly: false)]);
-            await gamelog.AddBountyAsync("RunPilot", 2_500_000); // earned during the run
+            await gamelog.AddBountyAsync("RunPilot", new BountyEvent(DateTime.UtcNow, 2_500_000)); // earned during the run
             ok &= Check("only bounty earned during the run counts (2.5M)",
                 FleetMetric(gamelog, runPilotId, MetricKind.Bounty, runFleet) == 2_500_000);
 
