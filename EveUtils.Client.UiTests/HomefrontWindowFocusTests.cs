@@ -96,6 +96,32 @@ public sealed class HomefrontWindowFocusTests
         owner.Close();
     }
 
+    /// <summary>
+    /// A second call carries a newly copied signature, and the window already up is the one that has to hear it.
+    /// The service used to raise that window and drop the incoming view model, so "start run" on a fresh signature
+    /// left the previous site on screen — Raymond hit that three times (2026-09-02).
+    /// </summary>
+    [AvaloniaFact]
+    public void ASecondStart_HandsItsSignatureToTheWindowAlreadyUp()
+    {
+        using var instance = TestClientInstance.Create();
+        Window owner = _Owner(out DialogService dialogs);
+
+        var open = new ActivityWindowViewModel(ActivityKind.Site, instance.Services) { SignatureName = "Sansha Hideaway" };
+        dialogs.ShowActivityWindow(open, RunWindowOpenTrigger.LocalUser);
+        Window? first = dialogs.ActivityWindow;
+
+        dialogs.ShowActivityWindow(
+            new ActivityWindowViewModel(ActivityKind.Site, instance.Services) { SignatureName = "Drone Cluster" },
+            RunWindowOpenTrigger.LocalUser);
+
+        Assert.Same(first, dialogs.ActivityWindow);   // still one window, as ET-100 requires
+        Assert.Equal("Drone Cluster", open.SignatureName);
+
+        dialogs.CloseAllPopouts();
+        owner.Close();
+    }
+
     /// <summary>A second fleet-commander start with the window already up must not build or re-show anything: the
     /// service returns before it ever touches the window, so there is no path from here to a focus call.</summary>
     [AvaloniaFact]

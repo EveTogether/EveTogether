@@ -106,6 +106,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private bool _isManualRun;
     private int? _runCharacterId;
     private int? _namedCharacterId;
+    private (string? Group, string Name, IReadOnlyList<SdeSite> Sites)? _pendingSignature;
     private string? _runCharacterName;
     private ShipFitDetectionReading? _fitReading;
     private RunEnemyObservationCollector? _enemyObservations;
@@ -491,11 +492,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public string ClockHint => IsAbyssal
         ? (FleetMemberCount > 1 ? $"{FleetStatusText}: the envelope is the earliest anchored run. " : string.Empty)
           + "The clock is a floor — the moment of entry cannot be observed, so this is at most what is left."
-        : RunState == ActivityRunState.Stopped
-            // STOP is a pause, not an end (Raymond, 2026-09-02): stepping out mid-site and coming back has to cost
-            // you nothing, so START picks the same run back up. What ends a run is SAVE or DISCARD.
-            ? "Stopped runs keep their figures; start picks this run back up."
-            : "Manual start and stop are the only source for a site run.";
+        : _pendingSignature is { } waiting
+            ? $"{waiting.Name} is copied and waiting. Save or discard this {SignatureName} run and it takes over."
+            : RunState == ActivityRunState.Stopped
+                // STOP is a pause, not an end (Raymond, 2026-09-02): stepping out mid-site and coming back has to
+                // cost you nothing, so START picks the same run back up. What ends a run is SAVE or DISCARD.
+                ? "Stopped runs keep their figures; start picks this run back up."
+                : "Manual start and stop are the only source for a site run.";
 
     // ── Section bodies ──────────────────────────────────────────────────────────────────────────────
 
@@ -1086,16 +1089,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public async Task RefreshFleetCommandAsync(DateTime nowUtc)
     {
         IActiveFleetState? fleet = _services.GetService<IActiveFleetState>();
-        // Before START the run has no character yet, so fall back to the one this client is in the fleet as —
-        // otherwise a multi-character client could not reach START to resolve it.
-        //
-        // Deliberately NOT _ActingCharacterId(), which the FIT section uses: both halves of this decision — which
-        // fleet, and as whom — have to come from the same place, or the boss of one fleet is compared against a
-        // character selected in another. IActiveFleetState is empty until the fleets window's row selection fills
-        // it, and a null fleet id makes RunControlAuthority grant outright, so on Raymond's client this gate is
-        // currently inert. Making it live means deciding who loses the DISCARD button, which is ET-105's call and
-        // not this fix's.
-        int? actingCharacterId = _runCharacterId ?? fleet?.CharacterId;
+        // The same character the rest of the window works from. It used to fall back to IActiveFleetState, which
+        // holds whichever character a fleets-window row was last selected as — so a fleet commander flying a
+        // different toon than that row's acting one was compared against his own fleet's boss id and told only the
+        // FC may start or stop (Jithran, 2026-09-02). The boss is looked up for this same character, so both sides
+        // of the comparison are now one pilot.
+        int? actingCharacterId = _ActingCharacterId();
         if (actingCharacterId is not { } characterId || _services.GetService<FleetBossTracker>() is not { } bosses)
         {
             ApplyFleetCommand(fleet?.ActiveFleetId, null, actingCharacterId);
@@ -1221,6 +1220,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // Thrown away means gone from this window too: the next START is a new run, not a second attempt at this one.
         _ResetForNewRun();
         GroupCode = null;   // the group ended with the run, which is what a discard reaches the other members to say.
+        _ApplyPendingSignature();   // the site they copied while this run was still open
         if (RunLoot is not null)
             await RunLoot.RefreshAsync();
         Refresh(nowUtc);
@@ -1559,6 +1559,39 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         Loot.HeaderSummary = RunLoot?.Captures.Count > 0
             ? $"{_LootItemCount()} · {RunLoot.NetIskDisplay}"
             : RunLoot?.RunStatusMessage ?? "no loot captured";
+    }
+
+    /// <summary>
+    /// A signature copied while this window is up. With no run going it simply becomes the window's site. With a
+    /// run going on a DIFFERENT site it stops the clock and waits: that run is not this one, and ending it is SAVE
+    /// or DISCARD — the player's call, never the window's. The copied site is held and applied the moment they do.
+    /// </summary>
+    public void ApplySignature(string? group, string name, IReadOnlyList<SdeSite> sites)
+    {
+        if (RunState is ActivityRunState.NotStarted || string.Equals(SignatureName, name, StringComparison.Ordinal))
+        {
+            _pendingSignature = null;
+            SignatureGroup = group;
+            SignatureName = name;
+            MatchedSites = sites;
+            Refresh(DateTime.UtcNow);
+            return;
+        }
+
+        _pendingSignature = (group, name, sites);
+        StopRun(DateTime.UtcNow);
+        Refresh(DateTime.UtcNow);
+    }
+
+    private void _ApplyPendingSignature()
+    {
+        if (_pendingSignature is not { } pending)
+            return;
+
+        _pendingSignature = null;
+        SignatureGroup = pending.Group;
+        SignatureName = pending.Name;
+        MatchedSites = pending.Sites;
     }
 
     private string _LootItemCount()

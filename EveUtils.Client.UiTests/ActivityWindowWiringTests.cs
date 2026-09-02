@@ -83,6 +83,51 @@ public class ActivityWindowWiringTests
         Assert.DoesNotContain("no loot captured", model.Loot.HeaderSummary, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// A signature copied while a run is going reaches the window that is up. Raymond copied Drone Cluster, pressed
+    /// "start run", and got the Sansha Hideaway run he was already in, still ticking, three times over: the offer
+    /// builds a fresh view model and DialogService dropped it because a window already existed.
+    ///
+    /// A different site does not take the run with it. The clock stops, the copied site waits, and DISCARD is what
+    /// hands the window over — nothing is saved or thrown away for him.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ASignatureCopiedOnARunningRun_StopsTheClock_AndTakesOverOnceThatRunIsEnded()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        model.SignatureName = "Sansha Hideaway";
+        await model.StartRunCommand.ExecuteAsync(null);
+        Assert.Equal(ActivityRunState.Running, model.RunState);
+
+        model.ApplySignature("Combat Site", "Drone Cluster", []);
+
+        Assert.Equal(ActivityRunState.Stopped, model.RunState);   // the clock is off, the run is not gone
+        Assert.Equal("Sansha Hideaway", model.SignatureName);     // still the run's own site, not the copied one
+        Assert.Contains("Drone Cluster", model.ClockHint, StringComparison.Ordinal);
+
+        harness.Dialogs.OnConfirm = (_, _) => Task.FromResult(true);
+        await model.DiscardRunCommand.ExecuteAsync(null);
+
+        Assert.Equal("Drone Cluster", model.SignatureName);
+        Assert.Equal(ActivityRunState.NotStarted, model.RunState);
+        Assert.Null(model.RunId);
+    }
+
+    /// <summary>With no run going a copied signature is simply the window's site — no waiting, no stopping.</summary>
+    [AvaloniaFact]
+    public async Task ASignatureCopiedOnAnIdleWindow_BecomesItsSiteOutright()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+
+        model.ApplySignature("Combat Site", "Drone Cluster", []);
+
+        Assert.Equal("Drone Cluster", model.SignatureName);
+        Assert.Equal(ActivityRunState.NotStarted, model.RunState);
+        Assert.DoesNotContain("waiting", model.ClockHint, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Raymond's evening in one test: the clock says a run is on and the LOOT section says none is.</summary>
     [AvaloniaFact]
     public async Task WhileTheClockRuns_TheLootSectionNeverSaysNoRunIsRunning()
