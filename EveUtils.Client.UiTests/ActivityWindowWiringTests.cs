@@ -19,6 +19,7 @@ using StoredRunState = EveUtils.Shared.Modules.Runs.Enums.RunState;
 using EveUtils.Shared.Modules.Runs.Queries;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 using RunCommands = EveUtils.Shared.Modules.Runs.Commands;
 
@@ -112,6 +113,28 @@ public class ActivityWindowWiringTests
         Run left = await _RunAsync(harness, open!.Value);
         Assert.Equal(StoredRunState.Stopped, left.State);
         Assert.Null(left.DeletedAtUtc);
+    }
+
+    /// <summary>
+    /// The diagnosis line names the run it closed, not the one that replaced it. It read SignatureName after
+    /// _SetSignature had already moved that on, so it reported the site just copied as the site just ended — in the
+    /// one line whose whole job is telling us where to look.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TheDecisionLine_NamesTheRunThatWasClosed_NotTheOneThatReplacedIt()
+    {
+        var log = new RecordingLoggerProvider();
+        using var harness = await ActivityWindowHarness.CreateAsync(
+            configure: services => services.AddLogging(builder => builder.AddProvider(log)));
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        model.SignatureName = "Sansha Hideaway";
+        await model.StartRunCommand.ExecuteAsync(null);
+
+        await model.ApplySignatureAsync("Combat Site", "Drone Cluster", []);
+
+        string line = Assert.Single(log.Messages, message => message.Contains("closed out", StringComparison.Ordinal));
+        Assert.Contains("Sansha Hideaway", line, StringComparison.Ordinal);
+        Assert.DoesNotContain("closed out the open Drone Cluster", line, StringComparison.Ordinal);
     }
 
     /// <summary>The group case on the open-window route too — it must wait, not close out.</summary>

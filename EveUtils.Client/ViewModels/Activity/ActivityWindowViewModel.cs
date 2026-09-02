@@ -1591,8 +1591,33 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// run going on a DIFFERENT site it stops the clock and waits: that run is not this one, and ending it is SAVE
     /// or DISCARD — the player's call, never the window's. The copied site is held and applied the moment they do.
     /// </summary>
+    /// <summary>
+    /// The clipboard hands this over from a void call, so the work is tracked rather than dropped: a dispatcher
+    /// that throws — a locked database is the one that happens — becomes a toast and a log line instead of an
+    /// unobserved task, the same treatment <c>AbyssalLootCapture.StoreAndOfferAsync</c> gives its own write.
+    ///
+    /// Nothing races on the caller's side: <c>DialogService</c> only reaches here when a window is already up, and
+    /// every branch after it either returns or activates that same window. It never builds a second one.
+    /// </summary>
     public void ApplySignature(string? group, string name, IReadOnlyList<SdeSite> sites) =>
-        _ = ApplySignatureAsync(group, name, sites);
+        LastSignature = _ApplySignatureSafelyAsync(group, name, sites);
+
+    /// <summary>The pending hand-over, so a test can await what a void call started.</summary>
+    internal Task LastSignature { get; private set; } = Task.CompletedTask;
+
+    private async Task _ApplySignatureSafelyAsync(string? group, string name, IReadOnlyList<SdeSite> sites)
+    {
+        try
+        {
+            await ApplySignatureAsync(group, name, sites);
+        }
+        catch (Exception ex)
+        {
+            _services.GetService<IToastService>()?.Show("Site not switched",
+                $"Could not close the open run to make room for {name}: {ex.Message}", ToastKind.Error);
+            _SignatureDecision($"failed: {ex.Message}", name);
+        }
+    }
 
     /// <summary>
     /// Same rule as the adopt-on-open path, and deliberately the same method rather than a second copy of it: the
@@ -1614,12 +1639,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // the site just copied. A group run is left standing, because ending it reaches every other member.
         if (RunId is { } runId && GroupCode is null && FleetId is null)
         {
+            string? closed = SignatureName;   // read before _SetSignature moves it on to the copied site
             using var scope = _services.CreateScope();
             await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
                 .Send(new DiscardRunCommand(runId, DateTime.UtcNow));
             _ResetForNewRun();
             _SetSignature(group, name, sites);
-            _SignatureDecision($"closed out the open {SignatureName} run", name);
+            _SignatureDecision($"closed out the open {closed} run", name);
             if (RunLoot is not null)
                 await RunLoot.RefreshAsync();
             Refresh(DateTime.UtcNow);
@@ -1639,8 +1665,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         MatchedSites = sites;
     }
 
-    /// <summary>What this window did with a copied signature, and why. Warning because AppLogger keeps nothing
-    /// below it, and this is the line that says which of the two routes ran.</summary>
+    /// <summary>
+    /// What this window did with a copied signature, and why — the line that says which of the two routes ran,
+    /// after this bug survived four attempts because that was invisible.
+    ///
+    /// ponytail: temporary instrument, at Warning only because AppLogger drops everything below it and
+    /// app-errors.jsonl is the only file a player can hand over. An ordinary copy has no business writing to an
+    /// error log: take this out once Raymond confirms the site switch behaves, or give AppLogger a level that
+    /// reaches that file without claiming something went wrong.
+    /// </summary>
     private void _SignatureDecision(string what, string name) =>
         _services.GetService<ILoggerFactory>()?.CreateLogger<ActivityWindowViewModel>().LogWarning(
             "Copied signature {Signature}: {What} (run {RunId}, state {State}, group {Group}, fleet {Fleet}).",
