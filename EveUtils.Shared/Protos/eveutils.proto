@@ -358,6 +358,10 @@ message ClaimPairingReply {
   string server_name = 7;
   string corporation_name = 8;
   string alliance_name = 9;
+  // The id of the session issued for this pairing. Handed over here so a freshly coupled client can name its
+  // session immediately; without it there is a window in which a refusal cannot be classified (ET-123), and
+  // re-coupling is exactly the path a client takes out of "your session is gone".
+  int32 session_id = 10;
 }
 
 // Why a refresh was refused, so the client knows whether trying again could ever come to anything (ET-123).

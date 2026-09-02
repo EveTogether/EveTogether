@@ -96,7 +96,11 @@ public sealed class ServerPairingService(
 
         await sessionStore.SaveAsync(
             serverAddress,
-            new ClientSessionTokens(claim.SessionToken, claim.SessionRefreshToken, claim.CharacterName, claim.CharacterId),
+            // The session id comes with the pairing, so a client that has just coupled can name its session from the
+            // first second. Coupling again is the way out of "your session is gone", and that recovery should not
+            // start with a window in which the same refusal is unclassifiable all over again.
+            new ClientSessionTokens(
+                claim.SessionToken, claim.SessionRefreshToken, claim.CharacterName, claim.CharacterId, claim.SessionId),
             cancellationToken);
 
         return new PairingResult(

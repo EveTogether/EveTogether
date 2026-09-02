@@ -21,4 +21,8 @@ public sealed class PairingState
     public string? AllianceName { get; set; }
     public string? SessionToken { get; set; }
     public string? SessionRefreshToken { get; set; }
+
+    /// <summary>The id of the session just issued, handed to the client along with the tokens so a fresh pairing
+    /// can name its session from the first second instead of waiting to learn it from a heartbeat (ET-123).</summary>
+    public int SessionId { get; set; }
 }
