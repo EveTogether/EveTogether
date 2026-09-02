@@ -363,7 +363,8 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
         Func<string, IReadOnlyList<CharacterPickOption>>? exportPickOptions = null,
         string? description = null, string? tags = null,
         ICharacterAttributesRepository? attributesRepository = null, IToastService? toasts = null,
-        Func<int, Task<FitMetadataDraft?>>? onEditMetadata = null, Func<string, Task>? onSharedToServer = null)
+        Func<int, Task<FitMetadataDraft?>>? onEditMetadata = null, Func<string, Task>? onSharedToServer = null,
+        string? name = null)
     {
         _fit = fit;
         _onEditMetadata = onEditMetadata;
@@ -380,7 +381,9 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
         _toasts = toasts;
         _onShowInfo = onShowInfo;
         _validator = data is null ? null : new FitValidator(data);   // validate skills + resource budgets
-        Name = fit.Name;
+        // fit-metadata: the stored name wins over the one still standing in RawJson, which renaming leaves alone
+        // (same rule as the browser's rows). _ApplyMetadata keeps the header in step during an in-place edit.
+        Name = string.IsNullOrWhiteSpace(name) ? fit.Name : name;
         ShipName = names.TypeName(fit.ShipTypeId);
         _isStructure = data?.GetCategoryId(fit.ShipTypeId) == StructureCategoryId;
 

@@ -174,7 +174,7 @@ public sealed partial class FitRowViewModel : ViewModelBase
         Action<string>? reportExportStatus = null, IMarketPriceRepository? prices = null,
         Func<int, Task>? onEditMetadata = null, Func<int, Task>? onDelete = null, string? tags = null,
         ICharacterPortraitProvider? portraits = null, int uploaderCharacterId = 0,
-        Func<string, Task>? onSharedToServer = null)
+        Func<string, Task>? onSharedToServer = null, string? name = null)
     {
         Fit = fit;
         LocalFitId = localFitId;
@@ -195,7 +195,9 @@ public sealed partial class FitRowViewModel : ViewModelBase
         OpenEftWindowCommand   = new AsyncRelayCommand(() => InvokeExportAsync((a, r) => a.OpenEftWindowAsync(r)), () => CanExport);
         EditMetadataCommand    = new AsyncRelayCommand(InvokeEditMetadataAsync, () => CanManage && _onEditMetadata is not null);
         DeleteCommand          = new AsyncRelayCommand(InvokeDeleteAsync, () => CanManage && _onDelete is not null);
-        Name = fit.Name;
+        // fit-metadata: the stored name wins — renaming leaves RawJson (and with it the fit's identity) alone, so the
+        // JSON keeps the name it was imported under and can only serve as the fallback.
+        Name = string.IsNullOrWhiteSpace(name) ? fit.Name : name;
         ShipTypeId = fit.ShipTypeId;
         ShipTypeLabel = names.TypeName(fit.ShipTypeId);
         HullClass = names.GroupName(fit.ShipTypeId);
