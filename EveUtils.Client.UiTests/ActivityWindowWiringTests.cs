@@ -61,6 +61,28 @@ public class ActivityWindowWiringTests
         Assert.Single(model.RunLoot.Captures);
     }
 
+    /// <summary>
+    /// A copy taken while the window stands open reaches the section that shows it. Raymond, 2026-09-02: the toast
+    /// said "Loot copied" and the LOOT section under it went on reading "no loot captured" — the capture really was
+    /// filed against the run, and the window simply never looked again. Stored through the same command the
+    /// clipboard uses, with nothing calling the window afterwards, so it is the wiring that is being measured.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task LootCopiedWhileTheWindowIsOpen_ReachesTheSectionThatShowsIt()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        await model.StartRunCommand.ExecuteAsync(null);
+        Assert.Empty(model.RunLoot!.Captures);
+
+        await harness.Services.GetRequiredService<IDispatcher>()
+            .Send(new RunCommands.AddRunLootCaptureCommand(_Capture()));
+
+        await ActivityWindowHarness.WaitUntil(() => model.RunLoot.Captures.Count > 0);
+        Assert.Single(model.RunLoot.Captures);
+        Assert.DoesNotContain("no loot captured", model.Loot.HeaderSummary, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Raymond's evening in one test: the clock says a run is on and the LOOT section says none is.</summary>
     [AvaloniaFact]
     public async Task WhileTheClockRuns_TheLootSectionNeverSaysNoRunIsRunning()

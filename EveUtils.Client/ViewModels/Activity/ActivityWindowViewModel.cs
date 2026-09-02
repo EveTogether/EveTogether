@@ -30,6 +30,7 @@ using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Control;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
@@ -90,6 +91,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private readonly IServiceProvider _services;
     private readonly GamelogClientService? _gamelog;
     private readonly IDisposable? _metricSubscription;
+    private readonly IDisposable? _lootSubscription;
 
     // The bounty lines seen while this run was running, with their own times — what SAVE writes as the run's
     // RunBountyEntry rows, and what the section adds up meanwhile.
@@ -118,6 +120,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         }
 
         _metricSubscription = services.GetService<IEventBus>()?.Subscribe<FleetMetricEvent>(_OnFleetMetric);
+        // The clipboard records loot; this window shows it, and the two never met. Without this the LOOT section
+        // only ever held what was already stored when the window loaded or started its run.
+        _lootSubscription = services.GetService<IEventBus>()?.Subscribe<RunLootCapturedEvent>(_OnRunLootCaptured);
         RunLoot = services.GetService<CqrsDispatcher>() is { } dispatcher ? new RunLootViewModel(dispatcher) : null;
         if (RunLoot is not null)
             RunLoot.PropertyChanged += (_, _) => _RefreshSummaries();
@@ -1189,6 +1194,22 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     }
 
     /// <summary>
+    /// A clipboard copy has just been filed against a run. Refreshed only when it is <i>this</i> window's run, so a
+    /// second window on another run does not redraw for loot that is not its own.
+    ///
+    /// The window reads its loot from the store, and until this arrived nothing told it to read again: a copy taken
+    /// while the window stood open was stored, toasted as "Loot copied", and left the LOOT section under it still
+    /// reading "no loot captured" (Raymond, 2026-09-02). The run had the loot; the window simply never looked.
+    /// </summary>
+    private void _OnRunLootCaptured(RunLootCapturedEvent integrationEvent)
+    {
+        if (RunLoot is null || integrationEvent.Data != RunId)
+            return;
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = RunLoot.RefreshAsync());
+    }
+
+    /// <summary>
     /// A fleet member's sample, straight off the bus <c>FleetMetricPublisher</c> puts them on. Held per member so
     /// the envelope is re-taken over the whole fleet each time, not over the one sample that just arrived — which is
     /// also the only way the FLEET section can say anything at all: nothing else tells this window a fleet exists.
@@ -1360,6 +1381,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         }
 
         _metricSubscription?.Dispose();
+        _lootSubscription?.Dispose();
         _timer?.Stop();
         _timer = null;
     }
