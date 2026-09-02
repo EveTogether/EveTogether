@@ -408,7 +408,7 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
             FROM Type t
             JOIN InvGroup g ON g.groupId = t.groupId
             WHERE g.categoryId = 11
-              AND t.nameEn LIKE $pattern
+              AND t.nameEn LIKE $pattern ESCAPE '\'
               AND EXISTS (
                   SELECT 1 FROM TypeDogmaAttribute a
                   WHERE a.typeId = t.typeId AND a.attributeId IN (114, 116, 117, 118)
