@@ -53,9 +53,11 @@ public class ServerLinkStateReachesTheRightChipTests
         Assert.Equal(ServerConnectionState.SessionGone, Link(owner, Abnoba).State);
         Assert.All(Healthy, id => Assert.Equal(ServerConnectionState.Connected, Link(owner, id).State));
 
-        // And the banner names the server, so the one character in trouble is not lost among five healthy ones.
+        // And the banner names that one character, so it is not lost among five healthy ones (ET-123).
         Assert.True(owner.IsServerPairingAlert);
-        Assert.Contains("couple the character again", owner.ServerPairingAlertMessage);
+        Assert.Contains($"Char{Abnoba}", owner.ServerPairingAlertMessage);
+        Assert.Contains("couple it to", owner.ServerPairingAlertMessage);
+        Assert.All(Healthy, id => Assert.DoesNotContain($"Char{id}", owner.ServerPairingAlertMessage));
     }
 
     private static CharacterViewModel Card(int characterId)

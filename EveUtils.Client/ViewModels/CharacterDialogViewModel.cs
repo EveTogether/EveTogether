@@ -124,7 +124,9 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
     private async Task RecoupleAsync(ServerLinkViewModel link)
     {
         Status = $"Coupling {link.DisplayName} again…";
-        var ok = await _owner.RunCoupleAsync();
+        // Hands the address over so the dialog opens filled in: this coupling already exists, it just has no session
+        // on the server any more, so there is nothing here for the user to look up or retype (ET-123).
+        var ok = await _owner.RunCoupleAsync(link.Address);
         await ReloadServerLinksAsync();
         Status = ok ? "Coupled." : "Coupling cancelled.";
     }

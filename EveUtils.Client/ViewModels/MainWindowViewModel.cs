@@ -906,15 +906,20 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     {
         var links = Characters.SelectMany(c => c.ServerLinks).ToList();
 
-        (IsServerPairingAlert, ServerPairingAlertMessage) = ServerPairingAlert.For(
-            links.Select(l => (l.DisplayName, l.State)));
+        // Carries the character's own name, because with six characters on one server naming only the server leaves
+        // the reader to guess which of their pilots has to be dealt with (ET-123).
+        var named = Characters
+            .SelectMany(c => c.ServerLinks.Select(l => new ServerPairingAlert.Link(l.DisplayName, c.Name, l.State)))
+            .ToList();
+
+        (IsServerPairingAlert, ServerPairingAlertMessage) = ServerPairingAlert.For(named);
 
         (IsServerCertificateAlert, ServerCertificateAlertMessage) = ServerCertificateAlert.For(
             links.Where(l => l.State is ServerConnectionState.CertificateRejected)
                  .Select(l => new ServerCertificateAlert.RejectedCertificate(
                      l.DisplayName, GetServerFingerprint(l.Address), GetPresentedServerFingerprint(l.Address))));
 
-        AnnounceRefusedServers(links);
+        AnnounceRefusedServers(named);
     }
 
     // Servers already announced by a toast this run, so the slow retry behind a refused session cannot re-announce
@@ -930,18 +935,19 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// it carries the ongoing state; this is only the moment, and only on the window in front of the user — the
     /// banner lives on the main window, which is not necessarily the one they are looking at.
     /// </summary>
-    private void AnnounceRefusedServers(IReadOnlyList<ServerLinkViewModel> links)
+    private void AnnounceRefusedServers(IReadOnlyList<ServerPairingAlert.Link> links)
     {
-        var gone = NamesInState(links, ServerConnectionState.SessionGone);
-        if (IsNewlyAnnounced(_sessionGoneAnnounced, gone))
+        var gone = InState(links, ServerConnectionState.SessionGone);
+        if (IsNewlyAnnounced(_sessionGoneAnnounced, Keys(gone)))
             Show(ServerLinkRefusalToast.ForSessionGone(gone), ServerLinkRefusalToast.SessionGoneReplacementKey);
 
-        var refused = NamesInState(links, ServerConnectionState.SessionExpired)
-            // A server whose session is gone is announced as gone and nothing else — the softer card would sit on
+        var goneKeys = Keys(gone).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var refused = InState(links, ServerConnectionState.SessionExpired)
+            // A coupling whose session is gone is announced as gone and nothing else — the softer card would sit on
             // top of the one that actually asks for something.
-            .Where(n => !gone.Contains(n, StringComparer.OrdinalIgnoreCase))
+            .Where(a => !goneKeys.Contains($"{a.Server} {a.Character}"))
             .ToList();
-        if (IsNewlyAnnounced(_refusalAnnounced, refused))
+        if (IsNewlyAnnounced(_refusalAnnounced, Keys(refused)))
             Show(ServerLinkRefusalToast.For(refused), ServerLinkRefusalToast.ReplacementKey);
 
         void Show((string Title, string Message) card, string replacementKey) =>
@@ -949,12 +955,18 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 card.Title, card.Message, ToastKind.Warning, [], onClosed: null, replacementKey: replacementKey);
     }
 
-    private static List<string> NamesInState(IReadOnlyList<ServerLinkViewModel> links, ServerConnectionState state) =>
+    private static List<(string Server, string Character)> InState(
+        IReadOnlyList<ServerPairingAlert.Link> links, ServerConnectionState state) =>
         links
             .Where(l => l.State == state)
-            .Select(l => l.DisplayName)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(l => (Server: l.ServerName, Character: l.CharacterName))
+            .Distinct()
             .ToList();
+
+    // Announced per (server, character) rather than per server: one character going quiet on a server another five
+    // are happily using is its own event, and keying on the server alone would swallow it (ET-123).
+    private static List<string> Keys(IEnumerable<(string Server, string Character)> affected) =>
+        affected.Select(a => $"{a.Server} {a.Character}").ToList();
 
     /// <summary>Records the current names against what has already been announced and says whether any of them is
     /// new. Names that recovered drop out, so a second spell is told again. Every name is added rather than stopping
@@ -1893,11 +1905,30 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         return scopes?.ServerName;
     }
 
-    public async Task<bool> RunCoupleAsync()
+    /// <summary>
+    /// <paramref name="restoreAddress"/> couples a server this client is already paired to again — the way back from
+    /// a session the server has dropped. The dialog opens with the address and the user's own label already filled
+    /// in, because both are stored with the coupling being restored and retyping them is asking for something the
+    /// client already knows (ET-123).
+    /// <para>Deliberately NOT offered after a refused certificate: there the address is precisely what is in
+    /// question, and handing it back pre-filled would walk the user past the fingerprint check (ET-95). The only
+    /// caller that passes an address is the link's recouple action, which is gated on
+    /// <see cref="ServerLinkViewModel.CanRecouple"/>.</para>
+    /// </summary>
+    public async Task<bool> RunCoupleAsync(string? restoreAddress = null)
     {
         if (_pairing is null || _dialogs is null) return false;
 
-        var couple = await _dialogs.CoupleServerAsync(ProbeServerNameAsync);
+        CoupleServerResult? prefill = null;
+        if (!string.IsNullOrWhiteSpace(restoreAddress))
+        {
+            // The label only — not the server's own name, which the dialog already falls back to on its own; putting
+            // it in the box would turn it into a user label the user never chose.
+            var known = _serverRegistry is null ? null : await _serverRegistry.GetAsync(restoreAddress);
+            prefill = new CoupleServerResult(restoreAddress, known?.Label);
+        }
+
+        var couple = await _dialogs.CoupleServerAsync(ProbeServerNameAsync, prefill);
         if (couple is null) { ActivityStatus = "Coupling cancelled."; return false; }
         var address = couple.Address;
 

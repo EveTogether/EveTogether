@@ -25,9 +25,21 @@ public partial class CoupleServerWindow : ChromedWindow
         AvaloniaXamlLoader.Load(this);
     }
 
-    public CoupleServerWindow(Func<string, CancellationToken, Task<string?>> probeServerName) : this()
+    public CoupleServerWindow(Func<string, CancellationToken, Task<string?>> probeServerName, CoupleServerResult? prefill = null)
+        : this()
     {
         _probeServerName = probeServerName;
+
+        // Restoring a coupling the client already knows: fill in what it knows rather than asking for it again, so
+        // the only steps left are connect and sign in (ET-123).
+        if (prefill is not null)
+        {
+            this.FindControl<TextBox>("AddressBox")!.Text = prefill.Address;
+            this.FindControl<TextBox>("LabelBox")!.Text = prefill.Label ?? "";
+            var hint = this.FindControl<TextBlock>("IntroBlock");
+            if (hint is not null)
+                hint.Text = "Filled in from the existing coupling — just sign in again as this character.";
+        }
 
         this.FindControl<TextBox>("AddressBox")!.TextChanged += OnAddressChanged;
         _debounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };

@@ -212,10 +212,11 @@ public sealed class DialogService : IDialogService, ISingletonService
         return await _Over(dialog).ShowDialog<IReadOnlyList<int>?>(_owner);
     }
 
-    public async Task<CoupleServerResult?> CoupleServerAsync(Func<string, CancellationToken, Task<string?>> probeServerName)
+    public async Task<CoupleServerResult?> CoupleServerAsync(
+        Func<string, CancellationToken, Task<string?>> probeServerName, CoupleServerResult? prefill = null)
     {
         if (_owner is null) return null;
-        var dialog = new CoupleServerWindow(probeServerName);
+        var dialog = new CoupleServerWindow(probeServerName, prefill);
         return await _Over(dialog).ShowDialog<CoupleServerResult?>(_owner);
     }
 

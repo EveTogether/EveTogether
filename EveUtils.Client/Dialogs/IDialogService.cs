@@ -48,7 +48,14 @@ public interface IDialogService
     /// address change to show the server's own name before pairing — an unauthenticated, accept-any-
     /// cert probe; null/throw means "not reachable". Real trust is still established via TOFU at pairing.
     /// </summary>
-    Task<CoupleServerResult?> CoupleServerAsync(Func<string, CancellationToken, Task<string?>> probeServerName);
+    /// <param name="prefill">
+    /// What is already known about the coupling being restored, filling the fields in so the user only has to
+    /// connect and sign in (ET-123). Null for a fresh coupling, where nothing is known yet. Only offered where the
+    /// address is not in question — never after a refused certificate, which is exactly the case where the user has
+    /// to check the address is still answered by their own server.
+    /// </param>
+    Task<CoupleServerResult?> CoupleServerAsync(
+        Func<string, CancellationToken, Task<string?>> probeServerName, CoupleServerResult? prefill = null);
 
     /// <summary>
     /// Server-picker dialog: choose which coupled server to share a fit to. Returns the chosen
