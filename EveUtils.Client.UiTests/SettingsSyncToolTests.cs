@@ -548,7 +548,7 @@ public sealed class SettingsSyncToolTests : IDisposable
             new PngBitmapEncoderOptions());
 
         // The two blocks are both on screen and labelled apart — the mistake this screen must not allow.
-        var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(block => block.Text).ToList();
+        var texts = RenderedText.VisibleTexts(window);
         Assert.Contains("CHARACTER SETTINGS", texts);
         Assert.Contains("ACCOUNT SETTINGS", texts);
         Assert.Contains("BACKUPS", texts);
@@ -593,12 +593,15 @@ public sealed class SettingsSyncToolTests : IDisposable
         window.CaptureRenderedFrame()!.Save(
             Path.Combine(_ShotDirectory(), "eveutils-settings-backups.png"), new PngBitmapEncoderOptions());
 
-        var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(block => block.Text).ToList();
+        // Every assertion below is a position claim ("on screen, not clipped below the fold"), so this needs the
+        // bounds-checked helper, not the plain visibility one (ET-89) — a hidden TextBlock is not the risk here,
+        // one pushed past the window's edge while still IsEffectivelyVisible is.
+        var texts = RenderedText.OnScreenTexts(window);
         Assert.Contains("CHARACTERS (4)", texts);
         Assert.Contains("ACCOUNTS (2)", texts);
         Assert.Contains("Main account · 1001", texts);   // the accounts are on screen, not clipped below the fold
         Assert.Contains("Account 1002", texts);
-        Assert.Contains(texts, text => text is not null && text.Contains("Restoring writes these 6 files back"));
+        Assert.Contains(texts, text => text.Contains("Restoring writes these 6 files back"));
         window.Close();
     }
 
@@ -721,7 +724,7 @@ public sealed class SettingsSyncToolTests : IDisposable
         window.CaptureRenderedFrame()!.Save(
             Path.Combine(_ShotDirectory(), "eveutils-settings-backups-docked.png"), new PngBitmapEncoderOptions());
 
-        var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(block => block.Text).ToList();
+        var texts = RenderedText.VisibleTexts(window);
         Assert.Contains("CHARACTERS (4)", texts);
         Assert.Contains("ACCOUNTS (2)", texts);
         Assert.Contains("Jithran · 90000001", texts);
@@ -1187,10 +1190,10 @@ public sealed class SettingsSyncToolTests : IDisposable
         window.CaptureRenderedFrame()!.Save(
             Path.Combine(_ShotDirectory(), "eveutils-settings-sync-autosync.png"), new PngBitmapEncoderOptions());
 
-        var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(block => block.Text).ToList();
+        var texts = RenderedText.VisibleTexts(window);
         Assert.Contains("PRESETS", texts);
-        Assert.Contains(texts, text => text is not null && text.Contains("Jithran →"));     // the remembered rule
-        Assert.Contains(texts, text => text is not null && text.Contains("It has not run yet"));
+        Assert.Contains(texts, text => text.Contains("Jithran →"));     // the remembered rule
+        Assert.Contains(texts, text => text.Contains("It has not run yet"));
         window.Close();
     }
 
@@ -1223,15 +1226,18 @@ public sealed class SettingsSyncToolTests : IDisposable
         window.CaptureRenderedFrame()!.Save(
             Path.Combine(_ShotDirectory(), "eveutils-settings-sync-docked-autosync.png"), new PngBitmapEncoderOptions());
 
-        var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(block => block.Text).ToList();
+        var texts = RenderedText.VisibleTexts(window);
         Assert.Contains("CHARACTER SETTINGS", texts);
         Assert.Contains("ACCOUNT SETTINGS", texts);
         Assert.Contains("BACKUPS", texts);
         Assert.Contains("PRESETS", texts);
-        Assert.Contains(texts, text => text is not null && text.Contains("Nothing set yet"));
-        // The file rows are still there — the new panels did not push the lists off the screen.
-        Assert.Contains("Jithran", texts);
-        Assert.Contains("Unnamed account", texts);
+        Assert.Contains(texts, text => text.Contains("Nothing set yet"));
+        // The file rows are still there — the new panels did not push the lists off the screen. That is a
+        // position claim, and a plain visibility filter cannot back it up: "Jithran" also matches an unrelated,
+        // hidden TextBlock elsewhere in this window (ET-89 grooming), so Contains would pass on the wrong one.
+        var onScreen = RenderedText.OnScreenTexts(window);
+        Assert.Contains("Jithran", onScreen);
+        Assert.Contains("Unnamed account", onScreen);
         window.Close();
     }
 
@@ -1260,8 +1266,8 @@ public sealed class SettingsSyncToolTests : IDisposable
         await _WaitForAsync(() => false, tries: 12);
         exportWindow.CaptureRenderedFrame()!.Save(
             Path.Combine(_ShotDirectory(), "eveutils-preset-export.png"), new PngBitmapEncoderOptions());
-        var exportTexts = exportWindow.GetVisualDescendants().OfType<TextBlock>().Select(block => block.Text).ToList();
-        Assert.Contains(exportTexts, text => text is not null && text.Contains("no login tokens", StringComparison.OrdinalIgnoreCase));
+        var exportTexts = RenderedText.VisibleTexts(exportWindow);
+        Assert.Contains(exportTexts, text => text.Contains("no login tokens", StringComparison.OrdinalIgnoreCase));
         exportWindow.Close();
 
         var presetPath = Path.Combine(_root, "carried", "default.etpreset");
@@ -1281,7 +1287,7 @@ public sealed class SettingsSyncToolTests : IDisposable
         importWindow.CaptureRenderedFrame()!.Save(
             Path.Combine(_ShotDirectory(), "eveutils-preset-import.png"), new PngBitmapEncoderOptions());
 
-        var importTexts = importWindow.GetVisualDescendants().OfType<TextBlock>().Select(block => block.Text).ToList();
+        var importTexts = RenderedText.VisibleTexts(importWindow);
         Assert.Contains("OVERWRITES", importTexts);   // the character already here
         Assert.Contains("NEW FILE", importTexts);     // the account that is not
         importWindow.Close();
