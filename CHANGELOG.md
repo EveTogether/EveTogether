@@ -153,6 +153,13 @@ taken from the matching `## vX.Y.Z` section below.
   and `Google.Protobuf` to 3.36.0. `xunit.v3`/`xunit.runner.visualstudio` 4.0.0 (major) held back
   pending review.
 
+### Fixed
+- **A fit you rename now carries its new name everywhere.** The name you type in *Edit fit details* was stored
+  correctly, but the card in the fit browser and the header of the fit detail window both went on reading the name
+  out of the fit's original import data — so the old name kept coming back. Both now show the name you gave it, and
+  fall back to the imported one when you never renamed it. Renaming still leaves the fit's contents untouched: a
+  renamed fit is the same fit, which is why the name is kept apart from them in the first place.
+
 ## v0.2.0-beta — 2026-07-06
 
 First beta of the EVE Together desktop client, and the first release from the public

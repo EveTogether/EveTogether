@@ -273,7 +273,9 @@ public sealed class RecordingDialogService : IDialogService
         await OnShowPresetImport(viewModel);
         return viewModel.Applied;
     }
-    public void ShowFitBrowser(FitBrowserViewModel viewModel) => throw NotUsed();
+    /// <summary>The view-model of the last fit browser shown, or null.</summary>
+    public FitBrowserViewModel? LastFitBrowser { get; private set; }
+    public void ShowFitBrowser(FitBrowserViewModel viewModel) => LastFitBrowser = viewModel;
     public void ShowCompositions(CompositionsViewModel viewModel) => throw NotUsed();
     public FitDetailWindowViewModel? LastFitDetail { get; private set; }
     public void ShowFitDetail(FitDetailWindowViewModel viewModel) => LastFitDetail = viewModel;

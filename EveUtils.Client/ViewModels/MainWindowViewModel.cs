@@ -759,7 +759,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             _services.GetService<ICharacterAttributesRepository>(),   // SP/time rate for the Skills Required panel
             _services.GetService<IToastService>(),                    // toast on a refused module activation (cloak conflict)
             onEditMetadata,                                           // in-place edit of the fit's name/notes/tags (local fits)
-            _refreshServerFitBrowserTab);                             // refresh the browser's server tab after a share (null if the browser was never opened this session)
+            _refreshServerFitBrowserTab,                              // refresh the browser's server tab after a share (null if the browser was never opened this session)
+            metadata?.Name);                                          // fit-metadata: the stored name, which RawJson does not carry after a rename
         await viewModel.InitializeAsync();
         _dialogs.ShowFitDetail(viewModel);
         _ = viewModel.LoadImagesAsync();   // opt-in CCP images pop in after the window shows
@@ -827,7 +828,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 _services!.GetService<IMarketPriceRepository>(), onEditMetadata, onDelete, tags: f.Tags,
                 portraits: _services!.GetService<ICharacterPortraitProvider>(),
                 uploaderCharacterId: owner?.CharacterId ?? 0,
-                onSharedToServer: onSharedToServer);
+                onSharedToServer: onSharedToServer, name: f.Name);
             // The images are the page's business, not the library's: the browser pulls them in for the fits it is
             // actually showing (FitBrowserTabViewModel.FillPage). A library of 148 fits used to fetch 148 renders
             // here, of which one page-worth was ever looked at.
