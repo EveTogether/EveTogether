@@ -801,6 +801,9 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.Property<int>("SyncState")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("TimesCorrectedAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("GroupCode", "CharacterId");
@@ -837,7 +840,7 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("Direction")
+                    b.Property<int>("Count")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("EnemyName")

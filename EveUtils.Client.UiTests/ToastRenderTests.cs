@@ -45,7 +45,7 @@ public class ToastRenderTests
         Pump();
 
         var frame = window.CaptureRenderedFrame() ?? throw new InvalidOperationException("no rendered frame to save");
-        frame.Save(Out("toast-real.png"));
+        frame.Save(Out("toast-real.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 

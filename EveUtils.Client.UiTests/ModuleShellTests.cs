@@ -50,7 +50,7 @@ public class ModuleShellTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(Out("eveutils-shell-docked.png"));
+        frame!.Save(Out("eveutils-shell-docked.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -66,7 +66,7 @@ public class ModuleShellTests
         Assert.Equal(1100d, window.Width);
 
         var frame = window.CaptureRenderedFrame();
-        frame!.Save(Out("eveutils-shell-docked-collapsed.png"));
+        frame!.Save(Out("eveutils-shell-docked-collapsed.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -88,7 +88,7 @@ public class ModuleShellTests
         Assert.Equal(360d, window.Width);
 
         var frame = window.CaptureRenderedFrame();
-        frame!.Save(Out("eveutils-shell-floating.png"));
+        frame!.Save(Out("eveutils-shell-floating.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -107,7 +107,7 @@ public class ModuleShellTests
         Assert.Equal(92d, window.Width);           // rail-only matches the rail width (no sliver)
 
         var frame = window.CaptureRenderedFrame();
-        frame!.Save(Out("eveutils-shell-rail-only.png"));
+        frame!.Save(Out("eveutils-shell-rail-only.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -143,20 +143,20 @@ public class ModuleShellTests
             theme.Apply(FactionTheme.Gallente);
             Dispatcher.UIThread.RunJobs();
             var gallente = Out("eveutils-shell-gallente.png");
-            window.CaptureRenderedFrame()!.Save(gallente);
+            window.CaptureRenderedFrame()!.Save(gallente, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
 
             theme.Apply(FactionTheme.Amarr);
             Dispatcher.UIThread.RunJobs();
             var amarr = Out("eveutils-shell-amarr.png");
-            window.CaptureRenderedFrame()!.Save(amarr);
+            window.CaptureRenderedFrame()!.Save(amarr, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
 
             theme.Apply(FactionTheme.Caldari);
             Dispatcher.UIThread.RunJobs();
-            window.CaptureRenderedFrame()!.Save(Out("eveutils-shell-caldari.png"));
+            window.CaptureRenderedFrame()!.Save(Out("eveutils-shell-caldari.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
 
             theme.Apply(FactionTheme.Minmatar);
             Dispatcher.UIThread.RunJobs();
-            window.CaptureRenderedFrame()!.Save(Out("eveutils-shell-minmatar.png"));
+            window.CaptureRenderedFrame()!.Save(Out("eveutils-shell-minmatar.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
 
             // The live swap must actually change pixels (DynamicResource re-tint), not just the resource value.
             Assert.False(File.ReadAllBytes(gallente).AsSpan().SequenceEqual(File.ReadAllBytes(amarr)));

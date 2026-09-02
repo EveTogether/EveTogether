@@ -26,7 +26,7 @@
              unlike ChromedWindow — does not bind its own brushes to resource observables, so DynamicResource on the
              faction-swappable keys is the only thing that re-tints this window when the faction changes. -->
         <DockPanel.Resources>
-            <!-- One header for all five sections: caret, fixed-width title, and the summary hard right. The summary
+            <!-- One header for all six sections: caret, fixed-width title, and the summary hard right. The summary
                  is why a folded section is still worth having on screen. -->
             <DataTemplate x:Key="SectionHeader" DataType="va:ActivitySection">
                 <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
@@ -263,6 +263,28 @@
                     <Button x:Name="DiscardRunButton" Grid.Column="3" Classes="pick run danger" Content="DISCARD"
                             IsVisible="{Binding IsDiscardButtonVisible}" Command="{Binding DiscardRunCommand}"/>
                 </Grid>
+                <!-- ══ Correcting the clock ══ (ET-98) manual START/STOP is the only source a site run has, so the
+                     half-minute you were late pressing it is part of every stored duration until it is taken back
+                     out. Only on a stopped run, and only before SAVE — after that the row is committed. -->
+                <StackPanel x:Name="TimeCorrection" Spacing="6" IsVisible="{Binding IsTimeCorrectionShown}">
+                    <TextBlock Classes="hint" Margin="0" Text="{Binding TimeSourceText}"/>
+                    <Grid ColumnDefinitions="Auto,90,Auto,90,Auto" ColumnSpacing="6">
+                        <TextBlock Classes="label" VerticalAlignment="Center" Text="START"/>
+                        <TextBox x:Name="StartCorrectionBox" Grid.Column="1"
+                                 Text="{Binding StartCorrectionText, Mode=TwoWay}"/>
+                        <TextBlock Grid.Column="2" Classes="label" VerticalAlignment="Center" Text="END"/>
+                        <TextBox x:Name="EndCorrectionBox" Grid.Column="3"
+                                 Text="{Binding EndCorrectionText, Mode=TwoWay}"/>
+                        <Button x:Name="ApplyTimeCorrectionButton" Grid.Column="4" Classes="pick"
+                                Content="correct" Command="{Binding ApplyTimeCorrectionCommand}"/>
+                    </Grid>
+                    <!-- A refused correction says what was wrong with it; it is never straightened out silently. -->
+                    <TextBlock x:Name="TimeCorrectionError" Classes="hint" Margin="0" TextWrapping="Wrap"
+                               IsVisible="{Binding HasTimeCorrectionError}" Text="{Binding TimeCorrectionError}"/>
+                </StackPanel>
+                <!-- Why the window is still here after SAVE. The toast is gone in seconds; this is not. -->
+                <TextBlock x:Name="SaveFailureText" Classes="hint" Margin="0" TextWrapping="Wrap"
+                           IsVisible="{Binding HasSaveFailure}" Text="{Binding SaveFailureText}"/>
                 <TextBlock Classes="hint" Margin="0" Text="{Binding ClockHint}"/>
                 <!-- Why there are no run controls, when there are none. An unknown fleet boss is a state, not
                      silence — the same rule as ET-65 AC-7. -->
@@ -271,7 +293,7 @@
             </StackPanel>
         </Border>
 
-        <!-- ══ The five sections ══ each says something with its body shut, so folding the window down never costs
+        <!-- ══ The six sections ══ each says something with its body shut, so folding the window down never costs
              the reader the answer — only the detail behind it. -->
         <ScrollViewer HorizontalScrollBarVisibility="Disabled">
             <StackPanel>
@@ -336,18 +358,6 @@
                             </ItemsControl>
                         </Grid>
 
-                        <ItemsControl ItemsSource="{Binding EnemyObservations}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="va:RunEnemyObservationViewModel">
-                                    <Grid Classes="kv" ColumnDefinitions="*,Auto">
-                                        <TextBlock Text="{Binding EnemyName}"/>
-                                        <NumericUpDown Grid.Column="1" Width="72" Minimum="0" Maximum="999" Increment="1"
-                                                       FormatString="0" Value="{Binding Count, Mode=TwoWay}"/>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
                         <!-- ── The manual entry ── the only field in this window the user fills in, because nothing
                              can detect it. Answered, it folds behind one line: twelve buttons standing open under a
                              question nobody is asking any more would be the loudest thing in the section. -->
@@ -402,16 +412,41 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Its own section, folded by default: a site's worth of rats inside ACTIVITY pushed FIT, FLEET,
+                     BOUNTY and LOOT under the fold. The count is typed after the fight, so the rows outlive STOP. -->
+                <ToggleButton Classes="section" Content="{Binding Enemies}"
+                              IsChecked="{Binding Enemies.IsExpanded, Mode=TwoWay}"/>
+                <Border Classes="sectionbody" IsVisible="{Binding Enemies.IsExpanded}">
+                    <ItemsControl x:Name="EnemyList" ItemsSource="{Binding EnemyObservations}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="va:RunEnemyObservationViewModel">
+                                <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                    <TextBlock Text="{Binding EnemyName}" VerticalAlignment="Center"/>
+                                    <!-- Seen is not counted, and only a counted row is saved (ET-106) — the row has
+                                         to say which of the two it is. -->
+                                    <TextBlock Grid.Column="1" Classes="hint" Margin="0" VerticalAlignment="Center"
+                                               Text="{Binding CountStateText}"/>
+                                    <NumericUpDown Grid.Column="2" Width="72" Minimum="0" Maximum="999" Increment="1"
+                                                   FormatString="0" Value="{Binding Count, Mode=TwoWay}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+
                 <ToggleButton Classes="section" Content="{Binding Fit}"
                               IsChecked="{Binding Fit.IsExpanded, Mode=TwoWay}"/>
                 <Border Classes="sectionbody" IsVisible="{Binding Fit.IsExpanded}">
                     <StackPanel Spacing="6">
-                        <TextBlock Classes="hint" Margin="0" Text="{Binding FitDetectionText}"/>
-                        <TextBlock Classes="hint" Margin="0" Text="{Binding FitSelectionText}"/>
+                        <TextBlock Classes="hint" Margin="0" Text="{Binding FitText}"/>
                         <TextBlock Classes="hint" Margin="0" Text="{Binding FitVelocityText}"/>
                         <TextBlock Classes="hint" Margin="0" Text="{Binding FitWarpSpeedText}"/>
-                        <Button Classes="pick" Content="choose fit" HorizontalAlignment="Left"
-                                Command="{Binding ChooseFitCommand}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Button Classes="pick" Content="choose fit" Command="{Binding ChooseFitCommand}"/>
+                            <!-- Only offered once there is a fit to take off; unlinking nothing is not a state. -->
+                            <Button Classes="pick" Content="detach fit" Command="{Binding DetachFitCommand}"
+                                    IsVisible="{Binding HasFit}"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 
@@ -422,6 +457,22 @@
                               IsChecked="{Binding Fleet.IsExpanded, Mode=TwoWay}"/>
                 <Border Classes="sectionbody" IsVisible="{Binding Fleet.IsExpanded}">
                     <StackPanel>
+                        <!-- Who this window has heard from, one row per shared location (ET-98). Not a roster: a
+                             member who does not share their location is in the fleet and not in this list, which is
+                             what the caption under it says rather than leaving the reader to count. -->
+                        <ItemsControl x:Name="FleetMemberList" ItemsSource="{Binding FleetMembers}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="va:ActivityFleetMemberViewModel">
+                                    <Grid Classes="kv" ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="{Binding Name}"/>
+                                        <TextBlock Grid.Column="1" Classes="hint" Margin="0"
+                                                   VerticalAlignment="Center" Text="{Binding LocationText}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock x:Name="FleetBasisText" Classes="hint" Margin="0" TextWrapping="Wrap"
+                                   Text="{Binding FleetBasisText}"/>
                         <!-- Two columns because they are two facts: who flew the site, and who takes a share of it.
                              A pilot can be the first without the second — the hauler who fetched ore (ET-105). -->
                         <ItemsControl ItemsSource="{Binding Participants}">

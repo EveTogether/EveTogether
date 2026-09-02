@@ -94,8 +94,12 @@ internal sealed class ActivityWindowHarness : IDisposable
         + " ISK</b><color=0x77ffffff> added to next bounty payout";
 
     /// <summary>One hit, as the combat log writes it.</summary>
-    public static string CombatLine(int amount, string target) =>
-        $"[ 2030.01.01 12:00:05 ] (combat) {amount} to {target} - Light Ion Blaster II - Hits";
+    public static string CombatLine(int amount, string target, string atTime = "12:00:05") =>
+        $"[ 2030.01.01 {atTime} ] (combat) {amount} to {target} - Light Ion Blaster II - Hits";
+
+    /// <summary>The same fight the other way round — the rat shooting back, which EVE writes as "from".</summary>
+    public static string IncomingCombatLine(int amount, string target, string atTime = "12:00:09") =>
+        $"[ 2030.01.01 {atTime} ] (combat) {amount} from {target} - Light Ion Blaster II - Hits";
 
     public static string JumpLine(string system) =>
         $"[ 2030.01.01 12:00:03 ] (None) Jumping from Osmon to {system}";

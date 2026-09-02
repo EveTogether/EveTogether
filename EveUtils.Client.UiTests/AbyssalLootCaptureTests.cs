@@ -26,6 +26,67 @@ public sealed class AbyssalLootCaptureTests
     private const string SecondContainer = "Nanite Repair Paste\t5\t0,50 m3\t400,00 ISK\r\nEMP S\t100\t1,00 m3\t50,00 ISK";
     private const string ContainerWithAPricelessRow = "Rifter\t1\t0,10 m3\t100,00 ISK\r\nDamage Control II\t2\t0,20 m3\t";
 
+    [AvaloniaTheory]
+    [InlineData("Ultraviolet M\t1\tFrequency Crystal\tMedium\t\t1 m3\t2.350,77 ISK", "Ultraviolet M")]
+    [InlineData("Metal Scraps\t1\tCommodities\t0,01 m3\t963,56 ISK", "Metal Scraps")]
+    public async Task SingleInventoryRowWithOneSdeCandidate_IsRecordedAsLoot(string text, string name)
+    {
+        using var env = await Env.StartAsync(sde: SingleRowSde());
+        await env.StartRunAsync();
+
+        await env.CopyAsync(text);
+
+        RunLootCapture capture = Assert.Single(await env.CapturesAsync());
+        Assert.Equal(name, Assert.Single(capture.Entries).Name);
+        Assert.Equal("Loot copied", Assert.Single(env.Toasts.ActionToasts).Title);
+    }
+
+    [AvaloniaTheory]
+    [InlineData("Use the gate\tthen dock")]
+    [InlineData("Annual subscription\t12")]
+    [InlineData("Raymond\tback in ten")]
+    [InlineData("Product name\t19")]
+    [InlineData("KDC-304\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0\t2.71 AU")]
+    public async Task SingleInventoryRowWithoutASdeCandidate_IsRejected(string text)
+    {
+        using var env = await Env.StartAsync(sde: SingleRowSde());
+        await env.StartRunAsync();
+
+        await env.CopyAsync(text);
+
+        Assert.Empty(await env.CapturesAsync());
+        Assert.Empty(env.Toasts.ActionToasts);
+        Assert.Empty(env.Toasts.Toasts);
+    }
+
+    [AvaloniaFact]
+    public async Task SingleInventoryRowWithMultipleSdeCandidates_IsRejected()
+    {
+        using var env = await Env.StartAsync(sde: new FakeSdeAccessor()
+            .Add(1, "Rifter", 1, 1)
+            .Add(2, "Damage Control II", 2, 2));
+        await env.StartRunAsync();
+
+        await env.CopyAsync("Rifter\t1\tDamage Control II");
+
+        Assert.Empty(await env.CapturesAsync());
+        Assert.Empty(env.Toasts.ActionToasts);
+        Assert.Equal("Loot not recognised", Assert.Single(env.Toasts.Toasts).Title);
+    }
+
+    [AvaloniaFact]
+    public async Task SingleInventoryRowWithUnavailableSde_IsRejectedWithoutGuessing()
+    {
+        using var env = await Env.StartAsync(sde: SingleRowSde().Offline());
+        await env.StartRunAsync();
+
+        await env.CopyAsync("Ultraviolet M\t1\tFrequency Crystal\tMedium\t\t1 m3\t2.350,77 ISK");
+
+        Assert.Empty(await env.CapturesAsync());
+        Assert.Empty(env.Toasts.ActionToasts);
+        Assert.Equal("Loot not recognised", Assert.Single(env.Toasts.Toasts).Title);
+    }
+
     [AvaloniaFact]
     public async Task InventoryWithKnownEveTypes_OffersLoot_AndSuppressesAnOpenDuplicate()
     {
@@ -242,12 +303,12 @@ public sealed class AbyssalLootCaptureTests
         public RecordingToastService Toasts { get; } = new();
 
         private Env(TestClientInstance instance, ClipboardWatchService watch, FakeClipboardChangeSource source,
-            CqrsDispatcher captureDispatcher)
+            CqrsDispatcher captureDispatcher, FakeSdeAccessor sde)
         {
             _instance = instance;
             _watch = watch;
             _source = source;
-            _capture = new AbyssalLootCapture(watch, Toasts, FakeSdeAccessor.WithSampleFit(), captureDispatcher);
+            _capture = new AbyssalLootCapture(watch, Toasts, sde, captureDispatcher);
         }
 
         private static CancellationToken Token => TestContext.Current.CancellationToken;
@@ -255,14 +316,16 @@ public sealed class AbyssalLootCaptureTests
         /// <param name="wrapDispatcher">Lets a test intercept the dispatcher calls <see cref="AbyssalLootCapture"/>
         /// itself makes (e.g. to fail a specific command), without touching the real one this Env's own helpers
         /// (StartRunAsync, CapturesAsync, ...) use.</param>
-        public static async Task<Env> StartAsync(Func<CqrsDispatcher, CqrsDispatcher>? wrapDispatcher = null)
+        public static async Task<Env> StartAsync(Func<CqrsDispatcher, CqrsDispatcher>? wrapDispatcher = null,
+            FakeSdeAccessor? sde = null)
         {
             var source = new FakeClipboardChangeSource();
             var instance = TestClientInstance.Create();
             var watch = new ClipboardWatchService(new RecordingDialogService(), instance.Services,
                 NullLogger<ClipboardWatchService>.Instance, source);
             var realDispatcher = instance.Services.GetRequiredService<CqrsDispatcher>();
-            var env = new Env(instance, watch, source, wrapDispatcher?.Invoke(realDispatcher) ?? realDispatcher);
+            var env = new Env(instance, watch, source, wrapDispatcher?.Invoke(realDispatcher) ?? realDispatcher,
+                sde ?? FakeSdeAccessor.WithSampleFit());
             await watch.SetEnabledAsync(true);
             return env;
         }
@@ -345,6 +408,10 @@ public sealed class AbyssalLootCaptureTests
         private Task<ClientDbContext> CreateDbAsync() =>
             _instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(Token);
     }
+
+    private static FakeSdeAccessor SingleRowSde() => new FakeSdeAccessor()
+        .Add(1, "Ultraviolet M", 1, 1)
+        .Add(2, "Metal Scraps", 2, 2);
 
     /// <summary>Fails one specific command the way a locked database would — an exception out of the dispatcher —
     /// so a test can prove that path is caught and shown, not swallowed.</summary>

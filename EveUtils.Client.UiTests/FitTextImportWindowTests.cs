@@ -15,6 +15,6 @@ public class FitTextImportWindowTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fit-text-import.png");
+        frame!.Save("/tmp/eveutils-fit-text-import.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
     }
 }

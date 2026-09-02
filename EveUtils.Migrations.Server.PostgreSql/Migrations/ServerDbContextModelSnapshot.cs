@@ -834,6 +834,9 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.Property<int>("SyncState")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("TimesCorrectedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
 
                     b.HasIndex("GroupCode", "CharacterId");
@@ -870,7 +873,7 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<int>("Direction")
+                    b.Property<int>("Count")
                         .HasColumnType("integer");
 
                     b.Property<string>("EnemyName")

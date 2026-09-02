@@ -22,6 +22,8 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fittings.Dtos;
+using EveUtils.Shared.Modules.Fittings.Entities;
+using EveUtils.Shared.Modules.Fittings.Repositories;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
@@ -37,10 +39,9 @@ using EveUtils.Shared.Modules.Settings.Queries;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.Extensions.DependencyInjection;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
-using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 // Aliased rather than imported wholesale: that namespace also holds an ActivityKind, which would collide with the
 // window's own.
-using EnemyObservationDirection = EveUtils.Shared.Modules.Runs.Enums.EnemyObservationDirection;
+using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 
 namespace EveUtils.Client.ViewModels.Activity;
 
@@ -102,6 +103,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private bool _isManualRun;
     private int? _runCharacterId;
     private string? _runCharacterName;
+    private ShipFitDetectionReading? _fitReading;
     private RunEnemyObservationCollector? _enemyObservations;
 
     public ActivityWindowViewModel(ActivityKind kind, IServiceProvider services)
@@ -137,7 +139,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             .Select((strategy, index) => new ActivityChoice { Index = index, Label = strategy })
             .ToList();
 
-        Sections = [Activity, Fit, Fleet, Bounty, Loot];
+        Sections = [Activity, Enemies, Fit, Fleet, Bounty, Loot];
         Refresh(DateTime.UtcNow);
     }
 
@@ -168,6 +170,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(IsStopButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsDiscardButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsSaveButtonVisible))]
+    [NotifyPropertyChangedFor(nameof(IsTimeCorrectionShown))]
     [NotifyPropertyChangedFor(nameof(RunOriginText))]
     private ActivityRunState _runState;
 
@@ -262,9 +265,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(HasShipRestriction))]
     private IReadOnlyList<SdeSite> _matchedSites = [];
 
-    // ── The five sections ───────────────────────────────────────────────────────────────────────────
+    // ── The six sections ────────────────────────────────────────────────────────────────────────────
 
     public ActivitySection Activity { get; } = new() { Title = "ACTIVITY", IsExpanded = true };
+
+    /// <summary>One row per enemy type, on its own rather than inside ACTIVITY: a site's worth of rats pushed every
+    /// other section under the fold (ET-115).</summary>
+    public ActivitySection Enemies { get; } = new() { Title = "ENEMIES" };
 
     public ActivitySection Fit { get; } = new() { Title = "FIT" };
 
@@ -274,25 +281,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public ActivitySection Loot { get; } = new() { Title = "LOOT" };
 
+    /// <summary>The run's one fit (ET-107) — filled from ET-101's detection, or the reason it could not be. Never a
+    /// proposal standing beside a choice: a manual pick comes back through the same reading as its own match reason.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FitSummary))]
-    private string _fitDetectionText = "choose a character to see its fit suggestion";
+    private string _fitText = "no fit: the run has no character yet";
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FitSummary))]
-    private string _fitSelectionText = "no fit chosen";
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FitSummary))]
-    private bool _hasChosenFit;
+    /// <summary>Whether <see cref="FitText"/> names a fit. A state rather than a comparison against the text, so
+    /// rewording a line can never silently flip what the window offers.</summary>
+    [ObservableProperty] private bool _hasFit;
 
     [ObservableProperty] private string _fitVelocityText = "no max velocity";
 
     [ObservableProperty] private string _fitWarpSpeedText = "no warp speed";
 
-    public string FitSummary => HasChosenFit ? FitSelectionText : FitDetectionText;
-
-    /// <summary>All five in window order — what the test walks to prove none of them is ever silent.</summary>
+    /// <summary>All six in window order — what the test walks to prove none of them is ever silent.</summary>
     public IReadOnlyList<ActivitySection> Sections { get; }
 
     // ── Weather and tier ────────────────────────────────────────────────────────────────────────────
@@ -348,6 +350,49 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     [ObservableProperty] private string _endText = string.Empty;
 
+    // ── Correcting the clock after the fact ─────────────────────────────────────────────────────────
+    // Manual start and stop are the only source a site run has — there is no site-entry or site-exit line in the
+    // gamelog to fall back on — so the human slack is part of the measurement: you press START once the fight is
+    // already going, and STOP once the loot is already in the hold. Without a correction every stored duration is
+    // systematically off, which is why this is part of the run and not a convenience.
+
+    /// <summary>The start as the pilot corrected it, or null while the measured one still stands. Held beside
+    /// <see cref="AnchorUtc"/> rather than over it: the measured moment is what the fleet envelope is made of, and
+    /// overwriting it would lose the difference the window exists to show.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsTimeCorrected))]
+    [NotifyPropertyChangedFor(nameof(TimeSourceText))]
+    private DateTime? _correctedStartUtc;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsTimeCorrected))]
+    [NotifyPropertyChangedFor(nameof(TimeSourceText))]
+    private DateTime? _correctedStopUtc;
+
+    [ObservableProperty] private string _startCorrectionText = string.Empty;
+
+    [ObservableProperty] private string _endCorrectionText = string.Empty;
+
+    /// <summary>Why a correction was refused, or null when there is nothing to refuse. A rejected time is never
+    /// quietly straightened out: the pilot typed something, and what was wrong with it is the answer.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTimeCorrectionError))]
+    private string? _timeCorrectionError;
+
+    public bool HasTimeCorrectionError => TimeCorrectionError is not null;
+
+    /// <summary>Only on a stopped run: while it is still going the clock is a measurement, and after SAVE the row
+    /// is committed.</summary>
+    public bool IsTimeCorrectionShown => RunState == ActivityRunState.Stopped;
+
+    public bool IsTimeCorrected => CorrectedStartUtc is not null || CorrectedStopUtc is not null;
+
+    /// <summary>Shown beside the figures, because this project says everywhere else whether a number was measured
+    /// or typed and the clock is no exception.</summary>
+    public string TimeSourceText => IsTimeCorrected
+        ? "corrected by hand — this is what SAVE stores, and it moves this run only"
+        : "measured from START and STOP";
+
     public string HeaderTitle => IsAbyssal ? "ABYSSAL RUN" : "SITE RUN";
 
     // Start, stop and discard steer the run for everybody in it, so all three hang off the same authority (AC-4).
@@ -381,11 +426,25 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// payout rule follows our exclusions.</summary>
     public string PayoutExpectationLabel => RunPayoutSplit.ExpectationLabel;
 
+    /// <summary>Who this window has actually heard from, one row per member that sent a location sample. Never a
+    /// roster: nothing here can see a member who is not sharing their location, which is what
+    /// <see cref="FleetBasisText"/> is on screen to say.</summary>
+    public ObservableCollection<ActivityFleetMemberViewModel> FleetMembers { get; } = [];
+
     public string FleetStatusText => FleetMemberCount > 1
         ? IsAbyssal
-            ? $"based on {AnchoredFleetMemberCount} of {FleetMemberCount} members"
-            : $"fleet of {FleetMemberCount} members"
+            ? $"based on {AnchoredFleetMemberCount} of {FleetMemberCount} members sharing a location"
+            : $"based on {FleetMemberCount} members sharing a location"
         : "no other member has reported in yet";
+
+    /// <summary>
+    /// What the count is counted from, said outright. <see cref="FleetMemberCount"/> counts location samples, so a
+    /// member who does not share their location is missing from both the number and the list — and a list of two
+    /// names in a fleet of three is a lie unless it says what it is a list of.
+    /// </summary>
+    public string FleetBasisText => FleetMembers.Count == 0
+        ? "No member has shared a location yet, so there is nobody to list."
+        : "Counted from shared locations. A member not sharing theirs is in the fleet but not in this list.";
 
     /// <summary>
     /// Whether there is a fleet to show at all. Nothing here may claim "solo": the window is never told the pilot
@@ -393,7 +452,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <see cref="FleetId"/>) or by a member's sample arriving on the bus. Without either, the section is not
     /// collapsed but gone, because an empty FLEET section reads as a measurement and it is not one.
     /// </summary>
-    public bool IsFleetShown => FleetId is not null || _fleetLocations.Count > 0 || Participants.Count > 0;
+    public bool IsFleetShown =>
+        FleetId is not null || _fleetLocations.Count > 0 || Participants.Count > 0 || FleetMembers.Count > 0;
 
     public string RunOriginText => RunState == ActivityRunState.NotStarted
         ? "not started"
@@ -566,23 +626,64 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 .FirstOrDefault(character => character.EsiCharacterId == characterId)?.Name ?? _runCharacterName;
     }
 
+    /// <summary>
+    /// Whose fit this is. The window never asks — before START the run has no character yet, so it falls back to the
+    /// one this client is in the fleet as, exactly as the run controls do. On a solo run there is one character and
+    /// on a fleet run it is you, so the question the FIT section used to print had no one left to ask.
+    /// </summary>
+    private int? _FitCharacterId() => _runCharacterId ?? _services.GetService<IActiveFleetState>()?.CharacterId;
+
+    /// <summary>Fill the run's fit from ET-101's reading. Clock-driven like the fleet command is, so starting a run
+    /// fills it without the player confirming anything. An unlinked fit comes back through the same reading, so it
+    /// survives this window being closed and reopened mid-run.</summary>
+    public async Task RefreshFitAsync()
+    {
+        if (_FitCharacterId() is not { } characterId
+            || _services.GetService<IShipFitDetectionService>() is not { } detection)
+            return;
+
+        ShipFitDetectionReading reading = detection.GetReading(characterId);
+        if (ReferenceEquals(reading, _fitReading))
+            return;
+
+        _fitReading = reading;
+        ApplyFitDetection(reading);
+        await _LoadFitStatsAsync(reading.SelectedFit?.Id);
+    }
+
+    private async Task _LoadFitStatsAsync(int? fittingId)
+    {
+        if (fittingId is not { } id || _services.GetService<IFittingRepository>() is not { } fittings)
+        {
+            ApplyFitStats(null, fitCouldBeRead: true);
+            return;
+        }
+
+        LocalFitting? fitting = await fittings.FindByIdAsync(id);
+        EsiFitting? esi = _ReadFitting(fitting?.RawJson);
+        ApplyFitStats(
+            esi is null ? null : await _services.GetRequiredService<IFitStatsProvider>().ComputeAsync(esi),
+            fitCouldBeRead: esi is not null);
+    }
+
+    private static EsiFitting? _ReadFitting(string? rawJson)
+    {
+        if (rawJson is null)
+            return null;
+        try { return JsonSerializer.Deserialize<EsiFitting>(rawJson); }
+        catch (JsonException) { return null; }
+    }
+
     [RelayCommand]
     private async Task ChooseFitAsync()
     {
         var dialogs = _services.GetRequiredService<IDialogService>();
-        IReadOnlyList<Character> characters = await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
-        var options = characters
-            .Select(character => character.EsiCharacterId is { } id
-                ? new CharacterPickOption(id, character.Name, "local character", Enabled: true)
-                : null)
-            .OfType<CharacterPickOption>()
-            .ToList();
-        int? characterId = await dialogs.PickCharacterAsync("Choose a character's fit", options);
-        if (characterId is null)
+        if (_FitCharacterId() is not { } characterId)
+        {
+            await dialogs.ShowMessageAsync("Choose a fit",
+                "Start the run first — its character is what a fit is filed under.");
             return;
-
-        var detection = _services.GetRequiredService<IShipFitDetectionService>();
-        ApplyFitDetection(detection.GetReading(characterId.Value));
+        }
 
         var picker = new FitPickerViewModel(_services, FitPickerMode.Single, alreadyAdded: null,
             composition: null, currentFitHash: null, skillCheckCharacterId: characterId);
@@ -591,25 +692,42 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
         if (fit.LocalFittingId is null)
         {
-            await dialogs.ShowMessageAsync("Choose a local fit", "Only a local fit can override the automatic suggestion.");
+            await dialogs.ShowMessageAsync("Choose a local fit", "Only a local fit can be filed against a run.");
             return;
         }
 
-        var overrideResult = await detection.SetManualFitAsync(characterId.Value, fit.LocalFittingId);
+        var detection = _services.GetRequiredService<IShipFitDetectionService>();
+        Result overrideResult = await detection.SetManualFitAsync(characterId, fit.LocalFittingId);
         if (!overrideResult.IsSuccess)
         {
-            await dialogs.ShowMessageAsync("Fit selection", overrideResult.Messages.FirstOrDefault()?.Text ?? "Could not save the fit selection.");
+            await dialogs.ShowMessageAsync("Fit selection",
+                overrideResult.Messages.FirstOrDefault()?.Text ?? "Could not save the fit selection.");
             return;
         }
 
-        FitSelectionText = $"chosen fit: {fit.FitName}";
-        HasChosenFit = true;
-        EsiFitting? esi;
-        try { esi = JsonSerializer.Deserialize<EsiFitting>(fit.RawJson); }
-        catch (JsonException) { esi = null; }
-        FitStats? stats = esi is null ? null : await _services.GetRequiredService<IFitStatsProvider>().ComputeAsync(esi);
-        ApplyFitStats(stats, esi is not null);
-        Refresh(DateTime.UtcNow);
+        _fitReading = null;
+        await RefreshFitAsync();
+    }
+
+    /// <summary>Unlink: the run goes on without a fit. Stored by the detection service rather than held here, or
+    /// closing and reopening the window mid-run would quietly fill back in what the player just took off.</summary>
+    [RelayCommand]
+    private async Task DetachFitAsync()
+    {
+        if (_FitCharacterId() is not { } characterId
+            || _services.GetService<IShipFitDetectionService>() is not { } detection)
+            return;
+
+        Result detached = await detection.DetachFitAsync(characterId);
+        if (!detached.IsSuccess)
+        {
+            await _services.GetRequiredService<IDialogService>().ShowMessageAsync("Fit selection",
+                detached.Messages.FirstOrDefault()?.Text ?? "Could not unlink the fit.");
+            return;
+        }
+
+        _fitReading = null;
+        await RefreshFitAsync();
     }
 
     /// <summary>Begin ticking. Separate from the constructor so a test drives <see cref="Refresh"/> with a clock it
@@ -632,6 +750,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _RefreshLocation(nowUtc);
         _RefreshClock(nowUtc);
         _RefreshSummaries();
+        _ = RefreshFleetCommandAsync(nowUtc);
+        _ = RefreshFitAsync();
     }
 
     [RelayCommand]
@@ -752,7 +872,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     }
 
     /// <summary>Stop the clock. The stored run stays open until SAVE or DISCARD: loot is copied out of the wreck
-    /// after the last rat, and it belongs to the run that produced it.</summary>
+    /// after the last rat, and it belongs to the run that produced it. The enemy list stays for the same reason and
+    /// more so — its count is typed by hand, and nobody types it while still being shot at (ET-115).</summary>
     public void StopRun(DateTime nowUtc)
     {
         if (RunState != ActivityRunState.Running)
@@ -760,10 +881,72 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         StoppedAtUtc = nowUtc;
         RunState = ActivityRunState.Stopped;
-        _enemyObservations = null;
-        OnPropertyChanged(nameof(EnemyObservations));
+        CorrectedStartUtc = null;
+        CorrectedStopUtc = null;
+        TimeCorrectionError = null;
+        // Seeded with what was measured, so correcting a start by half a minute is an edit and not a retype.
+        StartCorrectionText = AnchorUtc is { } start ? _LocalTime(start) : string.Empty;
+        EndCorrectionText = _LocalTime(nowUtc);
         Refresh(nowUtc);
     }
+
+    /// <summary>
+    /// Take the two typed times as this run's own. Refused rather than straightened out when they cannot be true:
+    /// an end before its start is not a duration, and an abyssal run longer than <c>AbyssalSpace.RunLimit</c> is a
+    /// run whose pilot was dead before it ended.
+    ///
+    /// It moves this run's row and nothing else. A group's envelope hangs on the earliest start over the whole
+    /// fleet, taken from the samples in <see cref="ApplyFleetEnvelope"/> — correcting your own clock does not
+    /// re-anchor anybody, which is why <see cref="AnchorUtc"/> is left standing as the measured moment.
+    /// </summary>
+    [RelayCommand]
+    private void ApplyTimeCorrection()
+    {
+        if (RunState != ActivityRunState.Stopped || AnchorUtc is not { } measuredStart)
+            return;
+
+        DateTime measuredStop = StoppedAtUtc ?? measuredStart;
+        if (_ParseLocalTime(StartCorrectionText, measuredStart) is not { } start
+            || _ParseLocalTime(EndCorrectionText, measuredStop) is not { } end)
+        {
+            TimeCorrectionError = "Both times are read as HH:mm:ss on the day the run was flown.";
+            return;
+        }
+
+        if (end < start)
+        {
+            TimeCorrectionError = "The end cannot be before the start.";
+            return;
+        }
+
+        if (IsAbyssal && end - start > AbyssalSpace.RunLimit)
+        {
+            TimeCorrectionError =
+                $"An abyssal run cannot last longer than {AbyssalSpace.RunLimit.TotalMinutes:N0} minutes — "
+                + "past that the ship and the pod are gone.";
+            return;
+        }
+
+        TimeCorrectionError = null;
+        // Only a time that differs is a correction; retyping what was measured leaves the run measured.
+        CorrectedStartUtc = start == measuredStart ? null : start;
+        CorrectedStopUtc = end == measuredStop ? null : end;
+        Refresh(DateTime.UtcNow);
+    }
+
+    /// <summary>The start SAVE writes and the clock counts from: the correction when there is one, the measured
+    /// moment otherwise.</summary>
+    public DateTime? EffectiveStartUtc => CorrectedStartUtc ?? AnchorUtc;
+
+    public DateTime? EffectiveStopUtc => CorrectedStopUtc ?? StoppedAtUtc;
+
+    /// <summary>HH:mm:ss on the day of <paramref name="referenceUtc"/>, in the pilot's own zone — the same shape
+    /// the figure above the box is printed in. The reference is per field, so a run over local midnight keeps its
+    /// end on the day it ended.</summary>
+    private static DateTime? _ParseLocalTime(string? text, DateTime referenceUtc) =>
+        TimeSpan.TryParseExact(text?.Trim(), @"hh\:mm\:ss", CultureInfo.InvariantCulture, out TimeSpan time)
+            ? DateTime.SpecifyKind(referenceUtc.ToLocalTime().Date + time, DateTimeKind.Local).ToUniversalTime()
+            : null;
 
     /// <summary>
     /// Re-test who may steer this run against the fleet boss ESI reports right now. Called whenever the roster or
@@ -775,6 +958,29 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         FleetId = fleetId;
         Authority = RunControlAuthority.From(fleetId, fleetBossCharacterId, actingCharacterId);
+    }
+
+    /// <summary>
+    /// Where the two halves of that question come from. The fleet is the one this client is participating in —
+    /// what the run is filed under and what a discard fans out over. The boss is whoever ESI reports commands it at
+    /// this moment, via <see cref="FleetBossTracker"/>; null when ESI cannot say, which lands on
+    /// <see cref="RunControlAuthorityLevel.Unknown"/> and says so on screen rather than handing a destructive button
+    /// to everybody. Run on the tick, like the location is, so a handover moves the controls on its own.
+    /// </summary>
+    public async Task RefreshFleetCommandAsync(DateTime nowUtc)
+    {
+        IActiveFleetState? fleet = _services.GetService<IActiveFleetState>();
+        // Before START the run has no character yet, so fall back to the one this client is in the fleet as —
+        // otherwise a multi-character client could not reach START to resolve it.
+        int? actingCharacterId = _runCharacterId ?? fleet?.CharacterId;
+        if (actingCharacterId is not { } characterId || _services.GetService<FleetBossTracker>() is not { } bosses)
+        {
+            ApplyFleetCommand(fleet?.ActiveFleetId, null, actingCharacterId);
+            return;
+        }
+
+        await bosses.RefreshAsync(characterId, nowUtc);
+        ApplyFleetCommand(fleet?.ActiveFleetId, bosses.BossOf(characterId), characterId);
     }
 
     /// <summary>
@@ -813,27 +1019,48 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         if (RunId is not { } runId)
         {
-            _services.GetService<IToastService>()?.Show("Run not saved",
-                "This run was never registered, so there is nothing to save it to.", ToastKind.Error);
+            SaveFailureText = "This run was never registered, so there is nothing to save it to.";
+            _services.GetService<IToastService>()?.Show("Run not saved", SaveFailureText, ToastKind.Error);
             return;
         }
 
         DateTime nowUtc = DateTime.UtcNow;
         using var scope = _services.CreateScope();
         Result result = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new SaveRunCommand(
-            runId, StoppedAtUtc ?? nowUtc, nowUtc, [], _bounties, _enemyObservations?.ToInputs() ?? [], []));
+            runId, EffectiveStopUtc ?? nowUtc, nowUtc, [], _bounties, _enemyObservations?.ToInputs() ?? [], [],
+            // Null leaves the row's own start alone; only a hand-corrected start travels.
+            CorrectedStartUtc,
+            IsTimeCorrected ? nowUtc : null));
         if (!result.IsSuccess)
         {
-            _services.GetService<IToastService>()?.Show("Run not saved",
-                result.Messages.FirstOrDefault()?.Text ?? "Could not save this run.", ToastKind.Error);
+            SaveFailureText = result.Messages.FirstOrDefault()?.Text ?? "Could not save this run.";
+            _services.GetService<IToastService>()?.Show("Run not saved", SaveFailureText, ToastKind.Error);
             return;
         }
 
+        SaveFailureText = null;
         RunState = ActivityRunState.Saved;
+        _EndEnemyObservations();
         if (RunLoot is not null)
             await RunLoot.RefreshAsync();
         Refresh(nowUtc);
+        // Only here, and only for this window: the run is committed and there is nothing left to do to it. A failed
+        // save falls out above with the reason still on screen, and a group's other members keep their own windows —
+        // saving is each member's own, and only the FC's DISCARD reaches anybody else (ET-105).
+        SaveSucceeded?.Invoke();
     }
+
+    /// <summary>Raised once a save has actually landed. The window closes on it; nothing else listens, and nothing
+    /// crosses to another member's window.</summary>
+    public event Action? SaveSucceeded;
+
+    /// <summary>Why the last save did not land, left on screen beside the still-open window. A toast is gone in
+    /// seconds and this is the state that says the work is not stored yet.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSaveFailure))]
+    private string? _saveFailureText;
+
+    public bool HasSaveFailure => SaveFailureText is not null;
 
     /// <summary>
     /// End the shared run for everyone in it. Confirmed first, because it reaches every other member's machine —
@@ -876,8 +1103,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         RunState = ActivityRunState.NotStarted;
         _bounties.Clear();
         BountyIsk = 0;
-        _enemyObservations = null;
-        OnPropertyChanged(nameof(EnemyObservations));
+        _EndEnemyObservations();
         if (RunLoot is not null)
             await RunLoot.RefreshAsync();
         Refresh(nowUtc);
@@ -911,6 +1137,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             .ToList();
 
         FleetMemberCount = members.Count;
+        _SyncFleetMembers(members);
 
         if (!IsAbyssal)
         {
@@ -938,6 +1165,56 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         }
 
         Refresh(receivedUtc);
+    }
+
+    /// <summary>
+    /// Bring the member rows in line with the samples that just arrived. Rows are kept and updated rather than
+    /// rebuilt, so a name that public ESI has already resolved is not thrown away every second — and a member whose
+    /// samples stop coming disappears, because this list is only ever a list of who is heard from.
+    /// </summary>
+    private void _SyncFleetMembers(IReadOnlyList<MetricSample> members)
+    {
+        foreach (MetricSample sample in members)
+        {
+            ActivityFleetMemberViewModel? row = FleetMembers.FirstOrDefault(m => m.CharacterId == sample.CharacterId);
+            if (row is null)
+            {
+                row = new ActivityFleetMemberViewModel(sample.CharacterId);
+                FleetMembers.Add(row);
+                _ = _ResolveFleetMemberNameAsync(row);
+            }
+
+            row.LocationText = sample.AbyssalAnchorMs > 0
+                ? "in abyssal space"
+                : sample.Text ?? "not sharing a system";
+        }
+
+        foreach (ActivityFleetMemberViewModel gone in FleetMembers
+                     .Where(row => members.All(sample => sample.CharacterId != row.CharacterId)).ToList())
+            FleetMembers.Remove(gone);
+
+        OnPropertyChanged(nameof(IsFleetShown));
+        OnPropertyChanged(nameof(FleetBasisText));
+    }
+
+    /// <summary>The registry first — a local character is known without asking anyone — then public ESI, the same
+    /// route the fleet overlay resolves its rows by. Best-effort: an unresolved id keeps its "Char 90000001" label,
+    /// which is still a member you can count.</summary>
+    private async Task _ResolveFleetMemberNameAsync(ActivityFleetMemberViewModel member)
+    {
+        if (_services.GetService<ICharacterRegistry>() is { } registry
+            && (await registry.GetAllAsync()).FirstOrDefault(c => c.EsiCharacterId == member.CharacterId) is { } local)
+        {
+            member.Name = local.Name;
+            return;
+        }
+
+        if (_services.GetService<IExternalCharacterLookup>() is not { } lookup)
+            return;
+
+        ExternalCharacterInfo info = await lookup.LookupAsync(member.CharacterId);
+        if (info.Exists)
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => member.Name = info.Name);
     }
 
     private async Task _BeginEstimatedRunAsync(DateTime anchorUtc)
@@ -1008,18 +1285,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _timer = null;
     }
 
-    // The gamelog's own vocabulary translated into the run store's at this one boundary: outgoing damage is an
-    // enemy you shot at, incoming is one that shot you. Both arrive here — the event fires for either.
+    // The event fires for damage either way — "250 to Centii Scavenger" and "1 from Centii Servant" alike — and both
+    // are the same kind of enemy, so the direction is dropped here rather than carried into the list (ET-115).
     private void _OnCombatObserved(int characterId, string target, DateTime observedAtUtc, DamageDirection direction)
     {
         if (RunState != ActivityRunState.Running)
             return;
 
-        EnemyObservationDirection observed = direction is DamageDirection.Outgoing
-            ? EnemyObservationDirection.To
-            : EnemyObservationDirection.From;
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            _enemyObservations?.Record(characterId, target, observedAtUtc, observed));
+            _enemyObservations?.Record(characterId, target, observedAtUtc));
     }
 
     private void _StartEnemyObservations()
@@ -1031,19 +1305,35 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _enemyObservations = sde is null || _runCharacterId is null ? null
             : new RunEnemyObservationCollector(_runCharacterId.Value,
                 name => sde.TryGetTypeId(name, out int typeId) ? typeId : null);
+        if (_enemyObservations is not null)
+            // Only the summary: re-announcing the list itself while a count is being typed would rebind the editor
+            // under the cursor. The rows are an ObservableCollection — the list keeps itself up to date.
+            _enemyObservations.Changed += _RefreshSummaries;
         OnPropertyChanged(nameof(EnemyObservations));
+        _RefreshSummaries();
+    }
+
+    /// <summary>Let go of the list, once the run it belongs to is committed or thrown away.</summary>
+    private void _EndEnemyObservations()
+    {
+        if (_enemyObservations is not null)
+            _enemyObservations.Changed -= _RefreshSummaries;
+
+        _enemyObservations = null;
+        OnPropertyChanged(nameof(EnemyObservations));
+        _RefreshSummaries();
     }
 
     // ── Internals ───────────────────────────────────────────────────────────────────────────────────
 
     private void _RefreshClock(DateTime nowUtc)
     {
-        DateTime effectiveNow = StoppedAtUtc ?? nowUtc;
+        DateTime effectiveNow = EffectiveStopUtc ?? nowUtc;
         ClockLabel = IsAbyssal
             ? RunState == ActivityRunState.Stopped ? "TIME LEFT AT STOP" : "TIME LEFT"
             : "ELAPSED";
 
-        if (AnchorUtc is not { } start)
+        if (EffectiveStartUtc is not { } start)
         {
             ClockText = NoClock;
             IsClockWarning = false;
@@ -1060,13 +1350,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             ClockText = _Elapsed(effectiveNow - start);
             IsClockWarning = false;
             IsClockCritical = false;
-            EndText = StoppedAtUtc is { } stopped ? _LocalTime(stopped) : "still running";
+            EndText = EffectiveStopUtc is { } stopped ? _LocalTime(stopped) : "still running";
             return;
         }
 
         // END is the deadline, not the moment the last pilot got out: at RunLimit the ship and the pod are gone,
         // and that is the only end time worth putting on screen while the run is still going.
-        EndText = StoppedAtUtc is { } stoppedAt ? _LocalTime(stoppedAt) : _LocalTime(start + AbyssalSpace.RunLimit);
+        EndText = EffectiveStopUtc is { } stoppedAt ? _LocalTime(stoppedAt) : _LocalTime(start + AbyssalSpace.RunLimit);
 
         // No remaining time is the loudest state there is, not the absence of one: past the deadline we are already
         // wrong about something, and a lifted `null <= CriticalAt` would quietly have shown that in the resting
@@ -1086,7 +1376,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private void _RefreshSummaries()
     {
         Activity.HeaderSummary = _ActivitySummary();
-        Fit.HeaderSummary = FitSummary;
+        Enemies.HeaderSummary = _EnemySummary();
+        Fit.HeaderSummary = FitText;
         // Never "solo": nothing here can observe the absence of a fleet, only the presence of one. Without any the
         // section is hidden (IsFleetShown) and this line is not on screen at all.
         Fleet.HeaderSummary = FleetMemberCount > 1 ? FleetStatusText : "no fleet has reported in";
@@ -1098,18 +1389,23 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     internal void ApplyFitDetection(ShipFitDetectionReading reading)
     {
-        FitDetectionText = reading.State switch
+        // The four detection states of ET-101 stay four: whether a character may look at all, has not looked yet,
+        // looked and found nothing, or looked and found too much are different answers with different remedies.
+        FitText = reading.State switch
         {
-            ShipFitDetectionState.Unobserved => "ship type has not been read yet",
-            ShipFitDetectionState.ScopeMissing => "ship-type scope is missing",
+            ShipFitDetectionState.Unobserved => "no fit: ship type has not been read yet",
+            ShipFitDetectionState.ScopeMissing => "no fit: ship-type scope is missing",
+            ShipFitDetectionState.Observed when reading.MatchReason == ShipFitMatchReason.Detached =>
+                "no fit: unlinked from this run",
             ShipFitDetectionState.Observed when reading.MatchReason == ShipFitMatchReason.NoFitFound =>
-                "no known fit matches the observed ship",
+                "no fit: no known fit matches the observed ship",
             ShipFitDetectionState.Observed when reading.SelectedFit is { } fit =>
-                $"suggested fit: {fit.Name} ({_FitMatchReason(reading.MatchReason)})",
-            ShipFitDetectionState.Observed => "no single fit matches the observed ship",
-            _ => "ship fit is unavailable"
+                $"fit: {fit.Name} ({_FitMatchReason(reading.MatchReason)})",
+            ShipFitDetectionState.Observed => "no fit: no single fit matches the observed ship",
+            _ => "no fit: ship fit is unavailable"
         };
-        Refresh(DateTime.UtcNow);
+        HasFit = reading is { State: ShipFitDetectionState.Observed, SelectedFit: not null };
+        _RefreshSummaries();
     }
 
     internal void ApplyFitStats(FitStats? stats, bool fitCouldBeRead)
@@ -1142,6 +1438,19 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         return Weather is { } weather && TierIndex is { } tier
             ? $"{Tiers[tier]} T{tier} · {weather.Name} · no location"
             : "not set yet · no location";
+    }
+
+    /// <summary>Shut, the section still has to answer both halves of the question it exists for: which kinds were
+    /// seen, and how many of them carry a count. A count of zero is not stored (ET-106), so "seen" and "counted"
+    /// are different numbers and the header is the only place they are both visible.</summary>
+    private string _EnemySummary()
+    {
+        int types = EnemyObservations.Count;
+        if (types == 0)
+            return RunState == ActivityRunState.NotStarted ? "no run watched yet" : "no enemies seen yet";
+
+        int counted = EnemyObservations.Count(observation => observation.IsCounted);
+        return $"{types} {(types == 1 ? "type" : "types")} · {(counted == 0 ? "none counted" : $"{counted} counted")}";
     }
 
     /// <summary>The shut header carries what the run demands, not only what it is called — the same description the

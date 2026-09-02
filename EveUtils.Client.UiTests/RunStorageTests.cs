@@ -43,7 +43,7 @@ public sealed class RunStorageTests
                 ]
             }],
             [new RunBountyEntryInput { OccurredAtUtc = StartedAtUtc.AddMinutes(5), Isk = 75m }],
-            [new RunEnemyObservationInput { Count = 1, EnemyTypeId = 111, EnemyName = "Raid Leader", Direction = EnemyObservationDirection.To, FirstObservedAtUtc = StartedAtUtc, LastObservedAtUtc = StartedAtUtc.AddMinutes(1) }],
+            [new RunEnemyObservationInput { Count = 1, EnemyTypeId = 111, EnemyName = "Raid Leader", FirstObservedAtUtc = StartedAtUtc, LastObservedAtUtc = StartedAtUtc.AddMinutes(1) }],
             [new RunParameterInput { ParameterKey = RunParameterKey.Smugglers, TypedValue = "3", ObservedAtUtc = StartedAtUtc.AddMinutes(2) }]), cancellationToken);
         Result<int> rebuilt = await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
 
@@ -376,7 +376,7 @@ public sealed class RunStorageTests
         Guid runId = started.Value;
         Result saved = await dispatcher.Send(new SaveRunCommand(runId, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16), [],
             [new RunBountyEntryInput { OccurredAtUtc = StartedAtUtc.AddMinutes(5), Isk = 75m }],
-            [new RunEnemyObservationInput { Count = 1, EnemyTypeId = 111, EnemyName = "Raid Leader", Direction = EnemyObservationDirection.To, FirstObservedAtUtc = StartedAtUtc, LastObservedAtUtc = StartedAtUtc.AddMinutes(1) }], []), cancellationToken);
+            [new RunEnemyObservationInput { Count = 1, EnemyTypeId = 111, EnemyName = "Raid Leader", FirstObservedAtUtc = StartedAtUtc, LastObservedAtUtc = StartedAtUtc.AddMinutes(1) }], []), cancellationToken);
         Assert.True(started.IsSuccess);
         Assert.True(saved.IsSuccess);
     }
@@ -387,7 +387,7 @@ public sealed class RunStorageTests
             1234, "Homefront", 30000142, "HF-7QK2"), cancellationToken);
         Guid runId = started.Value;
         Result saved = await dispatcher.Send(new SaveRunCommand(runId, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16), [], [],
-            [new RunEnemyObservationInput { Count = 1, EnemyTypeId = enemyTypeId, EnemyName = "Raid Leader", Direction = EnemyObservationDirection.To, FirstObservedAtUtc = StartedAtUtc, LastObservedAtUtc = StartedAtUtc.AddMinutes(1) }], []), cancellationToken);
+            [new RunEnemyObservationInput { Count = 1, EnemyTypeId = enemyTypeId, EnemyName = "Raid Leader", FirstObservedAtUtc = StartedAtUtc, LastObservedAtUtc = StartedAtUtc.AddMinutes(1) }], []), cancellationToken);
         Assert.True(started.IsSuccess);
         Assert.True(saved.IsSuccess);
     }

@@ -20,10 +20,30 @@ public static class ClipboardInventoryParser
         if (rows.Count == 0)
             return [];
 
-        var nameColumn = FindNameColumn(rows);
-        if (nameColumn is null)
+        int? nameColumn = FindNameColumn(rows);
+        return nameColumn is { } column ? ReadItems(rows, column) : [];
+    }
+
+    internal static bool HasSingleRow(string text) => ReadRows(text).Count == 1;
+
+    internal static IReadOnlyList<ClipboardInventoryItem> ParseAmbiguousNameCandidates(string text)
+    {
+        List<string[]> rows = ReadRows(text);
+        if (rows.Count != 1 || FindNameColumn(rows) is not null)
             return [];
 
+        List<ClipboardInventoryItem> candidates = [];
+        for (var column = 0; column < rows[0].Length; column++)
+        {
+            if (IsNameColumn(rows, column, out _))
+                candidates.AddRange(ReadItems(rows, column));
+        }
+
+        return candidates;
+    }
+
+    private static IReadOnlyList<ClipboardInventoryItem> ReadItems(IReadOnlyList<string[]> rows, int nameColumn)
+    {
         var quantityColumn = FindQuantityColumn(rows);
         var volumeColumn = FindUnitColumn(rows, "m3");
         var priceColumn = FindUnitColumn(rows, "ISK");
@@ -41,7 +61,7 @@ public static class ClipboardInventoryParser
                 ? parsedPrice
                 : null;
 
-            items.Add(new ClipboardInventoryItem(row[nameColumn.Value].Trim(), quantity, volume, price));
+            items.Add(new ClipboardInventoryItem(row[nameColumn].Trim(), quantity, volume, price));
         }
 
         return items;
@@ -78,40 +98,45 @@ public static class ClipboardInventoryParser
 
         for (var column = 0; column < rows[0].Length; column++)
         {
-            var hasName = true;
-            var values = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var row in rows)
-            {
-                var field = row[column];
-                if (string.IsNullOrWhiteSpace(field)
-                    || IsUnitField(field, "m3")
-                    || IsUnitField(field, "ISK")
-                    || TryParseWholeNumber(field, out _))
-                {
-                    hasName = false;
-                    break;
-                }
-
-                values.Add(field.Trim());
-            }
-
-            if (!hasName)
+            if (!IsNameColumn(rows, column, out var distinctCount))
                 continue;
 
-            if (values.Count > highestDistinctCount)
+            if (distinctCount > highestDistinctCount)
             {
                 nameColumn = column;
                 nextHighestDistinctCount = highestDistinctCount;
-                highestDistinctCount = values.Count;
+                highestDistinctCount = distinctCount;
             }
-            else if (values.Count > nextHighestDistinctCount)
+            else if (distinctCount > nextHighestDistinctCount)
             {
-                nextHighestDistinctCount = values.Count;
+                nextHighestDistinctCount = distinctCount;
             }
         }
 
         // This chosen, unmeasured 2x guard comes from one 39-versus-10 capture; it rejects valid 15-versus-8 selections rather than misnaming them.
         return nameColumn is null || highestDistinctCount < nextHighestDistinctCount * 2 ? null : nameColumn;
+    }
+
+    private static bool IsNameColumn(IReadOnlyList<string[]> rows, int column, out int distinctCount)
+    {
+        var values = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var row in rows)
+        {
+            var field = row[column];
+            if (string.IsNullOrWhiteSpace(field)
+                || IsUnitField(field, "m3")
+                || IsUnitField(field, "ISK")
+                || TryParseWholeNumber(field, out _))
+            {
+                distinctCount = 0;
+                return false;
+            }
+
+            values.Add(field.Trim());
+        }
+
+        distinctCount = values.Count;
+        return true;
     }
 
     private static int? FindQuantityColumn(IReadOnlyList<string[]> rows)

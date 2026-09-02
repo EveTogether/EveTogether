@@ -28,6 +28,9 @@ public partial class ActivityWindow : OverlayWindow
     {
         _viewModel = viewModel;
         DataContext = viewModel;
+        // Only on a save that landed (ET-98). A failed one leaves the window standing with the reason on it, and a
+        // group member's save never reaches this window — it is raised by the view model this window owns.
+        viewModel.SaveSucceeded += Close;
     }
 
     protected override async void OnOpened(EventArgs e)
@@ -41,6 +44,9 @@ public partial class ActivityWindow : OverlayWindow
 
     protected override void OnClosed(EventArgs e)
     {
+        if (_viewModel is not null)
+            _viewModel.SaveSucceeded -= Close;
+
         _viewModel?.Dispose();
         base.OnClosed(e);
     }

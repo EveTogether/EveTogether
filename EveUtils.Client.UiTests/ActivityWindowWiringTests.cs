@@ -8,12 +8,14 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Data;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Entities;
 using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 using LootCaptureSource = EveUtils.Shared.Modules.Runs.Enums.LootCaptureSource;
 using LootKind = EveUtils.Shared.Modules.Runs.Enums.LootKind;
-using EnemyObservationDirection = EveUtils.Shared.Modules.Runs.Enums.EnemyObservationDirection;
 using EveUtils.Shared.Modules.Runs.Queries;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using RunCommands = EveUtils.Shared.Modules.Runs.Commands;
@@ -236,7 +238,101 @@ public class ActivityWindowWiringTests
         RunEnemyObservationViewModel observed = Assert.Single(model.EnemyObservations);
         Assert.Equal("Centii Servant", observed.EnemyName);
         Assert.Equal(new DateTime(2030, 1, 1, 12, 0, 5, DateTimeKind.Utc), observed.FirstObservedAtUtc);
-        Assert.Equal(EnemyObservationDirection.To, observed.Direction);
+    }
+
+    /// <summary>
+    /// ET-115's first counter-proof, through the gamelog the player actually has. <c>CombatObserved</c> fires both
+    /// ways — "250 to Centii Servant" and "1 from Centii Servant" — and the direction is the only thing that ever
+    /// made these two rows. The question the list answers is which kind of enemy and how many, so one kind is one
+    /// row, and its window has to cover both sightings rather than one of them overwriting the other.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AnEnemyMetBothWays_IsOneRow_OverAWindowCoveringBothSightings()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        await harness.StartWatchingAsync();
+        await model.StartRunCommand.ExecuteAsync(null);
+
+        await harness.WriteLineAsync(ActivityWindowHarness.CombatLine(250, "Centii Servant", "12:00:05"));
+        await harness.WriteLineAsync(ActivityWindowHarness.IncomingCombatLine(7, "Centii Servant", "12:00:41"));
+
+        await ActivityWindowHarness.WaitUntil(() => model.EnemyObservations.Count > 0
+            && model.EnemyObservations[0].LastObservedAtUtc.Second == 41);
+
+        RunEnemyObservationViewModel observed = Assert.Single(model.EnemyObservations);
+        Assert.Equal("Centii Servant", observed.EnemyName);
+        Assert.Equal(new DateTime(2030, 1, 1, 12, 0, 5, DateTimeKind.Utc), observed.FirstObservedAtUtc);
+        Assert.Equal(new DateTime(2030, 1, 1, 12, 0, 41, DateTimeKind.Utc), observed.LastObservedAtUtc);
+    }
+
+    /// <summary>
+    /// ET-115's second counter-proof. STOP used to throw the collector away, and since a count of zero is never
+    /// stored (ET-106) and the player types that count after the fight, no enemy observation could ever be saved at
+    /// all. The list now outlives STOP for the same reason the stored run does, and the number typed on a stopped
+    /// run is the number SAVE writes.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AnEnemySeenBeforeStop_SurvivesStop_AndACountTypedAfterwardsIsSaved()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        await harness.StartWatchingAsync();
+        await model.StartRunCommand.ExecuteAsync(null);
+        await harness.WriteLineAsync(ActivityWindowHarness.CombatLine(250, "Centii Servant"));
+        await ActivityWindowHarness.WaitUntil(() => model.EnemyObservations.Count > 0);
+        Guid runId = Assert.NotNull(model.RunId);
+
+        model.StopRun(new DateTime(2030, 1, 1, 12, 5, 0, DateTimeKind.Utc));
+
+        // Still there with the counter usable — this is the moment the player reaches for it.
+        RunEnemyObservationViewModel observed = Assert.Single(model.EnemyObservations);
+        observed.Count = 4;
+        await model.SaveRunCommand.ExecuteAsync(null);
+
+        await using ClientDbContext db = await harness.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(TestContext.Current.CancellationToken);
+        RunEnemyObservation stored = Assert.Single(await db.Set<RunEnemyObservation>()
+            .Where(row => row.RunId == runId)
+            .ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("Centii Servant", stored.EnemyName);
+        Assert.Equal(4, stored.Count);
+    }
+
+    /// <summary>
+    /// ET-115's fourth counter-proof, and the other half of the one above: a kind that was seen but never counted
+    /// is not written to the run, and the difference is on screen rather than only in the database — the section
+    /// header names both numbers, so a folded section still says what SAVE will and will not keep.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AnEnemyLeftAtZero_IsNotStored_AndTheSectionSaysSoBeforeSave()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        await harness.StartWatchingAsync();
+        await model.StartRunCommand.ExecuteAsync(null);
+        await harness.WriteLineAsync(ActivityWindowHarness.CombatLine(250, "Centii Servant"));
+        await ActivityWindowHarness.WaitUntil(() => model.EnemyObservations.Count > 0);
+        Guid runId = Assert.NotNull(model.RunId);
+
+        model.StopRun(new DateTime(2030, 1, 1, 12, 5, 0, DateTimeKind.Utc));
+        string uncounted = model.Enemies.HeaderSummary;
+        Assert.Contains("none counted", uncounted);
+
+        model.EnemyObservations[0].Count = 2;
+        Assert.NotEqual(uncounted, model.Enemies.HeaderSummary);
+        model.EnemyObservations[0].Count = 0;
+        Assert.Equal(uncounted, model.Enemies.HeaderSummary);
+
+        await model.SaveRunCommand.ExecuteAsync(null);
+
+        await using ClientDbContext db = await harness.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(TestContext.Current.CancellationToken);
+        Assert.Empty(await db.Set<RunEnemyObservation>()
+            .Where(row => row.RunId == runId)
+            .ToListAsync(TestContext.Current.CancellationToken));
     }
 
     // ── The fleet reaches the window ────────────────────────────────────────────────────────────────
@@ -269,7 +365,7 @@ public class ActivityWindowWiringTests
         Assert.True(model.IsFleetShown);
         Assert.Equal(2, model.FleetMemberCount);
         Assert.Equal(2, model.AnchoredFleetMemberCount);
-        Assert.Equal("based on 2 of 2 members", model.Fleet.HeaderSummary);
+        Assert.Equal("based on 2 of 2 members sharing a location", model.Fleet.HeaderSummary);
     }
 
     /// <summary>A fleet run nobody pressed START for still gets its row: the envelope is what began it, and the loot

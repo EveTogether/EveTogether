@@ -288,7 +288,7 @@ public class ModuleNavigationTests
         Assert.Equal("APP LOGS", vm.HostTabs[0].Title);
         Assert.Same(vm.Logs, vm.SelectedHostTab!.Content.DataContext);   // tab content binds the module VM
 
-        window.CaptureRenderedFrame()!.Save(Path.Combine(Path.GetTempPath(), "eveutils-shell-docked-logs.png"));
+        window.CaptureRenderedFrame()!.Save(Path.Combine(Path.GetTempPath(), "eveutils-shell-docked-logs.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
 
         vm.SelectedHostTab!.CloseCommand.Execute(null);   // close the tab → back to the home
         Dispatcher.UIThread.RunJobs();
@@ -393,7 +393,7 @@ public class ModuleNavigationTests
         await browser.Tabs[0].EnsureLoadedAsync();
         Dispatcher.UIThread.RunJobs();
         Assert.True(browser.Tabs[0].TotalCount >= 2, $"hosted browser Local rows = {browser.Tabs[0].TotalCount}");
-        window.CaptureRenderedFrame()!.Save(Path.Combine(Path.GetTempPath(), "eveutils-shell-docked-browser.png"));
+        window.CaptureRenderedFrame()!.Save(Path.Combine(Path.GetTempPath(), "eveutils-shell-docked-browser.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -409,7 +409,7 @@ public class ModuleNavigationTests
         Assert.Equal("compositions", vm.ActiveModule);    // the COMP rail item lights up
         Assert.True(vm.IsCompositionsActive);
 
-        window.CaptureRenderedFrame()!.Save(Path.Combine(Path.GetTempPath(), "eveutils-shell-docked-compositions.png"));
+        window.CaptureRenderedFrame()!.Save(Path.Combine(Path.GetTempPath(), "eveutils-shell-docked-compositions.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 

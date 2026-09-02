@@ -40,7 +40,7 @@ public class SdeProgressViewTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-sde-progress.png");
+        frame!.Save("/tmp/eveutils-sde-progress.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
 
         // A successful finish asks the popup to close itself.

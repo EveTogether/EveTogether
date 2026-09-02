@@ -55,12 +55,27 @@ public sealed class AbyssalLootCapture : ISingletonService, IDisposable
         if (capture.Shape is not ClipboardShape.Inventory)
             return;
 
+        bool hasSingleRow = ClipboardInventoryParser.HasSingleRow(capture.Text);
         IReadOnlyList<ClipboardInventoryItem> items = ClipboardInventoryParser.Parse(capture.Text);
+        IReadOnlyList<ClipboardInventoryItem> candidates = [];
         var resolution = SdeInventoryResolver.Resolve(items, _sde);
+        bool hasNoSingleRowSdeMatch = hasSingleRow && _sde.IsAvailable && resolution.Lines.Count == 0;
+        if (items.Count == 0 && _sde.IsAvailable)
+        {
+            candidates = ClipboardInventoryParser.ParseAmbiguousNameCandidates(capture.Text);
+            resolution = SdeInventoryResolver.ResolveUniqueCandidate(candidates, _sde, out hasNoSingleRowSdeMatch);
+        }
+
         if (resolution.Lines.Count == 0)
         {
+            if (hasNoSingleRowSdeMatch)
+                return;
+
+            var message = candidates.Count > 0
+                ? $"Could not identify exactly one EVE item type from {candidates.Count} copied names. Copy rows from an EVE inventory window."
+                : $"None of the {resolution.Unresolved.Count} copied names is a known item type. Copy rows from an EVE inventory window.";
             _toasts.Show("Loot not recognised",
-                $"None of the {resolution.Unresolved.Count} copied names is a known item type. Copy rows from an EVE inventory window.",
+                message,
                 ToastKind.Error);
             return;
         }
