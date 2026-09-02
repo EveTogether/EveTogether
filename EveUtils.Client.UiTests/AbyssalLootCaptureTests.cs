@@ -136,6 +136,30 @@ public sealed class AbyssalLootCaptureTests
         Assert.Contains("1 name(s) were not recognised", offer.Message);
     }
 
+    /// <summary>
+    /// ET-65, Raymond 2026-09-02: a copied loot window that produced nothing at all — no loot, no toast, no line in
+    /// the log, indistinguishable from a watcher that never ran.
+    ///
+    /// This is a whole loot window whose name column the parser cannot pick out: three item names against two
+    /// groups does not clear its 2x distinctness guard, so no column stands out as the names. That refusal used to
+    /// leave through the single-row gate, which <c>ResolveUniqueCandidate</c>'s out parameter had overwritten for
+    /// every copy regardless of how many rows it held. A refusal the player cannot see is the fault here, not the
+    /// refusal: whatever it decides, it has to say so.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AWholeWindowWhoseNameColumnCannotBeToldApart_IsRefusedOutLoud_NotDropped()
+    {
+        using var env = await Env.StartAsync();
+        await env.StartRunAsync();
+
+        await env.CopyAsync("Rifter\tShip\t1\r\nDamage Control II\tModule\t2\r\nEMP S\tShip\t3");
+
+        Assert.Empty(await env.CapturesAsync());
+        var refusal = Assert.Single(env.Toasts.Toasts);
+        Assert.Equal("Loot not recognised", refusal.Title);
+        Assert.Contains("which of the copied columns holds the item names", refusal.Message);
+    }
+
     [AvaloniaFact]
     public async Task FitCapture_IsNotOfferedAsLoot()
     {
@@ -308,7 +332,7 @@ public sealed class AbyssalLootCaptureTests
             _instance = instance;
             _watch = watch;
             _source = source;
-            _capture = new AbyssalLootCapture(watch, Toasts, sde, captureDispatcher);
+            _capture = new AbyssalLootCapture(watch, Toasts, sde, NullLogger<AbyssalLootCapture>.Instance, captureDispatcher);
         }
 
         private static CancellationToken Token => TestContext.Current.CancellationToken;
