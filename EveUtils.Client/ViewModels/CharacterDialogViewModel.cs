@@ -75,7 +75,7 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
 
     private async Task ReloadServerLinksAsync()
     {
-        var links = await _owner.BuildServerLinksAsync(CharacterId, DecoupleAsync, ViewTrustAsync);
+        var links = await _owner.BuildServerLinksAsync(CharacterId, DecoupleAsync, ViewTrustAsync, RecoupleAsync);
         ServerLinks.Clear();
         foreach (var link in links)
             ServerLinks.Add(link);
@@ -116,6 +116,17 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
     {
         await _owner.DecoupleAsync(link);
         await ReloadServerLinksAsync();
+    }
+
+    /// <summary>Couple again from the link that has gone dead, which is where the user is looking when they are
+    /// told to. The same flow as the "Couple to server" button below — pairing overwrites the stored session and
+    /// restarts the connection, so nothing is deleted first.</summary>
+    private async Task RecoupleAsync(ServerLinkViewModel link)
+    {
+        Status = $"Coupling {link.DisplayName} again…";
+        var ok = await _owner.RunCoupleAsync();
+        await ReloadServerLinksAsync();
+        Status = ok ? "Coupled." : "Coupling cancelled.";
     }
 
     private async Task ViewTrustAsync(ServerLinkViewModel link)

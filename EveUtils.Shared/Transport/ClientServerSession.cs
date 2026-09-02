@@ -20,4 +20,9 @@ public sealed class ClientServerSession
     /// server (replaces the former dictionary insertion-order heuristic). Stored as a long — SQLite
     /// orders it natively, unlike DateTimeOffset.</summary>
     public long SavedAtUnixMs { get; set; }
+
+    /// <summary>The server's id for this session. Unlike the tokens it survives every rotation, so presenting it
+    /// on a refresh lets the server tell a deleted session from a stale copy of a live one (ET-123). 0 = not known
+    /// yet (paired before the server handed it out); the next heartbeat fills it in.</summary>
+    public int ServerSessionId { get; set; }
 }

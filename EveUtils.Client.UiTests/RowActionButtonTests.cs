@@ -42,8 +42,10 @@ public class RowActionButtonTests
         for (var i = 0; i < 10; i++)
             Dispatcher.UIThread.RunJobs();
 
+        // Only the ones actually on the row: the template also carries a "couple again" button that a healthy link
+        // hides (ET-123), and a collapsed control has no bounds to line anything up with.
         var buttons = window.GetVisualDescendants().OfType<Button>()
-            .Where(b => b.DataContext is ServerLinkViewModel)
+            .Where(b => b.DataContext is ServerLinkViewModel && b.IsVisible)
             .ToList();
 
         Assert.Equal(2, buttons.Count);

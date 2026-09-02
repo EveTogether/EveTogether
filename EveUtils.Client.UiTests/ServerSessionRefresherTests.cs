@@ -153,6 +153,43 @@ public class ServerSessionRefresherTests
         Assert.Equal(0, store.RemoveCalls);
     }
 
+    /// <summary>
+    /// The refusal the server can now be definite about (ET-123): the session is not there any more. It has to come
+    /// back as its own outcome, because the callers answer the two in opposite ways — one keeps retrying quietly,
+    /// the other stops and puts the user in front of a "couple again". What must NOT differ is the credentials:
+    /// they stay on disk either way, because coupling again is what replaces them and deleting them here would put
+    /// back the silent unpairing ET-121 removed.
+    /// </summary>
+    [Fact]
+    public async Task AServerSayingTheSessionIsGone_IsItsOwnOutcome_AndStillLeavesTheStoredPairingAlone()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new RecordingSessionStore(Tokens("access-1", "refresh-1"));
+        var refresher = new ServerSessionRefresher(RefreshCall.SaysSessionGone(), store);
+
+        var (outcome, session) = await refresher.TryRefreshAsync(Server, Character, cancellationToken: ct);
+
+        Assert.Equal(ServerSessionRefreshOutcome.SessionGone, outcome);
+        Assert.Equal(0, store.RemoveCalls);
+        Assert.Equal(0, store.SaveCalls);
+        Assert.Equal("refresh-1", session!.RefreshToken);
+    }
+
+    /// <summary>A refusal the server would not commit to stays exactly what it was before ET-123 — the whole point
+    /// of putting the reason on the wire was to stop guessing, not to start treating every refusal as final.</summary>
+    [Fact]
+    public async Task ARefusalThatDoesNotSayTheSessionIsGone_IsStillTheRetryableOne()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new RecordingSessionStore(Tokens("access-1", "refresh-1"));
+        var refresher = new ServerSessionRefresher(RefreshCall.AlwaysRefuses(), store);
+
+        var (outcome, _) = await refresher.TryRefreshAsync(Server, Character, cancellationToken: ct);
+
+        Assert.Equal(ServerSessionRefreshOutcome.Rejected, outcome);
+        Assert.Equal(0, store.RemoveCalls);
+    }
+
     private static ClientSessionTokens Tokens(string access, string refresh, int characterId = Character) =>
         new(access, refresh, "Jithran", characterId);
 
@@ -166,7 +203,13 @@ public class ServerSessionRefresherTests
 
         public int Calls => Volatile.Read(ref _calls);
 
+        /// <summary>Refuses without saying the session is gone — the ambiguous refusal ET-121's rules are about.</summary>
         public static RefreshCall AlwaysRefuses() => new(_ => new ServerSessionRefreshReply(false, "", ""));
+
+        /// <summary>Refuses and says outright that the session no longer exists (ET-123).</summary>
+        public static RefreshCall SaysSessionGone() =>
+            new(_ => new ServerSessionRefreshReply(false, "", "", SessionGone: true));
+
         public static RefreshCall Throws() => new(_ => throw new InvalidOperationException("server unreachable"));
 
         /// <summary>Rotates like the server does: every accepted refresh token becomes a new pair.</summary>
@@ -181,7 +224,7 @@ public class ServerSessionRefresherTests
         }
 
         public async Task<ServerSessionRefreshReply> RefreshAsync(
-            string serverAddress, string refreshToken, CancellationToken cancellationToken = default)
+            string serverAddress, string refreshToken, int sessionId = 0, CancellationToken cancellationToken = default)
         {
             Interlocked.Increment(ref _calls);
             await Task.Yield(); // give a racing caller room to arrive while this one is "in flight"
@@ -220,6 +263,13 @@ public class ServerSessionRefresherTests
 
         public Task<IReadOnlyList<ClientSessionTokens>> LoadAllAsync(string serverAddress, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ClientSessionTokens>>(_sessions.Values.ToList());
+
+        public Task SetServerSessionIdAsync(string serverAddress, int characterId, int serverSessionId, CancellationToken cancellationToken = default)
+        {
+            if (serverSessionId > 0 && _sessions.TryGetValue(characterId, out var tokens))
+                _sessions[characterId] = tokens with { ServerSessionId = serverSessionId };
+            return Task.CompletedTask;
+        }
 
         public Task RemoveAsync(string serverAddress, int characterId, CancellationToken cancellationToken = default)
         {

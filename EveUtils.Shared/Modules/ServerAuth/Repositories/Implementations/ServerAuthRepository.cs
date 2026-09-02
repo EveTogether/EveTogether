@@ -116,6 +116,13 @@ internal sealed class ServerAuthRepository(IDbContextFactory<SharedDbContext> co
             .FirstOrDefaultAsync(s => s.RefreshTokenHash == refreshHash, cancellationToken);
     }
 
+    public async Task<ServerSession?> FindSessionByIdAsync(int sessionId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Set<ServerSession>().AsNoTracking().Include(s => s.SyncedCharacter)
+            .FirstOrDefaultAsync(s => s.Id == sessionId, cancellationToken);
+    }
+
     public async Task TouchHeartbeatAsync(string accessHash, DateTimeOffset at, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);

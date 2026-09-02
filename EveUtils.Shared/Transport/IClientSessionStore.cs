@@ -18,6 +18,13 @@ public interface IClientSessionStore
     /// <summary>All sessions for the server — one per paired character (for synced status).</summary>
     Task<IReadOnlyList<ClientSessionTokens>> LoadAllAsync(string serverAddress, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Records the server's own id for this character's session, learned from a heartbeat. Separate from
+    /// <see cref="SaveAsync"/> because it must leave the tokens and the save timestamp alone — it is one field
+    /// caught in passing, not a new session. A non-positive id is ignored.
+    /// </summary>
+    Task SetServerSessionIdAsync(string serverAddress, int characterId, int serverSessionId, CancellationToken cancellationToken = default);
+
     /// <summary>Removes a stale/expired session for a character so the bus stops picking it.</summary>
     Task RemoveAsync(string serverAddress, int characterId, CancellationToken cancellationToken = default);
 

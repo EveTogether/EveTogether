@@ -17,9 +17,13 @@ namespace EveUtils.Client.Messaging;
 /// list from that server reads as "there is nothing here" for as long as the pairing stays broken. A notification
 /// that fades after a few seconds would be gone long before the user next opened one of those lists.
 ///
-/// Only <see cref="ServerConnectionState.SessionExpired"/> counts. A reconnecting or briefly dropped link fixes
-/// itself (and an access token that has merely expired is refreshed silently by the heartbeat), so raising the
-/// banner for those would train the user to ignore it.
+/// Only <see cref="ServerConnectionState.SessionExpired"/> and <see cref="ServerConnectionState.SessionGone"/>
+/// count. A reconnecting or briefly dropped link fixes itself (and an access token that has merely expired is
+/// refreshed silently by the heartbeat), so raising the banner for those would train the user to ignore it.
+///
+/// The two that do count get their own wording (ET-123). One is being retried and may clear on its own; the other
+/// has stopped and will not clear until the user couples again. Telling someone their client is still trying when
+/// it has given up is worse than saying nothing.
 /// </summary>
 public static class ServerPairingAlert
 {
@@ -28,23 +32,50 @@ public static class ServerPairingAlert
     /// coupled to it) and ordered, so the text is stable between rebuilds.</summary>
     public static (bool Show, string Message) For(IEnumerable<(string ServerName, ServerConnectionState State)> links)
     {
-        var expired = links
-            .Where(l => l.State is ServerConnectionState.SessionExpired)
+        var all = links.ToList();
+        var gone = Names(all, ServerConnectionState.SessionGone);
+        var refused = Names(all, ServerConnectionState.SessionExpired)
+            // A server in both states at once (one character gone, another merely refused) is named by the harder
+            // of the two: "couple again" is the move that also settles the other one.
+            .Where(n => !gone.Contains(n, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+
+        if (gone.Count == 0 && refused.Count == 0)
+            return (false, "");
+
+        // Two messages rather than one blended into both: they ask the user for opposite things — sit tight, or act
+        // now — and a sentence that covers both ends up asking for neither.
+        var parts = new List<string>();
+        if (gone.Count > 0)
+        {
+            var (verb, holder) = gone.Count == 1 ? ("no longer has", "that server") : ("no longer have", "those servers");
+            parts.Add(
+                $"{Join(gone)} {verb} a session for this client, so it has stopped trying to reconnect. Until you "
+                + $"couple the character again, anything {holder} holds — fleets, compositions, shared fits — reads "
+                + "as empty rather than as an error, and nothing can be saved there.");
+        }
+
+        if (refused.Count > 0)
+        {
+            var (verb, holder) = refused.Count == 1 ? ("is", "that server") : ("are", "those servers");
+            parts.Add(
+                $"{Join(refused)} {verb} refusing this client's stored sign-in and will not renew it. Your pairing is "
+                + "kept and retried every few minutes, so this may clear on its own — but while it lasts, anything "
+                + $"{holder} holds — fleets, compositions, shared fits — reads as empty rather than as an error, and "
+                + "nothing can be saved there. Couple the character again if it does not clear.");
+        }
+
+        return (true, string.Join(" ", parts));
+    }
+
+    private static List<string> Names(
+        IEnumerable<(string ServerName, ServerConnectionState State)> links, ServerConnectionState state) =>
+        links
+            .Where(l => l.State == state)
             .Select(l => l.ServerName)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
             .ToList();
-
-        if (expired.Count == 0)
-            return (false, "");
-
-        var (verb, holder) = expired.Count == 1 ? ("is", "that server") : ("are", "those servers");
-        return (true,
-            $"{Join(expired)} {verb} refusing this client's stored sign-in and will not renew it. Your pairing is "
-            + "kept and retried every few minutes, so this may clear on its own — but while it lasts, anything "
-            + $"{holder} holds — fleets, compositions, shared fits — reads as empty rather than as an error, and "
-            + "nothing can be saved there. Couple the character again if it does not clear.");
-    }
 
     private static string Join(IReadOnlyList<string> names) => names.Count switch
     {

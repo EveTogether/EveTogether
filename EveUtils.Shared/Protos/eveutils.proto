@@ -360,16 +360,35 @@ message ClaimPairingReply {
   string alliance_name = 9;
 }
 
-message RefreshRequest { string session_refresh_token = 1; }
+// Why a refresh was refused, so the client knows whether trying again could ever come to anything (ET-123).
+// From the token alone the two are indistinguishable: a session row that was deleted and a rotation this client
+// never got to persist both leave the presented token missing from the table.
+enum SessionRefusal {
+  SESSION_REFUSAL_UNSPECIFIED = 0; // not a refusal, or a server too old to say which it is
+  SESSION_REFUSAL_RETRY = 1;       // the token is not the current one, but the session itself is still there
+  SESSION_REFUSAL_SESSION_GONE = 2; // this server has no such session any more — only pairing again helps
+}
+
+message RefreshRequest {
+  string session_refresh_token = 1;
+  // Which session this client believes it is holding; 0 when it does not know yet (paired before this field
+  // existed). It survives rotation, which the tokens do not, and that is what lets the server tell a deleted
+  // session from a superseded token instead of guessing.
+  int32 session_id = 2;
+}
 message SessionReply {
   bool ok = 1;
   string session_token = 2;
   string session_refresh_token = 3;
   string message = 4;
+  int32 session_id = 5;
+  SessionRefusal refusal = 6;
 }
 
 message HeartbeatRequest { string session_token = 1; }
-message HeartbeatReply { bool ok = 1; }
+// The heartbeat carries the session id as well, so a client paired before session_id existed learns its own
+// within one 30s tick instead of having to wait for a rotation it may never get to make.
+message HeartbeatReply { bool ok = 1; int32 session_id = 2; }
 
 message RevokeRequest { string session_token = 1; }
 message RevokeReply { bool ok = 1; string message = 2; }

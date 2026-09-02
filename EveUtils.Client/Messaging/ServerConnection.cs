@@ -226,6 +226,18 @@ public sealed class ServerConnection
                         SetState(ServerConnectionState.Reconnecting);
                         attempt++;
                         continue;
+                    case ServerSessionRefreshOutcome.SessionGone:
+                        // The server does not merely refuse the token — it says the session itself is not there any
+                        // more. Retrying cannot bring it back, so this ends the loop the way a refused certificate
+                        // does, and the chip asks the user to couple again instead of claiming to be busy. The
+                        // stored pairing still stays: coupling again overwrites it, and deleting it here would put
+                        // back exactly the silent unpairing ET-121 removed.
+                        _logger.LogWarning(
+                            "Server {Server} no longer has the session for character {Character} — it was cleaned up, revoked or has lapsed. "
+                            + "Automatic reconnecting stopped; couple this character to the server again.",
+                            _serverAddress, _characterId);
+                        SetState(ServerConnectionState.SessionGone);
+                        return;
                     default: // Rejected: the server does not recognise the stored refresh token.
                         // The stored pairing STAYS. This branch used to call RemoveAsync, which turned a single
                         // refused round-trip into a pairing the user had to rebuild by hand — the next pass found no
@@ -353,7 +365,16 @@ public sealed class ServerConnection
                     var reply = await client.HeartbeatAsync(
                         new HeartbeatRequest { SessionToken = session.AccessToken }, cancellationToken: cancellationToken);
                     if (reply.Ok)
+                    {
+                        // Catch the session's own id in passing. A client paired before the server handed it out has
+                        // nothing to name its session with, and until it does, a refusal cannot be told apart from a
+                        // stale copy — this closes that gap within one tick instead of at the next rotation, which
+                        // for a session that is about to be refused may never come.
+                        if (reply.SessionId > 0 && reply.SessionId != session.ServerSessionId)
+                            await _sessionStore.SetServerSessionIdAsync(
+                                _serverAddress, _characterId, reply.SessionId, cancellationToken);
                         continue;
+                    }
 
                     // The server reached us and does not accept this access token any more.
                     switch ((await _refresher.TryRefreshAsync(_serverAddress, _characterId, session.AccessToken, cancellationToken)).Outcome)
@@ -374,6 +395,15 @@ public sealed class ServerConnection
                                     + "will be retried; re-pair only if it stays this way.", _serverAddress, _characterId);
                             SetState(ServerConnectionState.SessionExpired);
                             break;
+                        case ServerSessionRefreshOutcome.SessionGone:
+                            // Final: the connect loop has already stopped for this, and there is nothing left for
+                            // this loop to keep alive either. Stop rather than ask a server twice a minute about a
+                            // session it has told us it does not have.
+                            _logger.LogWarning(
+                                "Server {Server} no longer has the session for character {Character}; the heartbeat stopped. "
+                                + "Couple this character to the server again.", _serverAddress, _characterId);
+                            SetState(ServerConnectionState.SessionGone);
+                            return;
                         // Unavailable: server unreachable — keep the session and try again next tick.
                     }
                 }

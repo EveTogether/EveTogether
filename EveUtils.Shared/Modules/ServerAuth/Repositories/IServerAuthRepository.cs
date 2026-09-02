@@ -17,6 +17,12 @@ public interface IServerAuthRepository
     Task AddSessionAsync(ServerSession session, CancellationToken cancellationToken = default);
     Task<ServerSession?> FindSessionByAccessHashAsync(string accessHash, CancellationToken cancellationToken = default);
     Task<ServerSession?> FindSessionByRefreshHashAsync(string refreshHash, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// The session with this id, whatever token pair it currently holds. The id is the only thing about a session
+    /// that survives a rotation, so it is what separates "this row was deleted" from "your copy of its token is
+    /// stale" — which the token itself cannot tell apart (ET-123).
+    /// </summary>
+    Task<ServerSession?> FindSessionByIdAsync(int sessionId, CancellationToken cancellationToken = default);
     Task TouchHeartbeatAsync(string accessHash, DateTimeOffset at, CancellationToken cancellationToken = default);
     /// <summary>
     /// Rotates the session to a new token pair, but only while its refresh hash is still

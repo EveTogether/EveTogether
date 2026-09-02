@@ -60,7 +60,7 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:ServerLinkViewModel">
                             <Border Classes="panel" Padding="8,5" Margin="0,0,0,4">
-                                <Grid ColumnDefinitions="*,Auto,Auto">
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                                     <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
                                                    Foreground="{StaticResource TextBrightBrush}"
@@ -68,13 +68,20 @@
                                         <TextBlock Text="{Binding StatusLabel}" FontSize="10"
                                                    Foreground="{DynamicResource TextAccentBrush}"/>
                                     </StackPanel>
-                                    <Button Grid.Column="1" Classes="rowaction" Padding="8,2" Margin="6,0,0,0"
+                                    <!-- Only when the server has dropped the session: the way back has to be on the
+                                         row that says it is broken, not somewhere the user has to go and find. -->
+                                    <Button Grid.Column="1" Classes="rowaction" Content="COUPLE AGAIN" FontSize="9"
+                                            Padding="8,2" Margin="6,0,0,0" VerticalAlignment="Center"
+                                            IsVisible="{Binding CanRecouple}"
+                                            Command="{Binding RecoupleCommand}"
+                                            ToolTip.Tip="This server no longer has a session for this character — sign in again to restore the coupling."/>
+                                    <Button Grid.Column="2" Classes="rowaction" Padding="8,2" Margin="6,0,0,0"
                                             VerticalAlignment="Center"
                                             Command="{Binding ViewTrustCommand}"
                                             ToolTip.Tip="Server info + cert fingerprint (out-of-band trust check, SEC-13).">
                                         <mi:MaterialIcon Kind="CogOutline"/>
                                     </Button>
-                                    <Button Grid.Column="2" Classes="rowaction" Content="DECOUPLE" FontSize="9" Padding="8,2" Margin="4,0,0,0"
+                                    <Button Grid.Column="3" Classes="rowaction" Content="DECOUPLE" FontSize="9" Padding="8,2" Margin="4,0,0,0"
                                             VerticalAlignment="Center"
                                             Command="{Binding DecoupleCommand}"
                                             ToolTip.Tip="Revoke this character's session on the server and disconnect (D-109)."/>

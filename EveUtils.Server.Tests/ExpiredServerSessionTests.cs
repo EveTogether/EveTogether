@@ -40,7 +40,7 @@ public class ExpiredServerSessionTests
         Assert.Null(await sessions.ValidateAsync(issued.AccessToken, ct));
 
         // …and what the client can do about it without troubling the user.
-        var refreshed = await sessions.RefreshAsync(issued.RefreshToken, cancellationToken: ct);
+        var refreshed = (await sessions.RefreshAsync(issued.RefreshToken, cancellationToken: ct)).Issued;
         Assert.NotNull(refreshed);
         Assert.NotNull(await sessions.ValidateAsync(refreshed!.AccessToken, ct));
     }
@@ -57,7 +57,7 @@ public class ExpiredServerSessionTests
         await BackdateAsync(repository, issued, ct, refreshExpiresIn: TimeSpan.FromHours(-1));
 
         // The refusal (not a transport error) is what turns the character's server chip red instead of amber.
-        Assert.Null(await sessions.RefreshAsync(issued.RefreshToken, cancellationToken: ct));
+        Assert.Null((await sessions.RefreshAsync(issued.RefreshToken, cancellationToken: ct)).Issued);
     }
 
     /// <summary>
@@ -88,7 +88,11 @@ public class ExpiredServerSessionTests
         await BackdateAsync(repository, issued, ct, silentFor: TimeSpan.FromDays(silentDays));
 
         // The refresh gate first, while the row is certainly still there — so a refusal here is the guard itself.
-        Assert.Equal(survives, await sessions.RefreshAsync(issued.RefreshToken, cancellationToken: ct) is not null);
+        // The reason travels with it: an abandoned session is gone for good, and a client told merely "refused"
+        // would sit there retrying a session that is about to be swept (ET-123).
+        var refreshed = await sessions.RefreshAsync(issued.RefreshToken, cancellationToken: ct);
+        Assert.Equal(survives, refreshed.Issued is not null);
+        Assert.Equal(survives ? SessionRefusalReason.None : SessionRefusalReason.SessionGone, refreshed.Refusal);
 
         // Then the sweep, against the row the refresh left behind. Both gates have to agree, or a session is
         // refused while its row lingers as something a backup archive still hands out.
@@ -125,6 +129,44 @@ public class ExpiredServerSessionTests
         Assert.NotNull(await sessions.ValidateAsync(laptop.AccessToken, ct));
         Assert.NotNull(await sessions.ValidateAsync(thirdPc.AccessToken, ct));
         Assert.Null(await sessions.ValidateAsync(retired.AccessToken, ct));
+    }
+
+    /// <summary>
+    /// Cleaning sessions up creates a refusal ET-121 never had to answer: one where the session is really gone. The
+    /// client's move differs completely — stop and ask the user to couple again, rather than keep quietly retrying —
+    /// but from the token alone the two are the same event, because a deleted row and a rotation this client failed
+    /// to persist both leave the presented token missing from the table. The session id is the only thing that
+    /// survives a rotation, so it is what separates them. This is that rule, including what happens without it.
+    /// </summary>
+    [Fact]
+    public async Task ARefusedRefresh_SaysWhetherTheSessionIsGone_OrOnlyRotatedPastThisClientsCopy()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var repository = new ServerAuthRepository(_factory);
+        var character = await repository.UpsertSyncedAsync(90250177, "Jithran", new EncryptedToken([1], [2], [3]), null, ct);
+        var sessions = new ServerSessionService(repository, NullLogger<ServerSessionService>.Instance);
+
+        // Two sessions of one character, as two machines would hold them. One rotates while its client is not
+        // looking; the other is deleted underneath it, which is what the sweep and the panel's revoke both do.
+        var rotatedAway = await sessions.IssueAsync(character.Id, ct);
+        var deleted = await sessions.IssueAsync(character.Id, ct);
+        Assert.NotNull((await sessions.RefreshAsync(rotatedAway.RefreshToken, claimedSessionId: rotatedAway.SessionId, cancellationToken: ct)).Issued);
+        await repository.DeleteSessionAsync(deleted.SessionId, ct);
+
+        // Its row is still there, so the client is holding a copy it never replaced: ET-121's case, and it has to
+        // keep behaving as it did — the pairing stands and the slow retry goes on.
+        var stale = await sessions.RefreshAsync(rotatedAway.RefreshToken, claimedSessionId: rotatedAway.SessionId, cancellationToken: ct);
+        Assert.Equal(SessionRefusalReason.Retry, stale.Refusal);
+
+        // Its row is gone. Same missing token, opposite answer — and this one only becomes answerable because the
+        // client named the session, which is the whole reason the id is on the wire.
+        var gone = await sessions.RefreshAsync(deleted.RefreshToken, claimedSessionId: deleted.SessionId, cancellationToken: ct);
+        Assert.Equal(SessionRefusalReason.SessionGone, gone.Refusal);
+
+        // A client that cannot name its session yet gets the forgiving answer for the very same deleted session.
+        // Sending someone to re-pair on a guess is the regression ET-121 exists to prevent.
+        var unnamed = await sessions.RefreshAsync(deleted.RefreshToken, cancellationToken: ct);
+        Assert.Equal(SessionRefusalReason.Retry, unnamed.Refusal);
     }
 
     /// <summary>Backdates a session's window without touching its tokens: <paramref name="silentFor"/> ago it was
