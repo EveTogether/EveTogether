@@ -93,26 +93,43 @@ public class ActivityWindowWiringTests
     /// hands the window over — nothing is saved or thrown away for him.
     /// </summary>
     [AvaloniaFact]
-    public async Task ASignatureCopiedOnARunningRun_StopsTheClock_AndTakesOverOnceThatRunIsEnded()
+    public async Task ASignatureCopiedOnARunningRun_ClosesThatRunOut_AndTakesTheNewSite()
     {
         using var harness = await ActivityWindowHarness.CreateAsync();
         ActivityWindowViewModel model = await harness.OpenAsync();
         model.SignatureName = "Sansha Hideaway";
         await model.StartRunCommand.ExecuteAsync(null);
+        Guid? open = model.RunId;
         Assert.Equal(ActivityRunState.Running, model.RunState);
 
-        model.ApplySignature("Combat Site", "Drone Cluster", []);
-
-        Assert.Equal(ActivityRunState.Stopped, model.RunState);   // the clock is off, the run is not gone
-        Assert.Equal("Sansha Hideaway", model.SignatureName);     // still the run's own site, not the copied one
-        Assert.Contains("Drone Cluster", model.ClockHint, StringComparison.Ordinal);
-
-        harness.Dialogs.OnConfirm = (_, _) => Task.FromResult(true);
-        await model.DiscardRunCommand.ExecuteAsync(null);
+        await model.ApplySignatureAsync("Combat Site", "Drone Cluster", []);
 
         Assert.Equal("Drone Cluster", model.SignatureName);
         Assert.Equal(ActivityRunState.NotStarted, model.RunState);
         Assert.Null(model.RunId);
+        Assert.True(model.IsStartButtonVisible);
+
+        Run left = await _RunAsync(harness, open!.Value);
+        Assert.Equal(StoredRunState.Stopped, left.State);
+        Assert.Null(left.DeletedAtUtc);
+    }
+
+    /// <summary>The group case on the open-window route too — it must wait, not close out.</summary>
+    [AvaloniaFact]
+    public async Task ASignatureCopiedOnAGroupRun_WaitsInsteadOfEndingIt()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        model.SignatureName = "Sansha Hideaway";
+        model.GroupCode = "HF-7QK2";
+        await model.StartRunCommand.ExecuteAsync(null);
+
+        await model.ApplySignatureAsync("Combat Site", "Drone Cluster", []);
+
+        Assert.Equal(ActivityRunState.Stopped, model.RunState);
+        Assert.Equal("Sansha Hideaway", model.SignatureName);
+        Assert.Contains("Drone Cluster", model.ClockHint, StringComparison.Ordinal);
+        Assert.False(model.IsStartButtonVisible);
     }
 
     /// <summary>

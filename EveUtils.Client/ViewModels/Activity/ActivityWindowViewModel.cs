@@ -40,6 +40,7 @@ using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Queries;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 // Aliased rather than imported wholesale: that namespace also holds an ActivityKind, which would collide with the
 // window's own.
@@ -674,6 +675,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             {
                 await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
                     .Send(new DiscardRunCommand(run.Id, DateTime.UtcNow));
+                _SignatureDecision($"closed out the {siteName} run left open in the store", copied);
                 return false;
             }
 
@@ -681,6 +683,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             SignatureGroup = null;
             SignatureName = siteName;
             MatchedSites = [];
+            _SignatureDecision("the run left open belongs to a group, so it waits", copied);
         }
 
         RunId = run.Id;
@@ -1588,22 +1591,60 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// run going on a DIFFERENT site it stops the clock and waits: that run is not this one, and ending it is SAVE
     /// or DISCARD — the player's call, never the window's. The copied site is held and applied the moment they do.
     /// </summary>
-    public void ApplySignature(string? group, string name, IReadOnlyList<SdeSite> sites)
+    public void ApplySignature(string? group, string name, IReadOnlyList<SdeSite> sites) =>
+        _ = ApplySignatureAsync(group, name, sites);
+
+    /// <summary>
+    /// Same rule as the adopt-on-open path, and deliberately the same method rather than a second copy of it: the
+    /// window being open or closed decided which of the two ran, and fixing only one of them is what kept this bug
+    /// alive through four attempts.
+    /// </summary>
+    public async Task ApplySignatureAsync(string? group, string name, IReadOnlyList<SdeSite> sites)
     {
         if (RunState is ActivityRunState.NotStarted || string.Equals(SignatureName, name, StringComparison.Ordinal))
         {
             _pendingSignature = null;
-            SignatureGroup = group;
-            SignatureName = name;
-            MatchedSites = sites;
+            _SetSignature(group, name, sites);
+            _SignatureDecision("no run of another site was open", name);
+            Refresh(DateTime.UtcNow);
+            return;
+        }
+
+        // This pilot's own run: closed out here and now — stopped and unlinked, never deleted — so the window is on
+        // the site just copied. A group run is left standing, because ending it reaches every other member.
+        if (RunId is { } runId && GroupCode is null && FleetId is null)
+        {
+            using var scope = _services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+                .Send(new DiscardRunCommand(runId, DateTime.UtcNow));
+            _ResetForNewRun();
+            _SetSignature(group, name, sites);
+            _SignatureDecision($"closed out the open {SignatureName} run", name);
+            if (RunLoot is not null)
+                await RunLoot.RefreshAsync();
             Refresh(DateTime.UtcNow);
             return;
         }
 
         _pendingSignature = (group, name, sites);
         StopRun(DateTime.UtcNow);
+        _SignatureDecision("the open run belongs to a group, so it waits", name);
         Refresh(DateTime.UtcNow);
     }
+
+    private void _SetSignature(string? group, string name, IReadOnlyList<SdeSite> sites)
+    {
+        SignatureGroup = group;
+        SignatureName = name;
+        MatchedSites = sites;
+    }
+
+    /// <summary>What this window did with a copied signature, and why. Warning because AppLogger keeps nothing
+    /// below it, and this is the line that says which of the two routes ran.</summary>
+    private void _SignatureDecision(string what, string name) =>
+        _services.GetService<ILoggerFactory>()?.CreateLogger<ActivityWindowViewModel>().LogWarning(
+            "Copied signature {Signature}: {What} (run {RunId}, state {State}, group {Group}, fleet {Fleet}).",
+            name, what, RunId, RunState, GroupCode, FleetId);
 
     private void _ApplyPendingSignature()
     {
