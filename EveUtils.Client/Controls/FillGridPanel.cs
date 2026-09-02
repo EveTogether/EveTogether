@@ -19,6 +19,10 @@ namespace EveUtils.Client.Controls;
 ///
 /// Spacing lives here rather than in the item's own <c>Margin</c> so the panel accounts for the same gaps it lays
 /// out — a card template carries no layout arithmetic, and the next screen to use this panel has nothing to copy.
+///
+/// Where the columns fall is <see cref="FillGridGeometry"/>, shared with
+/// <see cref="VirtualizingFillGridPanel"/> — the same grid, for a screen whose cards are too expensive to build all
+/// of (ET-116). This one builds every child it is given, which is what a grid of a dozen cards wants.
 /// </summary>
 public sealed class FillGridPanel : Panel
 {
@@ -128,45 +132,12 @@ public sealed class FillGridPanel : Panel
         return new Size(finalSize.Width, Math.Max(finalSize.Height, top + rowHeight));
     }
 
-    /// <summary>How many columns of at least <see cref="MinItemWidth"/> fit in <paramref name="available"/>. Never
-    /// fewer than one: below the minimum the single card takes the full width rather than being clipped to a size
-    /// nothing was designed for. Empty columns are counted (CSS <c>auto-fill</c>), so a lone card in a wide host
-    /// stays one column wide.</summary>
-    private int ColumnCount(double available)
-    {
-        if (!double.IsFinite(available))
-            return Math.Max(1, Children.Count);
+    private int ColumnCount(double available) =>
+        FillGridGeometry.ColumnCount(available, MinItemWidth, ColumnSpacing, Children.Count);
 
-        double min = Math.Max(1, MinItemWidth);
-        return Math.Max(1, (int)Math.Floor((available + ColumnSpacing) / (min + ColumnSpacing)));
-    }
+    private double Edge(int index, int columns, double available, double scale) =>
+        FillGridGeometry.Edge(index, columns, available, MinItemWidth, ColumnSpacing, UseLayoutRounding, scale);
 
-    /// <summary>The left edge of a column, snapped to whole device pixels. Columns are placed by their EDGES rather
-    /// than by repeatedly adding a fractional width: an equal share is rarely a whole pixel, and a width rounded
-    /// once per column and then added up drifts — enough to push the last column past the panel it is filling, which
-    /// is the whitespace strip back again in mirror image. Snapping the edges instead keeps every boundary crisp,
-    /// spreads the leftover fraction over the columns (never more than a pixel apart) and lands the last column
-    /// exactly on the panel's right edge.</summary>
-    private double Edge(int index, int columns, double available, double scale)
-    {
-        if (index >= columns)
-            return available;
-
-        if (!double.IsFinite(available))
-            return index * (Math.Max(1, MinItemWidth) + ColumnSpacing);
-
-        double edge = index * (available + ColumnSpacing) / columns;
-        return UseLayoutRounding ? LayoutHelper.RoundLayoutValue(edge, scale) : edge;
-    }
-
-    /// <summary>A column's width: up to the next column's edge, minus the gap that goes between them. The last
-    /// column runs to the panel's edge, so no gap is taken off it.</summary>
-    private double ColumnWidth(int index, int columns, double available, double scale)
-    {
-        if (!double.IsFinite(available))
-            return Math.Max(1, MinItemWidth);
-
-        double gap = index == columns - 1 ? 0 : ColumnSpacing;
-        return Math.Max(0, Edge(index + 1, columns, available, scale) - gap - Edge(index, columns, available, scale));
-    }
+    private double ColumnWidth(int index, int columns, double available, double scale) =>
+        FillGridGeometry.ColumnWidth(index, columns, available, MinItemWidth, ColumnSpacing, UseLayoutRounding, scale);
 }
