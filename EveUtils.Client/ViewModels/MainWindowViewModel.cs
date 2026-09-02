@@ -1464,13 +1464,30 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         if (_services is null || _dialogs is null) return;
 
         // 1. Pick the character to import for (only chars with read_fittings + a local token are selectable).
-        var charId = await _dialogs.PickCharacterAsync(
-            "Import fits for which character?",
-            BuildPickOptions(FittingsScopeCatalog.ReadFittings));
-        if (charId is null) { FittingsStatus = "Import cancelled."; return; }
+        // Same shape as FitExportActions.ShareToServerAsync: with nothing to choose there is nothing to ask.
+        var options = BuildPickOptions(FittingsScopeCatalog.ReadFittings);
+        var selectable = options.Where(o => o.Enabled).ToList();
+        if (selectable.Count == 0)
+        {
+            FittingsStatus = "No character can read fits from EVE — sign in with the fittings scope first.";
+            return;
+        }
+
+        int charId;
+        if (selectable.Count > 1)
+        {
+            var picked = await _dialogs.PickCharacterAsync(
+                "Import fits for which character?", options);
+            if (picked is null) { FittingsStatus = "Import cancelled."; return; }
+            charId = picked.Value;
+        }
+        else
+        {
+            charId = selectable[0].CharacterId;
+        }
 
         var tokenStore = _services.GetRequiredService<IPerCharacterTokenStore>();
-        var tokens = await tokenStore.LoadAsync(charId.Value);
+        var tokens = await tokenStore.LoadAsync(charId);
         if (tokens is null) { FittingsStatus = "No token for that character — sign in first."; return; }
 
         // 2. Fetch from ESI.
@@ -1479,7 +1496,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         try
         {
             var esiClient = _services.GetRequiredService<IFittingEsiClient>();
-            fits = await esiClient.GetFittingsAsync(charId.Value, tokens.AccessToken);
+            fits = await esiClient.GetFittingsAsync(charId, tokens.AccessToken);
         }
         catch (Exception ex)
         {
@@ -1498,7 +1515,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         FittingsStatus = $"Importing {selectedIds.Count} fit(s)…";
         using var scope = _services.CreateScope();
         var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
-        var result = await dispatcher.Send(new ImportFittingsFromEsiCommand(charId.Value, fits, selectedIds));
+        var result = await dispatcher.Send(new ImportFittingsFromEsiCommand(charId, fits, selectedIds));
 
         if (result.IsSuccess)
         {

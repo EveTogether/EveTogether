@@ -76,7 +76,18 @@ public sealed class RecordingDialogService : IDialogService
 
     public Task<IReadOnlyList<string>?> SelectScopesAsync(IReadOnlyList<EsiScopeRequirement> available,
         IReadOnlyCollection<string>? preselected = null) => throw NotUsed();
-    public Task<IReadOnlyList<int>?> SelectFittingsAsync(IReadOnlyList<EsiFitting> fits) => throw NotUsed();
+    /// <summary>Answers the ESI fit-import dialog with the ticked fitting ids (or null to cancel). Default: cancel.</summary>
+    public Func<IReadOnlyList<EsiFitting>, Task<IReadOnlyList<int>?>> OnSelectFittings { get; set; } =
+        _ => Task.FromResult<IReadOnlyList<int>?>(null);
+
+    /// <summary>The fits the import dialog was opened with, or null if it never opened.</summary>
+    public IReadOnlyList<EsiFitting>? LastFittingsOffered { get; private set; }
+
+    public Task<IReadOnlyList<int>?> SelectFittingsAsync(IReadOnlyList<EsiFitting> fits)
+    {
+        LastFittingsOffered = fits;
+        return OnSelectFittings(fits);
+    }
     /// <summary>What the couple dialog was opened with, so a test can see whether it would have asked the user to
     /// retype something the client already knows (ET-123). Null means it has not been opened.</summary>
     public CoupleServerResult? LastCouplePrefill { get; private set; }

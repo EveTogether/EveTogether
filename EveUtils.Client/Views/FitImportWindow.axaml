@@ -14,15 +14,17 @@
         <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,12">
             <TextBlock Text="Choose fits to import" FontWeight="Bold" FontSize="15"
                        Foreground="{StaticResource TextBrightBrush}"/>
-            <TextBlock Text="{Binding HeaderText, ElementName=Root}"
+            <TextBlock x:Name="HeaderLine"
                        FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
             <TextBox PlaceholderText="Search by name…" TextChanged="OnSearchChanged" Margin="0,6,0,0"/>
         </StackPanel>
 
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
                     Spacing="8" Margin="0,12,0,0">
-            <Button Content="Select all" Click="OnSelectAll"/>
-            <Button Content="Select none" Click="OnSelectNone"/>
+            <TextBlock x:Name="SelectionCount" VerticalAlignment="Center" Margin="0,0,8,0"
+                       FontSize="11" Foreground="{DynamicResource TextAccentBrush}"/>
+            <Button Content="Select all shown" Click="OnSelectAll"/>
+            <Button Content="Select none shown" Click="OnSelectNone"/>
             <Button Content="Cancel" Click="OnCancel"/>
             <Button Content="Import selected" Click="OnConfirm" Classes="accent"/>
         </StackPanel>
