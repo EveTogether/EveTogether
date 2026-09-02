@@ -6,9 +6,10 @@ using Microsoft.Extensions.Logging;
 namespace EveUtils.Server.Auth;
 
 /// <summary>
-/// Periodically purges expired server sessions so the ServerSession table doesn't accumulate
-/// stale entries. On-encounter cleanup in <see cref="ServerSessionService.ValidateAsync"/> handles the
-/// rest. Runs every 5 minutes (plus once shortly after startup).
+/// Periodically purges server sessions that can no longer become a working credential — past their hard
+/// refresh window, or silent for longer than <see cref="ServerSessionService.IdleLifetime"/>. On-encounter
+/// cleanup in <see cref="ServerSessionService.ValidateAsync"/> handles the rest. Runs every 5 minutes (plus
+/// once shortly after startup).
 /// </summary>
 public sealed class ServerSessionCleanupService(
     IServiceScopeFactory scopeFactory,
@@ -26,9 +27,12 @@ public sealed class ServerSessionCleanupService(
             {
                 using var scope = scopeFactory.CreateScope();
                 var repo = scope.ServiceProvider.GetRequiredService<IServerAuthRepository>();
-                var removed = await repo.DeleteExpiredSessionsAsync(DateTimeOffset.UtcNow, stoppingToken);
+                var now = DateTimeOffset.UtcNow;
+                var removed = await repo.DeleteLapsedSessionsAsync(now, now - ServerSessionService.IdleLifetime, stoppingToken);
                 if (removed > 0)
-                    logger.LogInformation("Purged {Count} expired server session(s).", removed);
+                    logger.LogInformation(
+                        "Purged {Count} lapsed server session(s) — past the refresh window, or with no sign of life for {IdleDays:0} days.",
+                        removed, ServerSessionService.IdleLifetime.TotalDays);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

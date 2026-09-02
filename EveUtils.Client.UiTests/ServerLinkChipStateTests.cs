@@ -30,6 +30,37 @@ public class ServerLinkChipStateTests
         Assert.DoesNotContain("re-pair", link.LinkTooltip);
     }
 
+    /// <summary>
+    /// A session the server has dropped altogether (ET-123). Red like a refused one, but it must not read like it:
+    /// the retrying has stopped, so a chip still saying "retrying" would tell the user the app is busy at the very
+    /// moment they are the only one who can fix it. And it is the one state that offers the way back, because the
+    /// link's only actions were decouple and view-trust — nothing that repairs the thing it says is broken.
+    /// </summary>
+    [Fact]
+    public void SessionGone_IsRed_AsksTheUserToAct_AndOffersTheWayBack()
+    {
+        var link = Link(ServerConnectionState.SessionGone);
+
+        Assert.True(link.HasExpired);
+        Assert.False(link.HasIssue);
+        Assert.Equal(MaterialIconKind.CloudRemoveOutline, link.ChipIcon);
+        Assert.True(link.CanRecouple);
+        Assert.Contains("couple again", link.LinkTooltip);
+        Assert.DoesNotContain("retrying", link.LinkTooltip);
+    }
+
+    /// <summary>Coupling again is offered only where it is the actual remedy. Notably not on a refused certificate:
+    /// there the user has a fingerprint to check against the server first, and a one-click re-pair would walk them
+    /// straight past it (ET-95).</summary>
+    [Theory]
+    [InlineData(ServerConnectionState.Connected)]
+    [InlineData(ServerConnectionState.Reconnecting)]
+    [InlineData(ServerConnectionState.Disconnected)]
+    [InlineData(ServerConnectionState.SessionExpired)]
+    [InlineData(ServerConnectionState.CertificateRejected)]
+    public void EveryOtherState_DoesNotOfferToCoupleAgain(ServerConnectionState state) =>
+        Assert.False(Link(state).CanRecouple);
+
     [Fact]
     public void CertificateRejected_IsRed_AndSaysWhichOfTheTwoProblemsItIs()
     {

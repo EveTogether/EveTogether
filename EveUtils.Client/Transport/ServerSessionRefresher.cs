@@ -14,9 +14,16 @@ public enum ServerSessionRefreshOutcome
     /// <summary>The session was rotated (or another caller had just rotated it) and is usable again.</summary>
     Refreshed,
 
-    /// <summary>The server answered and refused the refresh token. Says nothing about whether the pairing is
-    /// gone — see the remarks on <see cref="ServerSessionRefresher"/>.</summary>
+    /// <summary>The server answered and refused the refresh token, but the session behind it is still there — this
+    /// client is holding a copy that a rotation superseded. Says nothing about whether the pairing is gone; see the
+    /// remarks on <see cref="ServerSessionRefresher"/>. Keep the credentials and keep trying.</summary>
     Rejected,
+
+    /// <summary>The server says the session this client holds does not exist there any anymore — swept as
+    /// abandoned (ET-123), revoked from the admin panel, or past its refresh window. Distinct from
+    /// <see cref="Rejected"/> because no retry can ever repair it: the user has to couple the character again, and
+    /// a client that goes on saying "retrying" is telling them the opposite of what they need to hear.</summary>
+    SessionGone,
 
     /// <summary>The server could not be reached, or there was nothing stored to refresh with.</summary>
     Unavailable
@@ -70,13 +77,20 @@ public sealed class ServerSessionRefresher(IServerSessionRefreshCall call, IClie
 
             try
             {
-                var reply = await call.RefreshAsync(serverAddress, session.RefreshToken, cancellationToken);
+                // Naming the session is what buys the caller an answer it can act on: without it the server cannot
+                // tell a deleted session from a superseded token and has to assume the forgiving one.
+                var reply = await call.RefreshAsync(
+                    serverAddress, session.RefreshToken, session.ServerSessionId, cancellationToken);
                 if (!reply.Ok)
-                    // Rejected, and the store is left exactly as it was. Deliberate: see the class remarks.
-                    return (ServerSessionRefreshOutcome.Rejected, session);
+                    // Refused, and the store is left exactly as it was either way. Deliberate: see the class
+                    // remarks. Only the server saying the session is gone earns the harder outcome.
+                    return (reply.SessionGone
+                        ? ServerSessionRefreshOutcome.SessionGone
+                        : ServerSessionRefreshOutcome.Rejected, session);
 
                 var rotated = new ClientSessionTokens(
-                    reply.AccessToken, reply.RefreshToken, session.CharacterName, session.CharacterId);
+                    reply.AccessToken, reply.RefreshToken, session.CharacterName, session.CharacterId,
+                    reply.SessionId > 0 ? reply.SessionId : session.ServerSessionId);
 
                 // Persist before returning: a caller that starts using the rotated access token while the old pair is
                 // still the one on disk would leave the store holding a token the server has already replaced — the

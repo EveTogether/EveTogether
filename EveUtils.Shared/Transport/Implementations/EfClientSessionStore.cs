@@ -44,7 +44,8 @@ internal sealed class EfClientSessionStore(IDbContextFactory<SharedDbContext> co
                 AccessToken = tokens.AccessToken,
                 RefreshToken = tokens.RefreshToken,
                 CharacterName = tokens.CharacterName,
-                SavedAtUnixMs = savedAt
+                SavedAtUnixMs = savedAt,
+                ServerSessionId = tokens.ServerSessionId
             });
         }
         else
@@ -53,9 +54,28 @@ internal sealed class EfClientSessionStore(IDbContextFactory<SharedDbContext> co
             row.RefreshToken = tokens.RefreshToken;
             row.CharacterName = tokens.CharacterName;
             row.SavedAtUnixMs = savedAt;
+            // 0 means "I don't know it", never "forget the one you had" — the dev-couple entry points and every
+            // caller predating ET-123 leave it unset, and losing it would cost the client the one thing that lets
+            // the server tell a deleted session from a stale copy.
+            if (tokens.ServerSessionId > 0)
+                row.ServerSessionId = tokens.ServerSessionId;
         }
 
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task SetServerSessionIdAsync(string serverAddress, int characterId, int serverSessionId, CancellationToken cancellationToken = default)
+    {
+        if (serverSessionId <= 0)
+            return;
+
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var identity = await IdentityAddressesAsync(db, serverAddress, cancellationToken);
+        // Deliberately not SaveAsync: this learns one field from a heartbeat and must not touch the tokens or
+        // SavedAtUnixMs, which is what the bus orders sessions by when it picks one for a server.
+        await db.Set<ClientServerSession>()
+            .Where(s => identity.Contains(s.Address) && s.CharacterId == characterId && s.ServerSessionId != serverSessionId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(s => s.ServerSessionId, serverSessionId), cancellationToken);
     }
 
     public async Task<ClientSessionTokens?> LoadAsync(string serverAddress, CancellationToken cancellationToken = default)
@@ -143,5 +163,5 @@ internal sealed class EfClientSessionStore(IDbContextFactory<SharedDbContext> co
     private static string Canonical(IGrouping<string, string> group) => Canonical((IEnumerable<string>)group);
 
     private static ClientSessionTokens? Map(ClientServerSession? row) =>
-        row is null ? null : new ClientSessionTokens(row.AccessToken, row.RefreshToken, row.CharacterName, row.CharacterId);
+        row is null ? null : new ClientSessionTokens(row.AccessToken, row.RefreshToken, row.CharacterName, row.CharacterId, row.ServerSessionId);
 }

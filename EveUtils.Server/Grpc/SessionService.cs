@@ -15,10 +15,29 @@ public sealed class SessionService(ServerSessionService sessions) : Session.Sess
     {
         // The peer is the only thing in the request that says WHICH machine was refused — the request carries no
         // character id — and a refusal is exactly the moment you want to know that.
-        var issued = await sessions.RefreshAsync(request.SessionRefreshToken, context.Peer, context.CancellationToken);
-        return issued is null
-            ? new SessionReply { Ok = false, Message = "Invalid or expired refresh token." }
-            : new SessionReply { Ok = true, SessionToken = issued.AccessToken, SessionRefreshToken = issued.RefreshToken, Message = "ok" };
+        var result = await sessions.RefreshAsync(
+            request.SessionRefreshToken, context.Peer, request.SessionId, context.CancellationToken);
+
+        if (result.Issued is not { } issued)
+            return new SessionReply
+            {
+                Ok = false,
+                // The reason travels as its own field rather than in the message, because the client acts on it:
+                // it stops retrying only when the server says the session is gone (ET-123).
+                Refusal = Map(result.Refusal),
+                Message = result.Refusal == SessionRefusalReason.SessionGone
+                    ? "This session no longer exists on the server — couple the character again."
+                    : "Invalid or expired refresh token."
+            };
+
+        return new SessionReply
+        {
+            Ok = true,
+            SessionToken = issued.AccessToken,
+            SessionRefreshToken = issued.RefreshToken,
+            SessionId = issued.SessionId,
+            Message = "ok"
+        };
     }
 
     public override async Task<HeartbeatReply> Heartbeat(HeartbeatRequest request, ServerCallContext context)
@@ -28,8 +47,17 @@ public sealed class SessionService(ServerSessionService sessions) : Session.Sess
             return new HeartbeatReply { Ok = false };
 
         await sessions.TouchAsync(request.SessionToken, context.CancellationToken);
-        return new HeartbeatReply { Ok = true };
+        // Riding along on the tick a healthy client already makes: it is how a client paired before session ids
+        // existed comes to know its own, without waiting for a rotation.
+        return new HeartbeatReply { Ok = true, SessionId = session.Id };
     }
+
+    private static SessionRefusal Map(SessionRefusalReason reason) => reason switch
+    {
+        SessionRefusalReason.SessionGone => SessionRefusal.SessionGone,
+        SessionRefusalReason.Retry => SessionRefusal.Retry,
+        _ => SessionRefusal.Unspecified
+    };
 
     public override async Task<RevokeReply> Revoke(RevokeRequest request, ServerCallContext context)
     {

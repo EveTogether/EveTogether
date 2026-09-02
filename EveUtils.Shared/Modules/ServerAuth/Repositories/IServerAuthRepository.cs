@@ -17,6 +17,12 @@ public interface IServerAuthRepository
     Task AddSessionAsync(ServerSession session, CancellationToken cancellationToken = default);
     Task<ServerSession?> FindSessionByAccessHashAsync(string accessHash, CancellationToken cancellationToken = default);
     Task<ServerSession?> FindSessionByRefreshHashAsync(string refreshHash, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// The session with this id, whatever token pair it currently holds. The id is the only thing about a session
+    /// that survives a rotation, so it is what separates "this row was deleted" from "your copy of its token is
+    /// stale" — which the token itself cannot tell apart (ET-123).
+    /// </summary>
+    Task<ServerSession?> FindSessionByIdAsync(int sessionId, CancellationToken cancellationToken = default);
     Task TouchHeartbeatAsync(string accessHash, DateTimeOffset at, CancellationToken cancellationToken = default);
     /// <summary>
     /// Rotates the session to a new token pair, but only while its refresh hash is still
@@ -26,6 +32,10 @@ public interface IServerAuthRepository
     Task<bool> RotateSessionAsync(int sessionId, string expectedRefreshHash, string newAccessHash, string newRefreshHash, DateTimeOffset issuedAt, DateTimeOffset expiresAt, DateTimeOffset refreshExpiresAt, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ServerSession>> ListSessionsAsync(CancellationToken cancellationToken = default);
     Task DeleteSessionAsync(int sessionId, CancellationToken cancellationToken = default);
-    /// <summary>Deletes all sessions past their hard refresh window (RefreshExpiresAt &lt;= now). Returns count.</summary>
-    Task<int> DeleteExpiredSessionsAsync(DateTimeOffset now, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Deletes every session that can no longer become a working credential: past its hard refresh window
+    /// (RefreshExpiresAt &lt;= <paramref name="now"/>), or with no sign of life since
+    /// <paramref name="idleSince"/>. Returns the number removed.
+    /// </summary>
+    Task<int> DeleteLapsedSessionsAsync(DateTimeOffset now, DateTimeOffset idleSince, CancellationToken cancellationToken = default);
 }

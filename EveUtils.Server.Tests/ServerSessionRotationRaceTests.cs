@@ -36,11 +36,11 @@ public class ServerSessionRotationRaceTests
         var session = await repository.FindSessionByRefreshHashAsync(observedRefreshHash, ct);
         Assert.NotNull(session);
 
-        var winner = new IssuedSession(TokenSecurity.GenerateToken(), TokenSecurity.GenerateToken());
-        var loser = new IssuedSession(TokenSecurity.GenerateToken(), TokenSecurity.GenerateToken());
+        var winner = new IssuedSession(TokenSecurity.GenerateToken(), TokenSecurity.GenerateToken(), session!.Id);
+        var loser = new IssuedSession(TokenSecurity.GenerateToken(), TokenSecurity.GenerateToken(), session.Id);
         var now = DateTimeOffset.UtcNow;
 
-        Assert.True(await Rotate(repository, session!.Id, observedRefreshHash, winner, now, ct));
+        Assert.True(await Rotate(repository, session.Id, observedRefreshHash, winner, now, ct));
         Assert.False(await Rotate(repository, session.Id, observedRefreshHash, loser, now, ct));
 
         // The row still belongs to the winner: the loser neither took it over nor left a half-written mix behind.
@@ -58,15 +58,15 @@ public class ServerSessionRotationRaceTests
         var sessions = new ServerSessionService(repository, NullLogger<ServerSessionService>.Instance);
         var issued = await sessions.IssueAsync(character.Id, ct);
 
-        var first = await sessions.RefreshAsync(issued.RefreshToken, cancellationToken: ct);
+        var first = (await sessions.RefreshAsync(issued.RefreshToken, cancellationToken: ct)).Issued;
         Assert.NotNull(first);
 
         // The overlapping caller presents the same refresh token a moment later. Refused — where it used to be
         // served, invalidating the pair the first caller is already using.
-        Assert.Null(await sessions.RefreshAsync(issued.RefreshToken, cancellationToken: ct));
+        Assert.Null((await sessions.RefreshAsync(issued.RefreshToken, cancellationToken: ct)).Issued);
 
         Assert.NotNull(await sessions.ValidateAsync(first!.AccessToken, ct));
-        Assert.NotNull(await sessions.RefreshAsync(first.RefreshToken, cancellationToken: ct));
+        Assert.NotNull((await sessions.RefreshAsync(first.RefreshToken, cancellationToken: ct)).Issued);
     }
 
     /// <summary>The path everything hangs on: an ordinary reconnect refresh still rotates and keeps working.</summary>
@@ -79,7 +79,7 @@ public class ServerSessionRotationRaceTests
         var sessions = new ServerSessionService(repository, NullLogger<ServerSessionService>.Instance);
         var issued = await sessions.IssueAsync(character.Id, ct);
 
-        var refreshed = await sessions.RefreshAsync(issued.RefreshToken, cancellationToken: ct);
+        var refreshed = (await sessions.RefreshAsync(issued.RefreshToken, cancellationToken: ct)).Issued;
         Assert.NotNull(refreshed);
         Assert.NotEqual(issued.AccessToken, refreshed!.AccessToken);
         Assert.NotEqual(issued.RefreshToken, refreshed.RefreshToken);

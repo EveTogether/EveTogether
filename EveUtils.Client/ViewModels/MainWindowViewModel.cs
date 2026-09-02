@@ -916,6 +916,10 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     // itself every few minutes. A server that recovers is dropped from the set, so a second spell is told again.
     private readonly HashSet<string> _refusalAnnounced = new(StringComparer.OrdinalIgnoreCase);
 
+    // The same, for sessions the server no longer has. Its own set: a link can pass from refused to gone, and one
+    // shared set would swallow the second announcement — which is the one that asks the user to do something.
+    private readonly HashSet<string> _sessionGoneAnnounced = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Raises the transition toast for a server that has just started refusing its stored session. The banner beside
     /// it carries the ongoing state; this is only the moment, and only on the window in front of the user — the
@@ -923,26 +927,41 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// </summary>
     private void AnnounceRefusedServers(IReadOnlyList<ServerLinkViewModel> links)
     {
-        var refused = links
-            .Where(l => l.State is ServerConnectionState.SessionExpired)
+        var gone = NamesInState(links, ServerConnectionState.SessionGone);
+        if (IsNewlyAnnounced(_sessionGoneAnnounced, gone))
+            Show(ServerLinkRefusalToast.ForSessionGone(gone), ServerLinkRefusalToast.SessionGoneReplacementKey);
+
+        var refused = NamesInState(links, ServerConnectionState.SessionExpired)
+            // A server whose session is gone is announced as gone and nothing else — the softer card would sit on
+            // top of the one that actually asks for something.
+            .Where(n => !gone.Contains(n, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+        if (IsNewlyAnnounced(_refusalAnnounced, refused))
+            Show(ServerLinkRefusalToast.For(refused), ServerLinkRefusalToast.ReplacementKey);
+
+        void Show((string Title, string Message) card, string replacementKey) =>
+            _services?.GetService<IToastService>()?.Show(
+                card.Title, card.Message, ToastKind.Warning, [], onClosed: null, replacementKey: replacementKey);
+    }
+
+    private static List<string> NamesInState(IReadOnlyList<ServerLinkViewModel> links, ServerConnectionState state) =>
+        links
+            .Where(l => l.State == state)
             .Select(l => l.DisplayName)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        _refusalAnnounced.IntersectWith(refused); // recovered → announce it again if it happens twice
-
-        // Every name is added, not just up to the first new one — Any would short-circuit and leave the rest
-        // unannounced-but-unrecorded, so they would toast again on the very next state change.
+    /// <summary>Records the current names against what has already been announced and says whether any of them is
+    /// new. Names that recovered drop out, so a second spell is told again. Every name is added rather than stopping
+    /// at the first new one — short-circuiting would leave the rest unannounced-but-unrecorded, and they would toast
+    /// on the very next state change.</summary>
+    private static bool IsNewlyAnnounced(HashSet<string> announced, IReadOnlyList<string> current)
+    {
+        announced.IntersectWith(current);
         var isNew = false;
-        foreach (var name in refused)
-            isNew |= _refusalAnnounced.Add(name);
-        if (!isNew)
-            return;
-
-        var (title, message) = ServerLinkRefusalToast.For(refused);
-        _services?.GetService<IToastService>()?.Show(
-            title, message, ToastKind.Warning, [], onClosed: null,
-            replacementKey: ServerLinkRefusalToast.ReplacementKey);
+        foreach (var name in current)
+            isNew |= announced.Add(name);
+        return isNew;
     }
 
     // Lazy-load a server tab the first time it is shown.
@@ -1354,7 +1373,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// (badge only) and the character settings dialog (full rows with gear/decouple wired via the callbacks).
     /// </summary>
     public async Task<List<ServerLinkViewModel>> BuildServerLinksAsync(
-        int characterId, Func<ServerLinkViewModel, Task> onDecouple, Func<ServerLinkViewModel, Task>? onViewTrust)
+        int characterId, Func<ServerLinkViewModel, Task> onDecouple, Func<ServerLinkViewModel, Task>? onViewTrust,
+        Func<ServerLinkViewModel, Task>? onRecouple = null)
     {
         var links = new List<ServerLinkViewModel>();
         if (_services is null) return links;
@@ -1364,7 +1384,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         {
             var display = _serverRegistry is null ? addr : await _serverRegistry.DisplayNameAsync(addr);
             var state = _busConnector?.StateFor(addr) ?? ServerConnectionState.Disconnected;
-            links.Add(new ServerLinkViewModel(characterId, addr, display, state, onDecouple, onViewTrust));
+            links.Add(new ServerLinkViewModel(characterId, addr, display, state, onDecouple, onViewTrust, onRecouple));
         }
         return links;
     }

@@ -17,6 +17,7 @@ public sealed class NullSessionStore : IClientSessionStore
     public Task<ClientSessionTokens?> LoadAsync(string serverAddress, CancellationToken cancellationToken = default) => Task.FromResult<ClientSessionTokens?>(null);
     public Task<ClientSessionTokens?> LoadForCharacterAsync(string serverAddress, int characterId, CancellationToken cancellationToken = default) => Task.FromResult<ClientSessionTokens?>(null);
     public Task<IReadOnlyList<ClientSessionTokens>> LoadAllAsync(string serverAddress, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ClientSessionTokens>>([]);
+    public Task SetServerSessionIdAsync(string serverAddress, int characterId, int serverSessionId, CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task RemoveAsync(string serverAddress, int characterId, CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task<IReadOnlyList<string>> ListServersAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<string>>([]);
     public Task<IReadOnlyList<string>> ListServersForCharacterAsync(int characterId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<string>>([]);
