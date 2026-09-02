@@ -255,12 +255,166 @@ public sealed class RunGroupCodeTests
         Assert.False(linked.IsSuccess);
     }
 
+    /// <summary>
+    /// The shape ET-136 is about: one fleet, three pilots, not all of them on the same rock. The commander and the
+    /// member beside him share his group code; the member running his own site a jump away must not be swept into
+    /// it, and before the site entered the key he was.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task SiteStarts_MemberElsewhere_KeepsOutOfTheCommandersGroup()
+    {
+        await using FleetOfThree fleet = FleetOfThree.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        Result<Guid> commander = await fleet.Commander.Dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site,
+            StartedAtUtc, 0, "Sansha's Refuge", 30000142, FleetId: FleetId, IsFleetCommander: true,
+            SolarSystemName: "Jita"), cancellationToken);
+        Result<Guid> beside = await fleet.Beside.Dispatcher.Send(new StartRunCommand(90000002, ActivityKind.Site,
+            StartedAtUtc.AddSeconds(20), 0, "Sansha's Refuge", 30000142, FleetId: FleetId,
+            SolarSystemName: "Jita"), cancellationToken);
+        Result<Guid> elsewhere = await fleet.Elsewhere.Dispatcher.Send(new StartRunCommand(90000003, ActivityKind.Site,
+            StartedAtUtc.AddSeconds(40), 0, "Serpentis Hideaway", 30002187, FleetId: FleetId,
+            SolarSystemName: "Amarr"), cancellationToken);
+
+        Assert.True(commander.IsSuccess);
+        Assert.True(beside.IsSuccess);
+        Assert.True(elsewhere.IsSuccess);
+        string? commanderCode = await fleet.Commander.GroupCodeAsync(cancellationToken);
+        Assert.NotNull(commanderCode);
+        Assert.Equal(commanderCode, await fleet.Beside.GroupCodeAsync(cancellationToken));
+        Assert.Null(await fleet.Elsewhere.GroupCodeAsync(cancellationToken));
+    }
+
+    /// <summary>
+    /// The same split the other way round in time: the member was already flying his own site when the commander
+    /// started. His run must not be relinked to a group he was never in — that retroactive link is what made one
+    /// DISCARD take runs with it that were never part of the run being ended.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task SiteStarts_RunAlreadyRunningElsewhere_IsNotRelinkedByTheCommandersStart()
+    {
+        await using FleetOfThree fleet = FleetOfThree.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        Result<Guid> elsewhere = await fleet.Elsewhere.Dispatcher.Send(new StartRunCommand(90000003, ActivityKind.Site,
+            StartedAtUtc, 0, "Serpentis Hideaway", 30002187, FleetId: FleetId,
+            SolarSystemName: "Amarr"), cancellationToken);
+        Result<Guid> commander = await fleet.Commander.Dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site,
+            StartedAtUtc.AddMinutes(2), 0, "Sansha's Refuge", 30000142, FleetId: FleetId, IsFleetCommander: true,
+            SolarSystemName: "Jita"), cancellationToken);
+
+        Assert.True(elsewhere.IsSuccess);
+        Assert.True(commander.IsSuccess);
+        Assert.NotNull(await fleet.Commander.GroupCodeAsync(cancellationToken));
+        Assert.Null(await fleet.Elsewhere.GroupCodeAsync(cancellationToken));
+    }
+
+    /// <summary>Two abyssal runs that would have converged on one code the moment they were in the same fleet and
+    /// the same second. Different systems are different runs, so they keep the codes they made.</summary>
+    [AvaloniaFact]
+    public async Task AbyssalStarts_SameSecond_InDifferentSystems_KeepSeparateCodes()
+    {
+        await using FleetOfThree fleet = FleetOfThree.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        Result<Guid> first = await fleet.Commander.Dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Abyssal,
+            StartedAtUtc.AddMilliseconds(100), 0, null, 30000142, FleetId: FleetId,
+            SolarSystemName: "Jita"), cancellationToken);
+        Result<Guid> second = await fleet.Elsewhere.Dispatcher.Send(new StartRunCommand(90000003, ActivityKind.Abyssal,
+            StartedAtUtc.AddMilliseconds(900), 0, null, 30002187, FleetId: FleetId,
+            SolarSystemName: "Amarr"), cancellationToken);
+
+        Assert.True(first.IsSuccess);
+        Assert.True(second.IsSuccess);
+        string? firstCode = await fleet.Commander.GroupCodeAsync(cancellationToken);
+        string? secondCode = await fleet.Elsewhere.GroupCodeAsync(cancellationToken);
+        Assert.NotNull(firstCode);
+        Assert.NotNull(secondCode);
+        Assert.NotEqual(firstCode, secondCode);
+    }
+
+    private const long FleetId = 42;
+
+    /// <summary>Three clients on one fleet wire, each with its own store and its own coordinator running.</summary>
+    private sealed class FleetOfThree : IAsyncDisposable
+    {
+        private FleetOfThree(FleetPilot commander, FleetPilot beside, FleetPilot elsewhere)
+        {
+            Commander = commander;
+            Beside = beside;
+            Elsewhere = elsewhere;
+        }
+
+        public FleetPilot Commander { get; }
+
+        public FleetPilot Beside { get; }
+
+        public FleetPilot Elsewhere { get; }
+
+        public static FleetOfThree Create()
+        {
+            FleetWireTransport[] wires = [new(), new(), new()];
+            FleetPilot[] pilots = [.. wires.Select(wire =>
+                new FleetPilot(TestClientInstance.Create(services => services.AddSingleton<IRemoteEventTransport>(wire))))];
+            for (int sender = 0; sender < pilots.Length; sender++)
+                foreach (FleetPilot other in pilots.Where((_, index) => index != sender))
+                    wires[sender].Destinations.Add(other.Instance.Services.GetRequiredService<IEventBus>());
+
+            return new FleetOfThree(pilots[0], pilots[1], pilots[2]);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            Commander.Instance.Dispose();
+            Beside.Instance.Dispose();
+            Elsewhere.Instance.Dispose();
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class FleetPilot
+    {
+        public FleetPilot(TestClientInstance instance)
+        {
+            Instance = instance;
+            Dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+            _ = instance.Services.GetRequiredService<FleetRunGroupCodeCoordinator>();
+        }
+
+        public TestClientInstance Instance { get; }
+
+        public IDispatcher Dispatcher { get; }
+
+        /// <summary>The group code on this pilot's own single run — the only run in this pilot's own store.</summary>
+        public async Task<string?> GroupCodeAsync(CancellationToken cancellationToken)
+        {
+            await using ClientDbContext db = await Instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+                .CreateDbContextAsync(cancellationToken);
+            return Assert.Single(await db.Set<Run>().ToListAsync(cancellationToken)).GroupCode;
+        }
+    }
+
     private sealed class FleetWireTransport : IRemoteEventTransport
     {
-        public IEventBus? Destination { get; set; }
+        /// <summary>Every other client in the fleet. A fleet is more than two pilots, and the bugs this file covers
+        /// only show up once a third one is somewhere else.</summary>
+        public List<IEventBus> Destinations { get; } = [];
 
-        public Task SendAsync(IIntegrationEvent integrationEvent, CancellationToken cancellationToken = default) =>
-            Destination?.PublishAsync(integrationEvent, EventTarget.Local, cancellationToken) ?? Task.CompletedTask;
+        public IEventBus? Destination
+        {
+            set
+            {
+                Destinations.Clear();
+                if (value is not null)
+                    Destinations.Add(value);
+            }
+        }
+
+        public async Task SendAsync(IIntegrationEvent integrationEvent, CancellationToken cancellationToken = default)
+        {
+            foreach (IEventBus destination in Destinations)
+                await destination.PublishAsync(integrationEvent, EventTarget.Local, cancellationToken);
+        }
     }
 
     private static async Task<Guid> _SaveRunAsync(IDispatcher dispatcher, long characterId, decimal bountyIsk,

@@ -45,7 +45,8 @@ internal sealed class StartRunCommandHandler(IDbContextFactory<ClientDbContext> 
         });
         await db.SaveChangesAsync(cancellationToken);
         await eventBus.PublishAsync(new RunStartedEvent(id, command.CharacterId, command.ActivityKind, command.StartedAtUtc,
-            command.FleetId, groupCode, command.IsFleetCommander), EventTarget.Local, cancellationToken);
+            command.FleetId, groupCode, command.IsFleetCommander, command.SolarSystemName, command.SiteName),
+            EventTarget.Local, cancellationToken);
         if (command.FleetId is { } fleetId && groupCode is not null)
             await eventBus.PublishAsync(new FleetRunGroupCodeEvent(new RunGroupCodeStart(fleetId, command.ActivityKind,
                 groupCode, command.StartedAtUtc, command.IsFleetCommander, command.SiteName, command.SolarSystemName),

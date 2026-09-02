@@ -9,4 +9,8 @@ public sealed record RunStartedEventData(
     DateTime StartedAtUtc,
     long? FleetId,
     string? GroupCode,
-    bool IsFleetCommander);
+    bool IsFleetCommander,
+    // Where this run is being flown. Not stored on the row — the run keeps SolarSystemId and SiteName — but the
+    // fleet coordinator needs both to tell one group from another, and this is its only sight of a local start.
+    string? SolarSystemName = null,
+    string? SiteName = null);
