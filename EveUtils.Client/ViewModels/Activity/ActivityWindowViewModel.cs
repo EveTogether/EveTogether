@@ -195,7 +195,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(IsDiscardButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsCommandStatusShown))]
     [NotifyPropertyChangedFor(nameof(CommandStatusText))]
-    private RunControlAuthority _authority = RunControlAuthority.From(null, null, null, null);
+    // Unknown, not the four nulls this was built from: those land in From's solo branch, so a window that knows
+    // nothing yet came up with every button on and only became right once a read had landed (ET-150).
+    private RunControlAuthority _authority = new(RunControlAuthorityLevel.Unknown, null);
 
     /// <summary>The run row this window is writing to, once one has been started. Null for a window that is only
     /// showing the frame.</summary>
@@ -1173,20 +1175,30 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public async Task RefreshFleetCommandAsync(DateTime nowUtc)
     {
         IActiveFleetState? fleet = _services.GetService<IActiveFleetState>();
+        long? fleetId = fleet?.ActiveFleetId;
         // The same character the rest of the window works from. It used to fall back to IActiveFleetState, which
         // holds whichever character a fleets-window row was last selected as — so a fleet commander flying a
         // different toon than that row's acting one was compared against his own fleet's boss id and told only the
         // FC may start or stop (Jithran, 2026-09-02). The boss is looked up for this same character, so both sides
         // of the comparison are now one pilot.
         int? actingCharacterId = _ActingCharacterId();
+        // A run that is nobody else's is settled without a boss — the same condition From answers without looking at
+        // one. So it must not wait for a read either: since the authority starts at Unknown, waiting is a solo pilot
+        // sitting without buttons for the length of an ESI round trip, which is ET-150 turned the other way up.
+        if (fleetId is null && GroupCode is null)
+        {
+            ApplyFleetCommand(null, null, actingCharacterId);
+            return;
+        }
+
         if (actingCharacterId is not { } characterId || _services.GetService<FleetBossTracker>() is not { } bosses)
         {
-            ApplyFleetCommand(fleet?.ActiveFleetId, null, actingCharacterId);
+            ApplyFleetCommand(fleetId, null, actingCharacterId);
             return;
         }
 
         await bosses.RefreshAsync(characterId, nowUtc);
-        ApplyFleetCommand(fleet?.ActiveFleetId, bosses.BossOf(characterId), characterId);
+        ApplyFleetCommand(fleetId, bosses.BossOf(characterId), characterId);
     }
 
     /// <summary>

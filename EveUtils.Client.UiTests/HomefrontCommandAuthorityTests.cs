@@ -361,6 +361,54 @@ public sealed class HomefrontCommandAuthorityTests
         Assert.Null(await _StoredGroupCodeAsync(client, Member));
     }
 
+    // ── ET-150: what the window does before it has been told anything ──────────────────────────────
+
+    /// <summary>
+    /// The window as <c>FleetRunWindowPresenter</c> builds it — group code and fleet id off the wire — with the
+    /// boss read still in flight, which is the only state a real client opens in. The initial authority used to be
+    /// <c>From(null, null, null, null)</c>, and four nulls read as "solo", so every button was on the screen the
+    /// pilot is actually looking at until ESI answered. DISCARD there reaches every other member's machine.
+    /// </summary>
+    [AvaloniaFact]
+    public void AFreshMembersWindow_HasNoRunControlsWhileTheBossIsStillBeingRead()
+    {
+        using ClientInFleet client = ClientInFleet.As(Member, bossCharacterId: Commander);
+        client.Esi.HoldEsiOpen();
+
+        ActivityWindowViewModel window =
+            new(ActivityKind.Site, client.Services) { GroupCode = "HF-7Q2", FleetId = FleetId };
+
+        Assert.False(window.IsStartButtonVisible);
+        Assert.False(window.IsDiscardButtonVisible);
+        Assert.True(window.IsCommandStatusShown);
+        client.Esi.LetEsiAnswer();
+    }
+
+    /// <summary>
+    /// The counter-proof, and the reason "start at Unknown" cannot be the whole fix: a pilot flying alone keeps
+    /// every button from the moment the window opens, with the very first boss read still in flight. His own run,
+    /// so no boss's answer could change the outcome and there is nothing to wait for.
+    ///
+    /// Nothing may touch this window after the constructor. A second <c>Refresh</c> makes it pass either way:
+    /// <see cref="FleetBossTracker"/> stamps its slot before the read goes out, so the next call finds it inside the
+    /// TTL and returns without ever reaching the gate. That is what the first version of this test did, and it was
+    /// green with the fix taken back out.
+    /// </summary>
+    [AvaloniaFact]
+    public void AFreshSoloWindow_KeepsItsButtonsWhileTheBossIsStillBeingRead()
+    {
+        using ClientInFleet client = ClientInFleet.As(Member, bossCharacterId: Commander, entersFleetsWindow: false);
+        client.Esi.HoldEsiOpen();
+
+        var window = new ActivityWindowViewModel(ActivityKind.Site, client.Services);
+
+        Assert.Null(window.GroupCode);              // genuinely alone, not merely unable to say
+        Assert.True(window.IsStartButtonVisible);
+        Assert.False(window.IsCommandStatusShown);
+        Assert.Equal(0, client.Esi.CharFleetReads); // and it never asked about a boss it does not need
+        client.Esi.LetEsiAnswer();
+    }
+
     private static List<RunGroupCodeStart> _AnnouncementsOf(ClientInFleet client, out IDisposable subscription)
     {
         List<RunGroupCodeStart> announced = [];
