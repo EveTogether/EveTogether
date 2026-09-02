@@ -77,6 +77,9 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
                 RunId = run.Id,
                 ParameterKey = parameter.ParameterKey,
                 TypedValue = parameter.TypedValue,
+                Amount = parameter.Amount,
+                ItemTypeId = parameter.ItemTypeId,
+                BonusWindowSeconds = parameter.BonusWindowSeconds,
                 ObservedAtUtc = parameter.ObservedAtUtc
             });
 

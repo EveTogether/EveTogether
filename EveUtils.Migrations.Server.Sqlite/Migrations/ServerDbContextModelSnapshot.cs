@@ -729,6 +729,9 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.Property<int>("ActivityKind")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("AgentId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("CharacterId")
                         .HasColumnType("INTEGER");
 
@@ -760,6 +763,9 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.Property<DateTime?>("LastPushedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("MissionLevel")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Revision")
                         .HasColumnType("INTEGER");
 
@@ -778,6 +784,9 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<int>("SiteTypeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SiteTypeSource")
                         .HasColumnType("INTEGER");
 
                     b.Property<int?>("SolarSystemId")
@@ -933,6 +942,16 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("BonusWindowSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("ItemTypeId")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("ObservedAtUtc")
                         .HasColumnType("TEXT");

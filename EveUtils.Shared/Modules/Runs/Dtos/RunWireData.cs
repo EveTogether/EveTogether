@@ -20,9 +20,12 @@ public sealed class RunWireData
     public DateTime? TimesCorrectedAtUtc { get; init; }
     public DateTime? DeletedAtUtc { get; init; }
     public required int SiteTypeId { get; init; }
+    public required SiteTypeSource SiteTypeSource { get; init; }
     public string? SiteName { get; init; }
     public int? SolarSystemId { get; init; }
     public string? Signature { get; init; }
+    public int? AgentId { get; init; }
+    public int? MissionLevel { get; init; }
     public required RunRole Role { get; init; }
     public required bool IsParticipant { get; init; }
     public required bool IsPayoutEligible { get; init; }
@@ -49,9 +52,12 @@ public sealed class RunWireData
         TimesCorrectedAtUtc = run.TimesCorrectedAtUtc,
         DeletedAtUtc = run.DeletedAtUtc,
         SiteTypeId = run.SiteTypeId,
+        SiteTypeSource = run.SiteTypeSource,
         SiteName = run.SiteName,
         SolarSystemId = run.SolarSystemId,
         Signature = run.Signature,
+        AgentId = run.AgentId,
+        MissionLevel = run.MissionLevel,
         Role = run.Role,
         IsParticipant = run.IsParticipant,
         IsPayoutEligible = run.IsPayoutEligible,
@@ -88,6 +94,9 @@ public sealed class RunWireData
         {
             ParameterKey = parameter.ParameterKey,
             TypedValue = parameter.TypedValue,
+            Amount = parameter.Amount,
+            ItemTypeId = parameter.ItemTypeId,
+            BonusWindowSeconds = parameter.BonusWindowSeconds,
             ObservedAtUtc = parameter.ObservedAtUtc
         }).ToList()
     };
@@ -108,9 +117,12 @@ public sealed class RunWireData
             TimesCorrectedAtUtc = TimesCorrectedAtUtc,
             DeletedAtUtc = DeletedAtUtc,
             SiteTypeId = SiteTypeId,
+            SiteTypeSource = SiteTypeSource,
             SiteName = SiteName,
             SolarSystemId = SolarSystemId,
             Signature = Signature,
+            AgentId = AgentId,
+            MissionLevel = MissionLevel,
             Role = Role,
             IsParticipant = IsParticipant,
             IsPayoutEligible = IsPayoutEligible,
@@ -164,6 +176,9 @@ public sealed class RunWireData
                 RunId = run.Id,
                 ParameterKey = parameter.ParameterKey,
                 TypedValue = parameter.TypedValue,
+                Amount = parameter.Amount,
+                ItemTypeId = parameter.ItemTypeId,
+                BonusWindowSeconds = parameter.BonusWindowSeconds,
                 ObservedAtUtc = parameter.ObservedAtUtc
             });
         return run;
