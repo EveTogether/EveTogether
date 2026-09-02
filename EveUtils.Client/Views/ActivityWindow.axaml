@@ -197,10 +197,34 @@
                 <Setter Property="MinHeight" Value="0"/>
                 <Setter Property="Padding" Value="0"/>
             </Style>
+            <!-- Two arrows, not two buttons (Raymond, 2026-09-02). No border, no plate, nothing but the glyph in
+                 the window's brightest text — thirteen enemy rows under each other is a list, and a list does not
+                 want twenty-six little frames in it. The padding is the only thing left with any size: it keeps the
+                 pointer target usable around a glyph that carries no chrome of its own to aim at. -->
             <Style Selector="NumericUpDown.count /template/ ButtonSpinner /template/ RepeatButton">
                 <Setter Property="MinHeight" Value="0"/>
-                <Setter Property="Padding" Value="0"/>
-                <Setter Property="FontSize" Value="7"/>
+                <Setter Property="MinWidth" Value="0"/>
+                <Setter Property="Padding" Value="5,2"/>
+                <Setter Property="FontSize" Value="8"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <!-- The plate the stock Fluent theme paints lives on the presenter, so a rule one level up loses to it —
+                 the same lesson ToggleButton.section above is already carrying. -->
+            <Style Selector="NumericUpDown.count /template/ ButtonSpinner /template/ RepeatButton /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="0"/>
+            </Style>
+            <!-- Hover and press are the arrow itself brightening, since there is no longer a plate to tint. -->
+            <Style Selector="NumericUpDown.count /template/ ButtonSpinner /template/ RepeatButton:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+            <Style Selector="NumericUpDown.count /template/ ButtonSpinner /template/ RepeatButton:pressed /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
             </Style>
             <Style Selector="Button.pick.on /template/ ContentPresenter">
                 <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>

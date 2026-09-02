@@ -613,6 +613,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         AnchorUtc = run.StartedAtUtc;
         StoppedAtUtc = null;
         GroupCode ??= run.GroupCode;
+        // The adopted run brings its own site. Without this the window wore whichever signature had just been
+        // copied over a run belonging to somewhere else entirely — Raymond opened one on Blood Burrow and got a
+        // Sansha Refuge run's clock, loot and fit under that heading (2026-09-02). The clock and the loot are the
+        // run's, so the name over them has to be the run's too; the newly copied signature is not this run's and
+        // does not belong on it.
+        if (run.SiteName is { Length: > 0 } siteName && siteName != SignatureName)
+        {
+            SignatureName = siteName;
+            MatchedSites = [];
+        }
         _isManualRun = true;
         RunState = ActivityRunState.Running;
         await _AdoptCharacterAsync(checked((int)run.CharacterId));
