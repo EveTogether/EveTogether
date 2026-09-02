@@ -13,7 +13,8 @@
         <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,14">
             <TextBlock Text="Couple a character to a server" FontWeight="Bold" FontSize="15"
                        Foreground="{StaticResource TextBrightBrush}"/>
-            <TextBlock Text="Enter the server address, then sign in as the character you want synced."
+            <TextBlock x:Name="IntroBlock"
+                       Text="Enter the server address, then sign in as the character you want synced."
                        FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
         </StackPanel>
 

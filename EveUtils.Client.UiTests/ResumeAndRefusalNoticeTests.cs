@@ -20,31 +20,48 @@ public class ResumeAndRefusalNoticeTests
     public void AGapBetweenTicks_ReadsAsAResumeOnlyOnceItIsBigEnoughToBeOne(int seconds, bool expected) =>
         Assert.Equal(expected, SystemResumeWatcher.IsResume(TimeSpan.FromSeconds(seconds)));
 
+    /// <summary>The card has to say which PILOT, not just which server: several characters share one server, and a
+    /// card naming only the server leaves the reader to work out who it is about (ET-123).</summary>
     [Fact]
-    public void TheRefusalToast_NamesTheServer()
+    public void TheRefusalToast_NamesTheCharacterAndTheServer()
     {
-        var (title, message) = ServerLinkRefusalToast.For(["ET"]);
+        var (title, message) = ServerLinkRefusalToast.For([("ET", "Abnoba Auscent")]);
 
         Assert.Contains("ET", title);
+        Assert.Contains("Abnoba Auscent", title);
+        Assert.Contains("Abnoba Auscent", message);
         Assert.Contains("kept", message); // the reassurance is the point — nothing was thrown away
         Assert.Contains("empty", message);
     }
 
     [Fact]
-    public void OneServerOnSeveralCharacters_IsOneCard_NamingItOnce()
+    public void OneCharacterOnOneServer_IsOneCard_NamingTheServerOnce()
     {
-        var (_, message) = ServerLinkRefusalToast.For(["ET", "ET", "ET"]);
+        var (_, message) = ServerLinkRefusalToast.For(
+            [("ET", "Abnoba Auscent"), ("ET", "Abnoba Auscent"), ("ET", "Abnoba Auscent")]);
 
-        Assert.Equal(1, message.Split("ET").Length - 1);
+        Assert.Equal(1, message.Split("Abnoba Auscent").Length - 1);
     }
 
     [Fact]
-    public void SeveralServers_AreNamedTogether_InAStableOrder()
+    public void SeveralAffectedCharacters_AreNamedTogether_InAStableOrder()
     {
-        var (title, message) = ServerLinkRefusalToast.For(["Wormhole Co-op", "ET"]);
+        var (title, message) = ServerLinkRefusalToast.For([("Wormhole Co-op", "Jithran"), ("ET", "Abnoba Auscent")]);
 
-        Assert.Contains("ET and Wormhole Co-op", message);
-        Assert.DoesNotContain("ET and Wormhole Co-op", title); // the title stays short; the names live in the body
+        Assert.Contains("Abnoba Auscent and Jithran", message);
+        // The title stays short once there is more than one; the names live in the body.
+        Assert.DoesNotContain("Abnoba Auscent and Jithran", title);
+    }
+
+    /// <summary>The card for a session that is gone asks for an action instead of promising a retry (ET-123).</summary>
+    [Fact]
+    public void TheSessionGoneToast_NamesTheCharacter_AndAsksForAnAction()
+    {
+        var (title, message) = ServerLinkRefusalToast.ForSessionGone([("ET", "Abnoba Auscent")]);
+
+        Assert.Contains("Abnoba Auscent", title);
+        Assert.Contains("couple it to the server again", message);
+        Assert.DoesNotContain("keep retrying", message);
     }
 
     /// <summary>
@@ -54,20 +71,23 @@ public class ResumeAndRefusalNoticeTests
     [Fact]
     public void TheToastAndTheBanner_NameTheSameServers()
     {
-        var links = new[]
-        {
-            ("ET", ServerConnectionState.SessionExpired),
-            ("Healthy One", ServerConnectionState.Connected)
-        };
+        ServerPairingAlert.Link[] links =
+        [
+            new("ET", "Abnoba Auscent", ServerConnectionState.SessionExpired),
+            new("Healthy One", "Noahmarr", ServerConnectionState.Connected)
+        ];
 
         var (bannerShown, bannerMessage) = ServerPairingAlert.For(links);
-        var (_, toastMessage) = ServerLinkRefusalToast.For(["ET"]);
+        var (_, toastMessage) = ServerLinkRefusalToast.For([("ET", "Abnoba Auscent")]);
 
         Assert.True(bannerShown);
+        // Both name the same pilot on the same server, so the card and the banner cannot disagree about who.
+        Assert.Contains("Abnoba Auscent", bannerMessage);
+        Assert.Contains("Abnoba Auscent", toastMessage);
         Assert.Contains("ET", bannerMessage);
-        Assert.Contains("ET", toastMessage);
         Assert.DoesNotContain("Healthy One", bannerMessage);
-        Assert.DoesNotContain("Healthy One", toastMessage);
+        Assert.DoesNotContain("Noahmarr", bannerMessage);
+        Assert.DoesNotContain("Noahmarr", toastMessage);
     }
 
     /// <summary>
@@ -77,7 +97,8 @@ public class ResumeAndRefusalNoticeTests
     [Fact]
     public void TheBanner_SaysThePairingIsKept_RatherThanThatItIsGone()
     {
-        var (_, message) = ServerPairingAlert.For([("ET", ServerConnectionState.SessionExpired)]);
+        var (_, message) = ServerPairingAlert.For(
+            [new ServerPairingAlert.Link("ET", "Abnoba Auscent", ServerConnectionState.SessionExpired)]);
 
         Assert.Contains("kept", message);
         Assert.DoesNotContain("no longer valid", message);

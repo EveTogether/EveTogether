@@ -52,7 +52,7 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
         CharacterId = character.CharacterId;
         IsLocalOnly = character.IsLocalOnly;
         if (_owner.Bus is not null)
-            _owner.Bus.StateChanged += OnServerState;
+            _owner.Bus.CharacterStateChanged += OnServerState;
     }
 
     /// <summary>Loads the character snapshot + its coupled-server links. Call right after construction.</summary>
@@ -124,7 +124,9 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
     private async Task RecoupleAsync(ServerLinkViewModel link)
     {
         Status = $"Coupling {link.DisplayName} again…";
-        var ok = await _owner.RunCoupleAsync();
+        // Hands the address over so the dialog opens filled in: this coupling already exists, it just has no session
+        // on the server any more, so there is nothing here for the user to look up or retype (ET-123).
+        var ok = await _owner.RunCoupleAsync(link.Address);
         await ReloadServerLinksAsync();
         Status = ok ? "Coupled." : "Coupling cancelled.";
     }
@@ -135,9 +137,13 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
             await DecoupleAsync(link); // user pressed Decouple inside the trust dialog
     }
 
-    private void OnServerState(string address, ServerConnectionState state) =>
+    // Only this dialog's character, and only its link to that server. The dialog shows one character's couplings, so
+    // painting every link for the address wrote another character's state onto them (ET-123).
+    private void OnServerState(string address, int characterId, ServerConnectionState state) =>
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
+            if (characterId != CharacterId)
+                return;
             foreach (var link in ServerLinks)
                 if (string.Equals(link.Address, address, StringComparison.OrdinalIgnoreCase))
                     link.State = state;
@@ -146,6 +152,6 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         if (_owner.Bus is not null)
-            _owner.Bus.StateChanged -= OnServerState;
+            _owner.Bus.CharacterStateChanged -= OnServerState;
     }
 }

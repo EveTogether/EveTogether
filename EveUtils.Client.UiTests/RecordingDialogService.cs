@@ -77,7 +77,19 @@ public sealed class RecordingDialogService : IDialogService
     public Task<IReadOnlyList<string>?> SelectScopesAsync(IReadOnlyList<EsiScopeRequirement> available,
         IReadOnlyCollection<string>? preselected = null) => throw NotUsed();
     public Task<IReadOnlyList<int>?> SelectFittingsAsync(IReadOnlyList<EsiFitting> fits) => throw NotUsed();
-    public Task<CoupleServerResult?> CoupleServerAsync(Func<string, CancellationToken, Task<string?>> probeServerName) => throw NotUsed();
+    /// <summary>What the couple dialog was opened with, so a test can see whether it would have asked the user to
+    /// retype something the client already knows (ET-123). Null means it has not been opened.</summary>
+    public CoupleServerResult? LastCouplePrefill { get; private set; }
+    public bool CoupleDialogOpened { get; private set; }
+
+    public Task<CoupleServerResult?> CoupleServerAsync(
+        Func<string, CancellationToken, Task<string?>> probeServerName, CoupleServerResult? prefill = null)
+    {
+        CoupleDialogOpened = true;
+        LastCouplePrefill = prefill;
+        return Task.FromResult<CoupleServerResult?>(null); // cancelled — the pairing round-trip is not what is under test
+    }
+
     public Task<string?> SelectServerAsync(string prompt, IReadOnlyList<ServerPickOption> options) => throw NotUsed();
     public string? LastMessage { get; private set; }
     public Task ShowMessageAsync(string title, string message)
