@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using EveUtils.Shared.Modules.ApiKeys.Services;
 using Microsoft.AspNetCore.Authorization;
 
@@ -23,6 +24,13 @@ public static class ApiKeyAuthentication
 
     public const string ScopeClaim = "api_scope";
     public const string OwnerCharacterClaim = "api_owner_character_id";
+
+    /// <summary>
+    /// The character this key is scoped to, or null for a key with no owner — which is admin scope over all
+    /// server data (ratified decision 3). The one place that reads this claim back off a principal.
+    /// </summary>
+    public static int? OwnerCharacterId(this ClaimsPrincipal user) =>
+        int.TryParse(user.FindFirstValue(OwnerCharacterClaim), out int owner) ? owner : null;
 
     /// <summary>Only the API-key scheme counts on <c>/api/v1</c> — an admin cookie must not open a data route.
     /// A key that authenticates but lacks the scope fails here, which is a 403 rather than a 401.</summary>

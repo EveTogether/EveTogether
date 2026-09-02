@@ -129,6 +129,7 @@ builder.Services.AddAuthorization(options =>
 
     options.AddPolicy(ApiKeyAuthentication.Policy, ApiKeyAuthentication.BuildPolicy());
 });
+builder.Services.AddServerApiDocs();                                    // OpenAPI document + Scalar reference
 builder.Services.AddSignalR();                                          // DPS stream hub
 builder.Services.AddHostedService<DpsBroadcastBridge>();                // server bus → SignalR bridge
 builder.Services.AddHostedService<ServerTokenRefreshService>();         // token refresh

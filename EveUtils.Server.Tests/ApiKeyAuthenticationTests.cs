@@ -202,28 +202,68 @@ public class ApiKeyAuthenticationTests : IDisposable
     }
 
     /// <summary>
+    /// The routes that are public by ratified decision 4. Spelled out here rather than read back off the routing
+    /// code, so that moving a route into the keyless set has to be argued in this test too.
+    /// </summary>
+    private static readonly string[] _KeylessApiRoutes = ["/api/v1/health"];
+
+    /// <summary>
     /// The gate is on the group, not on one route: every endpoint the API maps carries the API-key policy and
-    /// none of them opts back out. Dropping <c>RequireAuthorization</c> — or adding an <c>AllowAnonymous</c> —
-    /// turns this red, which no test of the policy object on its own would catch.
+    /// none of them opts back out — except the keyless ones above, which must opt out and stay opted out.
+    /// Dropping <c>RequireAuthorization</c>, adding an <c>AllowAnonymous</c> to a data route, or taking the one
+    /// off <c>/health</c> turns this red, which no test of the policy object on its own would catch.
     /// </summary>
     [Fact]
-    public void EveryEndpointUnderApiV1_CarriesTheApiKeyPolicy()
+    public void EveryEndpointUnderApiV1_CarriesTheApiKeyPolicy_ExceptTheRatifiedKeylessOnes()
     {
-        IEndpointRouteBuilder endpoints = WebApplication.CreateBuilder().Build();
-        endpoints.MapServerApi();
+        List<RouteEndpoint> routes = [.. _MapTheApi()
+            .Where(route => route.RoutePattern.RawText!.StartsWith("/api/v1/", StringComparison.Ordinal))];
 
-        List<RouteEndpoint> routes = [.. endpoints.DataSources
-            .SelectMany(source => source.Endpoints)
-            .OfType<RouteEndpoint>()];
+        // The data routes this milestone adds are in there — an empty or shrunken surface must not pass by default.
+        Assert.Equal(
+            ["/api/v1/compositions", "/api/v1/compositions/{id:long}", "/api/v1/fleets", "/api/v1/fleets/{id:long}",
+             "/api/v1/health", "/api/v1/whoami"],
+            routes.Select(route => route.RoutePattern.RawText).Order(StringComparer.Ordinal));
 
-        Assert.NotEmpty(routes);
         Assert.All(routes, route =>
         {
-            Assert.StartsWith("/api/v1/", route.RoutePattern.RawText, StringComparison.Ordinal);
             Assert.Contains(route.Metadata.GetOrderedMetadata<IAuthorizeData>(),
                 gate => gate.Policy == ApiKeyAuthentication.Policy);
-            Assert.Empty(route.Metadata.GetOrderedMetadata<IAllowAnonymous>());
+
+            IReadOnlyList<IAllowAnonymous> anonymous = route.Metadata.GetOrderedMetadata<IAllowAnonymous>();
+            if (_KeylessApiRoutes.Contains(route.RoutePattern.RawText))
+                Assert.NotEmpty(anonymous);
+            else
+                Assert.Empty(anonymous);
         });
+    }
+
+    /// <summary>
+    /// The self-docs are the other half of decision 4: <c>/openapi/v1.json</c> and <c>/scalar</c> are mapped
+    /// outside the group and carry no authorization at all, so a consumer can read the contract before it has a
+    /// key. Moving either inside the gated group turns this red.
+    /// </summary>
+    [Fact]
+    public void TheSelfDocs_AreMappedOutsideTheGatedGroup()
+    {
+        List<RouteEndpoint> docs = [.. _MapTheApi()
+            .Where(route => !route.RoutePattern.RawText!.StartsWith("/api/v1/", StringComparison.Ordinal))];
+
+        Assert.Contains(docs, route => route.RoutePattern.RawText!.StartsWith("/openapi", StringComparison.Ordinal));
+        Assert.Contains(docs, route => route.RoutePattern.RawText!.StartsWith("/scalar", StringComparison.Ordinal));
+        Assert.All(docs, route => Assert.Empty(route.Metadata.GetOrderedMetadata<IAuthorizeData>()));
+    }
+
+    private static List<RouteEndpoint> _MapTheApi()
+    {
+        WebApplicationBuilder builder = WebApplication.CreateBuilder();
+        builder.Services.AddServerApiDocs();
+        WebApplication app = builder.Build();
+        app.MapServerApi();
+
+        return [.. ((IEndpointRouteBuilder)app).DataSources
+            .SelectMany(source => source.Endpoints)
+            .OfType<RouteEndpoint>()];
     }
 
     /// <summary>
