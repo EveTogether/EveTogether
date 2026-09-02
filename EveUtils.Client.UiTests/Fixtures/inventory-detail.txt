@@ -1,0 +1,40 @@
+Agitated Exotic Filament	1	Abyssal Filaments			0,10 m3	42.237,65 ISK
+Agitated Firestorm Filament	1	Abyssal Filaments			0,10 m3	6.980,63 ISK
+Agitated Gamma Filament	1	Abyssal Filaments			0,10 m3	32.852,29 ISK
+Baryon Exotic Plasma S Blueprint		Exotic Plasma Charge Blueprint			0,01 m3	
+Baryon Exotic Plasma S Blueprint		Exotic Plasma Charge Blueprint			0,01 m3	
+Calm Firestorm Filament	2	Abyssal Filaments			0,20 m3	3.904,44 ISK
+Calm Gamma Filament	1	Abyssal Filaments			0,10 m3	6.686,35 ISK
+Chaotic Exotic Filament	3	Abyssal Filaments			0,30 m3	67.912.203,00 ISK
+Crystalline Isogen-10	209	Abyssal Materials			62,70 m3	10.637.291,17 ISK
+Decayed 100MN Afterburner Mutaplasmid	2	Mutaplasmids			2 m3	2.859.271,26 ISK
+Decayed 10MN Afterburner Mutaplasmid	4	Mutaplasmids			4 m3	4.426.433,76 ISK
+Decayed 1MN Afterburner Mutaplasmid	3	Mutaplasmids			3 m3	621.350,76 ISK
+Decayed 50MN Microwarpdrive Mutaplasmid	2	Mutaplasmids			2 m3	6.639.089,04 ISK
+Decayed 5MN Microwarpdrive Mutaplasmid	1	Mutaplasmids			1 m3	794.082,52 ISK
+Decayed Deep Core Mining Laser Mutaplasmid	1	Mutaplasmids			1 m3	501,92 ISK
+Decayed Deep Core Strip Miner Mutaplasmid	2	Mutaplasmids			2 m3	819,78 ISK
+Decayed Gas Cloud Harvester Mutaplasmid	1	Mutaplasmids			1 m3	3.751,32 ISK
+Decayed Gas Cloud Scoop Mutaplasmid	3	Mutaplasmids			3 m3	3.064,74 ISK
+Decayed Ice Harvester Mutaplasmid	1	Mutaplasmids			1 m3	4.709,13 ISK
+Decayed Mining Laser Mutaplasmid	1	Mutaplasmids			1 m3	774,32 ISK
+Decayed Modulated Deep Core Miner Mutaplasmid	1	Mutaplasmids			1 m3	12,08 ISK
+Decayed Modulated Strip Miner Mutaplasmid	1	Mutaplasmids			1 m3	2.113,40 ISK
+Decayed Strip Miner Mutaplasmid	1	Mutaplasmids			1 m3	2.518,78 ISK
+Entropic Radiation Sink I Blueprint		Entropic Radiation Sink Blueprint			0,01 m3	
+Fierce Dark Filament	1	Abyssal Filaments			0,10 m3	169.678,26 ISK
+Fierce Electrical Filament	1	Abyssal Filaments			0,10 m3	1.680.599,83 ISK
+Fierce Firestorm Filament	1	Abyssal Filaments			0,10 m3	264.999,49 ISK
+Glorified Decayed 100MN Afterburner Mutaplasmid Blueprint		Mutaplasmid Blueprint			0,10 m3	
+Glorified Decayed 1MN Afterburner Mutaplasmid Blueprint		Mutaplasmid Blueprint			0,10 m3	
+Heavy Mutadaptive Remote Armor Repairer I Blueprint		Mutadaptive Remote Armor Repairer Blueprint			0,01 m3	
+Meson Exotic Plasma S Blueprint		Exotic Plasma Charge Blueprint			0,01 m3	
+Raging Exotic Filament	3	Abyssal Filaments			0,30 m3	33.245.857,92 ISK
+Raging Firestorm Filament	1	Abyssal Filaments			0,10 m3	382.016,69 ISK
+Raging Gamma Filament	1	Abyssal Filaments			0,10 m3	10.642.382,46 ISK
+SKINR Studio Supplies	1	Special Edition Commodities			1 m3	187.330,05 ISK
+Supratidal Compact Entropic Disintegrator Blueprint		Precursor Weapon Blueprint			0,01 m3	
+Supratidal Entropic Disintegrator I Blueprint		Precursor Weapon Blueprint			0,01 m3	
+Tranquil Electrical Filament	1	Abyssal Filaments			0,10 m3	144.711,87 ISK
+Triglavian Survey Database	682	Triglavian Data			6,82 m3	68.200.000,00 ISK
+Unstable 500MN Microwarpdrive Mutaplasmid	1	Mutaplasmids			1 m3	21.019.262,96 ISK

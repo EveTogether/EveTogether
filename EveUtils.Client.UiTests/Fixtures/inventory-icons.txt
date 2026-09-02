@@ -1,0 +1,40 @@
+Entropic Radiation Sink I Blueprint	
+Baryon Exotic Plasma S Blueprint	
+Baryon Exotic Plasma S Blueprint	
+Meson Exotic Plasma S Blueprint	
+Heavy Mutadaptive Remote Armor Repairer I Blueprint	
+Glorified Decayed 100MN Afterburner Mutaplasmid Blueprint	
+Glorified Decayed 1MN Afterburner Mutaplasmid Blueprint	
+Supratidal Compact Entropic Disintegrator Blueprint	
+Supratidal Entropic Disintegrator I Blueprint	
+Agitated Exotic Filament	1
+Agitated Firestorm Filament	1
+Agitated Gamma Filament	1
+Calm Firestorm Filament	2
+Calm Gamma Filament	1
+Chaotic Exotic Filament	3
+Fierce Dark Filament	1
+Fierce Electrical Filament	1
+Fierce Firestorm Filament	1
+Raging Exotic Filament	3
+Raging Firestorm Filament	1
+Raging Gamma Filament	1
+Tranquil Electrical Filament	1
+Decayed 100MN Afterburner Mutaplasmid	2
+Decayed 10MN Afterburner Mutaplasmid	4
+Decayed 1MN Afterburner Mutaplasmid	3
+Decayed 50MN Microwarpdrive Mutaplasmid	2
+Decayed 5MN Microwarpdrive Mutaplasmid	1
+Decayed Deep Core Mining Laser Mutaplasmid	1
+Decayed Deep Core Strip Miner Mutaplasmid	2
+Decayed Gas Cloud Harvester Mutaplasmid	1
+Decayed Gas Cloud Scoop Mutaplasmid	3
+Decayed Ice Harvester Mutaplasmid	1
+Decayed Mining Laser Mutaplasmid	1
+Decayed Modulated Deep Core Miner Mutaplasmid	1
+Decayed Modulated Strip Miner Mutaplasmid	1
+Decayed Strip Miner Mutaplasmid	1
+Unstable 500MN Microwarpdrive Mutaplasmid	1
+Triglavian Survey Database	682
+Crystalline Isogen-10	209
+SKINR Studio Supplies	1

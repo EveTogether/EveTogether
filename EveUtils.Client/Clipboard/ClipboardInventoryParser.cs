@@ -26,17 +26,22 @@ public static class ClipboardInventoryParser
 
     internal static bool HasSingleRow(string text) => ReadRows(text).Count == 1;
 
-    internal static IReadOnlyList<ClipboardInventoryItem> ParseAmbiguousNameCandidates(string text)
+    /// <summary>
+    /// Every column that could hold the names, one list per column, for a caller that can check them against the
+    /// SDE. Distinct values only separate a name column from a group column once group names start repeating: over
+    /// forty rows that is 39-against-10, over two rows it is 2-against-2 and says nothing.
+    /// </summary>
+    internal static IReadOnlyList<IReadOnlyList<ClipboardInventoryItem>> ParseNameColumnCandidates(string text)
     {
         List<string[]> rows = ReadRows(text);
-        if (rows.Count != 1 || FindNameColumn(rows) is not null)
+        if (rows.Count == 0)
             return [];
 
-        List<ClipboardInventoryItem> candidates = [];
+        List<IReadOnlyList<ClipboardInventoryItem>> candidates = [];
         for (var column = 0; column < rows[0].Length; column++)
         {
             if (IsNameColumn(rows, column, out _))
-                candidates.AddRange(ReadItems(rows, column));
+                candidates.Add(ReadItems(rows, column));
         }
 
         return candidates;
@@ -124,7 +129,7 @@ public static class ClipboardInventoryParser
         // distinct names against three distinct group names, refused by the margin at 4 < 6.
         //
         // A tie still means nothing is known: with one copied row every text column has exactly one distinct value,
-        // which is why that case has its own route through ParseAmbiguousNameCandidates and the SDE.
+        // which is why that case falls through to ParseNameColumnCandidates and the SDE.
         // ponytail: distinctness with the SDE as the check afterwards. If a moved name column ever needs handling,
         // the upgrade is to resolve each candidate column against the SDE and keep the one that matches most rows.
         return nameColumn is null || highestDistinctCount <= nextHighestDistinctCount ? null : nameColumn;

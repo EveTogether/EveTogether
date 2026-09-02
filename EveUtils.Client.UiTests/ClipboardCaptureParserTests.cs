@@ -45,14 +45,21 @@ public sealed class ClipboardCaptureParserTests
             row => Assert.Null(row.Quantity));
     }
 
+    /// <summary>
+    /// Close cardinality no longer decides anything on its own: the group column here has MORE distinct values
+    /// than the names, so the shape alone picks the wrong one. That is why both columns are offered — whether the
+    /// right one wins is settled against the SDE, in <c>AbyssalLootCaptureTests</c>.
+    /// </summary>
     [Fact]
-    public void ParseInventory_CloseTextColumnCardinality_RejectsAmbiguousNames()
+    public void ParseInventory_CloseTextColumnCardinality_OffersBothColumnsRatherThanDeciding()
     {
         const string text = "Group one\tBaryon Exotic Plasma S Blueprint\t1\r\nGroup two\tBaryon Exotic Plasma S Blueprint\t2\r\nGroup three\tOther Blueprint\t3\r\nGroup four\tFinal Blueprint\t4";
 
-        var rows = ClipboardInventoryParser.Parse(text);
-
-        Assert.Empty(rows);
+        Assert.Equal(
+            [["Group one", "Group two", "Group three", "Group four"],
+                ["Baryon Exotic Plasma S Blueprint", "Baryon Exotic Plasma S Blueprint", "Other Blueprint", "Final Blueprint"]],
+            ClipboardInventoryParser.ParseNameColumnCandidates(text)
+                .Select(column => column.Select(item => item.Name).ToArray()));
     }
 
     [Fact]
@@ -61,10 +68,10 @@ public sealed class ClipboardCaptureParserTests
         const string text = "Ultraviolet M\t1\tFrequency Crystal\tMedium\t\t1 m3\t2.350,77 ISK";
 
         Assert.Empty(ClipboardInventoryParser.Parse(text));
-        Assert.Collection(ClipboardInventoryParser.ParseAmbiguousNameCandidates(text),
-            candidate => Assert.Equal("Ultraviolet M", candidate.Name),
-            candidate => Assert.Equal("Frequency Crystal", candidate.Name),
-            candidate => Assert.Equal("Medium", candidate.Name));
+        Assert.Equal(
+            [["Ultraviolet M"], ["Frequency Crystal"], ["Medium"]],
+            ClipboardInventoryParser.ParseNameColumnCandidates(text)
+                .Select(column => column.Select(item => item.Name).ToArray()));
     }
 
     [Fact]
@@ -99,6 +106,49 @@ public sealed class ClipboardCaptureParserTests
 
         Assert.Same(expected, parsed);
         Assert.Equal(text, importer.ImportedText);
+    }
+
+    /// <summary>EVE's Icons view, copied verbatim: two columns, and a blueprint carries no quantity at all.</summary>
+    [Fact]
+    public void ParseInventory_IconsView_KeepsEveryRow_IncludingTheOnesWithoutAQuantity()
+    {
+        string text = _Fixture("inventory-icons.txt");
+
+        Assert.Equal(ClipboardShape.Inventory, ClipboardShapeRecogniser.Recognise(text));
+        var rows = ClipboardInventoryParser.Parse(text);
+
+        Assert.Equal(40, rows.Count);
+        Assert.Equal("Entropic Radiation Sink I Blueprint", rows[0].Name);
+        Assert.Null(rows[0].Quantity);
+        Assert.Equal(209, rows.Single(row => row.Name == "Crystalline Isogen-10").Quantity);
+        Assert.Equal(9, rows.Count(row => row.Quantity is null));
+    }
+
+    /// <summary>The Details view, which already worked — here so this fixture cannot regress unnoticed.</summary>
+    [Fact]
+    public void ParseInventory_DetailsView_ReadsNameQuantityVolumeAndPrice()
+    {
+        string text = _Fixture("inventory-detail.txt");
+
+        Assert.Equal(ClipboardShape.Inventory, ClipboardShapeRecogniser.Recognise(text));
+        var rows = ClipboardInventoryParser.Parse(text);
+
+        Assert.Equal(40, rows.Count);
+        var isogen = rows.Single(row => row.Name == "Crystalline Isogen-10");
+        Assert.Equal(209, isogen.Quantity);
+        Assert.NotNull(isogen.Volume);
+        Assert.NotNull(isogen.Price);
+    }
+
+    private static string _Fixture(string name)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "EVE-Together.slnx")))
+            directory = directory.Parent;
+
+        return File.ReadAllText(Path.Combine(
+            directory?.FullName ?? throw new InvalidOperationException("the solution root is not above the test binary"),
+            "EveUtils.Client.UiTests", "Fixtures", name));
     }
 
     private sealed class RecordingFitTextImporter(FitImportResult importResult) : IFitTextImporter

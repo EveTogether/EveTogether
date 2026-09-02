@@ -80,38 +80,33 @@ public sealed class AbyssalLootCapture : ISingletonService, IDisposable
 
         bool hasSingleRow = ClipboardInventoryParser.HasSingleRow(capture.Text);
         IReadOnlyList<ClipboardInventoryItem> items = ClipboardInventoryParser.Parse(capture.Text);
-        IReadOnlyList<ClipboardInventoryItem> candidates = [];
         var resolution = SdeInventoryResolver.Resolve(items, _sde);
-        bool hasNoSingleRowSdeMatch = hasSingleRow && _sde.IsAvailable && resolution.Lines.Count == 0;
-        if (items.Count == 0 && _sde.IsAvailable)
+        bool hasNoSdeMatch = hasSingleRow && _sde.IsAvailable && resolution.Lines.Count == 0;
+        if (resolution.Lines.Count == 0 && _sde.IsAvailable)
         {
-            candidates = ClipboardInventoryParser.ParseAmbiguousNameCandidates(capture.Text);
-            // AND-ed back onto hasSingleRow rather than taken straight from the out parameter, which overwrote it
-            // unconditionally: ParseAmbiguousNameCandidates returns nothing at all for more than one row, so every
-            // MULTI-row copy whose name column could not be identified came out of here claiming to be the
-            // single-row case — and was dropped without a toast, a log line or any other trace (ET-65).
-            resolution = SdeInventoryResolver.ResolveUniqueCandidate(candidates, _sde, out bool noCandidateMatch);
-            hasNoSingleRowSdeMatch = hasSingleRow && noCandidateMatch;
+            // The column shape alone did not produce item types — it either could not choose, or chose the group
+            // column — so ask the SDE which candidate actually reads as item types. Every row count comes through
+            // here: it used to be the single-row case only, which left an icons copy of two items working and the
+            // same two items in details refused (ET-65).
+            resolution = SdeInventoryResolver.ResolveBestCandidate(
+                ClipboardInventoryParser.ParseNameColumnCandidates(capture.Text), _sde, out bool noCandidateMatch);
+            hasNoSdeMatch = hasSingleRow && noCandidateMatch;
         }
 
         if (resolution.Lines.Count == 0)
         {
             // One copied line that matches no item type is far more often an ordinary copy than lost loot, so that
             // one case stays quiet on screen — but it says so in the log like every other refusal.
-            if (hasNoSingleRowSdeMatch)
+            if (hasNoSdeMatch)
             {
                 _Dropped("a single copied row that matches no known item type");
                 return;
             }
 
-            var message = candidates.Count > 0
-                ? $"Could not identify exactly one EVE item type from {candidates.Count} copied names. Copy rows from an EVE inventory window."
-                : resolution.Unresolved.Count > 0
-                    ? $"None of the {resolution.Unresolved.Count} copied names is a known item type. Copy rows from an EVE inventory window."
-                    // The rows parsed, but no single column stood out as the item names, so there was never a name
-                    // to look up. It does NOT ask for column headings: an EVE inventory copy carries none, so a
-                    // message that asked for them was asking for something the player cannot produce.
-                    : "No column in this copy stands out as the item names. Copy the rows from an EVE inventory window.";
+            // It never asks for column headings: an EVE inventory copy carries none.
+            var message = resolution.Unresolved.Count > 0
+                ? $"None of the {resolution.Unresolved.Count} copied names is a known item type. Copy rows from an EVE inventory window."
+                : "No column in this copy stands out as the item names. Copy the rows from an EVE inventory window.";
             _toasts.Show("Loot not recognised",
                 message,
                 ToastKind.Error);
