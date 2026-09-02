@@ -3,10 +3,12 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Shared.Modules.Sde.Enums;
 using EveUtils.Client.Dialogs;
@@ -347,6 +349,43 @@ public class FitDetailTests
         var brush = Assert.IsType<SolidColorBrush>(cpu.FillColor);
         Assert.Equal(Color.Parse("#7BACC3"), brush.Color);   // stays CPU blue, not the old red recolour
         Assert.Contains("CPU", cpu.Tooltip);
+    }
+
+    [AvaloniaFact]
+    public async Task FitDetail_CapStateColour_FollowsStability()
+    {
+        // Two renders on purpose (ET-132): the defect was a colour hard-wired to the accent, which a single render of
+        // either state looks perfectly right in. Only the pair shows the line actually switching.
+        var fit = Fit("Thorax", 627, (2, "HiSlot0", 1));
+        var stable = SampleStats();
+        var depleting = stable with { CapacitorStable = false, CapacitorDepletesInSeconds = 393 };
+
+        var stableLine = await CapStateLine(fit, stable, "/tmp/eveutils-cap-stable.png");
+        var depletingLine = await CapStateLine(fit, depleting, "/tmp/eveutils-cap-depleting.png");
+
+        Assert.StartsWith("Stable", stableLine.Text);
+        Assert.StartsWith("Depletes in", depletingLine.Text);
+        // AccentBrightBrush (Gallente) stays; the depleting line takes the theme's RedBrush, the same red as .chip.danger.
+        Assert.Equal(Color.Parse("#FF7EE0BB"), stableLine.Colour);
+        Assert.Equal(Color.Parse("#FFEF5A5A"), depletingLine.Colour);
+    }
+
+    private sealed record CapStateLineRead(string? Text, Color Colour);
+
+    // Read while the window is still open: closing it unapplies the style, and the DynamicResource accent falls back.
+    private static async Task<CapStateLineRead> CapStateLine(EsiFitting fit, FitStats stats, string screenshot)
+    {
+        var vm = new FitDetailWindowViewModel(fit, FallbackNameResolver.Instance,
+            new StubStatsProvider(_ => stats), sde: null, data: null);
+        await vm.InitializeAsync();
+
+        var window = new FitDetailWindow(vm) { Width = 1080, Height = 680 };
+        window.Show();
+        window.CaptureRenderedFrame()!.Save(screenshot, new PngBitmapEncoderOptions());
+        var line = window.GetVisualDescendants().OfType<TextBlock>().Single(block => block.Classes.Contains("capstate"));
+        var read = new CapStateLineRead(line.Text, Assert.IsType<SolidColorBrush>(line.Foreground).Color);
+        window.Close();
+        return read;
     }
 
     [Fact]

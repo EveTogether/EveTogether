@@ -1597,6 +1597,9 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
     }
 
     // Capacitor
+    // The state line carries the colour in-game: the accent while the cap holds, red once it runs dry. This drives a
+    // style class instead of a brush property, so the stable side keeps re-tinting with the faction accent (D-183).
+    public bool CapDepleting => _stats is not null && !_stats.CapacitorStable;
     public string CapState => _stats is null
         ? "—"
         : _stats.CapacitorStable

@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
 using Avalonia.Threading;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.ViewModels;
@@ -91,11 +92,14 @@ public class DockedWindowStylesTests
     [AvaloniaTheory]
     [InlineData(Shell.OwnWindow)]
     [InlineData(Shell.DockedTab)]
-    public void FitDetailWindow_PulseGauge_KeepsItsStyle(Shell shell)
+    public void FitDetailWindow_ContentRootStyles_KeepTheirEffect(Shell shell)
     {
-        // The pulse style only carries an animation, so this asserts the style is there to be matched at all rather
-        // than a property it sets: an empty Styles collection on the content root is exactly the ET-42 regression.
+        // The pulse style only carries an animation, so an empty Styles collection — the ET-42 regression itself — is
+        // all it can be checked for. The CAPACITOR state style (ET-132) does set a property, so it is probed for real.
         var content = Present(new FitDetailWindow(), shell);
         Assert.NotEmpty(content.Styles);
+
+        var depleting = Probe(content, new TextBlock { Classes = { "capstate", "depleting" } });
+        Assert.Equal(Color.Parse("#FFEF5A5A"), Assert.IsType<SolidColorBrush>(depleting.Foreground).Color);
     }
 }
