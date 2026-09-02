@@ -381,10 +381,12 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _registry.RegistryChanged += () =>
             Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = RefreshCharactersAsync());
 
-        // Live per-server bus state → the matching character's server link indicator.
+        // Live bus state → the server link indicators. Per CHARACTER, not per server: the roll-up answers "is this
+        // server usable at all", and a character whose session the server dropped is invisible in it as soon as one
+        // other character on the same server is healthy (ET-123).
         if (_busConnector is not null)
-            _busConnector.StateChanged += (address, state) =>
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyServerConnectionState(address, state));
+            _busConnector.CharacterStateChanged += (address, characterId, state) =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyServerConnectionState(address, characterId, state));
 
         // Live Tranquility status → the bottom-bar indicator. Seed from the current snapshot (the poller may have
         // already run before this VM existed) and follow further changes.
@@ -882,13 +884,16 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 ? "A character accepted your fleet invite."
                 : "A character declined your fleet invite.");
 
-    // Update the live state of every server link pointing at this address. A character can be
-    // coupled to several servers, so we match per-link rather than painting one global state.
-    private void ApplyServerConnectionState(string address, ServerConnectionState state)
+    /// <summary>
+    /// Updates the one link this state belongs to: this character's coupling to this server. It used to paint every
+    /// link pointing at the address, which made a per-character state impossible to show in either direction — one
+    /// character's trouble was either hidden by its neighbours or smeared over all of them.
+    /// </summary>
+    private void ApplyServerConnectionState(string address, int characterId, ServerConnectionState state)
     {
         foreach (var c in Characters)
             foreach (var link in c.ServerLinks)
-                if (string.Equals(link.Address, address, StringComparison.OrdinalIgnoreCase))
+                if (link.CharacterId == characterId && string.Equals(link.Address, address, StringComparison.OrdinalIgnoreCase))
                     link.State = state;
 
         RefreshServerPairingAlert();
@@ -1383,7 +1388,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         foreach (var addr in await sessionStore.ListServersForCharacterAsync(characterId))
         {
             var display = _serverRegistry is null ? addr : await _serverRegistry.DisplayNameAsync(addr);
-            var state = _busConnector?.StateFor(addr) ?? ServerConnectionState.Disconnected;
+            // This character's own state, not the server roll-up — a link seeded from the roll-up would open green
+            // for a character whose session the server no longer has (ET-123).
+            var state = _busConnector?.StateFor(addr, characterId) ?? ServerConnectionState.Disconnected;
             links.Add(new ServerLinkViewModel(characterId, addr, display, state, onDecouple, onViewTrust, onRecouple));
         }
         return links;

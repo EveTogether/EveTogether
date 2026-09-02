@@ -31,6 +31,7 @@ public sealed class RemoteBusConnectionManager(
     private readonly Dictionary<(string Server, int Character), ServerConnection> _connections = new();
 
     public event Action<string, ServerConnectionState> StateChanged = (_, _) => { };
+    public event Action<string, int, ServerConnectionState> CharacterStateChanged = (_, _, _) => { };
 
     public IReadOnlyDictionary<string, ServerConnectionState> States
     {
@@ -49,6 +50,19 @@ public sealed class RemoteBusConnectionManager(
             return Aggregate(_connections
                 .Where(kv => string.Equals(kv.Key.Server, serverAddress, StringComparison.OrdinalIgnoreCase))
                 .Select(kv => kv.Value.State));
+    }
+
+    public ServerConnectionState StateFor(string serverAddress, int characterId)
+    {
+        // Matched the same way the roll-up matches, rather than by dictionary lookup: the key's string comparison is
+        // ordinal, and every other lookup here treats two spellings of one host as the same server.
+        lock (_gate)
+            return _connections
+                .Where(kv => kv.Key.Character == characterId
+                             && string.Equals(kv.Key.Server, serverAddress, StringComparison.OrdinalIgnoreCase))
+                .Select(kv => kv.Value.State)
+                .DefaultIfEmpty(ServerConnectionState.Disconnected)
+                .First();
     }
 
     /// <summary>
@@ -95,7 +109,14 @@ public sealed class RemoteBusConnectionManager(
                 existing.Stop();
 
             connection = new ServerConnection(serverAddress, characterId, channelFactory, sessionStore, registry, services);
-            connection.StateChanged += _ => StateChanged(serverAddress, StateFor(serverAddress));
+            // Both signals, because they answer different questions. The roll-up moves the server-wide indicators;
+            // the per-character one is what a link chip follows. Only raising the roll-up is what hid a swept session
+            // completely: five healthy characters on the same server roll up to Connected (ET-123).
+            connection.StateChanged += state =>
+            {
+                CharacterStateChanged(serverAddress, characterId, state);
+                StateChanged(serverAddress, StateFor(serverAddress));
+            };
             _connections[key] = connection;
         }
 
@@ -123,14 +144,23 @@ public sealed class RemoteBusConnectionManager(
 
     public Task DetachAsync(string serverAddress, CancellationToken cancellationToken = default)
     {
+        List<int> detached = [];
         lock (_gate)
         {
             foreach (var key in _connections.Keys
                          .Where(k => string.Equals(k.Server, serverAddress, StringComparison.OrdinalIgnoreCase))
                          .ToList())
                 if (_connections.Remove(key, out var connection))
+                {
                     connection.Stop();
+                    detached.Add(key.Character);
+                }
         }
+
+        // Say it per character as well: a chip follows its own character now, so without this the links of a
+        // decoupled server would keep showing whatever they last were.
+        foreach (var characterId in detached)
+            CharacterStateChanged(serverAddress, characterId, ServerConnectionState.Disconnected);
         StateChanged(serverAddress, ServerConnectionState.Disconnected);
         return Task.CompletedTask;
     }
@@ -191,6 +221,10 @@ public sealed class RemoteBusConnectionManager(
         // Ahead of SessionExpired: a refused certificate applies to the whole server rather than to one character's
         // pairing, and re-pairing is pointless until the user has decided the new certificate is the server's.
         if (list.Contains(ServerConnectionState.CertificateRejected)) return ServerConnectionState.CertificateRejected;
+        // Ahead of SessionExpired because it is the one that will not clear on its own. Listed at all because a state
+        // missing from this ladder falls through to Disconnected — which is how a session the server had dropped
+        // reported as a plain amber "disconnected" even when it was the only character on the server (ET-123).
+        if (list.Contains(ServerConnectionState.SessionGone)) return ServerConnectionState.SessionGone;
         if (list.Contains(ServerConnectionState.SessionExpired)) return ServerConnectionState.SessionExpired;
         return ServerConnectionState.Disconnected;
     }
