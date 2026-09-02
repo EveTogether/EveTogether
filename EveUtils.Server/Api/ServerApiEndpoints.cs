@@ -43,5 +43,23 @@ public static class ServerApiEndpoints
             await queries.GetCompositionAsync(id, ct) is { } composition
                 ? Results.Ok(composition)
                 : Results.NotFound());
+
+        api.MapGet("/fits", ([FromServices] ServerApiQueries queries, CancellationToken ct) =>
+            queries.GetFitsAsync(ct));
+        api.MapGet("/fits/{id:int}", async (int id, [FromServices] ServerApiQueries queries, CancellationToken ct) =>
+            await queries.GetFitAsync(id, ct) is { } fit
+                ? Results.Ok(fit)
+                : Results.NotFound());
+
+        api.MapGet("/characters", (ClaimsPrincipal user, [FromServices] ServerApiQueries queries, CancellationToken ct) =>
+            queries.GetCharactersAsync(user.OwnerCharacterId(), ct));
+        api.MapGet("/characters/{id:int}", async (int id, ClaimsPrincipal user,
+            [FromServices] ServerApiQueries queries, CancellationToken ct) =>
+            await queries.GetCharacterAsync(id, user.OwnerCharacterId(), ct) is { } character
+                ? Results.Ok(character)
+                : Results.NotFound());
+
+        api.MapGet("/metrics", (ClaimsPrincipal user, [FromServices] ServerApiQueries queries, CancellationToken ct) =>
+            queries.GetMetricsAsync(user.OwnerCharacterId(), ct));
     }
 }

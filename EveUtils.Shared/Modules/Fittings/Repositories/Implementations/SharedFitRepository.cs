@@ -53,6 +53,13 @@ internal sealed class SharedFitRepository(IDbContextFactory<SharedDbContext> con
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<SharedFit?> GetAsync(int id, CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Set<SharedFit>().AsNoTracking()
+            .FirstOrDefaultAsync(fit => fit.Id == id, cancellationToken);
+    }
+
     public async Task<bool> RemoveAsync(int id, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);

@@ -1,9 +1,14 @@
 using EveUtils.Server.Api.Dtos;
 using EveUtils.Shared.DependencyInjection;
+using EveUtils.Shared.Modules.Fittings.Entities;
+using EveUtils.Shared.Modules.Fittings.Repositories;
 using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Repositories;
+using EveUtils.Shared.Modules.Gamelog.Repositories;
+using EveUtils.Shared.Modules.ServerAuth.Entities;
+using EveUtils.Shared.Modules.ServerAuth.Repositories;
 using FleetEntity = EveUtils.Shared.Modules.Fleet.Entities.Fleet;
 
 namespace EveUtils.Server.Api;
@@ -14,7 +19,11 @@ namespace EveUtils.Server.Api;
 /// maps it to shapes that carry nothing an external consumer should not see.
 /// </summary>
 public sealed class ServerApiQueries(
-    IFleetRepository fleets, IFleetCompositionRepository compositions) : IScopedService
+    IFleetRepository fleets,
+    IFleetCompositionRepository compositions,
+    ISharedFitRepository fits,
+    IServerAuthRepository serverAuth,
+    ICharacterMetricStateRepository metrics) : IScopedService
 {
     /// <summary>
     /// The fleets this key may see. A key with no owner has admin scope over all server data (ratified decision 3)
@@ -103,4 +112,62 @@ public sealed class ServerApiQueries(
                 [.. role.Entries.Select(entry => new ApiCompositionEntry(
                     entry.Id, entry.EntryMinCount, entry.Fit.ShipTypeId, entry.Fit.FitName))]))]);
     }
+
+    public async Task<IReadOnlyList<ApiFit>> GetFitsAsync(CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<SharedFit> all = await fits.ListAsync(cancellationToken);
+        return [.. all.Select(_ToApiFit)];
+    }
+
+    public async Task<ApiFit?> GetFitAsync(int fitId, CancellationToken cancellationToken = default)
+    {
+        SharedFit? fit = await fits.GetAsync(fitId, cancellationToken);
+        return fit is null ? null : _ToApiFit(fit);
+    }
+
+    public async Task<IReadOnlyList<ApiCharacter>> GetCharactersAsync(
+        int? ownerCharacterId, CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<SyncedCharacter> all = await serverAuth.ListSyncedAsync(cancellationToken);
+        return [.. all
+            .Where(character => ownerCharacterId is null || character.EsiCharacterId == ownerCharacterId)
+            .Select(character => new ApiCharacter(character.EsiCharacterId, character.CharacterName))];
+    }
+
+    public async Task<ApiCharacter?> GetCharacterAsync(
+        int characterId, int? ownerCharacterId, CancellationToken cancellationToken = default)
+    {
+        if (ownerCharacterId is not null && ownerCharacterId != characterId)
+            return null;
+
+        SyncedCharacter? character = (await serverAuth.ListSyncedAsync(cancellationToken))
+            .FirstOrDefault(candidate => candidate.EsiCharacterId == characterId);
+        return character is null ? null : new ApiCharacter(character.EsiCharacterId, character.CharacterName);
+    }
+
+    public async Task<IReadOnlyList<ApiCharacterMetric>> GetMetricsAsync(
+        int? ownerCharacterId, CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<SyncedCharacter> characters = await serverAuth.ListSyncedAsync(cancellationToken);
+        IReadOnlyDictionary<string, int> ids = characters
+            .Where(character => ownerCharacterId is null || character.EsiCharacterId == ownerCharacterId)
+            .ToDictionary(character => character.CharacterName, character => character.EsiCharacterId, StringComparer.Ordinal);
+        IReadOnlyList<EveUtils.Shared.Modules.Gamelog.Entities.CharacterMetricState> all =
+            await metrics.ListAsync(cancellationToken);
+
+        return [.. all
+            .Where(state => ids.ContainsKey(state.CharacterName))
+            .Select(state => new ApiCharacterMetric(
+                ids[state.CharacterName], state.CharacterName, state.BountyTotal, state.Kills, state.MinedJson))];
+    }
+
+    private static ApiFit _ToApiFit(SharedFit fit) => new(
+        fit.Id,
+        fit.EsiFittingId,
+        fit.Name,
+        fit.ShipTypeId,
+        fit.RawJson,
+        fit.SharedByCharacterName,
+        fit.SharedByCharacterId,
+        fit.SharedAt);
 }

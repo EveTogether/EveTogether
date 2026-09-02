@@ -16,6 +16,14 @@ internal sealed class CharacterMetricStateRepository(IDbContextFactory<SharedDbC
             .FirstOrDefaultAsync(s => s.CharacterName == characterName, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<CharacterMetricState>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Set<CharacterMetricState>().AsNoTracking()
+            .OrderBy(state => state.CharacterName)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task UpsertAsync(string characterName, long bountyTotal, int kills, string minedJson, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);

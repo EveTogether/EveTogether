@@ -221,8 +221,9 @@ public class ApiKeyAuthenticationTests : IDisposable
 
         // The data routes this milestone adds are in there — an empty or shrunken surface must not pass by default.
         Assert.Equal(
-            ["/api/v1/compositions", "/api/v1/compositions/{id:long}", "/api/v1/fleets", "/api/v1/fleets/{id:long}",
-             "/api/v1/health", "/api/v1/whoami"],
+            ["/api/v1/characters", "/api/v1/characters/{id:int}", "/api/v1/compositions", "/api/v1/compositions/{id:long}",
+             "/api/v1/fits", "/api/v1/fits/{id:int}", "/api/v1/fleets", "/api/v1/fleets/{id:long}",
+             "/api/v1/health", "/api/v1/metrics", "/api/v1/whoami"],
             routes.Select(route => route.RoutePattern.RawText).Order(StringComparer.Ordinal));
 
         Assert.All(routes, route =>

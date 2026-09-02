@@ -1,12 +1,20 @@
 using System.Reflection;
 using EveUtils.Server.Api;
 using EveUtils.Server.Api.Dtos;
+using EveUtils.Shared.Modules.Fittings.Entities;
+using EveUtils.Shared.Modules.Fittings.Repositories;
+using EveUtils.Shared.Modules.Fittings.Repositories.Implementations;
 using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories.Implementations;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 using EveUtils.Shared.Modules.Fleet.Repositories.Implementations;
+using EveUtils.Shared.Modules.Gamelog.Repositories;
+using EveUtils.Shared.Modules.Gamelog.Repositories.Implementations;
+using EveUtils.Shared.Modules.ServerAuth.Repositories;
+using EveUtils.Shared.Modules.ServerAuth.Repositories.Implementations;
+using EveUtils.Shared.Modules.ServerAuth.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.OpenApi;
 using Xunit;
@@ -24,13 +32,19 @@ public class ServerApiTests : IDisposable
     private readonly SqliteServerDbContextFactory _factory = new();
     private readonly IFleetRepository _fleets;
     private readonly IFleetCompositionRepository _compositions;
+    private readonly ISharedFitRepository _fits;
+    private readonly IServerAuthRepository _serverAuth;
+    private readonly ICharacterMetricStateRepository _metrics;
     private readonly ServerApiQueries _queries;
 
     public ServerApiTests()
     {
         _fleets = new FleetRepository(_factory);
         _compositions = new FleetCompositionRepository(_factory);
-        _queries = new ServerApiQueries(_fleets, _compositions);
+        _fits = new SharedFitRepository(_factory);
+        _serverAuth = new ServerAuthRepository(_factory);
+        _metrics = new CharacterMetricStateRepository(_factory);
+        _queries = new ServerApiQueries(_fleets, _compositions, _fits, _serverAuth, _metrics);
     }
 
     public void Dispose() => _factory.Dispose();
@@ -193,6 +207,66 @@ public class ServerApiTests : IDisposable
         Assert.Equal(0, list.Single(item => item.Id == unused).FleetCount);
     }
 
+    // --- Fits ---
+
+    [Fact]
+    public async Task SharedFits_AreVisibleToEveryKey_AndReturnTheirFullPayload()
+    {
+        await _fits.AddAsync(new SharedFit
+        {
+            EsiFittingId = 7,
+            Name = "Vindicator",
+            ShipTypeId = 17_740,
+            RawJson = "{\"ship_type_id\":17740}",
+            SharedByCharacterId = 90_000_001,
+            SharedByCharacterName = "Rin",
+            SharedAt = DateTimeOffset.UnixEpoch
+        }, Ct);
+
+        IReadOnlyList<ApiFit> list = await _queries.GetFitsAsync(Ct);
+        ApiFit? detail = await _queries.GetFitAsync(1, Ct);
+
+        ApiFit fit = Assert.Single(list);
+        Assert.Equal(90_000_001, fit.SharedByCharacterId);
+        Assert.Equal("{\"ship_type_id\":17740}", Assert.IsType<string>(detail?.RawJson));
+    }
+
+    // --- Characters ---
+
+    [Fact]
+    public async Task SyncedCharacters_AreOwnerScoped_AndExposeOnlyPublicIdentity()
+    {
+        await _StoreSyncedCharacterAsync(_OwnedKey, "Rin");
+        await _StoreSyncedCharacterAsync(90_000_008, "Vela");
+
+        IReadOnlyList<ApiCharacter> own = await _queries.GetCharactersAsync(_OwnedKey, Ct);
+        IReadOnlyList<ApiCharacter> all = await _queries.GetCharactersAsync(_AdminKey, Ct);
+
+        Assert.Equal([_OwnedKey], own.Select(character => character.Id));
+        Assert.Equal([_OwnedKey, 90_000_008], all.Select(character => character.Id));
+        Assert.Null(await _queries.GetCharacterAsync(90_000_008, _OwnedKey, Ct));
+        Assert.Equal(["Id", "Name"], typeof(ApiCharacter).GetProperties().Select(property => property.Name));
+    }
+
+    // --- Metrics ---
+
+    [Fact]
+    public async Task CharacterMetrics_AreOwnerScoped_AndExcludeOrphanedRows()
+    {
+        await _StoreSyncedCharacterAsync(_OwnedKey, "Rin");
+        await _StoreSyncedCharacterAsync(90_000_008, "Vela");
+        await _metrics.UpsertAsync("Rin", 100, 2, "{\"Veldspar\":7}", Ct);
+        await _metrics.UpsertAsync("Vela", 200, 3, "{\"Scordite\":9}", Ct);
+        await _metrics.UpsertAsync("Orphan", 300, 4, "{}", Ct);
+
+        IReadOnlyList<ApiCharacterMetric> own = await _queries.GetMetricsAsync(_OwnedKey, Ct);
+        IReadOnlyList<ApiCharacterMetric> all = await _queries.GetMetricsAsync(_AdminKey, Ct);
+
+        Assert.Equal([_OwnedKey], own.Select(metric => metric.CharacterId));
+        Assert.Equal([_OwnedKey, 90_000_008], all.Select(metric => metric.CharacterId));
+        Assert.Equal("{\"Veldspar\":7}", Assert.Single(own).MinedJson);
+    }
+
     // --- Nothing leaks ---
 
     /// <summary>
@@ -275,6 +349,9 @@ public class ServerApiTests : IDisposable
     /// </summary>
     [Theory]
     [InlineData("api/v1/fleets", true)]
+    [InlineData("api/v1/fits", true)]
+    [InlineData("api/v1/characters/{id}", true)]
+    [InlineData("api/v1/metrics", true)]
     [InlineData("/api/v1/health", true)]
     [InlineData("api/server/scopes", false)]
     [InlineData("account/login", false)]
@@ -349,6 +426,9 @@ public class ServerApiTests : IDisposable
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         }, Ct);
+
+    private Task _StoreSyncedCharacterAsync(int characterId, string name) =>
+        _serverAuth.UpsertSyncedAsync(characterId, name, new EncryptedToken([1], [2], [3]), cancellationToken: Ct);
 
     private static FitReference _Fit(int shipTypeId, string fitName) => new()
     {
