@@ -8,6 +8,8 @@ using EveUtils.Shared.Modules.ApiKeys.Repositories.Implementations;
 using EveUtils.Shared.Modules.ApiKeys.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -167,6 +169,64 @@ public class ApiKeyAuthenticationTests : IDisposable
     }
 
     /// <summary>
+    /// The endpoint that proves the lock answers out of the key that opened it, and out of nothing else — no
+    /// plaintext, no hash. An unowned key reports the admin scope over all server data as an absent owner.
+    /// </summary>
+    [Fact]
+    public async Task WhoAmI_AnswersFromTheKeyThatOpenedTheDoor_AndCarriesNoSecret()
+    {
+        var (plainText, key) = await _StoreKeyAsync(ownerCharacterId: 90_000_001);
+        AuthenticateResult result = await _AuthenticateAsync(header: plainText);
+
+        ApiWhoAmIResponse whoAmI = ApiWhoAmIResponse.From(
+            result.Principal ?? throw new InvalidOperationException("the key did not authenticate"));
+
+        Assert.Equal(key.Prefix, whoAmI.Prefix);
+        Assert.Equal("dashboard", whoAmI.Label);
+        Assert.Equal([ApiKeyScopes.ReadAll], whoAmI.Scopes);
+        Assert.Equal(90_000_001, whoAmI.OwnerCharacterId);
+        Assert.DoesNotContain(key.SecretHash, whoAmI.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(plainText, whoAmI.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WhoAmI_AKeyWithoutAnOwner_ReportsNoOwner()
+    {
+        var (plainText, _) = await _StoreKeyAsync();
+        AuthenticateResult result = await _AuthenticateAsync(header: plainText);
+
+        ApiWhoAmIResponse whoAmI = ApiWhoAmIResponse.From(
+            result.Principal ?? throw new InvalidOperationException("the key did not authenticate"));
+
+        Assert.Null(whoAmI.OwnerCharacterId);
+    }
+
+    /// <summary>
+    /// The gate is on the group, not on one route: every endpoint the API maps carries the API-key policy and
+    /// none of them opts back out. Dropping <c>RequireAuthorization</c> — or adding an <c>AllowAnonymous</c> —
+    /// turns this red, which no test of the policy object on its own would catch.
+    /// </summary>
+    [Fact]
+    public void EveryEndpointUnderApiV1_CarriesTheApiKeyPolicy()
+    {
+        IEndpointRouteBuilder endpoints = WebApplication.CreateBuilder().Build();
+        endpoints.MapServerApi();
+
+        List<RouteEndpoint> routes = [.. endpoints.DataSources
+            .SelectMany(source => source.Endpoints)
+            .OfType<RouteEndpoint>()];
+
+        Assert.NotEmpty(routes);
+        Assert.All(routes, route =>
+        {
+            Assert.StartsWith("/api/v1/", route.RoutePattern.RawText, StringComparison.Ordinal);
+            Assert.Contains(route.Metadata.GetOrderedMetadata<IAuthorizeData>(),
+                gate => gate.Policy == ApiKeyAuthentication.Policy);
+            Assert.Empty(route.Metadata.GetOrderedMetadata<IAllowAnonymous>());
+        });
+    }
+
+    /// <summary>
     /// The panel page is gated on its own permission, and that code is in the list the host turns into policies —
     /// a code missing there leaves the page referring to a policy that was never registered.
     /// </summary>
@@ -186,7 +246,7 @@ public class ApiKeyAuthenticationTests : IDisposable
     }
 
     private async Task<(string PlainText, ApiKey Key)> _StoreKeyAsync(
-        string scopes = ApiKeyScopes.ReadAll, DateTimeOffset? expiresAt = null)
+        string scopes = ApiKeyScopes.ReadAll, DateTimeOffset? expiresAt = null, int? ownerCharacterId = null)
     {
         GeneratedApiKey generated = ApiKeySecurity.Generate();
         var key = new ApiKey
@@ -195,6 +255,7 @@ public class ApiKeyAuthenticationTests : IDisposable
             Prefix = generated.Prefix,
             SecretHash = ApiKeySecurity.Hash(generated.Secret),
             Scopes = scopes,
+            OwnerCharacterId = ownerCharacterId,
             IsActive = true,
             CreatedAt = DateTimeOffset.UtcNow,
             CreatedBy = "tests",

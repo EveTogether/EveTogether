@@ -14,7 +14,6 @@ using EveUtils.Server.Messaging;
 using EveUtils.Server.Permissions;
 using EveUtils.Server.Stream;
 using EveUtils.Server.Transport;
-using EveUtils.Shared.App;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Cqrs.Permissions;
 using EveUtils.Shared.Data;
@@ -299,10 +298,7 @@ app.MapGrpcService<FleetsGrpcService>();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode(); // Blazor admin panel at "/"
 app.MapHub<DpsHub>("/hubs/dps");                                // live DPS stream hub
 
-// Read-only REST API for external consumers. M0 ships the lock and one endpoint to prove it: /health is the
-// key-gated test route here (ET-118), and becomes the public one in M1 when the data routes and self-docs land.
-var api = app.MapGroup("/api/v1").RequireAuthorization(ApiKeyAuthentication.Policy);
-api.MapGet("/health", () => Results.Ok(new ApiHealthResponse("ok", AppInfo.Version, "v1")));
+app.MapServerApi();                                             // read-only REST API under /api/v1, behind an API key
 
 // Admin-panel login: a non-interactive HTML form posts here; SignInAsync needs a writable HttpContext,
 // so this is a minimal-API endpoint rather than a Blazor component event. Antiforgery is enforced by the
