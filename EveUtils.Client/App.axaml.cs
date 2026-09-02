@@ -52,6 +52,11 @@ public partial class App : Application
             // Second consumer, same reason: a copied signature list needs this resolved before the watch starts (ET-79).
             _ = Program.Services.GetRequiredService<Clipboard.ClipboardSignatureOffer>();
 
+            // Third consumer, same reason again (ET-65). It subscribes in its constructor, and a singleton nobody
+            // resolves is never constructed — so with this line missing the loot capture was registered, tested and
+            // shipped without ever being subscribed, and every copy out of a loot window went past it.
+            _ = Program.Services.GetRequiredService<Clipboard.AbyssalLootCapture>();
+
             // Clipboard watch: reads the persisted opt-in and starts only if the user turned it on (default off).
             // Started here rather than in Program because reading the clipboard needs the toplevel above (ET-57).
             var clipboardWatch = Program.Services.GetRequiredService<Clipboard.ClipboardWatchService>();

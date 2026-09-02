@@ -16,6 +16,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
@@ -190,13 +191,25 @@ public class ActivityWindowTests
         new(ShipFitDetectionState.Observed, Anchor, 17715, 9, "Gila", selected, reason,
             selected is null ? [] : [selected]);
 
-    /// <summary>A window that knows whose run it is without asking — the fleet character, the same fallback the run
-    /// controls use before START (ET-105).</summary>
-    private static IServiceProvider _WithFitDetection(ShipFitDetectionReading reading) =>
-        new ServiceCollection()
+    /// <summary>
+    /// A window that knows whose run it is without asking, before START — the character this client publishes fleet
+    /// metrics as, which is the same set the FLEET section beside it is drawn from.
+    ///
+    /// It used to be an <c>IActiveFleetState</c> stub, and that stub was the reason these tests passed while the
+    /// window did not: nothing but the fleets window's own row selection ever fills that state, so on Raymond's
+    /// client it was empty while the FLEET section listed two members, and the FIT section printed a question it had
+    /// no one left to ask. <see cref="IActiveFleetState"/> is deliberately not registered here — the window must not
+    /// go looking for it again.
+    /// </summary>
+    private static IServiceProvider _WithFitDetection(ShipFitDetectionReading reading)
+    {
+        var participation = new FleetParticipation();
+        participation.Set([new FleetParticipant(1, 900, ClientOnly: true)]);
+        return new ServiceCollection()
             .AddSingleton<IShipFitDetectionService>(new FakeShipFitDetection(reading))
-            .AddSingleton<IActiveFleetState>(new FakeActiveFleet())
+            .AddSingleton<IFleetParticipation>(participation)
             .BuildServiceProvider();
+    }
 
     /// <summary>Stands in for the service's own store: detaching changes what every later reading says, including one
     /// taken by a window opened after the first was closed.</summary>
@@ -216,23 +229,30 @@ public class ActivityWindowTests
         }
     }
 
-    private sealed class FakeActiveFleet : IActiveFleetState
+    /// <summary>
+    /// ET-115. The stepper beside an enemy row is a row control, not a form field: the theme's default sizing gave
+    /// it chevrons about twice the height of the name they belong to, in a window where every other button is the
+    /// <c>pick</c> style. Measured against one of those buttons rather than against a number, so the two keep step.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TheEnemyStepper_IsNoTallerThanTheWindowsOwnButtons()
     {
-        public long? ActiveFleetId => 900;
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        await harness.StartWatchingAsync();
+        await model.StartRunCommand.ExecuteAsync(null);
+        await harness.WriteLineAsync(ActivityWindowHarness.CombatLine(250, "Centii Servant"));
+        await ActivityWindowHarness.WaitUntil(() => model.EnemyObservations.Count > 0);
 
-        public int? CharacterId => 1;
+        ActivityWindow window = _Open(model, expanded: true);
 
-        public IReadOnlyCollection<int> ActiveCharacterIds => [1];
+        NumericUpDown stepper = Assert.Single(window.GetVisualDescendants().OfType<NumericUpDown>());
+        Button reference = _Button(window, "StopRunButton");
+        double name = stepper.FindAncestorOfType<Grid>()!.GetVisualDescendants().OfType<TextBlock>()
+            .First(text => text.Text == "Centii Servant").Bounds.Height;
 
-        public string? ActiveServerAddress => null;
-
-        public bool IsActiveFleetClientOnly => true;
-
-        public void Enter(long fleetId, int characterId, string? serverAddress = null, bool clientOnly = false) { }
-
-        public void Leave() { }
-
-        public void Leave(int characterId) { }
+        Assert.InRange(stepper.Bounds.Height, name, reference.Bounds.Height);
+        window.Close();   // its clock is ticking; the collection's other tests share this UI thread.
     }
 
     [Fact]

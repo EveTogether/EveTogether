@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using EveUtils.Client.Clipboard;
+using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -291,6 +292,44 @@ public class ClipboardWatchTests
     {
         source.RaiseChanged();
         Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>
+    /// A consumer subscribes in its constructor, and a singleton nobody asks for is never constructed — so a feature
+    /// can be written, registered, tested and shipped without ever being subscribed. That is what happened to ET-65's
+    /// loot capture: <see cref="AbyssalLootCapture"/> was resolved nowhere but in its own tests, and every copy out of
+    /// a loot window went past it while the LOOT section said "no loot captured".
+    ///
+    /// Read off the constructors rather than from a list here, so the next consumer is covered without a second edit.
+    /// </summary>
+    [Fact]
+    public void EveryClipboardConsumer_IsResolvedAtStartUp_OrItNeverSubscribes()
+    {
+        string startUp = File.ReadAllText(_SourcePath("EveUtils.Client/App.axaml.cs"));
+
+        // A singleton that takes the watch: the shape every consumer has, and the shape a window that merely offers
+        // the on/off toggle (SettingsWindow) does not.
+        List<string> consumers = [.. typeof(ClipboardWatchService).Assembly.GetTypes()
+            .Where(type => type is { IsClass: true, IsAbstract: false }
+                && typeof(ISingletonService).IsAssignableFrom(type)
+                && type.GetConstructors().Any(constructor => constructor.GetParameters()
+                    .Any(parameter => parameter.ParameterType == typeof(ClipboardWatchService))))
+            .Select(type => type.Name)];
+
+        Assert.NotEmpty(consumers);
+        Assert.All(consumers, consumer => Assert.Contains($"{consumer}>()", startUp, StringComparison.Ordinal));
+    }
+
+    /// <summary>The repository file, found from the test binary rather than from a checkout path baked in here.</summary>
+    private static string _SourcePath(string relative)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "EVE-Together.slnx")))
+            directory = directory.Parent;
+
+        return Path.Combine(
+            directory?.FullName ?? throw new InvalidOperationException("the solution root is not above the test binary"),
+            relative);
     }
 
     private sealed class FakeClipboardChangeSource : IClipboardChangeSource

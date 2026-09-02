@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Client.Views;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
@@ -124,8 +125,15 @@ public class ActivityWindowWiringTests
             .Query(new GetRunningRunQuery())).IsSuccess);
     }
 
-    /// <summary>Closing the window does not end the run, so opening one again has to find it rather than start a
-    /// second — two running rows is the state that breaks every loot copy afterwards.</summary>
+    /// <summary>
+    /// Closing the window does not end the run, so opening one again has to find it rather than start a second —
+    /// two running rows is the state that breaks every loot copy afterwards.
+    ///
+    /// Reopened through the real <see cref="ActivityWindow"/> rather than by calling <c>LoadAsync</c>, because that
+    /// call was exactly what production did not make: the window went up on a constructor's worth of state and
+    /// offered a START, so the run left open the night before only appeared once that button was pressed — and
+    /// appeared reading sixteen hours elapsed. Where a window is already in a run, that is what it shows.
+    /// </summary>
     [AvaloniaFact]
     public async Task ReopeningTheWindow_AttachesToTheRunAlreadyRunning()
     {
@@ -133,16 +141,23 @@ public class ActivityWindowWiringTests
         ActivityWindowViewModel first = await harness.OpenAsync();
         await first.StartRunCommand.ExecuteAsync(null);
         Guid? started = first.RunId;
+        DateTime? startedAt = first.AnchorUtc;
         first.Dispose();
 
-        ActivityWindowViewModel reopened = await harness.OpenAsync();
+        var reopened = new ActivityWindowViewModel(ActivityKind.Site, harness.Services);
+        var window = new ActivityWindow(reopened);
+        window.Show();
+        await ActivityWindowHarness.WaitUntil(() => reopened.RunId is not null);
 
         Assert.Equal(started, reopened.RunId);
         Assert.Equal(ActivityRunState.Running, reopened.RunState);
+        Assert.Equal(startedAt, reopened.AnchorUtc);
+        Assert.False(reopened.IsStartButtonVisible, "a run this window is already in still offered a START");
         Result<RunningRunDto> running = await harness.Services.GetRequiredService<IDispatcher>()
             .Query(new GetRunningRunQuery());
         Assert.True(running.IsSuccess, "reopening started a second run beside the first");
         Assert.Equal(running.Value!.StartedAtUtc, reopened.AnchorUtc);
+        window.Close();
     }
 
     // ── The gamelog reaches the window ──────────────────────────────────────────────────────────────

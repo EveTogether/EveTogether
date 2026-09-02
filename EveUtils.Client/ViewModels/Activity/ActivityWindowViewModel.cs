@@ -467,7 +467,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         ? (FleetMemberCount > 1 ? $"{FleetStatusText}: the envelope is the earliest anchored run. " : string.Empty)
           + "The clock is a floor — the moment of entry cannot be observed, so this is at most what is left."
         : RunState == ActivityRunState.Stopped
-            ? "Stopped runs retain their figures; start creates a new run."
+            // STOP is a pause, not an end (Raymond, 2026-09-02): stepping out mid-site and coming back has to cost
+            // you nothing, so START picks the same run back up. What ends a run is SAVE or DISCARD.
+            ? "Stopped runs keep their figures; start picks this run back up."
             : "Manual start and stop are the only source for a site run.";
 
     // ── Section bodies ──────────────────────────────────────────────────────────────────────────────
@@ -531,17 +533,22 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// test can assert the round-trip without racing anything.</summary>
     public async Task LoadAsync()
     {
-        using var scope = _services.CreateScope();
-        var settings = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Query(new GetSettingsQuery());
+        // Same guard _AdoptRunningRunAsync already carries: with no dispatcher there is nothing remembered to
+        // restore, and that is a window without a store rather than a fault.
+        if (_services.GetService<CqrsDispatcher>() is not null)
+        {
+            using var scope = _services.CreateScope();
+            var settings = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Query(new GetSettingsQuery());
 
-        WeatherIndex = _Restore(settings.FirstOrDefault(s => s.Key == WeatherSettingKey)?.Value,
-            AbyssalWeather.All.Count);
-        TierIndex = _Restore(settings.FirstOrDefault(s => s.Key == TierSettingKey)?.Value, Tiers.Count);
+            WeatherIndex = _Restore(settings.FirstOrDefault(s => s.Key == WeatherSettingKey)?.Value,
+                AbyssalWeather.All.Count);
+            TierIndex = _Restore(settings.FirstOrDefault(s => s.Key == TierSettingKey)?.Value, Tiers.Count);
 
-        // A remembered strategy from the other kind of run addresses nothing here, so it reads as unset — the same
-        // rule the two indices get.
-        string? strategy = settings.FirstOrDefault(s => s.Key == LootStrategySettingKey)?.Value;
-        LootStrategy = LootStrategies.Contains(strategy) ? strategy : null;
+            // A remembered strategy from the other kind of run addresses nothing here, so it reads as unset — the same
+            // rule the two indices get.
+            string? strategy = settings.FirstOrDefault(s => s.Key == LootStrategySettingKey)?.Value;
+            LootStrategy = LootStrategies.Contains(strategy) ? strategy : null;
+        }
 
         _SyncChoices();
         await _ResolveCharacterAsync(mayAsk: false);
@@ -627,18 +634,36 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     }
 
     /// <summary>
-    /// Whose fit this is. The window never asks — before START the run has no character yet, so it falls back to the
-    /// one this client is in the fleet as, exactly as the run controls do. On a solo run there is one character and
-    /// on a fleet run it is you, so the question the FIT section used to print had no one left to ask.
+    /// Whose window this is. The run's character once START has resolved one, and before that the character this
+    /// client is publishing fleet metrics as — the same membership set the FLEET section beside it is drawn from,
+    /// since <see cref="FleetMetricPublisher"/> puts a sample on the bus for every (character, fleet) in it.
+    ///
+    /// Not <see cref="IActiveFleetState"/>, which this used to ask: that is the fleet you last selected in the
+    /// fleets window and only an explicit <c>Enter</c> fills it, so on a client that never opened that window it is
+    /// empty while the FLEET section is listing members — which is exactly how the FIT section came to print a
+    /// question it had no one left to ask. The server dropped the same Enter-driven model for membership
+    /// (<c>FleetBroadcastResolver</c>) and the publisher followed; this is the window catching up.
+    ///
+    /// Null when several of this client's characters are in fleets at once. That is a real question rather than a
+    /// gap, and START is where it gets asked.
     /// </summary>
-    private int? _FitCharacterId() => _runCharacterId ?? _services.GetService<IActiveFleetState>()?.CharacterId;
+    private int? _ActingCharacterId()
+    {
+        if (_runCharacterId is { } resolved)
+            return resolved;
+
+        IEnumerable<FleetParticipant> mine = _services.GetService<IFleetParticipation>()?.Current ?? [];
+        if (FleetId is { } fleetId)
+            mine = mine.Where(participant => participant.FleetId == fleetId);
+        return mine.Select(participant => participant.CharacterId).Distinct().ToList() is [{ } only] ? only : null;
+    }
 
     /// <summary>Fill the run's fit from ET-101's reading. Clock-driven like the fleet command is, so starting a run
     /// fills it without the player confirming anything. An unlinked fit comes back through the same reading, so it
     /// survives this window being closed and reopened mid-run.</summary>
     public async Task RefreshFitAsync()
     {
-        if (_FitCharacterId() is not { } characterId
+        if (_ActingCharacterId() is not { } characterId
             || _services.GetService<IShipFitDetectionService>() is not { } detection)
             return;
 
@@ -678,7 +703,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private async Task ChooseFitAsync()
     {
         var dialogs = _services.GetRequiredService<IDialogService>();
-        if (_FitCharacterId() is not { } characterId)
+        if (_ActingCharacterId() is not { } characterId)
         {
             await dialogs.ShowMessageAsync("Choose a fit",
                 "Start the run first — its character is what a fit is filed under.");
@@ -714,7 +739,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [RelayCommand]
     private async Task DetachFitAsync()
     {
-        if (_FitCharacterId() is not { } characterId
+        if (_ActingCharacterId() is not { } characterId
             || _services.GetService<IShipFitDetectionService>() is not { } detection)
             return;
 
@@ -796,7 +821,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private void OpenPicker() => IsPickerOpen = true;
 
     /// <summary>The button. Creating the stored run is the whole of it — without that row there is no run for the
-    /// loot, the bounties or the enemies to hang off, and the clock would be counting on its own.</summary>
+    /// loot, the bounties or the enemies to hang off, and the clock would be counting on its own.
+    ///
+    /// It picks up the run the store already has open rather than opening a second one beside it, and it resets
+    /// nothing: STOP is a pause, so stepping out of a site halfway and pressing START again must cost you neither
+    /// your enemies nor your loot, your bounty, your fit or your times (Raymond, 2026-09-02). What ends a run is
+    /// SAVE or DISCARD.</summary>
     [RelayCommand]
     private async Task StartRunAsync()
     {
@@ -972,6 +1002,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         IActiveFleetState? fleet = _services.GetService<IActiveFleetState>();
         // Before START the run has no character yet, so fall back to the one this client is in the fleet as —
         // otherwise a multi-character client could not reach START to resolve it.
+        //
+        // Deliberately NOT _ActingCharacterId(), which the FIT section uses: both halves of this decision — which
+        // fleet, and as whom — have to come from the same place, or the boss of one fleet is compared against a
+        // character selected in another. IActiveFleetState is empty until the fleets window's row selection fills
+        // it, and a null fleet id makes RunControlAuthority grant outright, so on Raymond's client this gate is
+        // currently inert. Making it live means deciding who loses the DISCARD button, which is ET-105's call and
+        // not this fix's.
         int? actingCharacterId = _runCharacterId ?? fleet?.CharacterId;
         if (actingCharacterId is not { } characterId || _services.GetService<FleetBossTracker>() is not { } bosses)
         {
@@ -1096,17 +1133,49 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 EventTarget.Both);
 
         // Thrown away means gone from this window too: the next START is a new run, not a second attempt at this one.
-        RunId = null;
-        GroupCode = null;
-        AnchorUtc = null;
-        StoppedAtUtc = null;
-        RunState = ActivityRunState.NotStarted;
-        _bounties.Clear();
-        BountyIsk = 0;
-        _EndEnemyObservations();
+        _ResetForNewRun();
+        GroupCode = null;   // the group ended with the run, which is what a discard reaches the other members to say.
         if (RunLoot is not null)
             await RunLoot.RefreshAsync();
         Refresh(nowUtc);
+    }
+
+    /// <summary>
+    /// Everything the last run left standing on this window, in one place. A new run starts clean (Raymond,
+    /// 2026-09-02): what survives a run survives because it was decided to, not because nobody cleared it, and one
+    /// method rather than three copies is the whole point — three drift apart the first time a field is added, which
+    /// is how this gap opened.
+    ///
+    /// START is deliberately not one of its callers: STOP is a pause, so pressing START again picks the same run
+    /// back up. Ending a run is SAVE or DISCARD, and only DISCARD comes back here — SAVE closes the window.
+    ///
+    /// Kept on purpose, and each for its own reason: the weather, the tier and the loot strategy, because you fly the
+    /// same ones several runs in a row — which is what their settings keys exist for; the signature and its matched
+    /// sites, because they are what the window was opened on rather than anything the run produced; and whose run it
+    /// is, because that is the client's pilot and not this run's property. The fleet's members are not run state
+    /// either — they are whoever is heard from right now, and stop being listed on their own when they go quiet.
+    /// </summary>
+    private void _ResetForNewRun()
+    {
+        RunId = null;
+        AnchorUtc = null;
+        StoppedAtUtc = null;
+        CorrectedStartUtc = null;
+        CorrectedStopUtc = null;
+        TimeCorrectionError = null;
+        RunState = ActivityRunState.NotStarted;
+        SaveFailureText = null;
+        // Otherwise a discarded manual run left the window refusing every later fleet anchor: the flag that makes a
+        // stopped manual result final outlived the result it was final about.
+        _isManualRun = false;
+        _bounties.Clear();
+        BountyIsk = 0;
+        TotalLootIsk = null;
+        Participants.Clear();
+        // ET-101 reads the ship again for the new run rather than leaving the last one's fit on screen; the reading
+        // itself lives in the detection service, so this only drops what this window cached of it.
+        _fitReading = null;
+        _EndEnemyObservations();
     }
 
     /// <summary>

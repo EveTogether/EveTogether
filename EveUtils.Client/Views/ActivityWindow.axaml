@@ -182,6 +182,26 @@
                 <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
                 <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
             </Style>
+            <!-- ── The enemy stepper ── a row control, not a form field. The theme sizes a NumericUpDown like a text
+                 box, which beside a 10.5pt enemy name put chevrons taller than every button in this window (ET-115).
+                 Sized against Button.pick above, which is what the rest of the window is made of. -->
+            <Style Selector="NumericUpDown.count">
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="FontSize" Value="10.5"/>
+            </Style>
+            <Style Selector="NumericUpDown.count /template/ TextBox">
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Padding" Value="6,2"/>
+            </Style>
+            <Style Selector="NumericUpDown.count /template/ ButtonSpinner">
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+            </Style>
+            <Style Selector="NumericUpDown.count /template/ ButtonSpinner /template/ RepeatButton">
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="FontSize" Value="7"/>
+            </Style>
             <Style Selector="Button.pick.on /template/ ContentPresenter">
                 <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
@@ -426,7 +446,7 @@
                                          to say which of the two it is. -->
                                     <TextBlock Grid.Column="1" Classes="hint" Margin="0" VerticalAlignment="Center"
                                                Text="{Binding CountStateText}"/>
-                                    <NumericUpDown Grid.Column="2" Width="72" Minimum="0" Maximum="999" Increment="1"
+                                    <NumericUpDown Grid.Column="2" Classes="count" Width="72" Minimum="0" Maximum="999" Increment="1"
                                                    FormatString="0" Value="{Binding Count, Mode=TwoWay}"/>
                                 </Grid>
                             </DataTemplate>
