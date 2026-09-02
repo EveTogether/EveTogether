@@ -2,6 +2,7 @@ using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Modules.ServerAuth.Entities;
 using EveUtils.Shared.Modules.ServerAuth.Repositories;
 using EveUtils.Shared.Modules.ServerAuth.Services;
+using Microsoft.Extensions.Logging;
 
 namespace EveUtils.Server.Auth;
 
@@ -10,7 +11,7 @@ namespace EveUtils.Server.Auth;
 /// are stored hashed; reconnect is a silent refresh. Used by the pairing flow, the
 /// Session service and the auth-gated event bus.
 /// </summary>
-public sealed class ServerSessionService(IServerAuthRepository repository) : IScopedService
+public sealed class ServerSessionService(IServerAuthRepository repository, ILogger<ServerSessionService> logger) : IScopedService
 {
     private static readonly TimeSpan AccessLifetime = TimeSpan.FromHours(1);
 
@@ -61,26 +62,47 @@ public sealed class ServerSessionService(IServerAuthRepository repository) : ISc
     public Task TouchAsync(string accessToken, CancellationToken cancellationToken = default) =>
         repository.TouchHeartbeatAsync(TokenSecurity.Hash(accessToken), DateTimeOffset.UtcNow, cancellationToken);
 
-    public async Task<IssuedSession?> RefreshAsync(string refreshToken, CancellationToken cancellationToken = default)
+    public async Task<IssuedSession?> RefreshAsync(string refreshToken, string? peer = null, CancellationToken cancellationToken = default)
     {
-        var session = await repository.FindSessionByRefreshHashAsync(TokenSecurity.Hash(refreshToken), cancellationToken);
+        var presentedHash = TokenSecurity.Hash(refreshToken);
+        var caller = peer ?? "an unknown peer";
+        var session = await repository.FindSessionByRefreshHashAsync(presentedHash, cancellationToken);
         if (session is null)
+        {
+            // The token is not in the table at all: either revoked, or a copy that a later rotation superseded.
+            // ET-121 could not tell those apart afterwards because a refused refresh left no trace at all.
+            logger.LogWarning(
+                "Session.Refresh refused for {Peer}: refresh token {Fingerprint} is not a known session. It was revoked, or a newer rotation replaced it and this client kept an outdated copy.",
+                caller, Fingerprint(presentedHash));
             return null;
+        }
 
         var now = DateTimeOffset.UtcNow;
         // Past the hard refresh window → no silent refresh; a re-pair is required.
         if (session.RefreshExpiresAt <= now)
+        {
+            logger.LogWarning(
+                "Session.Refresh refused for {Peer}: session {SessionId} for character {Character} was last used on {LastUsed:O} and its refresh window lapsed at {RefreshExpiresAt:O}. This one really does need a re-pair.",
+                caller, session.Id, Describe(session), session.IssuedAt, session.RefreshExpiresAt);
             return null;
+        }
 
         var access = TokenSecurity.GenerateToken();
         var refresh = TokenSecurity.GenerateToken();
 
         // Rotate the access token (1h) and slide the refresh window forward so an active session keeps
-        // reconnecting silently; an idle one eventually lapses after RefreshLifetime.
+        // reconnecting silently; an idle one eventually lapses after RefreshLifetime. The rotation is conditional
+        // on the refresh hash we just read, so of two overlapping refreshes exactly one wins.
         var rotated = await repository.RotateSessionAsync(
-            session.Id, TokenSecurity.Hash(access), TokenSecurity.Hash(refresh),
+            session.Id, presentedHash, TokenSecurity.Hash(access), TokenSecurity.Hash(refresh),
             now, now + AccessLifetime, now + RefreshLifetime, cancellationToken);
-        return rotated ? new IssuedSession(access, refresh) : null;
+        if (rotated)
+            return new IssuedSession(access, refresh);
+
+        logger.LogWarning(
+            "Session.Refresh refused for {Peer}: session {SessionId} for character {Character} was rotated by another call while this one was in flight, so refresh token {Fingerprint} lost the race. The tokens minted here were discarded; the winner's pair stands.",
+            caller, session.Id, Describe(session), Fingerprint(presentedHash));
+        return null;
     }
 
     /// <summary>
@@ -96,4 +118,12 @@ public sealed class ServerSessionService(IServerAuthRepository repository) : ISc
         await repository.DeleteSessionAsync(session.Id, cancellationToken);
         return true;
     }
+
+    /// <summary>Enough of the stored hash to line two log lines up against each other, far too little to be a token.</summary>
+    private static string Fingerprint(string hash) => hash.Length <= 8 ? hash : hash[..8];
+
+    private static string Describe(ServerSession session) =>
+        session.SyncedCharacter is null
+            ? $"#{session.SyncedCharacterId}"
+            : $"{session.SyncedCharacter.CharacterName} (#{session.SyncedCharacterId})";
 }

@@ -13,7 +13,9 @@ public sealed class SessionService(ServerSessionService sessions) : Session.Sess
 {
     public override async Task<SessionReply> Refresh(RefreshRequest request, ServerCallContext context)
     {
-        var issued = await sessions.RefreshAsync(request.SessionRefreshToken, context.CancellationToken);
+        // The peer is the only thing in the request that says WHICH machine was refused — the request carries no
+        // character id — and a refusal is exactly the moment you want to know that.
+        var issued = await sessions.RefreshAsync(request.SessionRefreshToken, context.Peer, context.CancellationToken);
         return issued is null
             ? new SessionReply { Ok = false, Message = "Invalid or expired refresh token." }
             : new SessionReply { Ok = true, SessionToken = issued.AccessToken, SessionRefreshToken = issued.RefreshToken, Message = "ok" };
