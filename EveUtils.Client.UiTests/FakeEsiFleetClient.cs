@@ -19,12 +19,29 @@ internal sealed class FakeEsiFleetClient : IEsiFleetClient
     /// faster than the endpoint's own cache.</summary>
     public int CharFleetReads { get; private set; }
 
-    public Task<EsiResult<EsiCharacterFleet>> GetCharacterFleetAsync(int characterId, CancellationToken cancellationToken = default)
+    /// <summary>Holds the read open the way a real HTTP round trip does. <c>Task.FromResult</c> completes the await
+    /// synchronously, so without this a test only ever sees a window whose fleet command was already resolved before
+    /// the constructor returned — the one state a running client is never in (ET-150).</summary>
+    private TaskCompletionSource? _gate;
+
+    /// <summary>Reads from here on hang until <see cref="LetEsiAnswer"/>.</summary>
+    public void HoldEsiOpen() => _gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public void LetEsiAnswer()
+    {
+        TaskCompletionSource? gate = _gate;
+        _gate = null;
+        gate?.SetResult();
+    }
+
+    public async Task<EsiResult<EsiCharacterFleet>> GetCharacterFleetAsync(int characterId, CancellationToken cancellationToken = default)
     {
         CharFleetReads++;
-        return Task.FromResult(Error is { } e ? EsiResult<EsiCharacterFleet>.Fail(e)
+        if (_gate is { } gate)
+            await gate.Task;
+        return Error is { } e ? EsiResult<EsiCharacterFleet>.Fail(e)
             : CharFleet is { } f ? EsiResult<EsiCharacterFleet>.Ok(f)
-            : EsiResult<EsiCharacterFleet>.Fail(EsiError.Of(EsiErrorKind.NotFound, "not in a fleet", 404)));
+            : EsiResult<EsiCharacterFleet>.Fail(EsiError.Of(EsiErrorKind.NotFound, "not in a fleet", 404));
     }
 
     public Task<EsiResult<EsiFleetMember[]>> GetMembersAsync(long fleetId, int actingCharacterId, CancellationToken cancellationToken = default) =>
