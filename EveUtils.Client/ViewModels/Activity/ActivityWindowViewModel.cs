@@ -25,6 +25,7 @@ using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fittings.Entities;
 using EveUtils.Shared.Modules.Fittings.Repositories;
 using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Runs.Commands;
@@ -124,7 +125,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // The clipboard records loot; this window shows it, and the two never met. Without this the LOOT section
         // only ever held what was already stored when the window loaded or started its run.
         _lootSubscription = services.GetService<IEventBus>()?.Subscribe<RunLootCapturedEvent>(_OnRunLootCaptured);
-        RunLoot = services.GetService<CqrsDispatcher>() is { } dispatcher ? new RunLootViewModel(dispatcher) : null;
+        RunLoot = services.GetService<CqrsDispatcher>() is { } dispatcher
+            ? new RunLootViewModel(dispatcher, services.GetService<IAppraisalProvider>())
+            : null;
         if (RunLoot is not null)
             RunLoot.PropertyChanged += (_, _) => _RefreshSummaries();
 
@@ -1551,9 +1554,17 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // section is hidden (IsFleetShown) and this line is not on screen at all.
         Fleet.HeaderSummary = FleetMemberCount > 1 ? FleetStatusText : "no fleet has reported in";
         Bounty.HeaderSummary = BountyText;
+        // What was collected first, the value as an aside. A shut section that only reported "no price" read as a
+        // fault while two items sat in it (Raymond, 2026-09-02).
         Loot.HeaderSummary = RunLoot?.Captures.Count > 0
-            ? RunLoot.NetIskDisplay
+            ? $"{_LootItemCount()} · {RunLoot.NetIskDisplay}"
             : RunLoot?.RunStatusMessage ?? "no loot captured";
+    }
+
+    private string _LootItemCount()
+    {
+        int items = RunLoot?.Captures.Where(capture => !capture.IsExcluded).Sum(capture => capture.Entries.Count) ?? 0;
+        return items == 1 ? "1 item" : $"{items} items";
     }
 
     internal void ApplyFitDetection(ShipFitDetectionReading reading)

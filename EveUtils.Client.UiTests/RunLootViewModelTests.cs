@@ -3,6 +3,7 @@ using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
+using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -27,10 +28,10 @@ public sealed class RunLootViewModelTests
         using var instance = TestClientInstance.Create();
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
         await _StartRunAsync(dispatcher);
-        await _AddCaptureAsync(dispatcher, "AAA", 100m);
-        await _AddCaptureAsync(dispatcher, "BBB", 250m);
+        await _AddCaptureAsync(dispatcher, "AAA", typeId: 34);
+        await _AddCaptureAsync(dispatcher, "BBB", typeId: 35);
 
-        var viewModel = new RunLootViewModel(dispatcher);
+        var viewModel = new RunLootViewModel(dispatcher, new _Prices((34, 100), (35, 250)));
         await viewModel.RefreshAsync(Token);
 
         Assert.Equal(2, viewModel.Captures.Count);
@@ -47,16 +48,19 @@ public sealed class RunLootViewModelTests
         Assert.Equal(350m, viewModel.TotalIsk); // back to both
     }
 
-    /// <summary>A row the clipboard column showed no price for stays priceless, never a silent 0 (AC-5).</summary>
+    /// <summary>
+    /// A type the price source has nothing for stays priceless, never a silent 0. The reason moved with the source:
+    /// it used to be "the copied window showed no ISK column", it is now "no market price is known for this type".
+    /// </summary>
     [AvaloniaFact]
-    public async Task ARowWithoutAPrice_NeverBecomesZero()
+    public async Task ATypeWithoutAMarketPrice_NeverBecomesZero()
     {
         using var instance = TestClientInstance.Create();
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
         await _StartRunAsync(dispatcher);
-        await _AddCaptureAsync(dispatcher, "AAA", price: null);
+        await _AddCaptureAsync(dispatcher, "AAA", typeId: 34);
 
-        var viewModel = new RunLootViewModel(dispatcher);
+        var viewModel = new RunLootViewModel(dispatcher, new _Prices());
         await viewModel.RefreshAsync(Token);
 
         Assert.Null(viewModel.TotalIsk);
@@ -64,19 +68,23 @@ public sealed class RunLootViewModelTests
         Assert.Equal(1, viewModel.EntriesWithoutPrice);
     }
 
+    /// <summary>
+    /// A market price is per unit, so a stack of five is worth five of them. The clipboard column it replaced was a
+    /// line total, which is why this used to assert the opposite (Raymond, 2026-09-02).
+    /// </summary>
     [AvaloniaFact]
-    public async Task AStackPrice_IsCountedOnce()
+    public async Task AStack_IsWorthItsQuantityTimesTheUnitPrice()
     {
         using var instance = TestClientInstance.Create();
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
         await _StartRunAsync(dispatcher);
-        await _AddCaptureAsync(dispatcher, "stack", 100m, quantity: 5);
+        await _AddCaptureAsync(dispatcher, "stack", typeId: 34, quantity: 5);
 
-        var viewModel = new RunLootViewModel(dispatcher);
+        var viewModel = new RunLootViewModel(dispatcher, new _Prices((34, 100)));
         await viewModel.RefreshAsync(Token);
 
-        Assert.Equal(100m, viewModel.LootIsk);
-        Assert.Equal(100m, viewModel.NetIsk);
+        Assert.Equal(500m, viewModel.LootIsk);
+        Assert.Equal(500m, viewModel.NetIsk);
     }
 
     [AvaloniaFact]
@@ -85,48 +93,65 @@ public sealed class RunLootViewModelTests
         using var instance = TestClientInstance.Create();
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
         await _StartRunAsync(dispatcher);
-        await _AddCaptureAsync(dispatcher, "loot", 500m);
-        await _AddCaptureAsync(dispatcher, "filaments", 100m, LootKind.Lost, quantity: 3);
+        await _AddCaptureAsync(dispatcher, "loot", typeId: 34);
+        await _AddCaptureAsync(dispatcher, "filaments", typeId: 35, lootKind: LootKind.Lost, quantity: 3);
 
-        var viewModel = new RunLootViewModel(dispatcher);
+        var viewModel = new RunLootViewModel(dispatcher, new _Prices((34, 500), (35, 100)));
         await viewModel.RefreshAsync(Token);
 
         Assert.Equal(500m, viewModel.LootIsk);
-        Assert.Equal(100m, viewModel.ConsumedIsk);
-        Assert.Equal(400m, viewModel.NetIsk);
+        Assert.Equal(300m, viewModel.ConsumedIsk);
+        Assert.Equal(200m, viewModel.NetIsk);
     }
 
+    /// <summary>
+    /// The counter-proof for the change itself: the clipboard's own ISK column is parsed and stored, and no figure
+    /// on screen comes from it. Here it says 9 999 and the market says 100.
+    /// </summary>
     [AvaloniaFact]
-    public async Task ARowWithoutAPrice_DoesNotChangeTotals()
+    public async Task TheClipboardIskColumn_IsNeverWhatTheRunIsValuedAt()
     {
         using var instance = TestClientInstance.Create();
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
         await _StartRunAsync(dispatcher);
-        await _AddCaptureAsync(dispatcher, "priced", 100m);
-        await _AddCaptureAsync(dispatcher, "priceless", price: null);
+        await _AddCaptureAsync(dispatcher, "priced", typeId: 34, clipboardPrice: 9_999m);
+        await _AddCaptureAsync(dispatcher, "unpriced", typeId: 99, clipboardPrice: 5_000m);
 
-        var viewModel = new RunLootViewModel(dispatcher);
+        var viewModel = new RunLootViewModel(dispatcher, new _Prices((34, 100)));
         await viewModel.RefreshAsync(Token);
 
         Assert.Equal(100m, viewModel.LootIsk);
-        Assert.Null(viewModel.ConsumedIsk);
         Assert.Equal(100m, viewModel.NetIsk);
-        Assert.Equal(1, viewModel.EntriesWithoutPrice);
-        Assert.Equal("no price", viewModel.ConsumedIskDisplay);
+        Assert.Equal(1, viewModel.EntriesWithoutPrice);   // type 99 has no market price, whatever the copy said
     }
 
-    /// <summary>AC-5's label check: none of the ViewModel's exposed labels may name a valuation source — this is
-    /// the clipboard's own column, not an appraisal.</summary>
+    /// <summary>An empty price cache says why there are no figures instead of showing a total of zero.</summary>
+    [AvaloniaFact]
+    public async Task AnEmptyPriceCache_SaysSo_RatherThanTotallingZero()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await _StartRunAsync(dispatcher);
+        await _AddCaptureAsync(dispatcher, "AAA", typeId: 34);
+
+        var viewModel = new RunLootViewModel(dispatcher, new _NoPrices());
+        await viewModel.RefreshAsync(Token);
+
+        Assert.Null(viewModel.TotalIsk);
+        Assert.Contains("no market prices have been cached", viewModel.TotalIskLabel, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The label names what priced these figures. ET-65 AC-5 forbade that wording because the total WAS the copied
+    /// column; Raymond replaced the basis on 2026-09-02, so the label has to stop claiming otherwise.
+    /// </summary>
     [Fact]
-    public void Labels_NeverMentionAValuationSource()
+    public void TheTotalsLabel_NamesTheValuationSource_AndNotTheClipboard()
     {
         var viewModel = new RunLootViewModel(new _UnusedDispatcher());
-        string[] labels = [viewModel.TotalIskLabel, viewModel.EntriesWithoutPriceLabel];
-        string[] banned = ["Jita", "markt", "market", "waardering", "appraisal"];
 
-        foreach (var label in labels)
-            foreach (var word in banned)
-                Assert.DoesNotContain(word, label, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("price", viewModel.TotalIskLabel, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("clipboard", viewModel.TotalIskLabel, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>AC-7: no running run is a state the reader is told about, not an unexplained empty list.</summary>
@@ -174,17 +199,52 @@ public sealed class RunLootViewModelTests
         Assert.True(started.IsSuccess);
     }
 
-    private static async Task _AddCaptureAsync(IDispatcher dispatcher, string contentHash, decimal? price,
-        LootKind lootKind = LootKind.Gained, long quantity = 1)
+    private static async Task _AddCaptureAsync(IDispatcher dispatcher, string contentHash, int typeId,
+        LootKind lootKind = LootKind.Gained, long quantity = 1, decimal? clipboardPrice = null)
     {
         Result<RunLootCaptureSaveResult> added = await dispatcher.Send(new AddRunLootCaptureCommand(new RunLootCaptureInput
         {
             CapturedAtUtc = StartedAtUtc,
             Source = LootCaptureSource.Clipboard,
             ContentHash = contentHash,
-            Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = quantity, ClipboardPrice = price, LootKind = lootKind }]
+            Entries = [new RunLootEntryInput
+            {
+                ItemTypeId = typeId, Name = $"Item {typeId}", Quantity = quantity,
+                ClipboardPrice = clipboardPrice, LootKind = lootKind
+            }]
         }), Token);
         Assert.True(added.IsSuccess);
+    }
+
+    /// <summary>A price source with one answer per type id; a type it does not name simply has no price.</summary>
+    private sealed class _Prices(params (int TypeId, double Estimate)[] prices) : IAppraisalProvider
+    {
+        public string Id => "test";
+
+        public string DisplayName => "Test prices";
+
+        public Task<Result<AppraisalOutcome>> AppraiseAsync(IReadOnlyCollection<AppraisalLine> lines,
+            CancellationToken cancellationToken = default)
+        {
+            List<AppraisalRow> rows = [.. lines.Select(line => new AppraisalRow(line,
+                Array.Exists(prices, price => price.TypeId == line.TypeId)
+                    ? new AppraisalPrice(Array.Find(prices, price => price.TypeId == line.TypeId).Estimate)
+                    : null))];
+            return Task.FromResult(Result<AppraisalOutcome>.Success(new AppraisalOutcome(rows, [], "Test basis.")));
+        }
+    }
+
+    /// <summary>An empty cache: the provider refuses rather than returning a total of zero.</summary>
+    private sealed class _NoPrices : IAppraisalProvider
+    {
+        public string Id => "empty";
+
+        public string DisplayName => "Empty cache";
+
+        public Task<Result<AppraisalOutcome>> AppraiseAsync(IReadOnlyCollection<AppraisalLine> lines,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(Result<AppraisalOutcome>.Failure(new ResultMessage(MessageSeverity.Warning,
+                MessageCodes.PriceCacheEmpty, "No market prices have been cached yet.", "test")));
     }
 
     /// <summary>Stands in where a test never actually dispatches — <see cref="RunLootViewModel.Labels_NeverMentionAValuationSource"/>-style

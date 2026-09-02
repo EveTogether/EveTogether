@@ -34,5 +34,5 @@ internal sealed class GetRunningRunLootQueryHandler(IDbContextFactory<ClientDbCo
 
     private static RunLootCaptureDto _ToDto(RunLootCapture capture) => new(
         capture.Id, capture.CapturedAtUtc, capture.IsExcluded, capture.ContentHash,
-        [.. capture.Entries.Select(entry => new RunLootEntryDto(entry.Name, entry.Quantity, entry.ClipboardPrice, entry.LootKind))]);
+        [.. capture.Entries.Select(entry => new RunLootEntryDto(entry.ItemTypeId, entry.Name, entry.Quantity, entry.ClipboardPrice, entry.LootKind))]);
 }
