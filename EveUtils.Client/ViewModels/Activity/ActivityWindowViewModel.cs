@@ -1040,6 +1040,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (_runCharacterId is not { } characterId || _services.GetService<CqrsDispatcher>() is null)
             return;
 
+        // Who commands the fleet decides whether this start becomes a shared run, so it is re-read here rather
+        // than left to whichever tick last landed (ET-147).
+        await RefreshFleetCommandAsync(DateTime.UtcNow);
+
         using var scope = _services.CreateScope();
         Result<Guid> started = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(
             new StartRunCommand(characterId, StoredKind, startedAtUtc,
@@ -1051,6 +1055,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 GroupCode: GroupCode,
                 Signature: SignatureId,
                 FleetId: FleetId,
+                // The one thing that turns a site start into a shared run. Not Authority.CanControl on its own: a
+                // solo pilot commands their own run too, and only a fleet has a commander to be (ET-147).
+                IsFleetCommander: FleetId is not null && Authority.CanControl,
                 SolarSystemName: SolarSystem));
         if (!started.IsSuccess)
         {

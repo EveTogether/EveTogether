@@ -2,8 +2,14 @@ using Avalonia.Headless.XUnit;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Shared.Data;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
+using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Runs.Control;
+using EveUtils.Shared.Modules.Runs.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -309,6 +315,71 @@ public sealed class HomefrontCommandAuthorityTests
 
         Assert.False(window.IsDiscardButtonVisible);
         Assert.True(window.IsSaveButtonVisible);
+    }
+
+    // ── What the START button hands the command ────────────────────────────────────────────────────
+    //
+    // ET-147. The tests above prove the window KNOWS who commands; these prove it SAYS SO when it starts a run.
+    // StartRunCommand.IsFleetCommander defaulted to false and the window never passed it, so a site run never got a
+    // group code and no FleetRunGroupCodeEvent was ever published, by anybody. Asserting on a StartRunCommand the
+    // test built itself is what let that stand: it proves the handler, not the caller. These drive the button.
+
+    /// <summary>The FC starts a site run in his fleet and the fleet is told, with a group code for the members to
+    /// file their own runs under. Red before ET-147: nothing was published at all.</summary>
+    [AvaloniaFact]
+    public async Task TheFcsStart_IsAnnouncedToTheFleet()
+    {
+        using ClientInFleet client = ClientInFleet.As(Commander, bossCharacterId: Commander);
+        var window = new ActivityWindowViewModel(ActivityKind.Site, client.Services);
+        window.UseCharacter(Commander, "Jithran");
+
+        List<RunGroupCodeStart> announced = _AnnouncementsOf(client, out IDisposable subscription);
+        using (subscription)
+            await window.StartRunCommand.ExecuteAsync(null);
+
+        RunGroupCodeStart start = Assert.Single(announced);
+        Assert.True(start.IsFleetCommander);
+        Assert.Equal(FleetId, start.FleetId);
+        Assert.NotNull(await _StoredGroupCodeAsync(client, Commander));
+    }
+
+    /// <summary>The other half, and the one that matters most if the flag is ever wired to the wrong thing: a
+    /// member's own start is their own business. No group code, and it reaches nobody — pass
+    /// <c>IsFleetCommander: true</c> unconditionally and this goes red.</summary>
+    [AvaloniaFact]
+    public async Task AMembersOwnStart_IsNotAnnouncedToTheFleet()
+    {
+        using ClientInFleet client = ClientInFleet.As(Member, bossCharacterId: Commander);
+        var window = new ActivityWindowViewModel(ActivityKind.Site, client.Services);
+        window.UseCharacter(Member, "Raymond");
+
+        List<RunGroupCodeStart> announced = _AnnouncementsOf(client, out IDisposable subscription);
+        using (subscription)
+            await window.StartRunCommand.ExecuteAsync(null);
+
+        Assert.Empty(announced);
+        Assert.Null(await _StoredGroupCodeAsync(client, Member));
+    }
+
+    private static List<RunGroupCodeStart> _AnnouncementsOf(ClientInFleet client, out IDisposable subscription)
+    {
+        List<RunGroupCodeStart> announced = [];
+        subscription = client.Services.GetRequiredService<IEventBus>().Subscribe<FleetRunGroupCodeEvent>(
+            (integrationEvent, _) =>
+            {
+                announced.Add(integrationEvent.Data);
+                return Task.CompletedTask;
+            });
+        return announced;
+    }
+
+    private static async Task<string?> _StoredGroupCodeAsync(ClientInFleet client, int characterId)
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await using ClientDbContext db = await client.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        return (await db.Set<Run>()
+            .SingleAsync(run => run.CharacterId == characterId, cancellationToken)).GroupCode;
     }
 
     /// <summary>
