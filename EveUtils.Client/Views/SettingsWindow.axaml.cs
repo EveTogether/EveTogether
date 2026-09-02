@@ -36,6 +36,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private TextBlock _hintBlock = null!;
     private CheckBox _shareLocationBox = null!, _shareBountyBox = null!, _shareCombatBox = null!;
     private CheckBox _loadTypeImagesBox = null!, _openFitDetailAfterImportBox = null!, _enableLocalApiBox = null!;
+    private CheckBox _openFleetRunWindowBox = null!;
     private CheckBox _checkUpdatesOnStartupBox = null!, _watchClipboardBox = null!;
     private TextBlock _clipboardConsumersBlock = null!, _clipboardUnsupportedBlock = null!;
     private ComboBox _toastPositionBox = null!;
@@ -63,7 +64,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     }
 
     public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null,
-        int initialCategory = 0) : this()
+        int initialCategory = 0, bool openFleetRunWindowImmediately = false) : this()
     {
         _detectedDefault = detectedDefault;
         _localApi = localApiServer;
@@ -77,6 +78,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _shareCombatBox = this.FindControl<CheckBox>("ShareCombatBox")!;
         _loadTypeImagesBox = this.FindControl<CheckBox>("LoadTypeImagesBox")!;
         _openFitDetailAfterImportBox = this.FindControl<CheckBox>("OpenFitDetailAfterImportBox")!;
+        _openFleetRunWindowBox = this.FindControl<CheckBox>("OpenFleetRunWindowBox")!;
         _checkUpdatesOnStartupBox = this.FindControl<CheckBox>("CheckUpdatesOnStartupBox")!;
         _watchClipboardBox = this.FindControl<CheckBox>("WatchClipboardBox")!;
         _clipboardConsumersBlock = this.FindControl<TextBlock>("ClipboardConsumersBlock")!;
@@ -106,6 +108,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _shareCombatBox.IsChecked = shareCombat;
         _loadTypeImagesBox.IsChecked = loadTypeImages;
         _openFitDetailAfterImportBox.IsChecked = openFitDetailAfterImport;
+        _openFleetRunWindowBox.IsChecked = openFleetRunWindowImmediately;
         _checkUpdatesOnStartupBox.IsChecked = checkUpdatesOnStartup;
         this.FindControl<TextBlock>("SdeVersionBlock")!.Text = sdeVersionLabel;
         this.FindControl<TextBlock>("DataFolderBlock")!.Text = Composition.ClientServices.DataDirectory();
@@ -309,12 +312,13 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         var shareCombat = _shareCombatBox.IsChecked ?? true;
         var loadTypeImages = _loadTypeImagesBox.IsChecked ?? false;
         var openFitDetailAfterImport = _openFitDetailAfterImportBox.IsChecked ?? true;
+        var openFleetRunWindowImmediately = _openFleetRunWindowBox.IsChecked ?? false;
         var toastPosition = (Notifications.ToastPosition)(_toastPositionBox.SelectedIndex is { } i and >= 0 ? i : (int)Notifications.ToastPosition.TopRight);
         var enableLocalApi = _enableLocalApiBox.IsChecked ?? false;
         var localApiPort = int.TryParse(_localApiPortBox.Text, out var port) && port is > 0 and <= 65535
             ? port
             : LocalApi.LocalApiServer.DefaultPort;
         var checkUpdatesOnStartup = _checkUpdatesOnStartupBox.IsChecked ?? true;
-        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup);
+        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately);
     }
 }

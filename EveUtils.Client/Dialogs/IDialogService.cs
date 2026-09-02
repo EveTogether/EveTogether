@@ -148,13 +148,17 @@ public interface IDialogService
     void ShowActivityWindow(ActivityWindowViewModel viewModel,
         RunWindowOpenTrigger trigger = RunWindowOpenTrigger.LocalUser);
 
+    /// <summary>Whether the activity window is up right now, so a caller can tell there is nothing left to offer —
+    /// the same "leave it alone" answer <see cref="RunWindowPresentation"/> gives once one is open.</summary>
+    bool IsActivityWindowOpen { get; }
+
     /// <summary>
     /// Opens the settings module: a docked tab in docked mode, a floating window otherwise — non-modal so it
     /// matches the rest of the module shell. <paramref name="currentDirectory"/> is the saved gamelog path (empty if
     /// none), <paramref name="detectedDefault"/> the platform-probed fallback (Auto-detect). On Save the view invokes
     /// <paramref name="onApply"/> with the chosen values (the caller persists + applies live); Cancel/close does nothing.
     /// </summary>
-    void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0);
+    void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false);
 
     /// <summary>Per-fleet sharing dialog: per character a three-way override per metric. Returns true if the user saved.</summary>
     Task<bool> ShowFleetSharingAsync(ViewModels.FleetShareViewModel viewModel);

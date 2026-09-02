@@ -10,6 +10,7 @@ using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
+using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
@@ -148,14 +149,19 @@ public sealed class HomefrontWindowFocusTests
     // ── The path that actually opens it on a member's machine ───────────────────────────────────────
 
     /// <summary>
-    /// The fleet commander's start reaches this member and asks for the window under the remote trigger — the only
-    /// caller that may, and the reason the rule above is ever exercised in the running app.
+    /// FLIPPED (was: the commander's start opens the window here outright). A window a pilot did not ask for is now
+    /// offered as a toast first — see <see cref="FleetRunOfferToastTests"/> — so the commander's start opens the
+    /// window on this member's machine only when the member set the window preference. What that path must still
+    /// never do is take the keyboard, and that is what is asserted here: this is the only caller allowed to pass the
+    /// remote trigger, and the reason the rule above is ever exercised in the running app.
     /// </summary>
     [AvaloniaFact]
-    public void TheFleetCommandersStart_AsksForTheWindowWithoutFocus()
+    public void TheFleetCommandersStart_WhenTheMemberChoseTheWindow_AsksForItWithoutFocus()
     {
         var dialogs = new RecordingDialogService();
         using var instance = TestClientInstance.Create(services => services.AddSingleton<IDialogService>(dialogs));
+        instance.Services.GetRequiredService<ISettingRepository>()
+            .UpsertAsync(FleetRunWindowPresenter.AutoOpenSettingKey, "true").GetAwaiter().GetResult();
         var bus = instance.Services.GetRequiredService<IEventBus>();
         using var presenter = new FleetRunWindowPresenter(bus, dialogs, instance.Services);
 

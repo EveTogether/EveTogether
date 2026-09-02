@@ -19,4 +19,7 @@ public sealed record StartRunCommand(
     string? FitContentHash = null,
     string? FitNameSnapshot = null,
     long? FleetId = null,
-    bool IsFleetCommander = false) : ICommand<Result<Guid>>;
+    bool IsFleetCommander = false,
+    // Announced to the fleet, not stored: the run row keeps SolarSystemId, and the pilot's window knows the system
+    // only by the name its location sample carries.
+    string? SolarSystemName = null) : ICommand<Result<Guid>>;

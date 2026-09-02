@@ -1047,6 +1047,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         bool localApiEnabled;
         int localApiPort;
         bool checkUpdatesOnStartup;
+        bool openFleetRunWindow;
         using (var scope = _services.CreateScope())
         {
             var settings = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Query(new GetSettingsQuery());
@@ -1062,6 +1063,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             localApiPort = int.TryParse(settings.FirstOrDefault(s => s.Key == LocalApi.LocalApiServer.PortSettingKey)?.Value, out var lp)
                 ? lp : LocalApi.LocalApiServer.DefaultPort;
             checkUpdatesOnStartup = settings.FirstOrDefault(s => s.Key == CheckUpdatesOnStartupSettingKey)?.Value != "false"; // default on
+            openFleetRunWindow = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Runs.FleetRunWindowPresenter.AutoOpenSettingKey)?.Value == "true"; // default off: a toast is offered instead
         }
 
         var localApi = _services.GetService<LocalApi.ILocalApiServer>();
@@ -1070,7 +1072,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             current, GameLogLocations.Default(),
             shares.IsShared(MetricKind.Location), shares.IsShared(MetricKind.Bounty), shares.IsShared(MetricKind.Dps),
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
-            localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory);
+            localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow);
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,
@@ -1127,6 +1129,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 LocalApi.LocalApiServer.PortSettingKey, result.LocalApiPort.ToString()));
             await dispatcher.Send(new SetSettingCommand(
                 CheckUpdatesOnStartupSettingKey, result.CheckUpdatesOnStartup ? "true" : "false"));
+            await dispatcher.Send(new SetSettingCommand(
+                EveUtils.Client.Runs.FleetRunWindowPresenter.AutoOpenSettingKey, result.OpenFleetRunWindowImmediately ? "true" : "false"));
         }
 
         // Apply the toast position live so the next toast uses it without a restart.
