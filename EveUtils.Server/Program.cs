@@ -1,5 +1,6 @@
 using System.Net;
 using EveUtils.Server;
+using EveUtils.Server.Api;
 using EveUtils.Server.Auth;
 using EveUtils.Server.Backup;
 using EveUtils.Server.Components;
@@ -13,6 +14,7 @@ using EveUtils.Server.Messaging;
 using EveUtils.Server.Permissions;
 using EveUtils.Server.Stream;
 using EveUtils.Server.Transport;
+using EveUtils.Shared.App;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Cqrs.Permissions;
 using EveUtils.Shared.Data;
@@ -113,7 +115,9 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.LoginPath = "/login";
         options.LogoutPath = "/account/logout";
         options.AccessDeniedPath = "/login";
-    });
+    })
+    // The REST API's own scheme, deliberately beside the cookie and the gRPC bearer rather than sharing them.
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthentication.Scheme, null);
 builder.Services.AddAuthorization(options =>
 {
     // One policy per panel permission code. A super-admin passes every policy; otherwise the user
@@ -123,6 +127,8 @@ builder.Services.AddAuthorization(options =>
         var required = code;
         options.AddPolicy(required, policy => policy.RequireAssertion(ctx => ctx.User.HasPanelPermission(required)));
     }
+
+    options.AddPolicy(ApiKeyAuthentication.Policy, ApiKeyAuthentication.BuildPolicy());
 });
 builder.Services.AddSignalR();                                          // DPS stream hub
 builder.Services.AddHostedService<DpsBroadcastBridge>();                // server bus → SignalR bridge
@@ -292,6 +298,11 @@ app.MapGrpcService<RunsGrpcService>();
 app.MapGrpcService<FleetsGrpcService>();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode(); // Blazor admin panel at "/"
 app.MapHub<DpsHub>("/hubs/dps");                                // live DPS stream hub
+
+// Read-only REST API for external consumers. M0 ships the lock and one endpoint to prove it: /health is the
+// key-gated test route here (ET-118), and becomes the public one in M1 when the data routes and self-docs land.
+var api = app.MapGroup("/api/v1").RequireAuthorization(ApiKeyAuthentication.Policy);
+api.MapGet("/health", () => Results.Ok(new ApiHealthResponse("ok", AppInfo.Version, "v1")));
 
 // Admin-panel login: a non-interactive HTML form posts here; SignInAsync needs a writable HttpContext,
 // so this is a minimal-API endpoint rather than a Blazor component event. Antiforgery is enforced by the
