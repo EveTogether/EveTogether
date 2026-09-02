@@ -13,6 +13,7 @@ using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde;
+using Microsoft.Extensions.Logging;
 
 namespace EveUtils.Client.Clipboard;
 
@@ -23,17 +24,20 @@ public sealed class AbyssalLootCapture : ISingletonService, IDisposable
     private readonly IToastService _toasts;
     private readonly ISdeAccessor _sde;
     private readonly IDispatcher _dispatcher;
+    private readonly ILogger<AbyssalLootCapture> _logger;
     private readonly Lock _gate = new();
     private readonly IDisposable _subscription;
 
     private string? _openFingerprint;
 
     public AbyssalLootCapture(ClipboardWatchService clipboardWatch, IToastService toasts, ISdeAccessor sde,
+        ILogger<AbyssalLootCapture> logger,
         IDispatcher dispatcher)
     {
         _toasts = toasts;
         _sde = sde;
         _dispatcher = dispatcher;
+        _logger = logger;
         _subscription = clipboardWatch.Subscribe(FeatureName, OnCapture);
     }
 
@@ -50,33 +54,63 @@ public sealed class AbyssalLootCapture : ISingletonService, IDisposable
 
     public void Dispose() => _subscription.Dispose();
 
+    /// <summary>
+    /// The one place that says why a copy did not become loot. Every path in <see cref="OnCapture"/> that ends in
+    /// doing nothing comes through here, so "the watch fired and the content was refused" can be told apart from
+    /// "nothing reached this feature at all" — which was the whole difficulty in ET-65: most of those paths were
+    /// silent on screen and silent in the log, and looked exactly like a watcher that never ran.
+    ///
+    /// <c>Warning</c> deliberately: <c>AppLogger</c> drops anything below it, so an Information line would be
+    /// invisible precisely when it is wanted. It only ever runs on a payload the watch already recognised as one
+    /// of the three EVE shapes, so it is not a line per copy of the day.
+    ///
+    /// <paramref name="reason"/> is derived from the payload, never taken from it: ET-57 promises that clipboard
+    /// text is never written down, and that holds for this log too.
+    /// </summary>
+    private void _Dropped(string reason) =>
+        _logger.LogWarning("Clipboard copy not recorded as run loot: {Reason}.", reason);
+
     private void OnCapture(ClipboardCapture capture)
     {
         if (capture.Shape is not ClipboardShape.Inventory)
+        {
+            _Dropped($"the clipboard held a {capture.Shape} payload, not an inventory listing");
             return;
+        }
 
         bool hasSingleRow = ClipboardInventoryParser.HasSingleRow(capture.Text);
         IReadOnlyList<ClipboardInventoryItem> items = ClipboardInventoryParser.Parse(capture.Text);
-        IReadOnlyList<ClipboardInventoryItem> candidates = [];
         var resolution = SdeInventoryResolver.Resolve(items, _sde);
-        bool hasNoSingleRowSdeMatch = hasSingleRow && _sde.IsAvailable && resolution.Lines.Count == 0;
-        if (items.Count == 0 && _sde.IsAvailable)
+        bool hasNoSdeMatch = hasSingleRow && _sde.IsAvailable && resolution.Lines.Count == 0;
+        if (resolution.Lines.Count == 0 && _sde.IsAvailable)
         {
-            candidates = ClipboardInventoryParser.ParseAmbiguousNameCandidates(capture.Text);
-            resolution = SdeInventoryResolver.ResolveUniqueCandidate(candidates, _sde, out hasNoSingleRowSdeMatch);
+            // The column shape alone did not produce item types — it either could not choose, or chose the group
+            // column — so ask the SDE which candidate actually reads as item types. Every row count comes through
+            // here: it used to be the single-row case only, which left an icons copy of two items working and the
+            // same two items in details refused (ET-65).
+            resolution = SdeInventoryResolver.ResolveBestCandidate(
+                ClipboardInventoryParser.ParseNameColumnCandidates(capture.Text), _sde, out bool noCandidateMatch);
+            hasNoSdeMatch = hasSingleRow && noCandidateMatch;
         }
 
         if (resolution.Lines.Count == 0)
         {
-            if (hasNoSingleRowSdeMatch)
+            // One copied line that matches no item type is far more often an ordinary copy than lost loot, so that
+            // one case stays quiet on screen — but it says so in the log like every other refusal.
+            if (hasNoSdeMatch)
+            {
+                _Dropped("a single copied row that matches no known item type");
                 return;
+            }
 
-            var message = candidates.Count > 0
-                ? $"Could not identify exactly one EVE item type from {candidates.Count} copied names. Copy rows from an EVE inventory window."
-                : $"None of the {resolution.Unresolved.Count} copied names is a known item type. Copy rows from an EVE inventory window.";
+            // It never asks for column headings: an EVE inventory copy carries none.
+            var message = resolution.Unresolved.Count > 0
+                ? $"None of the {resolution.Unresolved.Count} copied names is a known item type. Copy rows from an EVE inventory window."
+                : "No column in this copy stands out as the item names. Copy the rows from an EVE inventory window.";
             _toasts.Show("Loot not recognised",
                 message,
                 ToastKind.Error);
+            _Dropped(message);
             return;
         }
 
@@ -85,7 +119,10 @@ public sealed class AbyssalLootCapture : ISingletonService, IDisposable
         {
             // Suppress only while its card stays open, so copying after dismissal — or a failed save — asks again.
             if (_openFingerprint == fingerprint)
+            {
+                _Dropped("the same copy is already on screen as an open card");
                 return;
+            }
 
             _openFingerprint = fingerprint;
         }

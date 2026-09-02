@@ -25,11 +25,13 @@ using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fittings.Entities;
 using EveUtils.Shared.Modules.Fittings.Repositories;
 using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Control;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
@@ -38,6 +40,7 @@ using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Queries;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 // Aliased rather than imported wholesale: that namespace also holds an ActivityKind, which would collide with the
 // window's own.
@@ -90,6 +93,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private readonly IServiceProvider _services;
     private readonly GamelogClientService? _gamelog;
     private readonly IDisposable? _metricSubscription;
+    private readonly IDisposable? _lootSubscription;
 
     // The bounty lines seen while this run was running, with their own times — what SAVE writes as the run's
     // RunBountyEntry rows, and what the section adds up meanwhile.
@@ -102,6 +106,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private DispatcherTimer? _timer;
     private bool _isManualRun;
     private int? _runCharacterId;
+    private int? _namedCharacterId;
+    private (string? Id, string? Group, string Name, IReadOnlyList<SdeSite> Sites)? _pendingSignature;
     private string? _runCharacterName;
     private ShipFitDetectionReading? _fitReading;
     private RunEnemyObservationCollector? _enemyObservations;
@@ -118,7 +124,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         }
 
         _metricSubscription = services.GetService<IEventBus>()?.Subscribe<FleetMetricEvent>(_OnFleetMetric);
-        RunLoot = services.GetService<CqrsDispatcher>() is { } dispatcher ? new RunLootViewModel(dispatcher) : null;
+        // The clipboard records loot; this window shows it, and the two never met. Without this the LOOT section
+        // only ever held what was already stored when the window loaded or started its run.
+        _lootSubscription = services.GetService<IEventBus>()?.Subscribe<RunLootCapturedEvent>(_OnRunLootCaptured);
+        RunLoot = services.GetService<CqrsDispatcher>() is { } dispatcher
+            ? new RunLootViewModel(dispatcher, services.GetService<IAppraisalProvider>())
+            : null;
         if (RunLoot is not null)
             RunLoot.PropertyChanged += (_, _) => _RefreshSummaries();
 
@@ -250,10 +261,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(HasSignature))]
     private string? _signatureGroup;
 
+    /// <summary>The scan's own id, e.g. <c>RUS-326</c>. Not shown anywhere — it is what tells one Sansha Refuge
+    /// from the next one, which a site name cannot.</summary>
+    [ObservableProperty]
+    private string? _signatureId;
+
     /// <summary>The signature's name once fully scanned — same field, same source as <see cref="SignatureGroup"/>.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SignatureSiteText))]
     [NotifyPropertyChangedFor(nameof(HasSignature))]
+    [NotifyPropertyChangedFor(nameof(ClockHint))]
     private string? _signatureName;
 
     /// <summary>What the site catalogue carries under <see cref="SignatureName"/> (ET-80). Empty is the ordinary
@@ -280,6 +297,22 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public ActivitySection Bounty { get; } = new() { Title = "BOUNTY" };
 
     public ActivitySection Loot { get; } = new() { Title = "LOOT" };
+
+    /// <summary>
+    /// Whose run this is, by name, for the header. The window knew this all along and never said it: the FLEET
+    /// section named everyone you fly beside without ever naming you (Raymond, 2026-09-02). Null until a character
+    /// is settled, which the header then says rather than leaving blank.
+    ///
+    /// The same character <see cref="_ActingCharacterId"/> answers with — one idea of who you are, shown and used.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasActingCharacter))]
+    [NotifyPropertyChangedFor(nameof(ActingCharacterText))]
+    private string? _actingCharacterName;
+
+    public bool HasActingCharacter => ActingCharacterName is not null;
+
+    public string ActingCharacterText => ActingCharacterName ?? "no character yet";
 
     /// <summary>The run's one fit (ET-107) — filled from ET-101's detection, or the reason it could not be. Never a
     /// proposal standing beside a choice: a manual pick comes back through the same reading as its own match reason.</summary>
@@ -398,7 +431,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     // Start, stop and discard steer the run for everybody in it, so all three hang off the same authority (AC-4).
     // Start and stop are the same slot seen from two sides and never both apply: a run that is going can only be
     // stopped, and offering to re-start it over itself is what put START next to a ticking clock.
-    public bool IsStartButtonVisible => Authority.CanControl && RunState != ActivityRunState.Running;
+    /// <summary>Hidden while a copied site is waiting: the only two answers there are SAVE and DISCARD, and START
+    /// would pick the run being waited on back up.</summary>
+    public bool IsStartButtonVisible =>
+        Authority.CanControl && RunState != ActivityRunState.Running && _pendingSignature is null;
 
     public bool IsStopButtonVisible => Authority.CanControl && RunState == ActivityRunState.Running;
 
@@ -466,9 +502,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public string ClockHint => IsAbyssal
         ? (FleetMemberCount > 1 ? $"{FleetStatusText}: the envelope is the earliest anchored run. " : string.Empty)
           + "The clock is a floor — the moment of entry cannot be observed, so this is at most what is left."
-        : RunState == ActivityRunState.Stopped
-            ? "Stopped runs retain their figures; start creates a new run."
-            : "Manual start and stop are the only source for a site run.";
+        : _pendingSignature is { } waiting
+            ? $"{waiting.Name} is copied and waiting. Save or discard this {SignatureName} run and it takes over."
+            : RunState == ActivityRunState.Stopped
+                // STOP is a pause, not an end (Raymond, 2026-09-02): stepping out mid-site and coming back has to
+                // cost you nothing, so START picks the same run back up. What ends a run is SAVE or DISCARD.
+                ? "Stopped runs keep their figures; start picks this run back up."
+                : "Manual start and stop are the only source for a site run.";
 
     // ── Section bodies ──────────────────────────────────────────────────────────────────────────────
 
@@ -509,6 +549,25 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public bool HasShipRestriction => ShipRestrictionText is not null;
 
+    /// <summary>
+    /// The hull list behind the site line, on demand. It used to stand inline in the ACTIVITY section, where a site
+    /// like Blood Lookout ran to thirty-odd names over five lines and pushed LOCATION and LOOT STRATEGY off the
+    /// bottom (Raymond, 2026-09-02). The site line still says <c>ship-restricted</c> itself, so the fact of the
+    /// restriction never depended on this list being visible.
+    ///
+    /// Shown through <see cref="IDialogService.ShowMessageAsync"/>, the same plain dialog the fit picker falls back
+    /// on — no new surface for one list.
+    /// </summary>
+    [RelayCommand]
+    private async Task ShowShipRestrictionAsync()
+    {
+        if (ShipRestrictionText is not { } hulls)
+            return;
+
+        await _services.GetRequiredService<IDialogService>()
+            .ShowMessageAsync("Ships allowed at this site", hulls);
+    }
+
     public string TierText => TierIndex is { } tier
         ? $"{Tiers[tier]} (Tier {tier})"
         : "not set";
@@ -531,17 +590,22 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// test can assert the round-trip without racing anything.</summary>
     public async Task LoadAsync()
     {
-        using var scope = _services.CreateScope();
-        var settings = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Query(new GetSettingsQuery());
+        // Same guard _AdoptRunningRunAsync already carries: with no dispatcher there is nothing remembered to
+        // restore, and that is a window without a store rather than a fault.
+        if (_services.GetService<CqrsDispatcher>() is not null)
+        {
+            using var scope = _services.CreateScope();
+            var settings = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Query(new GetSettingsQuery());
 
-        WeatherIndex = _Restore(settings.FirstOrDefault(s => s.Key == WeatherSettingKey)?.Value,
-            AbyssalWeather.All.Count);
-        TierIndex = _Restore(settings.FirstOrDefault(s => s.Key == TierSettingKey)?.Value, Tiers.Count);
+            WeatherIndex = _Restore(settings.FirstOrDefault(s => s.Key == WeatherSettingKey)?.Value,
+                AbyssalWeather.All.Count);
+            TierIndex = _Restore(settings.FirstOrDefault(s => s.Key == TierSettingKey)?.Value, Tiers.Count);
 
-        // A remembered strategy from the other kind of run addresses nothing here, so it reads as unset — the same
-        // rule the two indices get.
-        string? strategy = settings.FirstOrDefault(s => s.Key == LootStrategySettingKey)?.Value;
-        LootStrategy = LootStrategies.Contains(strategy) ? strategy : null;
+            // A remembered strategy from the other kind of run addresses nothing here, so it reads as unset — the same
+            // rule the two indices get.
+            string? strategy = settings.FirstOrDefault(s => s.Key == LootStrategySettingKey)?.Value;
+            LootStrategy = LootStrategies.Contains(strategy) ? strategy : null;
+        }
 
         _SyncChoices();
         await _ResolveCharacterAsync(mayAsk: false);
@@ -568,14 +632,25 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             .Where(character => character.EsiCharacterId is not null)
             .ToList();
 
-        Character? chosen = known is [{ } only] ? only : null;
-        if (chosen is null && mayAsk && known.Count > 1
+        // Only the pilots actually at the keyboard can be flying this site, so only they are worth asking about.
+        // Raymond has three characters registered and one EVE client open, and was still asked which of the three
+        // it was (2026-09-02). Counted per CHARACTER in game, not per running client: one sitting on the login
+        // screen is a process with no pilot behind it. Seeing none is not knowing rather than nobody, so then the
+        // whole list stands and the question is still worth asking.
+        List<Character> candidates = _services.GetService<ILocalCharacterPresence>() is { } presence
+            ? [.. known.Where(character => presence.IsInGame(character.EsiCharacterId!.Value, character.Name) is true)]
+            : [];
+        if (candidates.Count == 0)
+            candidates = known;
+
+        Character? chosen = candidates is [{ } only] ? only : null;
+        if (chosen is null && mayAsk && candidates.Count > 1
             && _services.GetService<IDialogService>() is { } dialogs)
         {
             int? picked = await dialogs.PickCharacterAsync("Whose run is this?",
-                [.. known.Select(character => new CharacterPickOption(
+                [.. candidates.Select(character => new CharacterPickOption(
                     character.EsiCharacterId!.Value, character.Name, "local character", Enabled: true))]);
-            chosen = known.FirstOrDefault(character => character.EsiCharacterId == picked);
+            chosen = candidates.FirstOrDefault(character => character.EsiCharacterId == picked);
         }
 
         if (chosen is null)
@@ -602,6 +677,33 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (!running.IsSuccess || running.Value is not { } run || run.ActivityKind != StoredKind)
             return false;
 
+        // This window was opened on a signature, and the run still open is for a different site. That run is over:
+        // it is closed out here and now, and the window comes up clean on the site actually copied. Closing out is
+        // DiscardRunCommand, which stops the activity and unlinks the group code and "never removes a row, a loot
+        // capture or a bounty" — the run keeps everything it collected and stays in the store.
+        //
+        // Only a run of this pilot's own. One that belongs to a group is left standing and waits for a decision:
+        // ending that one reaches every other member's machine, and that is the FC's button to press, not this
+        // window's (ET-105 AC-1).
+        if (SignatureName is { Length: > 0 } copied
+            && !_IsSameRun(run.Signature, run.SiteName, SignatureId, copied))
+        {
+            if (run.GroupCode is null && FleetId is null)
+            {
+                await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+                    .Send(new DiscardRunCommand(run.Id, DateTime.UtcNow));
+                _SignatureDecision($"closed out the {run.SiteName} run left open in the store", copied);
+                return false;
+            }
+
+            _pendingSignature = (SignatureId, SignatureGroup, copied, MatchedSites);
+            SignatureId = run.Signature;
+            SignatureGroup = null;
+            SignatureName = run.SiteName;
+            MatchedSites = [];
+            _SignatureDecision("the run left open belongs to a group, so it waits", copied);
+        }
+
         RunId = run.Id;
         AnchorUtc = run.StartedAtUtc;
         StoppedAtUtc = null;
@@ -610,6 +712,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         RunState = ActivityRunState.Running;
         await _AdoptCharacterAsync(checked((int)run.CharacterId));
         _StartEnemyObservations();
+
+        // After the state above: StopRun only acts on a run it considers running.
+        if (_pendingSignature is not null)
+            StopRun(DateTime.UtcNow);
+
         return true;
     }
 
@@ -627,18 +734,67 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     }
 
     /// <summary>
-    /// Whose fit this is. The window never asks — before START the run has no character yet, so it falls back to the
-    /// one this client is in the fleet as, exactly as the run controls do. On a solo run there is one character and
-    /// on a fleet run it is you, so the question the FIT section used to print had no one left to ask.
+    /// Whose window this is. The run's character once START has resolved one, and before that the character this
+    /// client is publishing fleet metrics as — the same membership set the FLEET section beside it is drawn from,
+    /// since <see cref="FleetMetricPublisher"/> puts a sample on the bus for every (character, fleet) in it.
+    ///
+    /// Not <see cref="IActiveFleetState"/>, which this used to ask: that is the fleet you last selected in the
+    /// fleets window and only an explicit <c>Enter</c> fills it, so on a client that never opened that window it is
+    /// empty while the FLEET section is listing members — which is exactly how the FIT section came to print a
+    /// question it had no one left to ask. The server dropped the same Enter-driven model for membership
+    /// (<c>FleetBroadcastResolver</c>) and the publisher followed; this is the window catching up.
+    ///
+    /// Null when several of this client's characters are in fleets at once. That is a real question rather than a
+    /// gap, and START is where it gets asked.
     /// </summary>
-    private int? _FitCharacterId() => _runCharacterId ?? _services.GetService<IActiveFleetState>()?.CharacterId;
+    private int? _ActingCharacterId()
+    {
+        if (_runCharacterId is { } resolved)
+            return resolved;
+
+        IEnumerable<FleetParticipant> mine = _services.GetService<IFleetParticipation>()?.Current ?? [];
+        if (FleetId is { } fleetId)
+            mine = mine.Where(participant => participant.FleetId == fleetId);
+        return mine.Select(participant => participant.CharacterId).Distinct().ToList() is [{ } only] ? only : null;
+    }
+
+    /// <summary>
+    /// Put a name to <see cref="_ActingCharacterId"/> for the header. Clock-driven like everything else here, but it
+    /// only reads the registry when the answer has actually changed — the id is settled once and then holds for the
+    /// rest of the run, so this is a lookup per run rather than one per second.
+    /// </summary>
+    private async Task _RefreshActingCharacterAsync()
+    {
+        if (_ActingCharacterId() is not { } characterId)
+        {
+            ActingCharacterName = null;
+            _namedCharacterId = null;
+            return;
+        }
+
+        if (_namedCharacterId == characterId)
+            return;
+
+        // The run's own character already carries its name; anyone else has to be looked up once.
+        string? name = _runCharacterId == characterId && _runCharacterName is not null
+            ? _runCharacterName
+            : _services.GetService<ICharacterRegistry>() is { } registry
+                ? (await registry.GetAllAsync()).FirstOrDefault(c => c.EsiCharacterId == characterId)?.Name
+                : null;
+
+        if (name is null)
+            return; // leave it unnamed and try again next tick rather than caching a miss.
+
+        _namedCharacterId = characterId;
+        ActingCharacterName = name;
+    }
 
     /// <summary>Fill the run's fit from ET-101's reading. Clock-driven like the fleet command is, so starting a run
     /// fills it without the player confirming anything. An unlinked fit comes back through the same reading, so it
     /// survives this window being closed and reopened mid-run.</summary>
     public async Task RefreshFitAsync()
     {
-        if (_FitCharacterId() is not { } characterId
+        if (_ActingCharacterId() is not { } characterId
             || _services.GetService<IShipFitDetectionService>() is not { } detection)
             return;
 
@@ -678,7 +834,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private async Task ChooseFitAsync()
     {
         var dialogs = _services.GetRequiredService<IDialogService>();
-        if (_FitCharacterId() is not { } characterId)
+        if (_ActingCharacterId() is not { } characterId)
         {
             await dialogs.ShowMessageAsync("Choose a fit",
                 "Start the run first — its character is what a fit is filed under.");
@@ -714,7 +870,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [RelayCommand]
     private async Task DetachFitAsync()
     {
-        if (_FitCharacterId() is not { } characterId
+        if (_ActingCharacterId() is not { } characterId
             || _services.GetService<IShipFitDetectionService>() is not { } detection)
             return;
 
@@ -752,6 +908,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _RefreshSummaries();
         _ = RefreshFleetCommandAsync(nowUtc);
         _ = RefreshFitAsync();
+        _ = _RefreshActingCharacterAsync();
     }
 
     [RelayCommand]
@@ -796,7 +953,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private void OpenPicker() => IsPickerOpen = true;
 
     /// <summary>The button. Creating the stored run is the whole of it — without that row there is no run for the
-    /// loot, the bounties or the enemies to hang off, and the clock would be counting on its own.</summary>
+    /// loot, the bounties or the enemies to hang off, and the clock would be counting on its own.
+    ///
+    /// It picks up the run the store already has open rather than opening a second one beside it, and it resets
+    /// nothing: STOP is a pause, so stepping out of a site halfway and pressing START again must cost you neither
+    /// your enemies nor your loot, your bounty, your fit or your times (Raymond, 2026-09-02). What ends a run is
+    /// SAVE or DISCARD.</summary>
     [RelayCommand]
     private async Task StartRunAsync()
     {
@@ -856,7 +1018,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 SiteName: SignatureName,
                 SolarSystemId: null,
                 GroupCode: GroupCode,
-                Signature: SignatureGroup,
+                Signature: SignatureId,
                 FleetId: FleetId));
         if (!started.IsSuccess)
         {
@@ -970,9 +1132,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public async Task RefreshFleetCommandAsync(DateTime nowUtc)
     {
         IActiveFleetState? fleet = _services.GetService<IActiveFleetState>();
-        // Before START the run has no character yet, so fall back to the one this client is in the fleet as —
-        // otherwise a multi-character client could not reach START to resolve it.
-        int? actingCharacterId = _runCharacterId ?? fleet?.CharacterId;
+        // The same character the rest of the window works from. It used to fall back to IActiveFleetState, which
+        // holds whichever character a fleets-window row was last selected as — so a fleet commander flying a
+        // different toon than that row's acting one was compared against his own fleet's boss id and told only the
+        // FC may start or stop (Jithran, 2026-09-02). The boss is looked up for this same character, so both sides
+        // of the comparison are now one pilot.
+        int? actingCharacterId = _ActingCharacterId();
         if (actingCharacterId is not { } characterId || _services.GetService<FleetBossTracker>() is not { } bosses)
         {
             ApplyFleetCommand(fleet?.ActiveFleetId, null, actingCharacterId);
@@ -1096,17 +1261,66 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 EventTarget.Both);
 
         // Thrown away means gone from this window too: the next START is a new run, not a second attempt at this one.
-        RunId = null;
-        GroupCode = null;
-        AnchorUtc = null;
-        StoppedAtUtc = null;
-        RunState = ActivityRunState.NotStarted;
-        _bounties.Clear();
-        BountyIsk = 0;
-        _EndEnemyObservations();
+        _ResetForNewRun();
+        GroupCode = null;   // the group ended with the run, which is what a discard reaches the other members to say.
+        _ApplyPendingSignature();   // the site they copied while this run was still open
         if (RunLoot is not null)
             await RunLoot.RefreshAsync();
         Refresh(nowUtc);
+    }
+
+    /// <summary>
+    /// Everything the last run left standing on this window, in one place. A new run starts clean (Raymond,
+    /// 2026-09-02): what survives a run survives because it was decided to, not because nobody cleared it, and one
+    /// method rather than three copies is the whole point — three drift apart the first time a field is added, which
+    /// is how this gap opened.
+    ///
+    /// START is deliberately not one of its callers: STOP is a pause, so pressing START again picks the same run
+    /// back up. Ending a run is SAVE or DISCARD, and only DISCARD comes back here — SAVE closes the window.
+    ///
+    /// Kept on purpose, and each for its own reason: the weather, the tier and the loot strategy, because you fly the
+    /// same ones several runs in a row — which is what their settings keys exist for; the signature and its matched
+    /// sites, because they are what the window was opened on rather than anything the run produced; and whose run it
+    /// is, because that is the client's pilot and not this run's property. The fleet's members are not run state
+    /// either — they are whoever is heard from right now, and stop being listed on their own when they go quiet.
+    /// </summary>
+    private void _ResetForNewRun()
+    {
+        RunId = null;
+        AnchorUtc = null;
+        StoppedAtUtc = null;
+        CorrectedStartUtc = null;
+        CorrectedStopUtc = null;
+        TimeCorrectionError = null;
+        RunState = ActivityRunState.NotStarted;
+        SaveFailureText = null;
+        // Otherwise a discarded manual run left the window refusing every later fleet anchor: the flag that makes a
+        // stopped manual result final outlived the result it was final about.
+        _isManualRun = false;
+        _bounties.Clear();
+        BountyIsk = 0;
+        TotalLootIsk = null;
+        Participants.Clear();
+        // ET-101 reads the ship again for the new run rather than leaving the last one's fit on screen; the reading
+        // itself lives in the detection service, so this only drops what this window cached of it.
+        _fitReading = null;
+        _EndEnemyObservations();
+    }
+
+    /// <summary>
+    /// A clipboard copy has just been filed against a run. Refreshed only when it is <i>this</i> window's run, so a
+    /// second window on another run does not redraw for loot that is not its own.
+    ///
+    /// The window reads its loot from the store, and until this arrived nothing told it to read again: a copy taken
+    /// while the window stood open was stored, toasted as "Loot copied", and left the LOOT section under it still
+    /// reading "no loot captured" (Raymond, 2026-09-02). The run had the loot; the window simply never looked.
+    /// </summary>
+    private void _OnRunLootCaptured(RunLootCapturedEvent integrationEvent)
+    {
+        if (RunLoot is null || integrationEvent.Data != RunId)
+            return;
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = RunLoot.RefreshAsync());
     }
 
     /// <summary>
@@ -1281,6 +1495,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         }
 
         _metricSubscription?.Dispose();
+        _lootSubscription?.Dispose();
         _timer?.Stop();
         _timer = null;
     }
@@ -1382,9 +1597,132 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // section is hidden (IsFleetShown) and this line is not on screen at all.
         Fleet.HeaderSummary = FleetMemberCount > 1 ? FleetStatusText : "no fleet has reported in";
         Bounty.HeaderSummary = BountyText;
+        // What was collected first, the value as an aside. A shut section that only reported "no price" read as a
+        // fault while two items sat in it (Raymond, 2026-09-02).
         Loot.HeaderSummary = RunLoot?.Captures.Count > 0
-            ? RunLoot.NetIskDisplay
+            ? $"{_LootItemCount()} · {RunLoot.NetIskDisplay}"
             : RunLoot?.RunStatusMessage ?? "no loot captured";
+    }
+
+    /// <summary>
+    /// A signature copied while this window is up. With no run going it simply becomes the window's site. With a
+    /// run going on a DIFFERENT site it stops the clock and waits: that run is not this one, and ending it is SAVE
+    /// or DISCARD — the player's call, never the window's. The copied site is held and applied the moment they do.
+    /// </summary>
+    /// <summary>
+    /// The clipboard hands this over from a void call, so the work is tracked rather than dropped: a dispatcher
+    /// that throws — a locked database is the one that happens — becomes a toast and a log line instead of an
+    /// unobserved task, the same treatment <c>AbyssalLootCapture.StoreAndOfferAsync</c> gives its own write.
+    ///
+    /// Nothing races on the caller's side: <c>DialogService</c> only reaches here when a window is already up, and
+    /// every branch after it either returns or activates that same window. It never builds a second one.
+    /// </summary>
+    public void ApplySignature(string? id, string? group, string name, IReadOnlyList<SdeSite> sites) =>
+        LastSignature = _ApplySignatureSafelyAsync(id, group, name, sites);
+
+    /// <summary>The pending hand-over, so a test can await what a void call started.</summary>
+    internal Task LastSignature { get; private set; } = Task.CompletedTask;
+
+    private async Task _ApplySignatureSafelyAsync(string? id, string? group, string name, IReadOnlyList<SdeSite> sites)
+    {
+        try
+        {
+            await ApplySignatureAsync(id, group, name, sites);
+        }
+        catch (Exception ex)
+        {
+            _services.GetService<IToastService>()?.Show("Site not switched",
+                $"Could not close the open run to make room for {name}: {ex.Message}", ToastKind.Error);
+            _SignatureDecision($"failed: {ex.Message}", name);
+        }
+    }
+
+    /// <summary>
+    /// Same rule as the adopt-on-open path, and deliberately the same method rather than a second copy of it: the
+    /// window being open or closed decided which of the two ran, and fixing only one of them is what kept this bug
+    /// alive through four attempts.
+    /// </summary>
+    public async Task ApplySignatureAsync(string? id, string? group, string name, IReadOnlyList<SdeSite> sites)
+    {
+        if (RunState is ActivityRunState.NotStarted || _IsSameRun(SignatureId, SignatureName, id, name))
+        {
+            _pendingSignature = null;
+            _SetSignature(id, group, name, sites);
+            _SignatureDecision("no run of another site was open", name);
+            Refresh(DateTime.UtcNow);
+            return;
+        }
+
+        // This pilot's own run: closed out here and now — stopped and unlinked, never deleted — so the window is on
+        // the site just copied. A group run is left standing, because ending it reaches every other member.
+        if (RunId is { } runId && GroupCode is null && FleetId is null)
+        {
+            string? closed = SignatureName;   // read before _SetSignature moves it on to the copied site
+            using var scope = _services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+                .Send(new DiscardRunCommand(runId, DateTime.UtcNow));
+            _ResetForNewRun();
+            _SetSignature(id, group, name, sites);
+            _SignatureDecision($"closed out the open {closed} run", name);
+            if (RunLoot is not null)
+                await RunLoot.RefreshAsync();
+            Refresh(DateTime.UtcNow);
+            return;
+        }
+
+        _pendingSignature = (id, group, name, sites);
+        StopRun(DateTime.UtcNow);
+        _SignatureDecision("the open run belongs to a group, so it waits", name);
+        Refresh(DateTime.UtcNow);
+    }
+
+    private void _SetSignature(string? id, string? group, string name, IReadOnlyList<SdeSite> sites)
+    {
+        SignatureId = id;
+        SignatureGroup = group;
+        SignatureName = name;
+        MatchedSites = sites;
+    }
+
+    /// <summary>
+    /// Whether a copied signature is the run already on this window rather than a new one. EVE gives every scan its
+    /// own id, and that is the only thing that tells "the site I am already in" from "another Sansha Refuge" —
+    /// comparing site names made every repeat of the same site look like the run in progress, which is what kept
+    /// handing Raymond a ticking clock when he scanned the next one (2026-09-02). The site name only stands in
+    /// where an id is missing on either side, which is a run started before this carried one.
+    /// </summary>
+    private static bool _IsSameRun(string? storedId, string? storedSite, string? copiedId, string? copiedSite) =>
+        storedId is { Length: > 0 } stored && copiedId is { Length: > 0 } copied
+            ? string.Equals(stored, copied, StringComparison.OrdinalIgnoreCase)
+            : string.Equals(storedSite, copiedSite, StringComparison.Ordinal);
+
+    /// <summary>
+    /// What this window did with a copied signature, and why — the line that says which of the two routes ran,
+    /// after this bug survived four attempts because that was invisible.
+    ///
+    /// ponytail: temporary instrument, at Warning only because AppLogger drops everything below it and
+    /// app-errors.jsonl is the only file a player can hand over. An ordinary copy has no business writing to an
+    /// error log: take this out once Raymond confirms the site switch behaves, or give AppLogger a level that
+    /// reaches that file without claiming something went wrong.
+    /// </summary>
+    private void _SignatureDecision(string what, string name) =>
+        _services.GetService<ILoggerFactory>()?.CreateLogger<ActivityWindowViewModel>().LogWarning(
+            "Copied signature {Signature}: {What} (run {RunId}, state {State}, group {Group}, fleet {Fleet}).",
+            name, what, RunId, RunState, GroupCode, FleetId);
+
+    private void _ApplyPendingSignature()
+    {
+        if (_pendingSignature is not { } pending)
+            return;
+
+        _pendingSignature = null;
+        _SetSignature(pending.Id, pending.Group, pending.Name, pending.Sites);
+    }
+
+    private string _LootItemCount()
+    {
+        int items = RunLoot?.Captures.Where(capture => !capture.IsExcluded).Sum(capture => capture.Entries.Count) ?? 0;
+        return items == 1 ? "1 item" : $"{items} items";
     }
 
     internal void ApplyFitDetection(ShipFitDetectionReading reading)

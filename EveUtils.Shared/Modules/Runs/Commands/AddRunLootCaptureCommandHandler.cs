@@ -4,11 +4,12 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Events;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
-internal sealed class AddRunLootCaptureCommandHandler(IDbContextFactory<ClientDbContext> contextFactory)
+internal sealed class AddRunLootCaptureCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus)
     : ICommandHandler<AddRunLootCaptureCommand, Result<RunLootCaptureSaveResult>>
 {
     public async Task<Result<RunLootCaptureSaveResult>> Handle(AddRunLootCaptureCommand command, CancellationToken cancellationToken = default)
@@ -54,6 +55,10 @@ internal sealed class AddRunLootCaptureCommandHandler(IDbContextFactory<ClientDb
             });
         db.Set<RunLootCapture>().Add(entity);
         await db.SaveChangesAsync(cancellationToken);
+        // Whoever is showing this run has to hear that it just gained loot. Storing the capture and telling the
+        // player it was stored were two different things, and an activity window that was already open did neither:
+        // the toast said "Loot copied" while the LOOT section under it went on reading "no loot captured".
+        await eventBus.PublishAsync(new RunLootCapturedEvent(run.Id), EventTarget.Local, cancellationToken);
         return Result<RunLootCaptureSaveResult>.Success(new RunLootCaptureSaveResult(entity.Id, repeatOf));
     }
 }

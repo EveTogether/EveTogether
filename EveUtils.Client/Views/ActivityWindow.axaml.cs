@@ -36,10 +36,16 @@ public partial class ActivityWindow : OverlayWindow
     protected override async void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
+        if (_viewModel is null)
+            return;
+
+        // The window's own state before the clock runs on it: the remembered weather and tier, whose run this is,
+        // and the run the store already has open. Nothing called this until now — the window went up on a
+        // constructor's worth of state, so it forgot the tier, could not say whose run it was, and offered a START
+        // for a run it was already in, which then adopted the old one instead of beginning a new one.
+        await _viewModel.LoadAsync();
         // Only once the window is up: a clock ticking for a window nobody opened is a clock nobody stops.
-        _viewModel?.Start();
-        if (_viewModel?.RunLoot is { } runLoot)
-            await runLoot.RefreshAsync();
+        _viewModel.Start();
     }
 
     protected override void OnClosed(EventArgs e)

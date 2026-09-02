@@ -26,17 +26,22 @@ public static class ClipboardInventoryParser
 
     internal static bool HasSingleRow(string text) => ReadRows(text).Count == 1;
 
-    internal static IReadOnlyList<ClipboardInventoryItem> ParseAmbiguousNameCandidates(string text)
+    /// <summary>
+    /// Every column that could hold the names, one list per column, for a caller that can check them against the
+    /// SDE. Distinct values only separate a name column from a group column once group names start repeating: over
+    /// forty rows that is 39-against-10, over two rows it is 2-against-2 and says nothing.
+    /// </summary>
+    internal static IReadOnlyList<IReadOnlyList<ClipboardInventoryItem>> ParseNameColumnCandidates(string text)
     {
         List<string[]> rows = ReadRows(text);
-        if (rows.Count != 1 || FindNameColumn(rows) is not null)
+        if (rows.Count == 0)
             return [];
 
-        List<ClipboardInventoryItem> candidates = [];
+        List<IReadOnlyList<ClipboardInventoryItem>> candidates = [];
         for (var column = 0; column < rows[0].Length; column++)
         {
             if (IsNameColumn(rows, column, out _))
-                candidates.AddRange(ReadItems(rows, column));
+                candidates.Add(ReadItems(rows, column));
         }
 
         return candidates;
@@ -113,8 +118,10 @@ public static class ClipboardInventoryParser
             }
         }
 
-        // This chosen, unmeasured 2x guard comes from one 39-versus-10 capture; it rejects valid 15-versus-8 selections rather than misnaming them.
-        return nameColumn is null || highestDistinctCount < nextHighestDistinctCount * 2 ? null : nameColumn;
+        // Strictly more distinct values than any other candidate: a margin on top of that refuses copies it cannot
+        // misname, and refusing loses the loot outright. A wrong pick costs nothing, because every caller checks
+        // the names against the SDE; a tie is no answer at all and falls through to ParseNameColumnCandidates.
+        return nameColumn is null || highestDistinctCount <= nextHighestDistinctCount ? null : nameColumn;
     }
 
     private static bool IsNameColumn(IReadOnlyList<string[]> rows, int column, out int distinctCount)

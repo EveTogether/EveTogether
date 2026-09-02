@@ -25,13 +25,40 @@ public static class SdeInventoryResolver
         return (lines, unresolved);
     }
 
+    /// <summary>
+    /// Which candidate column actually holds item names: the one whose values the SDE recognises most of. This is
+    /// what tells "Metal Scraps" from "Commodities" on a two-row copy, where counting distinct values cannot.
+    /// A tie is still no answer, and so is nothing matching at all.
+    /// </summary>
     internal static (IReadOnlyList<(AppraisalLine Line, ClipboardInventoryItem Item)> Lines, IReadOnlyList<string> Unresolved)
-        ResolveUniqueCandidate(IReadOnlyList<ClipboardInventoryItem> candidates, ISdeAccessor sde, out bool hasNoSdeMatch)
+        ResolveBestCandidate(IReadOnlyList<IReadOnlyList<ClipboardInventoryItem>> columns, ISdeAccessor sde,
+            out bool hasNoSdeMatch)
     {
-        var resolution = Resolve(candidates, sde);
-        hasNoSdeMatch = resolution.Lines.Count == 0;
-        return resolution.Lines.Count == 1
-            ? resolution
-            : ([], candidates.Select(candidate => candidate.Name).ToList());
+        (IReadOnlyList<(AppraisalLine Line, ClipboardInventoryItem Item)> Lines, IReadOnlyList<string> Unresolved) best = ([], []);
+        var bestCount = 0;
+        var tied = false;
+
+        foreach (IReadOnlyList<ClipboardInventoryItem> column in columns)
+        {
+            var resolution = Resolve(column, sde);
+            if (resolution.Lines.Count > bestCount)
+            {
+                best = resolution;
+                bestCount = resolution.Lines.Count;
+                tied = false;
+            }
+            else if (resolution.Lines.Count == bestCount && bestCount > 0)
+            {
+                tied = true;
+            }
+        }
+
+        hasNoSdeMatch = bestCount == 0;
+        // Nothing matched and two columns matching equally are different refusals, so they carry different
+        // evidence: the names that were looked up, or none at all.
+        if (bestCount == 0)
+            return ([], [.. columns.SelectMany(column => column.Select(item => item.Name))]);
+
+        return tied ? ([], []) : best;
     }
 }

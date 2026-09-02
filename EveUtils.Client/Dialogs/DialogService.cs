@@ -104,6 +104,13 @@ public sealed class DialogService : IDialogService, ISingletonService
         // Only one run is ever tracked at a time (ET-98): re-opening focuses it instead of stacking a second,
         // same rule as the DPS and fleet overlays above — and what makes ET-100's double-click AC hold. Whether
         // focus may be taken at all is RunWindowPresentation's call, never this method's (ET-105 AC-2).
+        // A second call carries a newly copied signature, and the window that is already up is the one that has to
+        // hear about it — dropping the incoming view model meant "start run" on a fresh signature did nothing but
+        // raise the window on the previous site (Raymond, 2026-09-02).
+        if (_activityWindow?.DataContext is ActivityWindowViewModel open && !ReferenceEquals(open, viewModel)
+            && viewModel.SignatureName is { Length: > 0 } signature)
+            open.ApplySignature(viewModel.SignatureId, viewModel.SignatureGroup, signature, viewModel.MatchedSites);
+
         switch (RunWindowPresentation.Decide(trigger, _activityWindow is not null))
         {
             case RunWindowActivation.LeaveAsIs:

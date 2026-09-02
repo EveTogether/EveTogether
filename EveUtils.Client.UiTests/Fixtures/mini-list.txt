@@ -1,0 +1,2 @@
+Metal Scraps	1	Commodities			0,01 m3	970,65 ISK
+Microwave S	1	Frequency Crystal	Small		1 m3	1.931,37 ISK

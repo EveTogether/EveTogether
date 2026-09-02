@@ -22,6 +22,6 @@ internal sealed class GetRunningRunQueryHandler(IDbContextFactory<ClientDbContex
                     $"{runningCount} runs are running, so which one this window is showing is ambiguous.", "Runs"));
 
         return Result<RunningRunDto>.Success(new RunningRunDto(
-            run.Id, run.CharacterId, run.ActivityKind, run.StartedAtUtc, run.GroupCode, run.SiteName));
+            run.Id, run.CharacterId, run.ActivityKind, run.StartedAtUtc, run.GroupCode, run.SiteName, run.Signature));
     }
 }

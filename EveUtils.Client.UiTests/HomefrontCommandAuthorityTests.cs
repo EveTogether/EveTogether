@@ -94,6 +94,25 @@ public sealed class HomefrontCommandAuthorityTests
         Assert.Contains("fleet commander", window.CommandStatusText, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The FC flies one toon while the fleets window's row was last selected as another. The controls belong to the
+    /// character he is actually in the fleet as, not to whichever one that row happens to act for — asking
+    /// IActiveFleetState instead told a real fleet commander that only the FC may start or stop (Jithran,
+    /// 2026-09-02).
+    /// </summary>
+    [AvaloniaFact]
+    public void TheFc_GetsTheRunControls_EvenWhenTheFleetRowActsForAnotherOfHisToons()
+    {
+        using ClientInFleet client = ClientInFleet.As(Member, bossCharacterId: Commander, flyingAs: Commander);
+        var window = new ActivityWindowViewModel(ActivityKind.Site, client.Services);
+
+        window.StartManualRun(DateTime.UtcNow);
+
+        Assert.True(window.IsStopButtonVisible);
+        Assert.True(window.IsDiscardButtonVisible);
+        Assert.False(window.IsCommandStatusShown);
+    }
+
     /// <summary>The FC does get them — so the assertion above is pinning down a choice, not a window with no
     /// buttons at all.</summary>
     [AvaloniaFact]
@@ -229,7 +248,9 @@ public sealed class HomefrontCommandAuthorityTests
 
         public FakeEsiFleetClient Esi => esi;
 
-        public static ClientInFleet As(int actingCharacterId, int? bossCharacterId)
+        /// <param name="actingCharacterId">The character the fleets-window row was selected as.</param>
+        /// <param name="flyingAs">The character this client actually publishes as; defaults to the same one.</param>
+        public static ClientInFleet As(int actingCharacterId, int? bossCharacterId, int? flyingAs = null)
         {
             var esi = new FakeEsiFleetClient();
             var client = new ClientInFleet(
@@ -237,6 +258,10 @@ public sealed class HomefrontCommandAuthorityTests
             client.BossBecomes(bossCharacterId);
             client.Services.GetRequiredService<IActiveFleetState>()
                 .Enter(FleetId, actingCharacterId, clientOnly: true);
+            // Who this client flies as, which is what the run controls are decided for — the fleets-window row
+            // selection above only says which fleet is on screen.
+            client.Services.GetRequiredService<IFleetParticipation>()
+                .Set([new FleetParticipant(flyingAs ?? actingCharacterId, FleetId, ClientOnly: true)]);
             return client;
         }
 

@@ -182,6 +182,72 @@
                 <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
                 <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
             </Style>
+            <!-- ── A link ── for the one thing in a row that opens something instead of setting it. Accent-coloured
+                 and underlined so it reads as clickable without a border or a plate, which in a key/value row would
+                 look like a control you can type into. -->
+            <Style Selector="Button.link">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="Cursor" Value="Hand"/>
+            </Style>
+            <Style Selector="Button.link /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="TextBlock.TextDecorations" Value="Underline"/>
+            </Style>
+            <Style Selector="Button.link:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+            </Style>
+
+            <!-- ── The enemy stepper ── a row control, not a form field. The theme sizes a NumericUpDown like a text
+                 box, which beside a 10.5pt enemy name put chevrons taller than every button in this window (ET-115).
+                 Sized against Button.pick above, which is what the rest of the window is made of. -->
+            <Style Selector="NumericUpDown.count">
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="FontSize" Value="10.5"/>
+            </Style>
+            <Style Selector="NumericUpDown.count /template/ TextBox">
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Padding" Value="6,2"/>
+            </Style>
+            <Style Selector="NumericUpDown.count /template/ ButtonSpinner">
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+            </Style>
+            <!-- Two arrows, not two buttons (Raymond, 2026-09-02). No border, no plate, nothing but the glyph in
+                 the window's brightest text — thirteen enemy rows under each other is a list, and a list does not
+                 want twenty-six little frames in it. The padding is the only thing left with any size: it keeps the
+                 pointer target usable around a glyph that carries no chrome of its own to aim at. -->
+            <Style Selector="NumericUpDown.count /template/ ButtonSpinner /template/ RepeatButton">
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="MinWidth" Value="0"/>
+                <Setter Property="Padding" Value="5,2"/>
+                <Setter Property="FontSize" Value="8"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <!-- The plate the stock Fluent theme paints lives on the presenter, so a rule one level up loses to it —
+                 the same lesson ToggleButton.section above is already carrying. -->
+            <Style Selector="NumericUpDown.count /template/ ButtonSpinner /template/ RepeatButton /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="0"/>
+            </Style>
+            <!-- Hover and press are the arrow itself brightening, since there is no longer a plate to tint. -->
+            <Style Selector="NumericUpDown.count /template/ ButtonSpinner /template/ RepeatButton:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+            <Style Selector="NumericUpDown.count /template/ ButtonSpinner /template/ RepeatButton:pressed /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+            </Style>
             <Style Selector="Button.pick.on /template/ ContentPresenter">
                 <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
@@ -199,6 +265,14 @@
                 </StackPanel>
 
                 <WrapPanel Grid.Column="1" VerticalAlignment="Center" ItemSpacing="5" LineSpacing="4">
+                    <!-- Whose run this is, first in the row and before anything about the site: with several toons
+                         running their own sites at once this is the only thing telling two windows apart, and even
+                         with one it was the question the window never answered (Raymond, 2026-09-02). -->
+                    <Border Classes="chip" Classes.ok="{Binding HasActingCharacter}"
+                            Classes.warn="{Binding !HasActingCharacter}"
+                            ToolTip.Tip="The character this run is filed under">
+                        <TextBlock Text="{Binding ActingCharacterText}"/>
+                    </Border>
                     <Border Classes="chip ok" IsVisible="{Binding HasWeatherAndTier}">
                         <TextBlock Text="{Binding TierText}"/>
                     </Border>
@@ -328,9 +402,16 @@
                                 <TextBlock Text="SITE"/>
                                 <TextBlock Grid.Column="1" Text="{Binding SignatureSiteText}"/>
                             </Grid>
+                            <!-- The hull list is behind this, not in the section: thirty-odd names over five lines
+                                 pushed LOCATION and LOOT STRATEGY off the bottom. The SITE line above still carries
+                                 "ship-restricted" itself, so the FACT of the restriction is never hidden — and it
+                                 stays visible even for a restricted site whose allow-list resolves to nothing,
+                                 which is exactly the case that has no list to open. -->
                             <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasShipRestriction}">
-                                <TextBlock Text="SHIPS"/>
-                                <TextBlock Grid.Column="1" Text="{Binding ShipRestrictionText}"/>
+                                <TextBlock Text=""/>
+                                <Button Grid.Column="1" Classes="link" Content="which ships may enter?"
+                                        HorizontalAlignment="Left"
+                                        Command="{Binding ShowShipRestrictionCommand}"/>
                             </Grid>
                         </StackPanel>
 
@@ -426,7 +507,7 @@
                                          to say which of the two it is. -->
                                     <TextBlock Grid.Column="1" Classes="hint" Margin="0" VerticalAlignment="Center"
                                                Text="{Binding CountStateText}"/>
-                                    <NumericUpDown Grid.Column="2" Width="72" Minimum="0" Maximum="999" Increment="1"
+                                    <NumericUpDown Grid.Column="2" Classes="count" Width="72" Minimum="0" Maximum="999" Increment="1"
                                                    FormatString="0" Value="{Binding Count, Mode=TwoWay}"/>
                                 </Grid>
                             </DataTemplate>

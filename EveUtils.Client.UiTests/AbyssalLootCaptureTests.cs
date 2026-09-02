@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
@@ -134,6 +136,137 @@ public sealed class AbyssalLootCaptureTests
         var offer = Assert.Single(env.Toasts.ActionToasts);
         Assert.Contains("1 EVE item type(s)", offer.Message);
         Assert.Contains("1 name(s) were not recognised", offer.Message);
+    }
+
+    /// <summary>
+    /// ET-65, Raymond 2026-09-02: a copied loot window that produced nothing at all — no loot, no toast, no line in
+    /// the log, indistinguishable from a watcher that never ran.
+    ///
+    /// This one is genuinely undecidable: two text columns that BOTH read as item types all the way down, so
+    /// neither the distinct counts nor the SDE can choose between them. A refusal is right; being refused in
+    /// silence was the fault.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AWholeWindowWhoseNameColumnCannotBeToldApart_IsRefusedOutLoud_NotDropped()
+    {
+        using var env = await Env.StartAsync(sde: new FakeSdeAccessor()
+            .Add(1, "Metal Scraps", 1, 1)
+            .Add(2, "Microwave S", 2, 2)
+            .Add(3, "Rifter", 3, 3)
+            .Add(4, "Damage Control II", 4, 4));
+        await env.StartRunAsync();
+
+        await env.CopyAsync("Metal Scraps\tRifter\t1\r\nMicrowave S\tDamage Control II\t2");
+
+        Assert.Empty(await env.CapturesAsync());
+        var refusal = Assert.Single(env.Toasts.Toasts);
+        Assert.Equal("Loot not recognised", refusal.Title);
+        Assert.Contains("stands out as the item names", refusal.Message);
+        // It must not ask for column headings: an EVE inventory copy has none, so that would be unfollowable.
+        Assert.DoesNotContain("column shown", refusal.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The same two items copied from EVE's Icons view and from its Details/List view (those two produce identical
+    /// bytes). Icons worked and Details did not, on the same names, so neither the view nor the items were ever the
+    /// cause: Icons has one text column and nothing to choose between, Details has two — the name and the group —
+    /// and over two rows both are 2-of-2 unique, so counting distinct values separates nothing. The Icons route
+    /// proved the SDE recognises these names; it simply was not asked on the multi-column path.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData("mini-icons.txt")]
+    [InlineData("mini-list.txt")]
+    public async Task TheSameTwoItems_AreRecorded_FromEveryViewTheyWereCopiedFrom(string fixture)
+    {
+        using var env = await Env.StartAsync(sde: new FakeSdeAccessor()
+            .Add(1, "Metal Scraps", 1, 1)
+            .Add(2, "Microwave S", 2, 2));
+        await env.StartRunAsync();
+
+        await env.CopyAsync(_Fixture(fixture));
+
+        RunLootCapture capture = Assert.Single(await env.CapturesAsync());
+        Assert.Equal(["Metal Scraps", "Microwave S"], capture.Entries.Select(entry => entry.Name).Order());
+    }
+
+    /// <summary>
+    /// The group column here has MORE distinct values than the item names, so the column shape alone picks the
+    /// wrong one. The SDE overrules it: "Group one" is nothing, the blueprints are types.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task WhenTheShapePicksTheGroupColumn_TheSdeOverrulesIt()
+    {
+        using var env = await Env.StartAsync(sde: new FakeSdeAccessor()
+            .Add(1, "Baryon Exotic Plasma S Blueprint", 1, 1)
+            .Add(2, "Other Blueprint", 2, 2)
+            .Add(3, "Final Blueprint", 3, 3));
+        await env.StartRunAsync();
+
+        await env.CopyAsync("Group one\tBaryon Exotic Plasma S Blueprint\t1\r\nGroup two\tBaryon Exotic Plasma S Blueprint\t2"
+            + "\r\nGroup three\tOther Blueprint\t3\r\nGroup four\tFinal Blueprint\t4");
+
+        RunLootCapture capture = Assert.Single(await env.CapturesAsync());
+        Assert.All(capture.Entries, entry => Assert.EndsWith("Blueprint", entry.Name, StringComparison.Ordinal));
+    }
+
+    /// <summary>Only the Details/List copy carries the ISK column, so only it can price what it recorded.</summary>
+    [AvaloniaFact]
+    public async Task TheDetailsCopy_KeepsThePriceColumn_TheIconsCopyHasNoneToKeep()
+    {
+        using var env = await Env.StartAsync(sde: new FakeSdeAccessor()
+            .Add(1, "Metal Scraps", 1, 1)
+            .Add(2, "Microwave S", 2, 2));
+        await env.StartRunAsync();
+
+        await env.CopyAsync(_Fixture("mini-list.txt"));
+        RunLootCapture detail = Assert.Single(await env.CapturesAsync());
+        Assert.Equal(970.65m, detail.Entries.Single(entry => entry.Name == "Metal Scraps").ClipboardPrice);
+
+        env.CloseOffer();
+        await env.CopyAsync(_Fixture("mini-icons.txt"));
+        RunLootCapture icons = (await env.CapturesAsync())[1];
+        Assert.All(icons.Entries, entry => Assert.Null(entry.ClipboardPrice));
+    }
+
+    private static string _Fixture(string name)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "EVE-Together.slnx")))
+            directory = directory.Parent;
+
+        return File.ReadAllText(Path.Combine(
+            directory?.FullName ?? throw new InvalidOperationException("the solution root is not above the test binary"),
+            "EveUtils.Client.UiTests", "Fixtures", name));
+    }
+
+    /// <summary>
+    /// Raymond's own loot window, copied verbatim on 2026-09-02 and refused. Seven columns — name, quantity, group,
+    /// size, slot, volume, price — with no heading row, empty cells appearing as consecutive tabs, a group name
+    /// repeating across rows, and both number conventions on one line (30.229,00 ISK beside 0,10 m3).
+    ///
+    /// Four distinct item names against three distinct group names did not clear the parser's old 2x distinctness
+    /// margin, so the whole window was refused. The margin is gone; the SDE is what catches a wrong column now.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AWholeLootWindowWithNoHeadingRow_IsRecordedFromItsNameColumn()
+    {
+        using var env = await Env.StartAsync(sde: new FakeSdeAccessor()
+            .Add(1, "Blood Microwave S", 1, 1)
+            .Add(2, "Dark Blood Copper Tag", 2, 2)
+            .Add(3, "Dark Blood EM Energized Membrane", 3, 3)
+            .Add(4, "Gamma S", 1, 1));
+        await env.StartRunAsync();
+
+        await env.CopyAsync(_Fixture("blood-raider-loot.txt"));
+
+        RunLootCapture capture = Assert.Single(await env.CapturesAsync());
+        Assert.Equal(
+            ["Blood Microwave S", "Dark Blood Copper Tag", "Dark Blood EM Energized Membrane", "Gamma S"],
+            capture.Entries.Select(entry => entry.Name).Order());
+        // The comma is the decimal point and the dot groups thousands, on the same row, in both units.
+        RunLootEntry crystal = capture.Entries.Single(entry => entry.Name == "Blood Microwave S");
+        Assert.Equal(30_229.00m, crystal.ClipboardPrice);
+        Assert.Equal(0.10m, capture.Entries.Single(entry => entry.Name == "Dark Blood Copper Tag").Volume);
     }
 
     [AvaloniaFact]
@@ -308,7 +441,7 @@ public sealed class AbyssalLootCaptureTests
             _instance = instance;
             _watch = watch;
             _source = source;
-            _capture = new AbyssalLootCapture(watch, Toasts, sde, captureDispatcher);
+            _capture = new AbyssalLootCapture(watch, Toasts, sde, NullLogger<AbyssalLootCapture>.Instance, captureDispatcher);
         }
 
         private static CancellationToken Token => TestContext.Current.CancellationToken;

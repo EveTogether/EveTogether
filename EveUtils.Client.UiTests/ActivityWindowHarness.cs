@@ -129,10 +129,14 @@ internal sealed class ActivityWindowHarness : IDisposable
         + "------------------------------------------------------------\n";
 
     /// <summary>Whether the pilot is at the keyboard — the one fact a headless run cannot observe for itself.</summary>
-    private sealed class StubPresence(bool inGame) : ILocalCharacterPresence
+    /// <param name="inGameIds">Which characters are at the keyboard; empty means "all of them", the old blanket
+    /// answer. Naming them is what lets a test have three registered pilots and one client open.</param>
+    internal sealed class StubPresence(bool inGame, params int[] inGameIds) : ILocalCharacterPresence
     {
-        public bool? IsInGame(int characterId, string? characterName) => inGame;
-        public bool? IsInGame(int characterId) => inGame;
+        public bool? IsInGame(int characterId, string? characterName) =>
+            inGameIds.Length == 0 ? inGame : inGame && Array.IndexOf(inGameIds, characterId) >= 0;
+
+        public bool? IsInGame(int characterId) => IsInGame(characterId, null);
         public IDisposable Subscribe(Action handler) => new Unsubscribed();
 
         private sealed class Unsubscribed : IDisposable
