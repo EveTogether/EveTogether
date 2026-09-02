@@ -1,0 +1,62 @@
+@page "/api-keys"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = PanelPermissions.ApiKeysManage)]
+
+<div class="crumb">Access / <b>API keys</b></div>
+
+@if (_created is not null)
+{
+    <Card Title="New API key — shown once">
+        <div style="padding:14px;display:flex;flex-direction:column;gap:8px;">
+            <p class="warn" style="margin:0;">Copy it now. Only the prefix and a hash are stored — this key cannot be shown again.</p>
+            <div style="display:flex;gap:8px;">
+                <input readonly value="@_created.PlainText" style="flex:1;font-family:monospace;" />
+                <button class="accent" onclick="navigator.clipboard.writeText(this.previousElementSibling.value)">Copy</button>
+                <button @onclick="Dismiss">Done</button>
+            </div>
+        </div>
+    </Card>
+}
+@if (_error is not null)
+{
+    <p class="warn">@_error</p>
+}
+
+<Card Title="API keys" Count="@_keys.Count.ToString()">
+    <HeaderAction>
+        <input @bind="_label" placeholder="Label" style="min-width:200px" />
+        <button class="accent" @onclick="CreateAsync">+ CREATE</button>
+    </HeaderAction>
+    <ChildContent>
+        @if (_keys.Count == 0)
+        {
+            <p class="dim" style="padding:14px;margin:0;">No API keys — the REST API is unreachable until one is created.</p>
+        }
+        else
+        {
+            <table>
+                <thead><tr><th>Label</th><th>Prefix</th><th>Scopes</th><th>Owner</th><th>Last used</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var key in _keys)
+                    {
+                        <tr>
+                            <td class="bright">@key.Label</td>
+                            <td class="dim" style="font-family:monospace;">@key.Prefix</td>
+                            <td class="dim">@string.Join(", ", key.Scopes)</td>
+                            <td class="dim">@(key.OwnerCharacterId?.ToString() ?? "all server data")</td>
+                            <td class="dim">@(key.LastUsedAt?.ToString("u") ?? "never")</td>
+                            <td class="@(key.IsActive ? "ok" : "dim")">@(key.IsActive ? "active" : "revoked")</td>
+                            <td style="text-align:right">
+                                @if (key.IsActive)
+                                {
+                                    <button @onclick="() => RevokeAsync(key.Id)">Revoke</button>
+                                }
+                                <button class="danger" @onclick="() => DeleteAsync(key.Id)">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </ChildContent>
+</Card>

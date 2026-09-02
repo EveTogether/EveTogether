@@ -20,6 +20,7 @@ public sealed class PanelPermissionCatalog : IPermissionCatalog
         new(PanelPermissions.UsersManage, "Manage users", "Create, edit, (de)activate and delete admin users.", PanelPermissions.Module),
         new(PanelPermissions.RolesManage, "Manage roles", "Create and edit roles and their permission codes.", PanelPermissions.Module),
         new(PanelPermissions.SettingsManage, "Manage settings", "Change server panel settings.", PanelPermissions.Module),
+        new(PanelPermissions.ApiKeysManage, "Manage API keys", "Create, revoke and delete REST API keys.", PanelPermissions.Module),
         new(PanelPermissions.BackupDownload, "Download backup", "Download an encrypted full-server backup archive.", PanelPermissions.Module),
         new(PanelPermissions.BackupRestore, "Restore backup", "Restore a backup archive — wipes the database and replaces the server identity.", PanelPermissions.Module),
     ];

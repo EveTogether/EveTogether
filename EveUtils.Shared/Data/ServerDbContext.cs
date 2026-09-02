@@ -1,4 +1,5 @@
 using EveUtils.Shared.Modules.AdminAuth;
+using EveUtils.Shared.Modules.ApiKeys;
 using EveUtils.Shared.Modules.Backup;
 using EveUtils.Shared.Modules.Fittings;
 using EveUtils.Shared.Modules.Fleet;
@@ -22,6 +23,7 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options) :
         SyncModule.ConfigureModel(modelBuilder);             // server-only
         ServerAuthModule.ConfigureModel(modelBuilder);       // server-only: pairing/sessions/allowed-list
         AdminAuthModule.ConfigureModel(modelBuilder);        // server-only: admin users/roles/RBAC
+        ApiKeysModule.ConfigureModel(modelBuilder);          // server-only: REST API keys
         FittingsModule.ConfigureServerModel(modelBuilder);   // server-only: SharedFit store
         PermissionsModule.ConfigureModel(modelBuilder);      // server-only: app-permission toggles
         FleetModule.ConfigureModel(modelBuilder);            // server-only: fleets/wings/squads/members/invites

@@ -1,5 +1,6 @@
 using System.Net;
 using EveUtils.Server;
+using EveUtils.Server.Api;
 using EveUtils.Server.Auth;
 using EveUtils.Server.Backup;
 using EveUtils.Server.Components;
@@ -113,7 +114,9 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.LoginPath = "/login";
         options.LogoutPath = "/account/logout";
         options.AccessDeniedPath = "/login";
-    });
+    })
+    // The REST API's own scheme, deliberately beside the cookie and the gRPC bearer rather than sharing them.
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthentication.Scheme, null);
 builder.Services.AddAuthorization(options =>
 {
     // One policy per panel permission code. A super-admin passes every policy; otherwise the user
@@ -123,6 +126,8 @@ builder.Services.AddAuthorization(options =>
         var required = code;
         options.AddPolicy(required, policy => policy.RequireAssertion(ctx => ctx.User.HasPanelPermission(required)));
     }
+
+    options.AddPolicy(ApiKeyAuthentication.Policy, ApiKeyAuthentication.BuildPolicy());
 });
 builder.Services.AddSignalR();                                          // DPS stream hub
 builder.Services.AddHostedService<DpsBroadcastBridge>();                // server bus → SignalR bridge
@@ -292,6 +297,8 @@ app.MapGrpcService<RunsGrpcService>();
 app.MapGrpcService<FleetsGrpcService>();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode(); // Blazor admin panel at "/"
 app.MapHub<DpsHub>("/hubs/dps");                                // live DPS stream hub
+
+app.MapServerApi();                                             // read-only REST API under /api/v1, behind an API key
 
 // Admin-panel login: a non-interactive HTML form posts here; SignInAsync needs a writable HttpContext,
 // so this is a minimal-API endpoint rather than a Blazor component event. Antiforgery is enforced by the

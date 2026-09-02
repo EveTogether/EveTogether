@@ -18,6 +18,7 @@ public static class PanelPermissions
     public const string UsersManage = "panel.users.manage";
     public const string RolesManage = "panel.roles.manage";
     public const string SettingsManage = "panel.settings.manage";
+    public const string ApiKeysManage = "panel.apikeys.manage";
 
     /// <summary>Download a full server backup archive. Separate from <see cref="DataView"/> because the archive
     /// decrypts every stored refresh token — it is the single most sensitive thing the panel can hand out.</summary>
@@ -29,7 +30,7 @@ public static class PanelPermissions
     public static readonly IReadOnlyList<string> All =
     [
         DashboardView, MetricsView, LogsView, AllowedManage,
-        DataView, DataDelete, UsersManage, RolesManage, SettingsManage,
+        DataView, DataDelete, UsersManage, RolesManage, SettingsManage, ApiKeysManage,
         BackupDownload, BackupRestore,
     ];
 }
