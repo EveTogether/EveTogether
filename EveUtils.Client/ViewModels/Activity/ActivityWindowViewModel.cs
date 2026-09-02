@@ -627,14 +627,25 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             .Where(character => character.EsiCharacterId is not null)
             .ToList();
 
-        Character? chosen = known is [{ } only] ? only : null;
-        if (chosen is null && mayAsk && known.Count > 1
+        // Only the pilots actually at the keyboard can be flying this site, so only they are worth asking about.
+        // Raymond has three characters registered and one EVE client open, and was still asked which of the three
+        // it was (2026-09-02). Counted per CHARACTER in game, not per running client: one sitting on the login
+        // screen is a process with no pilot behind it. Seeing none is not knowing rather than nobody, so then the
+        // whole list stands and the question is still worth asking.
+        List<Character> candidates = _services.GetService<ILocalCharacterPresence>() is { } presence
+            ? [.. known.Where(character => presence.IsInGame(character.EsiCharacterId!.Value, character.Name) is true)]
+            : [];
+        if (candidates.Count == 0)
+            candidates = known;
+
+        Character? chosen = candidates is [{ } only] ? only : null;
+        if (chosen is null && mayAsk && candidates.Count > 1
             && _services.GetService<IDialogService>() is { } dialogs)
         {
             int? picked = await dialogs.PickCharacterAsync("Whose run is this?",
-                [.. known.Select(character => new CharacterPickOption(
+                [.. candidates.Select(character => new CharacterPickOption(
                     character.EsiCharacterId!.Value, character.Name, "local character", Enabled: true))]);
-            chosen = known.FirstOrDefault(character => character.EsiCharacterId == picked);
+            chosen = candidates.FirstOrDefault(character => character.EsiCharacterId == picked);
         }
 
         if (chosen is null)

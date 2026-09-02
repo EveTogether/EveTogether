@@ -3,8 +3,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Client.Platform;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Cqrs;
+using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
@@ -135,6 +137,68 @@ public class ActivityWindowWiringTests
         string line = Assert.Single(log.Messages, message => message.Contains("closed out", StringComparison.Ordinal));
         Assert.Contains("Sansha Hideaway", line, StringComparison.Ordinal);
         Assert.DoesNotContain("closed out the open Drone Cluster", line, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Three characters registered, one EVE client open: there is nothing to choose, so nothing is asked. Raymond
+    /// got "Whose run is this?" over RaymondKrah, SoldierJRNL and Catbank while only RaymondKrah was logged in.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task WithOneCharacterInGame_StartDoesNotAskWhoseRunItIs()
+    {
+        using var harness = await _ThreeCharacters(inGame: ActivityWindowHarness.CharacterId);
+        ActivityWindowViewModel model = await harness.OpenAsync();
+
+        await model.StartRunCommand.ExecuteAsync(null);
+
+        Assert.Null(harness.Dialogs.LastPrompt);   // never asked
+        Result<RunningRunDto> running = await harness.Services.GetRequiredService<IDispatcher>()
+            .Query(new GetRunningRunQuery());
+        Assert.True(running.IsSuccess);
+        Assert.Equal(ActivityWindowHarness.CharacterId, running.Value!.CharacterId);
+    }
+
+    /// <summary>Two at the keyboard is a real question, and only those two are offered.</summary>
+    [AvaloniaFact]
+    public async Task WithTwoCharactersInGame_StartAsks_AndOffersOnlyThoseTwo()
+    {
+        using var harness = await _ThreeCharacters(inGame: [ActivityWindowHarness.CharacterId, 90000002]);
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        harness.Dialogs.OnPickCharacter = (_, options) => Task.FromResult<int?>(options[1].CharacterId);
+
+        await model.StartRunCommand.ExecuteAsync(null);
+
+        Assert.Equal("Whose run is this?", harness.Dialogs.LastPrompt);
+        Assert.Equal([ActivityWindowHarness.CharacterId, 90000002],
+            harness.Dialogs.LastOptions!.Select(option => option.CharacterId));
+        Result<RunningRunDto> running = await harness.Services.GetRequiredService<IDispatcher>()
+            .Query(new GetRunningRunQuery());
+        Assert.Equal(90000002, running.Value!.CharacterId);
+    }
+
+    /// <summary>Detection seeing nobody is not knowing, not nobody: the question still gets asked, over everyone.</summary>
+    [AvaloniaFact]
+    public async Task WithNobodyDetectedInGame_StartStillAsks_OverEveryRegisteredCharacter()
+    {
+        using var harness = await _ThreeCharacters(inGame: []);
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        harness.Dialogs.OnPickCharacter = (_, options) => Task.FromResult<int?>(options[0].CharacterId);
+
+        await model.StartRunCommand.ExecuteAsync(null);
+
+        Assert.Equal("Whose run is this?", harness.Dialogs.LastPrompt);
+        Assert.Equal(3, harness.Dialogs.LastOptions!.Count);
+    }
+
+    private static async Task<ActivityWindowHarness> _ThreeCharacters(params int[] inGame)
+    {
+        var harness = await ActivityWindowHarness.CreateAsync(
+            configure: services => services.AddSingleton<ILocalCharacterPresence>(
+                new ActivityWindowHarness.StubPresence(inGame: true, inGame)));
+        ICharacterRegistry registry = harness.Services.GetRequiredService<ICharacterRegistry>();
+        await registry.AddOrUpdateAsync(new Character("SoldierJRNL", 90000002));
+        await registry.AddOrUpdateAsync(new Character("Catbank", 90000003));
+        return harness;
     }
 
     /// <summary>The group case on the open-window route too — it must wait, not close out.</summary>
