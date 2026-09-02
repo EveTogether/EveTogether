@@ -7,5 +7,7 @@ public interface ICharacterMetricStateRepository
 {
     Task<CharacterMetricState?> GetAsync(string characterName, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<CharacterMetricState>> ListAsync(CancellationToken cancellationToken = default);
+
     Task UpsertAsync(string characterName, long bountyTotal, int kills, string minedJson, CancellationToken cancellationToken = default);
 }

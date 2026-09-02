@@ -13,6 +13,7 @@ public interface ISharedFitRepository
     /// </summary>
     Task<SharedFit?> AddOrMatchAsync(SharedFit fit, CancellationToken cancellationToken = default);
 
+    Task<SharedFit?> GetAsync(int id, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<SharedFit>> ListAsync(CancellationToken cancellationToken = default);
     /// <summary>Removes a shared fit from the server library by its DB id. True if it existed.</summary>
     Task<bool> RemoveAsync(int id, CancellationToken cancellationToken = default);
