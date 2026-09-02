@@ -815,13 +815,14 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             var fit = TryParseFit(f.RawJson);
             if (fit is null) continue;
             // The owning character, when there is one: it carries both the name shown as the uploader and the ESI id
-            // the card's avatar needs. CharacterId is 0 for a gamelog-only pilot, and an imported fit may match no
-            // character at all — the card then falls back to the uploader's initial.
+            // the card's avatar needs. CharacterId is 0 for a gamelog-only pilot — that row keeps its name and falls
+            // back to the uploader's initial. A clipboard import belongs to no character at all (its OwnerId is the
+            // local-library placeholder), and then the name stays null: an owner id is a key, never a display name.
             var owner = Characters.FirstOrDefault(c => c.OwnerId == f.OwnerId);
             // local DB id drives export; hull/module icons via the type-image provider; the per-row
             // export dropdown reaches the shared seam with the picker + status sink; edit/delete metadata
             // (fit-metadata) reach back to the browser composition through the callbacks
-            var row = new FitRowViewModel(fit, owner?.Name ?? f.OwnerId, names, f.Id, _services!.GetService<ITypeImageProvider>(),
+            var row = new FitRowViewModel(fit, owner?.Name, names, f.Id, _services!.GetService<ITypeImageProvider>(),
                 _fitExportActions, BuildPickOptions, status => FittingsStatus = status,
                 _services!.GetService<IMarketPriceRepository>(), onEditMetadata, onDelete, tags: f.Tags,
                 portraits: _services!.GetService<ICharacterPortraitProvider>(),
@@ -1656,7 +1657,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             Fittings.Clear();
             foreach (var f in list)
             {
-                var ownerName = Characters.FirstOrDefault(c => c.OwnerId == f.OwnerId)?.Name ?? f.OwnerId;
+                // Null when the fit matches no character — the owner id is a key, not something to show as a name.
+                var ownerName = Characters.FirstOrDefault(c => c.OwnerId == f.OwnerId)?.Name;
                 Fittings.Add(new FittingViewModel(f, ownerName, PushFittingCb, ShareFittingCb, DeleteFittingCb, ExportFittingCb));
             }
         });

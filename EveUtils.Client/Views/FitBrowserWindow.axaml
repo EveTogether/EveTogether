@@ -531,14 +531,17 @@
                                                     <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Height="36" Margin="{StaticResource FitCardInset}">
                                                         <!-- The uploader's portrait. Not every row has one: a local
                                                              fit owned by a gamelog-only pilot has no ESI id, and an
-                                                             imported fit may match no character at all. Those keep
+                                                             imported fit may be named without one. Those keep
                                                              the initial, which is also what a row falls back to with
                                                              images switched off — the provider gates on that setting
                                                              itself. The circle is drawn either way, so the name
-                                                             starts at the same place on every card. -->
+                                                             starts at the same place on every card. A fit with no
+                                                             owner at all drops circle and name together; the row
+                                                             keeps its height, so the price stays put. -->
                                                         <Border Grid.Column="0" Width="18" Height="18" CornerRadius="9"
                                                                 Margin="0,0,7,0" ClipToBounds="True"
                                                                 VerticalAlignment="Center"
+                                                                IsVisible="{Binding HasUploader}"
                                                                 Background="{DynamicResource AccentSoftBrush}">
                                                             <Panel>
                                                                 <TextBlock Text="{Binding UploaderInitial}" FontSize="9.5"
@@ -551,6 +554,7 @@
                                                             </Panel>
                                                         </Border>
                                                         <TextBlock Grid.Column="1" Text="{Binding Uploader}" FontSize="11"
+                                                                   IsVisible="{Binding HasUploader}"
                                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                                                    Foreground="{DynamicResource TextAccentBrush}"/>
                                                         <TextBlock Grid.Column="2" Text="{Binding PriceLabel}" FontSize="11.5"

@@ -159,17 +159,23 @@ public class FitCardTests
         Assert.Contains(request.Size, new[] { 32, 64, 128, 256, 512 });
     }
 
-    /// <summary>Every row has something to show in the circle, so a row without a portrait is not an empty frame —
-    /// and the name after it starts in the same place on every card.</summary>
+    /// <summary>A named uploader without a portrait is not an empty frame — the circle carries their initial and the
+    /// name after it starts in the same place on every card. A fit that nobody owns is the other case and the one
+    /// the card cannot show you is right: it gets no name and no initial, so the row can disappear entirely instead
+    /// of standing in for a name with a "?" (ET-134). That distinction is what this pins down; the row's absence on
+    /// the card is a rendering matter, checked by eye.</summary>
     [Theory]
-    [InlineData("Vaelor Kestrane", "V")]
-    [InlineData("imported", "I")]
-    [InlineData("", "?")]
-    public void WithoutAPortrait_TheCircleCarriesTheUploadersInitial(string uploader, string expected)
+    [InlineData("Vaelor Kestrane", true, "V")]
+    [InlineData("imported", true, "I")]
+    [InlineData(null, false, "")]
+    [InlineData("", false, "")]
+    public void WithoutAPortrait_TheCircleCarriesTheUploadersInitial_AndAnUnownedFitHasNeither(
+        string? uploader, bool hasUploader, string expected)
     {
         var row = new FitRowViewModel(FullFit(), uploader, new StubNames());
 
         Assert.False(row.HasUploaderPortrait);
+        Assert.Equal(hasUploader, row.HasUploader);
         Assert.Equal(expected, row.UploaderInitial);
     }
 
