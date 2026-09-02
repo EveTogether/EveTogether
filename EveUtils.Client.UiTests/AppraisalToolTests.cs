@@ -365,7 +365,7 @@ public sealed class AppraisalToolTests(ITestOutputHelper output)
         window.CaptureRenderedFrame()!.Save(
             Path.Combine(_ShotDirectory(), "eveutils-appraisal-copied.png"), new PngBitmapEncoderOptions());
 
-        Assert.Contains("Copied the total to the clipboard.", _VisibleTexts(window));
+        Assert.Contains("Copied the total to the clipboard.", RenderedText.VisibleTexts(window));
         window.Close();
     }
 
@@ -498,7 +498,7 @@ public sealed class AppraisalToolTests(ITestOutputHelper output)
         Assert.NotNull(rendered);
         rendered!.Save(Path.Combine(_ShotDirectory(), $"eveutils-appraisal-{label}.png"), new PngBitmapEncoderOptions());
 
-        var texts = _VisibleTexts(window);
+        var texts = RenderedText.VisibleTexts(window);
         Assert.Contains("APPRAISAL", texts);
         Assert.Contains("PASTE", texts);
 
@@ -556,7 +556,7 @@ public sealed class AppraisalToolTests(ITestOutputHelper output)
         window.CaptureRenderedFrame()!.Save(
             Path.Combine(_ShotDirectory(), "eveutils-appraisal-total-in-full.png"), new PngBitmapEncoderOptions());
 
-        Assert.Contains("1,395,000,000 ISK", _VisibleTexts(window));
+        Assert.Contains("1,395,000,000 ISK", RenderedText.VisibleTexts(window));
 
         // Bounds, not text: a squeezed TextBlock keeps its full Text and renders an ellipsis, so no string
         // assertion can tell the difference between a figure that fits and one that is cut off.
@@ -695,7 +695,7 @@ public sealed class AppraisalToolTests(ITestOutputHelper output)
         window.CaptureRenderedFrame()!.Save(
             Path.Combine(_ShotDirectory(), "eveutils-appraisal-docked.png"), new PngBitmapEncoderOptions());
 
-        var texts = _VisibleTexts(window);
+        var texts = RenderedText.VisibleTexts(window);
         Assert.Contains("ITEMS (4)", texts);
         Assert.Contains("10,700,000 ISK", texts);
         Assert.Contains("Tritanium", texts);
@@ -754,11 +754,6 @@ public sealed class AppraisalToolTests(ITestOutputHelper output)
     /// merely bound would pass an assertion that only looked at every <see cref="TextBlock"/>.</summary>
     private static TextBlock _Named(Visual root, string name) =>
         root.GetVisualDescendants().OfType<TextBlock>().Single(block => block.Name == name);
-
-    private static List<string> _VisibleTexts(Visual root) =>
-        [.. root.GetVisualDescendants().OfType<TextBlock>()
-            .Where(block => block.IsEffectivelyVisible && !string.IsNullOrEmpty(block.Text))
-            .Select(block => block.Text!)];
 
     /// <summary>A second price source, standing in for the one that quotes a real order book: it fills buy and sell
     /// beside the estimate and resolves names itself, which is what the seam exists to allow.</summary>
