@@ -114,6 +114,74 @@ public class ActivityWindowWiringTests
         Assert.Null(model.RunId);
     }
 
+    /// <summary>
+    /// Raymond's actual route, three times over: the window was CLOSED, so a copied signature opens a fresh one —
+    /// and that one adopts the run still open on another site. It used to come up with that run's clock ticking,
+    /// its start time, its loot and its site, as if that were the site just copied.
+    ///
+    /// Driven through the real <see cref="ActivityWindow"/>, because ApplySignature is not on this path at all.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ANewWindowOpenedOnASignature_DoesNotPresentAnOlderRunAsThatSite()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel first = await harness.OpenAsync();
+        first.SignatureName = "Sansha Hideaway";
+        await first.StartRunCommand.ExecuteAsync(null);
+        Guid? open = first.RunId;
+        first.Dispose();   // he closes the window; the run stays open in the store
+
+        var reopened = new ActivityWindowViewModel(ActivityKind.Site, harness.Services) { SignatureName = "Drone Cluster" };
+        var window = new ActivityWindow(reopened);
+        window.Show();
+        await ActivityWindowHarness.WaitUntil(() => reopened.RunId is not null);
+
+        Assert.Equal(open, reopened.RunId);
+        Assert.NotEqual(ActivityRunState.Running, reopened.RunState);   // the clock is not ticking on a stale run
+        Assert.Equal("Sansha Hideaway", reopened.SignatureName);        // shown as what it is, not as Drone Cluster
+        Assert.Contains("Drone Cluster", reopened.ClockHint, StringComparison.Ordinal);
+        Assert.False(reopened.IsStartButtonVisible);                   // SAVE or DISCARD are the only answers
+
+        harness.Dialogs.OnConfirm = (_, _) => Task.FromResult(true);
+        await reopened.DiscardRunCommand.ExecuteAsync(null);
+
+        Assert.Equal("Drone Cluster", reopened.SignatureName);
+        Assert.Null(reopened.RunId);
+        Assert.True(reopened.IsStartButtonVisible);
+        window.Close();
+    }
+
+    /// <summary>
+    /// The same thing across an application restart, which is what Raymond actually did: EVE Together closed, the
+    /// run left open in the database, the app started again and a fresh signature copied. A new process brings a new
+    /// container and a new view model, so nothing in memory can be carrying the answer — only the store can.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AfterRestartingTheApplication_ACopiedSignatureDoesNotInheritTheOpenRunsSite()
+    {
+        var before = TestClientInstance.Create();
+        before.KeepDataOnDispose = true;
+        var instanceName = before.InstanceName;
+        Result<Guid> started = await before.Services.GetRequiredService<IDispatcher>().Send(
+            new RunCommands.StartRunCommand(90000001, StoredActivityKind.Site, DateTime.UtcNow.AddHours(-1),
+                SiteTypeId: 0, SiteName: "Sansha Hideaway", SolarSystemId: null));
+        Assert.True(started.IsSuccess);
+        before.Dispose();   // the application closes; the run stays open
+
+        using var restarted = TestClientInstance.Create(instanceName: instanceName);
+        var model = new ActivityWindowViewModel(ActivityKind.Site, restarted.Services) { SignatureName = "Drone Cluster" };
+        var window = new ActivityWindow(model);
+        window.Show();
+        await ActivityWindowHarness.WaitUntil(() => model.RunId is not null);
+
+        Assert.Equal(started.Value, model.RunId);
+        Assert.NotEqual(ActivityRunState.Running, model.RunState);
+        Assert.Equal("Sansha Hideaway", model.SignatureName);
+        Assert.Contains("Drone Cluster", model.ClockHint, StringComparison.Ordinal);
+        Assert.False(model.IsStartButtonVisible);
+        window.Close();
+    }
+
     /// <summary>With no run going a copied signature is simply the window's site — no waiting, no stopping.</summary>
     [AvaloniaFact]
     public async Task ASignatureCopiedOnAnIdleWindow_BecomesItsSiteOutright()

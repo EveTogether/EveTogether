@@ -424,7 +424,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     // Start, stop and discard steer the run for everybody in it, so all three hang off the same authority (AC-4).
     // Start and stop are the same slot seen from two sides and never both apply: a run that is going can only be
     // stopped, and offering to re-start it over itself is what put START next to a ticking clock.
-    public bool IsStartButtonVisible => Authority.CanControl && RunState != ActivityRunState.Running;
+    /// <summary>Hidden while a copied site is waiting: the only two answers there are SAVE and DISCARD, and START
+    /// would pick the run being waited on back up.</summary>
+    public bool IsStartButtonVisible =>
+        Authority.CanControl && RunState != ActivityRunState.Running && _pendingSignature is null;
 
     public bool IsStopButtonVisible => Authority.CanControl && RunState == ActivityRunState.Running;
 
@@ -660,20 +663,31 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         AnchorUtc = run.StartedAtUtc;
         StoppedAtUtc = null;
         GroupCode ??= run.GroupCode;
-        // The adopted run brings its own site. Without this the window wore whichever signature had just been
-        // copied over a run belonging to somewhere else entirely — Raymond opened one on Blood Burrow and got a
-        // Sansha Refuge run's clock, loot and fit under that heading (2026-09-02). The clock and the loot are the
-        // run's, so the name over them has to be the run's too; the newly copied signature is not this run's and
-        // does not belong on it.
-        if (run.SiteName is { Length: > 0 } siteName && siteName != SignatureName)
-        {
-            SignatureName = siteName;
-            MatchedSites = [];
-        }
         _isManualRun = true;
         RunState = ActivityRunState.Running;
         await _AdoptCharacterAsync(checked((int)run.CharacterId));
         _StartEnemyObservations();
+
+        // The adopted run brings its own site — the clock and the loot are its, so the name over them is too.
+        //
+        // And if this window was opened ON a signature, that signature is for a different site than the run still
+        // open: it does not become this run's heading, it waits. The clock stops, so the window plainly asks for a
+        // SAVE or a DISCARD instead of presenting an hour-old run as the site just copied. This is the route
+        // Raymond kept hitting — the window had been closed, so ApplySignature never saw it. After the state above,
+        // because StopRun only acts on a run it considers running.
+        if (run.SiteName is { Length: > 0 } siteName && siteName != SignatureName)
+        {
+            if (SignatureName is { Length: > 0 } copied)
+            {
+                _pendingSignature = (SignatureGroup, copied, MatchedSites);
+                StopRun(DateTime.UtcNow);
+            }
+
+            SignatureGroup = null;
+            SignatureName = siteName;
+            MatchedSites = [];
+        }
+
         return true;
     }
 
