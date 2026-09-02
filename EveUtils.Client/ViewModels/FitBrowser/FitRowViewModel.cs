@@ -51,12 +51,17 @@ public sealed partial class FitRowViewModel : ViewModelBase
     /// <summary>Count of fitted modules (high/mid/low/rig/subsystem); drones and cargo are excluded.</summary>
     public int ModuleCount { get; }
 
-    /// <summary>Origin of the fit: the owning character (Local tab) or the sharer (server tab).</summary>
-    public string Source { get; }
+    /// <summary>Origin of the fit: the owning character (Local tab) or the sharer (server tab). Null when there is
+    /// no origin to name — a fit imported from the clipboard belongs to no character at all.</summary>
+    public string? Source { get; }
 
     /// <summary>Who put this fit here — the creator (owning character) on the Local tab, the sharer on a server tab
     /// . Same value as <see cref="Source"/>, named for the card's uploader row.</summary>
-    public string Uploader => Source;
+    public string? Uploader => Source;
+
+    /// <summary>True when there is someone to name. A clipboard-imported fit has no owning character, and the card
+    /// then drops the whole uploader row — circle and name both — rather than standing in for the missing name.</summary>
+    public bool HasUploader => !string.IsNullOrWhiteSpace(Uploader);
 
     public EsiFitting Fit { get; }
 
@@ -121,8 +126,10 @@ public sealed partial class FitRowViewModel : ViewModelBase
 
     /// <summary>The uploader's ESI character id, or 0 when there is no character behind the name. A local fit
     /// owned by a gamelog-only pilot has no ESI id (<see cref="CharacterViewModel.CharacterId"/> is 0 for those),
-    /// and an imported fit whose owner matches no known character has no character at all — both then fall back to
-    /// <see cref="UploaderInitial"/> rather than showing an empty frame. Server-shared rows always have one.</summary>
+    /// and an imported fit whose owner matches no known character is named without one — both keep a name, so they
+    /// fall back to <see cref="UploaderInitial"/> rather than showing an empty frame. Server-shared rows always have
+    /// one. A fit with no owner at all is the separate case: <see cref="HasUploader"/> is false and there is no
+    /// circle to fill.</summary>
     public int UploaderCharacterId { get; }
 
     [ObservableProperty]
@@ -132,8 +139,9 @@ public sealed partial class FitRowViewModel : ViewModelBase
     public bool HasUploaderPortrait => UploaderPortrait is not null;
 
     /// <summary>First letter of the uploader's name, shown in place of the portrait when there is no character id,
-    /// when images are off, or when the fetch fails — the same fallback the fleet rows use.</summary>
-    public string UploaderInitial => string.IsNullOrEmpty(Uploader) ? "?" : Uploader[..1].ToUpperInvariant();
+    /// when images are off, or when the fetch fails — the same fallback the fleet rows use. Empty when there is no
+    /// uploader: a name we do not have is not a name we stand in for.</summary>
+    public string UploaderInitial => HasUploader ? Uploader!.Trim()[..1].ToUpperInvariant() : "";
 
     // ── per-row export dropdown via the shared seam (same actions as the fit-detail header) ──
     private readonly IFitExportActions? _exportActions;
@@ -160,7 +168,7 @@ public sealed partial class FitRowViewModel : ViewModelBase
     public ICommand EditMetadataCommand { get; }
     public ICommand DeleteCommand { get; }
 
-    public FitRowViewModel(EsiFitting fit, string source, ISdeNameResolver names, int? localFitId = null,
+    public FitRowViewModel(EsiFitting fit, string? source, ISdeNameResolver names, int? localFitId = null,
         ITypeImageProvider? images = null, IFitExportActions? exportActions = null,
         Func<string, IReadOnlyList<CharacterPickOption>>? exportPickOptions = null,
         Action<string>? reportExportStatus = null, IMarketPriceRepository? prices = null,

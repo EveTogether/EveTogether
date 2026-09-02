@@ -11,7 +11,7 @@ public sealed class FittingViewModel
     public string Name       { get; }
     public int ShipTypeId    { get; }
     public string OwnerId     { get; }
-    public string OwnerName   { get; } // source character (display only); fits are portable
+    public string? OwnerName  { get; } // source character (display only), null when no character owns the fit
 
     public ICommand PushCommand   { get; }
     public ICommand ShareCommand  { get; }
@@ -19,7 +19,7 @@ public sealed class FittingViewModel
     public ICommand ExportCommand { get; }
 
     public FittingViewModel(
-        LocalFitting fitting, string ownerName,
+        LocalFitting fitting, string? ownerName,
         Func<FittingViewModel, Task> onPush,
         Func<FittingViewModel, Task> onShare,
         Func<FittingViewModel, Task> onDelete,

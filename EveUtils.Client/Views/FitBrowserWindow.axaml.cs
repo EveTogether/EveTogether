@@ -32,6 +32,15 @@ public partial class FitBrowserWindow : ChromedWindow, IHostableModuleWindow
         else Close();
     }
 
+    /// <summary>Puts the caret back in the search box after its clear cross has wiped the filter, so the next thing
+    /// typed goes where it was going anyway. The wiping itself is the view-model's (ClearSearchCommand); this is only
+    /// the focus, which is the view's business. The button sits in the box's own InnerRightContent, so the box is
+    /// simply its nearest TextBox ancestor.</summary>
+    private void OnSearchCleared(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Visual button && button.FindAncestorOfType<TextBox>() is { } box) box.Focus();
+    }
+
     /// <summary>Opens a card's fit. A card is one thing that opens one window, so a single click does it. Clicks that
     /// started inside the card's own buttons are left alone: the export and manage menus must not open the fit behind
     /// them.</summary>
