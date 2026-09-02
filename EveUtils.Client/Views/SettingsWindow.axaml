@@ -144,6 +144,13 @@
                     </StackPanel>
 
                     <StackPanel Spacing="3">
+                        <TextBlock Text="FLEET RUNS" Classes="label" FontSize="9"/>
+                        <CheckBox x:Name="OpenFleetRunWindowBox" Content="Open the run window straight away when the fleet commander starts"/>
+                        <TextBlock Text="Off by default: the commander's start arrives as a toast naming the site and system, and the run window opens only when you accept it — opening it is joining, so ignoring the toast keeps you out of the group. Check this to have the window come up at once instead. It never takes the keyboard either way."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="3">
                         <TextBlock Text="FITTINGS" Classes="label" FontSize="9"/>
                         <CheckBox x:Name="OpenFitDetailAfterImportBox" Content="Open the fit detail right after importing a fit"/>
                         <TextBlock Text="On by default. After importing from EFT/DNA text or an eveship.fit link, the full radial detail opens so you can check the import. Uncheck if you'd rather stay in the browser."

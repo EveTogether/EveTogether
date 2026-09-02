@@ -104,6 +104,16 @@ taken from the matching `## vX.Y.Z` section below.
   `docker-compose.yml` already references instead of building it from source.
 
 ### Changed
+- **A run the fleet commander starts now arrives as a notification you accept, rather than a window that opens by
+  itself.** The card names the site and the system, so a pilot flying something else entirely can see at a glance
+  that this is not their run, and it stays on screen until you answer it — nothing takes it away, because a card
+  that withdraws itself is a card you can miss, and missing it means missing the group your runs are recorded
+  under. Accepting it opens the run window and files your run under the commander's group; leaving it alone does
+  nothing at all, and starts no run. If more than one of your characters has an EVE client up, it first asks which
+  of them is flying this one, offering only the characters actually logged in. Were you already in a run, that run
+  is the one that joins the group. Accepting an offer for a run the commander has meanwhile ended opens nothing and
+  says why. If you would rather have the window straight away, as before, there is a switch for it under
+  **Settings → Interface → FLEET RUNS**.
 - **The self-hosted server no longer keeps its identity in the build output.** Its data directory — database, TLS
   certificate, token-protector key — used to sit inside `bin/`, where a rebuild, a `dotnet clean` or a fresh clone
   silently took it away and every paired character was lost for good. It now defaults to the per-user data folder

@@ -16,4 +16,5 @@ public sealed record SettingsResult(
     FactionTheme Faction, bool ReimportSde = false, bool OpenFitDetailAfterImport = true,
     ToastPosition ToastPosition = ToastPosition.TopRight,
     bool EnableLocalApi = false, int LocalApiPort = LocalApiServer.DefaultPort,
-    bool CheckUpdatesOnStartup = true);
+    bool CheckUpdatesOnStartup = true,
+    bool OpenFleetRunWindowImmediately = false);

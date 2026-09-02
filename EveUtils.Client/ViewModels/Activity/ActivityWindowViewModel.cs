@@ -634,12 +634,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         // Only the pilots actually at the keyboard can be flying this site, so only they are worth asking about.
         // Raymond has three characters registered and one EVE client open, and was still asked which of the three
-        // it was (2026-09-02). Counted per CHARACTER in game, not per running client: one sitting on the login
-        // screen is a process with no pilot behind it. Seeing none is not knowing rather than nobody, so then the
-        // whole list stands and the question is still worth asking.
-        List<Character> candidates = _services.GetService<ILocalCharacterPresence>() is { } presence
-            ? [.. known.Where(character => presence.IsInGame(character.EsiCharacterId!.Value, character.Name) is true)]
-            : [];
+        // it was (2026-09-02). Seeing none is not knowing rather than nobody, and START cannot proceed without a
+        // character at all, so then the whole list stands and the question is still worth asking.
+        List<Character> candidates = InGameCharacters.Among(known, _services.GetService<ILocalCharacterPresence>());
         if (candidates.Count == 0)
             candidates = known;
 
@@ -707,6 +704,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         RunId = run.Id;
         AnchorUtc = run.StartedAtUtc;
         StoppedAtUtc = null;
+        await _JoinStoredRunToFleetGroupAsync(scope, run);
         GroupCode ??= run.GroupCode;
         _isManualRun = true;
         RunState = ActivityRunState.Running;
@@ -718,6 +716,39 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             StopRun(DateTime.UtcNow);
 
         return true;
+    }
+
+    /// <summary>
+    /// Put the run this window just adopted into the fleet's group. Adopting publishes no <c>RunStartedEvent</c>,
+    /// so <c>FleetRunGroupCodeCoordinator</c> never hears of it and the stored row would stay outside the group the
+    /// window says it is in — a member who was already flying would join on screen only. Joining is an explicit
+    /// act, so the row is relinked: unlink first, because a run cannot be in two groups and
+    /// <c>LinkRunToGroupCode</c> refuses an occupied one.
+    /// </summary>
+    private async Task _JoinStoredRunToFleetGroupAsync(IServiceScope scope, RunningRunDto run)
+    {
+        // A run the signature check above decided is a DIFFERENT site is on its way to being stopped, so it does not
+        // join this fleet's group — it was never this window's run.
+        if (_pendingSignature is not null)
+            return;
+
+        if (GroupCode is not { } fleetGroupCode || string.Equals(run.GroupCode, fleetGroupCode, StringComparison.Ordinal))
+            return;
+
+        var dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
+        if (run.GroupCode is not null)
+            await dispatcher.Send(new UnlinkRunFromGroupCodeCommand(run.Id));
+        await dispatcher.Send(new LinkRunToGroupCodeCommand(run.Id, fleetGroupCode));
+    }
+
+    /// <summary>Name the pilot before the window loads, for a caller that already asked — the fleet-run offer, when
+    /// several clients are up. <see cref="_ResolveCharacterAsync"/> then has its answer and asks nobody. A run
+    /// already on the clock still wins: <see cref="_AdoptRunningRunAsync"/> takes that run's character instead,
+    /// because a run belongs to whoever started it.</summary>
+    public void UseCharacter(int characterId, string characterName)
+    {
+        _runCharacterId = characterId;
+        _runCharacterName = characterName;
     }
 
     /// <summary>The stored run names its character by id; the gamelog knows pilots by name. Both are needed, so the
@@ -1019,7 +1050,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 SolarSystemId: null,
                 GroupCode: GroupCode,
                 Signature: SignatureId,
-                FleetId: FleetId));
+                FleetId: FleetId,
+                SolarSystemName: SolarSystem));
         if (!started.IsSuccess)
         {
             _services.GetService<IToastService>()?.Show("Run not started",

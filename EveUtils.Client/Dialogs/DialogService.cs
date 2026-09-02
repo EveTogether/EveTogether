@@ -160,6 +160,8 @@ public sealed class DialogService : IDialogService, ISingletonService
     /// than on a second copy of the decision that could drift away from it.</summary>
     public Window? ActivityWindow => _activityWindow;
 
+    public bool IsActivityWindowOpen => _activityWindow is not null;
+
     /// <summary>Open pop-out windows independent of the main window: floating modules + DPS overlays + fleet
     /// overlays + info cards. Used by the main window's close handler to decide whether to confirm before quitting.</summary>
     public int OpenPopoutCount =>
@@ -303,9 +305,9 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void ShowFleets(FleetsViewModel viewModel) =>
         Route(new FleetsWindow(viewModel), "FLEETS", "fleet", "fleets");
 
-    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0)
+    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false)
     {
-        var window = new SettingsWindow(currentDirectory, detectedDefault, shareLocation, shareBounty, shareCombat, loadTypeImages, currentFaction, sdeVersionLabel, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, localApiStatusLabel, localApiServer, checkUpdatesOnStartup, clipboardWatch, onApply, initialCategory);
+        var window = new SettingsWindow(currentDirectory, detectedDefault, shareLocation, shareBounty, shareCombat, loadTypeImages, currentFaction, sdeVersionLabel, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, localApiStatusLabel, localApiServer, checkUpdatesOnStartup, clipboardWatch, onApply, initialCategory, openFleetRunWindowImmediately);
         Route(window, "SETTINGS", "settings", "settings"); // docked tab in docked mode, floating window otherwise
     }
 

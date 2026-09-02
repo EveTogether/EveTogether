@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using EveUtils.Shared.Identity;
 
 namespace EveUtils.Client.Platform;
 
@@ -41,4 +44,23 @@ public interface ILocalCharacterPresence
     /// no-I/O promise holds, since <see cref="IsInGame"/> is a set lookup over state this already holds.
     /// </summary>
     IDisposable Subscribe(Action handler);
+}
+
+/// <summary>
+/// Which of this client's characters are worth asking "who is flying this?" about: the ones with an EVE client
+/// actually up. Counted per CHARACTER, not per running client — one sitting on the login screen is a process with
+/// no pilot behind it.
+///
+/// One rule, two askers: the run window at START (<c>_ResolveCharacterAsync</c>) and the fleet-run offer before it
+/// opens any window (<c>FleetRunWindowPresenter</c>). They differ only in what an empty answer means, and each
+/// decides that for itself — seeing nobody is not knowing rather than nobody, and at START a character is required
+/// while at the offer it is not.
+/// </summary>
+public static class InGameCharacters
+{
+    public static List<Character> Among(IReadOnlyList<Character> known, ILocalCharacterPresence? presence) =>
+        presence is null
+            ? []
+            : [.. known.Where(character => character.EsiCharacterId is { } id
+                                           && presence.IsInGame(id, character.Name) is true)];
 }
