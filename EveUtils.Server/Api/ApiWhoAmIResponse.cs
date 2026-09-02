@@ -14,5 +14,5 @@ public sealed record ApiWhoAmIResponse(
         user.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty,
         user.FindFirstValue(ClaimTypes.Name) ?? string.Empty,
         [.. user.FindAll(ApiKeyAuthentication.ScopeClaim).Select(claim => claim.Value)],
-        int.TryParse(user.FindFirstValue(ApiKeyAuthentication.OwnerCharacterClaim), out var owner) ? owner : null);
+        user.OwnerCharacterId());
 }

@@ -16,22 +16,41 @@ namespace EveUtils.Server.Api;
 public sealed class ServerApiQueries(
     IFleetRepository fleets, IFleetCompositionRepository compositions) : IScopedService
 {
-    /// <summary>Every fleet on this server that is not soft-deleted, in creation order. A key with no owner has admin
-    /// scope over all server data (ratified decision 3), so this is the whole directory, not just the public ones.</summary>
-    public async Task<IReadOnlyList<ApiFleetListItem>> GetFleetsAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// The fleets this key may see. A key with no owner has admin scope over all server data (ratified decision 3)
+    /// and gets the whole directory; a key issued to a character gets what that character could discover on the
+    /// server anyway — the open fleets. Without this split every key would be an admin key, because the
+    /// character-scoping the decision leaves incremental is not built yet.
+    /// </summary>
+    public async Task<IReadOnlyList<ApiFleetListItem>> GetFleetsAsync(
+        int? ownerCharacterId, CancellationToken cancellationToken = default)
     {
-        IReadOnlyList<FleetEntity> all = await fleets.ListByStateAsync(FleetState.Active, cancellationToken);
+        IReadOnlyList<FleetEntity> all = ownerCharacterId is null
+            ? await fleets.ListByStateAsync(FleetState.Active, cancellationToken)
+            : await fleets.ListOpenAsync(cancellationToken);
+
         return [.. all.Select(fleet => new ApiFleetListItem(
             fleet.Id, fleet.Name, fleet.Description, fleet.CreatorCharacterId,
             fleet.State.ToString(), fleet.Activation.ToString(), fleet.Visibility.ToString(),
             fleet.FleetCompositionId))];
     }
 
-    /// <summary>One fleet with its wings, squads and roster; null when it does not exist.</summary>
-    public async Task<ApiFleetDetail?> GetFleetAsync(long fleetId, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// One fleet with its wings, squads and roster; null when it does not exist, and equally null when this key
+    /// may not see it. A filter on the list that the detail route walks around is no filter at all, so the same
+    /// split applies here — a key scoped to a character cannot fetch an invite-only fleet by guessing its id.
+    /// </summary>
+    public async Task<ApiFleetDetail?> GetFleetAsync(
+        long fleetId, int? ownerCharacterId, CancellationToken cancellationToken = default)
     {
         FleetEntity? fleet = await fleets.GetAsync(fleetId, cancellationToken);
         if (fleet is null) return null;
+
+        // Asked against the open set rather than re-stating its rule here, so the two can never drift apart.
+        // ponytail: linear scan over the open fleets; a server's fleet directory is small, index it if that changes.
+        if (ownerCharacterId is not null
+            && !(await fleets.ListOpenAsync(cancellationToken)).Any(open => open.Id == fleetId))
+            return null;
 
         var wings = new List<ApiFleetWing>();
         foreach (FleetWing wing in await fleets.ListWingsAsync(fleetId, cancellationToken))

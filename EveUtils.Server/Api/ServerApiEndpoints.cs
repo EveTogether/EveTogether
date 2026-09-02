@@ -29,10 +29,13 @@ public static class ServerApiEndpoints
 
         // [FromServices] rather than inference: the bridge is a plain class, and an unregistered one would
         // otherwise be read as a request body instead of failing to resolve.
-        api.MapGet("/fleets", ([FromServices] ServerApiQueries queries, CancellationToken ct) =>
-            queries.GetFleetsAsync(ct));
-        api.MapGet("/fleets/{id:long}", async (long id, [FromServices] ServerApiQueries queries, CancellationToken ct) =>
-            await queries.GetFleetAsync(id, ct) is { } fleet ? Results.Ok(fleet) : Results.NotFound());
+        api.MapGet("/fleets", (ClaimsPrincipal user, [FromServices] ServerApiQueries queries, CancellationToken ct) =>
+            queries.GetFleetsAsync(user.OwnerCharacterId(), ct));
+        api.MapGet("/fleets/{id:long}", async (long id, ClaimsPrincipal user, [FromServices] ServerApiQueries queries,
+            CancellationToken ct) =>
+            await queries.GetFleetAsync(id, user.OwnerCharacterId(), ct) is { } fleet
+                ? Results.Ok(fleet)
+                : Results.NotFound());
 
         api.MapGet("/compositions", ([FromServices] ServerApiQueries queries, CancellationToken ct) =>
             queries.GetCompositionsAsync(ct));

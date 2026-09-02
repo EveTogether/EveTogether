@@ -37,6 +37,12 @@ public class ServerApiTests : IDisposable
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
+    /// <summary>A key with no owner: admin scope over all server data (ratified decision 3).</summary>
+    private static readonly int? _AdminKey = null;
+
+    /// <summary>A key issued to a character, which is scoped to what that character could discover anyway.</summary>
+    private const int _OwnedKey = 90_000_007;
+
     // --- Fleets ---
 
     /// <summary>
@@ -53,7 +59,7 @@ public class ServerApiTests : IDisposable
         await _StoreMemberAsync(fleetId, 90_000_001, wingId, squadId, FleetRole.FleetCommander, fitName: "Vindicator");
         await _StoreMemberAsync(fleetId, 90_000_002, secondWingId, secondSquadId, FleetRole.SquadMember);
 
-        ApiFleetDetail? detail = await _queries.GetFleetAsync(fleetId, Ct);
+        ApiFleetDetail? detail = await _queries.GetFleetAsync(fleetId, _AdminKey, Ct);
 
         Assert.NotNull(detail);
         Assert.Equal("Home defence", detail.Name);
@@ -81,7 +87,7 @@ public class ServerApiTests : IDisposable
     {
         long fleetId = await _StoreFleetAsync();
 
-        ApiFleetDetail? detail = await _queries.GetFleetAsync(fleetId, Ct);
+        ApiFleetDetail? detail = await _queries.GetFleetAsync(fleetId, _AdminKey, Ct);
 
         Assert.NotNull(detail);
         Assert.Empty(detail.Wings);
@@ -92,7 +98,7 @@ public class ServerApiTests : IDisposable
     [Fact]
     public async Task AFleetThatDoesNotExist_IsNull()
     {
-        Assert.Null(await _queries.GetFleetAsync(4_242, Ct));
+        Assert.Null(await _queries.GetFleetAsync(4_242, _AdminKey, Ct));
     }
 
     /// <summary>The list is this server's fleet directory, not the join-me board: an invite-only fleet is on it
@@ -104,10 +110,38 @@ public class ServerApiTests : IDisposable
         long open = await _StoreFleetAsync(name: "Open roam", visibility: FleetVisibility.Public);
         await _StoreFleetAsync(name: "Old op", state: FleetState.Archived);
 
-        IReadOnlyList<ApiFleetListItem> list = await _queries.GetFleetsAsync(Ct);
+        IReadOnlyList<ApiFleetListItem> list = await _queries.GetFleetsAsync(_AdminKey, Ct);
 
         Assert.Equal([inviteOnly, open], list.Select(fleet => fleet.Id));
         Assert.Equal(["InviteOnly", "Public"], list.Select(fleet => fleet.Visibility));
+    }
+
+    /// <summary>
+    /// A key issued to a character is not an admin key. Until the character-scoping of ratified decision 3 is
+    /// built out, that key sees what the character could discover on the server anyway — the open fleets — and
+    /// an invite-only fleet is not one of them.
+    /// </summary>
+    [Fact]
+    public async Task AKeyScopedToACharacter_DoesNotSeeInviteOnlyFleets()
+    {
+        await _StoreFleetAsync();
+        long open = await _StoreFleetAsync(name: "Open roam", visibility: FleetVisibility.Public);
+
+        IReadOnlyList<ApiFleetListItem> list = await _queries.GetFleetsAsync(_OwnedKey, Ct);
+
+        Assert.Equal([open], list.Select(fleet => fleet.Id));
+    }
+
+    /// <summary>And it cannot walk around the list by asking for the fleet by id.</summary>
+    [Fact]
+    public async Task AKeyScopedToACharacter_CannotFetchAnInviteOnlyFleetById()
+    {
+        long inviteOnly = await _StoreFleetAsync();
+        long open = await _StoreFleetAsync(name: "Open roam", visibility: FleetVisibility.Public);
+
+        Assert.Null(await _queries.GetFleetAsync(inviteOnly, _OwnedKey, Ct));
+        Assert.NotNull(await _queries.GetFleetAsync(open, _OwnedKey, Ct));
+        Assert.NotNull(await _queries.GetFleetAsync(inviteOnly, _AdminKey, Ct));
     }
 
     // --- Compositions ---
