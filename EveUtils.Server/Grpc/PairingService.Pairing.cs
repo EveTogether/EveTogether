@@ -73,6 +73,7 @@ public sealed partial class PairingService
             SessionRefreshToken = state.SessionRefreshToken,
             CharacterId = state.CharacterId,
             CharacterName = state.CharacterName,
+            SessionId = state.SessionId,
             ServerName = serverInfo.Name,
             CorporationName = state.CorporationName ?? string.Empty,
             AllianceName = state.AllianceName ?? string.Empty,

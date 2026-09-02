@@ -347,6 +347,46 @@ public sealed class ServerConnection
     // the server "is this token still good?" every 30s; acting on the answer is what keeps the token alive.
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
 
+    // Whether this connection has already complained that it cannot store the session id. Once is enough: the
+    // heartbeat comes round every 30s and a repeating cause would otherwise fill the log window.
+    private bool _sessionIdStoreFailureLogged;
+
+    /// <summary>
+    /// Records the id the server gave this session, caught in passing on a heartbeat. A client paired before the
+    /// server handed ids out has nothing to name its session with, and until it does, a refused refresh cannot be
+    /// told apart from a stale copy — so it falls back to retrying (ET-123).
+    /// <para>Its own method for one reason: the heartbeat loop swallows everything at Debug so an outage cannot
+    /// flood the log, and <c>app-errors.jsonl</c> keeps only Warning and above. A failure to store the id would
+    /// therefore leave the client quietly stuck on the fallback with no trace anywhere — which is exactly the state
+    /// that is hardest to diagnose from the outside. It is caught here, said out loud once, and never allowed to
+    /// take the heartbeat down with it.</para>
+    /// </summary>
+    private async Task LearnSessionIdAsync(int sessionId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _sessionStore.SetServerSessionIdAsync(_serverAddress, _characterId, sessionId, cancellationToken);
+            _logger.LogInformation(
+                "Server {Server} identified character {Character}'s session as {SessionId}; a refused refresh can now "
+                + "be told apart from a session that is gone.", _serverAddress, _characterId, sessionId);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            if (_sessionIdStoreFailureLogged)
+                return;
+            _sessionIdStoreFailureLogged = true;
+            _logger.LogWarning(ex,
+                "Could not store the session id {SessionId} for character {Character} on {Server}. The pairing keeps "
+                + "working, but until this succeeds a refused refresh cannot be recognised as a session that is gone, "
+                + "so the client will keep retrying instead of asking you to couple again.",
+                sessionId, _characterId, _serverAddress);
+        }
+    }
+
     private async Task HeartbeatLoopAsync(CancellationToken cancellationToken)
     {
         using var timer = new PeriodicTimer(HeartbeatInterval);
@@ -366,13 +406,8 @@ public sealed class ServerConnection
                         new HeartbeatRequest { SessionToken = session.AccessToken }, cancellationToken: cancellationToken);
                     if (reply.Ok)
                     {
-                        // Catch the session's own id in passing. A client paired before the server handed it out has
-                        // nothing to name its session with, and until it does, a refusal cannot be told apart from a
-                        // stale copy — this closes that gap within one tick instead of at the next rotation, which
-                        // for a session that is about to be refused may never come.
                         if (reply.SessionId > 0 && reply.SessionId != session.ServerSessionId)
-                            await _sessionStore.SetServerSessionIdAsync(
-                                _serverAddress, _characterId, reply.SessionId, cancellationToken);
+                            await LearnSessionIdAsync(reply.SessionId, cancellationToken);
                         continue;
                     }
 

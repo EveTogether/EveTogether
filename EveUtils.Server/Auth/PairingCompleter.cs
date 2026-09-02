@@ -68,6 +68,7 @@ public sealed class PairingCompleter(
             state.AllianceName = affiliation?.AllianceName;
             state.SessionToken = session.AccessToken;
             state.SessionRefreshToken = session.RefreshToken;
+            state.SessionId = session.SessionId;
             state.Status = PairingStatus.Completed;
 
             return (true, $"Paired {identity.CharacterName}.");
