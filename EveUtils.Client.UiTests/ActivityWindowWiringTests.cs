@@ -44,6 +44,7 @@ public class ActivityWindowWiringTests
         ActivityWindowViewModel model = await harness.OpenAsync();
         // A combat anomaly, exactly as ClipboardSignatureOffer hands one over.
         model.SignatureGroup = "Combat Site";
+        model.SignatureId = "RUS-326";
         model.SignatureName = "Sansha Hideaway";
 
         await model.StartRunCommand.ExecuteAsync(null);
@@ -100,12 +101,13 @@ public class ActivityWindowWiringTests
     {
         using var harness = await ActivityWindowHarness.CreateAsync();
         ActivityWindowViewModel model = await harness.OpenAsync();
+        model.SignatureId = "RUS-326";
         model.SignatureName = "Sansha Hideaway";
         await model.StartRunCommand.ExecuteAsync(null);
         Guid? open = model.RunId;
         Assert.Equal(ActivityRunState.Running, model.RunState);
 
-        await model.ApplySignatureAsync("Combat Site", "Drone Cluster", []);
+        await model.ApplySignatureAsync("SUG-270", "Combat Site", "Drone Cluster", []);
 
         Assert.Equal("Drone Cluster", model.SignatureName);
         Assert.Equal(ActivityRunState.NotStarted, model.RunState);
@@ -129,14 +131,56 @@ public class ActivityWindowWiringTests
         using var harness = await ActivityWindowHarness.CreateAsync(
             configure: services => services.AddLogging(builder => builder.AddProvider(log)));
         ActivityWindowViewModel model = await harness.OpenAsync();
+        model.SignatureId = "RUS-326";
         model.SignatureName = "Sansha Hideaway";
         await model.StartRunCommand.ExecuteAsync(null);
 
-        await model.ApplySignatureAsync("Combat Site", "Drone Cluster", []);
+        await model.ApplySignatureAsync("SUG-270", "Combat Site", "Drone Cluster", []);
 
         string line = Assert.Single(log.Messages, message => message.Contains("closed out", StringComparison.Ordinal));
         Assert.Contains("Sansha Hideaway", line, StringComparison.Ordinal);
         Assert.DoesNotContain("closed out the open Drone Cluster", line, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Raymond runs Sansha Refuge after Sansha Refuge. Comparing site NAMES made the next scan look like the run
+    /// already going, so he got a seventeen-minute clock on a site he had just scanned. EVE gives every scan its own
+    /// id and that is what tells them apart.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AnotherScanOfTheSameSite_IsANewRun_NotTheOneAlreadyGoing()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        model.SignatureId = "RUS-326";
+        model.SignatureName = "Sansha Refuge";
+        await model.StartRunCommand.ExecuteAsync(null);
+        Guid? first = model.RunId;
+
+        await model.ApplySignatureAsync("SUG-270", "Combat Site", "Sansha Refuge", []);
+
+        Assert.Equal("Sansha Refuge", model.SignatureName);
+        Assert.Equal("SUG-270", model.SignatureId);
+        Assert.Null(model.RunId);                                   // the old run is not this one
+        Assert.Equal(ActivityRunState.NotStarted, model.RunState);  // and its clock is not ours either
+        Assert.Equal(StoredRunState.Stopped, (await _RunAsync(harness, first!.Value)).State);
+    }
+
+    /// <summary>The other half: the same scan is the same run, and picking it up again must not end it.</summary>
+    [AvaloniaFact]
+    public async Task TheSameScanCopiedAgain_IsStillTheRunAlreadyGoing()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        model.SignatureId = "RUS-326";
+        model.SignatureName = "Sansha Refuge";
+        await model.StartRunCommand.ExecuteAsync(null);
+        Guid? started = model.RunId;
+
+        await model.ApplySignatureAsync("RUS-326", "Combat Site", "Sansha Refuge", []);
+
+        Assert.Equal(started, model.RunId);
+        Assert.Equal(ActivityRunState.Running, model.RunState);
     }
 
     /// <summary>
@@ -207,11 +251,12 @@ public class ActivityWindowWiringTests
     {
         using var harness = await ActivityWindowHarness.CreateAsync();
         ActivityWindowViewModel model = await harness.OpenAsync();
+        model.SignatureId = "RUS-326";
         model.SignatureName = "Sansha Hideaway";
         model.GroupCode = "HF-7QK2";
         await model.StartRunCommand.ExecuteAsync(null);
 
-        await model.ApplySignatureAsync("Combat Site", "Drone Cluster", []);
+        await model.ApplySignatureAsync("SUG-270", "Combat Site", "Drone Cluster", []);
 
         Assert.Equal(ActivityRunState.Stopped, model.RunState);
         Assert.Equal("Sansha Hideaway", model.SignatureName);
@@ -231,12 +276,13 @@ public class ActivityWindowWiringTests
     {
         using var harness = await ActivityWindowHarness.CreateAsync();
         ActivityWindowViewModel first = await harness.OpenAsync();
+        first.SignatureId = "RUS-326";
         first.SignatureName = "Sansha Hideaway";
         await first.StartRunCommand.ExecuteAsync(null);
         Guid? open = first.RunId;
         first.Dispose();   // he closes the window; the run stays open in the store
 
-        var reopened = new ActivityWindowViewModel(ActivityKind.Site, harness.Services) { SignatureName = "Drone Cluster" };
+        var reopened = new ActivityWindowViewModel(ActivityKind.Site, harness.Services) { SignatureId = "SUG-270", SignatureName = "Drone Cluster" };
         var window = new ActivityWindow(reopened);
         window.Show();
         await ActivityWindowHarness.WaitUntil(() => reopened.ClockText != "--:--" || reopened.RunId is not null,
@@ -263,13 +309,14 @@ public class ActivityWindowWiringTests
     {
         using var harness = await ActivityWindowHarness.CreateAsync();
         ActivityWindowViewModel first = await harness.OpenAsync();
+        first.SignatureId = "RUS-326";
         first.SignatureName = "Sansha Hideaway";
         first.GroupCode = "HF-7QK2";
         await first.StartRunCommand.ExecuteAsync(null);
         Guid? open = first.RunId;
         first.Dispose();
 
-        var reopened = new ActivityWindowViewModel(ActivityKind.Site, harness.Services) { SignatureName = "Drone Cluster" };
+        var reopened = new ActivityWindowViewModel(ActivityKind.Site, harness.Services) { SignatureId = "SUG-270", SignatureName = "Drone Cluster" };
         var window = new ActivityWindow(reopened);
         window.Show();
         await ActivityWindowHarness.WaitUntil(() => reopened.RunId is not null);
@@ -307,7 +354,7 @@ public class ActivityWindowWiringTests
         before.Dispose();   // the application closes; the run stays open
 
         using var restarted = TestClientInstance.Create(instanceName: instanceName);
-        var model = new ActivityWindowViewModel(ActivityKind.Site, restarted.Services) { SignatureName = "Drone Cluster" };
+        var model = new ActivityWindowViewModel(ActivityKind.Site, restarted.Services) { SignatureId = "SUG-270", SignatureName = "Drone Cluster" };
         var window = new ActivityWindow(model);
         window.Show();
         await ActivityWindowHarness.WaitUntil(() => model.RunId is not null);
@@ -326,7 +373,7 @@ public class ActivityWindowWiringTests
         using var harness = await ActivityWindowHarness.CreateAsync();
         ActivityWindowViewModel model = await harness.OpenAsync();
 
-        model.ApplySignature("Combat Site", "Drone Cluster", []);
+        model.ApplySignature("SUG-270", "Combat Site", "Drone Cluster", []);
 
         Assert.Equal("Drone Cluster", model.SignatureName);
         Assert.Equal(ActivityRunState.NotStarted, model.RunState);

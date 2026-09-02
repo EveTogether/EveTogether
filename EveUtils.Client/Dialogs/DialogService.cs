@@ -109,7 +109,7 @@ public sealed class DialogService : IDialogService, ISingletonService
         // raise the window on the previous site (Raymond, 2026-09-02).
         if (_activityWindow?.DataContext is ActivityWindowViewModel open && !ReferenceEquals(open, viewModel)
             && viewModel.SignatureName is { Length: > 0 } signature)
-            open.ApplySignature(viewModel.SignatureGroup, signature, viewModel.MatchedSites);
+            open.ApplySignature(viewModel.SignatureId, viewModel.SignatureGroup, signature, viewModel.MatchedSites);
 
         switch (RunWindowPresentation.Decide(trigger, _activityWindow is not null))
         {

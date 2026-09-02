@@ -107,7 +107,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private bool _isManualRun;
     private int? _runCharacterId;
     private int? _namedCharacterId;
-    private (string? Group, string Name, IReadOnlyList<SdeSite> Sites)? _pendingSignature;
+    private (string? Id, string? Group, string Name, IReadOnlyList<SdeSite> Sites)? _pendingSignature;
     private string? _runCharacterName;
     private ShipFitDetectionReading? _fitReading;
     private RunEnemyObservationCollector? _enemyObservations;
@@ -260,6 +260,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(SignatureTypeText))]
     [NotifyPropertyChangedFor(nameof(HasSignature))]
     private string? _signatureGroup;
+
+    /// <summary>The scan's own id, e.g. <c>RUS-326</c>. Not shown anywhere — it is what tells one Sansha Refuge
+    /// from the next one, which a site name cannot.</summary>
+    [ObservableProperty]
+    private string? _signatureId;
 
     /// <summary>The signature's name once fully scanned — same field, same source as <see cref="SignatureGroup"/>.</summary>
     [ObservableProperty]
@@ -680,19 +685,21 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // Only a run of this pilot's own. One that belongs to a group is left standing and waits for a decision:
         // ending that one reaches every other member's machine, and that is the FC's button to press, not this
         // window's (ET-105 AC-1).
-        if (SignatureName is { Length: > 0 } copied && run.SiteName is { Length: > 0 } siteName && siteName != copied)
+        if (SignatureName is { Length: > 0 } copied
+            && !_IsSameRun(run.Signature, run.SiteName, SignatureId, copied))
         {
             if (run.GroupCode is null && FleetId is null)
             {
                 await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
                     .Send(new DiscardRunCommand(run.Id, DateTime.UtcNow));
-                _SignatureDecision($"closed out the {siteName} run left open in the store", copied);
+                _SignatureDecision($"closed out the {run.SiteName} run left open in the store", copied);
                 return false;
             }
 
-            _pendingSignature = (SignatureGroup, copied, MatchedSites);
+            _pendingSignature = (SignatureId, SignatureGroup, copied, MatchedSites);
+            SignatureId = run.Signature;
             SignatureGroup = null;
-            SignatureName = siteName;
+            SignatureName = run.SiteName;
             MatchedSites = [];
             _SignatureDecision("the run left open belongs to a group, so it waits", copied);
         }
@@ -1011,7 +1018,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 SiteName: SignatureName,
                 SolarSystemId: null,
                 GroupCode: GroupCode,
-                Signature: SignatureGroup,
+                Signature: SignatureId,
                 FleetId: FleetId));
         if (!started.IsSuccess)
         {
@@ -1610,17 +1617,17 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// Nothing races on the caller's side: <c>DialogService</c> only reaches here when a window is already up, and
     /// every branch after it either returns or activates that same window. It never builds a second one.
     /// </summary>
-    public void ApplySignature(string? group, string name, IReadOnlyList<SdeSite> sites) =>
-        LastSignature = _ApplySignatureSafelyAsync(group, name, sites);
+    public void ApplySignature(string? id, string? group, string name, IReadOnlyList<SdeSite> sites) =>
+        LastSignature = _ApplySignatureSafelyAsync(id, group, name, sites);
 
     /// <summary>The pending hand-over, so a test can await what a void call started.</summary>
     internal Task LastSignature { get; private set; } = Task.CompletedTask;
 
-    private async Task _ApplySignatureSafelyAsync(string? group, string name, IReadOnlyList<SdeSite> sites)
+    private async Task _ApplySignatureSafelyAsync(string? id, string? group, string name, IReadOnlyList<SdeSite> sites)
     {
         try
         {
-            await ApplySignatureAsync(group, name, sites);
+            await ApplySignatureAsync(id, group, name, sites);
         }
         catch (Exception ex)
         {
@@ -1635,12 +1642,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// window being open or closed decided which of the two ran, and fixing only one of them is what kept this bug
     /// alive through four attempts.
     /// </summary>
-    public async Task ApplySignatureAsync(string? group, string name, IReadOnlyList<SdeSite> sites)
+    public async Task ApplySignatureAsync(string? id, string? group, string name, IReadOnlyList<SdeSite> sites)
     {
-        if (RunState is ActivityRunState.NotStarted || string.Equals(SignatureName, name, StringComparison.Ordinal))
+        if (RunState is ActivityRunState.NotStarted || _IsSameRun(SignatureId, SignatureName, id, name))
         {
             _pendingSignature = null;
-            _SetSignature(group, name, sites);
+            _SetSignature(id, group, name, sites);
             _SignatureDecision("no run of another site was open", name);
             Refresh(DateTime.UtcNow);
             return;
@@ -1655,7 +1662,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
                 .Send(new DiscardRunCommand(runId, DateTime.UtcNow));
             _ResetForNewRun();
-            _SetSignature(group, name, sites);
+            _SetSignature(id, group, name, sites);
             _SignatureDecision($"closed out the open {closed} run", name);
             if (RunLoot is not null)
                 await RunLoot.RefreshAsync();
@@ -1663,18 +1670,31 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
         }
 
-        _pendingSignature = (group, name, sites);
+        _pendingSignature = (id, group, name, sites);
         StopRun(DateTime.UtcNow);
         _SignatureDecision("the open run belongs to a group, so it waits", name);
         Refresh(DateTime.UtcNow);
     }
 
-    private void _SetSignature(string? group, string name, IReadOnlyList<SdeSite> sites)
+    private void _SetSignature(string? id, string? group, string name, IReadOnlyList<SdeSite> sites)
     {
+        SignatureId = id;
         SignatureGroup = group;
         SignatureName = name;
         MatchedSites = sites;
     }
+
+    /// <summary>
+    /// Whether a copied signature is the run already on this window rather than a new one. EVE gives every scan its
+    /// own id, and that is the only thing that tells "the site I am already in" from "another Sansha Refuge" —
+    /// comparing site names made every repeat of the same site look like the run in progress, which is what kept
+    /// handing Raymond a ticking clock when he scanned the next one (2026-09-02). The site name only stands in
+    /// where an id is missing on either side, which is a run started before this carried one.
+    /// </summary>
+    private static bool _IsSameRun(string? storedId, string? storedSite, string? copiedId, string? copiedSite) =>
+        storedId is { Length: > 0 } stored && copiedId is { Length: > 0 } copied
+            ? string.Equals(stored, copied, StringComparison.OrdinalIgnoreCase)
+            : string.Equals(storedSite, copiedSite, StringComparison.Ordinal);
 
     /// <summary>
     /// What this window did with a copied signature, and why — the line that says which of the two routes ran,
@@ -1696,9 +1716,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
 
         _pendingSignature = null;
-        SignatureGroup = pending.Group;
-        SignatureName = pending.Name;
-        MatchedSites = pending.Sites;
+        _SetSignature(pending.Id, pending.Group, pending.Name, pending.Sites);
     }
 
     private string _LootItemCount()

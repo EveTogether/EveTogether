@@ -95,6 +95,9 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
 
         _dialogs.ShowActivityWindow(new ActivityWindowViewModel(ActivityKind.Site, _services)
         {
+            // The scan id travels with the site: two Sansha Refuges scanned an hour apart are two runs, and only
+            // this tells them apart.
+            SignatureId = row.SignatureId,
             SignatureGroup = row.Group,
             SignatureName = row.Name,
             MatchedSites = MatchSites(row.Name!)

@@ -9,4 +9,7 @@ public sealed record RunningRunDto(
     ActivityKind ActivityKind,
     DateTime StartedAtUtc,
     string? GroupCode,
-    string? SiteName);
+    string? SiteName,
+    /// <summary>The scan id this run was started from, e.g. RUS-326. Two runs of the same site are still two runs,
+    /// and this is the only thing that tells them apart.</summary>
+    string? Signature);
