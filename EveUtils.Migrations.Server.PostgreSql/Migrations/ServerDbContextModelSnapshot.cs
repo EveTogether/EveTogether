@@ -768,6 +768,9 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.Property<int>("ActivityKind")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("AgentId")
+                        .HasColumnType("integer");
+
                     b.Property<long>("CharacterId")
                         .HasColumnType("bigint");
 
@@ -799,6 +802,9 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.Property<DateTime?>("LastPushedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int?>("MissionLevel")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Revision")
                         .HasColumnType("integer");
 
@@ -817,6 +823,9 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                         .HasColumnType("character varying(255)");
 
                     b.Property<int>("SiteTypeId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SiteTypeSource")
                         .HasColumnType("integer");
 
                     b.Property<int?>("SolarSystemId")
@@ -972,6 +981,16 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("BonusWindowSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ItemTypeId")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("ObservedAtUtc")
                         .HasColumnType("timestamp with time zone");

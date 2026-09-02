@@ -768,6 +768,9 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                     b.Property<int>("ActivityKind")
                         .HasColumnType("int");
 
+                    b.Property<int?>("AgentId")
+                        .HasColumnType("int");
+
                     b.Property<long>("CharacterId")
                         .HasColumnType("bigint");
 
@@ -799,6 +802,9 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                     b.Property<DateTime?>("LastPushedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("MissionLevel")
+                        .HasColumnType("int");
+
                     b.Property<int>("Revision")
                         .HasColumnType("int");
 
@@ -817,6 +823,9 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                         .HasColumnType("nvarchar(255)");
 
                     b.Property<int>("SiteTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SiteTypeSource")
                         .HasColumnType("int");
 
                     b.Property<int?>("SolarSystemId")
@@ -972,6 +981,16 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("BonusWindowSeconds")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ItemTypeId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("ObservedAtUtc")
                         .HasColumnType("datetime2");

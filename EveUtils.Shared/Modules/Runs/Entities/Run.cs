@@ -27,9 +27,19 @@ public sealed class Run
     public DateTime? TimesCorrectedAtUtc { get; set; }
     public DateTime? DeletedAtUtc { get; set; }
     public int SiteTypeId { get; set; }
+
+    /// <summary>Which id space <see cref="SiteTypeId"/> was taken from. Site and mission ids are disjunct spaces that
+    /// reuse the same numbers, so on its own the id cannot say what it points at (ET-137).</summary>
+    public SiteTypeSource SiteTypeSource { get; set; }
+
     public string? SiteName { get; set; }
     public int? SolarSystemId { get; set; }
     public string? Signature { get; set; }
+
+    /// <summary>The agent who handed out the mission, and its level. Null on everything that is not a mission.</summary>
+    public int? AgentId { get; set; }
+
+    public int? MissionLevel { get; set; }
     public RunRole Role { get; set; }
 
     // Two facts, never one boolean: the hauler who fetched ore during the site did participate and registers loot,

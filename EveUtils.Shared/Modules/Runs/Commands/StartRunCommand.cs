@@ -22,4 +22,9 @@ public sealed record StartRunCommand(
     bool IsFleetCommander = false,
     // Announced to the fleet, not stored: the run row keeps SolarSystemId, and the pilot's window knows the system
     // only by the name its location sample carries.
-    string? SolarSystemName = null) : ICommand<Result<Guid>>;
+    string? SolarSystemName = null,
+    // Which id space SiteTypeId came from, plus the mission's agent and level (ET-137). Defaulted, because every
+    // caller today starts a site or an abyssal run.
+    SiteTypeSource SiteTypeSource = SiteTypeSource.Site,
+    int? AgentId = null,
+    int? MissionLevel = null) : ICommand<Result<Guid>>;
