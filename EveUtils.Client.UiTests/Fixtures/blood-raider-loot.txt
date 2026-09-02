@@ -1,0 +1,4 @@
+Blood Microwave S	1	Frequency Crystal	Small		1 m3	30.229,00 ISK
+Dark Blood Copper Tag	1	Criminal Tags			0,10 m3	31.467,72 ISK
+Dark Blood EM Energized Membrane	1	Energized Armor Membrane		Low	5 m3	146.529,04 ISK
+Gamma S	1	Frequency Crystal	Small		1 m3	1.856,16 ISK

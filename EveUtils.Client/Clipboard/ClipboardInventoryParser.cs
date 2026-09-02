@@ -118,20 +118,9 @@ public static class ClipboardInventoryParser
             }
         }
 
-        // Strictly more distinct values than any other candidate — no margin on top of that.
-        //
-        // The margin used to be 2x, chosen from a single 39-versus-10 capture, and its own note admitted it would
-        // "reject valid 15-versus-8 selections rather than misname them". That trade does not hold: refusing is not
-        // the safe side, because a refused copy loses the loot outright, and choosing wrong is caught immediately
-        // afterwards — SdeInventoryResolver only keeps names that resolve to a real EVE item type, so picking the
-        // group column instead of the name column comes back as "none of these is a known item type" rather than as
-        // wrong loot. Measured on a real capture (Raymond, 2026-09-02): four rows of Blood Raider loot, four
-        // distinct names against three distinct group names, refused by the margin at 4 < 6.
-        //
-        // A tie still means nothing is known: with one copied row every text column has exactly one distinct value,
-        // which is why that case falls through to ParseNameColumnCandidates and the SDE.
-        // ponytail: distinctness with the SDE as the check afterwards. If a moved name column ever needs handling,
-        // the upgrade is to resolve each candidate column against the SDE and keep the one that matches most rows.
+        // Strictly more distinct values than any other candidate: a margin on top of that refuses copies it cannot
+        // misname, and refusing loses the loot outright. A wrong pick costs nothing, because every caller checks
+        // the names against the SDE; a tie is no answer at all and falls through to ParseNameColumnCandidates.
         return nameColumn is null || highestDistinctCount <= nextHighestDistinctCount ? null : nameColumn;
     }
 

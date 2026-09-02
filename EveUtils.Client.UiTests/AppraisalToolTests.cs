@@ -73,6 +73,43 @@ public sealed class AppraisalToolTests(ITestOutputHelper output)
     // ── Valuing a paste ──────────────────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// Four item names against three group names — close enough that the parser's old 2x distinctness margin
+    /// refused the paste outright. The appraisal tool has no second guess: it reads <c>Parse</c> and reports "does
+    /// not read as an inventory listing" when that comes back empty, so unlike the loot capture there is no SDE
+    /// arbitration behind it. This is where dropping that margin is load-bearing.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Tool_ValuesAPaste_WhoseNameAndGroupColumnsAreCloseInCardinality()
+    {
+        using var instance = _NewInstance(new FakeSdeAccessor()
+            .Add(1, "Blood Microwave S", 18, 4)
+            .Add(2, "Dark Blood Copper Tag", 18, 4)
+            .Add(3, "Dark Blood EM Energized Membrane", 18, 4)
+            .Add(4, "Gamma S", 18, 4));
+        await _CachePricesAsync(instance, new DateTimeOffset(2026, 8, 31, 9, 30, 0, TimeSpan.Zero),
+            (1, 30_000), (2, 31_000), (3, 146_000), (4, 1_800));
+        var tool = _BuildTool(instance);
+        tool.PasteText = _Fixture("blood-raider-loot.txt");
+
+        await tool.AppraiseCommand.ExecuteAsync(null);
+
+        Assert.False(tool.StatusIsError);
+        Assert.Equal(4, tool.Rows.Count);
+        Assert.False(tool.HasUnresolved);
+    }
+
+    private static string _Fixture(string name)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "EVE-Together.slnx")))
+            directory = directory.Parent;
+
+        return File.ReadAllText(Path.Combine(
+            directory?.FullName ?? throw new InvalidOperationException("the solution root is not above the test binary"),
+            "EveUtils.Client.UiTests", "Fixtures", name));
+    }
+
+    /// <summary>
     /// The whole path in one go: the inventory parser reads the paste, the SDE turns names into type ids, and the
     /// cached averages turn those into a total. Every figure is checked, because a tool that totals the wrong
     /// column still looks like it worked.

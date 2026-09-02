@@ -257,11 +257,7 @@ public sealed class AbyssalLootCaptureTests
             .Add(4, "Gamma S", 1, 1));
         await env.StartRunAsync();
 
-        await env.CopyAsync(
-            "Blood Microwave S\t1\tFrequency Crystal\tSmall\t\t1 m3\t30.229,00 ISK\r\n"
-            + "Dark Blood Copper Tag\t1\tCriminal Tags\t\t\t0,10 m3\t31.467,72 ISK\r\n"
-            + "Dark Blood EM Energized Membrane\t1\tEnergized Armor Membrane\t\tLow\t5 m3\t146.529,04 ISK\r\n"
-            + "Gamma S\t1\tFrequency Crystal\tSmall\t\t1 m3\t1.856,16 ISK");
+        await env.CopyAsync(_Fixture("blood-raider-loot.txt"));
 
         RunLootCapture capture = Assert.Single(await env.CapturesAsync());
         Assert.Equal(
