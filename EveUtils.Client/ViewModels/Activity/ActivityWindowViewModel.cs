@@ -195,7 +195,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(IsDiscardButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsCommandStatusShown))]
     [NotifyPropertyChangedFor(nameof(CommandStatusText))]
-    private RunControlAuthority _authority = RunControlAuthority.From(null, null, null);
+    private RunControlAuthority _authority = RunControlAuthority.From(null, null, null, null);
 
     /// <summary>The run row this window is writing to, once one has been started. Null for a window that is only
     /// showing the frame.</summary>
@@ -1147,11 +1147,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// the boss changes, not once at start: a handover mid-run moves the controls to the new FC and takes them off
     /// the old one, and that is an ordinary state change (ET-105). <paramref name="fleetBossCharacterId"/> null
     /// means ESI cannot say — the controls go away and say why, rather than appearing for everybody.
+    /// Whether the run is shared at all is the run's own <see cref="GroupCode"/>, not <paramref name="fleetId"/>:
+    /// this client having no ET fleet active is not the same thing as flying alone (ET-135).
     /// </summary>
     public void ApplyFleetCommand(long? fleetId, int? fleetBossCharacterId, int? actingCharacterId)
     {
         FleetId = fleetId;
-        Authority = RunControlAuthority.From(fleetId, fleetBossCharacterId, actingCharacterId);
+        Authority = RunControlAuthority.From(fleetId, fleetBossCharacterId, actingCharacterId, GroupCode);
     }
 
     /// <summary>

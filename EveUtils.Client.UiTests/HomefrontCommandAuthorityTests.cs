@@ -25,12 +25,12 @@ public sealed class HomefrontCommandAuthorityTests
 
     [AvaloniaFact]
     public void TheFleetBoss_MayCommandTheRun() =>
-        Assert.True(RunControlAuthority.From(FleetId, Commander, Commander).CanControl);
+        Assert.True(RunControlAuthority.From(FleetId, Commander, Commander, groupCode: null).CanControl);
 
     [AvaloniaFact]
     public void AMemberWhoIsNotTheFleetBoss_MayNot()
     {
-        RunControlAuthority authority = RunControlAuthority.From(FleetId, Commander, Member);
+        RunControlAuthority authority = RunControlAuthority.From(FleetId, Commander, Member, groupCode: null);
 
         Assert.False(authority.CanControl);
         Assert.False(authority.IsUnknown);          // a plain no, not a shrug
@@ -44,7 +44,8 @@ public sealed class HomefrontCommandAuthorityTests
     [AvaloniaFact]
     public void WithNoKnownFleetBoss_NobodyCommandsAndTheWindowSaysSo()
     {
-        RunControlAuthority authority = RunControlAuthority.From(FleetId, fleetBossCharacterId: null, Member);
+        RunControlAuthority authority =
+            RunControlAuthority.From(FleetId, fleetBossCharacterId: null, Member, groupCode: null);
 
         Assert.False(authority.CanControl);
         Assert.True(authority.IsUnknown);
@@ -52,10 +53,41 @@ public sealed class HomefrontCommandAuthorityTests
         Assert.NotEqual(string.Empty, authority.StatusText.Trim());
     }
 
-    /// <summary>A pilot soloing owns their own run: there is no commander to be and no other machine to reach.</summary>
+    /// <summary>A pilot soloing owns their own run: there is no commander to be and no other machine to reach.
+    /// Solo is the run carrying no group code, not merely the client having no fleet id to hand (ET-135).</summary>
     [AvaloniaFact]
     public void ASoloRun_IsAlwaysTheOwnPilotsToCommand() =>
-        Assert.True(RunControlAuthority.From(fleetId: null, fleetBossCharacterId: null, Member).CanControl);
+        Assert.True(RunControlAuthority
+            .From(fleetId: null, fleetBossCharacterId: null, Member, groupCode: null).CanControl);
+
+    /// <summary>
+    /// ET-135. The run carries a group code, so it is the commander's and a discard of it reaches every other
+    /// member — but this client has no fleet id, so there is no fleet whose boss ESI could be asked about. That is
+    /// not knowing, and not knowing is not "yes": the pilot who never opened the fleets window used to be handed
+    /// the whole set of buttons here, DISCARD included.
+    /// </summary>
+    [AvaloniaFact]
+    public void ASharedRunWithNoFleetId_IsNobodysToCommandAndSaysSo()
+    {
+        RunControlAuthority authority =
+            RunControlAuthority.From(fleetId: null, fleetBossCharacterId: null, Member, groupCode: "HF-7Q2");
+
+        Assert.False(authority.CanControl);
+        Assert.True(authority.IsUnknown);
+        Assert.Contains("not known", authority.StatusText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The plain no survives the change: a member of a shared run whose fleet boss IS known is denied,
+    /// not shrugged at, and is told who to ask.</summary>
+    [AvaloniaFact]
+    public void AMemberOfASharedRunWithAKnownBoss_IsStillPlainlyDenied()
+    {
+        RunControlAuthority authority = RunControlAuthority.From(FleetId, Commander, Member, groupCode: "HF-7Q2");
+
+        Assert.Equal(RunControlAuthorityLevel.Denied, authority.Level);
+        Assert.False(authority.IsUnknown);
+        Assert.Contains("fleet commander", authority.StatusText, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// The counter-proof for the handover: the same pilot who could not command before may after the boss moves to
@@ -64,12 +96,12 @@ public sealed class HomefrontCommandAuthorityTests
     [AvaloniaFact]
     public void WhenTheFleetBossChanges_TheRightMovesWithIt()
     {
-        Assert.False(RunControlAuthority.From(FleetId, Commander, Member).CanControl);
-        Assert.True(RunControlAuthority.From(FleetId, Commander, Commander).CanControl);
+        Assert.False(RunControlAuthority.From(FleetId, Commander, Member, groupCode: null).CanControl);
+        Assert.True(RunControlAuthority.From(FleetId, Commander, Commander, groupCode: null).CanControl);
 
         // The boss hands over to Member mid-run.
-        Assert.True(RunControlAuthority.From(FleetId, Member, Member).CanControl);
-        Assert.False(RunControlAuthority.From(FleetId, Member, Commander).CanControl);
+        Assert.True(RunControlAuthority.From(FleetId, Member, Member, groupCode: null).CanControl);
+        Assert.False(RunControlAuthority.From(FleetId, Member, Commander, groupCode: null).CanControl);
     }
 
     // ── What the window does with it, driven from the source the application uses ───────────────────
@@ -194,6 +226,50 @@ public sealed class HomefrontCommandAuthorityTests
         Assert.Null(window.FleetId);
     }
 
+    /// <summary>
+    /// ET-135, end to end and in the shape it actually happens in: the member accepted the commander's offer, so
+    /// <c>FleetRunWindowPresenter</c> built the window with the group code and fleet id off the wire — but
+    /// this pilot never opened the fleets window, so <see cref="IActiveFleetState"/> is empty and the tick hands
+    /// <c>ActiveFleetId</c> null. The run is still the commander's. Take the group code out of the decision and
+    /// this window gets START, STOP and DISCARD, and that DISCARD reaches every other member's machine.
+    /// </summary>
+    [AvaloniaFact]
+    public void AMemberWhoseFleetsWindowWasNeverOpened_GetsNoControlsOverTheCommandersRun()
+    {
+        using ClientInFleet client = ClientInFleet.As(Member, bossCharacterId: Commander, entersFleetsWindow: false);
+        ActivityWindowViewModel window =
+            new(ActivityKind.Site, client.Services) { GroupCode = "HF-7Q2", FleetId = FleetId };
+
+        window.StartManualRun(DateTime.UtcNow);
+
+        Assert.Null(window.FleetId);                // the tick overwrote it with what IActiveFleetState knows: nothing
+        Assert.False(window.IsStartButtonVisible);
+        Assert.False(window.IsStopButtonVisible);
+        Assert.False(window.IsDiscardButtonVisible);
+        Assert.True(window.IsCommandStatusShown);   // and it says why, rather than a corner where buttons used to be
+        Assert.NotEqual(string.Empty, window.CommandStatusText.Trim());
+    }
+
+    /// <summary>
+    /// The other half, and the one that keeps the gate from swinging shut over everybody: the same client, in the
+    /// same in-game fleet with the same boss, flying a run of its OWN — no group code, so no group to command and
+    /// nobody else's machine to reach. This pilot keeps every button. Decide on "is there a fleet boss" rather than
+    /// on the run's group code and this goes red.
+    /// </summary>
+    [AvaloniaFact]
+    public void APilotsOwnRunWhileInAnInGameFleet_KeepsItsButtons()
+    {
+        using ClientInFleet client = ClientInFleet.As(Member, bossCharacterId: Commander, entersFleetsWindow: false);
+        var window = new ActivityWindowViewModel(ActivityKind.Site, client.Services);
+
+        window.StartManualRun(DateTime.UtcNow);
+
+        Assert.Null(window.GroupCode);
+        Assert.True(window.IsStopButtonVisible);
+        Assert.True(window.IsDiscardButtonVisible);
+        Assert.False(window.IsCommandStatusShown);
+    }
+
     /// <summary>The read is not made faster than the endpoint's own 60s ESI cache: a 1 Hz tick must not turn into
     /// a 1 Hz poll, which is how the error-limit budget is spent and the client banned.</summary>
     [AvaloniaFact]
@@ -250,14 +326,19 @@ public sealed class HomefrontCommandAuthorityTests
 
         /// <param name="actingCharacterId">The character the fleets-window row was selected as.</param>
         /// <param name="flyingAs">The character this client actually publishes as; defaults to the same one.</param>
-        public static ClientInFleet As(int actingCharacterId, int? bossCharacterId, int? flyingAs = null)
+        /// <param name="entersFleetsWindow">False for a pilot who never opened the fleets window: they are in the
+        /// fleet as far as ESI and the bus are concerned, but nothing ever called <c>Enter</c>, so this client has
+        /// no fleet id of its own to give (ET-135).</param>
+        public static ClientInFleet As(
+            int actingCharacterId, int? bossCharacterId, int? flyingAs = null, bool entersFleetsWindow = true)
         {
             var esi = new FakeEsiFleetClient();
             var client = new ClientInFleet(
                 TestClientInstance.Create(services => services.AddSingleton<IEsiFleetClient>(esi)), esi);
             client.BossBecomes(bossCharacterId);
-            client.Services.GetRequiredService<IActiveFleetState>()
-                .Enter(FleetId, actingCharacterId, clientOnly: true);
+            if (entersFleetsWindow)
+                client.Services.GetRequiredService<IActiveFleetState>()
+                    .Enter(FleetId, actingCharacterId, clientOnly: true);
             // Who this client flies as, which is what the run controls are decided for — the fleets-window row
             // selection above only says which fleet is on screen.
             client.Services.GetRequiredService<IFleetParticipation>()
