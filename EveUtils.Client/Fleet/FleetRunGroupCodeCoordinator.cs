@@ -180,8 +180,16 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
     /// ActivityWindowViewModel does key on the scan id, because it asks the other question: whether one pilot's two
     /// runs are the same run. Two questions, two keys; do not merge them.
     ///
-    /// ponytail: two instances of the same site in one system (two Sansha Refuges side by side) still share a key.
-    /// Wrong, and knowingly left — no source today tells the instances apart. Split it when one exists.
+    /// Nor the catalogue's DungeonId, though ET-136 asked for it. At this point the client knows the site only by
+    /// the name that came off the clipboard, and the one route from a name into the catalogue
+    /// (<c>ClipboardSignatureOffer.MatchSites</c>) matches on that name — so an id derived that way carries nothing
+    /// the name did not already carry, and is no better a key. It is not the same key either: 218 of the SDE's 1014
+    /// site names cover more than one dungeon ("Angel Powergrid" is four), so the name is the coarser grain.
+    ///
+    /// ponytail: two members in one system on two different sites that happen to share a name therefore land in one
+    /// group, as do two instances of one site side by side. Knowingly left — nothing reaching here tells them apart.
+    /// Come back the moment a real DungeonId arrives from somewhere other than the name (a registered escalation,
+    /// or SiteTypeId on a stored run), because that is where the name key and the id key stop agreeing.
     /// </summary>
     private readonly record struct RunGroupKey(
         long FleetId,
