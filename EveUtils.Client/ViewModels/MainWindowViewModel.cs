@@ -908,6 +908,41 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             links.Where(l => l.State is ServerConnectionState.CertificateRejected)
                  .Select(l => new ServerCertificateAlert.RejectedCertificate(
                      l.DisplayName, GetServerFingerprint(l.Address), GetPresentedServerFingerprint(l.Address))));
+
+        AnnounceRefusedServers(links);
+    }
+
+    // Servers already announced by a toast this run, so the slow retry behind a refused session cannot re-announce
+    // itself every few minutes. A server that recovers is dropped from the set, so a second spell is told again.
+    private readonly HashSet<string> _refusalAnnounced = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Raises the transition toast for a server that has just started refusing its stored session. The banner beside
+    /// it carries the ongoing state; this is only the moment, and only on the window in front of the user — the
+    /// banner lives on the main window, which is not necessarily the one they are looking at.
+    /// </summary>
+    private void AnnounceRefusedServers(IReadOnlyList<ServerLinkViewModel> links)
+    {
+        var refused = links
+            .Where(l => l.State is ServerConnectionState.SessionExpired)
+            .Select(l => l.DisplayName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        _refusalAnnounced.IntersectWith(refused); // recovered → announce it again if it happens twice
+
+        // Every name is added, not just up to the first new one — Any would short-circuit and leave the rest
+        // unannounced-but-unrecorded, so they would toast again on the very next state change.
+        var isNew = false;
+        foreach (var name in refused)
+            isNew |= _refusalAnnounced.Add(name);
+        if (!isNew)
+            return;
+
+        var (title, message) = ServerLinkRefusalToast.For(refused);
+        _services?.GetService<IToastService>()?.Show(
+            title, message, ToastKind.Warning, [], onClosed: null,
+            replacementKey: ServerLinkRefusalToast.ReplacementKey);
     }
 
     // Lazy-load a server tab the first time it is shown.

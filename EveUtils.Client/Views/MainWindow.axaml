@@ -86,11 +86,14 @@
         <!-- ── Downtime banner (D-157) ── -->
         <Border DockPanel.Dock="Top" IsVisible="{Binding IsEsiAlert}" Background="#33CC4444"
                 BorderBrush="{StaticResource RedBrush}" BorderThickness="0,0,0,1" Padding="14,8">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-                <mi:MaterialIcon Classes="icon-lg" Kind="AlertOutline" Foreground="{StaticResource RedBrush}"/>
-                <TextBlock Text="{Binding EsiAlertMessage}" Foreground="{StaticResource TextBrightBrush}"
+            <!-- Grid, not a horizontal StackPanel: a StackPanel measures its children with unbounded width, so the
+                 TextWrapping below never fired and a long banner simply ran off the right edge (ET-121). -->
+            <Grid ColumnDefinitions="Auto,*">
+                <mi:MaterialIcon Grid.Column="0" Classes="icon-lg" Kind="AlertOutline" Margin="0,0,10,0"
+                                 VerticalAlignment="Center" Foreground="{StaticResource RedBrush}"/>
+                <TextBlock Grid.Column="1" Text="{Binding EsiAlertMessage}" Foreground="{StaticResource TextBrightBrush}"
                            FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
-            </StackPanel>
+            </Grid>
         </Border>
 
         <!-- ── Lapsed server pairing (ET-77) ── Stays put until the pairing is valid again, like the update banner
@@ -98,11 +101,12 @@
              failing, so the app would otherwise go on showing "there is nothing here" indefinitely. ── -->
         <Border DockPanel.Dock="Top" IsVisible="{Binding IsServerPairingAlert}" Background="#33CC4444"
                 BorderBrush="{StaticResource RedBrush}" BorderThickness="0,0,0,1" Padding="14,8">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-                <mi:MaterialIcon Classes="icon-lg" Kind="CloudOffOutline" Foreground="{StaticResource RedBrush}"/>
-                <TextBlock Text="{Binding ServerPairingAlertMessage}" Foreground="{StaticResource TextBrightBrush}"
+            <Grid ColumnDefinitions="Auto,*">
+                <mi:MaterialIcon Grid.Column="0" Classes="icon-lg" Kind="CloudOffOutline" Margin="0,0,10,0"
+                                 VerticalAlignment="Center" Foreground="{StaticResource RedBrush}"/>
+                <TextBlock Grid.Column="1" Text="{Binding ServerPairingAlertMessage}" Foreground="{StaticResource TextBrightBrush}"
                            FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
-            </StackPanel>
+            </Grid>
         </Border>
 
         <!-- ── Refused server certificate (ET-95) ── The reconnect loop stops on this instead of retrying, so without
@@ -110,11 +114,12 @@
              certificate legitimately changed is the user's call and nothing else can make it for them. ── -->
         <Border DockPanel.Dock="Top" IsVisible="{Binding IsServerCertificateAlert}" Background="#33CC4444"
                 BorderBrush="{StaticResource RedBrush}" BorderThickness="0,0,0,1" Padding="14,8">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-                <mi:MaterialIcon Classes="icon-lg" Kind="ShieldAlertOutline" Foreground="{StaticResource RedBrush}"/>
-                <SelectableTextBlock Text="{Binding ServerCertificateAlertMessage}" Foreground="{StaticResource TextBrightBrush}"
+            <Grid ColumnDefinitions="Auto,*">
+                <mi:MaterialIcon Grid.Column="0" Classes="icon-lg" Kind="ShieldAlertOutline" Margin="0,0,10,0"
+                                 VerticalAlignment="Center" Foreground="{StaticResource RedBrush}"/>
+                <SelectableTextBlock Grid.Column="1" Text="{Binding ServerCertificateAlertMessage}" Foreground="{StaticResource TextBrightBrush}"
                                      FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
-            </StackPanel>
+            </Grid>
         </Border>
 
         <!-- ── Update-ready banner (ET-32) ── A downloaded package that is never applied leaves the app running the

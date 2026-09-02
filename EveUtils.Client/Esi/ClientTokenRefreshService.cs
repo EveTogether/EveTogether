@@ -33,6 +33,12 @@ public sealed class ClientTokenRefreshService(
     // One gate per character so two callers never send the same refresh token to EVE SSO at the same time —
     // with a rotating refresh token the loser of that race gets invalid_grant and the account is really signed out.
     private readonly ConcurrentDictionary<int, SemaphoreSlim> _gates = new();
+    // Characters whose stored token ESI has just refused: the next check refreshes instead of trusting the clock.
+    private readonly ConcurrentDictionary<int, bool> _refused = new();
+    // Floor under those forced refreshes. Without it a token ESI keeps refusing would mean one SSO round-trip per
+    // ESI call for as long as it lasts; with it the character simply stays Rejected until the cooldown lapses.
+    private static readonly TimeSpan ForcedRefreshCooldown = TimeSpan.FromSeconds(60);
+    private readonly ConcurrentDictionary<int, DateTimeOffset> _forcedRefreshAfter = new();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -100,13 +106,35 @@ public sealed class ClientTokenRefreshService(
         return status;
     }
 
+    /// <summary>
+    /// ESI answered 401 for this character's token. Distrusts the stored token so the next check refreshes rather
+    /// than believing its expiry, and puts the character on the badge as <see cref="TokenStatus.Rejected"/> — a
+    /// refused token used to be invisible here, because nothing carried ESI's opinion back into the status the UI
+    /// reads (ET-121).
+    /// </summary>
+    public async Task RecordRefusalAsync(int charId, CancellationToken cancellationToken = default)
+    {
+        _refused[charId] = true;
+        await statusTracker.RecordAsync(charId, TokenStatus.Rejected, cancellationToken);
+    }
+
     private async Task<TokenStatus> EnsureValidCoreAsync(int charId, CancellationToken cancellationToken)
     {
         var tokens = await tokenStore.LoadAsync(charId, cancellationToken);
         if (tokens is null) return TokenStatus.NoToken;
 
-        var remaining = tokens.ExpiresAt - DateTimeOffset.UtcNow;
-        if (remaining > RefreshThreshold)
+        var now = DateTimeOffset.UtcNow;
+        // A token ESI has refused gets refreshed even though its own clock says it is still good — that clock is
+        // exactly what was wrong. Honoured at most once per cooldown so a persistently refused token cannot turn
+        // every ESI call into an SSO round-trip.
+        var forced = _refused.TryRemove(charId, out _);
+        if (forced && _forcedRefreshAfter.TryGetValue(charId, out var notBefore) && now < notBefore)
+            return TokenStatus.Rejected; // refreshed for this reason moments ago and ESI still says no — hold the verdict
+        if (forced)
+            _forcedRefreshAfter[charId] = now + ForcedRefreshCooldown;
+
+        var remaining = tokens.ExpiresAt - now;
+        if (!forced && remaining > RefreshThreshold)
         {
             _unusableRetryAfter.TryRemove(charId, out _); // a valid token ends any unusable run
             return TokenStatus.Valid;

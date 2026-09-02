@@ -89,6 +89,8 @@ public partial class CharacterViewModel : ObservableObject
         TokenStatus.TemporarilyUnavailable         => "ESI: temporarily unavailable — the token cannot be used "
                                                       + "right now (usually a clock difference with EVE); signing in "
                                                       + "again will not help",
+        TokenStatus.Rejected                       => "ESI: refusing this character's token — trying to renew it. "
+                                                      + "Signing in again is not needed yet",
         _                                          => "ESI: not signed in",
     };
 
@@ -104,15 +106,18 @@ public partial class CharacterViewModel : ObservableObject
         TokenStatus.Valid or TokenStatus.Refreshed => MaterialIconKind.Check,
         TokenStatus.NeedsReauth                    => MaterialIconKind.AlertOutline,
         TokenStatus.TemporarilyUnavailable         => MaterialIconKind.ClockOutline,
+        TokenStatus.Rejected                       => MaterialIconKind.LockAlertOutline,
         _                                          => MaterialIconKind.Minus,
     };
 
     /// <summary>Healthy accent chip: this character's ESI session actually works.</summary>
     public bool EsiOk => EsiTokenStatus is TokenStatus.Valid or TokenStatus.Refreshed;
 
-    /// <summary>Amber chip: there is a token but it does not work — re-auth needed, or unusable for now.
-    /// TemporarilyUnavailable used to read as green while nothing worked; it does not any more.</summary>
-    public bool EsiWarn => EsiTokenStatus is TokenStatus.NeedsReauth or TokenStatus.TemporarilyUnavailable;
+    /// <summary>Amber chip: there is a token but it does not work — re-auth needed, unusable for now, or refused by
+    /// ESI itself. TemporarilyUnavailable used to read as green while nothing worked; so did a token ESI was
+    /// answering 401 to, right up until the pilot noticed their location had stopped updating (ET-121).</summary>
+    public bool EsiWarn => EsiTokenStatus
+        is TokenStatus.NeedsReauth or TokenStatus.TemporarilyUnavailable or TokenStatus.Rejected;
 
     /// <summary>Inert chip: not signed in at all (mutually exclusive with ok/warn, so the variants never stack).</summary>
     public bool EsiDim => EsiTokenStatus is TokenStatus.NoToken;

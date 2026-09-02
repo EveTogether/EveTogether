@@ -17,4 +17,12 @@ public interface IEsiTokenProvider
         int characterId,
         IReadOnlyList<string> requiredScopes,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// ESI refused the bearer this provider just handed out (401). The pre-flight cannot see that coming — it trusts
+    /// the token's own expiry — so without this the provider would keep serving a token every call rejects, silently
+    /// and indefinitely (ET-121). Implementations distrust their cached verdict for the character and let the next
+    /// <see cref="AuthorizeAsync"/> refresh for real. A host that has nothing to reconsider leaves it as it is.
+    /// </summary>
+    Task TokenRefusedAsync(int characterId, CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

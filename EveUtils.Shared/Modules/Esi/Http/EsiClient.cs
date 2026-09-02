@@ -79,6 +79,14 @@ public sealed class EsiClient(
 
             var error = MapError(request, response, body);
             RecordOutcome(error.Kind);
+
+            // ESI rejected the bearer the pre-flight just vouched for. Tell the provider, so the character's next
+            // call refreshes instead of re-sending the same refused token — and so the badge can say something is
+            // wrong. Left unsaid, this was invisible: a token whose local expiry still looked fine kept a green
+            // badge while every call came back 401 (ET-121).
+            if (error.Kind == EsiErrorKind.AuthRequired && request.CharacterId is { } refusedCharacter)
+                await tokenProvider.TokenRefusedAsync(refusedCharacter, cancellationToken);
+
             var status = (int)response.StatusCode;
             // A 404 means the resource isn't there — an expected outcome the caller handles via EsiErrorKind.NotFound
             // (e.g. "character is not in a fleet"), not a transport/server failure. Log it at Warning so it stays
