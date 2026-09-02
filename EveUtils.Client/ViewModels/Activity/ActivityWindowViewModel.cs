@@ -104,6 +104,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private DispatcherTimer? _timer;
     private bool _isManualRun;
     private int? _runCharacterId;
+    private int? _namedCharacterId;
     private string? _runCharacterName;
     private ShipFitDetectionReading? _fitReading;
     private RunEnemyObservationCollector? _enemyObservations;
@@ -285,6 +286,22 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public ActivitySection Bounty { get; } = new() { Title = "BOUNTY" };
 
     public ActivitySection Loot { get; } = new() { Title = "LOOT" };
+
+    /// <summary>
+    /// Whose run this is, by name, for the header. The window knew this all along and never said it: the FLEET
+    /// section named everyone you fly beside without ever naming you (Raymond, 2026-09-02). Null until a character
+    /// is settled, which the header then says rather than leaving blank.
+    ///
+    /// The same character <see cref="_ActingCharacterId"/> answers with — one idea of who you are, shown and used.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasActingCharacter))]
+    [NotifyPropertyChangedFor(nameof(ActingCharacterText))]
+    private string? _actingCharacterName;
+
+    public bool HasActingCharacter => ActingCharacterName is not null;
+
+    public string ActingCharacterText => ActingCharacterName ?? "no character yet";
 
     /// <summary>The run's one fit (ET-107) — filled from ET-101's detection, or the reason it could not be. Never a
     /// proposal standing beside a choice: a manual pick comes back through the same reading as its own match reason.</summary>
@@ -673,6 +690,37 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         return mine.Select(participant => participant.CharacterId).Distinct().ToList() is [{ } only] ? only : null;
     }
 
+    /// <summary>
+    /// Put a name to <see cref="_ActingCharacterId"/> for the header. Clock-driven like everything else here, but it
+    /// only reads the registry when the answer has actually changed — the id is settled once and then holds for the
+    /// rest of the run, so this is a lookup per run rather than one per second.
+    /// </summary>
+    private async Task _RefreshActingCharacterAsync()
+    {
+        if (_ActingCharacterId() is not { } characterId)
+        {
+            ActingCharacterName = null;
+            _namedCharacterId = null;
+            return;
+        }
+
+        if (_namedCharacterId == characterId)
+            return;
+
+        // The run's own character already carries its name; anyone else has to be looked up once.
+        string? name = _runCharacterId == characterId && _runCharacterName is not null
+            ? _runCharacterName
+            : _services.GetService<ICharacterRegistry>() is { } registry
+                ? (await registry.GetAllAsync()).FirstOrDefault(c => c.EsiCharacterId == characterId)?.Name
+                : null;
+
+        if (name is null)
+            return; // leave it unnamed and try again next tick rather than caching a miss.
+
+        _namedCharacterId = characterId;
+        ActingCharacterName = name;
+    }
+
     /// <summary>Fill the run's fit from ET-101's reading. Clock-driven like the fleet command is, so starting a run
     /// fills it without the player confirming anything. An unlinked fit comes back through the same reading, so it
     /// survives this window being closed and reopened mid-run.</summary>
@@ -792,6 +840,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _RefreshSummaries();
         _ = RefreshFleetCommandAsync(nowUtc);
         _ = RefreshFitAsync();
+        _ = _RefreshActingCharacterAsync();
     }
 
     [RelayCommand]

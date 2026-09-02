@@ -243,6 +243,14 @@
                 </StackPanel>
 
                 <WrapPanel Grid.Column="1" VerticalAlignment="Center" ItemSpacing="5" LineSpacing="4">
+                    <!-- Whose run this is, first in the row and before anything about the site: with several toons
+                         running their own sites at once this is the only thing telling two windows apart, and even
+                         with one it was the question the window never answered (Raymond, 2026-09-02). -->
+                    <Border Classes="chip" Classes.ok="{Binding HasActingCharacter}"
+                            Classes.warn="{Binding !HasActingCharacter}"
+                            ToolTip.Tip="The character this run is filed under">
+                        <TextBlock Text="{Binding ActingCharacterText}"/>
+                    </Border>
                     <Border Classes="chip ok" IsVisible="{Binding HasWeatherAndTier}">
                         <TextBlock Text="{Binding TierText}"/>
                     </Border>
