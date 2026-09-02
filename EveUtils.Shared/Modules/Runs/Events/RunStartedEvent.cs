@@ -10,9 +10,11 @@ public sealed class RunStartedEvent(
     DateTime startedAtUtc,
     long? fleetId,
     string? groupCode,
-    bool isFleetCommander)
+    bool isFleetCommander,
+    string? solarSystemName = null,
+    string? siteName = null)
     : IntegrationEvent<RunStartedEventData>(new RunStartedEventData(
-        runId, characterId, activityKind, startedAtUtc, fleetId, groupCode, isFleetCommander))
+        runId, characterId, activityKind, startedAtUtc, fleetId, groupCode, isFleetCommander, solarSystemName, siteName))
 {
     public override string EventType => "runs.started";
 }

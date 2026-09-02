@@ -13,8 +13,8 @@ namespace EveUtils.Client.Fleet;
 public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposable
 {
     private readonly object _gate = new();
-    private readonly Dictionary<(long FleetId, ActivityKind ActivityKind, long CharacterId), RunningRun> _runs = [];
-    private readonly Dictionary<(long FleetId, ActivityKind ActivityKind), List<RunGroupCodeCandidate>> _candidates = [];
+    private readonly Dictionary<(RunGroupKey Key, long CharacterId), RunningRun> _runs = [];
+    private readonly Dictionary<RunGroupKey, List<RunGroupCodeCandidate>> _candidates = [];
     private readonly SemaphoreSlim _reconcileGate = new(1, 1);
     private readonly IDispatcher _dispatcher;
     private readonly IDisposable _runStartedSubscription;
@@ -46,11 +46,12 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
         if (started.FleetId is not { } fleetId)
             return;
 
-        RunningRun run = new(started.RunId, started.CharacterId, fleetId, started.ActivityKind, started.GroupCode,
-            started.StartedAtUtc, started.IsFleetCommander);
+        RunningRun run = new(started.RunId, started.CharacterId,
+            RunGroupKey.For(fleetId, started.ActivityKind, started.SolarSystemName, started.SiteName),
+            started.GroupCode, started.StartedAtUtc, started.IsFleetCommander);
         lock (_gate)
         {
-            _runs[(fleetId, started.ActivityKind, started.CharacterId)] = run;
+            _runs[(run.Key, run.CharacterId)] = run;
             _AddCandidate(run);
         }
 
@@ -65,9 +66,9 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
             if (run is null)
                 return Task.CompletedTask;
 
-            _runs.Remove((run.FleetId, run.ActivityKind, run.CharacterId));
-            if (!_runs.Values.Any(candidate => candidate.FleetId == run.FleetId && candidate.ActivityKind == run.ActivityKind))
-                _candidates.Remove((run.FleetId, run.ActivityKind));
+            _runs.Remove((run.Key, run.CharacterId));
+            if (!_runs.Values.Any(candidate => candidate.Key == run.Key))
+                _candidates.Remove(run.Key);
         }
 
         return Task.CompletedTask;
@@ -86,28 +87,33 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
 
         lock (_gate)
         {
-            foreach (var key in _runs
-                .Where(entry => entry.Value.FleetId == discard.FleetId
-                                && entry.Value.ActivityKind == discard.ActivityKind)
-                .Select(entry => entry.Key)
-                .ToList())
-                _runs.Remove(key);
+            // A discard names a group code, not a site, so it ends the groups holding that code — not every group
+            // this fleet has running (ET-136).
+            List<RunGroupKey> ended = [.. _candidates
+                .Where(entry => entry.Key.FleetId == discard.FleetId
+                                && entry.Key.ActivityKind == discard.ActivityKind
+                                && entry.Value.Any(candidate => candidate.GroupCode == discard.GroupCode))
+                .Select(entry => entry.Key)];
 
-            _candidates.Remove((discard.FleetId, discard.ActivityKind));
+            foreach (RunGroupKey key in ended)
+            {
+                foreach ((RunGroupKey Key, long CharacterId) runKey in _runs.Keys.Where(entry => entry.Key == key).ToList())
+                    _runs.Remove(runKey);
+                _candidates.Remove(key);
+            }
         }
     }
 
     private async Task _OnGroupCodeAsync(FleetRunGroupCodeEvent integrationEvent, CancellationToken cancellationToken)
     {
-        RunGroupCodeCandidate candidate = new(integrationEvent.Data.GroupCode, integrationEvent.Data.StartedAtUtc,
-            integrationEvent.Data.IsFleetCommander);
+        RunGroupCodeStart start = integrationEvent.Data;
+        RunGroupKey key = RunGroupKey.For(start.FleetId, start.ActivityKind, start.SolarSystemName, start.SiteName);
+        RunGroupCodeCandidate candidate = new(start.GroupCode, start.StartedAtUtc, start.IsFleetCommander);
         List<RunningRun> runs;
         lock (_gate)
         {
-            _AddCandidate(integrationEvent.Data.FleetId, integrationEvent.Data.ActivityKind, candidate);
-            runs = _runs.Values
-                .Where(run => run.FleetId == integrationEvent.Data.FleetId && run.ActivityKind == integrationEvent.Data.ActivityKind)
-                .ToList();
+            _AddCandidate(key, candidate);
+            runs = [.. _runs.Values.Where(run => run.Key == key)];
         }
 
         foreach (RunningRun run in runs)
@@ -121,9 +127,9 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
         {
             List<RunGroupCodeCandidate> candidates;
             lock (_gate)
-                candidates = [.. _candidates.GetValueOrDefault((run.FleetId, run.ActivityKind), [])];
+                candidates = [.. _candidates.GetValueOrDefault(run.Key, [])];
 
-            Result<string> selected = RunGroupCodeArbiter.Select(run.ActivityKind, candidates);
+            Result<string> selected = RunGroupCodeArbiter.Select(run.Key.ActivityKind, candidates);
             if (!selected.IsSuccess || selected.Value is not { } groupCode || run.GroupCode == groupCode)
                 return;
 
@@ -139,7 +145,7 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
                 return;
 
             lock (_gate)
-                _runs[(run.FleetId, run.ActivityKind, run.CharacterId)] = run with { GroupCode = groupCode };
+                _runs[(run.Key, run.CharacterId)] = run with { GroupCode = groupCode };
         }
         finally
         {
@@ -150,13 +156,11 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
     private void _AddCandidate(RunningRun run)
     {
         if (run.GroupCode is not null)
-            _AddCandidate(run.FleetId, run.ActivityKind,
-                new RunGroupCodeCandidate(run.GroupCode, run.StartedAtUtc, run.IsFleetCommander));
+            _AddCandidate(run.Key, new RunGroupCodeCandidate(run.GroupCode, run.StartedAtUtc, run.IsFleetCommander));
     }
 
-    private void _AddCandidate(long fleetId, ActivityKind activityKind, RunGroupCodeCandidate candidate)
+    private void _AddCandidate(RunGroupKey key, RunGroupCodeCandidate candidate)
     {
-        (long FleetId, ActivityKind ActivityKind) key = (fleetId, activityKind);
         if (!_candidates.TryGetValue(key, out List<RunGroupCodeCandidate>? candidates))
         {
             candidates = [];
@@ -167,11 +171,36 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
             candidates.Add(candidate);
     }
 
+    /// <summary>
+    /// Who may share one group code: the same fleet, doing the same kind of thing, in the same system, on the same
+    /// site (ET-136). Fleet and activity kind alone filed six pilots on six anomalies as one shared run.
+    ///
+    /// The site is its name, never the scan id: EVE gives each pilot their own id for the same site, so keying on
+    /// the id would keep two members on ONE site apart — the opposite of what this key is for. <c>_IsSameRun</c> in
+    /// ActivityWindowViewModel does key on the scan id, because it asks the other question: whether one pilot's two
+    /// runs are the same run. Two questions, two keys; do not merge them.
+    ///
+    /// ponytail: two instances of the same site in one system (two Sansha Refuges side by side) still share a key.
+    /// Wrong, and knowingly left — no source today tells the instances apart. Split it when one exists.
+    /// </summary>
+    private readonly record struct RunGroupKey(
+        long FleetId,
+        ActivityKind ActivityKind,
+        string? SolarSystem,
+        string? Site)
+    {
+        public static RunGroupKey For(long fleetId, ActivityKind activityKind, string? solarSystem, string? site) =>
+            new(fleetId, activityKind, _Normalize(solarSystem), _Normalize(site));
+
+        // Both halves are text a pilot copied; casing or padding must not split a group that belongs together.
+        private static string? _Normalize(string? value) =>
+            string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
+    }
+
     private sealed record RunningRun(
         Guid RunId,
         long CharacterId,
-        long FleetId,
-        ActivityKind ActivityKind,
+        RunGroupKey Key,
         string? GroupCode,
         DateTime StartedAtUtc,
         bool IsFleetCommander);
