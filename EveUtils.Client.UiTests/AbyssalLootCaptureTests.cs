@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
@@ -152,12 +153,50 @@ public sealed class AbyssalLootCaptureTests
         using var env = await Env.StartAsync();
         await env.StartRunAsync();
 
-        await env.CopyAsync("Rifter\tShip\t1\r\nDamage Control II\tModule\t2\r\nEMP S\tShip\t3");
+        // Two text columns with the SAME number of distinct values: nothing tells them apart, which is the only
+        // case left now that the parser takes the column with strictly the most distinct values.
+        await env.CopyAsync("Rifter\tAlpha\t1\r\nDamage Control II\tBeta\t2");
 
         Assert.Empty(await env.CapturesAsync());
         var refusal = Assert.Single(env.Toasts.Toasts);
         Assert.Equal("Loot not recognised", refusal.Title);
-        Assert.Contains("which of the copied columns holds the item names", refusal.Message);
+        Assert.Contains("stands out as the item names", refusal.Message);
+        // It must not ask for column headings: an EVE inventory copy has none, so that would be unfollowable.
+        Assert.DoesNotContain("column shown", refusal.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Raymond's own loot window, copied verbatim on 2026-09-02 and refused. Seven columns — name, quantity, group,
+    /// size, slot, volume, price — with no heading row, empty cells appearing as consecutive tabs, a group name
+    /// repeating across rows, and both number conventions on one line (30.229,00 ISK beside 0,10 m3).
+    ///
+    /// Four distinct item names against three distinct group names did not clear the parser's old 2x distinctness
+    /// margin, so the whole window was refused. The margin is gone; the SDE is what catches a wrong column now.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AWholeLootWindowWithNoHeadingRow_IsRecordedFromItsNameColumn()
+    {
+        using var env = await Env.StartAsync(sde: new FakeSdeAccessor()
+            .Add(1, "Blood Microwave S", 1, 1)
+            .Add(2, "Dark Blood Copper Tag", 2, 2)
+            .Add(3, "Dark Blood EM Energized Membrane", 3, 3)
+            .Add(4, "Gamma S", 1, 1));
+        await env.StartRunAsync();
+
+        await env.CopyAsync(
+            "Blood Microwave S\t1\tFrequency Crystal\tSmall\t\t1 m3\t30.229,00 ISK\r\n"
+            + "Dark Blood Copper Tag\t1\tCriminal Tags\t\t\t0,10 m3\t31.467,72 ISK\r\n"
+            + "Dark Blood EM Energized Membrane\t1\tEnergized Armor Membrane\t\tLow\t5 m3\t146.529,04 ISK\r\n"
+            + "Gamma S\t1\tFrequency Crystal\tSmall\t\t1 m3\t1.856,16 ISK");
+
+        RunLootCapture capture = Assert.Single(await env.CapturesAsync());
+        Assert.Equal(
+            ["Blood Microwave S", "Dark Blood Copper Tag", "Dark Blood EM Energized Membrane", "Gamma S"],
+            capture.Entries.Select(entry => entry.Name).Order());
+        // The comma is the decimal point and the dot groups thousands, on the same row, in both units.
+        RunLootEntry crystal = capture.Entries.Single(entry => entry.Name == "Blood Microwave S");
+        Assert.Equal(30_229.00m, crystal.ClipboardPrice);
+        Assert.Equal(0.10m, capture.Entries.Single(entry => entry.Name == "Dark Blood Copper Tag").Volume);
     }
 
     [AvaloniaFact]

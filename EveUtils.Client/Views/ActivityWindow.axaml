@@ -182,6 +182,28 @@
                 <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
                 <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
             </Style>
+            <!-- ── A link ── for the one thing in a row that opens something instead of setting it. Accent-coloured
+                 and underlined so it reads as clickable without a border or a plate, which in a key/value row would
+                 look like a control you can type into. -->
+            <Style Selector="Button.link">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="Cursor" Value="Hand"/>
+            </Style>
+            <Style Selector="Button.link /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="TextBlock.TextDecorations" Value="Underline"/>
+            </Style>
+            <Style Selector="Button.link:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+            </Style>
+
             <!-- ── The enemy stepper ── a row control, not a form field. The theme sizes a NumericUpDown like a text
                  box, which beside a 10.5pt enemy name put chevrons taller than every button in this window (ET-115).
                  Sized against Button.pick above, which is what the rest of the window is made of. -->
@@ -380,9 +402,16 @@
                                 <TextBlock Text="SITE"/>
                                 <TextBlock Grid.Column="1" Text="{Binding SignatureSiteText}"/>
                             </Grid>
+                            <!-- The hull list is behind this, not in the section: thirty-odd names over five lines
+                                 pushed LOCATION and LOOT STRATEGY off the bottom. The SITE line above still carries
+                                 "ship-restricted" itself, so the FACT of the restriction is never hidden — and it
+                                 stays visible even for a restricted site whose allow-list resolves to nothing,
+                                 which is exactly the case that has no list to open. -->
                             <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasShipRestriction}">
-                                <TextBlock Text="SHIPS"/>
-                                <TextBlock Grid.Column="1" Text="{Binding ShipRestrictionText}"/>
+                                <TextBlock Text=""/>
+                                <Button Grid.Column="1" Classes="link" Content="which ships may enter?"
+                                        HorizontalAlignment="Left"
+                                        Command="{Binding ShowShipRestrictionCommand}"/>
                             </Grid>
                         </StackPanel>
 

@@ -533,6 +533,25 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public bool HasShipRestriction => ShipRestrictionText is not null;
 
+    /// <summary>
+    /// The hull list behind the site line, on demand. It used to stand inline in the ACTIVITY section, where a site
+    /// like Blood Lookout ran to thirty-odd names over five lines and pushed LOCATION and LOOT STRATEGY off the
+    /// bottom (Raymond, 2026-09-02). The site line still says <c>ship-restricted</c> itself, so the fact of the
+    /// restriction never depended on this list being visible.
+    ///
+    /// Shown through <see cref="IDialogService.ShowMessageAsync"/>, the same plain dialog the fit picker falls back
+    /// on — no new surface for one list.
+    /// </summary>
+    [RelayCommand]
+    private async Task ShowShipRestrictionAsync()
+    {
+        if (ShipRestrictionText is not { } hulls)
+            return;
+
+        await _services.GetRequiredService<IDialogService>()
+            .ShowMessageAsync("Ships allowed at this site", hulls);
+    }
+
     public string TierText => TierIndex is { } tier
         ? $"{Tiers[tier]} (Tier {tier})"
         : "not set";

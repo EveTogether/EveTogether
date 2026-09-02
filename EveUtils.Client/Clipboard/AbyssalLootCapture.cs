@@ -108,9 +108,10 @@ public sealed class AbyssalLootCapture : ISingletonService, IDisposable
                 ? $"Could not identify exactly one EVE item type from {candidates.Count} copied names. Copy rows from an EVE inventory window."
                 : resolution.Unresolved.Count > 0
                     ? $"None of the {resolution.Unresolved.Count} copied names is a known item type. Copy rows from an EVE inventory window."
-                    // Reachable only since the line above stopped swallowing it: the rows parsed, but no column
-                    // stood out as the names, so there was never a name to look up.
-                    : "Could not tell which of the copied columns holds the item names. Copy the rows with the item name column shown.";
+                    // The rows parsed, but no single column stood out as the item names, so there was never a name
+                    // to look up. It does NOT ask for column headings: an EVE inventory copy carries none, so a
+                    // message that asked for them was asking for something the player cannot produce.
+                    : "No column in this copy stands out as the item names. Copy the rows from an EVE inventory window.";
             _toasts.Show("Loot not recognised",
                 message,
                 ToastKind.Error);

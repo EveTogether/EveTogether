@@ -113,8 +113,21 @@ public static class ClipboardInventoryParser
             }
         }
 
-        // This chosen, unmeasured 2x guard comes from one 39-versus-10 capture; it rejects valid 15-versus-8 selections rather than misnaming them.
-        return nameColumn is null || highestDistinctCount < nextHighestDistinctCount * 2 ? null : nameColumn;
+        // Strictly more distinct values than any other candidate — no margin on top of that.
+        //
+        // The margin used to be 2x, chosen from a single 39-versus-10 capture, and its own note admitted it would
+        // "reject valid 15-versus-8 selections rather than misname them". That trade does not hold: refusing is not
+        // the safe side, because a refused copy loses the loot outright, and choosing wrong is caught immediately
+        // afterwards — SdeInventoryResolver only keeps names that resolve to a real EVE item type, so picking the
+        // group column instead of the name column comes back as "none of these is a known item type" rather than as
+        // wrong loot. Measured on a real capture (Raymond, 2026-09-02): four rows of Blood Raider loot, four
+        // distinct names against three distinct group names, refused by the margin at 4 < 6.
+        //
+        // A tie still means nothing is known: with one copied row every text column has exactly one distinct value,
+        // which is why that case has its own route through ParseAmbiguousNameCandidates and the SDE.
+        // ponytail: distinctness with the SDE as the check afterwards. If a moved name column ever needs handling,
+        // the upgrade is to resolve each candidate column against the SDE and keep the one that matches most rows.
+        return nameColumn is null || highestDistinctCount <= nextHighestDistinctCount ? null : nameColumn;
     }
 
     private static bool IsNameColumn(IReadOnlyList<string[]> rows, int column, out int distinctCount)
