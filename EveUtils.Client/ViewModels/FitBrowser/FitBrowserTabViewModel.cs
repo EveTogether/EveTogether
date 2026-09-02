@@ -31,7 +31,10 @@ public partial class FitBrowserTabViewModel : ObservableObject
     /// <summary>Page of rows currently shown in the card grid (after search + paging).</summary>
     public ObservableCollection<FitRowViewModel> PagedRows { get; } = [];
 
-    [ObservableProperty] private string _search = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSearch))]
+    private string _search = "";
+
     [ObservableProperty] private int _pageSize = 25;
     [ObservableProperty] private int _currentPage = 1;
     [ObservableProperty] private FitRowViewModel? _selectedRow;
@@ -71,6 +74,10 @@ public partial class FitBrowserTabViewModel : ObservableObject
         _names = names ?? FallbackNameResolver.Instance;
         Refresh();
     }
+
+    /// <summary>True when there is a filter to undo — the box's own clear button appears only then, so an empty box
+    /// does not carry a dead cross.</summary>
+    public bool HasSearch => !string.IsNullOrEmpty(Search);
 
     public bool HasDetail => Detail is not null;
     public int FilteredCount => _filtered.Count;
@@ -231,6 +238,12 @@ public partial class FitBrowserTabViewModel : ObservableObject
             // superseded — the keystroke that cancelled this round owns the next one
         }
     }
+
+    /// <summary>Wipes the filter from the box's own clear button. It goes through <see cref="Search"/> like any other
+    /// edit, so it lands on the same path an emptied box already takes: no quiet spell, the whole library straight
+    /// back.</summary>
+    [RelayCommand]
+    private void ClearSearch() => Search = "";
 
     private void FilterNow()
     {

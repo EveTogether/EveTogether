@@ -59,6 +59,22 @@
                 <Setter Property="Padding" Value="12,0"/>
             </Style>
 
+            <!-- The clear cross that sits inside the search box. No outline and no fill of its own — the box already
+                 draws both, and a second frame inside the first reads as a control stuck in a control. It carries the
+                 dim ink of a hint until the pointer is on it, so it stays quieter than the text being typed beside
+                 it. The padding is the whole hit area; the size of the mark itself is Icons.axaml's business. -->
+            <Style Selector="Button.searchclear">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="Padding" Value="6,4"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+            </Style>
+            <Style Selector="Button.searchclear:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            </Style>
+
             <!-- The card lifts on hover, so it reads as the thing you are about to open. -->
             <Style Selector="Border.fitcard">
                 <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
@@ -142,7 +158,22 @@
                             <TextBox Grid.Column="0" Text="{Binding Search}"
                                      PlaceholderText="Search by fit, hull, class, tag or uploader…"
                                      ToolTip.Tip="Matches everything the card shows: the fit's name, its hull and class, its tags, and who put it there"
-                                     VerticalContentAlignment="Center" FontSize="12"/>
+                                     VerticalContentAlignment="Center" FontSize="12">
+                                <!-- Inside the box, not beside it: an extra column would move the whole bar and take
+                                     the search's alignment with the order beside it out with it. The box is down to
+                                     160 px in a narrow docked tab, and this way the cross costs that column nothing.
+                                     Not focusable, so clicking it leaves the caret where it was; the handler puts the
+                                     caret in the box for the case where it was somewhere else entirely. -->
+                                <TextBox.InnerRightContent>
+                                    <Button Classes="searchclear" Focusable="False"
+                                            IsVisible="{Binding HasSearch}"
+                                            Command="{Binding ClearSearchCommand}"
+                                            Click="OnSearchCleared"
+                                            ToolTip.Tip="Clear the filter">
+                                        <mi:MaterialIcon Classes="icon-sm" Kind="CloseThick"/>
+                                    </Button>
+                                </TextBox.InnerRightContent>
+                            </TextBox>
 
                             <TextBlock Grid.Column="1" Text="Sort" VerticalAlignment="Center"
                                        Margin="10,0,6,0" FontSize="11" Foreground="{DynamicResource TextAccentBrush}"/>
