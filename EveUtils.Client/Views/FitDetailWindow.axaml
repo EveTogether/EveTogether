@@ -24,6 +24,15 @@
                     </Animation>
                 </Style.Animations>
             </Style>
+            <!-- CAPACITOR state line: accent while stable, the theme red once it depletes (the in-game cue). Set from
+                 a style rather than a local Foreground — a locally-set value outranks a style setter in Avalonia, so
+                 the red would never land. Lives on the content root so the docked tab keeps it too (ET-42). -->
+            <Style Selector="TextBlock.capstate">
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.capstate.depleting">
+                <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+            </Style>
         </DockPanel.Styles>
 
         <!-- Header -->
@@ -921,7 +930,8 @@
                                     <Image Source="avares://EveUtils.Client/Assets/icons/capacitor.png" Width="15" Height="15" VerticalAlignment="Center"/>
                                     <TextBlock Classes="panel-title" Text="CAPACITOR"/>
                                 </StackPanel>
-                                <TextBlock Text="{Binding CapState}" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrightBrush}"/>
+                                <TextBlock Text="{Binding CapState}" FontWeight="SemiBold"
+                                           Classes="capstate" Classes.depleting="{Binding CapDepleting}"/>
                                 <StackPanel Orientation="Horizontal" Spacing="20">
                                     <TextBlock Text="{Binding CapCapacity}" Foreground="{StaticResource TextBrightBrush}"/>
                                     <TextBlock Text="{Binding CapDelta}" Foreground="{DynamicResource TextAccentBrush}"/>
