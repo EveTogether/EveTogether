@@ -162,17 +162,18 @@ internal sealed class ServerAuthRepository(IDbContextFactory<SharedDbContext> co
         }
     }
 
-    public async Task<int> DeleteExpiredSessionsAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
+    public async Task<int> DeleteLapsedSessionsAsync(DateTimeOffset now, DateTimeOffset idleSince, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
         // SQLite can't compare DateTimeOffset in SQL → filter client-side on materialized rows.
-        // Purge on the hard refresh window, not the 1h access expiry, so a still-refreshable
-        // session survives an overnight gap.
+        // Two grounds, both meaning the row can never be a working credential again: its hard refresh window
+        // lapsed, or nothing has used it since idleSince. Never the 1h access expiry — a still-refreshable
+        // session has to survive an overnight gap.
         var all = await db.Set<ServerSession>().ToListAsync(cancellationToken);
-        var expired = all.Where(s => s.RefreshExpiresAt <= now).ToList();
-        if (expired.Count == 0) return 0;
-        db.RemoveRange(expired);
+        var lapsed = all.Where(s => s.RefreshExpiresAt <= now || s.LastHeartbeat <= idleSince).ToList();
+        if (lapsed.Count == 0) return 0;
+        db.RemoveRange(lapsed);
         await db.SaveChangesAsync(cancellationToken);
-        return expired.Count;
+        return lapsed.Count;
     }
 }

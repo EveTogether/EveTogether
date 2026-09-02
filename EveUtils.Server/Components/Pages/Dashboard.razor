@@ -29,23 +29,42 @@
 </Card>
 
 <Card Title="Sessions" Count="@Sessions.Count.ToString()">
+    @if (PendingRevoke is { } pending)
+    {
+        <div class="confirmbar">
+            <span>Revoke @pending.CharacterName's session issued @pending.Session.IssuedAt.ToString("yyyy-MM-dd HH:mm") UTC?</span>
+            @if (pending.IsLive)
+            {
+                <span class="warn">⚠ This one is live — the machine holding it is attached right now and will have to pair again.</span>
+            }
+            <button class="danger" @onclick="RevokeAsync">Confirm</button>
+            <button @onclick="() => PendingRevoke = null">Cancel</button>
+        </div>
+    }
     @if (Sessions.Count == 0)
     {
         <p class="dim" style="padding:14px;margin:0;">No server sessions issued yet.</p>
     }
     else
     {
+        <p class="dim" style="padding:11px 14px 2px;margin:0;">
+            One session per machine a character is paired on — several at once is normal. <span class="ok">@LiveSessions live</span>,
+            @(Sessions.Count - LiveSessions) silent@(LapsingSessions > 0 ? $", of which {LapsingSessions} past the idle window and due to be cleaned up" : "").
+        </p>
         <table>
-            <thead><tr><th>Character</th><th>Issued</th><th>Expires</th><th>Heartbeat</th><th>State</th></tr></thead>
+            <thead><tr><th>Character</th><th>Issued (UTC)</th><th>Last seen (UTC)</th><th>Silent for</th><th>State</th><th></th></tr></thead>
             <tbody>
-                @foreach (var session in Sessions)
+                @foreach (var row in Sessions)
                 {
                     <tr>
-                        <td class="bright">@(session.SyncedCharacter?.CharacterName ?? "—")</td>
-                        <td class="dim">@session.IssuedAt.ToString("HH:mm:ss")</td>
-                        <td class="dim">@session.ExpiresAt.ToString("HH:mm:ss")</td>
-                        <td class="dim">@session.LastHeartbeat.ToString("HH:mm:ss")</td>
-                        <td class="@(IsStale(session.LastHeartbeat) ? "stale" : "ok")">@(IsStale(session.LastHeartbeat) ? "stale" : "live")</td>
+                        <td class="bright">@row.CharacterName</td>
+                        <td class="dim">@row.Session.IssuedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td class="dim">@row.Session.LastHeartbeat.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td class="dim">@row.SilenceLabel</td>
+                        <td class="@row.StateClass">@row.State</td>
+                        <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="del">
+                            <button class="danger" @onclick="() => PendingRevoke = row">Revoke</button>
+                        </AuthorizeView></td>
                     </tr>
                 }
             </tbody>

@@ -21,6 +21,20 @@ public sealed class ServerSessionService(IServerAuthRepository repository, ILogg
     // days of zero use. Trusted local TOFU-pinned client → keep it long so re-login is rare.
     private static readonly TimeSpan RefreshLifetime = TimeSpan.FromDays(365);
 
+    // How long a session may go without a single sign of life before it counts as abandoned. The client
+    // heartbeats every 30s for as long as it runs (ServerConnection.HeartbeatInterval) and a rotation stamps
+    // LastHeartbeat too, so a row silent for this long belongs to a machine that is never coming back with it.
+    //
+    // Deliberately NOT "a newer session exists for this character": one character may be paired on several
+    // machines at once and every one of those is a session that has to keep working, so abandonment is the only
+    // ground we may clean up on (ET-123).
+    //
+    // The margin is the whole of the choice. Anything alive is at most 30s stale, so telling live from not-live
+    // is trivial; what the number decides is how long a machine may be switched off. A week away is ordinary and
+    // a month-long holiday is not rare, so 60 days sits ~8x over the first and ~2x over the second — while
+    // cutting an abandoned row's life as a usable credential from RefreshLifetime (a year) down to two months.
+    public static readonly TimeSpan IdleLifetime = TimeSpan.FromDays(60);
+
     public async Task<IssuedSession> IssueAsync(int syncedCharacterId, CancellationToken cancellationToken = default)
     {
         var access = TokenSecurity.GenerateToken();
@@ -84,6 +98,17 @@ public sealed class ServerSessionService(IServerAuthRepository repository, ILogg
             logger.LogWarning(
                 "Session.Refresh refused for {Peer}: session {SessionId} for character {Character} was last used on {LastUsed:O} and its refresh window lapsed at {RefreshExpiresAt:O}. This one really does need a re-pair.",
                 caller, session.Id, Describe(session), session.IssuedAt, session.RefreshExpiresAt);
+            return null;
+        }
+
+        // Silent for longer than a machine is plausibly switched off: a leftover row from an earlier pairing,
+        // which stayed a working credential for a full year before ET-123. Refusing it here rather than leaving
+        // it to the sweep is what makes the idle window a guarantee instead of a schedule.
+        if (session.LastHeartbeat + IdleLifetime <= now)
+        {
+            logger.LogWarning(
+                "Session.Refresh refused for {Peer}: session {SessionId} for character {Character} has shown no sign of life since {LastHeartbeat:O}, past the {IdleDays:0}-day idle window, so it counts as abandoned. This machine has to pair again.",
+                caller, session.Id, Describe(session), session.LastHeartbeat, IdleLifetime.TotalDays);
             return null;
         }
 

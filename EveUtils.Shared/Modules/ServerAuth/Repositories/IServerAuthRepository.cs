@@ -26,6 +26,10 @@ public interface IServerAuthRepository
     Task<bool> RotateSessionAsync(int sessionId, string expectedRefreshHash, string newAccessHash, string newRefreshHash, DateTimeOffset issuedAt, DateTimeOffset expiresAt, DateTimeOffset refreshExpiresAt, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ServerSession>> ListSessionsAsync(CancellationToken cancellationToken = default);
     Task DeleteSessionAsync(int sessionId, CancellationToken cancellationToken = default);
-    /// <summary>Deletes all sessions past their hard refresh window (RefreshExpiresAt &lt;= now). Returns count.</summary>
-    Task<int> DeleteExpiredSessionsAsync(DateTimeOffset now, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Deletes every session that can no longer become a working credential: past its hard refresh window
+    /// (RefreshExpiresAt &lt;= <paramref name="now"/>), or with no sign of life since
+    /// <paramref name="idleSince"/>. Returns the number removed.
+    /// </summary>
+    Task<int> DeleteLapsedSessionsAsync(DateTimeOffset now, DateTimeOffset idleSince, CancellationToken cancellationToken = default);
 }

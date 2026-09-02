@@ -146,14 +146,16 @@
     else
     {
         <table>
-            <thead><tr><th>Character</th><th>Issued</th><th>Expires</th><th>Heartbeat</th><th></th></tr></thead>
+            <thead><tr><th>Character</th><th>Issued (UTC)</th><th>Expires (UTC)</th><th>Last seen (UTC)</th><th></th></tr></thead>
             <tbody>
                 @foreach (var s in _sessions)
                 {
                     <tr>
+                        @* Dates, not just a clock: sessions here go back months, and HH:mm made a June row
+                           indistinguishable from one issued this morning. *@
                         <td class="bright">@(s.SyncedCharacter?.CharacterName ?? "—")</td>
-                        <td class="dim">@s.IssuedAt.ToString("HH:mm")</td><td class="dim">@s.ExpiresAt.ToString("HH:mm")</td>
-                        <td class="dim">@s.LastHeartbeat.ToString("HH:mm")</td>
+                        <td class="dim">@s.IssuedAt.ToString("yyyy-MM-dd HH:mm")</td><td class="dim">@s.ExpiresAt.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td class="dim">@s.LastHeartbeat.ToString("yyyy-MM-dd HH:mm")</td>
                         <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
                             <button class="danger" @onclick="() => AskSession(s)">Delete</button>
                         </AuthorizeView></td>
@@ -191,7 +193,9 @@
     private void AskDisband(Fleet fleet) => _pending = new Pending("disband", fleet.Id, $"Disband fleet '{fleet.Name}' (soft-delete → Archived)?");
     private void AskPurge(Fleet fleet) => _pending = new Pending("purge", fleet.Id, $"Purge fleet '{fleet.Name}' permanently?");
     private void AskSynced(SyncedCharacter c) => _pending = new Pending("synced", c.Id, $"Delete paired character '{c.CharacterName}'?");
-    private void AskSession(ServerSession s) => _pending = new Pending("session", s.Id, $"Delete session for '{s.SyncedCharacter?.CharacterName ?? "?"}'?");
+    // The issue date is in the label because a character has one session per machine it is paired on, and
+    // without it the confirm bar cannot say which of them you are about to delete.
+    private void AskSession(ServerSession s) => _pending = new Pending("session", s.Id, $"Delete session for '{s.SyncedCharacter?.CharacterName ?? "?"}' issued {s.IssuedAt:yyyy-MM-dd HH:mm} UTC?");
     private void Cancel() => _pending = null;
 
     private async Task ConfirmAsync()
