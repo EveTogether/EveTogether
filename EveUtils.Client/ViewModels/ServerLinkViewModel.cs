@@ -30,7 +30,7 @@ public partial class ServerLinkViewModel : ObservableObject
         ServerConnectionState.Connected           => "connected",
         ServerConnectionState.Connecting          => "connecting…",
         ServerConnectionState.Reconnecting        => "reconnecting…",
-        ServerConnectionState.SessionExpired      => "session expired — re-pair",
+        ServerConnectionState.SessionExpired      => "sign-in refused — retrying",
         ServerConnectionState.CertificateRejected => "certificate changed — check and re-pair",
         _                                         => "disconnected"
     };
@@ -40,10 +40,11 @@ public partial class ServerLinkViewModel : ObservableObject
     public bool HasIssue => State is ServerConnectionState.Reconnecting
                                   or ServerConnectionState.Disconnected;
 
-    /// <summary>Red chip: the coupling is no longer usable and only the user can fix it. Either the pairing itself
-    /// lapsed — the 30s heartbeat finds an access token the server refuses and cannot silently refresh (ET-77) —
-    /// or the server now presents a certificate the pin refuses (ET-95). Both stop the reconnect loop, so the chip is
-    /// the only thing on the card that still says anything about that server.</summary>
+    /// <summary>Red chip: nothing this coupling is for works right now. Either the server refuses the stored session
+    /// and will not renew it — the 30s heartbeat finds an access token it rejects (ET-77) — or the server presents a
+    /// certificate the pin refuses (ET-95). Red rather than amber even though the session case now keeps retrying by
+    /// itself (ET-121): reads come back EMPTY rather than failing while it lasts, and a quiet amber would let that
+    /// pass for "there is nothing here".</summary>
     public bool HasExpired => State is ServerConnectionState.SessionExpired
                                     or ServerConnectionState.CertificateRejected;
 

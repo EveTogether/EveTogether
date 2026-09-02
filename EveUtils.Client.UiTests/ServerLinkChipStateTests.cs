@@ -24,14 +24,17 @@ public class ServerLinkChipStateTests
         Assert.True(link.HasExpired);
         Assert.False(link.HasIssue);
         Assert.Equal(MaterialIconKind.CloudOffOutline, link.ChipIcon);
-        Assert.Contains("re-pair", link.LinkTooltip);
+        // Not "re-pair": the pairing is kept and retried now, so the chip stops instructing and starts reporting
+        // (ET-121). Red all the same — everything that server holds reads as empty while it lasts.
+        Assert.Contains("refused", link.LinkTooltip);
+        Assert.DoesNotContain("re-pair", link.LinkTooltip);
     }
 
     [Fact]
     public void CertificateRejected_IsRed_AndSaysWhichOfTheTwoProblemsItIs()
     {
-        // Also permanent, also the user's to fix, but a different question: an expired pairing just needs coupling
-        // again, a changed certificate needs deciding whether to trust it at all first (ET-95).
+        // Also red, also the user's to fix, but a different question — and unlike a refused session this one really
+        // does end the reconnect loop, because the next handshake is refused identically (ET-95).
         var link = Link(ServerConnectionState.CertificateRejected);
 
         Assert.True(link.HasExpired);

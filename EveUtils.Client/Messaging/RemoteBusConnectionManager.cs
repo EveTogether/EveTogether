@@ -102,6 +102,25 @@ public sealed class RemoteBusConnectionManager(
         connection.Start();
     }
 
+    /// <summary>
+    /// Rebuilds every connection this manager holds, for every server it holds one for. Used after the machine wakes
+    /// up (ET-121): the sockets died while it slept and the streams only notice when their 45 s receive deadline
+    /// lapses — and a connection sitting out a slow retry behind a refused session would wait minutes longer still.
+    /// Reconciling per server also picks up the characters, so a pairing repaired while asleep comes back with it.
+    /// </summary>
+    public async Task ReconnectAllAsync(CancellationToken cancellationToken = default)
+    {
+        string[] servers;
+        lock (_gate)
+            servers = _connections.Keys
+                .Select(k => k.Server)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+        foreach (var server in servers)
+            await AttachAsync(server, cancellationToken: cancellationToken);
+    }
+
     public Task DetachAsync(string serverAddress, CancellationToken cancellationToken = default)
     {
         lock (_gate)

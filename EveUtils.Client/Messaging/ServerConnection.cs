@@ -48,7 +48,7 @@ public sealed class ServerConnection
     private readonly ILogger<ServerConnection> _logger;
 
     private readonly SemaphoreSlim _writeGate = new(1, 1);
-    private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private readonly ServerSessionRefresher _refresher;
     private AsyncDuplexStreamingCall<ClientEnvelope, ServerEnvelope>? _call;
     private CancellationTokenSource? _connectionCts;
 
@@ -67,6 +67,7 @@ public sealed class ServerConnection
         _registry = registry;
         _services = services;
         _trustStore = services.GetRequiredService<IServerTrustStore>();
+        _refresher = services.GetRequiredService<ServerSessionRefresher>();
         _logger = services.GetRequiredService<ILogger<ServerConnection>>();
     }
 
@@ -152,16 +153,17 @@ public sealed class ServerConnection
     /// Managed connect + auto-reconnect. Attaches the bidi stream; when it drops, reconnects with
     /// an increasing backoff up to 30 s, until cancelled. Attaches with the preferred character's session
     /// when given (e.g. the just-paired char), else the most recent.
-    /// <para>Two failures end the loop instead of retrying, because no further attempt could succeed: a refresh the
-    /// server rejects (<see cref="ServerConnectionState.SessionExpired"/>) and a certificate the pin refuses
-    /// (<see cref="ServerConnectionState.CertificateRejected"/>). Both are shown to the user; everything else is
-    /// transient and retried.</para>
+    /// <para>One failure ends the loop instead of retrying, because no further attempt could succeed and the next one
+    /// would be refused identically: a certificate the pin refuses (<see cref="ServerConnectionState.CertificateRejected"/>).
+    /// A rejected refresh (<see cref="ServerConnectionState.SessionExpired"/>) does NOT end it — it is shown and then
+    /// retried on a slow cadence, with the stored pairing left alone (ET-121).</para>
     /// </summary>
     private async Task ConnectLoopAsync(CancellationToken cancellationToken)
     {
         var attempt = 0;
         while (!cancellationToken.IsCancellationRequested)
         {
+            string? attachedAccessToken = null;
             var delay = BackoffSeconds[Math.Min(attempt, BackoffSeconds.Length - 1)];
             if (delay > 0)
             {
@@ -174,6 +176,7 @@ public sealed class ServerConnection
             {
                 var session = await _sessionStore.LoadForCharacterAsync(_serverAddress, _characterId, cancellationToken);
                 if (session is null) { SetState(ServerConnectionState.Disconnected); return; } // not paired
+                attachedAccessToken = session.AccessToken;
 
                 SetState(ServerConnectionState.Connecting);
                 var channel = _channelFactory.CreatePinned(_serverAddress);
@@ -209,24 +212,32 @@ public sealed class ServerConnection
             }
             catch (RpcException rpc) when (rpc.StatusCode == StatusCode.Unauthenticated)
             {
-                // Session access token expired/revoked. Try a server-session refresh first;
-                // only an explicit rejection means re-pairing is actually needed.
-                switch (await TryRefreshSessionAsync(cancellationToken))
+                // Session access token expired/revoked. Refresh through the shared refresher, which serialises this
+                // against the heartbeat below and against every unary client's own refresh-on-401.
+                switch ((await _refresher.TryRefreshAsync(_serverAddress, _characterId, attachedAccessToken, cancellationToken)).Outcome)
                 {
-                    case RefreshOutcome.Refreshed:
+                    case ServerSessionRefreshOutcome.Refreshed:
                         attempt = 0; // refreshed → retry attach immediately
                         continue;
-                    case RefreshOutcome.TransientError:
+                    case ServerSessionRefreshOutcome.Unavailable:
                         // The server was unreachable while refreshing — keep the session and retry with
                         // backoff. Reopening the app after days must not log the user out just because the
                         // first refresh round-trip hiccuped.
                         SetState(ServerConnectionState.Reconnecting);
                         attempt++;
                         continue;
-                    default: // Rejected: server says the refresh token is invalid/expired (past the 30d window).
-                        await _sessionStore.RemoveAsync(_serverAddress, _characterId, cancellationToken);
+                    default: // Rejected: the server does not recognise the stored refresh token.
+                        // The stored pairing STAYS. This branch used to call RemoveAsync, which turned a single
+                        // refused round-trip into a pairing the user had to rebuild by hand — the next pass found no
+                        // session, reported "not paired" and ended the loop for good (ET-121). A rejection is a state
+                        // to show, not a verdict: the server refuses any refresh token missing from its table, and one
+                        // goes missing whenever a rotation this client made never reached disk. Keep the credentials,
+                        // say so on the chip, and keep trying on a slow cadence so a server that comes back with the
+                        // session — or a user who re-pairs — recovers without anyone restarting the app.
                         SetState(ServerConnectionState.SessionExpired);
-                        return;
+                        try { await Task.Delay(SessionExpiredRetryInterval, cancellationToken); }
+                        catch (OperationCanceledException) { return; }
+                        continue;
                 }
             }
             catch (Exception ex) when (IsCertificateRejected(ex))
@@ -304,56 +315,11 @@ public sealed class ServerConnection
         return false;
     }
 
-    /// <summary>Outcome of a server-session refresh attempt: distinguishes a definitive rejection
-    /// (re-pair needed) from a transient error (server unreachable — keep the session and retry).</summary>
-    private enum RefreshOutcome { Refreshed, Rejected, TransientError }
-
-    /// <summary>
-    /// Refreshes the server session via <c>Session.Refresh</c> when the access token has
-    /// expired. Saves the rotated tokens and preserves the character mapping. Returns <see cref="RefreshOutcome"/>:
-    /// <c>Refreshed</c> on success, <c>Rejected</c> when the server says the token is invalid/expired, and
-    /// <c>TransientError</c> when the server could not be reached (so the caller keeps the session and retries).
-    /// </summary>
-    private async Task<RefreshOutcome> TryRefreshSessionAsync(CancellationToken cancellationToken)
-    {
-        // Serialised: the connect loop and the heartbeat can both find the access token expired at the same
-        // moment. A refresh ROTATES the refresh token, so two in flight at once would make the loser present a
-        // token the server has already replaced — read as "genuinely expired", costing the user a re-pair. The
-        // second caller waits, re-reads the store below and sees the freshly rotated pair.
-        await _refreshGate.WaitAsync(cancellationToken);
-        try
-        {
-            // Refresh the session for the character this connection serves (multi-char safe).
-            var session = await _sessionStore.LoadForCharacterAsync(_serverAddress, _characterId, cancellationToken);
-            if (session is null || string.IsNullOrEmpty(session.RefreshToken))
-                return RefreshOutcome.Rejected; // nothing usable to refresh → treat as re-pair
-
-            try
-            {
-                var channel = _channelFactory.CreatePinned(_serverAddress);
-                var client = new GrpcSession.SessionClient(channel);
-                var reply = await client.RefreshAsync(
-                    new RefreshRequest { SessionRefreshToken = session.RefreshToken }, cancellationToken: cancellationToken);
-                if (!reply.Ok)
-                    return RefreshOutcome.Rejected; // server reached us and refused → genuinely expired/invalid
-
-                await _sessionStore.SaveAsync(_serverAddress,
-                    new ClientSessionTokens(reply.SessionToken, reply.SessionRefreshToken, session.CharacterName, session.CharacterId),
-                    cancellationToken);
-                return RefreshOutcome.Refreshed;
-            }
-            catch (Exception)
-            {
-                // Couldn't reach the server (network/TLS/cancellation) — keep the session and retry later. On
-                // a real shutdown the connect loop's `while (!cancellationToken.IsCancellationRequested)` exits.
-                return RefreshOutcome.TransientError;
-            }
-        }
-        finally
-        {
-            _refreshGate.Release();
-        }
-    }
+    // How long to wait before re-trying a refresh the server rejected. Long, because the usual cause of a rejection
+    // is a stored token the server has already rotated away, which no amount of retrying repairs — but not infinite,
+    // because the pairing is deliberately kept now, and something that is kept has to have a way back. At this
+    // cadence a permanently stale session costs twelve refused round-trips an hour and stays visible on the chip.
+    private static readonly TimeSpan SessionExpiredRetryInterval = TimeSpan.FromMinutes(5);
 
     // Independent backup liveness: a periodic unary Session.Heartbeat on its own call, separate from
     // the bus stream. It keeps the server's LastHeartbeat fresh (admin-panel "last seen") and gives a coarse
@@ -390,20 +356,25 @@ public sealed class ServerConnection
                         continue;
 
                     // The server reached us and does not accept this access token any more.
-                    switch (await TryRefreshSessionAsync(cancellationToken))
+                    switch ((await _refresher.TryRefreshAsync(_serverAddress, _characterId, session.AccessToken, cancellationToken)).Outcome)
                     {
-                        case RefreshOutcome.Refreshed:
+                        case ServerSessionRefreshOutcome.Refreshed:
                             _logger.LogInformation(
                                 "Server session for {Server} (character {Character}) was refreshed after its access token expired.",
                                 _serverAddress, _characterId);
                             break;
-                        case RefreshOutcome.Rejected:
-                            // Genuinely no longer paired (revoked, or past the refresh window). Say so NOW, on the
-                            // character's server chip, instead of letting the user discover it on a failed save. The
-                            // session row is left for the connect loop to clear when the stream itself drops.
+                        case ServerSessionRefreshOutcome.Rejected:
+                            // The server does not recognise the stored refresh token. Say so NOW, on the character's
+                            // server chip, instead of letting the user discover it on a failed save — and say it at
+                            // Warning, because until ET-121 nothing in the log marked the moment a pairing went bad.
+                            // The stored session stays put; the connect loop retries it slowly.
+                            if (State != ServerConnectionState.SessionExpired)
+                                _logger.LogWarning(
+                                    "Server {Server} refused the stored session for character {Character}. The pairing is kept and "
+                                    + "will be retried; re-pair only if it stays this way.", _serverAddress, _characterId);
                             SetState(ServerConnectionState.SessionExpired);
                             break;
-                        // TransientError: server unreachable — keep the session and try again next tick.
+                        // Unavailable: server unreachable — keep the session and try again next tick.
                     }
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

@@ -237,6 +237,22 @@ repository. **Beta:** more stable than the alpha, but expect occasional rough ed
   and unfolding survives a refresh. A small fleet is unchanged: no extra line, no extra click.
 
 ### Fixed
+- **Your characters no longer quietly lose their link to a server and have to be coupled again by hand.** When a
+  server declined to renew this client's stored sign-in — which can happen after a server restart, after your PC
+  wakes from sleep, or simply when several characters reconnect at the same moment — the app deleted that character's
+  stored pairing. There was no way back from that except coupling the character again yourself, and nothing said it
+  had happened; the character was just gone from the server. The pairing is now kept and retried, and the app says so
+  while it lasts: the character's server chip turns red, a banner explains that reads from that server come back
+  empty rather than failing, and a message appears the moment it starts. Renewals are also no longer allowed to
+  collide with each other, which is what made a working pairing look expired in the first place.
+- **The ESI badge now says when EVE is refusing a character's token.** If EVE started rejecting a token the app still
+  believed was good, every call for that character failed while the badge stayed green — the app went by the token's
+  own expiry time and never heard EVE's opinion. It now turns amber, says so, and renews the token instead of sending
+  the refused one again.
+- **Waking your PC from sleep now rebuilds the connections instead of waiting for them to notice.** Server links and
+  ESI tokens are both stale after a nap; the app now checks both within seconds of coming back rather than up to a
+  minute later, and in some cases not at all.
+- A long warning banner at the top of the window no longer runs off the right edge — it wraps.
 - **EVE's daily downtime no longer stops the app from following where your characters are.** While Tranquility is
   down the app holds back its own calls rather than hammering a dead API — but it counted each held-back call as a
   failed reading, and after two minutes of them it gave up watching, for the rest of the session. Downtime lasts

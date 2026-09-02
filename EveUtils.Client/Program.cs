@@ -6,7 +6,9 @@ using Avalonia;
 using EveUtils.Client.Composition;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Messaging;
 using EveUtils.Shared.Data;
+using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Esi.Status;
 using Microsoft.EntityFrameworkCore;
@@ -57,6 +59,7 @@ sealed class Program
         RunResilient(Services.GetRequiredService<EveUtils.Client.Skills.SkillRefreshService>().StartAsync(refreshCts.Token), "skill-refresh");
         RunResilient(Services.GetRequiredService<EveUtils.Client.Implants.ImplantRefreshService>().StartAsync(refreshCts.Token), "implant-refresh");
         RunResilient(Services.GetRequiredService<EveUtils.Client.Platform.EveClientPresenceService>().StartAsync(refreshCts.Token), "eve-client-presence");
+        StartResumeRecovery(refreshCts.Token);
         // Automatic EVE settings sync (ET-60): does nothing at all unless the user configured and enabled it, and
         // then only while every EVE client is closed.
         RunResilient(Services.GetRequiredService<EveUtils.Client.EveSettings.AutoSettingsSyncService>().StartAsync(refreshCts.Token), "eve-settings-auto-sync");
@@ -194,6 +197,35 @@ sealed class Program
         task.ContinueWith(
             t => Console.Error.WriteLine($"[bg:{name}] crashed: {t.Exception}"),
             TaskContinuationOptions.OnlyOnFaulted);
+
+    /// <summary>
+    /// Wires waking from sleep to the two things that are certainly stale afterwards (ET-121): the server bus
+    /// connections, whose sockets died while the machine was off, and the ESI tokens, which aged past their hour.
+    /// Neither notices on its own quickly — the streams wait out a 45 s receive deadline and the token loop wakes on
+    /// its own 60 s tick, and on the morning this ticket came from that added up to watches that stayed dead for
+    /// hours. Nudging both is idempotent, so a false positive costs one reconnect.
+    /// </summary>
+    static void StartResumeRecovery(CancellationToken cancellationToken)
+    {
+        var watcher = Services.GetRequiredService<EveUtils.Client.Platform.SystemResumeWatcher>();
+        watcher.Resumed += _ =>
+        {
+            RunResilient(Services.GetRequiredService<RemoteBusConnectionManager>()
+                .ReconnectAllAsync(cancellationToken), "resume-reconnect");
+            RunResilient(RecheckEsiTokensAsync(cancellationToken), "resume-token-recheck");
+        };
+        RunResilient(watcher.StartAsync(cancellationToken), "system-resume-watch");
+    }
+
+    /// <summary>Re-checks every known character's ESI token now rather than on the refresh loop's next tick.</summary>
+    static async Task RecheckEsiTokensAsync(CancellationToken cancellationToken)
+    {
+        var registry = Services.GetRequiredService<ICharacterRegistry>();
+        var refresh = Services.GetRequiredService<ClientTokenRefreshService>();
+        foreach (var character in await registry.GetAllAsync(cancellationToken))
+            if (character.EsiCharacterId is { } characterId)
+                await refresh.EnsureValidAsync(characterId, cancellationToken);
+    }
 
     /// <summary>One-off backfill of the fit content-hash for rows predating the column (idempotent dedup).</summary>
     static async Task BackfillFitHashesAsync()

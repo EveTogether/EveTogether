@@ -33,7 +33,10 @@ public sealed class ClientEsiTokenProvider(
         // TemporarilyUnavailable (refresh produced an unusable token, e.g. clock skew) is treated like "needs auth"
         // for this call: it fails cleanly with AuthRequired instead of throwing, so background pollers skip the cycle
         // quietly rather than logging an error on every tick.
-        if (status is TokenStatus.NoToken or TokenStatus.NeedsReauth or TokenStatus.TemporarilyUnavailable)
+        // Rejected joins them: ESI refused this token moments ago and the forced refresh is still on cooldown, so
+        // sending it again would just collect another 401.
+        if (status is TokenStatus.NoToken or TokenStatus.NeedsReauth or TokenStatus.TemporarilyUnavailable
+            or TokenStatus.Rejected)
             return EsiAuthorization.AuthRequired;
 
         var tokens = await tokenStore.LoadAsync(characterId, cancellationToken);
@@ -41,4 +44,7 @@ public sealed class ClientEsiTokenProvider(
             ? EsiAuthorization.AuthRequired
             : EsiAuthorization.Authorized(tokens.AccessToken);
     }
+
+    public Task TokenRefusedAsync(int characterId, CancellationToken cancellationToken = default) =>
+        refreshService.RecordRefusalAsync(characterId, cancellationToken);
 }

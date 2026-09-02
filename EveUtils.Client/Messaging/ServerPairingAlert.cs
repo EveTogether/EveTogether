@@ -5,9 +5,12 @@ using System.Linq;
 namespace EveUtils.Client.Messaging;
 
 /// <summary>
-/// Resolves the top-of-window banner for a server pairing that has lapsed (ET-77). Companion to the red chip on the
-/// character card: the chip says WHICH character lost its pairing, this says what it costs you and does not go away
-/// on its own.
+/// Resolves the top-of-window banner for a server that refuses this client's stored sign-in (ET-77). Companion to the
+/// red chip on the character card: the chip says WHICH character it is, this says what it costs you and does not go
+/// away on its own.
+///
+/// The pairing itself is no longer thrown away when this happens (ET-121), so the banner has a second job it did not
+/// have before: it is now the only thing that says a kept-but-refused pairing exists at all.
 ///
 /// It has to be persistent rather than a toast, because the damage is silent and ongoing: a list read against a
 /// server that no longer accepts the session comes back as an EMPTY LIST, not an error, so every fleet/composition
@@ -35,10 +38,12 @@ public static class ServerPairingAlert
         if (expired.Count == 0)
             return (false, "");
 
+        var (verb, holder) = expired.Count == 1 ? ("is", "that server") : ("are", "those servers");
         return (true,
-            $"Your pairing with {Join(expired)} is no longer valid. Until you couple the character to it again, "
-            + "anything that server holds — fleets, compositions, shared fits — reads as empty rather than as an "
-            + "error, and nothing can be saved to it.");
+            $"{Join(expired)} {verb} refusing this client's stored sign-in and will not renew it. Your pairing is "
+            + "kept and retried every few minutes, so this may clear on its own — but while it lasts, anything "
+            + $"{holder} holds — fleets, compositions, shared fits — reads as empty rather than as an error, and "
+            + "nothing can be saved there. Couple the character again if it does not clear.");
     }
 
     private static string Join(IReadOnlyList<string> names) => names.Count switch
