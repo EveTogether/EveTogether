@@ -21,6 +21,9 @@
          MIT, so it sits under the AGPL without friction. The package id is SharpZipLib; ICSharpCode.SharpZipLib
          is the pre-1.0 id, last published in 2013. -->
     <PackageReference Include="SharpZipLib" Version="1.4.2" />
+    <!-- Self-documenting REST API: the OpenAPI document plus the Scalar reference the client already uses. -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.17.1" />
   </ItemGroup>
 
   <PropertyGroup>
