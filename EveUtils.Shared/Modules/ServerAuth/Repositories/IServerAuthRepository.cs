@@ -18,7 +18,12 @@ public interface IServerAuthRepository
     Task<ServerSession?> FindSessionByAccessHashAsync(string accessHash, CancellationToken cancellationToken = default);
     Task<ServerSession?> FindSessionByRefreshHashAsync(string refreshHash, CancellationToken cancellationToken = default);
     Task TouchHeartbeatAsync(string accessHash, DateTimeOffset at, CancellationToken cancellationToken = default);
-    Task<bool> RotateSessionAsync(int sessionId, string newAccessHash, string newRefreshHash, DateTimeOffset issuedAt, DateTimeOffset expiresAt, DateTimeOffset refreshExpiresAt, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Rotates the session to a new token pair, but only while its refresh hash is still
+    /// <paramref name="expectedRefreshHash"/>. Returns false when another rotation got there first, so two
+    /// overlapping refreshes can never both succeed and invalidate each other's tokens.
+    /// </summary>
+    Task<bool> RotateSessionAsync(int sessionId, string expectedRefreshHash, string newAccessHash, string newRefreshHash, DateTimeOffset issuedAt, DateTimeOffset expiresAt, DateTimeOffset refreshExpiresAt, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ServerSession>> ListSessionsAsync(CancellationToken cancellationToken = default);
     Task DeleteSessionAsync(int sessionId, CancellationToken cancellationToken = default);
     /// <summary>Deletes all sessions past their hard refresh window (RefreshExpiresAt &lt;= now). Returns count.</summary>

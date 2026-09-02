@@ -1,6 +1,7 @@
 using EveUtils.Server.Auth;
 using EveUtils.Shared.Modules.ServerAuth.Repositories.Implementations;
 using EveUtils.Shared.Modules.ServerAuth.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace EveUtils.Server.Tests;
@@ -25,7 +26,7 @@ public class ExpiredServerSessionTests
         var ct = TestContext.Current.CancellationToken;
         var repository = new ServerAuthRepository(_factory);
         var character = await repository.UpsertSyncedAsync(90250177, "Jithran", new EncryptedToken([1], [2], [3]), null, ct);
-        var sessions = new ServerSessionService(repository);
+        var sessions = new ServerSessionService(repository, NullLogger<ServerSessionService>.Instance);
 
         var issued = await sessions.IssueAsync(character.Id, ct);
         await ExpireAccessWindowAsync(repository, issued, ct);
@@ -34,7 +35,7 @@ public class ExpiredServerSessionTests
         Assert.Null(await sessions.ValidateAsync(issued.AccessToken, ct));
 
         // …and what the client can do about it without troubling the user.
-        var refreshed = await sessions.RefreshAsync(issued.RefreshToken, ct);
+        var refreshed = await sessions.RefreshAsync(issued.RefreshToken, cancellationToken: ct);
         Assert.NotNull(refreshed);
         Assert.NotNull(await sessions.ValidateAsync(refreshed!.AccessToken, ct));
     }
@@ -45,13 +46,13 @@ public class ExpiredServerSessionTests
         var ct = TestContext.Current.CancellationToken;
         var repository = new ServerAuthRepository(_factory);
         var character = await repository.UpsertSyncedAsync(90250177, "Jithran", new EncryptedToken([1], [2], [3]), null, ct);
-        var sessions = new ServerSessionService(repository);
+        var sessions = new ServerSessionService(repository, NullLogger<ServerSessionService>.Instance);
 
         var issued = await sessions.IssueAsync(character.Id, ct);
         await ExpireAccessWindowAsync(repository, issued, ct, refreshExpiresIn: TimeSpan.FromHours(-1));
 
         // The refusal (not a transport error) is what turns the character's server chip red instead of amber.
-        Assert.Null(await sessions.RefreshAsync(issued.RefreshToken, ct));
+        Assert.Null(await sessions.RefreshAsync(issued.RefreshToken, cancellationToken: ct));
     }
 
     /// <summary>Backdates a live session's access window without touching its tokens — exactly what an hour of
@@ -63,11 +64,12 @@ public class ExpiredServerSessionTests
         var now = DateTimeOffset.UtcNow;
         var session = await repository.FindSessionByAccessHashAsync(TokenSecurity.Hash(issued.AccessToken), cancellationToken);
         Assert.NotNull(session);
-        await repository.RotateSessionAsync(
+        Assert.True(await repository.RotateSessionAsync(
             session!.Id,
+            TokenSecurity.Hash(issued.RefreshToken),   // rotating onto itself: the tokens stay, only the window moves
             TokenSecurity.Hash(issued.AccessToken),
             TokenSecurity.Hash(issued.RefreshToken),
             now.AddHours(-2), now.AddHours(-1), now + (refreshExpiresIn ?? TimeSpan.FromDays(300)),
-            cancellationToken);
+            cancellationToken));
     }
 }

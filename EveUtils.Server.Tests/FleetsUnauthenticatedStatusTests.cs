@@ -4,6 +4,7 @@ using EveUtils.Server.Grpc;
 using EveUtils.Shared.Modules.ServerAuth.Repositories.Implementations;
 using EveUtils.Shared.Modules.ServerAuth.Services;
 using Grpc.Core;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace EveUtils.Server.Tests;
@@ -44,7 +45,7 @@ public class FleetsUnauthenticatedStatusTests
 
     /// <summary>Only the session service is reached before the gate refuses, so the rest of the graph stays out of it.</summary>
     private FleetsGrpcService Service() =>
-        new(new ServerSessionService(new ServerAuthRepository(_factory)),
+        new(new ServerSessionService(new ServerAuthRepository(_factory), NullLogger<ServerSessionService>.Instance),
             null!, null!, null!, null!, null!, null!);
 
     private static ServerCallContext Context(string? bearer)

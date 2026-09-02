@@ -126,20 +126,22 @@ internal sealed class ServerAuthRepository(IDbContextFactory<SharedDbContext> co
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<bool> RotateSessionAsync(int sessionId, string newAccessHash, string newRefreshHash, DateTimeOffset issuedAt, DateTimeOffset expiresAt, DateTimeOffset refreshExpiresAt, CancellationToken cancellationToken = default)
+    public async Task<bool> RotateSessionAsync(int sessionId, string expectedRefreshHash, string newAccessHash, string newRefreshHash, DateTimeOffset issuedAt, DateTimeOffset expiresAt, DateTimeOffset refreshExpiresAt, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        var session = await db.Set<ServerSession>().FirstOrDefaultAsync(s => s.Id == sessionId, cancellationToken);
-        if (session is null)
-            return false;
-        session.AccessTokenHash = newAccessHash;
-        session.RefreshTokenHash = newRefreshHash;
-        session.IssuedAt = issuedAt;
-        session.ExpiresAt = expiresAt;
-        session.RefreshExpiresAt = refreshExpiresAt;
-        session.LastHeartbeat = issuedAt;
-        await db.SaveChangesAsync(cancellationToken);
-        return true;
+        // One conditional statement instead of read-then-write: the old refresh hash is part of the WHERE, so the
+        // database decides the winner of two overlapping rotations and the loser sees zero rows. Without it both
+        // rotations committed and the second silently invalidated the first client's freshly-issued tokens.
+        var rotated = await db.Set<ServerSession>()
+            .Where(s => s.Id == sessionId && s.RefreshTokenHash == expectedRefreshHash)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(s => s.AccessTokenHash, newAccessHash)
+                .SetProperty(s => s.RefreshTokenHash, newRefreshHash)
+                .SetProperty(s => s.IssuedAt, issuedAt)
+                .SetProperty(s => s.ExpiresAt, expiresAt)
+                .SetProperty(s => s.RefreshExpiresAt, refreshExpiresAt)
+                .SetProperty(s => s.LastHeartbeat, issuedAt), cancellationToken);
+        return rotated > 0;
     }
 
     public async Task<IReadOnlyList<ServerSession>> ListSessionsAsync(CancellationToken cancellationToken = default)
