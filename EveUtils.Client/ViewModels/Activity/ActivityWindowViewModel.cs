@@ -264,6 +264,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SignatureSiteText))]
     [NotifyPropertyChangedFor(nameof(HasSignature))]
+    [NotifyPropertyChangedFor(nameof(ClockHint))]
     private string? _signatureName;
 
     /// <summary>What the site catalogue carries under <see cref="SignatureName"/> (ET-80). Empty is the ordinary
@@ -659,6 +660,29 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (!running.IsSuccess || running.Value is not { } run || run.ActivityKind != StoredKind)
             return false;
 
+        // This window was opened on a signature, and the run still open is for a different site. That run is over:
+        // it is closed out here and now, and the window comes up clean on the site actually copied. Closing out is
+        // DiscardRunCommand, which stops the activity and unlinks the group code and "never removes a row, a loot
+        // capture or a bounty" — the run keeps everything it collected and stays in the store.
+        //
+        // Only a run of this pilot's own. One that belongs to a group is left standing and waits for a decision:
+        // ending that one reaches every other member's machine, and that is the FC's button to press, not this
+        // window's (ET-105 AC-1).
+        if (SignatureName is { Length: > 0 } copied && run.SiteName is { Length: > 0 } siteName && siteName != copied)
+        {
+            if (run.GroupCode is null && FleetId is null)
+            {
+                await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+                    .Send(new DiscardRunCommand(run.Id, DateTime.UtcNow));
+                return false;
+            }
+
+            _pendingSignature = (SignatureGroup, copied, MatchedSites);
+            SignatureGroup = null;
+            SignatureName = siteName;
+            MatchedSites = [];
+        }
+
         RunId = run.Id;
         AnchorUtc = run.StartedAtUtc;
         StoppedAtUtc = null;
@@ -668,25 +692,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         await _AdoptCharacterAsync(checked((int)run.CharacterId));
         _StartEnemyObservations();
 
-        // The adopted run brings its own site — the clock and the loot are its, so the name over them is too.
-        //
-        // And if this window was opened ON a signature, that signature is for a different site than the run still
-        // open: it does not become this run's heading, it waits. The clock stops, so the window plainly asks for a
-        // SAVE or a DISCARD instead of presenting an hour-old run as the site just copied. This is the route
-        // Raymond kept hitting — the window had been closed, so ApplySignature never saw it. After the state above,
-        // because StopRun only acts on a run it considers running.
-        if (run.SiteName is { Length: > 0 } siteName && siteName != SignatureName)
-        {
-            if (SignatureName is { Length: > 0 } copied)
-            {
-                _pendingSignature = (SignatureGroup, copied, MatchedSites);
-                StopRun(DateTime.UtcNow);
-            }
-
-            SignatureGroup = null;
-            SignatureName = siteName;
-            MatchedSites = [];
-        }
+        // After the state above: StopRun only acts on a run it considers running.
+        if (_pendingSignature is not null)
+            StopRun(DateTime.UtcNow);
 
         return true;
     }

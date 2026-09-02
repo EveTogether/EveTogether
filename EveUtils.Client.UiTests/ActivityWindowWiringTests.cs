@@ -15,6 +15,7 @@ using EveUtils.Shared.Modules.Runs.Entities;
 using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 using LootCaptureSource = EveUtils.Shared.Modules.Runs.Enums.LootCaptureSource;
 using LootKind = EveUtils.Shared.Modules.Runs.Enums.LootKind;
+using StoredRunState = EveUtils.Shared.Modules.Runs.Enums.RunState;
 using EveUtils.Shared.Modules.Runs.Queries;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -134,21 +135,54 @@ public class ActivityWindowWiringTests
         var reopened = new ActivityWindowViewModel(ActivityKind.Site, harness.Services) { SignatureName = "Drone Cluster" };
         var window = new ActivityWindow(reopened);
         window.Show();
+        await ActivityWindowHarness.WaitUntil(() => reopened.ClockText != "--:--" || reopened.RunId is not null,
+            timeoutMs: 1500);
+
+        Assert.Equal("Drone Cluster", reopened.SignatureName);       // the site he copied, not the one he left
+        Assert.Null(reopened.RunId);
+        Assert.Equal(ActivityRunState.NotStarted, reopened.RunState);
+        Assert.True(reopened.IsStartButtonVisible);
+
+        // The Sansha Hideaway run is closed out, not deleted: still there, still holding what it collected.
+        Run left = await _RunAsync(harness, open!.Value);
+        Assert.Equal(StoredRunState.Stopped, left.State);
+        Assert.Null(left.DeletedAtUtc);
+        window.Close();
+    }
+
+    /// <summary>
+    /// The exception, and the reason this is not just "always close the old one": a run that belongs to a group
+    /// ends on every other member's machine too, and that is the FC's button. It stays, the copied site waits.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ACopiedSiteDoesNotEndAGroupRun_ItWaitsForTheDecision()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel first = await harness.OpenAsync();
+        first.SignatureName = "Sansha Hideaway";
+        first.GroupCode = "HF-7QK2";
+        await first.StartRunCommand.ExecuteAsync(null);
+        Guid? open = first.RunId;
+        first.Dispose();
+
+        var reopened = new ActivityWindowViewModel(ActivityKind.Site, harness.Services) { SignatureName = "Drone Cluster" };
+        var window = new ActivityWindow(reopened);
+        window.Show();
         await ActivityWindowHarness.WaitUntil(() => reopened.RunId is not null);
 
         Assert.Equal(open, reopened.RunId);
-        Assert.NotEqual(ActivityRunState.Running, reopened.RunState);   // the clock is not ticking on a stale run
-        Assert.Equal("Sansha Hideaway", reopened.SignatureName);        // shown as what it is, not as Drone Cluster
+        Assert.Equal("Sansha Hideaway", reopened.SignatureName);
+        Assert.NotEqual(ActivityRunState.Running, reopened.RunState);
         Assert.Contains("Drone Cluster", reopened.ClockHint, StringComparison.Ordinal);
-        Assert.False(reopened.IsStartButtonVisible);                   // SAVE or DISCARD are the only answers
-
-        harness.Dialogs.OnConfirm = (_, _) => Task.FromResult(true);
-        await reopened.DiscardRunCommand.ExecuteAsync(null);
-
-        Assert.Equal("Drone Cluster", reopened.SignatureName);
-        Assert.Null(reopened.RunId);
-        Assert.True(reopened.IsStartButtonVisible);
+        Assert.False(reopened.IsStartButtonVisible);
         window.Close();
+    }
+
+    private static async Task<Run> _RunAsync(ActivityWindowHarness harness, Guid runId)
+    {
+        await using ClientDbContext db = await harness.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        return await db.Set<Run>().AsNoTracking().SingleAsync(run => run.Id == runId);
     }
 
     /// <summary>
@@ -174,11 +208,10 @@ public class ActivityWindowWiringTests
         window.Show();
         await ActivityWindowHarness.WaitUntil(() => model.RunId is not null);
 
-        Assert.Equal(started.Value, model.RunId);
-        Assert.NotEqual(ActivityRunState.Running, model.RunState);
-        Assert.Equal("Sansha Hideaway", model.SignatureName);
-        Assert.Contains("Drone Cluster", model.ClockHint, StringComparison.Ordinal);
-        Assert.False(model.IsStartButtonVisible);
+        Assert.Equal("Drone Cluster", model.SignatureName);
+        Assert.Null(model.RunId);
+        Assert.Equal(ActivityRunState.NotStarted, model.RunState);
+        Assert.True(model.IsStartButtonVisible);
         window.Close();
     }
 
