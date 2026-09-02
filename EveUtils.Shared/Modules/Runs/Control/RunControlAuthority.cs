@@ -29,17 +29,23 @@ public readonly record struct RunControlAuthority(RunControlAuthorityLevel Level
     /// <summary>
     /// Decide against the fleet boss as ESI currently reports them.
     /// </summary>
-    /// <param name="fleetId">The fleet the run belongs to, or null for a solo run.</param>
+    /// <param name="fleetId">The fleet this client has active, or null when it has none.</param>
     /// <param name="fleetBossCharacterId">The current ESI fleet boss, or null when ESI cannot say.</param>
     /// <param name="actingCharacterId">The character whose window this is, or null when no character is chosen.</param>
-    public static RunControlAuthority From(long? fleetId, int? fleetBossCharacterId, int? actingCharacterId)
+    /// <param name="groupCode">The run's own group code, null for a run that belongs to no group.</param>
+    public static RunControlAuthority From(
+        long? fleetId, int? fleetBossCharacterId, int? actingCharacterId, string? groupCode)
     {
-        // A solo run has no commander to be, and no other machine to reach: the pilot owns it outright. The risk
-        // this guard exists for is the fleet case, so a solo run is never held back for want of a fleet boss.
-        if (fleetId is null)
+        // Solo is what the RUN says it is — no group code and no fleet — not "this client has no ET fleet active",
+        // which is a different thing and used to be read as the same one: a member whose fleets window was never
+        // opened was handed DISCARD over the commander's run (ET-135). A solo run has no commander to be and no
+        // other machine to reach, so it is never held back for want of a fleet boss.
+        if (fleetId is null && groupCode is null)
             return new RunControlAuthority(RunControlAuthorityLevel.Granted, actingCharacterId);
 
-        if (fleetBossCharacterId is not { } boss || actingCharacterId is null)
+        // Shared, but with no fleet to ask ESI about there is no boss to compare against — and not knowing must
+        // not read as "yes" any more here than it does when ESI itself goes quiet.
+        if (fleetId is null || fleetBossCharacterId is not { } boss || actingCharacterId is null)
             return new RunControlAuthority(RunControlAuthorityLevel.Unknown, fleetBossCharacterId);
 
         return new RunControlAuthority(
