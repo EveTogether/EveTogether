@@ -5,10 +5,11 @@ using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Runs;
-
+using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
@@ -289,10 +290,142 @@ public sealed class FleetRunOfferToastTests
         }
     }
 
+    // ── What joining actually joins ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The window a member joins on shows the commander's run, not an empty one wearing his group code. It used to
+    /// carry the group code and the fleet id and nothing else, so a member who joined a run that had been going for
+    /// minutes sat at NOT STARTED, ELAPSED --:--, "no signature" (Raymond, 2026-09-03) — and with no run row of his
+    /// own there was nowhere for his loot to go either.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AcceptingTheOffer_TakesOverTheRunTheCommanderIsFlying()
+    {
+        var (instance, dialogs, toasts, bus, presenter) = _Harness(Lionear);
+        using (instance)
+        using (presenter)
+        {
+            await _SeedCharactersAsync(instance);
+            DateTime startedAt = DateTime.UtcNow.AddMinutes(-4);
+
+            await bus.PublishAsync(new FleetRunGroupCodeEvent(_Start(startedAt: startedAt)));
+            Dispatcher.UIThread.RunJobs();
+            _Accept(toasts);
+            await _SettleAsync(() => dialogs.ShownActivityWindows.Count > 0);
+
+            var window = Assert.Single(dialogs.ShownActivityWindows);
+            Assert.Equal(ActivityRunState.Running, window.RunState);
+            Assert.Equal(startedAt, window.AnchorUtc);
+            Assert.Equal("Blood Watch", window.SignatureName);
+
+            // The stored row, not only the readout: the loot and the bounties hang off that row.
+            await _SettleAsync(() => window.RunId is not null);
+            Assert.NotNull(window.RunId);
+            Assert.Equal(GroupCode, await _StoredGroupCodeAsync(instance));
+        }
+    }
+
+    /// <summary>
+    /// The two halves of "er lijkt compleet geen communicatie te zijn" (Raymond, 2026-09-03), one row each.
+    ///
+    /// Receiving: a member whose window is already open hears nothing from the presenter — that only ever opens
+    /// windows — so what the commander does next has to reach the window itself, and none of the three did. START
+    /// was dropped once a window was up, STOP had no event at all, and DISCARD crossed to a client where nothing
+    /// was listening. Driven over the bus, because the wiring is what is under test.
+    ///
+    /// Sending: the commander's own window did not know the group code of the run it had just started — the command
+    /// mints it and hands back only the run id — so STOP had nothing to announce and DISCARD, which announces only
+    /// when it has a code, reached nobody at all. Driven from the buttons and read off the bus.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData("member-start")]
+    [InlineData("member-stop")]
+    [InlineData("member-discard")]
+    [InlineData("commander-stop")]
+    [InlineData("commander-discard")]
+    public async Task TheCommandersRunAndAMembersOpenWindow_AreConnectedBothWays(string row)
+    {
+        var (instance, dialogs, _, bus, presenter) = _Harness(Lionear);
+        using (instance)
+        using (presenter)
+        {
+            await _SeedCharactersAsync(instance);
+            DateTime startedAt = DateTime.UtcNow.AddMinutes(-4);
+            DateTime endedAt = startedAt.AddMinutes(3);
+
+            if (row.StartsWith("commander", StringComparison.Ordinal))
+            {
+                List<string> announced = [];
+                using var stopped = bus.Subscribe<FleetRunStoppedEvent>(e => announced.Add("stop:" + e.Data.GroupCode));
+                using var discarded = bus.Subscribe<FleetRunDiscardedEvent>(e => announced.Add("discard:" + e.Data.GroupCode));
+                instance.Services.GetRequiredService<IFleetParticipation>()
+                    .Set([new FleetParticipant(Lionear, FleetId, ClientOnly: true, Lionear)]);
+
+                using var commander = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
+                await commander.LoadAsync();
+                commander.SignatureName = "Blood Watch";
+                await commander.StartRunCommand.ExecuteAsync(null);
+
+                // The code the store minted, back on the window that started it: everything below hangs off it.
+                Assert.NotNull(commander.GroupCode);
+
+                if (row == "commander-stop")
+                {
+                    commander.StopRunCommand.Execute(null);
+                    await _SettleAsync(() => announced.Count > 0);
+                    Assert.Equal([$"stop:{commander.GroupCode}"], announced);
+                    return;
+                }
+
+                dialogs.OnConfirm = (_, _) => Task.FromResult(true);
+                string code = commander.GroupCode!;
+                await commander.DiscardRunCommand.ExecuteAsync(null);
+                await _SettleAsync(() => announced.Count > 0);
+                Assert.Equal([$"discard:{code}"], announced);
+                return;
+            }
+
+            using var window = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
+            await window.LoadAsync();
+
+            await bus.PublishAsync(new FleetRunGroupCodeEvent(_Start(startedAt: startedAt)));
+            await _SettleAsync(() => window.RunState == ActivityRunState.Running);
+            // Every row starts from a window that is IN the run: a stop or a discard landing on one that never
+            // joined would hold for the wrong reason.
+            Assert.Equal(ActivityRunState.Running, window.RunState);
+
+            if (row == "member-start")
+            {
+                Assert.Equal(ActivityRunState.Running, window.RunState);
+                Assert.Equal(startedAt, window.AnchorUtc);
+                Assert.Equal(GroupCode, window.GroupCode);
+                return;
+            }
+
+            if (row == "member-stop")
+            {
+                await bus.PublishAsync(new FleetRunStoppedEvent(
+                    new RunGroupStop(FleetId, StoredActivityKind.Site, GroupCode, endedAt)));
+                await _SettleAsync(() => window.RunState == ActivityRunState.Stopped);
+
+                Assert.Equal(ActivityRunState.Stopped, window.RunState);
+                Assert.Equal(endedAt, window.StoppedAtUtc);
+                return;
+            }
+
+            await bus.PublishAsync(new FleetRunDiscardedEvent(
+                new RunGroupDiscard(FleetId, StoredActivityKind.Site, GroupCode, endedAt)));
+            await _SettleAsync(() => window.GroupCode is null);
+
+            Assert.Equal(ActivityRunState.NotStarted, window.RunState);
+            Assert.Null(window.GroupCode);
+        }
+    }
+
     // ── Harness ─────────────────────────────────────────────────────────────────────────────────────
 
-    private static RunGroupCodeStart _Start(bool isFleetCommander = true) => new(
-        FleetId, StoredActivityKind.Site, GroupCode, DateTime.UtcNow, isFleetCommander,
+    private static RunGroupCodeStart _Start(bool isFleetCommander = true, DateTime? startedAt = null) => new(
+        FleetId, StoredActivityKind.Site, GroupCode, startedAt ?? DateTime.UtcNow, isFleetCommander,
         SiteName: "Blood Watch", SolarSystemName: "Osmon");
 
     private static async Task _CommanderStartsAsync(IEventBus bus)
