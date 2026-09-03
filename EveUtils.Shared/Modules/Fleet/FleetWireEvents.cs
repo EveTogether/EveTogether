@@ -44,6 +44,13 @@ public sealed class FleetWireEvents : IWireEventCatalog
             return new FleetRunGroupCodeEvent(payload, characterId);
         });
 
+        registry.Register("fleet.run-stopped", (payloadJson, characterId) =>
+        {
+            var payload = JsonSerializer.Deserialize<RunGroupStop>(payloadJson)
+                          ?? throw new InvalidOperationException("Invalid fleet.run-stopped payload.");
+            return new FleetRunStoppedEvent(payload, characterId);
+        });
+
         registry.Register("fleet.run-discarded", (payloadJson, characterId) =>
         {
             var payload = JsonSerializer.Deserialize<RunGroupDiscard>(payloadJson)

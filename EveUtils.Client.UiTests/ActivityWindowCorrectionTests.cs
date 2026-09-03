@@ -54,7 +54,7 @@ public sealed class ActivityWindowCorrectionTests
 
         // The count and the list are the same fact, and the line beside them says which fact that is.
         Assert.Equal(model.FleetMembers.Count, model.FleetMemberCount);
-        Assert.Contains("sharing a location", model.FleetStatusText, StringComparison.Ordinal);
+        Assert.Contains("sharing their location", model.FleetStatusText, StringComparison.Ordinal);
         Assert.Contains("not sharing theirs", model.FleetBasisText, StringComparison.Ordinal);
         Assert.True(model.IsFleetShown);
     }

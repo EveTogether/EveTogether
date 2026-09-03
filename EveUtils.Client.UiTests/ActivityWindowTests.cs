@@ -278,6 +278,31 @@ public class ActivityWindowTests
         Assert.NotEqual("0", model.Bounty.HeaderSummary);
     }
 
+    /// <summary>
+    /// A system tells you which Sansha Refuge you are looking at no better than its name does, so LOCATION carries
+    /// the scan id behind the place when there is one (Raymond, 2026-09-03). Never behind "not known yet" — that
+    /// line is about us — and never in the abyss, where a filament carries no signature at all.
+    /// </summary>
+    [Theory]
+    [InlineData(ActivityKind.Site, "Shaggoth", "RUS-326", "Shaggoth (RUS-326)")]
+    [InlineData(ActivityKind.Site, "Shaggoth", null, "Shaggoth")]
+    [InlineData(ActivityKind.Site, null, "RUS-326", "not known yet")]
+    [InlineData(ActivityKind.Abyssal, "Shaggoth", "RUS-326", "none — an abyssal pocket has no location")]
+    public void TheLocationRow_NamesTheScanBehindThePlace(
+        ActivityKind kind, string? system, string? signatureId, string expected)
+    {
+        var model = new ActivityWindowViewModel(kind, _Unused());
+        var changed = new List<string?>();
+        model.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        model.SolarSystem = system;
+        model.SignatureId = signatureId;
+
+        Assert.Equal(expected, model.LocationText);
+        // The value being right is half of it: without the notification the row never redraws.
+        Assert.Contains(nameof(model.LocationText), changed);
+    }
+
     /// <summary>A row that would only report our own ignorance is not on screen at all — that rule is what took the
     /// catalogue lines out of ACTIVITY, and LOCATION follows it too.</summary>
     [Fact]
@@ -411,7 +436,30 @@ public class ActivityWindowTests
         Assert.Equal(ActivityRunState.NotStarted, site.RunState);
         Assert.Null(site.AnchorUtc);
         Assert.Equal(2, site.FleetMemberCount);
-        Assert.Contains("based on 2 members sharing a location", site.Fleet.HeaderSummary);
+        Assert.Contains("based on 2 members sharing their location", site.Fleet.HeaderSummary);
+    }
+
+    /// <summary>
+    /// <c>FleetMembers</c> is one row per member that sent a location sample — each their own. "sharing a location"
+    /// read as one place shared between them, and under the chip stood RaymondKrah in Amarr and Jithran in Shaggoth
+    /// (Raymond, 2026-09-03). The chip says what was measured: they each share theirs.
+    /// </summary>
+    [Theory]
+    [InlineData(ActivityKind.Site, "based on 2 members sharing their location")]
+    [InlineData(ActivityKind.Abyssal, "based on 0 of 2 members sharing their location")]
+    public void TheFleetChip_CountsMembersSharingTheirOwnLocation_NotMembersInOnePlace(
+        ActivityKind kind, string expected)
+    {
+        var model = new ActivityWindowViewModel(kind, _Unused());
+
+        model.ApplyFleetEnvelope(
+        [
+            new MetricSample(1, 7, MetricKind.Location, 0, 1_000_000, Text: "Amarr"),
+            new MetricSample(2, 7, MetricKind.Location, 0, 1_000_000, Text: "Shaggoth")
+        ], Anchor);
+
+        Assert.Equal(expected, model.FleetStatusText);
+        Assert.DoesNotContain("sharing a location", model.FleetStatusText, StringComparison.Ordinal);
     }
 
     [Fact]

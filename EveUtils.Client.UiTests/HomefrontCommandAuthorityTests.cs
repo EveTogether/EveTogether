@@ -126,6 +126,40 @@ public sealed class HomefrontCommandAuthorityTests
         Assert.False(RunControlAuthority.From(FleetId, Member, Commander, groupCode: "HF-7Q2").CanControl);
     }
 
+    /// <summary>
+    /// Denied says WHO, by name. The record holds an id and the sentence printed it, so "Only the fleet commander
+    /// (character 90250177) can start, stop or discard this run." stood on Raymond's screen (2026-09-03). The name
+    /// is resolved by the window, where names already live, and handed down — the shared layer still looks nothing
+    /// up. Driven through the window's own tick, not through <c>ApplyFleetCommand</c>: a name nothing supplies is
+    /// exactly the gap this guards.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ADeniedMember_IsToldTheCommandersName_NeverHisCharacterId()
+    {
+        using var instance = TestClientInstance.Create(services =>
+            services.AddSingleton<IExternalCharacterLookup>(new FakeExternalLookup { [Commander] = "Jithran" }));
+        await instance.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character("RaymondKrah", Member));
+        instance.Services.GetRequiredService<IFleetParticipation>()
+            .Set([new FleetParticipant(Member, FleetId, ClientOnly: true, Commander)]);
+
+        using var window = new ActivityWindowViewModel(ActivityKind.Site, instance.Services)
+        {
+            GroupCode = "HF-7Q2"
+        };
+        for (var attempt = 0; attempt < 100 && !window.CommandStatusText.Contains("Jithran"); attempt++)
+        {
+            window.Refresh(DateTime.UtcNow);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            await Task.Delay(20);
+        }
+
+        Assert.Equal(RunControlAuthorityLevel.Denied, window.Authority.Level);
+        Assert.Equal("Only Jithran, who commands this fleet, can start, stop or discard this run.",
+            window.CommandStatusText);
+        Assert.DoesNotContain("90000001", window.CommandStatusText, StringComparison.Ordinal);
+    }
+
     // ── What the window does with it, driven from the source the application uses ───────────────────
     //
     // None of these calls ApplyFleetCommand. They set what ESI answers and which fleet this client is in, then let

@@ -33,8 +33,12 @@ public enum RunControlAuthorityLevel
 /// roster could not say.</param>
 /// <param name="IsFleetCommander">Whether this character commands the FLEET. A different question from whether they
 /// may steer this run, and the only one that decides whether a start is announced to the fleet.</param>
+/// <param name="FleetCommanderName">What to call that commander on screen. Handed in by the layer that already
+/// resolves character names; this one holds ids and never looks a name up. Null is an unresolved name rather than an
+/// unknown commander, so the sentence drops the who and keeps the rule.</param>
 public readonly record struct RunControlAuthority(
-    RunControlAuthorityLevel Level, int? FleetCommanderCharacterId, bool IsFleetCommander = false)
+    RunControlAuthorityLevel Level, int? FleetCommanderCharacterId, bool IsFleetCommander = false,
+    string? FleetCommanderName = null)
 {
     /// <summary>
     /// Answer both questions against the fleet's own roster: may this character steer this run, and do they command
@@ -46,8 +50,10 @@ public readonly record struct RunControlAuthority(
     /// could not be read.</param>
     /// <param name="actingCharacterId">The character whose window this is, or null when no character is chosen.</param>
     /// <param name="groupCode">The run's own group code, null for a run that belongs to no group.</param>
+    /// <param name="fleetCommanderName">That commander's name, where the caller already knows it.</param>
     public static RunControlAuthority From(
-        long? fleetId, int? fleetCommanderCharacterId, int? actingCharacterId, string? groupCode)
+        long? fleetId, int? fleetCommanderCharacterId, int? actingCharacterId, string? groupCode,
+        string? fleetCommanderName = null)
     {
         // Commanding the fleet takes a roster that names a commander and this character being them. Not knowing is
         // never "yes" here: no group code is made and nothing is announced, which is the safe way round for a
@@ -62,17 +68,17 @@ public readonly record struct RunControlAuthority(
         // is the case Unknown below exists for: there, DISCARD reaches four other machines.
         if (groupCode is null)
             return new RunControlAuthority(
-                RunControlAuthorityLevel.Granted, fleetCommanderCharacterId, commandsTheFleet);
+                RunControlAuthorityLevel.Granted, fleetCommanderCharacterId, commandsTheFleet, fleetCommanderName);
 
         // Shared, so a button here reaches other people's machines. With no fleet, no commander the roster could
         // name, or no character to compare, not knowing must not read as "yes" — nor as a silent "no" (ET-105).
         if (fleetId is null || fleetCommanderCharacterId is not { } named || actingCharacterId is null)
             return new RunControlAuthority(
-                RunControlAuthorityLevel.Unknown, fleetCommanderCharacterId, commandsTheFleet);
+                RunControlAuthorityLevel.Unknown, fleetCommanderCharacterId, commandsTheFleet, fleetCommanderName);
 
         return new RunControlAuthority(
             named == actingCharacterId ? RunControlAuthorityLevel.Granted : RunControlAuthorityLevel.Denied,
-            named, commandsTheFleet);
+            named, commandsTheFleet, fleetCommanderName);
     }
 
     public bool CanControl => Level is RunControlAuthorityLevel.Granted;
@@ -84,8 +90,11 @@ public readonly record struct RunControlAuthority(
     public string StatusText => Level switch
     {
         RunControlAuthorityLevel.Granted => "You command this run.",
-        RunControlAuthorityLevel.Denied =>
-            $"Only the fleet commander (character {FleetCommanderCharacterId}) can start, stop or discard this run.",
+        // A bare 90250177 on screen names nobody (Raymond, 2026-09-03). Without a resolved name the sentence states
+        // the rule and leaves the who out, rather than printing the id this record happens to hold.
+        RunControlAuthorityLevel.Denied => FleetCommanderName is { Length: > 0 } commander
+            ? $"Only {commander}, who commands this fleet, can start, stop or discard this run."
+            : "Only the fleet commander can start, stop or discard this run.",
         _ => "Who commands this fleet is not known right now, so the run controls are hidden."
     };
 }

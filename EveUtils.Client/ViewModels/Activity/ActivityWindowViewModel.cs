@@ -94,6 +94,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private readonly GamelogClientService? _gamelog;
     private readonly IDisposable? _metricSubscription;
     private readonly IDisposable? _lootSubscription;
+    private readonly IDisposable? _fleetRunStartedSubscription;
+    private readonly IDisposable? _fleetRunStoppedSubscription;
+    private readonly IDisposable? _fleetRunDiscardedSubscription;
 
     // The bounty lines seen while this run was running, with their own times — what SAVE writes as the run's
     // RunBountyEntry rows, and what the section adds up meanwhile.
@@ -109,6 +112,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private int? _namedCharacterId;
     private (string? Id, string? Group, string Name, IReadOnlyList<SdeSite> Sites)? _pendingSignature;
     private string? _runCharacterName;
+    private int? _commanderNameId;
+    private string? _commanderName;
     private ShipFitDetectionReading? _fitReading;
     private RunEnemyObservationCollector? _enemyObservations;
 
@@ -127,6 +132,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // The clipboard records loot; this window shows it, and the two never met. Without this the LOOT section
         // only ever held what was already stored when the window loaded or started its run.
         _lootSubscription = services.GetService<IEventBus>()?.Subscribe<RunLootCapturedEvent>(_OnRunLootCaptured);
+        // What the commander does to the shared run, as it happens. Until these existed the announcements crossed to
+        // this machine and no window was listening for any of them, so a member saw the run start, stop and end
+        // without a single thing changing in front of him (Raymond, 2026-09-03).
+        _fleetRunStartedSubscription = services.GetService<IEventBus>()?.Subscribe<FleetRunGroupCodeEvent>(_OnFleetRunStarted);
+        _fleetRunStoppedSubscription = services.GetService<IEventBus>()?.Subscribe<FleetRunStoppedEvent>(_OnFleetRunStopped);
+        _fleetRunDiscardedSubscription = services.GetService<IEventBus>()?.Subscribe<FleetRunDiscardedEvent>(_OnFleetRunDiscarded);
         RunLoot = services.GetService<CqrsDispatcher>() is { } dispatcher
             ? new RunLootViewModel(dispatcher, services.GetService<IAppraisalProvider>())
             : null;
@@ -268,9 +279,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(HasSignature))]
     private string? _signatureGroup;
 
-    /// <summary>The scan's own id, e.g. <c>RUS-326</c>. Not shown anywhere — it is what tells one Sansha Refuge
-    /// from the next one, which a site name cannot.</summary>
+    /// <summary>The scan's own id, e.g. <c>RUS-326</c> — what tells one Sansha Refuge from the next one, which a
+    /// site name cannot. Shown after the location, so the row names the site as well as the system.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LocationText))]
     private string? _signatureId;
 
     /// <summary>The signature's name once fully scanned — same field, same source as <see cref="SignatureGroup"/>.</summary>
@@ -474,10 +486,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <see cref="FleetBasisText"/> is on screen to say.</summary>
     public ObservableCollection<ActivityFleetMemberViewModel> FleetMembers { get; } = [];
 
+    /// <summary>What the figures were counted over. "sharing a location" read as "they are in the same place", which
+    /// is the very question a pilot asks this chip — under it stood RaymondKrah in Amarr and Jithran in Shaggoth
+    /// (Raymond, 2026-09-03). Each member shares theirs, and that is all this counts.</summary>
     public string FleetStatusText => FleetMemberCount > 1
         ? IsAbyssal
-            ? $"based on {AnchoredFleetMemberCount} of {FleetMemberCount} members sharing a location"
-            : $"based on {FleetMemberCount} members sharing a location"
+            ? $"based on {AnchoredFleetMemberCount} of {FleetMemberCount} members sharing their location"
+            : $"based on {FleetMemberCount} members sharing their location"
         : "no other member has reported in yet";
 
     /// <summary>
@@ -523,7 +538,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public string LocationText => IsInsideAbyssal
         ? "none — an abyssal pocket has no location"
-        : LocationDisplay ?? SolarSystem ?? "not known yet";
+        : (LocationDisplay ?? SolarSystem) is { } place
+            // Never behind "not known yet": that line is about us rather than about where he is, and a scan id in
+            // brackets after it would read as half a place.
+            ? SignatureId is { Length: > 0 } signature ? $"{place} ({signature})" : place
+            : "not known yet";
 
     /// <summary>Shown only once there is a system to show. "not known yet" is a line about us, not about where he
     /// is, and the row is hidden instead.</summary>
@@ -756,6 +775,70 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         _runCharacterId = characterId;
         _runCharacterName = characterName;
+    }
+
+    /// <summary>
+    /// Take over the run the fleet commander announced. Joining used to be the group code and the fleet id and
+    /// nothing else, so a member landed on a brand-new window that was NOT STARTED while the commander's clock had
+    /// been going for minutes (Raymond, 2026-09-03).
+    ///
+    /// Everything the joining window is missing already travels on the announcement, so nothing is fetched and
+    /// <see cref="RunGroupCodeStart"/> is not extended: the commander's run row lives in a database this client
+    /// cannot read, and asking the server for a second copy of facts already in hand is a second source to keep
+    /// in step. The site name is only taken where this window has none — a member who copied a signature of their
+    /// own keeps it, and <c>_AdoptRunningRunAsync</c> below decides between the two runs.
+    /// </summary>
+    public void JoinFleetRun(RunGroupCodeStart start)
+    {
+        GroupCode = start.GroupCode;
+        FleetId = start.FleetId;
+        AnchorUtc = start.StartedAtUtc;
+        StoppedAtUtc = null;
+        RunState = ActivityRunState.Running;
+        _StartEnemyObservations();
+        // A joined run still needs its own row, or this member's loot and bounties have nothing to hang off.
+        _ = _BeginEstimatedRunAsync(start.StartedAtUtc, start.SiteName);
+        Refresh(DateTime.UtcNow);
+    }
+
+    /// <summary>The commander started, and this window was already open on nothing. Only a start that came from the
+    /// commander joins a window: a member's own start is announced too, and it is not an invitation.</summary>
+    private void _OnFleetRunStarted(FleetRunGroupCodeEvent integrationEvent)
+    {
+        RunGroupCodeStart start = integrationEvent.Data;
+        if (!start.IsFleetCommander || RunState != ActivityRunState.NotStarted
+            || (FleetId is { } fleetId && fleetId != start.FleetId) || start.ActivityKind != StoredKind)
+            return;
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => JoinFleetRun(start));
+    }
+
+    private void _OnFleetRunStopped(FleetRunStoppedEvent integrationEvent)
+    {
+        RunGroupStop stop = integrationEvent.Data;
+        if (GroupCode is not { } groupCode || !string.Equals(groupCode, stop.GroupCode, StringComparison.Ordinal))
+            return;
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => StopRun(stop.StoppedAtUtc));
+    }
+
+    /// <summary>The commander threw the run away. The stored row is <c>FleetRunGroupCodeCoordinator</c>'s to discard
+    /// — it does that on every client — so this only takes the dead run off the screen it is still drawn on.</summary>
+    private void _OnFleetRunDiscarded(FleetRunDiscardedEvent integrationEvent)
+    {
+        RunGroupDiscard discard = integrationEvent.Data;
+        if (GroupCode is not { } groupCode || !string.Equals(groupCode, discard.GroupCode, StringComparison.Ordinal))
+            return;
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            _ResetForNewRun();
+            GroupCode = null;
+            _ApplyPendingSignature();
+            if (RunLoot is not null)
+                _ = RunLoot.RefreshAsync();
+            Refresh(DateTime.UtcNow);
+        });
     }
 
     /// <summary>The stored run names its character by id; the gamelog knows pilots by name. Both are needed, so the
@@ -1097,6 +1180,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         }
 
         RunId = started.Value;
+        // The handler mints the group code when the window had none, and the command only ever gave the run id back
+        // — so a commander's own window did not know the code of the run it had just started. With no code it fell
+        // through RunControlAuthority's solo branch, and DISCARD, which only announces itself when it has one, never
+        // reached a single other member (Raymond, 2026-09-03).
+        if (GroupCode is null)
+            GroupCode = (await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+                .Query(new GetRunningRunQuery())).Value?.GroupCode;
+
         if (RunLoot is not null)
             await RunLoot.RefreshAsync();
         Refresh(DateTime.UtcNow);
@@ -1118,7 +1209,27 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // Seeded with what was measured, so correcting a start by half a minute is an edit and not a retype.
         StartCorrectionText = AnchorUtc is { } start ? _LocalTime(start) : string.Empty;
         EndCorrectionText = _LocalTime(nowUtc);
+        _AnnounceStopToFleet(nowUtc);
         Refresh(nowUtc);
+    }
+
+    /// <summary>
+    /// Bring every member's clock to rest at the commander's moment. There was no such announcement at all until
+    /// now — START and DISCARD crossed the wire and STOP simply did not exist — so a member watched a run that had
+    /// been over for minutes carry on counting (Raymond, 2026-09-03).
+    ///
+    /// Only from the window that commands the run: a member stopping their own leg ends nobody else's, and the
+    /// event is received back here too, where <see cref="StopRun"/>'s own guard makes the second one a no-op.
+    /// </summary>
+    private void _AnnounceStopToFleet(DateTime stoppedAtUtc)
+    {
+        if (!Authority.CanControl || FleetId is not { } fleetId || GroupCode is not { } groupCode
+            || _services.GetService<IEventBus>() is not { } eventBus)
+            return;
+
+        _ = eventBus.PublishAsync(
+            new FleetRunStoppedEvent(new RunGroupStop(fleetId, StoredKind, groupCode, stoppedAtUtc)),
+            EventTarget.Both);
     }
 
     /// <summary>
@@ -1187,10 +1298,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// Whether the run is shared at all is the run's own <see cref="GroupCode"/>, not <paramref name="fleetId"/>:
     /// this client having no ET fleet active is not the same thing as flying alone (ET-135).
     /// </summary>
-    public void ApplyFleetCommand(long? fleetId, int? fleetCommanderCharacterId, int? actingCharacterId)
+    public void ApplyFleetCommand(long? fleetId, int? fleetCommanderCharacterId, int? actingCharacterId,
+        string? fleetCommanderName = null)
     {
         FleetId = fleetId;
-        Authority = RunControlAuthority.From(fleetId, fleetCommanderCharacterId, actingCharacterId, GroupCode);
+        Authority = RunControlAuthority.From(
+            fleetId, fleetCommanderCharacterId, actingCharacterId, GroupCode, fleetCommanderName);
     }
 
     /// <summary>
@@ -1204,14 +1317,49 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// </summary>
     public Task RefreshFleetCommandAsync(DateTime nowUtc)
     {
-        long? fleetId = _ActingFleetId();
+        // A run filed under a group belongs to the fleet whose commander made that group, and a membership sweep
+        // that has not answered yet must not take it away again: on a joining member the announcement arrives
+        // before his own participation does, and the first tick erased the fleet id it had just been handed.
+        long? fleetId = _ActingFleetId() ?? (GroupCode is not null ? FleetId : null);
         // The same character the rest of the window works from. It used to fall back to IActiveFleetState, which
         // holds whichever character a fleets-window row was last selected as — so a fleet commander flying a
         // different toon than that row's acting one was compared against his own fleet's boss id and told only the
         // FC may start or stop (Jithran, 2026-09-02). The boss is looked up for this same character, so both sides
         // of the comparison are now one pilot.
-        ApplyFleetCommand(fleetId, _CommanderOf(fleetId), _ActingCharacterId());
+        int? commander = _CommanderOf(fleetId);
+        ApplyFleetCommand(fleetId, commander, _ActingCharacterId(), _CommanderNameOf(commander));
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// What to call the commander, so the run controls can say who instead of printing his character id at a pilot
+    /// (Raymond, 2026-09-03). Resolved here rather than in <see cref="RunControlAuthority"/>: that record decides
+    /// who may press what and holds ids, and giving it a name lookup would give the shared layer a dependency the
+    /// names already sit above.
+    ///
+    /// One lookup per commander, not one per clock tick: the id is claimed before the lookup runs, so an FC who
+    /// cannot be named is asked about once and the sentence goes out without a name.
+    /// </summary>
+    private string? _CommanderNameOf(int? commanderCharacterId)
+    {
+        if (commanderCharacterId is not { } characterId)
+            return null;
+
+        if (_commanderNameId != characterId)
+        {
+            _commanderNameId = characterId;
+            _commanderName = null;
+            _ = _ResolveCommanderNameAsync(characterId);
+        }
+
+        return _commanderName;
+    }
+
+    private async Task _ResolveCommanderNameAsync(int characterId)
+    {
+        string? name = await _NameOfAsync(characterId);
+        if (_commanderNameId == characterId)
+            _commanderName = name;
     }
 
     /// <summary>Who commands <paramref name="fleetId"/> on its ET roster, as the last membership sweep read it.
@@ -1484,31 +1632,39 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         OnPropertyChanged(nameof(FleetBasisText));
     }
 
-    /// <summary>The registry first — a local character is known without asking anyone — then public ESI, the same
-    /// route the fleet overlay resolves its rows by. Best-effort: an unresolved id keeps its "Char 90000001" label,
-    /// which is still a member you can count.</summary>
+    /// <summary>Best-effort: an unresolved id keeps its "Char 90000001" label, which is still a member you can
+    /// count.</summary>
     private async Task _ResolveFleetMemberNameAsync(ActivityFleetMemberViewModel member)
     {
-        if (_services.GetService<ICharacterRegistry>() is { } registry
-            && (await registry.GetAllAsync()).FirstOrDefault(c => c.EsiCharacterId == member.CharacterId) is { } local)
-        {
-            member.Name = local.Name;
-            return;
-        }
-
-        if (_services.GetService<IExternalCharacterLookup>() is not { } lookup)
-            return;
-
-        ExternalCharacterInfo info = await lookup.LookupAsync(member.CharacterId);
-        if (info.Exists)
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => member.Name = info.Name);
+        if (await _NameOfAsync(member.CharacterId) is { } name)
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => member.Name = name);
     }
 
-    private async Task _BeginEstimatedRunAsync(DateTime anchorUtc)
+    /// <summary>The registry first — a local character is known without asking anyone — then public ESI, the same
+    /// route the fleet overlay resolves its rows by. Null is "could not be named", never a placeholder: what to
+    /// show instead is the caller's decision, and the two callers here answer it differently.</summary>
+    private async Task<string?> _NameOfAsync(int characterId)
+    {
+        if (_services.GetService<ICharacterRegistry>() is { } registry
+            && (await registry.GetAllAsync()).FirstOrDefault(c => c.EsiCharacterId == characterId) is { } local)
+            return local.Name;
+
+        if (_services.GetService<IExternalCharacterLookup>() is not { } lookup)
+            return null;
+
+        ExternalCharacterInfo info = await lookup.LookupAsync(characterId);
+        return info.Exists ? info.Name : null;
+    }
+
+    /// <param name="siteName">What the fleet says is being flown, for a window that has nothing of its own. Taken
+    /// only after <see cref="_AdoptRunningRunAsync"/> has had its say: a name from elsewhere is not a signature this
+    /// pilot copied, and setting it first made adopt read the member's own run as a different site and park it.</param>
+    private async Task _BeginEstimatedRunAsync(DateTime anchorUtc, string? siteName = null)
     {
         if (await _AdoptRunningRunAsync() || !await _ResolveCharacterAsync(mayAsk: false))
             return;
 
+        SignatureName ??= siteName;
         await _StoreRunAsync(anchorUtc);
     }
 
@@ -1569,6 +1725,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         _metricSubscription?.Dispose();
         _lootSubscription?.Dispose();
+        _fleetRunStartedSubscription?.Dispose();
+        _fleetRunStoppedSubscription?.Dispose();
+        _fleetRunDiscardedSubscription?.Dispose();
         _timer?.Stop();
         _timer = null;
     }

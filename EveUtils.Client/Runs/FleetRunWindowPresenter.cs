@@ -159,9 +159,12 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
         ActivityKind kind = start.ActivityKind == StoredActivityKind.Abyssal ? ActivityKind.Abyssal : ActivityKind.Site;
         Dispatcher.UIThread.Post(() =>
         {
-            ActivityWindowViewModel window = new(kind, _services) { GroupCode = start.GroupCode, FleetId = start.FleetId };
+            ActivityWindowViewModel window = new(kind, _services);
+            // The pilot first: joining creates this member's own run row, and that row is filed under whoever this
+            // window is for.
             if (pilot is { EsiCharacterId: { } characterId })
                 window.UseCharacter(characterId, pilot.Name);
+            window.JoinFleetRun(start);
             _dialogs.ShowActivityWindow(window, RunWindowOpenTrigger.RemoteFleetCommander);
         });
     }
