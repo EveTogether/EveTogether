@@ -235,7 +235,19 @@
                 <Setter Property="ItemTemplate">
                     <Setter.Value>
                         <DataTemplate x:DataType="vm:DpsViewModel">
-                            <Border Classes="memberrow" Classes.dragging="{Binding IsDragging}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="10,4" Cursor="SizeAll">
+                            <!-- Background="Transparent" is the row's HIT AREA, not its look. Unlike the list and the
+                                 grid this row is not a panel — it is a line with a divider under it, and that is the
+                                 point of the density — so nothing sets a Background on it, and an unfilled Border
+                                 takes no pointer over its own empty surface. Everything the row promises hangs off
+                                 this Border: Cursor="SizeAll" over its full width, the drag the ItemsControl reads
+                                 back through InputHitTest, and the ContextMenu below. Without a fill only the
+                                 TextBlocks answered, so ~70% of a 900-wide row and ~80% of a 1400-wide one was dead
+                                 (ET-154, measured). Local value rather than a setter on Border.memberrow: that
+                                 selector also matches the two densities that DO carry Classes="panel", and a style
+                                 this close to the control would beat the theme's Border.panel and strip their
+                                 background. Transparent is what the other member rows in this app use for the same
+                                 reason — see FleetsWindow's MemberLeafTemplate and FleetRosterWindow's entry row. -->
+                            <Border Classes="memberrow" Classes.dragging="{Binding IsDragging}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="10,4" Cursor="SizeAll" Background="Transparent">
                                 <Border.ContextMenu>
                                     <ContextMenu ItemsSource="{Binding MemberMenu}"
                                                  ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>

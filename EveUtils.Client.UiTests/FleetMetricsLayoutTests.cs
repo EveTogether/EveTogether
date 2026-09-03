@@ -8,7 +8,9 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Controls;
@@ -221,6 +223,48 @@ public class FleetMetricsLayoutTests
         root.MouseMove(new Point(start.X + 6, start.Y));   // past the drag threshold, still over the same row
         root.MouseMove(LeadingEdgeOf(host, root, to));
         Dispatcher.UIThread.RunJobs();
+    }
+
+    // The same drag, but picked up on a piece of the row that shows nothing (ET-154) instead of on its middle.
+    private static void DragRowFromEmptySpace(Window root, FleetMetricsViewModel vm, int from, int to)
+    {
+        ItemsControl host = MemberHost(root, vm);
+        Point start = EmptySpaceOf(host, root, from);
+
+        root.MouseDown(start, MouseButton.Left);
+        root.MouseMove(new Point(start.X + 6, start.Y));
+        root.MouseMove(LeadingEdgeOf(host, root, to));
+        Dispatcher.UIThread.RunJobs();
+        root.MouseUp(LeadingEdgeOf(host, root, to), MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>
+    /// A point inside a row that is on none of the things it draws — no figure, no name, no button, no graph. Found
+    /// from where those landed rather than by asking the hit test, so it cannot quietly answer its own question: this
+    /// is a place the user sees nothing but the row, and the row says it can be grabbed there.
+    /// </summary>
+    private static Point EmptySpaceOf(ItemsControl host, Visual root, int index)
+    {
+        Control container = Assert.IsAssignableFrom<Control>(host.ContainerFromIndex(index));
+        var bounds = new Rect(container.TranslatePoint(default, host) ?? default, container.Bounds.Size);
+
+        List<Rect> drawn = container.GetVisualDescendants().OfType<Control>()
+            .Where(c => c is TextBlock or Button or DpsGraph)
+            .Select(c => new Rect(c.TranslatePoint(default, host) ?? default, c.Bounds.Size).Inflate(2))
+            .ToList();
+
+        for (double y = bounds.Y + 4; y < bounds.Bottom - 4; y += 3)
+        for (double x = bounds.X + 4; x < bounds.Right - 4; x += 3)
+        {
+            var point = new Point(x, y);
+            if (drawn.All(rect => !rect.Contains(point)))
+                return host.TranslatePoint(point, root)
+                    ?? throw new InvalidOperationException($"member row {index} is not in the tree");
+        }
+
+        throw new InvalidOperationException(
+            $"row {index} has no empty space to grab it by — the fixture, not the row, needs looking at");
     }
 
     // A point just inside a row's leading edge — above its middle in a stacked layout, left of it when the cards
@@ -959,6 +1003,135 @@ public class FleetMetricsLayoutTests
         DragRow(root, vm, from: 1, to: 0);
 
         Assert.Equal(["Lionear", "RaymondKrah"], vm.Members.Select(m => m.Character));
+    }
+
+    /// <summary>
+    /// ET-154: a row promises with <c>Cursor="SizeAll"</c> that you can pick it up anywhere, so anywhere has to
+    /// work — the gaps between the columns included. Grabs the row on a point that is deliberately on none of its
+    /// text and none of its buttons, which is the half of the row a press used to fall straight through: the compact
+    /// row carried no <c>Background</c>, and an unfilled <c>Border</c> takes no pointer over its own empty surface.
+    /// Asserting on the class or the brush would not have noticed — this presses there and looks at the order.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(FleetMetricsLayout.List, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.List, Shell.DockedTab)]
+    [InlineData(FleetMetricsLayout.Grid, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.Grid, Shell.DockedTab)]
+    [InlineData(FleetMetricsLayout.Compact, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.Compact, Shell.DockedTab)]
+    public async Task Drag_ReordersMembers_WhenTheRowIsGrabbedByItsEmptySpace(FleetMetricsLayout layout, Shell shell)
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, layout, shell);
+
+        DragRowFromEmptySpace(root, vm, from: 1, to: 0);
+
+        Assert.Equal(["Lionear", "RaymondKrah"], vm.Members.Select(m => m.Character));
+    }
+
+    // The wider the window the more of a compact row is gap rather than figures, so this is where the hole was
+    // biggest: at 1400 roughly four fifths of the row answered to nothing. A docked tab is the narrow end of the
+    // same story and is covered above.
+    [AvaloniaTheory]
+    [InlineData(Shell.OwnWindow)]
+    [InlineData(Shell.DockedTab)]
+    public async Task Drag_ReordersMembers_FromTheEmptySpace_OnAWideCompactRow(Shell shell)
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Compact, shell, 1400);
+
+        DragRowFromEmptySpace(root, vm, from: 1, to: 0);
+
+        Assert.Equal(["Lionear", "RaymondKrah"], vm.Members.Select(m => m.Character));
+    }
+
+    // The hit area travels with the content, so the row is still whole after the module host hands it from a docked
+    // tab back to its own window.
+    [AvaloniaFact]
+    public async Task Drag_ReordersMembers_FromTheEmptySpace_AfterADockToFloatMigration()
+    {
+        using var instance = CreateInstance();
+        var vm = await BuildViewModelAsync(instance, Roster());
+        vm.SetLayoutCommand.Execute(FleetMetricsLayout.Compact);
+
+        var display = new FakeDisplay { IsFloating = false };
+        var host = new ModuleHostService();
+        host.SetOwner(new Window());
+        host.SetHost(display);
+        var window = new FleetMetricsWindow(vm) { Width = 1400, Height = 620 };
+        host.Open(window, "FLEET METRICS", "fleet", "fleet-metrics");
+
+        display.IsFloating = true;
+        host.SwitchMode();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        DragRowFromEmptySpace(window, vm, from: 1, to: 0);
+
+        Assert.Equal(["Lionear", "RaymondKrah"], vm.Members.Select(m => m.Character));
+        window.Close();
+    }
+
+    /// <summary>
+    /// The other interaction hanging off the same <c>Border</c>: right-clicking the empty part of a row has to reach
+    /// the row that owns the member menu. A real right button through the input pipeline, not a hand-raised
+    /// <c>ContextRequested</c> — the question is precisely whether the pointer arrives, which raising the event
+    /// yourself assumes away. What the menu then holds is <see cref="FleetMemberMenuTests"/>'s job.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(FleetMetricsLayout.List, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.Grid, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.Compact, Shell.OwnWindow)]
+    [InlineData(FleetMetricsLayout.Compact, Shell.DockedTab)]
+    public async Task RightClick_OnTheRowsEmptySpace_AsksForThatMembersMenu(FleetMetricsLayout layout, Shell shell)
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, layout, shell, 1400);
+        ItemsControl members = MemberHost(root, vm);
+
+        DpsViewModel? asked = null;
+        members.AddHandler(Control.ContextRequestedEvent, (object? _, ContextRequestedEventArgs e) =>
+        {
+            for (Visual? visual = e.Source as Visual; visual is not null; visual = visual.GetVisualParent())
+                if (visual is Control { DataContext: DpsViewModel tracker })
+                {
+                    asked = tracker;
+                    return;
+                }
+        }, RoutingStrategies.Tunnel | RoutingStrategies.Bubble);
+
+        Point empty = EmptySpaceOf(members, root, 1);
+        try
+        {
+            root.MouseDown(empty, MouseButton.Right);
+            root.MouseUp(empty, MouseButton.Right);
+        }
+        catch (InvalidOperationException)
+        {
+            // "no overlay layer / no IPopupImpl": the headless platform cannot put a popup on screen. Avalonia only
+            // reaches that point after the request has travelled the tree, which is the whole of what is under test.
+        }
+
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(vm.Members[1], asked);
+    }
+
+    /// <summary>
+    /// The fix must not cost the density its look: a compact row is a line with a divider under it, not a panel. The
+    /// fill it grew is a hit area, so it has to stay invisible — an opaque brush would take the pointer just as well
+    /// and would be a regression all the same.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task CompactRows_TakeThePointer_WithoutPaintingAnything()
+    {
+        using var instance = CreateInstance();
+        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Compact, Shell.OwnWindow, 1400);
+        Control container = Assert.IsAssignableFrom<Control>(MemberHost(root, vm).ContainerFromIndex(0));
+        Border row = container.GetSelfAndVisualDescendants().OfType<Border>()
+            .First(b => b.Classes.Contains("memberrow"));
+
+        Assert.DoesNotContain("panel", row.Classes);
+        Assert.Equal(0, Assert.IsType<ImmutableSolidColorBrush>(row.Background).Color.A);
     }
 
     // While a member is held the list must stand still and say what is happening: a ghost of the row under the
