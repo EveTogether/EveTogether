@@ -72,7 +72,8 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
             () => CloseOffer(fingerprint), FeatureName);
     }
 
-    // Wormholes are excluded for now; English-only site labels are a known limitation until a locale alias source exists.
+    // Wormholes are excluded for now. This still matches the group text literally in English — SiteNameAlias (ET-79)
+    // covers site names, not the scan-window group column.
     private static bool IsActivitySite(string? siteType) => siteType?.EndsWith("Combat Site", StringComparison.Ordinal) is true;
 
     private void StartRun(string fingerprint, ClipboardSignatureRow row)
@@ -143,18 +144,15 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
     {
         var matches = MatchSites(name);
         if (matches.Count == 0)
-            return $"{signatureId} · {name} — site names are matched in English only";
+            return $"{signatureId} · {name} — not in the site catalogue";
 
         var suffix = SdeSiteDescription.DescribeMatches(matches);
         return suffix.Length == 0 ? $"{signatureId} · {name}" : $"{signatureId} · {name} — {suffix}";
     }
 
     /// <summary>The one route from a copied site name into the catalogue — the toast and the window it opens must
-    /// not answer differently. English-only exact match (ET-79 AC-4b: the multi-language alias table is an open
-    /// decision); a miss does not prove the site is missing, so neither caller says it is.</summary>
-    private IReadOnlyList<SdeSite> MatchSites(string name) =>
-        _sde.SearchSites(nameQuery: name)
-            .Where(site => string.Equals(site.Name, name, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+    /// not answer differently. Exact match across every SDE locale (ET-79 AC-4); a miss does not prove the site is
+    /// missing (Data Site, Relic Site and Wormhole are not in the catalogue at all), so neither caller says it is.</summary>
+    private IReadOnlyList<SdeSite> MatchSites(string name) => _sde.FindSitesByExactName(name);
 
 }

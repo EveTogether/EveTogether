@@ -486,7 +486,37 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
             : "%" + nameQuery.Replace("%", "\\%").Replace("_", "\\_") + "%");
         command.Parameters.AddWithValue("$archetypeId", (object?)archetypeId ?? DBNull.Value);
         command.Parameters.AddWithValue("$factionId", (object?)factionId ?? DBNull.Value);
+        return ReadSites(connection, command);
+    }
 
+    /// <summary>Exact-name lookup over every SDE locale (ET-79 AC-4). The name key is matched against
+    /// <c>SiteNameAlias</c>, which (unlike <c>TypeNameAlias</c>) carries a row for the English locale too — Site has
+    /// no persisted <c>nameKey</c> column of its own, so matching straight against <c>nameEn</c> in SQL would rely
+    /// on SQLite's ASCII-only <c>LOWER()</c> and disagree with the <see cref="NameKey"/> a lookup key is built with
+    /// for the handful of English names carrying a non-ASCII character. Deliberately exact, not the substring match
+    /// <see cref="SearchSites"/> uses — a clipboard signature is either the site's name or it is not.</summary>
+    public IReadOnlyList<SdeSite> FindSitesByExactName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return [];
+        using var connection = Open();
+        if (connection is null)
+            return [];
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT dungeonId, nameEn, archetypeId, archetypeName, factionId, factionName, description, dedRating,
+                   shipGroupIdsJson
+            FROM Site
+            WHERE dungeonId IN (SELECT dungeonId FROM SiteNameAlias WHERE nameKey = $key)
+            ORDER BY nameEn;
+            """;
+        command.Parameters.AddWithValue("$key", NameKey(name));
+        return ReadSites(connection, command);
+    }
+
+    private static IReadOnlyList<SdeSite> ReadSites(SqliteConnection connection, SqliteCommand command)
+    {
         var rows = new List<(SdeSite Site, int[] GroupIds)>();
         using (var reader = command.ExecuteReader())
         {
