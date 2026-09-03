@@ -53,4 +53,15 @@ public enum MetricKind
     /// report and <see cref="FleetMemberPresence.SilentAfter"/> reads instead (ET-70).
     /// </summary>
     Presence = 9,
+
+    /// <summary>
+    /// What this member's run has looted so far, net of what it cost them, in ISK. Cumulative, and priced before it
+    /// ever reaches the bus: the figure is the one the LOOT section already shows, valued from the market cache by
+    /// type id and never from the clipboard's own ISK column (Raymond, 2026-09-02) — so a member's Icons copy is
+    /// worth exactly what their Details copy of the same items is.
+    ///
+    /// Personal, so opt-IN like <see cref="Bounty"/>: what a pilot made is theirs to offer. The two are counted
+    /// apart on a member's row and in the fleet's total, because they are two figures and each has its own switch.
+    /// </summary>
+    Loot = 10,
 }

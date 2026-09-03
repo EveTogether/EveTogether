@@ -545,13 +545,24 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="va:ActivityFleetMemberViewModel">
                                     <Grid Classes="kv" ColumnDefinitions="*,Auto">
-                                        <TextBlock Text="{Binding Name}"/>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Name}"/>
+                                            <TextBlock Classes="hint" Margin="0" Text="{Binding IskText}"/>
+                                        </StackPanel>
                                         <TextBlock Grid.Column="1" Classes="hint" Margin="0"
                                                    VerticalAlignment="Center" Text="{Binding LocationText}"/>
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <!-- Directly under the names it adds up, and above the caption that says the list is not the
+                             roster: a total standing anywhere else would have to explain what it covers. -->
+                        <Grid x:Name="FleetTotalRow" Classes="kv" ColumnDefinitions="Auto,*"
+                              IsVisible="{Binding IsFleetTotalShown}">
+                            <TextBlock Text="fleet total"/>
+                            <TextBlock Grid.Column="1" Margin="8,0,0,0" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" Text="{Binding FleetTotalText}"/>
+                        </Grid>
                         <TextBlock x:Name="FleetBasisText" Classes="hint" Margin="0" TextWrapping="Wrap"
                                    Text="{Binding FleetBasisText}"/>
                         <!-- Two columns because they are two facts: who flew the site, and who takes a share of it.
