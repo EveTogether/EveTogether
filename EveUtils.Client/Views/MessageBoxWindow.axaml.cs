@@ -17,7 +17,11 @@ public partial class MessageBoxWindow : ChromedWindow
         AvaloniaXamlLoader.Load(this);
     }
 
-    public MessageBoxWindow(string title, string message, bool confirm = false, string okText = "OK", string? optOutText = null) : this()
+    // A three-answer box hands back bool? and cancel is null; a plain confirm keeps its bool and cancel is false.
+    private bool _threeWay;
+
+    public MessageBoxWindow(string title, string message, bool confirm = false, string okText = "OK",
+        string? optOutText = null, string? secondaryText = null) : this()
     {
         Title = string.IsNullOrWhiteSpace(title) ? "EVE Together" : title;
         this.FindControl<TextBlock>("TitleBlock")!.Text = title;
@@ -26,6 +30,13 @@ public partial class MessageBoxWindow : ChromedWindow
         {
             this.FindControl<Button>("CancelButton")!.IsVisible = true;
             this.FindControl<Button>("OkButton")!.Content = okText;
+        }
+        if (!string.IsNullOrWhiteSpace(secondaryText))
+        {
+            _threeWay = true;
+            var secondary = this.FindControl<Button>("SecondaryButton")!;
+            secondary.Content = secondaryText;
+            secondary.IsVisible = true;
         }
         if (!string.IsNullOrWhiteSpace(optOutText))
         {
@@ -39,5 +50,6 @@ public partial class MessageBoxWindow : ChromedWindow
     public bool OptOutChecked => this.FindControl<CheckBox>("OptOutCheck")!.IsChecked == true;
 
     private void OnOk(object? sender, RoutedEventArgs e) => Close(true);
-    private void OnCancel(object? sender, RoutedEventArgs e) => Close(false);
+    private void OnSecondary(object? sender, RoutedEventArgs e) => Close(false);
+    private void OnCancel(object? sender, RoutedEventArgs e) => Close(_threeWay ? null : false);
 }

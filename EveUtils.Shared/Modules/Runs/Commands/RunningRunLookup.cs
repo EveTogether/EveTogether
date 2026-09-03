@@ -12,12 +12,23 @@ internal static class RunningRunLookup
 {
     /// <summary><see cref="Run"/> is null when the count isn't exactly one; the caller phrases the failure for its
     /// own context (recording vs. showing), because "no run" and "which one" only differ in that.</summary>
-    public static async Task<(Run? Run, int RunningCount)> FindAsync(ClientDbContext db, CancellationToken cancellationToken)
+    /// <param name="includeStopped">Also answer with a run whose clock is at rest but which is still open — what
+    /// loot needs, because it is copied out of the wreck after the last rat and belongs to the run that produced it.
+    /// A window opening asks WITHOUT it: a stopped run is exactly what it must not adopt, or a pilot who closes his
+    /// window gets yesterday's run back with its site, its start and its commander's group code.</param>
+    public static async Task<(Run? Run, int RunningCount)> FindAsync(
+        ClientDbContext db, CancellationToken cancellationToken, bool includeStopped = false)
     {
-        List<Run> running = await db.Set<Run>()
+        List<Run> open = await db.Set<Run>()
             .AsNoTracking()
-            .Where(run => run.State == RunState.Running && !run.DeletedAtUtc.HasValue)
+            .Where(run => !run.DeletedAtUtc.HasValue
+                          && (run.State == RunState.Running || (includeStopped && run.State == RunState.Stopped)))
             .ToListAsync(cancellationToken);
-        return (running.Count == 1 ? running[0] : null, running.Count);
+
+        // A run on the clock wins over one only stopped: the moment a NEXT run is running, that is the one a copy
+        // belongs to — otherwise every run stopped and not yet saved would go on competing for the pilot's loot.
+        List<Run> running = [.. open.Where(run => run.State == RunState.Running)];
+        List<Run> candidates = running.Count > 0 ? running : open;
+        return (candidates.Count == 1 ? candidates[0] : null, candidates.Count);
     }
 }

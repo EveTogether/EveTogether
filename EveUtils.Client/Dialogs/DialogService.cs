@@ -288,6 +288,13 @@ public sealed class DialogService : IDialogService, ISingletonService
         return await _Over(dialog).ShowDialog<bool>(_owner);
     }
 
+    public async Task<bool?> ChooseAsync(string title, string message, string primaryText, string secondaryText)
+    {
+        if (_owner is null) return null;
+        var dialog = new MessageBoxWindow(title, message, confirm: true, okText: primaryText, secondaryText: secondaryText);
+        return await _Over(dialog).ShowDialog<bool?>(_owner);
+    }
+
     public async Task ShowCharacterAsync(CharacterDialogViewModel viewModel)
     {
         if (_owner is null) return;

@@ -357,8 +357,8 @@
                                IsVisible="{Binding HasTimeCorrectionError}" Text="{Binding TimeCorrectionError}"/>
                 </StackPanel>
                 <!-- Why the window is still here after SAVE. The toast is gone in seconds; this is not. -->
-                <TextBlock x:Name="SaveFailureText" Classes="hint" Margin="0" TextWrapping="Wrap"
-                           IsVisible="{Binding HasSaveFailure}" Text="{Binding SaveFailureText}"/>
+                <TextBlock x:Name="RunNoticeText" Classes="hint" Margin="0" TextWrapping="Wrap"
+                           IsVisible="{Binding HasRunNotice}" Text="{Binding RunNoticeText}"/>
                 <TextBlock Classes="hint" Margin="0" Text="{Binding ClockHint}"/>
                 <!-- Why there are no run controls, when there are none. An unknown fleet boss is a state, not
                      silence — the same rule as ET-65 AC-7. -->
@@ -617,8 +617,8 @@
                             <TextBlock Text="NET"/>
                             <TextBlock Grid.Column="1" Text="{Binding RunLoot.NetIskDisplay}"/>
                         </Grid>
-                        <!-- The one caption that stays: these figures are not a valuation, and saying so is the
-                             difference between a number you can act on and one you cannot. -->
+                        <!-- The caption names where these figures come from. It has to, and it has to be right: it read
+                             "the clipboard column" long after the copied ISK stopped being kept at all. -->
                         <TextBlock Classes="hint" Text="{Binding IskLabel}"/>
                         <TextBlock Classes="hint" Margin="0" Text="{Binding RunLoot.RunStatusMessage}"/>
                         <ItemsControl ItemsSource="{Binding RunLoot.Captures}">

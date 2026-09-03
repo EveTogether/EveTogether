@@ -832,7 +832,11 @@ public class ActivityWindowTests
             foreach (var word in forbidden)
                 Assert.DoesNotContain(word, text, StringComparison.OrdinalIgnoreCase);
 
-        Assert.Contains("clipboard column", model.IskLabel, StringComparison.OrdinalIgnoreCase);
+        // The caption used to claim the totals WERE the copied ISK column, and went on claiming it after the copied
+        // ISK stopped being kept at all. It names the price lookup now, and still says which one figure is the
+        // copied column — a caption that names the wrong source makes a right number look doubtful.
+        Assert.DoesNotContain("Prices are the clipboard column", model.IskLabel, StringComparison.Ordinal);
+        Assert.Contains("copied column", model.IskLabel, StringComparison.OrdinalIgnoreCase);
     }
 
     // ── AC-7 — the four faction palettes reach this window ──────────────────────────────────────────

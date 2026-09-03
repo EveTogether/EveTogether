@@ -428,18 +428,23 @@ public class ActivityWindowWiringTests
         Assert.True(model.IsStartButtonVisible);
     }
 
+    /// <summary>Throwing the run away ends this window too (ET-155). It used to be cleaned out and left standing,
+    /// ready for the next START — and a cleaned-out window standing open is the shape in which old run state kept
+    /// coming back. What the store does is unchanged: the row is closed, never removed.</summary>
     [AvaloniaFact]
-    public async Task Discard_EndsTheRun_AndTheWindowStopsClaimingOne()
+    public async Task Discard_EndsTheRun_AndTakesTheWindowWithIt()
     {
         using var harness = await ActivityWindowHarness.CreateAsync();
         ActivityWindowViewModel model = await harness.OpenAsync();
         await model.StartRunCommand.ExecuteAsync(null);
         harness.Dialogs.OnConfirm = (_, _) => Task.FromResult(true);
+        var closed = 0;
+        model.CloseRequested += () => closed++;
 
         await model.DiscardRunCommand.ExecuteAsync(null);
 
-        Assert.Equal(ActivityRunState.NotStarted, model.RunState);
-        Assert.Null(model.RunId);
+        Assert.Equal(1, closed);
+        Assert.Null(model.GroupCode);
         Assert.False((await harness.Services.GetRequiredService<IDispatcher>()
             .Query(new GetRunningRunQuery())).IsSuccess);
     }

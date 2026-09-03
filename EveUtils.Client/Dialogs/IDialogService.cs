@@ -96,6 +96,11 @@ public interface IDialogService
     /// <summary>Yes/No confirmation for destructive actions. Returns true if confirmed.</summary>
     Task<bool> ConfirmAsync(string title, string message, string okText = "Delete");
 
+    /// <summary>A question with two answers and a way out: true for <paramref name="primaryText"/>, false for
+    /// <paramref name="secondaryText"/>, null for cancel. Cancel is not a third opinion but the absence of one —
+    /// somebody who hit the close button by accident has to be able to take it back.</summary>
+    Task<bool?> ChooseAsync(string title, string message, string primaryText, string secondaryText);
+
     /// <summary>Opens the per-character settings dialog: ESI scopes, coupled servers, couple/decouple.</summary>
     Task ShowCharacterAsync(CharacterDialogViewModel viewModel);
 
