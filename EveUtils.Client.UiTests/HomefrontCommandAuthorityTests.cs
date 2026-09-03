@@ -3,6 +3,7 @@ using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Data;
+using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Fleet.Dtos;
@@ -26,6 +27,25 @@ public sealed class HomefrontCommandAuthorityTests
     private const long FleetId = 4242;
     private const int Commander = 90000001;
     private const int Member = 90000002;
+
+    /// <summary>
+    /// How much this client has been told about the fleet it is in. The three are a ladder, and ET-152 is the gap
+    /// between the bottom two: the run window used to know its fleet only at the top rung.
+    /// </summary>
+    public enum FleetKnowledge
+    {
+        /// <summary>Nothing was opened at all. The fleet exists in the local repository and the startup sweep is
+        /// the only thing that has looked at it — a pilot who launched the client while already in a fleet.</summary>
+        SweptOnStartup,
+
+        /// <summary>The membership set is filled, but no fleet row was ever selected: the fleets window loaded and
+        /// nothing was clicked in it.</summary>
+        MembershipOnly,
+
+        /// <summary>OPEN METRICS was pressed, so <c>IActiveFleetState.Enter</c> ran too. The only state in which the
+        /// run window used to know its fleet at all.</summary>
+        MetricsOpened
+    }
 
     // ── The rule ────────────────────────────────────────────────────────────────────────────────────
 
@@ -234,21 +254,27 @@ public sealed class HomefrontCommandAuthorityTests
 
     /// <summary>
     /// ET-135, end to end and in the shape it actually happens in: the member accepted the commander's offer, so
-    /// <c>FleetRunWindowPresenter</c> built the window with the group code and fleet id off the wire — but
-    /// this pilot never opened the fleets window, so <see cref="IActiveFleetState"/> is empty and the tick hands
-    /// <c>ActiveFleetId</c> null. The run is still the commander's. Take the group code out of the decision and
+    /// <c>FleetRunWindowPresenter</c> built the window with the group code and fleet id off the wire, and this pilot
+    /// never opened the fleets window. The run is still the commander's. Take the group code out of the decision and
     /// this window gets START, STOP and DISCARD, and that DISCARD reaches every other member's machine.
+    ///
+    /// The fleet-id assertion below was <c>Assert.Null</c> until ET-152 and is deliberately turned over: it pinned
+    /// down that the tick overwrote the wire's fleet id with what <c>IActiveFleetState</c> knew, which was nothing.
+    /// Now the tick reads membership, so the id survives — and this member is denied because the fleet has a boss who
+    /// is somebody else, rather than because the window could not name a fleet at all. That is the stronger reason,
+    /// and it is the one ET-152's proof of done asks for.
     /// </summary>
     [AvaloniaFact]
     public void AMemberWhoseFleetsWindowWasNeverOpened_GetsNoControlsOverTheCommandersRun()
     {
-        using ClientInFleet client = ClientInFleet.As(Member, bossCharacterId: Commander, entersFleetsWindow: false);
+        using ClientInFleet client = ClientInFleet.As(Member, bossCharacterId: Commander, knowledge: FleetKnowledge.MembershipOnly);
         ActivityWindowViewModel window =
             new(ActivityKind.Site, client.Services) { GroupCode = "HF-7Q2", FleetId = FleetId };
 
         window.StartManualRun(DateTime.UtcNow);
 
-        Assert.Null(window.FleetId);                // the tick overwrote it with what IActiveFleetState knows: nothing
+        Assert.Equal(FleetId, window.FleetId);      // membership carries it now, where IActiveFleetState knew nothing
+        Assert.Equal(RunControlAuthorityLevel.Denied, window.Authority.Level); // and denied for the right reason
         Assert.False(window.IsStartButtonVisible);
         Assert.False(window.IsStopButtonVisible);
         Assert.False(window.IsDiscardButtonVisible);
@@ -265,7 +291,7 @@ public sealed class HomefrontCommandAuthorityTests
     [AvaloniaFact]
     public void APilotsOwnRunWhileInAnInGameFleet_KeepsItsButtons()
     {
-        using ClientInFleet client = ClientInFleet.As(Member, bossCharacterId: Commander, entersFleetsWindow: false);
+        using ClientInFleet client = ClientInFleet.As(Member, bossCharacterId: Commander, knowledge: FleetKnowledge.MembershipOnly);
         var window = new ActivityWindowViewModel(ActivityKind.Site, client.Services);
 
         window.StartManualRun(DateTime.UtcNow);
@@ -324,12 +350,22 @@ public sealed class HomefrontCommandAuthorityTests
     // group code and no FleetRunGroupCodeEvent was ever published, by anybody. Asserting on a StartRunCommand the
     // test built itself is what let that stand: it proves the handler, not the caller. These drive the button.
 
-    /// <summary>The FC starts a site run in his fleet and the fleet is told, with a group code for the members to
-    /// file their own runs under. Red before ET-147: nothing was published at all.</summary>
-    [AvaloniaFact]
-    public async Task TheFcsStart_IsAnnouncedToTheFleet()
+    /// <summary>
+    /// The FC starts a site run in his fleet and the fleet is told, with a group code for the members to file their
+    /// own runs under. Red before ET-147 at every rung: nothing was published at all.
+    ///
+    /// The three rungs are ET-152. Announcing used to need <c>IActiveFleetState</c>, which only OPEN METRICS fills —
+    /// so a commander who never pressed that button published nothing and nobody saw his run start. Both lower rungs
+    /// are red before ET-152 and the top one is not, which is what makes them worth the rows: the bug was invisible
+    /// from the only state the suite used to build.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(FleetKnowledge.MetricsOpened)]
+    [InlineData(FleetKnowledge.MembershipOnly)]
+    [InlineData(FleetKnowledge.SweptOnStartup)]
+    public async Task TheFcsStart_IsAnnouncedToTheFleet(FleetKnowledge knowledge)
     {
-        using ClientInFleet client = ClientInFleet.As(Commander, bossCharacterId: Commander);
+        using ClientInFleet client = ClientInFleet.As(Commander, bossCharacterId: Commander, knowledge: knowledge);
         var window = new ActivityWindowViewModel(ActivityKind.Site, client.Services);
         window.UseCharacter(Commander, "Jithran");
 
@@ -339,7 +375,7 @@ public sealed class HomefrontCommandAuthorityTests
 
         RunGroupCodeStart start = Assert.Single(announced);
         Assert.True(start.IsFleetCommander);
-        Assert.Equal(FleetId, start.FleetId);
+        Assert.Equal(client.FleetId, start.FleetId);
         Assert.NotNull(await _StoredGroupCodeAsync(client, Commander));
     }
 
@@ -397,7 +433,7 @@ public sealed class HomefrontCommandAuthorityTests
     [AvaloniaFact]
     public void AFreshSoloWindow_KeepsItsButtonsWhileTheBossIsStillBeingRead()
     {
-        using ClientInFleet client = ClientInFleet.As(Member, bossCharacterId: Commander, entersFleetsWindow: false);
+        using ClientInFleet client = ClientInFleet.As(Member, bossCharacterId: Commander, knowledge: FleetKnowledge.MembershipOnly);
         client.Esi.HoldEsiOpen();
 
         var window = new ActivityWindowViewModel(ActivityKind.Site, client.Services);
@@ -443,26 +479,56 @@ public sealed class HomefrontCommandAuthorityTests
 
         public FakeEsiFleetClient Esi => esi;
 
+        /// <summary>The fleet this client is in — the shared constant, or the id the local repository handed out
+        /// when the fleet was really created (<see cref="FleetKnowledge.SweptOnStartup"/>).</summary>
+        public long FleetId { get; private set; } = HomefrontCommandAuthorityTests.FleetId;
+
         /// <param name="actingCharacterId">The character the fleets-window row was selected as.</param>
         /// <param name="flyingAs">The character this client actually publishes as; defaults to the same one.</param>
-        /// <param name="entersFleetsWindow">False for a pilot who never opened the fleets window: they are in the
-        /// fleet as far as ESI and the bus are concerned, but nothing ever called <c>Enter</c>, so this client has
-        /// no fleet id of its own to give (ET-135).</param>
+        /// <param name="knowledge">How much this client has been told about the fleet it is in.</param>
         public static ClientInFleet As(
-            int actingCharacterId, int? bossCharacterId, int? flyingAs = null, bool entersFleetsWindow = true)
+            int actingCharacterId, int? bossCharacterId, int? flyingAs = null,
+            FleetKnowledge knowledge = FleetKnowledge.MetricsOpened)
         {
             var esi = new FakeEsiFleetClient();
             var client = new ClientInFleet(
                 TestClientInstance.Create(services => services.AddSingleton<IEsiFleetClient>(esi)), esi);
             client.BossBecomes(bossCharacterId);
-            if (entersFleetsWindow)
+
+            if (knowledge == FleetKnowledge.SweptOnStartup)
+            {
+                client._CreateRealFleet(flyingAs ?? actingCharacterId);
+                return client;
+            }
+
+            if (knowledge == FleetKnowledge.MetricsOpened)
                 client.Services.GetRequiredService<IActiveFleetState>()
-                    .Enter(FleetId, actingCharacterId, clientOnly: true);
+                    .Enter(client.FleetId, actingCharacterId, clientOnly: true);
             // Who this client flies as, which is what the run controls are decided for — the fleets-window row
             // selection above only says which fleet is on screen.
             client.Services.GetRequiredService<IFleetParticipation>()
-                .Set([new FleetParticipant(flyingAs ?? actingCharacterId, FleetId, ClientOnly: true)]);
+                .Set([new FleetParticipant(flyingAs ?? actingCharacterId, client.FleetId, ClientOnly: true)]);
             return client;
+        }
+
+        /// <summary>
+        /// The state a pilot's client is really in after starting the app while already in a fleet: the fleet exists
+        /// in the local repository and nothing else has been told anything. Nothing calls <c>Enter</c> and nothing
+        /// hands the participation set a ready-made entry — the startup sweep has to find it, which is the whole
+        /// point of the row that uses this.
+        /// </summary>
+        private void _CreateRealFleet(int characterId)
+        {
+            Services.GetRequiredService<ICharacterRegistry>()
+                .AddOrUpdateAsync(new Character("Jithran", characterId)).GetAwaiter().GetResult();
+            Result<long> created = Services.GetRequiredService<ClientFleetService>()
+                .CreateLocalFleetAsync("HF", null, characterId).GetAwaiter().GetResult();
+            Assert.True(created.IsSuccess);
+            FleetId = created.Value;
+
+            // What MainWindowViewModel's startup chain reaches through Home.RefreshAsync() — the one sweep a pilot
+            // gets without opening anything.
+            Services.GetRequiredService<FleetParticipationRefresher>().RefreshAsync().GetAwaiter().GetResult();
         }
 
         /// <summary>ESI reports the fleet under new command from its next read on.</summary>

@@ -154,6 +154,14 @@ taken from the matching `## vX.Y.Z` section below.
   pending review.
 
 ### Fixed
+- **A fleet commander's site run now reaches his fleet even if he never opened the fleets window.** The run window
+  worked out which fleet it belonged to from a screen selection rather than from the fleet you are actually in, and
+  the only thing that ever made that selection was the OPEN METRICS button. A commander who simply started a site
+  therefore had no fleet as far as his own client was concerned: no group code was made, nothing was announced, and
+  none of his fleet members saw the run appear. Which fleet you are in is now read from your membership, and your
+  membership is refreshed when the app starts instead of only while the fleets window is open — so starting the
+  client while already in a fleet is enough. A pilot who really is flying alone keeps every button and still
+  announces nothing.
 - **A fit you rename now carries its new name everywhere.** The name you type in *Edit fit details* was stored
   correctly, but the card in the fit browser and the header of the fit detail window both went on reading the name
   out of the fit's original import data — so the old name kept coming back. Both now show the name you gave it, and

@@ -37,7 +37,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     private readonly IServiceProvider _services;
     private readonly IFleetTransportClient _fleets;
     private readonly IActiveFleetState _activeFleet;
-    private readonly IFleetParticipation _participation; // Membership-driven publish set (what the publisher shares)
+    private readonly FleetParticipationRefresher _participationRefresher; // the one writer of the publish set
     private readonly IDialogService _dialogs;
     private readonly IClientSessionStore _sessions;
     private readonly IServerRegistry _serverRegistry;
@@ -47,10 +47,6 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     private readonly IToastService _toasts;
     private readonly IFleetMetricsLauncher _metricsLauncher;
 
-    /// <summary>The characters coupled on THIS client, as of the last local-fleet load. A local fleet's card lists
-    /// its whole roster, externals included, but only these can ever publish a metric sample — so this, not the
-    /// leaf list, decides the publish set. Refreshed by <see cref="LoadLocalFleetsAsync"/>.</summary>
-    private IReadOnlySet<int> _localCharacterIds = new HashSet<int>();
     private readonly IFleetRosterWatch _rosterWatch;
     private readonly IDisposable _rosterSubscription;
 
@@ -69,7 +65,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         _services = services;
         _fleets = services.GetRequiredService<IFleetTransportClient>();
         _activeFleet = services.GetRequiredService<IActiveFleetState>();
-        _participation = services.GetRequiredService<IFleetParticipation>();
+        _participationRefresher = services.GetRequiredService<FleetParticipationRefresher>();
         _dialogs = services.GetRequiredService<IDialogService>();
         _sessions = services.GetRequiredService<IClientSessionStore>();
         _serverRegistry = services.GetRequiredService<IServerRegistry>();
@@ -213,7 +209,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         if (UnreachableServers.Count > 0)
             StatusMessage = $"Could not reach {string.Join(", ", UnreachableServers.Select(g => g.ServerName))} — decouple below if stale.";
 
-        UpdateParticipation();
+        await _participationRefresher.RefreshAsync();
     }
 
     /// <summary>Loads one coupled server's fleets in isolation. A transport failure (server down/unreachable) is caught
@@ -585,42 +581,6 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         _Announce(FleetRosterChange.Changed(fleetId, member.CharacterId));
     }
 
-    // The publisher shares metrics for the fleets the client is in — but only once a server fleet is
-    // ACTIVE (the FC pressed Start). Signing up in advance to a Forming fleet (e.g. created Tuesday for Saturday) is
-    // membership without broadcast: you only share when it actually starts. Browser rows are excluded (discoverable ≠
-    // joined); client-only fleets are local-only so they always feed your own graphs. Refreshed on every (re)load so a
-    // join/leave/kick/start is reflected on the next sweep.
-    private void UpdateParticipation()
-    {
-        var participants = new List<FleetParticipant>();
-        foreach (var row in ServerGroups.SelectMany(g => g.Fleets).Where(r => r.IsParticipating))
-            if (row.Info.Activation == FleetActivation.Active)
-            {
-                // Per-fleet aggregation (B-2): publish metrics for EVERY one of my characters in the fleet, not only
-                // the acting one — multi-boxing several characters into one fleet must feed all their graphs.
-                if (row.Members.Count > 0)
-                    foreach (var leaf in row.Members)
-                        participants.Add(new FleetParticipant(leaf.CharacterId, row.Id, ClientOnly: false));
-                else
-                    participants.Add(new FleetParticipant(row.ActingCharacterId, row.Id, ClientOnly: false));
-            }
-        foreach (var row in LocalFleets)
-        {
-            // Same per-fleet aggregation as server fleets: a local fleet multi-boxing several of my characters must
-            // feed every member's graph, not only the acting one — otherwise the metrics window shows data for the
-            // acting character alone and the rest flatline. Only MY characters, though: a local fleet's card lists
-            // its externals too (ET-46), and this client can no more publish for someone else's pilot than it can
-            // read their game log.
-            var mine = row.Members.Where(m => _localCharacterIds.Contains(m.CharacterId)).ToList();
-            if (mine.Count > 0)
-                foreach (var leaf in mine)
-                    participants.Add(new FleetParticipant(leaf.CharacterId, row.Id, ClientOnly: true));
-            else
-                participants.Add(new FleetParticipant(row.ActingCharacterId, row.Id, ClientOnly: true));
-        }
-        _participation.Set(participants);
-    }
-
     [RelayCommand]
     private Task Refresh() => ReloadAsync();
 
@@ -659,8 +619,6 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             .Where(c => c.EsiCharacterId is not null)
             .Select(c => (Id: c.EsiCharacterId!.Value, c.Name))
             .ToList();
-        _localCharacterIds = localChars.Select(c => c.Id).ToHashSet();
-
         foreach (var character in characters)
         {
             var ownerId = character.EsiCharacterId ?? 0;
@@ -684,7 +642,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         }
 
         HasLocalFleets = LocalFleets.Count > 0;
-        UpdateParticipation();
+        await _participationRefresher.RefreshAsync();
     }
 
     private static FleetInfo ToInfo(FleetEntity fleet) => new(

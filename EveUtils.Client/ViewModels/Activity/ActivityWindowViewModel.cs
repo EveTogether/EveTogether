@@ -785,11 +785,33 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (_runCharacterId is { } resolved)
             return resolved;
 
-        IEnumerable<FleetParticipant> mine = _services.GetService<IFleetParticipation>()?.Current ?? [];
+        IEnumerable<FleetParticipant> mine = _Participation();
         if (FleetId is { } fleetId)
             mine = mine.Where(participant => participant.FleetId == fleetId);
         return mine.Select(participant => participant.CharacterId).Distinct().ToList() is [{ } only] ? only : null;
     }
+
+    /// <summary>
+    /// Which fleet this run belongs to — the mirror image of <see cref="_ActingCharacterId"/>: there the fleet
+    /// narrows the character, here the character narrows the fleet.
+    ///
+    /// Membership, not the fleets window's selection. <c>IActiveFleetState</c> is only ever filled by an explicit
+    /// <c>Enter</c>, and the two production calls to it both sit behind OPEN METRICS — so a fleet commander who never
+    /// pressed that button had no fleet id, and with it no group code and no announcement to his fleet (ET-152).
+    ///
+    /// Null while several fleets are in play at once, the same way the character is null while several are: that is a
+    /// question rather than a gap, and START is where it gets asked.
+    /// </summary>
+    private long? _ActingFleetId()
+    {
+        IEnumerable<FleetParticipant> mine = _Participation();
+        if (_runCharacterId is { } characterId)
+            mine = mine.Where(participant => participant.CharacterId == characterId);
+        return mine.Select(participant => participant.FleetId).Distinct().ToList() is [{ } only] ? only : null;
+    }
+
+    private IReadOnlyList<FleetParticipant> _Participation() =>
+        _services.GetService<IFleetParticipation>()?.Current ?? [];
 
     /// <summary>
     /// Put a name to <see cref="_ActingCharacterId"/> for the header. Clock-driven like everything else here, but it
@@ -1174,8 +1196,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// </summary>
     public async Task RefreshFleetCommandAsync(DateTime nowUtc)
     {
-        IActiveFleetState? fleet = _services.GetService<IActiveFleetState>();
-        long? fleetId = fleet?.ActiveFleetId;
+        long? fleetId = _ActingFleetId();
         // The same character the rest of the window works from. It used to fall back to IActiveFleetState, which
         // holds whichever character a fleets-window row was last selected as — so a fleet commander flying a
         // different toon than that row's acting one was compared against his own fleet's boss id and told only the

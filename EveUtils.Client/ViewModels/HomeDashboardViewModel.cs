@@ -47,6 +47,7 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
     private readonly ITypeImageProvider? _typeImages;
     private readonly GamelogClientService? _gamelog;     // per-character location, even without combat (jump/undock)
     private readonly GamelogWatcherService? _watcher;    // raises CharacterObserved on every parsed line (incl. jumps)
+    private readonly FleetParticipationRefresher? _participationRefresher; // membership, refreshed with this card
     // 1 Hz, drives the abyssal countdown on the cards. Null in the design-time constructor, which has no services
     // to tick for — and leaving that honest is what keeps the Release build warning-free.
     private readonly Avalonia.Threading.DispatcherTimer? _clock;
@@ -73,6 +74,7 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
         _typeImages = services.GetService<ITypeImageProvider>();
         _gamelog = services.GetService<GamelogClientService>();
         _watcher = services.GetService<GamelogWatcherService>();
+        _participationRefresher = services.GetService<FleetParticipationRefresher>();
 
         MyCharacters = new ObservableCollection<DpsViewModel>(dpsTrackers.Where(t => t.IsSelf));
         dpsTrackers.CollectionChanged += OnTrackersChanged;
@@ -315,6 +317,12 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
         ActiveFleetCount = built.Count(f => f.Activation == FleetActivation.Active);
         FormingFleetCount = built.Count(f => f.Activation == FleetActivation.Forming);
         OnPropertyChanged(nameof(HasFleets));
+
+        // This card runs on startup and on every fleet.changed, which makes it the one sweep a pilot gets without
+        // opening anything. Refreshing membership here is what gives a run window its fleet on a client whose fleets
+        // window was never opened (ET-152).
+        if (_participationRefresher is not null)
+            await _participationRefresher.RefreshAsync();
     }
 
     private async Task LoadFitsAsync()
