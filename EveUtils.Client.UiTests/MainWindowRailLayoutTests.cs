@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Threading;
@@ -31,6 +32,9 @@ public class MainWindowRailLayoutTests
         var window = new MainWindow { DataContext = vm, Width = floating ? 360 : 1100, Height = height };
         window.Show();
         Dispatcher.UIThread.RunJobs();
+        // RunJobs settles layout, but InputHitTest resolves against the composition tree, which only exists once a
+        // render pass has run. Without this the hit tests below depend on a tick landing by luck (ET-149).
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
         return window;
     }
 
