@@ -390,6 +390,9 @@ public sealed class FleetRunOfferToastTests
 
             await bus.PublishAsync(new FleetRunGroupCodeEvent(_Start(startedAt: startedAt)));
             await _SettleAsync(() => window.RunState == ActivityRunState.Running);
+            // Every row starts from a window that is IN the run: a stop or a discard landing on one that never
+            // joined would hold for the wrong reason.
+            Assert.Equal(ActivityRunState.Running, window.RunState);
 
             if (row == "member-start")
             {
