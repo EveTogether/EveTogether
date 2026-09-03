@@ -154,6 +154,11 @@ taken from the matching `## vX.Y.Z` section below.
   pending review.
 
 ### Fixed
+- **A member row in the compact fleet-metrics view can be grabbed anywhere on it, not just on its text.** The row
+  showed the move cursor across its full width but only answered on the words themselves: pressing, dragging or
+  right-clicking the gaps between the figures did nothing at all, which on a wide window was most of the row. Both
+  reordering by dragging and the right-click member menu now work from any point on the row. It looks exactly as it
+  did — a compact row is still a single line with a divider under it, not a panel.
 - **A fleet commander's site run now reaches his fleet even if he never opened the fleets window.** The run window
   worked out which fleet it belonged to from a screen selection rather than from the fleet you are actually in, and
   the only thing that ever made that selection was the OPEN METRICS button. A commander who simply started a site
