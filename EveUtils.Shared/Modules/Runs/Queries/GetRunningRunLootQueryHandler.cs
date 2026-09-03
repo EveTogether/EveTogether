@@ -14,7 +14,7 @@ internal sealed class GetRunningRunLootQueryHandler(IDbContextFactory<ClientDbCo
     public async Task<Result<RunLootOverview>> Handle(GetRunningRunLootQuery query, CancellationToken cancellationToken = default)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        (Run? run, int runningCount) = await RunningRunLookup.FindAsync(db, cancellationToken);
+        (Run? run, int runningCount) = await RunningRunLookup.FindAsync(db, cancellationToken, includeStopped: true);
         if (run is null)
             return Result<RunLootOverview>.Failure(runningCount == 0
                 ? new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound,

@@ -112,6 +112,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     private DispatcherTimer? _timer;
     private bool _isManualRun;
+    // The discard this window ordered comes back to it on the bus. Without this the commander's own window would
+    // take the member's treatment — a notice and a Discarded state — on its way out.
+    private bool _isDiscarding;
     private int? _runCharacterId;
     private int? _namedCharacterId;
     private (string? Id, string? Group, string Name, IReadOnlyList<SdeSite> Sites)? _pendingSignature;
@@ -541,9 +544,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         FleetId is not null || _fleetLocations.Count > 0 || _fleetIsk.Count > 0 || Participants.Count > 0
         || FleetMembers.Count > 0;
 
-    public string RunOriginText => RunState == ActivityRunState.NotStarted
-        ? "not started"
-        : _isManualRun ? "manual" : "estimated from fleet";
+    public string RunOriginText => RunState switch
+    {
+        ActivityRunState.NotStarted => "not started",
+        ActivityRunState.Discarded => "discarded by the fleet commander",
+        _ => _isManualRun ? "manual" : "estimated from fleet"
+    };
 
     /// <summary>
     /// What the clock does not say on its face. <c>AbyssalSpace.Describe</c> writes a "+" for this; here it is a
@@ -632,10 +638,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         ? $"{weather.Bonus} · {_PenaltyRange(tier)} {weather.PenaltyTarget}"
         : "not set";
 
-    /// <summary>The caption over every ISK figure in the loot section. It names its own source on purpose: the
-    /// figures are whatever price column happened to be in the EVE loot window at the moment of the copy, and the
-    /// window has no way to price anything itself.</summary>
-    public string IskLabel => "Prices are the clipboard column as it stood at the copy.";
+    /// <summary>
+    /// The caption over the ISK figures in the loot section. It names its own source on purpose, and it used to name
+    /// the wrong one: it read "Prices are the clipboard column as it stood at the copy" long after the ISK in a
+    /// copied line stopped being held at all. LOOT, CONSUMED and NET are valued on type id out of the price cache
+    /// EVE Together refreshes hourly, which is the rule for every figure in this app.
+    ///
+    /// The per-line figure under this caption is the copied column, and it is the only thing here that is: naming
+    /// both is the difference between a total a pilot can act on and one whose source he has to guess. Which cache
+    /// snapshot valued them is <see cref="RunLootViewModel.TotalIskLabel"/>'s to say, and it says it beside the
+    /// total rather than twice.
+    /// </summary>
+    public string IskLabel =>
+        "Prices come from EVE Together's own hourly price lookup on type id. The figure beside each line is the "
+        + "copied column, and is not what these add up.";
 
     // ── Lifecycle ───────────────────────────────────────────────────────────────────────────────────
 
@@ -810,11 +826,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// nothing else, so a member landed on a brand-new window that was NOT STARTED while the commander's clock had
     /// been going for minutes (Raymond, 2026-09-03).
     ///
-    /// Everything the joining window is missing already travels on the announcement, so nothing is fetched and
-    /// <see cref="RunGroupCodeStart"/> is not extended: the commander's run row lives in a database this client
-    /// cannot read, and asking the server for a second copy of facts already in hand is a second source to keep
-    /// in step. The site name is only taken where this window has none — a member who copied a signature of their
-    /// own keeps it, and <c>_AdoptRunningRunAsync</c> below decides between the two runs.
+    /// Everything the joining window is missing travels on the announcement, so nothing is fetched: the commander's
+    /// run row lives in a database this client cannot read, and asking the server for a second copy of facts already
+    /// in hand is a second source to keep in step. The site name and the scan id are only taken where this window has
+    /// none — a member who copied a signature of their own keeps it, and <c>_AdoptRunningRunAsync</c> below decides
+    /// between the two runs.
     /// </summary>
     public void JoinFleetRun(RunGroupCodeStart start)
     {
@@ -822,6 +838,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         FleetId = start.FleetId;
         AnchorUtc = start.StartedAtUtc;
         StoppedAtUtc = null;
+        // The commander's scan id names the same signature on this member's own scanner — the id belongs to the
+        // system, not to the pilot (ET-151) — so LOCATION reads RUS-326 · Shousran here too instead of the bare
+        // system it showed a member while the commander had the site.
+        SignatureId ??= start.Signature;
         RunState = ActivityRunState.Running;
         _StartEnemyObservations();
         // A joined run still needs its own row, or this member's loot and bounties have nothing to hang off.
@@ -850,19 +870,30 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         Avalonia.Threading.Dispatcher.UIThread.Post(() => StopRun(stop.StoppedAtUtc));
     }
 
-    /// <summary>The commander threw the run away. The stored row is <c>FleetRunGroupCodeCoordinator</c>'s to discard
-    /// — it does that on every client — so this only takes the dead run off the screen it is still drawn on.</summary>
+    /// <summary>
+    /// The commander threw the run away, and this is a member's window. It stays open and says so (ET-155): the
+    /// member is the one this happened to rather than the one who did it, and a toast is gone in seconds while he may
+    /// only look at the window minutes later. He closes it himself; nothing here closes it for him.
+    ///
+    /// The clock comes to rest and nothing is taken away — which is what the commander's own confirmation promises
+    /// the members, so the row he already has stays exactly where it is and the notice does not contradict it. The
+    /// stored row is <c>FleetRunGroupCodeCoordinator</c>'s to unlink; it does that on every client.
+    /// </summary>
     private void _OnFleetRunDiscarded(FleetRunDiscardedEvent integrationEvent)
     {
         RunGroupDiscard discard = integrationEvent.Data;
-        if (GroupCode is not { } groupCode || !string.Equals(groupCode, discard.GroupCode, StringComparison.Ordinal))
+        if (_isDiscarding || GroupCode is not { } groupCode
+            || !string.Equals(groupCode, discard.GroupCode, StringComparison.Ordinal))
             return;
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            _ResetForNewRun();
+            StoppedAtUtc ??= discard.DiscardedAtUtc;
+            RunState = ActivityRunState.Discarded;
+            _EndEnemyObservations();
             GroupCode = null;
-            _ApplyPendingSignature();
+            RunNoticeText = "The fleet commander discarded this run, so it is no longer part of the group. "
+                            + "Nothing you already saved is gone. Close this window when you have read it.";
             if (RunLoot is not null)
                 _ = RunLoot.RefreshAsync();
             Refresh(DateTime.UtcNow);
@@ -1153,6 +1184,22 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private async Task StartRunAsync()
     {
         DateTime nowUtc = DateTime.UtcNow;
+        // The row this window stopped is picked back up rather than a second one opened beside it. Adopt cannot do
+        // it any more — a stopped run is exactly what it must not hand a fresh window — so the pause is resumed here,
+        // where the run id is still known.
+        if (RunId is not null && RunState is ActivityRunState.Stopped)
+        {
+            await _SetStoredRunStoppedAsync(null);
+            StoppedAtUtc = null;
+            CorrectedStopUtc = null;
+            RunState = ActivityRunState.Running;
+            _StartEnemyObservations();
+            if (RunLoot is not null)
+                await RunLoot.RefreshAsync();
+            Refresh(nowUtc);
+            return;
+        }
+
         if (await _AdoptRunningRunAsync())
         {
             if (RunLoot is not null)
@@ -1256,8 +1303,27 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // Seeded with what was measured, so correcting a start by half a minute is an edit and not a retype.
         StartCorrectionText = AnchorUtc is { } start ? _LocalTime(start) : string.Empty;
         EndCorrectionText = _LocalTime(nowUtc);
+        _ = _SetStoredRunStoppedAsync(nowUtc);
         _AnnounceStopToFleet(nowUtc);
         Refresh(nowUtc);
+    }
+
+    /// <summary>
+    /// Put the clock's rest — or its restart, with <paramref name="stoppedAtUtc"/> null — into the row itself.
+    ///
+    /// Until this call existed a stop lived on this view model alone: the row stayed Running for the rest of the
+    /// session, so every window that opened afterwards adopted it through <c>_AdoptRunningRunAsync</c>, start time,
+    /// site and commander's group code included. That is the whole of what the operator reported ten times, and it
+    /// is also why a commander's STOP did not reach him — his window was on yesterday's group code, so the announced
+    /// one never matched (measured, 2026-09-03).
+    /// </summary>
+    private async Task _SetStoredRunStoppedAsync(DateTime? stoppedAtUtc)
+    {
+        if (RunId is not { } runId || _services.GetService<CqrsDispatcher>() is null)
+            return;
+
+        using var scope = _services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new SetRunStoppedCommand(runId, stoppedAtUtc));
     }
 
     /// <summary>
@@ -1452,8 +1518,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         if (RunId is not { } runId)
         {
-            SaveFailureText = "This run was never registered, so there is nothing to save it to.";
-            _services.GetService<IToastService>()?.Show("Run not saved", SaveFailureText, ToastKind.Error);
+            RunNoticeText = "This run was never registered, so there is nothing to save it to.";
+            _services.GetService<IToastService>()?.Show("Run not saved", RunNoticeText, ToastKind.Error);
             return;
         }
 
@@ -1466,12 +1532,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             IsTimeCorrected ? nowUtc : null));
         if (!result.IsSuccess)
         {
-            SaveFailureText = result.Messages.FirstOrDefault()?.Text ?? "Could not save this run.";
-            _services.GetService<IToastService>()?.Show("Run not saved", SaveFailureText, ToastKind.Error);
+            RunNoticeText = result.Messages.FirstOrDefault()?.Text ?? "Could not save this run.";
+            _services.GetService<IToastService>()?.Show("Run not saved", RunNoticeText, ToastKind.Error);
             return;
         }
 
-        SaveFailureText = null;
+        RunNoticeText = null;
         RunState = ActivityRunState.Saved;
         _EndEnemyObservations();
         if (RunLoot is not null)
@@ -1480,20 +1546,22 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // Only here, and only for this window: the run is committed and there is nothing left to do to it. A failed
         // save falls out above with the reason still on screen, and a group's other members keep their own windows —
         // saving is each member's own, and only the FC's DISCARD reaches anybody else (ET-105).
-        SaveSucceeded?.Invoke();
+        CloseRequested?.Invoke();
     }
 
-    /// <summary>Raised once a save has actually landed. The window closes on it; nothing else listens, and nothing
-    /// crosses to another member's window.</summary>
-    public event Action? SaveSucceeded;
+    /// <summary>Raised when this window is done with its run and should go away: a save that landed, or a discard by
+    /// the pilot who commands the run (ET-155). The window closes on it; nothing else listens, and nothing crosses to
+    /// another member's window — a member whose commander discarded keeps his window and closes it himself.</summary>
+    public event Action? CloseRequested;
 
-    /// <summary>Why the last save did not land, left on screen beside the still-open window. A toast is gone in
-    /// seconds and this is the state that says the work is not stored yet.</summary>
+    /// <summary>The one line on this window that stays put: why the last save did not land, or — since ET-155 — that
+    /// the commander threw the shared run away. A toast is gone in seconds, and both of these are states a pilot may
+    /// only look at minutes later.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasSaveFailure))]
-    private string? _saveFailureText;
+    [NotifyPropertyChangedFor(nameof(HasRunNotice))]
+    private string? _runNoticeText;
 
-    public bool HasSaveFailure => SaveFailureText is not null;
+    public bool HasRunNotice => RunNoticeText is not null;
 
     /// <summary>
     /// End the shared run for everyone in it. Confirmed first, because it reaches every other member's machine —
@@ -1523,18 +1591,79 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
         }
 
+        _isDiscarding = true;
         if (FleetId is { } fleetId && GroupCode is { } groupCode)
             await _services.GetRequiredService<IEventBus>().PublishAsync(
                 new FleetRunDiscardedEvent(new RunGroupDiscard(fleetId, StoredKind, groupCode, nowUtc)),
                 EventTarget.Both);
 
-        // Thrown away means gone from this window too: the next START is a new run, not a second attempt at this one.
-        _ResetForNewRun();
+        // Thrown away means this window is done, so it closes (ET-155). It used to be cleaned out and left standing
+        // ready for the next START, which is the very shape in which old run state kept coming back. Only here: a
+        // refused command and a cancelled confirmation both fall out above with the window still on its run.
+        _SendPendingSignatureToANewWindow();
         GroupCode = null;   // the group ended with the run, which is what a discard reaches the other members to say.
-        _ApplyPendingSignature();   // the site they copied while this run was still open
-        if (RunLoot is not null)
-            await RunLoot.RefreshAsync();
-        Refresh(nowUtc);
+        CloseRequested?.Invoke();
+    }
+
+    /// <summary>
+    /// Where the site copied during the run ends up now that the window closes instead of clearing itself. Not a new
+    /// route: a signature copied with no run window open opens a fresh window on it, and that is exactly what this
+    /// hands to <see cref="IDialogService.ShowActivityWindow"/> — so the copy is answered the way every other copy
+    /// is, rather than evaporating with the window that was holding it (ET-155).
+    /// </summary>
+    private void _SendPendingSignatureToANewWindow()
+    {
+        if (_pendingSignature is not { } pending || _services.GetService<IDialogService>() is not { } dialogs)
+            return;
+
+        _pendingSignature = null;
+        dialogs.ShowActivityWindow(new ActivityWindowViewModel(Kind, _services)
+        {
+            SignatureId = pending.Id,
+            SignatureGroup = pending.Group,
+            SignatureName = pending.Name,
+            MatchedSites = pending.Sites
+        });
+    }
+
+    /// <summary>
+    /// Answer the close on a run that is not saved yet. The question lives here because a run outlives its window in
+    /// the store: a close that decides nothing left the row open, and the next window adopted it — start time, site
+    /// and the commander's group code included (Raymond, ten reports, 2026-09-03).
+    ///
+    /// A running clock is brought to rest first, so the question is about a finished stretch rather than a moving
+    /// one. That costs nothing: STOP is a pause, and SAVE writes <see cref="EffectiveStopUtc"/> either way.
+    ///
+    /// Never gated on <see cref="RunControlAuthority.CanControl"/>. A member flying the commander's run may not end
+    /// it for the fleet, but the row this window made for him is his own, and refusing him the answer would leave
+    /// him unable to close without keeping exactly the state this whole question exists to clear.
+    /// </summary>
+    public async Task<bool> RequestCloseAsync()
+    {
+        if (RunId is not { } runId || RunState is ActivityRunState.NotStarted or ActivityRunState.Saved
+            || _services.GetService<CqrsDispatcher>() is null)
+            return true;
+
+        if (RunState is ActivityRunState.Running)
+            StopRun(DateTime.UtcNow);
+
+        bool? save = await _services.GetRequiredService<IDialogService>().ChooseAsync("Close this run?",
+            "This run is not saved yet. Save it, or throw your own registration away — either way the run ends here.",
+            "Save", "Discard");
+        if (save is null)
+            return false;
+
+        if (save.Value)
+        {
+            await SaveRunCommand.ExecuteAsync(null);
+            return RunState is ActivityRunState.Saved;   // a refused save keeps the window, with the reason on it
+        }
+
+        // This pilot's own row and nothing else. Announcing the end to the fleet hangs on CanControl and lives in
+        // DiscardRunAsync; throwing away your own registration is not that, so no FleetRunDiscardedEvent goes out.
+        using var scope = _services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new DiscardRunCommand(runId, DateTime.UtcNow));
+        return true;
     }
 
     /// <summary>
@@ -1544,7 +1673,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// is how this gap opened.
     ///
     /// START is deliberately not one of its callers: STOP is a pause, so pressing START again picks the same run
-    /// back up. Ending a run is SAVE or DISCARD, and only DISCARD comes back here — SAVE closes the window.
+    /// back up. Ending a run closes the window now — SAVE and DISCARD both do (ET-155) — so what is left here is the
+    /// one case where the window stays and the run does not: a copied site taking over from a run just closed out.
     ///
     /// Kept on purpose, and each for its own reason: the weather, the tier and the loot strategy, because you fly the
     /// same ones several runs in a row — which is what their settings keys exist for; the signature and its matched
@@ -1561,7 +1691,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         CorrectedStopUtc = null;
         TimeCorrectionError = null;
         RunState = ActivityRunState.NotStarted;
-        SaveFailureText = null;
+        RunNoticeText = null;
         // Otherwise a discarded manual run left the window refusing every later fleet anchor: the flag that makes a
         // stopped manual result final outlived the result it was final about.
         _isManualRun = false;

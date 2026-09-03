@@ -417,8 +417,11 @@ public sealed class FleetRunOfferToastTests
                 new RunGroupDiscard(FleetId, StoredActivityKind.Site, GroupCode, endedAt)));
             await _SettleAsync(() => window.GroupCode is null);
 
-            Assert.Equal(ActivityRunState.NotStarted, window.RunState);
+            // A member is the one this happened to, not the one who did it: the window stays and reads back what
+            // became of the run, rather than clearing itself into a fresh-looking one (ET-155).
+            Assert.Equal(ActivityRunState.Discarded, window.RunState);
             Assert.Null(window.GroupCode);
+            Assert.True(window.HasRunNotice);
         }
     }
 

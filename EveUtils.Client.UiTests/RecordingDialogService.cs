@@ -165,6 +165,21 @@ public sealed class RecordingDialogService : IDialogService
         ConfirmPrompts.Add((title, message));
         return OnConfirm is null ? throw NotUsed() : OnConfirm(title, message);
     }
+    /// <summary>Every three-way question asked, in order. Null answers cancel, which is the row a close test needs
+    /// to prove the window stays put.</summary>
+    public List<(string Title, string Message, string Primary, string Secondary)> ChoicePrompts { get; } = [];
+
+    /// <summary>What to answer: true = primary, false = secondary, null = cancel. Unset answers "discard" rather
+    /// than throwing: closing a window is teardown for most tests here, and a question refused would hang the close
+    /// on a run made of scratch data. A test that cares what the answer does sets this.</summary>
+    public Func<string, string, bool?>? OnChoose { get; set; }
+
+    public Task<bool?> ChooseAsync(string title, string message, string primaryText, string secondaryText)
+    {
+        ChoicePrompts.Add((title, message, primaryText, secondaryText));
+        return Task.FromResult(OnChoose is null ? false : OnChoose(title, message));
+    }
+
     public Task ShowCharacterAsync(CharacterDialogViewModel viewModel) => throw NotUsed();
     public Task<bool> ShowServerTrustAsync(string displayName, string address, string fingerprint, string statusLabel) => throw NotUsed();
     public void ShowFleets(FleetsViewModel viewModel) => throw NotUsed();

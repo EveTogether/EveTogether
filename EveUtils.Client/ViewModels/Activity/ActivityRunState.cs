@@ -10,5 +10,9 @@ public enum ActivityRunState
     Stopped,
 
     /// <summary>Committed. Nothing more can be added to it, so only START is left.</summary>
-    Saved
+    Saved,
+
+    /// <summary>The fleet commander threw the shared run away while this window was on it. A member's state only:
+    /// the commander's own window closes on its discard, so it is never left standing in this one (ET-155).</summary>
+    Discarded
 }

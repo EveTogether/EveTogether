@@ -306,7 +306,7 @@ public sealed class ActivityWindowCorrectionTests
 
         Assert.Equal(ActivityRunState.Saved, model.RunState);
         Assert.False(window.IsVisible);
-        Assert.Null(model.SaveFailureText);
+        Assert.Null(model.RunNoticeText);
     }
 
     /// <summary>The counterproof AC-3 asks for: make the save fail and the window is still standing, with the
@@ -334,12 +334,12 @@ public sealed class ActivityWindowCorrectionTests
 
         Assert.NotEqual(ActivityRunState.Saved, model.RunState);
         Assert.True(window.IsVisible);
-        Assert.True(model.HasSaveFailure);
-        Assert.False(string.IsNullOrWhiteSpace(model.SaveFailureText));
+        Assert.True(model.HasRunNotice);
+        Assert.False(string.IsNullOrWhiteSpace(model.RunNoticeText));
 
-        TextBlock reason = window.FindControl<TextBlock>("SaveFailureText")
-            ?? throw new InvalidOperationException("SaveFailureText was not rendered");
-        Assert.Equal(model.SaveFailureText, reason.Text);
+        TextBlock reason = window.FindControl<TextBlock>("RunNoticeText")
+            ?? throw new InvalidOperationException("RunNoticeText was not rendered");
+        Assert.Equal(model.RunNoticeText, reason.Text);
         window.Close();
     }
 
