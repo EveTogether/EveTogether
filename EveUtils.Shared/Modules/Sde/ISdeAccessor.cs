@@ -72,6 +72,14 @@ public interface ISdeAccessor
     /// SDE is unavailable.</summary>
     IReadOnlyList<SdeSite> SearchSites(string? nameQuery = null, int? archetypeId = null, int? factionId = null);
 
+    /// <summary>Exact-name site lookup across every SDE locale (ET-79 AC-4): a name copied from the scan window
+    /// carries whatever language the client runs in, and CCP translates dungeon names (unlike the signature id).
+    /// Matches the normalised name key against the English name and every locale alias. Multiple dungeons can share
+    /// a name (218 of 1014 English names do), so callers must not assume a single result and must not pick one.
+    /// Distinct from <see cref="SearchSites"/>, which is a substring search for a browser and has different needs.
+    /// Empty when the SDE is unavailable or <paramref name="name"/> is blank.</summary>
+    IReadOnlyList<SdeSite> FindSitesByExactName(string name);
+
     /// <summary>Release the store file (drop pooled connections + stop serving queries) so the importer can overwrite
     /// it during the atomic swap — on Windows an open/pooled handle blocks <c>File.Move</c>. Pair with <see cref="Reopen"/>.</summary>
     void Close();

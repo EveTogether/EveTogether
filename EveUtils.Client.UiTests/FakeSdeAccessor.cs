@@ -124,6 +124,13 @@ public sealed class FakeSdeAccessor : ISdeAccessor
             ? _sites
             : _sites.Where(s => s.Name.Contains(nameQuery, StringComparison.OrdinalIgnoreCase)).ToList();
 
+    // No locale-alias modelling here — a fixture site's Name is whatever the test gave it, and exact match against
+    // that is enough to exercise the toast/window callers without a real store.
+    public IReadOnlyList<SdeSite> FindSitesByExactName(string name) =>
+        string.IsNullOrWhiteSpace(name)
+            ? []
+            : _sites.Where(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)).ToList();
+
     public void Close() { }
     public void Reopen() { }
 

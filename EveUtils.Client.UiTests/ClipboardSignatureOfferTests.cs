@@ -22,16 +22,19 @@ public sealed class ClipboardSignatureOfferTests
     private const string MeasuredHomefrontLine =
         "IMM-760	Cosmic Anomaly	Homefront Operation Site - Combat Site	Suspicious Signal: Secure the Intel	100,0%	0,50 AU";
 
+    // ET-79 AC-4: the English-only fallback text is gone now that site names resolve across every SDE locale — a
+    // miss means the site is not in the catalogue (the expected case for Data Site, Relic Site and Wormhole), not
+    // that matching was limited to English.
     [AvaloniaFact]
-    public async Task UnmatchedSignatureName_StatesEnglishOnlyMatching_NotThatTheSiteIsMissing()
+    public async Task UnmatchedSignatureName_StatesTheSiteIsNotInTheCatalogue_NotAnEnglishOnlyLimitation()
     {
         using var env = await Env.StartAsync();
 
         env.Copy("KDC-304\tCosmic Signature\tCombat Site\tRuined Blood Raider Crystal Quarry\t100.0%\t2.71 AU");
 
         var message = Assert.Single(env.Toasts.ActionToasts).Message;
-        Assert.Contains("matched in English only", message);
-        Assert.DoesNotContain("not in the site catalogue", message);
+        Assert.Contains("not in the site catalogue", message);
+        Assert.DoesNotContain("English", message);
     }
 
     [AvaloniaFact]
@@ -274,17 +277,17 @@ public sealed class ClipboardSignatureOfferTests
         Assert.False(opened.HasShipRestriction);
     }
 
-    // The known limitation, pinned rather than assumed: the catalogue stores site names in English only, so the same
-    // site copied from a client in another language cannot be matched. The toast says that at the copy, where it is
-    // still actionable; the window that follows shows the site, not our matching trouble.
+    // A name the catalogue does not carry (here: a French name the fixture never registered) is a miss, not proof
+    // the site is missing — see the "not in the site catalogue" test above. The toast says that at the copy, where
+    // it is still actionable; the window that follows shows the site, not our matching trouble.
     [AvaloniaFact]
-    public async Task TheCatalogueIsMatchedByEnglishNameOnly_AndTheToastNamesThatAsTheReason()
+    public async Task SiteNameTheCatalogueDoesNotCarry_TheWindowShowsTheNameAndNothingAboutOurMatching()
     {
         using var env = await Env.StartAsync();
         env.Sde.AddSite(Site(1263, "Suspicious Signal: Secure the Intel", ded: 4));
 
         env.Copy("IMM-760	Cosmic Anomaly	Homefront Operation Site - Combat Site	Signal suspect : sécuriser les renseignements	100,0%	0,50 AU");
-        Assert.Contains("English", env.Toasts.ActionToasts[0].Message);
+        Assert.Contains("not in the site catalogue", env.Toasts.ActionToasts[0].Message);
 
         env.Toasts.ActionToasts[0].Actions[1].Run();
 

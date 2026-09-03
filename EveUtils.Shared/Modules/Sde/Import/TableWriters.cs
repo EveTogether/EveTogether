@@ -27,6 +27,7 @@ internal sealed partial class TableWriters
     private readonly SqliteCommand _fitRequirement;
     private readonly SqliteCommand _typeAlias;
     private readonly SqliteCommand _site;
+    private readonly SqliteCommand _siteAlias;
 
     private readonly Dictionary<long, string> _archetypeNames = [];
     private readonly Dictionary<long, string> _factionNames = [];
@@ -70,6 +71,9 @@ internal sealed partial class TableWriters
             "VALUES ($dungeonId, $nameEn, $archetypeId, $archetypeName, $factionId, $factionName, $description, $dedRating, $shipGroupIdsJson);",
             "$dungeonId", "$nameEn", "$archetypeId", "$archetypeName", "$factionId", "$factionName", "$description",
             "$dedRating", "$shipGroupIdsJson");
+        _siteAlias = Prepare(connection, transaction,
+            "INSERT INTO SiteNameAlias (dungeonId, nameKey, locale) VALUES ($dungeonId, $nameKey, $locale);",
+            "$dungeonId", "$nameKey", "$locale");
     }
 
     public void Insert(string dataset, JsonElement element)
@@ -250,9 +254,11 @@ internal sealed partial class TableWriters
         var description = StripHtml(EnName(e, "description"));
         var archetypeId = NullableInt(e, "archetypeID");
         var factionId = NullableInt(e, "factionID");
+        var dungeonId = Key(e);
+        var name = EnName(e, "name");
 
-        _site.Parameters["$dungeonId"].Value = Key(e);
-        _site.Parameters["$nameEn"].Value = EnName(e, "name");
+        _site.Parameters["$dungeonId"].Value = dungeonId;
+        _site.Parameters["$nameEn"].Value = name;
         _site.Parameters["$archetypeId"].Value = archetypeId;
         _site.Parameters["$archetypeName"].Value = Lookup(_archetypeNames, archetypeId);
         _site.Parameters["$factionId"].Value = factionId;
@@ -261,6 +267,31 @@ internal sealed partial class TableWriters
         _site.Parameters["$dedRating"].Value = DedRating(description);
         _site.Parameters["$shipGroupIdsJson"].Value = ShipGroupIdsJson(e);
         _site.ExecuteNonQuery();
+        _WriteSiteNameAliases(dungeonId, e);
+    }
+
+    // Unlike _WriteNameAliases (which skips "en" because Type carries its own persisted, .NET-normalised nameKey
+    // column), this writes every locale including English. Site has no nameKey column of its own, and SQLite's
+    // LOWER() is ASCII-only, so comparing a lookup key against nameEn in SQL would not agree with .NET's
+    // ToLowerInvariant() for the handful of English names that carry a non-ASCII character (measured: 4 of 1409
+    // dungeons, build 3492266, e.g. "Salvation Angel´s Shipment"). Routing every locale through this table keeps
+    // both sides of the comparison normalised the same way.
+    private void _WriteSiteNameAliases(long dungeonId, JsonElement e)
+    {
+        if (!e.TryGetProperty("name", out var nameObject) || nameObject.ValueKind != JsonValueKind.Object)
+            return;
+        foreach (var locale in nameObject.EnumerateObject())
+        {
+            if (locale.Value.ValueKind != JsonValueKind.String)
+                continue;
+            var localized = locale.Value.GetString();
+            if (string.IsNullOrWhiteSpace(localized))
+                continue;
+            _siteAlias.Parameters["$dungeonId"].Value = dungeonId;
+            _siteAlias.Parameters["$nameKey"].Value = SqliteSdeAccessor.NameKey(localized);
+            _siteAlias.Parameters["$locale"].Value = locale.Name;
+            _siteAlias.ExecuteNonQuery();
+        }
     }
 
     // NULL when the dungeon carries no allowedShipsList, a JSON array of InvGroup ids when it does. The array can be

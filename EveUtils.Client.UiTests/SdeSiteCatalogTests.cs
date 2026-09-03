@@ -171,9 +171,9 @@ public sealed class SdeSiteCatalogTests : IDisposable
     }
 
     [Fact]
-    public void SchemaVersion_IsFour_AndAnOlderStoreReadsAsUnavailable()
+    public void SchemaVersion_IsFive_AndAnOlderStoreReadsAsUnavailable()
     {
-        Assert.Equal(4, SdeSchema.SchemaVersion);
+        Assert.Equal(5, SdeSchema.SchemaVersion);
 
         // A store left behind by a v3 build has no Site table. The accessor must refuse it outright so
         // SdeImporter.CheckForUpdateAsync sees a null local version and offers the rebuild.
@@ -193,6 +193,16 @@ public sealed class SdeSiteCatalogTests : IDisposable
         Assert.False(sde.IsAvailable);
         Assert.Null(sde.Version);
         Assert.Empty(sde.SearchSites());
+    }
+
+    // ET-79 AC-4: a site name copied from a non-English client must resolve to the same dungeon as the English
+    // name. Tegenproef: drop the importer's alias writes (or query only nameEn) and this goes red.
+    [Fact]
+    public void FindSitesByExactName_MatchesEveryLocale_AndReturnsTheSameDungeonAsTheEnglishName()
+    {
+        Assert.Equal([43], Sde.FindSitesByExactName("Guristas Supply Depot").Select(s => s.DungeonId));
+        Assert.Equal([43], Sde.FindSitesByExactName("Guristas-Versorgungsdepot").Select(s => s.DungeonId));
+        Assert.Empty(Sde.FindSitesByExactName("Versorgungs"));  // exact, not a substring match
     }
 
     public void Dispose()

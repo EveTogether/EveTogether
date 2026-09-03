@@ -17,9 +17,10 @@ public static class SdeSchema
     /// Bumped whenever the table shape changes so a store built by an older app version is rebuilt on next launch
     /// (the build number alone would not change). v2 added <c>DogmaAttribute.maxAttributeId</c> (attribute capping);
     /// v3 added the <c>TypeNameAlias</c> table for locale-agnostic name import; v4 added the <c>Site</c> table
-    /// (the dungeon/site catalogue).
+    /// (the dungeon/site catalogue); v5 added the <c>SiteNameAlias</c> table so a site name copied from a
+    /// non-English client resolves too (ET-79 AC-4).
     /// </summary>
-    public const int SchemaVersion = 4;
+    public const int SchemaVersion = 5;
 
     /// <summary>Schema-creating statements, run before the bulk load.</summary>
     public static readonly string[] CreateTables =
@@ -109,7 +110,12 @@ public static class SdeSchema
             dedRating        INTEGER,
             shipGroupIdsJson TEXT
         ) WITHOUT ROWID;
-        """
+        """,
+        // Locale-agnostic name import for sites, same idea as TypeNameAlias but carrying English too (locale "en"):
+        // Site has no persisted nameKey column of its own, so the lookup goes through this table for every locale
+        // rather than mixing it with an ASCII-only SQL LOWER() over Site.nameEn — see TableWriters and
+        // SqliteSdeAccessor.FindSitesByExactName.
+        "CREATE TABLE SiteNameAlias (dungeonId INTEGER NOT NULL, nameKey TEXT NOT NULL, locale TEXT NOT NULL);"
     ];
 
     /// <summary>Index-creating statements, run after the bulk load.</summary>
@@ -118,6 +124,7 @@ public static class SdeSchema
         // The hot path: case-insensitive name -> typeId for EFT import (lowercased nameKey, O(log n)).
         "CREATE INDEX IX_Type_nameKey ON Type (nameKey);",
         "CREATE INDEX IX_TypeNameAlias_nameKey ON TypeNameAlias (nameKey);",
+        "CREATE INDEX IX_SiteNameAlias_nameKey ON SiteNameAlias (nameKey);",
         "CREATE INDEX IX_Type_groupId ON Type (groupId);",
         "CREATE INDEX IX_TypeDogmaAttribute_typeId ON TypeDogmaAttribute (typeId);",
         "CREATE INDEX IX_TypeDogmaEffect_typeId ON TypeDogmaEffect (typeId);",
