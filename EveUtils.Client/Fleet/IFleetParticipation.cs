@@ -13,10 +13,9 @@ public interface IFleetParticipation
     void Set(IReadOnlyList<FleetParticipant> participants);
 
     /// <summary>
-    /// Drops one pilot from one fleet, right now. The set is otherwise only ever rewritten by the fleet listing, which
-    /// reloads while the fleets window is open — so a pilot removed from a fleet kept being published for at 1 Hz
-    /// until that window happened to sweep, and with it closed, indefinitely. Those samples put the pilot's card
-    /// straight back on the fleet-metrics screen the FC had just cleared them from (ET-49).
+    /// Drops one pilot from one fleet, right now, rather than at the mercy of the next sweep. Removal is news that
+    /// has already happened, and a sample sent in the meantime puts the pilot's card straight back on the
+    /// fleet-metrics screen the FC had just cleared them from (ET-49).
     /// </summary>
     void Remove(long fleetId, int characterId);
 }

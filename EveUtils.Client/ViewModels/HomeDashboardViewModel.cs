@@ -320,9 +320,11 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
 
         // This card runs on startup and on every fleet.changed, which makes it the one sweep a pilot gets without
         // opening anything. Refreshing membership here is what gives a run window its fleet on a client whose fleets
-        // window was never opened (ET-152).
+        // window was never opened (ET-152). Best-effort like every other source on this card: it is called
+        // fire-and-forget, so anything thrown here would be an unobserved task exception nobody ever sees.
         if (_participationRefresher is not null)
-            await _participationRefresher.RefreshAsync();
+            try { await _participationRefresher.RefreshAsync(); }
+            catch { /* membership keeps its last good set rather than failing the home */ }
     }
 
     private async Task LoadFitsAsync()

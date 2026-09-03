@@ -212,6 +212,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     [ObservableProperty] private string? _groupCode;
 
+    // The group code is what makes a run shared, so the verdict has to be redone when it arrives. It arrives after
+    // the constructor: FleetRunWindowPresenter sets it through an object initializer, which runs once the window has
+    // already worked out an authority for a run it then still read as its own.
+    partial void OnGroupCodeChanged(string? value) => _ = RefreshFleetCommandAsync(DateTime.UtcNow);
+
     [ObservableProperty] private DateTime? _stoppedAtUtc;
 
     [ObservableProperty]
@@ -1079,9 +1084,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 GroupCode: GroupCode,
                 Signature: SignatureId,
                 FleetId: FleetId,
-                // The one thing that turns a site start into a shared run. Not Authority.CanControl on its own: a
-                // solo pilot commands their own run too, and only a fleet has a commander to be (ET-147).
-                IsFleetCommander: FleetId is not null && Authority.CanControl,
+                // The one thing that turns a site start into a shared run. Not CanControl: a member steering their
+                // own run may control it without commanding anybody, and answering "am I the boss" is the
+                // authority's own job rather than something reassembled here (ET-147, ET-152).
+                IsFleetCommander: Authority.IsFleetCommander,
                 SolarSystemName: SolarSystem));
         if (!started.IsSuccess)
         {
@@ -1176,25 +1182,27 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <summary>
     /// Re-test who may steer this run against the fleet boss ESI reports right now. Called whenever the roster or
     /// the boss changes, not once at start: a handover mid-run moves the controls to the new FC and takes them off
-    /// the old one, and that is an ordinary state change (ET-105). <paramref name="fleetBossCharacterId"/> null
-    /// means ESI cannot say — the controls go away and say why, rather than appearing for everybody.
+    /// the old one, and that is an ordinary state change (ET-105). <paramref name="fleetCommanderCharacterId"/> null
+    /// means the roster could not say — the controls go away and say why, rather than appearing for everybody.
     /// Whether the run is shared at all is the run's own <see cref="GroupCode"/>, not <paramref name="fleetId"/>:
     /// this client having no ET fleet active is not the same thing as flying alone (ET-135).
     /// </summary>
-    public void ApplyFleetCommand(long? fleetId, int? fleetBossCharacterId, int? actingCharacterId)
+    public void ApplyFleetCommand(long? fleetId, int? fleetCommanderCharacterId, int? actingCharacterId)
     {
         FleetId = fleetId;
-        Authority = RunControlAuthority.From(fleetId, fleetBossCharacterId, actingCharacterId, GroupCode);
+        Authority = RunControlAuthority.From(fleetId, fleetCommanderCharacterId, actingCharacterId, GroupCode);
     }
 
     /// <summary>
-    /// Where the two halves of that question come from. The fleet is the one this client is participating in —
-    /// what the run is filed under and what a discard fans out over. The boss is whoever ESI reports commands it at
-    /// this moment, via <see cref="FleetBossTracker"/>; null when ESI cannot say, which lands on
-    /// <see cref="RunControlAuthorityLevel.Unknown"/> and says so on screen rather than handing a destructive button
-    /// to everybody. Run on the tick, like the location is, so a handover moves the controls on its own.
+    /// Where the two halves of that question come from, and both now out of the same membership set. The fleet is
+    /// the one this client is participating in — what the run is filed under and what a discard fans out over — and
+    /// the commander is whoever holds that role on its ET roster, null when the roster could not be read.
+    ///
+    /// It used to ask ESI for the in-game fleet boss, which only answers for a coupled fleet: an ordinary ET fleet
+    /// never produced one, so its commander was told his own controls were hidden because nobody knew who he was
+    /// (ET-152). Nothing is awaited here any more, so the answer is on screen the moment the window opens.
     /// </summary>
-    public async Task RefreshFleetCommandAsync(DateTime nowUtc)
+    public Task RefreshFleetCommandAsync(DateTime nowUtc)
     {
         long? fleetId = _ActingFleetId();
         // The same character the rest of the window works from. It used to fall back to IActiveFleetState, which
@@ -1202,25 +1210,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // different toon than that row's acting one was compared against his own fleet's boss id and told only the
         // FC may start or stop (Jithran, 2026-09-02). The boss is looked up for this same character, so both sides
         // of the comparison are now one pilot.
-        int? actingCharacterId = _ActingCharacterId();
-        // A run that is nobody else's is settled without a boss — the same condition From answers without looking at
-        // one. So it must not wait for a read either: since the authority starts at Unknown, waiting is a solo pilot
-        // sitting without buttons for the length of an ESI round trip, which is ET-150 turned the other way up.
-        if (fleetId is null && GroupCode is null)
-        {
-            ApplyFleetCommand(null, null, actingCharacterId);
-            return;
-        }
-
-        if (actingCharacterId is not { } characterId || _services.GetService<FleetBossTracker>() is not { } bosses)
-        {
-            ApplyFleetCommand(fleetId, null, actingCharacterId);
-            return;
-        }
-
-        await bosses.RefreshAsync(characterId, nowUtc);
-        ApplyFleetCommand(fleetId, bosses.BossOf(characterId), characterId);
+        ApplyFleetCommand(fleetId, _CommanderOf(fleetId), _ActingCharacterId());
+        return Task.CompletedTask;
     }
+
+    /// <summary>Who commands <paramref name="fleetId"/> on its ET roster, as the last membership sweep read it.
+    /// Null when there is no fleet or the sweep could not say.</summary>
+    private int? _CommanderOf(long? fleetId) =>
+        fleetId is { } id
+            ? _Participation().FirstOrDefault(participant => participant.FleetId == id).FleetCommanderCharacterId
+            : null;
 
     /// <summary>
     /// Take a character out of the ISK split, or put them back in. Never touches their participation: they flew the

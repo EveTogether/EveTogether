@@ -162,6 +162,15 @@ taken from the matching `## vX.Y.Z` section below.
   membership is refreshed when the app starts instead of only while the fleets window is open — so starting the
   client while already in a fleet is enough. A pilot who really is flying alone keeps every button and still
   announces nothing.
+- **The fleet commander gets the run controls again, also without an in-game fleet.** Who commands a fleet was read
+  from EVE itself, and EVE only answers that for a fleet you have actually formed in the game. An ordinary EVE
+  Together fleet has no such link, so the answer never came — and the run window told the commander his controls were
+  hidden because nobody knew who was in charge, two lines under a header naming him. It now reads the FC from the
+  fleet's own roster, which is where you appoint one. If EVE Together and an in-game fleet disagree about who leads,
+  EVE Together's roster is what counts.
+- **A run of your own stays yours, even in a fleet somebody else leads.** Start, stop and discard were withheld from
+  anyone who was not the FC, including for a run that was never shared with the fleet and that reaches nobody else's
+  screen. Those runs keep all their buttons; only a run that carries a group code is the commander's to steer.
 - **A fit you rename now carries its new name everywhere.** The name you type in *Edit fit details* was stored
   correctly, but the card in the fit browser and the header of the fit detail window both went on reading the name
   out of the fit's original import data — so the old name kept coming back. Both now show the name you gave it, and
