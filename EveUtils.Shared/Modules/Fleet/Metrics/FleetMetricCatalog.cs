@@ -19,6 +19,7 @@ public static class FleetMetricCatalog
         [MetricKind.NeutIn] = new(MetricKind.NeutIn, MetricSemantics.Rate, Aggregatable: true, Unit: "GJ/s"),
         [MetricKind.MiningLedger] = new(MetricKind.MiningLedger, MetricSemantics.Cumulative, Aggregatable: true, Unit: "m3"),
         [MetricKind.Presence] = new(MetricKind.Presence, MetricSemantics.State, Aggregatable: false, Unit: string.Empty),
+        [MetricKind.Loot] = new(MetricKind.Loot, MetricSemantics.Cumulative, Aggregatable: true, Unit: "ISK"),
     };
 
     /// <summary>The descriptor for a kind; an unknown kind degrades to a non-aggregatable State descriptor.</summary>

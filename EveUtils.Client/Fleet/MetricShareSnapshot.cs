@@ -13,8 +13,11 @@ namespace EveUtils.Client.Fleet;
 /// </summary>
 public sealed class MetricShareSnapshot(IReadOnlyDictionary<string, string> values)
 {
-    /// <summary>Personal metrics that are opt-IN (off until explicitly enabled): location (privacy) and bounty (ISK).</summary>
-    public static bool IsOptIn(MetricKind kind) => kind is MetricKind.Location or MetricKind.Bounty;
+    /// <summary>Personal metrics that are opt-IN (off until explicitly enabled): location (privacy) and what a pilot
+    /// made — bounty and loot. A new kind inherits "shared", so ISK has to be named here or it goes out by
+    /// default, which is the opposite of how this client already treats the bounty figure beside it.</summary>
+    public static bool IsOptIn(MetricKind kind) =>
+        kind is MetricKind.Location or MetricKind.Bounty or MetricKind.Loot;
 
     /// <summary>The global default for a metric kind (the baseline for all fleets/characters).</summary>
     public bool IsShared(MetricKind kind)

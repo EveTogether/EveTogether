@@ -106,6 +106,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     // sample rather than over whichever one happened to arrive last.
     private readonly Dictionary<int, MetricSample> _fleetLocations = [];
 
+    // What each member last said their run had made. Separate from the locations because loot, bounty and location
+    // are three separate opt-ins: the common member shares one of them and not the others.
+    private readonly Dictionary<int, (decimal? Loot, decimal? Bounty)> _fleetIsk = [];
+
     private DispatcherTimer? _timer;
     private bool _isManualRun;
     private int? _runCharacterId;
@@ -501,8 +505,31 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// names in a fleet of three is a lie unless it says what it is a list of.
     /// </summary>
     public string FleetBasisText => FleetMembers.Count == 0
-        ? "No member has shared a location yet, so there is nobody to list."
-        : "Counted from shared locations. A member not sharing theirs is in the fleet but not in this list.";
+        ? "No member has shared anything yet, so there is nobody to list."
+        : "Counted from what members share. A member sharing nothing is in the fleet but not in this list.";
+
+    /// <summary>
+    /// What the rows above add up to, and only them. That is why it stands between the names and
+    /// <see cref="FleetBasisText"/>: a total that covered more than the rows it sits under would need explaining,
+    /// and the caption below is already the line that says the fleet may be larger than this list. A member sharing
+    /// neither figure is in neither the rows nor the sum, which is the same rule in both places.
+    ///
+    /// Never a zero for a figure nobody offered — the two halves are counted apart, so a fleet sharing bounty and no
+    /// loot says exactly that rather than reporting nothing looted.
+    /// </summary>
+    public string FleetTotalText => (_FleetSum(row => row.LootIsk), _FleetSum(row => row.BountyIsk)) switch
+    {
+        (null, null) => "no member is sharing loot or bounty",
+        ({ } loot, null) => $"loot {ActivityFleetMemberViewModel.Isk(loot)} · bounty not shared",
+        (null, { } bounty) => $"loot not shared · bounty {ActivityFleetMemberViewModel.Isk(bounty)}",
+        ({ } loot, { } bounty) =>
+            $"loot {ActivityFleetMemberViewModel.Isk(loot)} · bounty {ActivityFleetMemberViewModel.Isk(bounty)}"
+    };
+
+    public bool IsFleetTotalShown => FleetMembers.Count > 0;
+
+    private decimal? _FleetSum(Func<ActivityFleetMemberViewModel, decimal?> figure) =>
+        FleetMembers.Select(figure).OfType<decimal>().ToList() is { Count: > 0 } shared ? shared.Sum() : null;
 
     /// <summary>
     /// Whether there is a fleet to show at all. Nothing here may claim "solo": the window is never told the pilot
@@ -511,7 +538,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// collapsed but gone, because an empty FLEET section reads as a measurement and it is not one.
     /// </summary>
     public bool IsFleetShown =>
-        FleetId is not null || _fleetLocations.Count > 0 || Participants.Count > 0 || FleetMembers.Count > 0;
+        FleetId is not null || _fleetLocations.Count > 0 || _fleetIsk.Count > 0 || Participants.Count > 0
+        || FleetMembers.Count > 0;
 
     public string RunOriginText => RunState == ActivityRunState.NotStarted
         ? "not started"
@@ -1052,6 +1080,25 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _ = RefreshFleetCommandAsync(nowUtc);
         _ = RefreshFitAsync();
         _ = _RefreshActingCharacterAsync();
+        _ShareRunLootWithFleet();
+    }
+
+    /// <summary>
+    /// Offer what this run has looted to the fleet. Clock-driven like the rest of the window, and it only ever hands
+    /// the figure to the metric source: what leaves the machine is the publisher's share gate, where loot is opt-IN,
+    /// so nothing here decides who may see a pilot's ISK.
+    ///
+    /// The figure is <see cref="RunLootViewModel.NetIsk"/> — the same one the LOOT section shows, priced from the
+    /// market cache by type id — so nothing is valued twice and the fleet sees what the pilot sees. Bounty needs no
+    /// counterpart here: the gamelog has been putting it on this stream per fleet run all along.
+    /// </summary>
+    private void _ShareRunLootWithFleet()
+    {
+        if (_ActingCharacterId() is not { } characterId
+            || _services.GetService<RunLootMetricSource>() is not { } source)
+            return;
+
+        source.SetLootIsk(characterId, RunState is ActivityRunState.NotStarted ? null : RunLoot?.NetIsk);
     }
 
     [RelayCommand]
@@ -1552,7 +1599,24 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private void _OnFleetMetric(FleetMetricEvent integrationEvent)
     {
         MetricSample sample = integrationEvent.Data;
-        if (sample.Kind != MetricKind.Location || (FleetId is { } fleetId && sample.FleetId != fleetId))
+        if (FleetId is { } fleetId && sample.FleetId != fleetId)
+            return;
+
+        if (sample.Kind is MetricKind.Loot or MetricKind.Bounty)
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                (decimal? Loot, decimal? Bounty) held = _fleetIsk.GetValueOrDefault(sample.CharacterId);
+                _fleetIsk[sample.CharacterId] = sample.Kind == MetricKind.Loot
+                    ? held with { Loot = (decimal)sample.Value }
+                    : held with { Bounty = (decimal)sample.Value };
+                OnPropertyChanged(nameof(IsFleetShown));
+                ApplyFleetEnvelope([.. _fleetLocations.Values], DateTime.UtcNow);
+            });
+            return;
+        }
+
+        if (sample.Kind != MetricKind.Location)
             return;
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -1609,27 +1673,43 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// </summary>
     private void _SyncFleetMembers(IReadOnlyList<MetricSample> members)
     {
-        foreach (MetricSample sample in members)
-        {
-            ActivityFleetMemberViewModel? row = FleetMembers.FirstOrDefault(m => m.CharacterId == sample.CharacterId);
-            if (row is null)
-            {
-                row = new ActivityFleetMemberViewModel(sample.CharacterId);
-                FleetMembers.Add(row);
-                _ = _ResolveFleetMemberNameAsync(row);
-            }
+        foreach (int characterId in members.Select(sample => sample.CharacterId).Concat(_fleetIsk.Keys).Distinct())
+            _RowFor(characterId);
 
-            row.LocationText = sample.AbyssalAnchorMs > 0
+        foreach (MetricSample sample in members)
+            _RowFor(sample.CharacterId).LocationText = sample.AbyssalAnchorMs > 0
                 ? "in abyssal space"
                 : sample.Text ?? "not sharing a system";
+
+        foreach (ActivityFleetMemberViewModel row in FleetMembers)
+        {
+            (decimal? Loot, decimal? Bounty) figures = _fleetIsk.GetValueOrDefault(row.CharacterId);
+            row.LootIsk = figures.Loot;
+            row.BountyIsk = figures.Bounty;
         }
 
         foreach (ActivityFleetMemberViewModel gone in FleetMembers
-                     .Where(row => members.All(sample => sample.CharacterId != row.CharacterId)).ToList())
+                     .Where(row => members.All(sample => sample.CharacterId != row.CharacterId)
+                                   && !_fleetIsk.ContainsKey(row.CharacterId)).ToList())
             FleetMembers.Remove(gone);
 
         OnPropertyChanged(nameof(IsFleetShown));
         OnPropertyChanged(nameof(FleetBasisText));
+        OnPropertyChanged(nameof(FleetTotalText));
+        OnPropertyChanged(nameof(IsFleetTotalShown));
+    }
+
+    /// <summary>The row for a member, made on first sight. A name public ESI has already resolved is not thrown away
+    /// and asked for again every second, which is why rows are kept and updated rather than rebuilt.</summary>
+    private ActivityFleetMemberViewModel _RowFor(int characterId)
+    {
+        if (FleetMembers.FirstOrDefault(row => row.CharacterId == characterId) is { } existing)
+            return existing;
+
+        ActivityFleetMemberViewModel row = new(characterId);
+        FleetMembers.Add(row);
+        _ = _ResolveFleetMemberNameAsync(row);
+        return row;
     }
 
     /// <summary>Best-effort: an unresolved id keeps its "Char 90000001" label, which is still a member you can
