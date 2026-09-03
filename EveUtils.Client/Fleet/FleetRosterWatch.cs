@@ -14,10 +14,11 @@ namespace EveUtils.Client.Fleet;
 /// <list type="number">
 /// <item>the server's <c>fleet.changed</c> is folded into the same stream, so a screen subscribes once and gets a
 /// roster change whether it came from this client or another one;</item>
-/// <item>a removed pilot is dropped from <see cref="IFleetParticipation"/> here. That set is otherwise only ever
-/// rewritten wholesale by the fleets listing, which sweeps while its window is open and never while it is closed
-/// (ET-49) — so "stop publishing for a pilot who is out of the fleet" is a property of the removal, not of the
-/// screen that happened to perform it, and belongs with the announcement rather than in one caller.</item>
+/// <item>a removed pilot is dropped from <see cref="IFleetParticipation"/> here. <see cref="FleetParticipationRefresher"/>
+/// rewrites that set wholesale on its own sweeps, but a sweep is a question asked later while a removal is news that
+/// has already happened (ET-49) — so "stop publishing for a pilot who is out of the fleet" is a property of the
+/// removal, not of the screen that happened to perform it, and belongs with the announcement rather than in one
+/// caller.</item>
 /// </list>
 ///
 /// Handlers are invoked on the UI thread because every subscriber is a view-model that touches bound collections;

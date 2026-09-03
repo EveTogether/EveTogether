@@ -10,11 +10,15 @@ using EveUtils.Shared.DependencyInjection;
 namespace EveUtils.Client.Fleet;
 
 /// <summary>
-/// Drives the ~1 Hz fleet activity stream. While the client is participating in a fleet
-/// (<see cref="IActiveFleetState"/>), each tick polls every <see cref="IFleetMetricSource"/> for the active
-/// scope and publishes each sample as a <see cref="FleetMetricEvent"/>: the local UI always graphs it, and — when
-/// the share-gate allows it — the server reroutes it, fleet-scoped, to the fleet's other active participants.
-/// When not participating the tick is a no-op, so nothing leaks to a fleet the user has left.
+/// Drives the ~1 Hz fleet activity stream. For every (character, fleet) in <see cref="IFleetParticipation"/>,
+/// each tick polls every <see cref="IFleetMetricSource"/> for that scope and publishes each sample as a
+/// <see cref="FleetMetricEvent"/>: the local UI always graphs it, and — when the share-gate allows it — the server
+/// reroutes it, fleet-scoped, to the fleet's other active participants. With an empty set the tick is a no-op, so
+/// nothing leaks to a fleet the user has left.
+///
+/// Membership is the gate, not an explicit enter: this read <c>IActiveFleetState</c> until the server dropped the
+/// same Enter-driven model (<c>FleetBroadcastResolver</c>), and the doc said so for a while after the code stopped
+/// doing it — which is how ET-152 came to be written against a publisher that had already moved.
 ///
 /// The client has no generic host, so <see cref="Start"/>/<see cref="StopAsync"/> own the loop manually (like
 /// <c>ClientTokenRefreshService</c>). The unit of work, <see cref="PublishTickAsync"/>, is public and

@@ -547,8 +547,11 @@ public class ActivityWindowTests
     [InlineData(ActivityRunState.Stopped)]
     public void WithoutTheCommand_TheThreeSharedControlsGoAway_AndSayWhy(ActivityRunState state)
     {
+        // A shared run — a group code is what makes it one, and only a shared run has a commander to be denied by
+        // (ET-152). Without it these three belong to the pilot in front of them.
         var denied = _InState(state);
-        denied.ApplyFleetCommand(fleetId: 7, fleetBossCharacterId: 1, actingCharacterId: 2);
+        denied.GroupCode = "HF-7Q2";
+        denied.ApplyFleetCommand(fleetId: 7, fleetCommanderCharacterId: 1, actingCharacterId: 2);
 
         Assert.False(denied.IsStartButtonVisible);
         Assert.False(denied.IsStopButtonVisible);
@@ -560,7 +563,8 @@ public class ActivityWindowTests
         Assert.Equal(state == ActivityRunState.Stopped, denied.IsSaveButtonVisible);
 
         var unknown = _InState(state);
-        unknown.ApplyFleetCommand(fleetId: 7, fleetBossCharacterId: null, actingCharacterId: 2);
+        unknown.GroupCode = "HF-7Q2";
+        unknown.ApplyFleetCommand(fleetId: 7, fleetCommanderCharacterId: null, actingCharacterId: 2);
 
         Assert.False(unknown.IsStartButtonVisible);
         Assert.False(unknown.IsStopButtonVisible);

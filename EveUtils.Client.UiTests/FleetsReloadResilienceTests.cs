@@ -27,7 +27,10 @@ public class FleetsReloadResilienceTests
     public async Task TransientTransportFailure_KeepsCurrentFleets_AndReportsIt()
     {
         var transport = new RecordingFleetTransportClient();
-        transport.MyFleetsByServer[Server] = [Fleet(11, "Alpha Op", Char, FleetVisibility.InviteOnly)];
+        // Started, not merely forming: only a started fleet is in the publish set, which is what the blip must not
+        // take away.
+        transport.MyFleetsByServer[Server] =
+            [Fleet(11, "Alpha Op", Char, FleetVisibility.InviteOnly, FleetActivation.Active)];
 
         using var instance = TestClientInstance.Create(services =>
         {
@@ -51,6 +54,11 @@ public class FleetsReloadResilienceTests
         var group = Assert.Single(vm.ServerGroups);
         Assert.Equal("Alpha Op", Assert.Single(group.Fleets).Name);
         Assert.Contains("Could not reach", vm.StatusMessage);
+
+        // ET-152: membership survives the same blip the rows do. Answer a failed read with silence and the fleet id
+        // comes off the run window and the commander stops publishing — this ticket's own failure, by another road.
+        IFleetParticipation participation = instance.Services.GetRequiredService<IFleetParticipation>();
+        Assert.Equal(11, Assert.Single(participation.Current).FleetId);
 
         // Recovery: once the server is reachable again, a Refresh repopulates normally.
         transport.UnreachableServers.Remove(Server);
@@ -94,6 +102,8 @@ public class FleetsReloadResilienceTests
         Assert.Equal(Down, Assert.Single(vm.UnreachableServers).ServerAddress);
     }
 
-    private static FleetInfo Fleet(long id, string name, int creator, FleetVisibility visibility) =>
-        new(id, name, null, visibility, FleetState.Active, creator, null, null, DateTimeOffset.UnixEpoch, FleetActivation.Forming);
+    private static FleetInfo Fleet(
+        long id, string name, int creator, FleetVisibility visibility,
+        FleetActivation activation = FleetActivation.Forming) =>
+        new(id, name, null, visibility, FleetState.Active, creator, null, null, DateTimeOffset.UnixEpoch, activation);
 }
