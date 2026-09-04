@@ -12,8 +12,8 @@ namespace EveUtils.Client.Views;
 /// <summary>
 /// Moving one of my own pilots from the fleet it counts for into another one (ET-168, scherm 7). In the code this
 /// is two acts — leave, then couple — and coupling while still active elsewhere is refused outright. This screen
-/// makes one button of it, and shows the two steps rather than hiding them, so that what the button does is the
-/// thing that was read.
+/// makes one button of it, and numbers what that button does, so that what happens is the thing that was read. It
+/// says nothing about the two acts being two: that is how it is built, not something the pilot is choosing between.
 ///
 /// <para>Only ever one of my own characters: a commander asks other people to switch, and moves their own alt
 /// because it is their character, not because they command the fleet. Returns true when the pilot goes.</para>
@@ -48,11 +48,6 @@ public partial class SwitchFleetWindow : ChromedWindow
             : $"That fleet keeps running for everyone else; only this pilot is no longer a member of it. If you meant to stay on its roster for next time, this is not what you want.";
         this.FindControl<TextBlock>("StepTwoHead")!.Text = $"2 · You link to {prompt.TargetFleetName}.";
 
-        this.FindControl<TextBlock>("TwoStepsNote")!.Text =
-            "In the code these are two steps — leaving, then coupling — and coupling while you are still active elsewhere "
-            + "is refused with “leave or conclude it before joining another”. This button does both, in that order, "
-            + "and stops before the first one if the second could not have worked.";
-
         foreach (var run in prompt.RunsInProgress)
             RunsInProgress.Add(run);
 
@@ -64,6 +59,7 @@ public partial class SwitchFleetWindow : ChromedWindow
                 string.Create(CultureInfo.InvariantCulture, $"{RunsInProgress.Count} still running");
             this.FindControl<StackPanel>("RunsBlock")!.IsVisible = true;
             this.FindControl<TextBlock>("RunsBlockLabel")!.Text = $"THE {noun.ToUpperInvariant()} STILL GOING";
+            this.FindControl<Border>("StepThree")!.IsVisible = true;
         }
 
         // The footer says the consequence that is easiest to miss: a switch takes you off the roster you leave, and

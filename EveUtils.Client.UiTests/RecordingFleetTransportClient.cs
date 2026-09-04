@@ -57,8 +57,11 @@ public sealed class RecordingFleetTransportClient : IFleetTransportClient
 
     // --- The rest of the surface is unused by these tests; provide harmless defaults. ---
 
+    /// <summary>Single fleets a test staged, for the paths that read one header rather than a list.</summary>
+    public Dictionary<long, FleetInfo> FleetsById { get; } = new();
+
     public Task<FleetInfo?> GetFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
-        Task.FromResult<FleetInfo?>(null);
+        Task.FromResult(FleetsById.TryGetValue(fleetId, out var fleet) ? fleet : null);
 
     public Task<(bool Ok, string Message, long FleetId)> CreateFleetAsync(
         string serverAddress, string name, string? description, FleetVisibility visibility,
@@ -166,10 +169,14 @@ public sealed class RecordingFleetTransportClient : IFleetTransportClient
 
     public Task<(bool Ok, string Message)> RespondToInviteAsync(string serverAddress, long inviteId, bool accept, int actingCharacterId = 0, CancellationToken cancellationToken = default) => Accepted();
 
+    /// <summary>What answering a message comes back with; a test sets a refusal to drive the path where the server
+    /// turns an accept down — which is where the offer to switch instead lives (ET-168).</summary>
+    public (bool Ok, string Message) RespondToMessageResult { get; set; } = (true, string.Empty);
+
     public Task<(bool Ok, string Message)> RespondToMessageAsync(string serverAddress, long messageId, bool accept, int actingCharacterId = 0, CancellationToken cancellationToken = default)
     {
         RespondToMessageCalls.Add((serverAddress, messageId, accept, actingCharacterId));
-        return Accepted();
+        return Task.FromResult(RespondToMessageResult);
     }
 
     public Task<(bool Ok, string Message, long InviteId)> CreateInviteAsync(
@@ -236,8 +243,11 @@ public sealed class RecordingFleetTransportClient : IFleetTransportClient
         return Accepted();
     }
 
+    /// <summary>The invites a character is holding, per server.</summary>
+    public Dictionary<string, IReadOnlyList<FleetInviteInfo>> PendingInvitesByServer { get; } = new();
+
     public Task<IReadOnlyList<FleetInviteInfo>> ListPendingInvitesAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
-        Task.FromResult(EmptyList<FleetInviteInfo>());
+        Task.FromResult(PendingInvitesByServer.TryGetValue(serverAddress, out var invites) ? invites : EmptyList<FleetInviteInfo>());
 
     public Task<IReadOnlyList<FleetInviteInfo>> ListPendingFleetInvitesAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
         Task.FromResult(EmptyList<FleetInviteInfo>());

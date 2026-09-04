@@ -14,6 +14,11 @@
          and anything left on the window stays behind (ET-42). This dialog is modal and never docked, but the rule is
          cheap to keep and expensive to notice the one time a screen starts being routed. -->
     <DockPanel Margin="16">
+        <DockPanel.Resources>
+            <!-- The theme has no warn brush of its own; this is the ink Border.chip.warn uses, and the same value
+                 the fleet overview declares, so the collision reads amber in exactly one shade across screens. -->
+            <SolidColorBrush x:Key="WarnBrush" Color="#FFE0B341"/>
+        </DockPanel.Resources>
         <DockPanel.Styles>
             <!-- The mockup's `okline`: a bordered block of prose that says what an act does. -->
             <Style Selector="Border.okline">
@@ -154,7 +159,7 @@
 
                 <!-- The collision. One line, one button, whatever the count — scherm 2, besluit 4. -->
                 <StackPanel Spacing="5" x:Name="CollisionBlock" IsVisible="False">
-                    <TextBlock Text="ACTIVE ELSEWHERE &#x2014; ONE LINE, ONE BUTTON" Classes="label" FontSize="9"/>
+                    <TextBlock Text="ACTIVE ELSEWHERE" Classes="label" FontSize="9"/>
                     <Border Classes="collide">
                         <StackPanel Spacing="6">
                             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -170,8 +175,10 @@
                                 <Button x:Name="AskButton" Classes="pick" Content="ask them all to switch" Click="OnAskThemAll"/>
                                 <Button x:Name="LeaveButton" Classes="pick on" Content="leave them" Click="OnLeaveThem"/>
                             </StackPanel>
+                            <!-- A signpost, not a justification: where the per-member choice lives. Why the dialog
+                                 has no per-member choice of its own belongs in the PR, not on the screen. -->
                             <TextBlock Classes="hint" Margin="0"
-                                       Text="One of them or fifty: the same line and the same button. Nothing is decided per member here, because starting must not be held up by it. Per member you decide on the member row in the overview and in fleet management."/>
+                                       Text="To handle one of them on their own, use the member row in the overview or fleet management."/>
                         </StackPanel>
                     </Border>
                 </StackPanel>

@@ -13,6 +13,11 @@
     <!-- Styles on the content root, never on the window (ET-42): ModuleHostService lifts Content out to dock a
          module and anything left on the window stays behind. -->
     <DockPanel Margin="16">
+        <DockPanel.Resources>
+            <!-- The theme has no warn brush of its own; this is the ink Border.chip.warn uses, and the same value
+                 the fleet overview declares, so the collision reads amber in exactly one shade across screens. -->
+            <SolidColorBrush x:Key="WarnBrush" Color="#FFE0B341"/>
+        </DockPanel.Resources>
         <DockPanel.Styles>
             <Style Selector="TextBlock.kvlabel">
                 <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
@@ -117,10 +122,12 @@
                             <TextBlock Text="From that moment this character shares its location and its measurements there, and an activity you start points at that fleet."/>
                         </StackPanel>
                     </Border>
-                    <Border Classes="okline">
+                    <!-- Only when something is actually running: with no run going this step is a reassurance
+                         about nothing, and it pushes the two that matter up the screen. -->
+                    <Border Classes="okline" x:Name="StepThree" IsVisible="False">
                         <StackPanel Spacing="3">
-                            <TextBlock Classes="step" Text="3 · A run you have going keeps going."/>
-                            <TextBlock Text="It keeps the fleet group it was given at the start and is saved as usual — switching only touches what begins after it. The same rule as stopping a fleet: bookkeeping does not throw away a measurement that is under way."/>
+                            <TextBlock Classes="step" Text="3 · Your run keeps going."/>
+                            <TextBlock Text="It keeps the fleet group it was given at the start and is saved as usual — switching only touches what begins after it."/>
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -139,13 +146,6 @@
                         </ItemsControl>
                     </Border>
                 </StackPanel>
-
-                <Border Classes="collide">
-                    <StackPanel Spacing="4">
-                        <TextBlock Classes="head" Text="One thing to know."/>
-                        <TextBlock Classes="body" x:Name="TwoStepsNote" Text=""/>
-                    </StackPanel>
-                </Border>
 
             </StackPanel>
         </ScrollViewer>
