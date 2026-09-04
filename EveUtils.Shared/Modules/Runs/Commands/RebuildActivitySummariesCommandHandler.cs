@@ -56,9 +56,10 @@ internal sealed class RebuildActivitySummariesCommandHandler(
             .ToList();
         decimal? gained = _KnownLootValue(loot, LootKind.Gained, prices);
         decimal? lost = _KnownLootValue(loot, LootKind.Lost, prices);
+        // Runs, for the PayoutEligibleCount column: how many eligible runs the activity holds.
         int payoutEligibleCount = runs.Count(run => run.IsPayoutEligible);
-        // Runs, not characters: ET-130 allows one character to hold more than one payout-eligible run in the same
-        // activity, and dividing by runs there would halve everybody's share without anyone noticing.
+        // Distinct characters, for the expected payout: they differ because ET-130 lets one character hold more than
+        // one eligible run in the same activity, and dividing by runs there would shrink everybody's share.
         int payoutEligibleCharacterCount = runs.Where(run => run.IsPayoutEligible)
             .Select(run => run.CharacterId).Distinct().Count();
 

@@ -11,6 +11,8 @@ using EveUtils.Client.Notifications;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Market.Entities;
+using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -370,11 +372,12 @@ public sealed class AbyssalLootCaptureTests
         Assert.Equal(1.80m, summary.LootVolume);
     }
 
-    /// <summary>A row the window showed no price for stays a row without a price, never a zero.</summary>
+    /// <summary>A row nobody has a price for stays a row without a price, never a zero — the window showed none and
+    /// ET knows none either, so it counts as an item and as a gap in the total, not as 0 ISK.</summary>
     [AvaloniaFact]
     public async Task ARowWithoutAPrice_IsVisible_AndMovesNoTotal()
     {
-        using var env = await Env.StartAsync();
+        using var env = await Env.StartAsync(prices: new Dictionary<int, double> { [587] = 100.00 });
         await env.StartRunAsync();
 
         await env.CopyAsync(ContainerWithAPricelessRow);
@@ -386,6 +389,26 @@ public sealed class AbyssalLootCaptureTests
         Assert.Equal(100.00m, summary.LootIskGained);
         Assert.Equal(1, summary.LootEntriesWithoutPrice);
         Assert.Equal(3, summary.LootItemCount);
+    }
+
+    /// <summary>A cold price cache leaves the total unknown, not zero — the state main actually stood in, pinned as a
+    /// specification. The clipboard's ISK column is right there (100,00 + 250,50) and must still buy nothing, while
+    /// the rows themselves survive intact. Counter-proof: value the loot from ClipboardPrice again and LootIskGained
+    /// reads 350.50 instead of null; make the empty lookup total 0m instead and it reads 0.</summary>
+    [AvaloniaFact]
+    public async Task WithoutAnyKnownPrice_TheTotalIsUnknown_NotZero_AndTheRowsRemain()
+    {
+        using var env = await Env.StartAsync(prices: new Dictionary<int, double>());
+        await env.StartRunAsync();
+
+        await env.CopyAsync(Container);
+
+        ActivitySummary summary = await env.SaveAndRebuildAsync();
+        Assert.Null(summary.LootIskGained);
+        Assert.Null(summary.LootIskNet);
+        Assert.Equal(2, summary.LootEntriesWithoutPrice);
+        Assert.Equal(3, summary.LootItemCount);
+        Assert.Equal(0.30m, summary.LootVolume);
     }
 
     /// <summary>Rebuilding reads the exclusions back off the runs, so putting the repeat back in raises the total by
@@ -426,6 +449,16 @@ public sealed class AbyssalLootCaptureTests
     {
         private static readonly DateTime StartedAtUtc = new(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
 
+        /// <summary>ET's own prices, per unit — the only source the valuation reads (ET-159). Chosen as the
+        /// fixtures' ISK column divided by their quantity, because that column is the whole stack.</summary>
+        private static readonly Dictionary<int, double> UnitPrices = new()
+        {
+            [587] = 100.00,     // Rifter
+            [2048] = 125.25,    // Damage Control II
+            [28668] = 80.00,    // Nanite Repair Paste
+            [12608] = 0.50,     // EMP S
+        };
+
         private readonly TestClientInstance _instance;
         private readonly ClipboardWatchService _watch;
         private readonly AbyssalLootCapture _capture;
@@ -449,11 +482,20 @@ public sealed class AbyssalLootCaptureTests
         /// <param name="wrapDispatcher">Lets a test intercept the dispatcher calls <see cref="AbyssalLootCapture"/>
         /// itself makes (e.g. to fail a specific command), without touching the real one this Env's own helpers
         /// (StartRunAsync, CapturesAsync, ...) use.</param>
+        /// <param name="prices">Overrides <see cref="UnitPrices"/> for a test that needs ET not to know a type.</param>
         public static async Task<Env> StartAsync(Func<CqrsDispatcher, CqrsDispatcher>? wrapDispatcher = null,
-            FakeSdeAccessor? sde = null)
+            FakeSdeAccessor? sde = null, IReadOnlyDictionary<int, double>? prices = null)
         {
             var source = new FakeClipboardChangeSource();
             var instance = TestClientInstance.Create();
+            await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
+                [.. (prices ?? UnitPrices).Select(price => new LocalMarketPrice
+                {
+                    TypeId = price.Key,
+                    AveragePrice = price.Value,
+                    AdjustedPrice = price.Value,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                })]);
             var watch = new ClipboardWatchService(new RecordingDialogService(), instance.Services,
                 NullLogger<ClipboardWatchService>.Instance, source);
             var realDispatcher = instance.Services.GetRequiredService<CqrsDispatcher>();
