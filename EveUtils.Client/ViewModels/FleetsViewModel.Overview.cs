@@ -323,6 +323,7 @@ public sealed partial class FleetsViewModel
     private void BuildLanes(ActiveFleetLinks links, DateTimeOffset now)
     {
         Lanes.Clear();
+        var built = new List<FleetLaneViewModel>();
         foreach (var character in _knownCharacters)
         {
             if (character.EsiCharacterId is not { } id)
@@ -380,8 +381,15 @@ public sealed partial class FleetsViewModel
                 lane.FootChips.Add(new(standingBy.Count == 1 ? "standing by in 1 fleet" : Count(standingBy.Count, "standing by in") + " fleets"));
 
             lane.Tick(now);
-            Lanes.Add(lane);
+            built.Add(lane);
         }
+
+        // Pilots who are in a started fleet first, the ones who are in none after them — scherm 13: "ze staan dim en
+        // onderaan, maar ze staan er". Order within each half is the character registry's, so the band does not
+        // reshuffle itself under you as fleets start and stop. Elsewhere-active counts as being in a fleet: that
+        // pilot is somewhere, which is the whole thing the band answers.
+        foreach (var lane in built.OrderBy(l => l.IsIdle ? 1 : 0))
+            Lanes.Add(lane);
 
         LanesEmptyText = Lanes.Count == 0 ? "No characters yet — add one in the CHARACTERS column." : null;
     }
