@@ -141,6 +141,12 @@ taken from the matching `## vX.Y.Z` section below.
   away: a mission is no longer asked which loot strategy it was flown on — "full clear" is a site's word and means
   nothing on a mission — and the setting for reading loot off your clipboard is now called **Run loot** rather than
   **Abyssal run loot**, because it never was about the abyss. It works exactly as it did.
+- **Starting a run by hand now takes you to the run.** START used to create the run and leave you looking at a
+  sentence: no clock, no loot, no STOP, and no way to the screen that has them. It now opens the activity window on
+  that run, the same window a copied signature lands in, and the dialog closes behind it. **Start Run** is a proper
+  dialog too — it is as tall as the three things it asks for, where it used to be a window three times the height of
+  its own content with an empty black field below. Its one Dutch button is gone: **ACHTERAF INVOEREN** now reads
+  **BACKDATE**, with the date and time it governs directly under it.
 - **Copying a scanned combat site now starts the run straight away, instead of offering a card you had to come back
   to the app to click.** The run window comes up on that site with the clock already going, behind whatever you are
   looking at and without taking the keyboard — so you can stay in EVE and fly. If more than one of your characters

@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
+using Avalonia.Threading;
+using EveUtils.Client.Notifications;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
@@ -22,6 +24,12 @@ namespace EveUtils.Client.Dialogs;
 /// </summary>
 public sealed class DialogService : IDialogService, ISingletonService
 {
+    // Optional so the eight tests that build this service by hand keep working: without it a fault still reaches
+    // stderr, it just has no window to say so in.
+    private readonly IToastService? _toasts;
+
+    public DialogService(IToastService? toasts = null) => _toasts = toasts;
+
     private Window? _owner;
     private readonly ModuleHostService _moduleHost = new();
     private readonly Dictionary<string, DpsOverlayWindow> _dpsOverlays = new(StringComparer.OrdinalIgnoreCase);
@@ -44,6 +52,20 @@ public sealed class DialogService : IDialogService, ISingletonService
     // Opens a non-modal feature window as a module: a docked tab, or a floating window — handled by the host.
     private void Route(Window window, string title, string? moduleKey, string moduleId) =>
         _moduleHost.Open(window, title, moduleKey, moduleId);
+
+    /// <summary>
+    /// Watches a load this service starts but does not await, so a fault is seen instead of vanishing into an
+    /// unobserved task — the same rule <c>Program.RunResilient</c> holds for background services, and the trap
+    /// ET-158 fell into when <c>_StartOnArrivalAsync</c> ran outside its <c>try</c>. A locked database is the case
+    /// that really happens, and without this the pilot gets a screen showing the wrong thing and no reason for it.
+    /// </summary>
+    private void _Observe(Task task, string what) =>
+        task.ContinueWith(faulted =>
+        {
+            Console.Error.WriteLine($"[dialog] {what}: {faulted.Exception}");
+            // Back to the UI thread: a continuation runs on the pool, and a toast is a window operation.
+            Dispatcher.UIThread.Post(() => _toasts?.Show("Screen out of date", what, ToastKind.Error));
+        }, TaskContinuationOptions.OnlyOnFaulted);
 
     public void ShowDpsOverlay(DpsViewModel tracker)
     {
@@ -108,22 +130,32 @@ public sealed class DialogService : IDialogService, ISingletonService
         // A second call carries a newly copied signature, and the window that is already up is the one that has to
         // hear about it — dropping the incoming view model meant "start run" on a fresh signature did nothing but
         // raise the window on the previous site (Raymond, 2026-09-02).
-        if (_activityWindow?.DataContext is ActivityWindowViewModel open && !ReferenceEquals(open, viewModel)
-            && viewModel.SignatureName is { Length: > 0 } signature)
+        if (_activityWindow?.DataContext is ActivityWindowViewModel open && !ReferenceEquals(open, viewModel))
         {
-            // The incoming view model is dropped here, so what it was asked to do travels with the signature or an
-            // automatic start would only ever happen on the window that did not exist yet (ET-158).
-            open.StartsOnArrival = viewModel.StartsOnArrival;
-            // Including whose run it is, and before ApplySignature rather than after: that is what settles the
-            // character, and a caller that already asked would otherwise be asked again by the window that was
-            // already up.
-            //
-            // Only to a window with no run of its own. A run on the clock belongs to the pilot who started it, and
-            // ApplySignature may well keep it — a copy of the site already being flown changes nothing — so writing
-            // a different pilot over it would leave the header, the gamelog filter and the stored row disagreeing.
-            if (open.RunId is null && viewModel.PickedCharacter is { } pilot)
-                open.UseCharacter(pilot.Id, pilot.Name);
-            open.ApplySignature(viewModel.SignatureId, viewModel.SignatureGroup, signature, viewModel.MatchedSites);
+            if (viewModel.SignatureName is { Length: > 0 } signature)
+            {
+                // The incoming view model is dropped here, so what it was asked to do travels with the signature or an
+                // automatic start would only ever happen on the window that did not exist yet (ET-158).
+                open.StartsOnArrival = viewModel.StartsOnArrival;
+                // Including whose run it is, and before ApplySignature rather than after: that is what settles the
+                // character, and a caller that already asked would otherwise be asked again by the window that was
+                // already up.
+                //
+                // Only to a window with no run of its own. A run on the clock belongs to the pilot who started it, and
+                // ApplySignature may well keep it — a copy of the site already being flown changes nothing — so writing
+                // a different pilot over it would leave the header, the gamelog filter and the stored row disagreeing.
+                if (open.RunId is null && viewModel.PickedCharacter is { } pilot)
+                    open.UseCharacter(pilot.Id, pilot.Name);
+                open.ApplySignature(viewModel.SignatureId, viewModel.SignatureGroup, signature, viewModel.MatchedSites);
+            }
+            else
+            {
+                // No signature means the caller is asking for "whatever run the store has open now" — the manual
+                // start (ET-163) and the runs-overview lane both do. A window already up adopted its run when it
+                // opened and never looks again, so raising it would show the previous run and hide the one just
+                // started. Re-reading is what it does on open anyway, and every side effect in there is guarded.
+                _Observe(open.LoadAsync(), "the run window could not be brought up to date");
+            }
         }
 
         switch (RunWindowPresentation.Decide(trigger, _activityWindow is not null))
@@ -397,7 +429,7 @@ public sealed class DialogService : IDialogService, ISingletonService
 
     public void ShowInbox(InboxViewModel viewModel)
     {
-        _ = viewModel.OnOpenedAsync();   // mark shown messages read so the unread badge clears
+        _Observe(viewModel.OnOpenedAsync(), "the inbox could not be marked as read");
         Route(new InboxWindow(viewModel), "INBOX", "inbox", "inbox");
     }
 
@@ -418,7 +450,7 @@ public sealed class DialogService : IDialogService, ISingletonService
 
     public void ShowActivityDetail(ActivityDetailViewModel viewModel, Guid activitySummaryId)
     {
-        _ = viewModel.LoadAsync();
+        _Observe(viewModel.LoadAsync(), "this screen could not be read");
         Route(new ActivityDetailWindow(viewModel), "ACTIVITY", "runs", $"activity-{activitySummaryId}");
     }
 
@@ -437,12 +469,18 @@ public sealed class DialogService : IDialogService, ISingletonService
 
     public void ShowRuns(RunsOverviewViewModel viewModel)
     {
-        _ = viewModel.LoadAsync();
+        _Observe(viewModel.LoadAsync(), "this screen could not be read");
         Route(new RunsWindow(viewModel), "RUNS", "runs", "runs");
     }
 
-    public void ShowManualRunStart(ManualRunStartViewModel viewModel) =>
-        Route(new ManualRunStartWindow(viewModel), "START RUN", "runs-start", "runs-start");
+    /// <summary>A modal dialog rather than a docked module (ET-163 nazorg): filling in a run is a moment, not a
+    /// screen you keep open — the run itself lives in the activity window, which the view model opens on its way
+    /// out.</summary>
+    public async Task ShowManualRunStartAsync(ManualRunStartViewModel viewModel)
+    {
+        if (_owner is null) return;
+        await _Over(new ManualRunStartWindow(viewModel)).ShowDialog(_owner);
+    }
 
     public void ShowFitBrowser(FitBrowserViewModel viewModel) =>
         // One fit-browser module for the whole app (not per-entity, unlike roster/metrics): re-opening re-selects

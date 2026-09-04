@@ -14,6 +14,7 @@ using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fittings;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Esi;
@@ -622,7 +623,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             _services.GetRequiredService<IDispatcher>(), _dialogs, _services, characters));
     }
 
-    /// <summary>Opens the manual run-start screen (ET-163) — non-modal, like the other tools. A fresh view-model
+    /// <summary>Opens the manual run-start dialog (ET-163) — modal, and closed again by START. A fresh view-model
     /// per open, read from the character registry as it stands now rather than as it stood at app start.</summary>
     private async Task OpenManualRunStartAsync()
     {
@@ -630,9 +631,11 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             return;
 
         IReadOnlyList<Character> characters = await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
-        _dialogs.ShowManualRunStart(new ManualRunStartViewModel(
+        await _dialogs.ShowManualRunStartAsync(new ManualRunStartViewModel(
             _services.GetRequiredService<IDispatcher>(),
             _services.GetRequiredService<ISdeAccessor>(),
+            _dialogs,
+            kind => new ActivityWindowViewModel(kind, _services),
             characters));
     }
 

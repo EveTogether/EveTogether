@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Dialogs;
+using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
@@ -21,18 +23,30 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// this is the second production caller, not a second run type. The mission path is deliberately absent: its three
 /// autocompletes need SDE data that is not imported yet (ET-129).
 ///
-/// There is no STARTTIME field. Starting now means the starttime is now; ACHTERAF INVOEREN is the one exception,
-/// for a run typed in after the fact.
+/// There is no STARTTIME field. Starting now means the starttime is now; BACKDATE is the one exception, for a run
+/// typed in after the fact.
+///
+/// It is a dialog, and it is done the moment the run exists: START hands over to the activity window through the
+/// same <see cref="IDialogService.ShowActivityWindow"/> the clipboard route uses (ET-158), then closes itself — a
+/// second way to put a run on screen would drift from that one.
 /// </summary>
 public partial class ManualRunStartViewModel : ViewModelBase
 {
     private readonly IDispatcher _dispatcher;
     private readonly ISdeAccessor _sde;
+    private readonly IDialogService _dialogs;
+    private readonly Func<ActivityKind, ActivityWindowViewModel> _runWindowFor;
 
-    public ManualRunStartViewModel(IDispatcher dispatcher, ISdeAccessor sde, IReadOnlyList<Character> characters)
+    /// <param name="runWindowFor">Builds the run window this dialog hands over to. A delegate rather than the
+    /// container: what that view model needs is its own business, and this one still says on its signature that a
+    /// dispatcher, the catalogue and a way to open a window is the whole of what it takes.</param>
+    public ManualRunStartViewModel(IDispatcher dispatcher, ISdeAccessor sde, IDialogService dialogs,
+        Func<ActivityKind, ActivityWindowViewModel> runWindowFor, IReadOnlyList<Character> characters)
     {
         _dispatcher = dispatcher;
         _sde = sde;
+        _dialogs = dialogs;
+        _runWindowFor = runWindowFor;
         Characters = [.. characters.Where(character => character.EsiCharacterId is > 0)];
         SelectedCharacter = Characters.FirstOrDefault();
         SelectedActivityKind = ActivityKind.Site;
@@ -77,6 +91,9 @@ public partial class ManualRunStartViewModel : ViewModelBase
 
     public bool Started { get; private set; }
 
+    /// <summary>Raised once the run exists — the dialog's cue to go, the same signal SdeProgress uses.</summary>
+    public event Action? CloseRequested;
+
     private bool CanStart => SelectedCharacter is not null && SelectedSite is not null;
 
     [RelayCommand(CanExecute = nameof(CanStart))]
@@ -85,7 +102,7 @@ public partial class ManualRunStartViewModel : ViewModelBase
         if (SelectedCharacter is not { EsiCharacterId: { } characterId } || SelectedSite is not { } site)
             return;
 
-        // "Terug in de tijd" types a past moment; without it the starttime is simply now. Either way this is the
+        // "Earlier moment" types a past moment; without it the starttime is simply now. Either way this is the
         // only place StartedAtUtc is decided — nothing downstream corrects it (ET-163 AC-3: no measured start to
         // correct means TimesCorrectedAtUtc stays untouched).
         DateTime startedAtUtc = IsBackdated && BackdatedDate is { } date && BackdatedTime is { } time
@@ -110,7 +127,12 @@ public partial class ManualRunStartViewModel : ViewModelBase
         }
 
         Started = true;
-        Status = $"Run started on {SelectedCharacter.Name} at {site.Name}.";
         StatusIsError = false;
+
+        // The dialog goes first: the activity window must not come up behind a modal that is still standing. What
+        // it is handed is a plain view model, which adopts the run the store now has open by itself — the same
+        // route the runs overview takes to a running lane, rather than a second one invented here.
+        CloseRequested?.Invoke();
+        _dialogs.ShowActivityWindow(_runWindowFor(SelectedActivityKind));
     }
 }
