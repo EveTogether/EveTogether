@@ -80,39 +80,23 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
             return;
         }
 
-        bool hasSingleRow = ClipboardInventoryParser.HasSingleRow(capture.Text);
-        IReadOnlyList<ClipboardInventoryItem> items = ClipboardInventoryParser.Parse(capture.Text);
-        var resolution = SdeInventoryResolver.Resolve(items, _sde);
-        bool hasNoSdeMatch = hasSingleRow && _sde.IsAvailable && resolution.Lines.Count == 0;
-        if (resolution.Lines.Count == 0 && _sde.IsAvailable)
-        {
-            // The column shape alone did not produce item types — it either could not choose, or chose the group
-            // column — so ask the SDE which candidate actually reads as item types. Every row count comes through
-            // here: it used to be the single-row case only, which left an icons copy of two items working and the
-            // same two items in details refused (ET-65).
-            resolution = SdeInventoryResolver.ResolveBestCandidate(
-                ClipboardInventoryParser.ParseNameColumnCandidates(capture.Text), _sde, out bool noCandidateMatch);
-            hasNoSdeMatch = hasSingleRow && noCandidateMatch;
-        }
-
-        if (resolution.Lines.Count == 0)
+        InventoryTextReading reading = InventoryTextReading.Read(capture.Text, _sde);
+        if (reading.Lines.Count == 0)
         {
             // One copied line that matches no item type is far more often an ordinary copy than lost loot, so that
             // one case stays quiet on screen — but it says so in the log like every other refusal.
-            if (hasNoSdeMatch)
+            if (reading.IsSingleUnknownRow)
             {
                 _Dropped("a single copied row that matches no known item type");
                 return;
             }
 
-            // It never asks for column headings: an EVE inventory copy carries none.
-            var message = resolution.Unresolved.Count > 0
-                ? $"None of the {resolution.Unresolved.Count} copied names is a known item type. Copy rows from an EVE inventory window."
-                : "No column in this copy stands out as the item names. Copy the rows from an EVE inventory window.";
-            _toasts.Show("Loot not recognised",
-                message,
-                ToastKind.Error);
-            _Dropped(message);
+            if (reading.Refusal is { } refusal)
+            {
+                _toasts.Show("Loot not recognised", refusal, ToastKind.Error);
+                _Dropped(refusal);
+            }
+
             return;
         }
 
@@ -129,7 +113,7 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
             _openFingerprint = fingerprint;
         }
 
-        _TrackLastStore(StoreAndOfferAsync(fingerprint, resolution.Lines, resolution.Unresolved.Count));
+        _TrackLastStore(StoreAndOfferAsync(fingerprint, reading.Lines, reading.UnresolvedCount));
     }
 
     /// <summary>Stores the capture and only then tells the player what actually happened — recorded, refused with a

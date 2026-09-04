@@ -748,16 +748,72 @@
                         <!-- The caption names where these figures come from. It has to, and it has to be right: it read
                              "the clipboard column" long after the copied ISK stopped being kept at all. -->
                         <TextBlock Classes="hint" Text="{Binding IskLabel}"/>
+                        <!-- Which two captures the figures are the difference between — in BOTH ways of working, so
+                             someone back on the clipboard way who sees an unexpected total can read why in one
+                             glance, and take the visible way out: exclude that capture. -->
+                        <TextBlock Classes="hint" Margin="0" Text="{Binding RunLoot.DifferenceText}"/>
                         <TextBlock Classes="hint" Margin="0" Text="{Binding RunLoot.RunStatusMessage}"/>
+
+                        <!-- Set where it applies, like LOOT STRATEGY above, and per kind for the same reason. It
+                             decides which controls are on screen and never what the run is worth. -->
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding !RunLoot.IsLocked}">
+                            <TextBlock Text="REGISTRATION" VerticalAlignment="Center"/>
+                            <ItemsControl Grid.Column="1" HorizontalAlignment="Right" ItemsSource="{Binding LootModeChoices}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel HorizontalAlignment="Right"/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="va:ActivityChoice">
+                                        <Button Classes="pick" Classes.on="{Binding IsSelected}"
+                                                Content="{Binding Label}"
+                                                Command="{Binding $parent[ItemsControl].((va:ActivityWindowViewModel)DataContext).SelectLootModeCommand}"
+                                                CommandParameter="{Binding Index}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+
+                        <!-- The two holds. Only in the way that uses them, and only while the run is open: a saved
+                             section carries no controls at all. -->
+                        <StackPanel Spacing="4" IsVisible="{Binding RunLoot.IsCargoDiffShown}">
+                            <StackPanel Spacing="4" IsVisible="{Binding !RunLoot.IsLocked}">
+                                <TextBlock Classes="hint" Margin="0" Text="STARTING HOLD"/>
+                                <TextBox AcceptsReturn="True" MinHeight="54" TextWrapping="NoWrap"
+                                         PlaceholderText="Paste your cargo hold — Ctrl+A, Ctrl+C in the inventory window."
+                                         Text="{Binding RunLoot.CargoBeforeText, Mode=TwoWay}"/>
+                                <TextBlock Classes="hint" Margin="0" Text="{Binding RunLoot.CargoBeforeStatus}"/>
+                                <TextBlock Classes="hint" Margin="0" Text="ENDING HOLD"/>
+                                <TextBox AcceptsReturn="True" MinHeight="54" TextWrapping="NoWrap"
+                                         PlaceholderText="Leave this empty and the last capture is the ending hold."
+                                         Text="{Binding RunLoot.CargoAfterText, Mode=TwoWay}"/>
+                                <TextBlock Classes="hint" Margin="0" Text="{Binding RunLoot.CargoAfterStatus}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- An editable section says until when; a fixed one says it is fixed. Never nothing. -->
+                        <TextBlock Classes="hint" Text="{Binding RunLoot.EditableUntilText}"/>
+
                         <ItemsControl ItemsSource="{Binding RunLoot.Captures}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vr:RunLootCaptureRowViewModel">
                                     <StackPanel Spacing="4">
-                                        <Grid Classes="kv" ColumnDefinitions="*,Auto">
+                                        <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                                             <TextBlock Text="{Binding CapturedAtDisplay}"/>
-                                            <Button Grid.Column="1" Classes="pick" Content="{Binding InOutText}"
+                                            <Button Grid.Column="1" Classes="pick" Content="starting hold"
+                                                    IsVisible="{Binding $parent[ItemsControl].((va:ActivityWindowViewModel)DataContext).RunLoot.IsCargoDiffShown}"
+                                                    Command="{Binding $parent[ItemsControl].((va:ActivityWindowViewModel)DataContext).RunLoot.MakeCaptureCargoBeforeCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Grid.Column="2" Classes="pick" Content="{Binding InOutText}"
+                                                    IsVisible="{Binding !$parent[ItemsControl].((va:ActivityWindowViewModel)DataContext).RunLoot.IsLocked}"
                                                     Command="{Binding $parent[ItemsControl].((va:ActivityWindowViewModel)DataContext).RunLoot.ToggleCaptureExcludedCommand}"
                                                     CommandParameter="{Binding}"/>
+                                        </Grid>
+                                        <!-- What it is to the run, and where its bytes came from: two different
+                                             questions, and the strip answers both without a click. -->
+                                        <Grid Classes="kv" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
+                                            <TextBlock Classes="hint" Margin="0" Text="{Binding NumberDisplay}"/>
+                                            <TextBlock Grid.Column="1" Classes="hint" Margin="0" Text="{Binding SourceText}"/>
+                                            <TextBlock Grid.Column="2" Classes="hint" Margin="0" Text="{Binding RoleText}"/>
                                         </Grid>
                                         <TextBlock Classes="hint" Text="{Binding RepeatOfDisplay}"/>
                                         <ItemsControl ItemsSource="{Binding Entries}">

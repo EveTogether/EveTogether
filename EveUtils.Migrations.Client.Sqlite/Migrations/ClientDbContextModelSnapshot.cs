@@ -905,6 +905,9 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.Property<bool>("IsExcluded")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Role")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("TEXT");
 

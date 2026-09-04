@@ -5,6 +5,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Tally;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
@@ -51,11 +52,9 @@ internal sealed class RebuildActivitySummariesCommandHandler(
         DateTime? stoppedAtUtc = runs.All(run => run.StoppedAtUtc is not null)
             ? runs.Max(run => run.StoppedAtUtc)
             : null;
-        // An excluded capture stays visible on its run and counts towards nothing.
-        List<RunLootEntry> loot = runs.SelectMany(run => run.LootCaptures)
-            .Where(capture => !capture.IsExcluded)
-            .SelectMany(capture => capture.Entries)
-            .ToList();
+        // Counted per run, not per activity: a starting cargo hold belongs to the run it was pasted on, and two
+        // grouped runs each have their own. The rule itself is LootTally's, shared with the open window.
+        List<LootTallyLine> loot = [.. runs.SelectMany(run => LootTally.Count(_Tally(run)))];
         decimal? gained = _KnownLootValue(loot, LootKind.Gained, prices);
         decimal? lost = _KnownLootValue(loot, LootKind.Lost, prices);
         // Runs, for the PayoutEligibleCount column: how many eligible runs the activity holds.
@@ -83,10 +82,10 @@ internal sealed class RebuildActivitySummariesCommandHandler(
             LootIskGained = gained,
             LootIskLost = lost,
             LootIskNet = gained is null && lost is null ? null : gained.GetValueOrDefault() - lost.GetValueOrDefault(),
-            LootEntriesWithoutPrice = loot.Count(entry => !prices.ContainsKey(entry.ItemTypeId)),
-            LootItemCount = checked((int)loot.Sum(entry => entry.Quantity.GetValueOrDefault())),
+            LootEntriesWithoutPrice = loot.Count(line => !prices.ContainsKey(line.ItemTypeId)),
+            LootItemCount = checked((int)loot.Sum(line => line.Quantity.GetValueOrDefault())),
             // The volume column of an EVE inventory is already the volume of the whole stack (measured: 2 filaments = 0,20 m3).
-            LootVolume = loot.Sum(entry => entry.Volume.GetValueOrDefault()),
+            LootVolume = loot.Sum(line => line.Volume.GetValueOrDefault()),
             BountyIsk = runs.SelectMany(run => run.BountyEntries).Sum(entry => entry.Isk),
             // Same equal split RunPayoutSplit.Apply makes over the running run's participants — over eligible
             // characters here, since this read model has no per-participant rows to divide onto.
@@ -98,13 +97,20 @@ internal sealed class RebuildActivitySummariesCommandHandler(
         };
     }
 
-    private static decimal? _KnownLootValue(IEnumerable<RunLootEntry> loot, LootKind lootKind, IReadOnlyDictionary<int, double> prices)
+    private static IReadOnlyList<LootTallyCapture> _Tally(Run run) =>
+        [.. run.LootCaptures
+            .OrderBy(capture => capture.CapturedAtUtc)
+            .Select(capture => new LootTallyCapture(capture.Role, capture.IsExcluded,
+                [.. capture.Entries.Select(entry =>
+                    new LootTallyLine(entry.ItemTypeId, entry.Quantity, entry.Volume, entry.LootKind))]))];
+
+    private static decimal? _KnownLootValue(IEnumerable<LootTallyLine> loot, LootKind lootKind, IReadOnlyDictionary<int, double> prices)
     {
         // GetValueOrDefault(), not ?? 1: a missing quantity counts as zero pieces in LootItemCount above, so it
         // must value as zero here too — the same line as "what the lookup doesn't know doesn't count".
         decimal[] values = [.. loot
-            .Where(entry => entry.LootKind == lootKind && prices.ContainsKey(entry.ItemTypeId))
-            .Select(entry => (decimal)prices[entry.ItemTypeId] * entry.Quantity.GetValueOrDefault())];
+            .Where(line => line.LootKind == lootKind && prices.ContainsKey(line.ItemTypeId))
+            .Select(line => (decimal)prices[line.ItemTypeId] * line.Quantity.GetValueOrDefault())];
         return values.Length == 0 ? null : values.Sum();
     }
 }

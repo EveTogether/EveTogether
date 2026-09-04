@@ -9,6 +9,10 @@ public sealed class RunLootCapture
     public DateTime CapturedAtUtc { get; set; }
     public LootCaptureSource Source { get; set; }
 
+    /// <summary>What this capture is to the run — the hold it started from, the hold it ended on, or a moment in
+    /// between. One role and one place to set it, so two starting holds are impossible rather than caught.</summary>
+    public LootCaptureRole Role { get; set; }
+
     /// <summary>SHA256 over the raw clipboard text — the same window copied twice carries the same hash.</summary>
     public string? ContentHash { get; set; }
 

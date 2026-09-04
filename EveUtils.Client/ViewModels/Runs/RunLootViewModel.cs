@@ -1,14 +1,17 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Clipboard;
 using EveUtils.Client.Esi;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
+using EveUtils.Shared.Modules.Runs.Tally;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
 namespace EveUtils.Client.ViewModels.Runs;
@@ -22,13 +25,15 @@ public sealed partial class RunLootViewModel : ViewModelBase
 {
     private readonly CqrsDispatcher _dispatcher;
     private readonly IAppraisalProvider? _appraisal;
+    private readonly ISdeAccessor? _sde;
     private readonly Dictionary<int, decimal> _unitPrices = [];
     private string? _pricingBasis;
 
-    public RunLootViewModel(CqrsDispatcher dispatcher, IAppraisalProvider? appraisal = null)
+    public RunLootViewModel(CqrsDispatcher dispatcher, IAppraisalProvider? appraisal = null, ISdeAccessor? sde = null)
     {
         _dispatcher = dispatcher;
         _appraisal = appraisal;
+        _sde = sde;
     }
 
     public ObservableCollection<RunLootCaptureRowViewModel> Captures { get; } = [];
@@ -66,6 +71,56 @@ public sealed partial class RunLootViewModel : ViewModelBase
     /// <summary>Set from <see cref="ApplyLocationState"/> when location tracking itself explains why there is no
     /// run to attach loot to right now.</summary>
     [ObservableProperty] private string? _locationStatusMessage;
+
+    /// <summary>Whether this section offers the two paste boxes and the starting-hold picker. A window preference
+    /// and only that: what counts is decided by the roles on the captures, which is why switching back to the
+    /// clipboard way takes the controls off screen and never moves a figure (Zyra, 2026-09-04).</summary>
+    [ObservableProperty] private bool _isCargoDiffShown;
+
+    /// <summary>The run is saved, so nothing here is adjustable any more — by SAVE, or by ET-179 finishing a run
+    /// left standing a day after STOP.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EditableUntilText))]
+    private bool _isLocked;
+
+    /// <summary>An editable section says until when; a fixed one says it is fixed. Never nothing.</summary>
+    public string EditableUntilText => IsLocked
+        ? "This run is saved, so its loot is fixed."
+        : "Pasting, pasting again and moving the starting hold all stay possible until this run is saved.";
+
+    /// <summary>What the two paste boxes now hold, as the pilot left them. Writing back what was already stored is
+    /// the text-correction ticket's job; this box is where the text goes in.</summary>
+    [ObservableProperty] private string? _cargoBeforeText;
+
+    [ObservableProperty] private string? _cargoAfterText;
+
+    /// <summary>How many rows came out of that box, or why none did. The two refusals are the clipboard watch's own
+    /// words — in a box they belong beside the text they turn down, not in a toast.</summary>
+    [ObservableProperty] private string? _cargoBeforeStatus;
+
+    [ObservableProperty] private string? _cargoAfterStatus;
+
+    /// <summary>Which two captures the figures are the difference between, from <see cref="LootTally.Ends"/> rather
+    /// than a second reading of the same roles. Shown whether or not the paste boxes are: someone back on the
+    /// clipboard way who sees an unexpected total has to be able to read why in one glance, and the way out is the
+    /// visible one — exclude that capture.</summary>
+    public string DifferenceText
+    {
+        get
+        {
+            (int before, int after) = LootTally.Ends(_TallyCaptures());
+            return before < 0
+                ? "no starting hold — every capture counts"
+                : after < 0
+                    ? $"starting hold #{Captures[before].Number}, nothing after it yet"
+                    : $"difference #{Captures[before].Number} → #{Captures[after].Number}";
+        }
+    }
+
+    /// <summary>The write a text box's change callback cannot wait for, so a test can. Chained rather than replaced,
+    /// the same way <c>ClipboardLootCapture.LastStore</c> is: pasting into the second box while the first is still
+    /// settling must not lose the first one's completion or its exception.</summary>
+    internal Task LastCargoWrite { get; private set; } = Task.CompletedTask;
 
     /// <summary>What these figures are, said by whoever priced them. ET-65 AC-5 had this read "Clipboard ISK total"
     /// because the total WAS the copied column; it is a valuation now, so the label says so — including when the
@@ -115,7 +170,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
                     firstSeenAt[hash] = capture.CapturedAtUtc;
             }
 
-            Captures.Add(new RunLootCaptureRowViewModel(capture, repeatOf));
+            Captures.Add(new RunLootCaptureRowViewModel(capture, repeatOf, Captures.Count + 1));
         }
 
         _Recompute();
@@ -137,6 +192,92 @@ public sealed partial class RunLootViewModel : ViewModelBase
 
     [RelayCommand]
     private Task ToggleCaptureExcludedAsync(RunLootCaptureRowViewModel row) => ToggleExcludedAsync(row);
+
+    partial void OnCargoBeforeTextChanged(string? value) =>
+        _TrackCargoWrite(PasteCargoAsync(LootCaptureRole.CargoBefore, value));
+
+    partial void OnCargoAfterTextChanged(string? value) =>
+        _TrackCargoWrite(PasteCargoAsync(LootCaptureRole.CargoAfter, value));
+
+    /// <summary>
+    /// Reads a cargo hold out of one of the boxes and stores it as that run's hold, replacing whatever the box held
+    /// before — pasting again is a correction of the same hold, not a second sighting of it.
+    ///
+    /// Text that cannot be read blocks nothing and is not thrown away: it stays in the box with the reason under it,
+    /// because a hold nobody could read belongs to a role you have not handed out yet. The stored hold from the
+    /// previous, readable paste is left exactly where it was rather than being emptied on a typo.
+    /// </summary>
+    public async Task<bool> PasteCargoAsync(LootCaptureRole role, string? text, CancellationToken cancellationToken = default)
+    {
+        if (RunId is not { } runId || _sde is null)
+            return false;
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            _SetCargoStatus(role, null);
+            return false;
+        }
+
+        InventoryTextReading reading = InventoryTextReading.Read(text, _sde);
+        if (reading.Lines.Count == 0)
+        {
+            _SetCargoStatus(role, reading.Refusal ?? "Nothing in this text reads as an EVE inventory listing.");
+            return false;
+        }
+
+        Result<Guid> stored = await _dispatcher.Send(new SetRunCargoHoldCommand(runId, role, DateTime.UtcNow,
+            [.. reading.Lines.Select(resolved => new RunLootEntryInput
+            {
+                ItemTypeId = resolved.Line.TypeId,
+                Name = resolved.Line.Name,
+                Quantity = resolved.Line.Quantity,
+                // The clipboard columns as they stood in the window, not a valuation: the money comes from the
+                // type-id lookup here as it does everywhere else.
+                Volume = resolved.Item.Volume,
+                ClipboardPrice = resolved.Item.Price,
+                LootKind = LootKind.Gained
+            })]), cancellationToken);
+        if (!stored.IsSuccess)
+        {
+            _SetCargoStatus(role, stored.Messages.Count > 0 ? stored.Messages[0].Text : "This cargo hold was not stored.");
+            return false;
+        }
+
+        int unresolved = reading.UnresolvedCount;
+        _SetCargoStatus(role, unresolved > 0
+            ? $"read: {reading.Lines.Count} row(s), {unresolved} name(s) not recognised"
+            : $"read: {reading.Lines.Count} row(s)");
+        await RefreshAsync(cancellationToken);
+        return true;
+    }
+
+    /// <summary>Which capture the run started from, changed after the fact. The capture that held the role keeps its
+    /// place in the strip and says what it was — a correction is not allowed to make a cargo hold disappear.</summary>
+    public async Task<bool> MakeCargoBeforeAsync(RunLootCaptureRowViewModel row, CancellationToken cancellationToken = default)
+    {
+        Result result = await _dispatcher.Send(new SetRunLootCaptureRoleCommand(row.CaptureId, LootCaptureRole.CargoBefore), cancellationToken);
+        if (!result.IsSuccess)
+        {
+            RunStatusMessage = result.Messages.Count > 0 ? result.Messages[0].Text : null;
+            return false;
+        }
+
+        await RefreshAsync(cancellationToken);
+        return true;
+    }
+
+    [RelayCommand]
+    private Task MakeCaptureCargoBeforeAsync(RunLootCaptureRowViewModel row) => MakeCargoBeforeAsync(row);
+
+    private void _SetCargoStatus(LootCaptureRole role, string? status)
+    {
+        if (role is LootCaptureRole.CargoBefore)
+            CargoBeforeStatus = status;
+        else
+            CargoAfterStatus = status;
+    }
+
+    private void _TrackCargoWrite(Task current) => LastCargoWrite = Task.WhenAll(LastCargoWrite, current);
 
     /// <summary>Four states, three of them a reason rather than silence (ET-65 AC-7): watching off, an anchor
     /// present (nothing to explain), an anchor lost with a known reason, and an anchor never set (e.g. a restart —
@@ -189,24 +330,32 @@ public sealed partial class RunLootViewModel : ViewModelBase
             _unitPrices[row.Line.TypeId] = (decimal)row.Price!.Estimate;
     }
 
+    /// <summary>Which captures count, and for how much, is <see cref="LootTally"/>'s answer and not this window's —
+    /// the stored run is rebuilt from the same rule, so the figures here are the figures it will keep.</summary>
     private void _Recompute()
     {
-        List<RunLootEntryDto> included = [.. Captures.Where(capture => !capture.IsExcluded).SelectMany(capture => capture.Entries)];
-        TotalIsk = _Sum(included);
-        EntriesWithoutPrice = included.Count(entry => !_unitPrices.ContainsKey(entry.ItemTypeId));
-        LootIsk = _Sum(included.Where(entry => entry.LootKind == LootKind.Gained));
-        ConsumedIsk = _Sum(included.Where(entry => entry.LootKind == LootKind.Lost));
+        IReadOnlyList<LootTallyLine> counted = LootTally.Count(_TallyCaptures());
+        TotalIsk = _Sum(counted);
+        EntriesWithoutPrice = counted.Count(line => !_unitPrices.ContainsKey(line.ItemTypeId));
+        LootIsk = _Sum(counted.Where(line => line.LootKind == LootKind.Gained));
+        ConsumedIsk = _Sum(counted.Where(line => line.LootKind == LootKind.Lost));
         NetIsk = LootIsk is null && ConsumedIsk is null ? null : (LootIsk ?? 0m) - (ConsumedIsk ?? 0m);
         OnPropertyChanged(nameof(TotalIskLabel));
+        OnPropertyChanged(nameof(DifferenceText));
     }
+
+    /// <summary>No volume: a capture row carries none, and nothing on this screen totals one.</summary>
+    private IReadOnlyList<LootTallyCapture> _TallyCaptures() =>
+        [.. Captures.Select(capture => new LootTallyCapture(capture.Role, capture.IsExcluded,
+            [.. capture.Entries.Select(entry => new LootTallyLine(entry.ItemTypeId, entry.Quantity, Volume: null, entry.LootKind))]))];
 
     /// <summary>A market price is per unit, so the quantity is what turns it into a line value. No quantity column
     /// means one of it — the same reading <c>SdeInventoryResolver</c> takes.</summary>
-    private decimal? _Sum(IEnumerable<RunLootEntryDto> entries)
+    private decimal? _Sum(IEnumerable<LootTallyLine> lines)
     {
-        decimal[] values = [.. entries
-            .Where(entry => _unitPrices.ContainsKey(entry.ItemTypeId))
-            .Select(entry => _unitPrices[entry.ItemTypeId] * (entry.Quantity ?? 1))];
+        decimal[] values = [.. lines
+            .Where(line => _unitPrices.ContainsKey(line.ItemTypeId))
+            .Select(line => _unitPrices[line.ItemTypeId] * (line.Quantity ?? 1))];
         return values.Length == 0 ? null : values.Sum();
     }
 

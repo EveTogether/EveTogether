@@ -938,6 +938,9 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                     b.Property<bool>("IsExcluded")
                         .HasColumnType("bit");
 
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("uniqueidentifier");
 
