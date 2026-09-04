@@ -22,7 +22,7 @@ public sealed class RunSynchronizationService(
         DateTime waterline = localRuns.Where(run => run.LastPushedAtUtc.HasValue)
             .Select(run => run.LastPushedAtUtc.GetValueOrDefault()).DefaultIfEmpty(DateTime.UnixEpoch).Min();
 
-        IReadOnlyList<Run> pendingRuns = await _LoadPendingAsync(characterId, cancellationToken);
+        IReadOnlyList<Run> pendingRuns = await _LoadPendingAsync(serverAddress, characterId, cancellationToken);
         var pushedRunIds = new HashSet<Guid>();
         foreach (Run run in pendingRuns)
         {
@@ -34,7 +34,7 @@ public sealed class RunSynchronizationService(
             var push = await client.PushAsync(serverAddress, payload, characterId, cancellationToken);
             if (!push.Accepted)
                 return (false, push.Message);
-            await _MarkSyncedAsync(run.Id, push.LastPushedAtUtc, cancellationToken);
+            await _MarkSyncedAsync(run.Id, serverAddress, push.LastPushedAtUtc, cancellationToken);
             pushedRunIds.Add(run.Id);
         }
 
@@ -43,15 +43,18 @@ public sealed class RunSynchronizationService(
             var pull = await client.PullAsync(serverAddress, groupCodes, waterline, characterId, cancellationToken);
             if (!pull.Accepted)
                 return (false, pull.Message);
-            await applier.ApplyAsync(pull.Runs, pushedRunIds, cancellationToken);
+            await applier.ApplyAsync(serverAddress, pull.Runs, pushedRunIds, cancellationToken);
         }
         return (true, "Runs synchronized.");
     }
 
-    private async Task<IReadOnlyList<Run>> _LoadPendingAsync(long characterId, CancellationToken cancellationToken)
+    /// <summary>Pending for THIS server, never pending as such: a run queued for another coupled server must not
+    /// travel here because a sync happened to run first.</summary>
+    private async Task<IReadOnlyList<Run>> _LoadPendingAsync(string serverAddress, long characterId, CancellationToken cancellationToken)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        return await _IncludeGraph(db.Set<Run>().AsNoTracking().Where(run => run.CharacterId == characterId && run.SyncState == RunSyncState.Pending))
+        return await _IncludeGraph(db.Set<Run>().AsNoTracking().Where(run =>
+                run.CharacterId == characterId && run.SyncState == RunSyncState.Pending && run.SyncServerAddress == serverAddress))
             .ToListAsync(cancellationToken);
     }
 
@@ -62,11 +65,12 @@ public sealed class RunSynchronizationService(
             .ToListAsync(cancellationToken);
     }
 
-    private async Task _MarkSyncedAsync(Guid runId, DateTime? lastPushedAtUtc, CancellationToken cancellationToken)
+    private async Task _MarkSyncedAsync(Guid runId, string serverAddress, DateTime? lastPushedAtUtc, CancellationToken cancellationToken)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
         await db.Set<Run>().Where(run => run.Id == runId).ExecuteUpdateAsync(properties => properties
             .SetProperty(run => run.SyncState, RunSyncState.Synced)
+            .SetProperty(run => run.SyncServerAddress, serverAddress)
             .SetProperty(run => run.LastPushedAtUtc, lastPushedAtUtc), cancellationToken);
     }
 

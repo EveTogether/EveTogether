@@ -99,11 +99,34 @@
             </StackPanel>
         </Border>
 
+        <!-- ══ Sources ══ Local first, then a tab per coupled server — the fit browser's strip. No coupled server
+             means no server tab and no strip at all, rather than a lone "Local" tab explaining nothing. -->
+        <Border DockPanel.Dock="Top" Padding="14,0" BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource BorderBrush}"
+                IsVisible="{Binding HasServerTabs}">
+            <ListBox x:Name="SourceTabs" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}"
+                     Background="Transparent" BorderThickness="0" Padding="0">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="vr:RunsTabViewModel">
+                        <TextBlock Text="{Binding Header}" FontSize="11" Padding="8,7"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="160"/>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+
         <!-- ══ Running ══ one lane per local character, running or not. A pilot sitting still keeps their lane and
              their START: a toon that drops out of the band is a toon you forget (AC-6). Built for n lanes; today
-             at most one of them carries a run, because RunningRunLookup answers only for exactly one (ET-130). -->
+             at most one of them carries a run, because RunningRunLookup answers only for exactly one (ET-130).
+             Local only: a running clock belongs to this machine, not to a server. -->
         <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1"
-                BorderBrush="{DynamicResource BorderBrush}">
+                BorderBrush="{DynamicResource BorderBrush}"
+                IsVisible="{Binding IsLocalTabSelected}">
             <StackPanel Spacing="5">
                 <TextBlock Classes="label" Text="RUNNING"/>
                 <ItemsControl x:Name="LaneList" ItemsSource="{Binding Lanes}">
@@ -131,9 +154,11 @@
 
         <!-- ══ Unfinished ══ stopped and then left there. Its own band, above the days and never a row inside one:
              a run that was never saved must not count towards an evening's total (ET-179 AC-3). Gone entirely once
-             the last one is dealt with — an empty band would be a permanent reminder of nothing. -->
+             the last one is dealt with — an empty band would be a permanent reminder of nothing. Local only, like
+             RUNNING: a run still owing a decision owes it on this machine. -->
         <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1"
-                BorderBrush="{DynamicResource BorderBrush}" IsVisible="{Binding HasUnfinishedRuns}">
+                BorderBrush="{DynamicResource BorderBrush}"
+                IsVisible="{Binding ShowUnfinishedBand}">
             <StackPanel Spacing="5">
                 <TextBlock Classes="label" Text="UNFINISHED"/>
                 <TextBlock Classes="hint" Margin="0" TextWrapping="Wrap"
@@ -162,9 +187,14 @@
             </StackPanel>
         </Border>
 
-        <!-- ══ Finished activities ══ one row per activity, under the day it belongs to. -->
+        <!-- ══ Finished activities ══ one row per activity, under the day it belongs to. The days belong to the
+             selected source: Local holds every activity, a server tab the ones published to it. -->
         <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-            <ItemsControl x:Name="DayList" ItemsSource="{Binding Days}">
+          <StackPanel>
+            <TextBlock x:Name="TabStatus" Classes="hint" Margin="14,10" TextWrapping="Wrap"
+                       IsVisible="{Binding SelectedTab.StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                       Text="{Binding SelectedTab.StatusMessage}"/>
+            <ItemsControl x:Name="DayList" ItemsSource="{Binding SelectedTab.Days}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="vr:RunsDayViewModel">
                         <StackPanel>
@@ -178,7 +208,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="vr:ActivityOverviewRowViewModel">
                                         <StackPanel>
-                                            <Grid ColumnDefinitions="Auto,*"
+                                            <Grid ColumnDefinitions="Auto,*,Auto"
                                                   Background="Transparent">
                                                 <Button Grid.Column="0" Classes="caretbtn"
                                                         Command="{Binding ToggleCommand}"
@@ -186,6 +216,14 @@
                                                     <TextBlock Classes="caret" Classes.expanded="{Binding IsExpanded}"
                                                                Text="&#x25B6;"/>
                                                 </Button>
+                                                <!-- Outside the row button, not inside it: the row opens the detail,
+                                                     and a publish that fired because someone aimed for the detail is
+                                                     exactly the click this data must not have. -->
+                                                <Button Grid.Column="2" Classes="rowaction" Content="PUBLISH"
+                                                        VerticalAlignment="Top" Margin="0,8,14,0"
+                                                        IsVisible="{Binding CanPublish}"
+                                                        Command="{Binding PublishCommand}"
+                                                        ToolTip.Tip="Send this activity's runs to a coupled server"/>
                                                 <Button Grid.Column="1" Classes="activityrow"
                                                         Command="{Binding OpenDetailCommand}">
                                                     <StackPanel Spacing="3">
@@ -223,6 +261,13 @@
                                                             <TextBlock Grid.Column="1" Classes="rowsub"
                                                                        IsVisible="{Binding HasAutoSavedRun}"
                                                                        Text="{Binding AutoSavedText}"/>
+                                                            <!-- A run knows where it stands towards a server, so the
+                                                                 row says it. A fit row has no such line because a fit
+                                                                 keeps no trace of having been shared. -->
+                                                            <TextBlock Grid.Column="1" Classes="rowsub"
+                                                                       Margin="0,0,64,0" HorizontalAlignment="Right"
+                                                                       IsVisible="{Binding HasSyncText}"
+                                                                       Text="{Binding SyncText}"/>
                                                             <TextBlock Grid.Column="2" Classes="rowsub"
                                                                        Text="{Binding EnemiesText}"/>
                                                         </Grid>
@@ -285,6 +330,7 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
+          </StackPanel>
         </ScrollViewer>
     </DockPanel>
 </v:ChromedWindow>

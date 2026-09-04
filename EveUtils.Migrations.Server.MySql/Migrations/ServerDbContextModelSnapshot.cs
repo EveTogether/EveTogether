@@ -846,6 +846,10 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.Property<DateTime?>("StoppedAtUtc")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<string>("SyncServerAddress")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
                     b.Property<int>("SyncState")
                         .HasColumnType("int");
 

@@ -807,6 +807,10 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.Property<DateTime?>("StoppedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SyncServerAddress")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("SyncState")
                         .HasColumnType("INTEGER");
 

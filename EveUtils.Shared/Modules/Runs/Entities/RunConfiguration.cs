@@ -15,6 +15,7 @@ public sealed class RunConfiguration : IEntityTypeConfiguration<Run>
         builder.Property(run => run.Signature).HasMaxLength(128);
         builder.Property(run => run.FitContentHash).HasMaxLength(128);
         builder.Property(run => run.FitNameSnapshot).HasMaxLength(255);
+        builder.Property(run => run.SyncServerAddress).HasMaxLength(255);
         builder.HasIndex(run => new { run.GroupCode, run.CharacterId });
     }
 }

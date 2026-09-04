@@ -20,6 +20,7 @@ namespace EveUtils.Client.UiTests;
 public sealed class RunStorageTests
 {
     private static readonly DateTime StartedAtUtc = new(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
+    private const string ServerAddress = "https://server.invalid";
 
     [AvaloniaFact]
     public async Task LocalRun_WithoutServer_PersistsBuildsSummaryAndRemainsLocal()
@@ -416,12 +417,13 @@ public sealed class RunStorageTests
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
             1234, "Homefront", 30000142), cancellationToken);
 
-        Result queued = await dispatcher.Send(new QueueRunForServerSyncCommand(started.Value), cancellationToken);
+        Result queued = await dispatcher.Send(new QueueRunForServerSyncCommand(started.Value, ServerAddress), cancellationToken);
 
         await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
         Run run = Assert.Single(await db.Set<Run>().ToListAsync(cancellationToken));
         Assert.True(queued.IsSuccess);
         Assert.Equal(RunSyncState.Pending, run.SyncState);
+        Assert.Equal(ServerAddress, run.SyncServerAddress);
     }
 
     [AvaloniaFact]
@@ -434,8 +436,8 @@ public sealed class RunStorageTests
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
             1234, "Homefront", 30000142, "HF-7QK2"), cancellationToken);
-        await dispatcher.Send(new QueueRunForServerSyncCommand(started.Value), cancellationToken);
         const string serverAddress = "https://127.0.0.1:1";
+        await dispatcher.Send(new QueueRunForServerSyncCommand(started.Value, serverAddress), cancellationToken);
         await sessions.SaveAsync(serverAddress, new ClientSessionTokens("access", "refresh", "Pilot", 90000001), cancellationToken);
 
         var synchronized = await synchronization.SynchronizeAsync(serverAddress, 90000001, cancellationToken);
@@ -482,13 +484,14 @@ public sealed class RunStorageTests
                 SavedAtUtc = StartedAtUtc,
                 SiteTypeId = 1234,
                 SyncState = RunSyncState.Pending,
+                SyncServerAddress = ServerAddress,
                 Revision = 2
             });
             await db.SaveChangesAsync(cancellationToken);
         }
         var synchronization = new RunSynchronizationService(contextFactory, client, applier);
 
-        var synchronized = await synchronization.SynchronizeAsync("https://server.invalid", 90000001, cancellationToken);
+        var synchronized = await synchronization.SynchronizeAsync(ServerAddress, 90000001, cancellationToken);
 
         Assert.True(synchronized.Accepted);
         Assert.Equal(["push", "pull"], client.Calls);
@@ -513,7 +516,7 @@ public sealed class RunStorageTests
         }
         await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
 
-        await applier.ApplyAsync([new RunWirePayload
+        await applier.ApplyAsync(ServerAddress, [new RunWirePayload
         {
             Run = RunWireData.FromEntity(new Run { Id = started.Value, DeletedAtUtc = DateTime.UtcNow }),
             SentAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
@@ -550,7 +553,7 @@ public sealed class RunStorageTests
             await db.SaveChangesAsync(cancellationToken);
         }
 
-        await applier.ApplyAsync([new RunWirePayload
+        await applier.ApplyAsync(ServerAddress, [new RunWirePayload
         {
             Run = RunWireData.FromEntity(new Run
             {
@@ -598,7 +601,7 @@ public sealed class RunStorageTests
             Revision = 2
         };
 
-        await applier.ApplyAsync([new RunWirePayload
+        await applier.ApplyAsync(ServerAddress, [new RunWirePayload
         {
             Run = RunWireData.FromEntity(remote),
             SentAtUnixMilliseconds = new DateTimeOffset(remoteNowUtc).ToUnixTimeMilliseconds()

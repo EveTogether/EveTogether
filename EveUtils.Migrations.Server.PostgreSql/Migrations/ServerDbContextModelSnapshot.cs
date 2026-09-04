@@ -846,6 +846,10 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.Property<DateTime?>("StoppedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("SyncServerAddress")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
                     b.Property<int>("SyncState")
                         .HasColumnType("integer");
 
