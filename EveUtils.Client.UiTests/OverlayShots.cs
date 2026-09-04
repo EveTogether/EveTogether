@@ -28,12 +28,7 @@ internal static class OverlayShots
         var path = Path.Combine(
             string.IsNullOrWhiteSpace(directory) ? Path.GetTempPath() : directory, name + ".png");
 
-        // Avalonia offers no non-obsolete Save on Bitmap in this version — both overloads carry CS0618, which is why
-        // every render test in this suite raises one. Suppressed in this one place instead of at each new call site,
-        // so the build's warning count stays where ET-35 left it.
-#pragma warning disable CS0618
-        frame!.Save(path);
-#pragma warning restore CS0618
+        frame!.Save(path, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
 
         return Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
     }
