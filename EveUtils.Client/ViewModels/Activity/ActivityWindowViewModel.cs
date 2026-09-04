@@ -858,7 +858,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (SignatureName is { Length: > 0 } copied
             && !_IsSameRun(run.Signature, run.SiteName, SignatureId, copied))
         {
-            if (run.GroupCode is null && FleetId is null)
+            // The run's OWN group code decides this, and nothing else. It used to also require `FleetId is null` —
+            // this window's live fleet membership — which is a different question about a different thing: a Run row
+            // has no fleet id at all, so its group code is the only tie it has to anybody else. Being in a fleet
+            // tonight does not hand yesterday's solo run to whoever commands tonight (ET-152: "the fleet id says
+            // where a run is filed, not who commands it").
+            //
+            // What that cost Raymond on 2026-09-04: a run of his own left open since the previous day was adopted,
+            // refused close-out because he happened to be in Jithran's fleet, and then read as a group run — so the
+            // window told him only Jithran could stop or discard it. His own run, and no way out of it.
+            if (run.GroupCode is null)
             {
                 await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
                     .Send(new DiscardRunCommand(run.Id, DateTime.UtcNow));

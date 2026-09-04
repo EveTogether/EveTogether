@@ -301,6 +301,51 @@ public class ActivityWindowWiringTests
     }
 
     /// <summary>
+    /// Raymond, 2026-09-04: his own run, left open since the previous day, came up in a fresh window with the
+    /// controls gone and "Only Jithran, who commands this fleet, can start, stop or discard this run." His run, and
+    /// no way out of it.
+    ///
+    /// The close-out guard asked <c>run.GroupCode is null &amp;&amp; FleetId is null</c>, and that second half is a
+    /// different question about a different thing: <c>FleetId</c> is this window's live membership, while a
+    /// <c>Run</c> row has no fleet id at all. So a solo run stopped being closable the moment its pilot joined
+    /// anybody's fleet. That is the mistake ET-152 already took out of <see cref="RunControlAuthority"/> — see
+    /// <c>HomefrontCommandAuthorityTests.ASoloRun_IsAlwaysTheOwnPilotsToCommand</c>, whose second row is this same
+    /// fleet id — and the guard had quietly put it back.
+    ///
+    /// The fleet id here is what makes this a test rather than a copy of the one above: drop it and this passes
+    /// either way.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ACopiedSiteEndsHisOwnSoloRun_EvenWhileHeIsInSomebodyElsesFleet()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel first = await harness.OpenAsync();
+        first.SignatureId = "RUS-326";
+        first.SignatureName = "Sansha Hideaway";
+        await first.StartRunCommand.ExecuteAsync(null);
+        Guid? open = first.RunId;
+        Assert.Null(first.GroupCode);   // solo: this run fans out to nobody, whatever fleet he is in
+        first.Dispose();
+
+        var reopened = new ActivityWindowViewModel(ActivityKind.Site, harness.Services)
+            { SignatureId = "SUG-270", SignatureName = "Drone Cluster", FleetId = 4242 };
+        var window = new ActivityWindow(reopened);
+        window.Show();
+        await ActivityWindowHarness.WaitUntil(() => reopened.ClockText != "--:--" || reopened.RunId is not null,
+            timeoutMs: 1500);
+
+        Assert.Equal("Drone Cluster", reopened.SignatureName);   // the site he copied, not yesterday's
+        Assert.Null(reopened.RunId);
+        Assert.True(reopened.IsStartButtonVisible);              // and he can act, rather than waiting on an FC
+
+        // Closed out, not deleted: it keeps everything it collected (DiscardRunCommand never removes a row).
+        Run left = await _RunAsync(harness, open!.Value);
+        Assert.Equal(StoredRunState.Stopped, left.State);
+        Assert.Null(left.DeletedAtUtc);
+        window.Close();
+    }
+
+    /// <summary>
     /// The exception, and the reason this is not just "always close the old one": a run that belongs to a group
     /// ends on every other member's machine too, and that is the FC's button. It stays, the copied site waits.
     /// </summary>
