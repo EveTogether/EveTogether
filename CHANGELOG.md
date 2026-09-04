@@ -134,6 +134,13 @@ taken from the matching `## vX.Y.Z` section below.
   `docker-compose.yml` already references instead of building it from source.
 
 ### Changed
+- **What kind of activity a run is is now carried from where it started, instead of being worked out from "is this
+  an abyssal run".** Everything that was not an abyssal run was filed as a combat site, so a mission was stored as a
+  site and came back as one — and there was no way to record any other kind at all. Each kind now stands on its own
+  footing, which is what lets homefronts, missions, relic and data sites follow. Two things you can see straight
+  away: a mission is no longer asked which loot strategy it was flown on — "full clear" is a site's word and means
+  nothing on a mission — and the setting for reading loot off your clipboard is now called **Run loot** rather than
+  **Abyssal run loot**, because it never was about the abyss. It works exactly as it did.
 - **Copying a scanned combat site now starts the run straight away, instead of offering a card you had to come back
   to the app to click.** The run window comes up on that site with the clock already going, behind whatever you are
   looking at and without taking the keyboard — so you can stay in EVE and fly. If more than one of your characters

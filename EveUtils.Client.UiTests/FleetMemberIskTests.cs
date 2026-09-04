@@ -10,6 +10,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 

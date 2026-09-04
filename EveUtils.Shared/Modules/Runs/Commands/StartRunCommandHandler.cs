@@ -59,6 +59,8 @@ internal sealed class StartRunCommandHandler(IDbContextFactory<ClientDbContext> 
         return Result<Guid>.Success(id);
     }
 
-    private static string? _CreateGroupCode(StartRunCommand command) => command.FleetId is null ||
-        command.ActivityKind == ActivityKind.Site && !command.IsFleetCommander ? null : RunGroupCode.Create();
+    private static string? _CreateGroupCode(StartRunCommand command) => command.FleetId is null
+        || RunGroupCodeArbiter.TakesGroupFromCommanderOnly(command.ActivityKind) && !command.IsFleetCommander
+            ? null
+            : RunGroupCode.Create();
 }

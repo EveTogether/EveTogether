@@ -545,7 +545,7 @@
                         </Grid>
                         <!-- Set, not reported: the label is what makes the duration readable, so the row it sits on
                              is the row you answer it with. -->
-                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsLootStrategyShown}">
                             <TextBlock Text="LOOT STRATEGY" VerticalAlignment="Center"/>
                             <ItemsControl Grid.Column="1" HorizontalAlignment="Right"
                                           ItemsSource="{Binding LootStrategyChoices}">

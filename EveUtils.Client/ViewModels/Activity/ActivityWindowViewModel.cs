@@ -32,6 +32,7 @@ using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Control;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
@@ -43,9 +44,6 @@ using EveUtils.Shared.Modules.Sde;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
-// Aliased rather than imported wholesale: that namespace also holds an ActivityKind, which would collide with the
-// window's own.
-using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 
 namespace EveUtils.Client.ViewModels.Activity;
 
@@ -77,8 +75,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public static IReadOnlyList<string> Tiers { get; } =
         ["Tranquil", "Calm", "Agitated", "Fierce", "Raging", "Chaotic", "Cataclysmic"];
 
-    /// <summary>How much of the pocket you opened. The two runs loot in different vocabularies, so they get
-    /// different lists rather than one that half fits each.</summary>
+    /// <summary>How much of the pocket you opened. Kinds loot in different vocabularies, so each gets its own list
+    /// rather than one that half fits each — and a kind with nothing sensible to offer gets none.</summary>
     public static IReadOnlyList<string> AbyssalLootStrategies { get; } =
         ["bioadaptive only", "bioadaptive + triglavian", "all cans"];
 
@@ -173,19 +171,18 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         Refresh(DateTime.UtcNow);
     }
 
-    /// <summary>Which of the two runs this window is showing. Fixed for the life of the window: a run does not turn
-    /// into the other kind halfway through.</summary>
+    /// <summary>Which kind of run this window is showing — the same value the store files it under, given to the
+    /// window rather than worked out here (ET-174 AC-3). Fixed for the life of the window: a run does not turn into
+    /// another kind halfway through.</summary>
     public ActivityKind Kind { get; }
 
     public IReadOnlyList<RunEnemyObservationViewModel> EnemyObservations => _enemyObservations?.Observations ?? [];
 
     public RunLootViewModel? RunLoot { get; }
 
+    /// <summary>Only for what is genuinely the abyss's own: the 20-minute deadline, the tier and weather, the
+    /// per-member anchors. Never for "and everything else is a site" — that is what this window used to do.</summary>
     public bool IsAbyssal => Kind == ActivityKind.Abyssal;
-
-    /// <summary>The same kind as the run store names it. Two enums, deliberately mapped rather than cast: they are
-    /// separate types and a silent reordering of either would otherwise file runs under the wrong activity.</summary>
-    public StoredActivityKind StoredKind => IsAbyssal ? StoredActivityKind.Abyssal : StoredActivityKind.Site;
 
     // ── The run ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -292,8 +289,19 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public IReadOnlyList<ActivityChoice> LootStrategyChoices { get; }
 
-    /// <summary>The list this run's kind loots by.</summary>
-    public IReadOnlyList<string> LootStrategies => IsAbyssal ? AbyssalLootStrategies : SiteLootStrategies;
+    /// <summary>The list this run's kind loots by. Empty is a real answer and not a gap: a mission is not looted in
+    /// these words at all, so it gets no list rather than the site list it never fitted (ET-174 AC-4).</summary>
+    public IReadOnlyList<string> LootStrategies => Kind switch
+    {
+        ActivityKind.Abyssal => AbyssalLootStrategies,
+        ActivityKind.Site => SiteLootStrategies,
+        // A mission, and any kind this build has not met: no list at all.
+        _ => []
+    };
+
+    /// <summary>Hidden rather than shown empty: a LOOT STRATEGY row with no buttons under it reads as a question
+    /// the window failed to load, not as one that does not apply here.</summary>
+    public bool IsLootStrategyShown => LootStrategyChoices.Count > 0;
 
     /// <summary>What the copied signature's own text said it was (ET-100) — the raw scan-window field, not
     /// anything the SDE could enrich it to. Always null in the abyss; a filament carries no signature.</summary>
@@ -472,7 +480,19 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         ? "corrected by hand — this is what SAVE stores, and it moves this run only"
         : "measured from START and STOP";
 
-    public string HeaderTitle => IsAbyssal ? "ABYSSAL RUN" : "SITE RUN";
+    /// <summary>What a kind this build has never heard of is called. A run stored by a later version still opens
+    /// and still reads as a run — the window going down over a header is the failure mode AGENTS.md §2 forbids.
+    /// No kind that ships may land here, and a test walks every <see cref="ActivityKind"/> to say so (ET-174 AC-1):
+    /// adding one without deciding its title turns that test red.</summary>
+    public const string UnknownKindHeader = "RUN";
+
+    public string HeaderTitle => Kind switch
+    {
+        ActivityKind.Abyssal => "ABYSSAL RUN",
+        ActivityKind.Site => "SITE RUN",
+        ActivityKind.Mission => "MISSION RUN",
+        _ => UnknownKindHeader
+    };
 
     // Start, stop and discard steer the run for everybody in it, so all three hang off the same authority (AC-4).
     // Start and stop are the same slot seen from two sides and never both apply: a run that is going can only be
@@ -612,7 +632,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 // STOP is a pause, not an end (Raymond, 2026-09-02): stepping out mid-site and coming back has to
                 // cost you nothing, so START picks the same run back up. What ends a run is SAVE or DISCARD.
                 ? "Stopped runs keep their figures; start picks this run back up."
-                : "Manual start and stop are the only source for a site run.";
+                : "Manual start and stop are the only source for this run.";
 
     // ── Section bodies ──────────────────────────────────────────────────────────────────────────────
 
@@ -816,7 +836,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         using var scope = _services.CreateScope();
         Result<RunningRunDto> running = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
             .Query(new GetRunningRunQuery());
-        if (!running.IsSuccess || running.Value is not { } run || run.ActivityKind != StoredKind)
+        if (!running.IsSuccess || running.Value is not { } run || run.ActivityKind != Kind)
             return false;
 
         // This window was opened on a signature, and the run still open is for a different site. That run is over:
@@ -930,7 +950,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         RunGroupCodeStart start = integrationEvent.Data;
         if (!start.IsFleetCommander || RunState != ActivityRunState.NotStarted
-            || (FleetId is { } fleetId && fleetId != start.FleetId) || start.ActivityKind != StoredKind)
+            || (FleetId is { } fleetId && fleetId != start.FleetId) || start.ActivityKind != Kind)
             return;
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() => JoinFleetRun(start));
@@ -1412,7 +1432,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         using var scope = _services.CreateScope();
         Result<Guid> started = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(
-            new StartRunCommand(characterId, StoredKind, startedAtUtc,
+            new StartRunCommand(characterId, Kind, startedAtUtc,
                 // No type id: a signature names a dungeon, and the catalogue's DungeonId is not the type id this
                 // column holds. The name travels instead.
                 SiteTypeId: 0,
@@ -1504,7 +1524,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
 
         _ = eventBus.PublishAsync(
-            new FleetRunStoppedEvent(new RunGroupStop(fleetId, StoredKind, groupCode, stoppedAtUtc)),
+            new FleetRunStoppedEvent(new RunGroupStop(fleetId, Kind, groupCode, stoppedAtUtc)),
             EventTarget.Both);
     }
 
@@ -1761,7 +1781,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _isDiscarding = true;
         if (FleetId is { } fleetId && GroupCode is { } groupCode)
             await _services.GetRequiredService<IEventBus>().PublishAsync(
-                new FleetRunDiscardedEvent(new RunGroupDiscard(fleetId, StoredKind, groupCode, nowUtc)),
+                new FleetRunDiscardedEvent(new RunGroupDiscard(fleetId, Kind, groupCode, nowUtc)),
                 EventTarget.Both);
 
         // Thrown away means this window is done, so it closes (ET-155). It used to be cleaned out and left standing
@@ -2221,7 +2241,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <summary>
     /// The clipboard hands this over from a void call, so the work is tracked rather than dropped: a dispatcher
     /// that throws — a locked database is the one that happens — becomes a toast and a log line instead of an
-    /// unobserved task, the same treatment <c>AbyssalLootCapture.StoreAndOfferAsync</c> gives its own write.
+    /// unobserved task, the same treatment <c>ClipboardLootCapture.StoreAndOfferAsync</c> gives its own write.
     ///
     /// Nothing races on the caller's side: <c>DialogService</c> only reaches here when a window is already up, and
     /// every branch after it either returns or activates that same window. It never builds a second one.

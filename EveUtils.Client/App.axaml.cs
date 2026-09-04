@@ -55,7 +55,7 @@ public partial class App : Application
             // Third consumer, same reason again (ET-65). It subscribes in its constructor, and a singleton nobody
             // resolves is never constructed — so with this line missing the loot capture was registered, tested and
             // shipped without ever being subscribed, and every copy out of a loot window went past it.
-            _ = Program.Services.GetRequiredService<Clipboard.AbyssalLootCapture>();
+            _ = Program.Services.GetRequiredService<Clipboard.ClipboardLootCapture>();
 
             // Clipboard watch: reads the persisted opt-in and starts only if the user turned it on (default off).
             // Started here rather than in Program because reading the clipboard needs the toplevel above (ET-57).

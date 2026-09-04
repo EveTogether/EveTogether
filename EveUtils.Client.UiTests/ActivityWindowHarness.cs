@@ -10,6 +10,7 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Settings.Commands;
+using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.UiTests;

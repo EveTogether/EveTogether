@@ -11,9 +11,9 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Settings.Repositories;
+using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 
 namespace EveUtils.Client.UiTests;
 
@@ -165,7 +165,7 @@ public sealed class HomefrontWindowFocusTests
         var bus = instance.Services.GetRequiredService<IEventBus>();
         using var presenter = new FleetRunWindowPresenter(bus, dialogs, instance.Services);
 
-        bus.PublishAsync(new FleetRunGroupCodeEvent(new RunGroupCodeStart(4242, StoredActivityKind.Site, "HF-F0CU",
+        bus.PublishAsync(new FleetRunGroupCodeEvent(new RunGroupCodeStart(4242, ActivityKind.Site, "HF-F0CU",
             DateTime.UtcNow, IsFleetCommander: true))).GetAwaiter().GetResult();
         Dispatcher.UIThread.RunJobs();
 
@@ -183,7 +183,7 @@ public sealed class HomefrontWindowFocusTests
         var bus = instance.Services.GetRequiredService<IEventBus>();
         using var presenter = new FleetRunWindowPresenter(bus, dialogs, instance.Services);
 
-        bus.PublishAsync(new FleetRunGroupCodeEvent(new RunGroupCodeStart(4242, StoredActivityKind.Site, "HF-F0CU",
+        bus.PublishAsync(new FleetRunGroupCodeEvent(new RunGroupCodeStart(4242, ActivityKind.Site, "HF-F0CU",
             DateTime.UtcNow, IsFleetCommander: false))).GetAwaiter().GetResult();
         Dispatcher.UIThread.RunJobs();
 

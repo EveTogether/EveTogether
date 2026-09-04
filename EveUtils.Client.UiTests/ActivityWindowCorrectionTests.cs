@@ -14,6 +14,7 @@ using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Entities;
+using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -21,7 +22,6 @@ using Xunit;
 // store's, and Avalonia's Dispatcher beside the CQRS one.
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 using Result = EveUtils.Shared.Messaging.Result;
-using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 using StoredRunState = EveUtils.Shared.Modules.Runs.Enums.RunState;
 
 namespace EveUtils.Client.UiTests;
@@ -247,13 +247,13 @@ public sealed class ActivityWindowCorrectionTests
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
 
         Guid measured = (await dispatcher.Send(
-            new StartRunCommand(90000001, StoredActivityKind.Site, Anchor, 1234, "Homefront", 30000142),
+            new StartRunCommand(90000001, ActivityKind.Site, Anchor, 1234, "Homefront", 30000142),
             cancellationToken)).Value;
         Assert.True((await dispatcher.Send(new SaveRunCommand(measured, Anchor.AddMinutes(6), Anchor.AddMinutes(6),
             [], [], [], []), cancellationToken)).IsSuccess);
 
         Guid corrected = (await dispatcher.Send(
-            new StartRunCommand(90000002, StoredActivityKind.Site, Anchor, 1234, "Homefront", 30000142),
+            new StartRunCommand(90000002, ActivityKind.Site, Anchor, 1234, "Homefront", 30000142),
             cancellationToken)).Value;
         Assert.True((await dispatcher.Send(new SaveRunCommand(corrected, Anchor.AddMinutes(8), Anchor.AddMinutes(8),
             [], [], [], [], StartedAtUtc: Anchor.AddSeconds(-45),
@@ -278,7 +278,7 @@ public sealed class ActivityWindowCorrectionTests
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
 
         EveUtils.Shared.Messaging.Result<Guid> started = await dispatcher.Send(
-            new StartRunCommand(90000001, StoredActivityKind.Site, Anchor, 1234, "Homefront", 30000142), cancellationToken);
+            new StartRunCommand(90000001, ActivityKind.Site, Anchor, 1234, "Homefront", 30000142), cancellationToken);
         Result saved = await dispatcher.Send(new SaveRunCommand(started.Value, Anchor.AddMinutes(-1),
             Anchor.AddMinutes(1), [], [], [], []), cancellationToken);
 

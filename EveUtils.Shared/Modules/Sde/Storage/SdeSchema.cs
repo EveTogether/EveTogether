@@ -18,9 +18,10 @@ public static class SdeSchema
     /// (the build number alone would not change). v2 added <c>DogmaAttribute.maxAttributeId</c> (attribute capping);
     /// v3 added the <c>TypeNameAlias</c> table for locale-agnostic name import; v4 added the <c>Site</c> table
     /// (the dungeon/site catalogue); v5 added the <c>SiteNameAlias</c> table so a site name copied from a
-    /// non-English client resolves too (ET-79 AC-4).
+    /// non-English client resolves too (ET-79 AC-4); v6 added <c>SolarSystem</c>, <c>Agent</c>,
+    /// <c>AgentNameAlias</c>, <c>Mission</c> and <c>EpicArcMission</c> — the mission side of the SDE (ET-173).
     /// </summary>
-    public const int SchemaVersion = 5;
+    public const int SchemaVersion = 6;
 
     /// <summary>Schema-creating statements, run before the bulk load.</summary>
     public static readonly string[] CreateTables =
@@ -115,7 +116,54 @@ public static class SdeSchema
         // Site has no persisted nameKey column of its own, so the lookup goes through this table for every locale
         // rather than mixing it with an ASCII-only SQL LOWER() over Site.nameEn — see TableWriters and
         // SqliteSdeAccessor.FindSitesByExactName.
-        "CREATE TABLE SiteNameAlias (dungeonId INTEGER NOT NULL, nameKey TEXT NOT NULL, locale TEXT NOT NULL);"
+        "CREATE TABLE SiteNameAlias (dungeonId INTEGER NOT NULL, nameKey TEXT NOT NULL, locale TEXT NOT NULL);",
+        // The mission side of the SDE (ET-173). SolarSystem backs Agent.solarSystemId; agent and site name
+        // resolution is only ever by id, never joined against Site's own dungeonId space (see Mission below).
+        """
+        CREATE TABLE SolarSystem (
+            solarSystemId  INTEGER PRIMARY KEY,
+            nameEn         TEXT NOT NULL,
+            securityStatus REAL NOT NULL
+        ) WITHOUT ROWID;
+        """,
+        // Only npcCharacters rows with an `agent` sub-object become a row here (ET-173 AC-2). solarSystemId is
+        // resolved at import time from npcStations.jsonl (agent -> station -> system) and is null when that
+        // dataset is unavailable — nothing here depends on Site or dungeonId. agentTypeName is denormalised from
+        // agentTypes.jsonl (13 rows, too small for its own table, same reasoning as Site.archetypeName).
+        """
+        CREATE TABLE Agent (
+            agentId       INTEGER PRIMARY KEY,
+            nameEn        TEXT NOT NULL,
+            nameKey       TEXT NOT NULL,
+            level         INTEGER NOT NULL,
+            agentTypeId   INTEGER NOT NULL,
+            agentTypeName TEXT,
+            divisionId    INTEGER NOT NULL,
+            isLocator     INTEGER NOT NULL,
+            corporationId INTEGER NOT NULL,
+            locationId    INTEGER NOT NULL,
+            solarSystemId INTEGER
+        ) WITHOUT ROWID;
+        """,
+        // Locale-agnostic name import for agents, the TypeNameAlias route (ET-173 AC-4): one row per non-English
+        // locale, English stays canonical on Agent.nameKey. Not the SiteNameAlias route — agent names carry no
+        // known non-ASCII-English edge case, so there is no reason to route "en" through here too.
+        "CREATE TABLE AgentNameAlias (agentId INTEGER NOT NULL, nameKey TEXT NOT NULL, locale TEXT NOT NULL);",
+        // Name and keys only — the eight-language message/reward blocks are the bulk of missions.jsonl's 53 MB raw
+        // and are not imported. killMissionDungeonId is its own id space: 1.460 distinct ids against Site's 1.409,
+        // the same numeric range, with 3 accidental overlaps (13341, 13342, 14100 — ET-173 AC-5). It must never be
+        // compared against Site.dungeonId as if the two were the same catalogue.
+        """
+        CREATE TABLE Mission (
+            missionId            INTEGER PRIMARY KEY,
+            nameEn               TEXT NOT NULL,
+            agentTypeId          INTEGER,
+            killMissionDungeonId INTEGER
+        ) WITHOUT ROWID;
+        """,
+        // missionId -> arcId only (ET-173 AC-6, minimal by design); the nextMissions chain graph is a read
+        // concern (ET-131), not an import concern.
+        "CREATE TABLE EpicArcMission (missionId INTEGER PRIMARY KEY, arcId INTEGER NOT NULL) WITHOUT ROWID;"
     ];
 
     /// <summary>Index-creating statements, run after the bulk load.</summary>
@@ -130,6 +178,8 @@ public static class SdeSchema
         "CREATE INDEX IX_TypeDogmaEffect_typeId ON TypeDogmaEffect (typeId);",
         // The two site filter axes. Name search is a substring LIKE, which no index can serve.
         "CREATE INDEX IX_Site_archetypeId ON Site (archetypeId);",
-        "CREATE INDEX IX_Site_factionId ON Site (factionId);"
+        "CREATE INDEX IX_Site_factionId ON Site (factionId);",
+        "CREATE INDEX IX_Agent_nameKey ON Agent (nameKey);",
+        "CREATE INDEX IX_AgentNameAlias_nameKey ON AgentNameAlias (nameKey);"
     ];
 }
