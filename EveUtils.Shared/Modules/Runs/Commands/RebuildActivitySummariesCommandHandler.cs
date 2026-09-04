@@ -1,5 +1,6 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
+using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Entities;
@@ -8,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
+[ClientOnly]
 internal sealed class RebuildActivitySummariesCommandHandler(
     IDbContextFactory<ClientDbContext> contextFactory, IMarketPriceRepository marketPrices)
     : ICommandHandler<RebuildActivitySummariesCommand, Result<int>>

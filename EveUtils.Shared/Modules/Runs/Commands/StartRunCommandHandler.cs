@@ -1,5 +1,6 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
+using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
@@ -11,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
+[ClientOnly]
 internal sealed class StartRunCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus)
     : ICommandHandler<StartRunCommand, Result<Guid>>
 {

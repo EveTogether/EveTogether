@@ -73,8 +73,8 @@ public static class ClientServices
         services.AddPermissionRegistry(); // foundation: code-derived registry + OwnerAllPolicy
         services.AddCqrs();              // dispatcher behind the permission gate
         services.AddEventBus();          // local (in-process) event bus (+ remote-forward gate)
-        services.AddSharedServices();    // central marker-scan over the shared assembly
-        services.AddAutoServices(typeof(ClientServices).Assembly); // host-only marker-tagged services
+        services.AddSharedServices(ExecutionHost.Client);    // central marker-scan over the shared assembly
+        services.AddAutoServices(typeof(ClientServices).Assembly, ExecutionHost.Client); // host-only marker-tagged services
         services.AddSingleton<IWireEventCatalog, FleetWireEvents>(); // deserialize fleet invite events aimed at us
         services.AddSingleton<IWireEventCatalog, MessagingWireEvents>(); // deserialize message deliveries aimed at us
         services.AddWireEvents();        // event-type registry for the remote bus

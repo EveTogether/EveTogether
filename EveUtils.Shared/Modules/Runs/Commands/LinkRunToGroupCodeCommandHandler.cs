@@ -1,12 +1,14 @@
 using System.Text.RegularExpressions;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
+using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
+[ClientOnly]
 internal sealed partial class LinkRunToGroupCodeCommandHandler(IDbContextFactory<ClientDbContext> contextFactory)
     : ICommandHandler<LinkRunToGroupCodeCommand, Result>
 {

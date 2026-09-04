@@ -44,6 +44,7 @@ using EveUtils.Shared.Modules.Ships.Commands;
 using EveUtils.Shared.Modules.Ships.Queries;
 using EveUtils.Shared.Modules.Sync.Commands;
 using EveUtils.Shared.Modules.Sync.Queries;
+using EveUtils.Shared.Runtime;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -144,8 +145,8 @@ builder.Services.AddPermissionRegistry();                  // foundation: code-d
 builder.Services.AddSingleton<IAccessPolicy, ToggleablePolicy>(); // overrides OwnerAllPolicy for fit.sync (last-registered wins)
 builder.Services.AddCqrs();                                // dispatcher behind the permission gate
 builder.Services.AddEventBus();                            // local (in-process) event bus (+ remote-forward gate)
-builder.Services.AddSharedServices();                      // central marker-scan over the shared assembly
-builder.Services.AddAutoServices(typeof(Program).Assembly); // host-only marker-tagged services
+builder.Services.AddSharedServices(ExecutionHost.Server);  // central marker-scan over the shared assembly
+builder.Services.AddAutoServices(typeof(Program).Assembly, ExecutionHost.Server); // host-only marker-tagged services
 builder.Services.AddServerDatabase(builder.Configuration, dataDirectory); // db (anchored to dataDirectory) + runtime + modules (handlers + permissions per module)
 
 // ESI (Mode B confidential exchange) + server-auth (pairing, sessions, encrypted tokens, allowed-list).
