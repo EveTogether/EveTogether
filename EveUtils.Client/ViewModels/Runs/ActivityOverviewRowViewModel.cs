@@ -40,7 +40,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         Duration = TimeSpan.FromSeconds(row.DurationSeconds);
         TimeText = StartedAtLocal.ToString("HH:mm");
         SiteText = string.IsNullOrWhiteSpace(row.SiteName) ? "Unnamed site" : row.SiteName;
-        KindText = _KindText(row.ActivityKind);
+        KindText = KindLabel(row.ActivityKind);
         DurationText = Duration.ToString(@"hh\:mm\:ss");
         // "Net" is what the activity brought in, which on a combat site is mostly bounty: leaving it out read a
         // 1.26M ISK evening as its 6.8k of salvage (acceptatie 2026-09-04). Null only when neither half exists —
@@ -58,6 +58,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
             // "Counted", not "recorded": only hand-counted enemies are stored, so a zero here is nobody typing a
             // number, never an activity without a fight.
             : "no enemies counted";
+        HasAutoSavedRun = row.HasAutoSavedRun;
         Chips = [.. row.Rewards
             .OrderBy(reward => (int)reward.ParameterKey)
             .Select(reward => new ActivityRewardChipViewModel(reward.ParameterKey, reward.Amount))];
@@ -81,6 +82,12 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 
     public bool HasNet { get; }
     public string NetText { get; }
+
+    /// <summary>Nobody finished this one — the app committed it a day after it was stopped (ET-179). Said on the row
+    /// rather than left to the reader, who would otherwise find an activity in their history they never saved.</summary>
+    public bool HasAutoSavedRun { get; }
+
+    public string AutoSavedText => "auto-saved";
 
     /// <summary>What stands where the net would be when neither a loot capture nor a bounty line was ever taken.
     /// Never a "0 ISK": a zero here reads as a valuation that was taken and came out at nothing (ET-161 AC-4,
@@ -117,7 +124,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 
     // A kind added later gets its own name rather than an exception: this row is a list entry, and the whole screen
     // going down over one unknown value is the failure mode AGENTS.md §2 is about.
-    private static string _KindText(ActivityKind kind) => kind switch
+    public static string KindLabel(ActivityKind kind) => kind switch
     {
         ActivityKind.Abyssal => "ABYSSAL",
         ActivityKind.Site => "SITE",

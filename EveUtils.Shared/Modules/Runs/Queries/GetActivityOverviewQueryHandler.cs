@@ -46,7 +46,7 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             .AsNoTracking()
             .Where(run => run.State == RunState.Saved && !run.DeletedAtUtc.HasValue
                           && ((run.GroupCode != null && groupCodes.Contains(run.GroupCode)) || runIds.Contains(run.Id)))
-            .Select(run => new { run.Id, run.GroupCode, run.CharacterId })
+            .Select(run => new { run.Id, run.GroupCode, run.CharacterId, run.AutoSavedAtUtc })
             .ToListAsync(cancellationToken);
         Dictionary<Guid, string> activityKeyByRunId = memberRuns.ToDictionary(run => run.Id, run => run.GroupCode ?? run.Id.ToString());
 
@@ -59,16 +59,20 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             .ToListAsync(cancellationToken);
         ILookup<string, RunParameter> rewardsByActivity = parameters.ToLookup(parameter => activityKeyByRunId[parameter.RunId]);
         ILookup<string, long> crewByActivity = memberRuns.ToLookup(run => run.GroupCode ?? run.Id.ToString(), run => run.CharacterId);
+        HashSet<string> autoSavedActivities = [.. memberRuns
+            .Where(run => run.AutoSavedAtUtc.HasValue)
+            .Select(run => run.GroupCode ?? run.Id.ToString())];
 
         return Result<IReadOnlyList<ActivityOverviewRowDto>>.Success(
             [.. page.Select(summary => _ToDto(
                 summary,
                 rewardsByActivity[summary.GroupCode ?? summary.RunId!.Value.ToString()],
-                crewByActivity[summary.GroupCode ?? summary.RunId!.Value.ToString()]))]);
+                crewByActivity[summary.GroupCode ?? summary.RunId!.Value.ToString()],
+                autoSavedActivities.Contains(summary.GroupCode ?? summary.RunId!.Value.ToString())))]);
     }
 
     private static ActivityOverviewRowDto _ToDto(
-        ActivitySummary summary, IEnumerable<RunParameter> rewardRows, IEnumerable<long> crew)
+        ActivitySummary summary, IEnumerable<RunParameter> rewardRows, IEnumerable<long> crew, bool hasAutoSavedRun)
     {
         RunParameter[] rewards = [.. rewardRows];
         return new ActivityOverviewRowDto(
@@ -78,7 +82,8 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             [.. rewards.GroupBy(reward => reward.ParameterKey)
                 .Select(group => new ActivityRewardDto(group.Key, _SumOrNull(group.Select(reward => reward.Amount))))],
             summary.BountyIsk, summary.LootIskNet, summary.EnemyTypeCount,
-            rewards.Any(reward => reward.ParameterKey == RunParameterKey.Escalation));
+            rewards.Any(reward => reward.ParameterKey == RunParameterKey.Escalation),
+            hasAutoSavedRun);
     }
 
     private static decimal? _SumOrNull(IEnumerable<decimal?> amounts)

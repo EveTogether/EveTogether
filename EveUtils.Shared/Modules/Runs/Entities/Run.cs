@@ -25,6 +25,13 @@ public sealed class Run
     /// could tell a measured duration from a typed one. This project keeps that difference everywhere else.
     /// </summary>
     public DateTime? TimesCorrectedAtUtc { get; set; }
+
+    /// <summary>When the app saved this run itself, because it had been stopped for a day without anyone finishing
+    /// it (ET-179), or null when a pilot pressed SAVE. Both write <see cref="SavedAtUtc"/> and the same
+    /// <see cref="RunState.Saved"/>, so without this column an activity nobody ever committed would be
+    /// indistinguishable from one somebody stood behind.</summary>
+    public DateTime? AutoSavedAtUtc { get; set; }
+
     public DateTime? DeletedAtUtc { get; set; }
     public int SiteTypeId { get; set; }
 

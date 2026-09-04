@@ -95,6 +95,7 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
                 // The corrected times overwrite the measured ones, so this stamp is all that is left to tell the
                 // two apart afterwards — and it cannot be added back later for runs already saved without it.
                 .SetProperty(candidate => candidate.TimesCorrectedAtUtc, command.TimesCorrectedAtUtc)
+                .SetProperty(candidate => candidate.AutoSavedAtUtc, command.AutoSavedAtUtc)
                 .SetProperty(candidate => candidate.SavedAtUtc, command.SavedAtUtc)
                 .SetProperty(candidate => candidate.SyncState,
                     candidate => candidate.SyncState == RunSyncState.Local ? RunSyncState.Local : RunSyncState.Pending)

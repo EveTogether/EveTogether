@@ -245,6 +245,108 @@ public sealed class RunsOverviewTests
         Assert.DoesNotContain(texts, text => text == "no loot or bounty recorded");
     }
 
+    /// <summary>ET-179 AC-1: three runs on <c>Stopped</c> and two on <c>Saved</c> — all five are on screen, and the
+    /// three that were never finished stand apart from the two that were. Counter-proof: read only
+    /// <c>ActivitySummary</c>, which is built from saved runs alone, and the three vanish — the behaviour of the
+    /// day this was written, where eleven of them had piled up unseen in the operator's own store.</summary>
+    [AvaloniaFact]
+    public async Task StoppedRunsThatWereNeverFinished_AreOnScreen_ApartFromTheSavedOnes()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        foreach (Character character in Crew.Take(3))
+            await _StopSiteRunAsync(dispatcher, character.EsiCharacterId!.Value, cancellationToken);
+        foreach (Character character in Crew.Skip(3).Take(2))
+            await _SaveSiteRunAsync(dispatcher, character.EsiCharacterId!.Value, null, cancellationToken);
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+        List<string> texts = RenderedText.VisibleTexts(presented.Root);
+
+        Assert.Equal(3, presented.ViewModel.UnfinishedRuns.Count);
+        Assert.Equal(2, Assert.Single(presented.ViewModel.Days).Rows.Count);
+        Assert.Contains(texts, text => text == "UNFINISHED");
+        Assert.Equal(3, texts.Count(text => text == "SAVE"));
+    }
+
+    /// <summary>ET-179 AC-2: both ways out work from this screen, and the row is gone from the unfinished band
+    /// afterwards — saved it stands under its day, thrown away it stands nowhere. Counter-proof: update the run but
+    /// leave the screen as it was and the row stays where it is, which the first assertion catches.</summary>
+    [AvaloniaTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UnfinishedRun_SavedOrThrownAway_LeavesTheBand(bool save)
+    {
+        using var instance = TestClientInstance.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _StopSiteRunAsync(_Dispatcher(instance), 90000001, cancellationToken);
+        var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(true) };
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken, dialogs: dialogs);
+        UnfinishedRunViewModel run = Assert.Single(presented.ViewModel.UnfinishedRuns);
+        await (save ? run.SaveCommand : run.DeleteCommand).ExecuteAsync(null);
+
+        Assert.Empty(presented.ViewModel.UnfinishedRuns);
+        if (!save)
+        {
+            Assert.Empty(presented.ViewModel.Days);
+            return;
+        }
+
+        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(presented.ViewModel.Days).Rows);
+        Assert.Equal("Homefront", row.SiteText);
+    }
+
+    /// <summary>ET-179 AC-3: the runs that were saved are shown as they always were. An evening is what was
+    /// committed to it, so three stopped runs beside it change neither its count nor its total. Counter-proof: add
+    /// the unfinished runs to the same list and the band reads five activities.</summary>
+    [AvaloniaFact]
+    public async Task StoppedRuns_DoNotReachTheDayBand()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        foreach (Character character in Crew.Take(3))
+            await _StopSiteRunAsync(dispatcher, character.EsiCharacterId!.Value, cancellationToken);
+        foreach (Character character in Crew.Skip(3).Take(2))
+            await _SaveSiteRunAsync(dispatcher, character.EsiCharacterId!.Value, null, cancellationToken,
+                bounties: [new RunBountyEntryInput { OccurredAtUtc = StartedAtUtc.AddMinutes(2), Isk = 500_000m }]);
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+        RunsDayViewModel day = Assert.Single(presented.ViewModel.Days);
+
+        Assert.Equal("2 activities · 0:30:00 flown · +1M ISK net", day.SummaryText);
+    }
+
+    /// <summary>ET-179: <c>Stopped</c> is not a resting place (Raymond, 2026-09-04). A day after it was stopped the
+    /// app commits the run as it stands and says on the row that it did; an hour after, it is still the pilot's own
+    /// to finish. Counter-proof, one per row: save every stopped run without a deadline and the hour-old one is
+    /// taken out of the pilot's hands; leave the deadline unjudged here and the day-old one sits in the band for
+    /// good, which is the pile this ticket started from.</summary>
+    [AvaloniaTheory]
+    [InlineData(25)]
+    [InlineData(1)]
+    public async Task RunLeftUnfinished_IsSavedByItself_OnlyOnceItIsADayOld(double hoursSinceStop)
+    {
+        using var instance = TestClientInstance.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _StopSiteRunAsync(_Dispatcher(instance), 90000001, cancellationToken, hoursSinceStop);
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+
+        if (hoursSinceStop < 24)
+        {
+            Assert.Single(presented.ViewModel.UnfinishedRuns);
+            Assert.Empty(presented.ViewModel.Days);
+            return;
+        }
+
+        Assert.Empty(presented.ViewModel.UnfinishedRuns);
+        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(presented.ViewModel.Days).Rows);
+        Assert.True(row.HasAutoSavedRun);
+        Assert.Contains(RenderedText.VisibleTexts(presented.Root), text => text == "auto-saved");
+    }
+
     private static ICqrsDispatcher _Dispatcher(TestClientInstance instance) =>
         instance.Services.GetRequiredService<ICqrsDispatcher>();
 
@@ -254,14 +356,14 @@ public sealed class RunsOverviewTests
 
     private static async Task<(RunsWindow Window, RunsOverviewViewModel ViewModel)> _WindowAsync(
         TestClientInstance instance, double width, CancellationToken cancellationToken,
-        IReadOnlyList<Character>? characters = null)
+        IReadOnlyList<Character>? characters = null, RecordingDialogService? dialogs = null)
     {
         ICqrsDispatcher dispatcher = _Dispatcher(instance);
         await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
 
         // No lane clock: a DispatcherTimer here would go on ticking for the rest of the test session, since the
         // window that would dispose the view-model is never closed.
-        var viewModel = new RunsOverviewViewModel(dispatcher, new RecordingDialogService(), instance.Services,
+        var viewModel = new RunsOverviewViewModel(dispatcher, dialogs ?? new RecordingDialogService(), instance.Services,
             characters ?? Crew, runClock: false);
         await viewModel.LoadAsync(cancellationToken);
         return (new RunsWindow(viewModel) { Width = width, Height = 1400 }, viewModel);
@@ -269,10 +371,10 @@ public sealed class RunsOverviewTests
 
     private static async Task<Presented> _PresentAsync(
         TestClientInstance instance, double width, CancellationToken cancellationToken,
-        IReadOnlyList<Character>? characters = null)
+        IReadOnlyList<Character>? characters = null, RecordingDialogService? dialogs = null)
     {
         (RunsWindow window, RunsOverviewViewModel viewModel) =
-            await _WindowAsync(instance, width, cancellationToken, characters);
+            await _WindowAsync(instance, width, cancellationToken, characters, dialogs);
 
         var display = new FakeDisplay();
         var host = new ModuleHostService();
@@ -297,6 +399,18 @@ public sealed class RunsOverviewTests
             1234, siteName, 30000142, groupCode), cancellationToken);
         await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15),
             StartedAtUtc.AddMinutes(16), [], bounties ?? [], [], parameters ?? []), cancellationToken);
+    }
+
+    /// <summary>A run stopped and left there — the shape ET-179 is about: <c>Stopped</c>, never saved, never thrown
+    /// away. Placed against the wall clock and not against <see cref="StartedAtUtc"/>, because how long ago it was
+    /// stopped is what decides whether the app saves it by itself.</summary>
+    private static async Task _StopSiteRunAsync(ICqrsDispatcher dispatcher, long characterId,
+        CancellationToken cancellationToken, double hoursSinceStop = 1)
+    {
+        DateTime stoppedAtUtc = DateTime.UtcNow.AddHours(-hoursSinceStop);
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site,
+            stoppedAtUtc.AddMinutes(-15), 1234, "Homefront", 30000142), cancellationToken);
+        await dispatcher.Send(new SetRunStoppedCommand(started.Value, stoppedAtUtc), cancellationToken);
     }
 
     private static IReadOnlyList<RunParameterInput> _EveryRewardForm() =>

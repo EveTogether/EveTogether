@@ -738,6 +738,9 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.Property<int?>("AgentId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("AutoSavedAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("CharacterId")
                         .HasColumnType("INTEGER");
 
