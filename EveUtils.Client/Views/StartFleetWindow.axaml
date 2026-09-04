@@ -187,14 +187,6 @@
                     <TextBlock x:Name="WillLinkText" Text=""/>
                 </Border>
 
-                <!-- Under-strength is a warning, never a gate: a pug or a roam is started short on purpose. -->
-                <Border Classes="collide" x:Name="UnderStrengthBlock" IsVisible="False">
-                    <StackPanel Spacing="4">
-                        <TextBlock Classes="collidehead" Text="The coupled doctrine's minimums are not all met."/>
-                        <TextBlock Classes="collidebody" Text="Starting anyway is fine — this is a note, not a gate."/>
-                    </StackPanel>
-                </Border>
-
                 <!-- ESI-invite seam, kept from the old prompt: shown only when there is anyone it could apply to. -->
                 <StackPanel Spacing="4" x:Name="EsiBlock" IsVisible="False">
                     <CheckBox x:Name="EsiInviteBox" Content="Invite members without an ESI link via in-game ESI"/>

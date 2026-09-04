@@ -1427,11 +1427,17 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         _members = members;
         BuildCompositionFill();
 
-        // B-5: under-strength warns, it never blocks — an FC starts a pug or a roam short on purpose. It is a note
-        // inside the start dialog rather than a yes/no in front of it: two dialogs for one press read as two
-        // decisions, and only one of them ever was one.
-        var choice = await _dialogs.PickFleetStartAsync(
-            await BuildStartPromptAsync(members, CompositionFillBuilder.AllMinimaMet(_coupledComposition, members)));
+        // B-5: under-strength warns, it never blocks — an FC starts a pug or a roam short on purpose, so this is a
+        // question and not a refusal. It stands in front of the start dialog rather than inside it: ET-168 folded it
+        // in as a note there, and on a twenty-pilot roster that note sat 208 px below the fold of a scrolling dialog
+        // whose START button is pinned to the footer — a warning you press past without it ever coming into view.
+        // A question you have to answer cannot scroll away.
+        if (!CompositionFillBuilder.AllMinimaMet(_coupledComposition, members)
+            && !await _dialogs.ConfirmAsync("Start under-strength?",
+                "The coupled doctrine's minimums are not all met yet. Start the fleet anyway?", okText: "Start anyway"))
+            return;
+
+        var choice = await _dialogs.PickFleetStartAsync(await BuildStartPromptAsync(members));
         if (choice == FleetStartChoice.Cancel)
             return;
 
@@ -1466,7 +1472,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
     /// can answer for someone else's pilot. Whose pilot is whose comes from this client's own character register,
     /// because "your own alt you move yourself" turns on exactly that.
     /// </summary>
-    private async Task<FleetStartPrompt> BuildStartPromptAsync(IReadOnlyList<FleetMemberInfo> members, bool minimaMet)
+    private async Task<FleetStartPrompt> BuildStartPromptAsync(IReadOnlyList<FleetMemberInfo> members)
     {
         var elsewhere = (await _fleets.ListMembersActiveElsewhereAsync(_fleet.Id))
             .ToDictionary(m => m.CharacterId, m => m.ElsewhereFleetName);
@@ -1488,7 +1494,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
 
         // A client-only fleet's roster is the owner's own pilots and externals: nobody there has an inbox to ask.
         // Read off the transport rather than the fleet, because "client-only" is a property of where it lives.
-        return new FleetStartPrompt(_fleet.Name, rows, CanAskThemAll: _fleets is not LocalFleetClient, minimaMet);
+        return new FleetStartPrompt(_fleet.Name, rows, CanAskThemAll: _fleets is not LocalFleetClient);
     }
 
     /// <summary>

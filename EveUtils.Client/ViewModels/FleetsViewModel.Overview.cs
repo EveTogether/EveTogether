@@ -744,9 +744,15 @@ public sealed partial class FleetsViewModel
             ? await CompositionClientFor(row.ServerAddress, row.ActingCharacterId).GetAsync(compositionId)
             : null;
 
-        // Under-strength used to be a yes/no in front of the start dialog. It is a note inside it now: two dialogs
-        // for one press read as two decisions, and only one of them was ever a decision.
-        var prompt = await BuildStartPromptAsync(row, client, CompositionFillBuilder.AllMinimaMet(composition, members));
+        // B-5: under-strength warns and never blocks, so it is a question in front of the start dialog rather than a
+        // note inside it. ET-168 folded it in, and on a long roster the note ended up below the fold of a scrolling
+        // dialog whose START button is pinned to the footer — press-past-able without ever being read.
+        if (!CompositionFillBuilder.AllMinimaMet(composition, members)
+            && !await _dialogs.ConfirmAsync("Start under-strength?",
+                "The coupled doctrine's minimums are not all met yet. Start the fleet anyway?", okText: "Start anyway"))
+            return;
+
+        var prompt = await BuildStartPromptAsync(row, client);
         var choice = await _dialogs.PickFleetStartAsync(prompt);
         if (choice == FleetStartChoice.Cancel)
             return;
@@ -778,7 +784,7 @@ public sealed partial class FleetsViewModel
     /// ones included; the store the fleet lives in answers for someone else's pilot, which no client can see. What
     /// the client knows first-hand wins, because it spans stores and the server's answer does not.
     /// </summary>
-    private async Task<FleetStartPrompt> BuildStartPromptAsync(FleetViewModel row, IFleetClient client, bool minimaMet)
+    private async Task<FleetStartPrompt> BuildStartPromptAsync(FleetViewModel row, IFleetClient client)
     {
         var reported = new Dictionary<int, string>();
         foreach (var member in await client.ListMembersActiveElsewhereAsync(row.Id))
@@ -791,7 +797,7 @@ public sealed partial class FleetsViewModel
             .ToList();
 
         // A client-only fleet's roster is your own pilots and external ones: there is no inbox to send a request to.
-        return new FleetStartPrompt(row.Name, members, CanAskThemAll: !row.IsLocal, minimaMet);
+        return new FleetStartPrompt(row.Name, members, CanAskThemAll: !row.IsLocal);
 
         string? Reported(int characterId) => reported.TryGetValue(characterId, out var name) ? name : null;
     }
