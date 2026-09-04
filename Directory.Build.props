@@ -3,5 +3,9 @@
     <!-- Dev-build default. The release pipeline (.github/workflows/release.yml) overrides this with the
          git tag via -p:Version, so AppInfo.Version always matches the published release. -->
     <Version>0.2.0</Version>
+
+    <!-- ET-35: the build sits at 0 warnings. Locking it in on the solution level means a new warning is
+         caught on a local build, before the PR, instead of after. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 </Project>
