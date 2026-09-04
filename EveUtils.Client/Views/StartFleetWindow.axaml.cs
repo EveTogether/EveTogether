@@ -45,7 +45,6 @@ public partial class StartFleetWindow : ChromedWindow
 
         this.FindControl<TextBlock>("MembersLabel")!.Text = DescribeRoster(prompt);
         this.FindControl<TextBlock>("WillLinkText")!.Text = DescribeWhatStarts(prompt);
-        this.FindControl<Border>("UnderStrengthBlock")!.IsVisible = !prompt.MinimaMet;
 
         // The ESI seam only makes sense while there is anyone it could apply to.
         this.FindControl<StackPanel>("EsiBlock")!.IsVisible = prompt.ExternalCount > 0;

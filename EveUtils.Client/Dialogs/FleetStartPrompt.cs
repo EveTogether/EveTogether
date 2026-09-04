@@ -60,13 +60,12 @@ public enum FleetStartChoice
 /// <param name="CanAskThemAll">Whether there is anyone with an inbox to ask. False for a client-only fleet, whose
 /// pilots are the owner's own characters: those you move yourself from the member row, because they are your
 /// characters — not because you are the commander.</param>
-/// <param name="MinimaMet">Whether the coupled doctrine's minimums are all met; false draws the under-strength note
-/// in the dialog instead of asking a second yes/no in front of it.</param>
+/// <remarks>Under-strength is deliberately <i>not</i> here. It is asked before this dialog opens, because a
+/// question that has to be answered cannot scroll out of view and a note in a long dialog can.</remarks>
 public sealed record FleetStartPrompt(
     string FleetName,
     IReadOnlyList<FleetStartMember> Members,
-    bool CanAskThemAll,
-    bool MinimaMet = true)
+    bool CanAskThemAll)
 {
     /// <summary>Everyone on the roster who counts for another started fleet — the collision, in roster order.</summary>
     public IReadOnlyList<FleetStartMember> ActiveElsewhere { get; } =

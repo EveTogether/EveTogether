@@ -16,6 +16,10 @@ namespace EveUtils.Client.UiTests;
 /// Stream B / B-5: starting a fleet whose coupled doctrine minimums are not met warns the FC, but does not
 /// block — cancelling the warning leaves the fleet Forming, accepting it proceeds (an FC may deliberately start an
 /// under-strength pug/roam). Drives the real roster over the local seam with a coupled, under-filled doctrine.
+///
+/// <para><b>Both</b> ways in are covered here, and that pairing is the point. The rule used to be guarded on the
+/// roster window alone; ET-168 rebuilt the start flow on both and dropped the warning from both, and only one half
+/// of that had a test to notice. A rule that lives in two places needs a test in two places.</para>
 /// </summary>
 public class FleetStartMinimaTests
 {
@@ -64,5 +68,79 @@ public class FleetStartMinimaTests
 
         Assert.Equal("Start under-strength?", warnedTitle);
         Assert.Equal(FleetActivation.Forming, (await repository.GetAsync(fleetId))!.Activation);
+    }
+
+    /// <summary>
+    /// The same rule on the fleet overview's own START (ET-170 put one there). The warning has to stand in front of
+    /// the start dialog and not inside it: that dialog scrolls and its START button is pinned to the footer, so a
+    /// note below the fold is one an FC presses past without reading. Cancelling the question leaves the fleet
+    /// Forming, exactly as on the roster window.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task StartOnTheOverviewRow_WithUnmetDoctrineMinimums_WarnsAndCancelDoesNotStart()
+    {
+        var (recording, instance, vm, repository, fleetId) = await UnderStrengthOverviewAsync();
+        using (instance)
+        {
+            string? warnedTitle = null;
+            recording.OnConfirm = (title, _) =>
+            {
+                warnedTitle = title;
+                return Task.FromResult(false);
+            };
+
+            await vm.StartRowCommand.ExecuteAsync(Assert.Single(vm.StandingByFleets));
+
+            Assert.Equal("Start under-strength?", warnedTitle);
+            Assert.Equal(FleetActivation.Forming, (await repository.GetAsync(fleetId))!.Activation);
+            vm.Dispose();
+        }
+    }
+
+    /// <summary>It warns; it never blocks. An FC who says "start anyway" gets the ordinary start dialog next and the
+    /// fleet runs — the half of B-5 that a plain refusal would quietly break.</summary>
+    [AvaloniaFact]
+    public async Task StartOnTheOverviewRow_WithUnmetDoctrineMinimums_ProceedsWhenTheFcSaysStartAnyway()
+    {
+        var (recording, instance, vm, repository, fleetId) = await UnderStrengthOverviewAsync();
+        using (instance)
+        {
+            recording.OnConfirm = (_, _) => Task.FromResult(true);
+            recording.FleetStart = FleetStartChoice.LeaveThem;
+
+            await vm.StartRowCommand.ExecuteAsync(Assert.Single(vm.StandingByFleets));
+
+            Assert.Equal("Start under-strength?", recording.LastConfirmTitle);
+            Assert.NotNull(recording.FleetStartPrompt);   // the warning came first, the start dialog after it
+            Assert.Equal(FleetActivation.Active, (await repository.GetAsync(fleetId))!.Activation);
+            vm.Dispose();
+        }
+    }
+
+    /// <summary>A client-only fleet with a doctrine that wants 40 DPS and nobody assigned to it, on the overview.</summary>
+    private static async Task<(RecordingDialogService Dialogs, TestClientInstance Instance, FleetsViewModel Vm,
+        IFleetRepository Repository, long FleetId)> UnderStrengthOverviewAsync()
+    {
+        var recording = new RecordingDialogService();
+        var instance = TestClientInstance.Create(s => s.AddSingleton<IDialogService>(recording));
+        await instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character("FC", Owner));
+
+        var fleetService = instance.Services.GetRequiredService<ClientFleetService>();
+        var repository = instance.Services.GetRequiredService<IFleetRepository>();
+        var compositionRepository = instance.Services.GetRequiredService<IFleetCompositionRepository>();
+        var compositions = new LocalFleetCompositionClient(fleetService, compositionRepository, Owner);
+        var client = new LocalFleetClient(fleetService, repository,
+            instance.Services.GetRequiredService<ICharacterRegistry>(), Owner);
+
+        var fleetId = (await fleetService.CreateLocalFleetAsync("under-strength", null, Owner)).Value;
+        var composition = await compositions.CreateAsync("Homefront Vanguard", null);
+        await compositions.AddRoleAsync(composition.Id, "DPS", 40);
+        Assert.True((await client.SetFleetCompositionAsync(fleetId, composition.Id)).Ok);
+
+        var vm = new FleetsViewModel(instance.Services, runClock: false);
+        for (var i = 0; i < 100 && vm.StandingByFleets.Count == 0; i++)
+            await Task.Delay(50);
+        Assert.Single(vm.StandingByFleets);
+        return (recording, instance, vm, repository, fleetId);
     }
 }
