@@ -1,0 +1,314 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:va="using:EveUtils.Client.ViewModels.Activity"
+        xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="758" d:DesignHeight="720"
+        x:Class="EveUtils.Client.Views.ActivityDetailWindow"
+        x:DataType="vr:ActivityDetailViewModel"
+        Width="758" Height="720" MinWidth="420" MinHeight="320"
+        WindowStartupLocation="CenterOwner"
+        Title="Activity detail">
+
+    <!-- One layout, sized off the space it is given rather than off the window: ModuleHostService moves this very
+         Content between a docked tab (758px) and a floating window, and there is no pop-out variant to fall back on. -->
+    <DockPanel>
+
+        <!-- On the content root, not on the window: Window.Styles/Resources stay behind with the (never shown)
+             window once the module host re-parents this content into a tab. -->
+        <DockPanel.Resources>
+            <!-- One header for every section: caret, fixed-width title, summary hard right. The summary is why a
+                 folded section is still worth having on screen. -->
+            <DataTemplate x:Key="DetailSectionHeader" DataType="va:ActivitySection">
+                <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
+                    <TextBlock Grid.Column="0" Classes="caret" Text="&#x25B6;"/>
+                    <TextBlock Grid.Column="1" Classes="sectiontitle" Text="{Binding Title}"/>
+                    <TextBlock Grid.Column="2" Classes="sectionsummary" Text="{Binding HeaderSummary}"/>
+                </Grid>
+            </DataTemplate>
+        </DockPanel.Resources>
+
+        <DockPanel.Styles>
+            <Style Selector="ToggleButton.section">
+                <Setter Property="ContentTemplate" Value="{StaticResource DetailSectionHeader}"/>
+            </Style>
+            <!-- The activity's own duration, in the same figure the run window gives the clock. -->
+            <Style Selector="TextBlock.durationfigure">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="FontSize" Value="26"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+            <Style Selector="TextBlock.clockmeta">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+            </Style>
+            <Style Selector="TextBlock.clockmeta.figure">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            </Style>
+        </DockPanel.Styles>
+
+        <!-- ══ Header ══ what this activity was, and how long it took. -->
+        <Border DockPanel.Dock="Top" Padding="14,12,14,14" BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource BorderBrush}">
+            <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                    <StackPanel Grid.Column="0" Spacing="2">
+                        <TextBlock x:Name="SiteTitle" Classes="panel-title" FontSize="13"
+                                   TextWrapping="Wrap" Text="{Binding SiteText}"/>
+                        <TextBlock Classes="label" Text="{Binding KindText}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Top">
+                        <TextBlock Classes="clockmeta">
+                            <Run Text="START "/><Run Classes="figure" Text="{Binding StartText}"/>
+                        </TextBlock>
+                        <TextBlock Classes="clockmeta">
+                            <Run Text="END "/><Run Classes="figure" Text="{Binding EndText}"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Grid>
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                    <StackPanel Grid.Column="0" Spacing="2">
+                        <TextBlock Classes="label" Text="DURATION"/>
+                        <TextBlock x:Name="DurationFigure" Classes="durationfigure" Text="{Binding DurationText}"/>
+                    </StackPanel>
+                    <!-- The stamp is the only thing telling a typed duration from a measured one; the figure beside
+                         it cannot, because a correction overwrites the moments themselves. -->
+                    <Border Grid.Column="1" Classes="chip dim" HorizontalAlignment="Left" VerticalAlignment="Bottom">
+                        <TextBlock x:Name="TimeSourceChip" Text="{Binding TimeSourceText}"/>
+                    </Border>
+                </Grid>
+                <TextBlock x:Name="StatusMessage" Classes="hint" Margin="0" TextWrapping="Wrap"
+                           IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           Text="{Binding StatusMessage}"/>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+
+                <ToggleButton Classes="section" Content="{Binding Activity}"
+                              IsChecked="{Binding Activity.IsExpanded, Mode=TwoWay}"/>
+                <Border Classes="sectionbody" IsVisible="{Binding Activity.IsExpanded}">
+                    <StackPanel>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="SITE"/>
+                            <TextBlock Grid.Column="1" Text="{Binding SiteText}"/>
+                        </Grid>
+                        <!-- Only a mission has an agent, so nothing else carries these two rows. -->
+                        <Grid x:Name="AgentRow" Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsAgentShown}">
+                            <TextBlock Text="AGENT"/>
+                            <TextBlock Grid.Column="1" Text="{Binding AgentText}"/>
+                        </Grid>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsAgentShown}">
+                            <TextBlock Text="LEVEL"/>
+                            <TextBlock Grid.Column="1" Text="{Binding MissionLevelText}"/>
+                        </Grid>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsSignatureShown}">
+                            <TextBlock Text="SIGNATURE"/>
+                            <TextBlock Grid.Column="1" Text="{Binding SignatureText}"/>
+                        </Grid>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="LOCATION"/>
+                            <TextBlock Grid.Column="1" Text="{Binding LocationText}"/>
+                        </Grid>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="FIT"/>
+                            <TextBlock Grid.Column="1" Text="{Binding FitText}"/>
+                        </Grid>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasObjectives}">
+                            <TextBlock Text="OBJECTIVES"/>
+                            <TextBlock Grid.Column="1" Text="{Binding ObjectivesText}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel x:Name="RewardsSection" IsVisible="{Binding IsRewardsShown}">
+                    <ToggleButton Classes="section" Content="{Binding Rewards}"
+                                  IsChecked="{Binding Rewards.IsExpanded, Mode=TwoWay}"/>
+                    <Border Classes="sectionbody" IsVisible="{Binding Rewards.IsExpanded}">
+                        <StackPanel>
+                            <!-- One row per form and never one total: the key list keeps growing, and LP and
+                                 Evermarks have no rate to convert into ISK against. -->
+                            <ItemsControl x:Name="RewardList" ItemsSource="{Binding RewardRows}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vr:ActivityRewardRowViewModel">
+                                        <Grid Classes="kv" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                            <TextBlock Text="{Binding Label}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding ValueText}"/>
+                                            <TextBlock Grid.Column="2" Classes="hint" Margin="0"
+                                                       VerticalAlignment="Center" IsVisible="{Binding HasNote}"
+                                                       Text="{Binding NoteText}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Classes="hint" TextWrapping="Wrap"
+                                       IsVisible="{Binding RewardsEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                       Text="{Binding RewardsEmptyText}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <ToggleButton Classes="section" Content="{Binding Enemies}"
+                              IsChecked="{Binding Enemies.IsExpanded, Mode=TwoWay}"/>
+                <Border Classes="sectionbody" IsVisible="{Binding Enemies.IsExpanded}">
+                    <StackPanel>
+                        <!-- Not folded together on type: two runs that each saw the same enemy keep their own row
+                             and their own first/last window. -->
+                        <ItemsControl x:Name="EnemyList" ItemsSource="{Binding EnemyRows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:ActivityEnemyRowViewModel">
+                                    <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                                        <TextBlock Text="{Binding EnemyName}"/>
+                                        <TextBlock Grid.Column="1" Classes="hint" Margin="0"
+                                                   VerticalAlignment="Center" Text="{Binding WindowText}"/>
+                                        <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding CountText}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock x:Name="EnemiesEmpty" Classes="hint" TextWrapping="Wrap"
+                                   IsVisible="{Binding EnemiesEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                   Text="{Binding EnemiesEmptyText}"/>
+                    </StackPanel>
+                </Border>
+
+                <ToggleButton Classes="section" Content="{Binding Fleet}"
+                              IsChecked="{Binding Fleet.IsExpanded, Mode=TwoWay}"/>
+                <Border Classes="sectionbody" IsVisible="{Binding Fleet.IsExpanded}">
+                    <StackPanel>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="PARTICIPANTS"/>
+                            <TextBlock x:Name="ParticipantCount" Grid.Column="1" Text="{Binding ParticipantCountText}"/>
+                        </Grid>
+                        <ItemsControl x:Name="RunList" ItemsSource="{Binding RunRows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:ActivityRunRowViewModel">
+                                    <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding CharacterText}"
+                                                       Foreground="{StaticResource TextBrightBrush}" FontSize="11.5"/>
+                                            <TextBlock Classes="hint" Margin="0" Text="{Binding StandingText}"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Classes="hint" Margin="0"
+                                                   VerticalAlignment="Center" Text="{Binding TimeSourceText}"/>
+                                        <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding DurationText}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock x:Name="FleetBasis" Classes="hint" TextWrapping="Wrap" Text="{Binding FleetBasisText}"/>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel x:Name="BountySection" IsVisible="{Binding IsBountyShown}">
+                    <ToggleButton Classes="section" Content="{Binding Bounty}"
+                                  IsChecked="{Binding Bounty.IsExpanded, Mode=TwoWay}"/>
+                    <Border Classes="sectionbody" IsVisible="{Binding Bounty.IsExpanded}">
+                        <StackPanel>
+                            <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasBountyFigures}">
+                                <TextBlock Text="BOUNTY"/>
+                                <TextBlock Grid.Column="1" Text="{Binding BountyText}"/>
+                            </Grid>
+                            <TextBlock x:Name="BountyEmpty" Classes="hint" TextWrapping="Wrap"
+                                       IsVisible="{Binding BountyEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                       Text="{Binding BountyEmptyText}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="LootSection" IsVisible="{Binding IsLootShown}">
+                    <ToggleButton Classes="section" Content="{Binding Loot}"
+                                  IsChecked="{Binding Loot.IsExpanded, Mode=TwoWay}"/>
+                    <Border Classes="sectionbody" IsVisible="{Binding Loot.IsExpanded}">
+                        <StackPanel>
+                            <!-- The three figures are only drawn when something was captured: a zero here would
+                                 read as a valuation that came out at nothing. -->
+                            <StackPanel IsVisible="{Binding HasLootFigures}">
+                                <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                                    <TextBlock Text="LOOT"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding LootIskText}"/>
+                                </Grid>
+                                <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                                    <TextBlock Text="CONSUMED"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding ConsumedIskText}"/>
+                                </Grid>
+                                <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                                    <TextBlock Text="NET"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding NetIskText}"/>
+                                </Grid>
+                                <TextBlock Classes="hint" Margin="0,6,0,0"
+                                           Text="Valued per type id from the cached ESI average price, never from the copied ISK column."/>
+                                <TextBlock x:Name="LinesWithoutPrice" Classes="hint" Margin="0"
+                                           IsVisible="{Binding LinesWithoutPriceText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                           Text="{Binding LinesWithoutPriceText}"/>
+                            </StackPanel>
+                            <ItemsControl x:Name="LootList" ItemsSource="{Binding LootCaptureRows}" Margin="0,4,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vr:ActivityLootCaptureRowViewModel">
+                                        <StackPanel Spacing="2" Margin="0,4">
+                                            <!-- An excluded capture keeps its row and its lines: leaving it out
+                                                 would balance just as well and lose the fact that it was taken. -->
+                                            <Grid Classes="kv" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                                <TextBlock Text="{Binding CapturedAtText}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding StateText}"/>
+                                            </Grid>
+                                            <ItemsControl ItemsSource="{Binding Lines}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="vr:ActivityLootLineViewModel">
+                                                        <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                                                            <TextBlock Text="{Binding Name}"/>
+                                                            <TextBlock Grid.Column="1" VerticalAlignment="Center"
+                                                                       Text="{Binding QuantityText}"/>
+                                                            <TextBlock Grid.Column="2" VerticalAlignment="Center"
+                                                                       Text="{Binding ValueText}"/>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock x:Name="LootEmpty" Classes="hint" TextWrapping="Wrap"
+                                       IsVisible="{Binding LootEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                       Text="{Binding LootEmptyText}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="EscalationSection" IsVisible="{Binding IsEscalationShown}">
+                    <ToggleButton Classes="section" Content="{Binding Escalation}"
+                                  IsChecked="{Binding Escalation.IsExpanded, Mode=TwoWay}"/>
+                    <Border Classes="sectionbody" IsVisible="{Binding Escalation.IsExpanded}">
+                        <StackPanel>
+                            <Grid Classes="kv" ColumnDefinitions="Auto,*"
+                                  IsVisible="{Binding EscalationText, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                <TextBlock Text="SITE"/>
+                                <TextBlock Grid.Column="1" Text="{Binding EscalationText}"/>
+                            </Grid>
+                            <TextBlock Classes="hint" Margin="0"
+                                       IsVisible="{Binding EscalationObservedText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                       Text="{Binding EscalationObservedText}"/>
+                            <TextBlock x:Name="EscalationEmpty" Classes="hint" TextWrapping="Wrap"
+                                       IsVisible="{Binding EscalationEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                       Text="{Binding EscalationEmptyText}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- ══ Why a section is not here ══ the distinguishing line of this screen. An absent section that
+                     says nothing reads exactly like an empty one, and the two mean opposite things. -->
+                <Border Padding="14,12" IsVisible="{Binding AbsentSectionsText, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <TextBlock x:Name="AbsentSections" Classes="hint" Margin="0" TextWrapping="Wrap"
+                               Text="{Binding AbsentSectionsText}"/>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</v:ChromedWindow>

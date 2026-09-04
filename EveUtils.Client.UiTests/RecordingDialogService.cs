@@ -282,6 +282,12 @@ public sealed class RecordingDialogService : IDialogService
 
     public void ShowManualRunStart(ManualRunStartViewModel viewModel) => LastManualRunStart = viewModel;
 
+    /// <summary>The activity detail the shell was asked to open, or null.</summary>
+    public ActivityDetailViewModel? LastActivityDetail { get; private set; }
+
+    public void ShowActivityDetail(ActivityDetailViewModel viewModel, Guid activitySummaryId) =>
+        LastActivityDetail = viewModel;
+
     /// <summary>The save-a-preset dialog the tool asked for, or null — and a hook to drive it (pick a path and
     /// export) without a window.</summary>
     public PresetExportViewModel? LastPresetExport { get; private set; }

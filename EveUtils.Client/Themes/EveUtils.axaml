@@ -610,4 +610,90 @@
         <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
     </Style>
 
+    <!-- ── Collapsible sections ── the shape ActivityWindow gave the run readout: a flat full-width header row with a
+         caret that turns, a fixed-width monospaced title, the summary hard right so a folded section still answers
+         for itself, and an indented body of key/value lines under it. Here rather than in one window because the
+         activity detail (ET-162) is the same readout unfolded and must not put a second look beside it.
+         ActivityWindow still carries its own identical copy in its DockPanel.Styles, which shadows these without
+         changing anything; that copy can be dropped in one block once nothing else is open on that file. -->
+    <Style Selector="ToggleButton.section">
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Padding" Value="14,9"/>
+    </Style>
+    <!-- State ink goes on the presenter: the stock Fluent theme sets its own there for :pointerover and :checked,
+         and a rule one level up loses to it. -->
+    <Style Selector="ToggleButton.section:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+    </Style>
+    <Style Selector="ToggleButton.section:checked /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="ToggleButton.section:checked:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+    </Style>
+
+    <Style Selector="TextBlock.caret">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="FontSize" Value="9"/>
+        <Setter Property="Width" Value="9"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="RenderTransform" Value="none"/>
+    </Style>
+    <Style Selector="ToggleButton.section:checked TextBlock.caret">
+        <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+    </Style>
+    <Style Selector="TextBlock.sectiontitle">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="LetterSpacing" Value="1.8"/>
+        <Setter Property="Width" Value="96"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.sectionsummary">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="TextAlignment" Value="Right"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <Style Selector="Border.sectionbody">
+        <Setter Property="Background" Value="{StaticResource BgRowBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="Padding" Value="37,2,14,13"/>
+    </Style>
+
+    <!-- ColumnDefinitions is not a styled property, so the columns stay on each Grid; everything else about a
+         key/value line lives here. The label carries the letterspacing, the value carries the ink. -->
+    <Style Selector="Grid.kv">
+        <Setter Property="Margin" Value="0,3"/>
+    </Style>
+    <Style Selector="Grid.kv > TextBlock:nth-child(1)">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="LetterSpacing" Value="1.8"/>
+    </Style>
+    <Style Selector="Grid.kv > TextBlock:nth-child(2)">
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="TextAlignment" Value="Right"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+
+    <!-- Where a section says what it does NOT know, and why. -->
+    <Style Selector="TextBlock.hint">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="FontSize" Value="9.5"/>
+        <Setter Property="LineHeight" Value="14"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="Margin" Value="0,6,0,0"/>
+    </Style>
+
 </Styles>
