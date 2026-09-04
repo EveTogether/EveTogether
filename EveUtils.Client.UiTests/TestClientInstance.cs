@@ -1,5 +1,6 @@
 using EveUtils.Client.Composition;
 using EveUtils.Shared.Data;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -26,6 +27,9 @@ public sealed class TestClientInstance : IDisposable
 
     /// <summary>The scratch instance this ran on; hand it back to Create to model a restart on the same data.</summary>
     public string InstanceName { get; }
+
+    /// <summary>The scratch data directory this instance owns; exposed so a test can assert ET-181 stays fixed.</summary>
+    public string DataDirectory => _dataDirectory;
 
     /// <summary>Set on the run that only stands in for "the app was closed", so the next one finds the database it
     /// left behind instead of an empty directory.</summary>
@@ -63,14 +67,25 @@ public sealed class TestClientInstance : IDisposable
         (Services as IDisposable)?.Dispose();
         Environment.SetEnvironmentVariable("EVEUTILS_INSTANCE", null);
 
+        if (KeepDataOnDispose)
+            return;
+
+        // Microsoft.Data.Sqlite pools the file handle for reuse independent of the DI scope disposed above, so the
+        // delete below silently no-ops without this — verified by measurement (ET-181): every one of these
+        // directories was left behind, pass or fail, until the pool holding client.db open was cleared first.
+        using (var conn = new SqliteConnection($"Data Source={Path.Combine(_dataDirectory, "client.db")}"))
+            SqliteConnection.ClearPool(conn);
+
         try
         {
-            if (!KeepDataOnDispose && Directory.Exists(_dataDirectory))
+            if (Directory.Exists(_dataDirectory))
                 Directory.Delete(_dataDirectory, recursive: true);
         }
-        catch
+        catch (Exception ex)
         {
-            // Best-effort cleanup of scratch data; a leftover throwaway dir is harmless.
+            // Swallowing this silently is exactly how ET-181 went unnoticed for six weeks; surface it on stderr
+            // without failing an otherwise-passing test over a best-effort scratch-dir cleanup.
+            Console.Error.WriteLine($"TestClientInstance: failed to delete {_dataDirectory}: {ex.Message}");
         }
     }
 }

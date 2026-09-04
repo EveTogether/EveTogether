@@ -570,14 +570,16 @@ public class ActivityWindowWiringTests
     [AvaloniaFact]
     public async Task AfterRestartingTheApplication_ACopiedSignatureDoesNotInheritTheOpenRunsSite()
     {
-        var before = TestClientInstance.Create();
-        before.KeepDataOnDispose = true;
-        var instanceName = before.InstanceName;
-        Result<Guid> started = await before.Services.GetRequiredService<IDispatcher>().Send(
-            new RunCommands.StartRunCommand(90000001, ActivityKind.Site, DateTime.UtcNow.AddHours(-1),
-                SiteTypeId: 0, SiteName: "Sansha Hideaway", SolarSystemId: null));
-        Assert.True(started.IsSuccess);
-        before.Dispose();   // the application closes; the run stays open
+        string instanceName;
+        using (var before = TestClientInstance.Create())
+        {
+            before.KeepDataOnDispose = true;
+            instanceName = before.InstanceName;
+            Result<Guid> started = await before.Services.GetRequiredService<IDispatcher>().Send(
+                new RunCommands.StartRunCommand(90000001, ActivityKind.Site, DateTime.UtcNow.AddHours(-1),
+                    SiteTypeId: 0, SiteName: "Sansha Hideaway", SolarSystemId: null));
+            Assert.True(started.IsSuccess);
+        } // the application closes; the run stays open — Dispose() still runs here if the assert above fails
 
         using var restarted = TestClientInstance.Create(instanceName: instanceName);
         var model = new ActivityWindowViewModel(ActivityKind.Site, restarted.Services) { SignatureId = "SUG-270", SignatureName = "Drone Cluster" };
