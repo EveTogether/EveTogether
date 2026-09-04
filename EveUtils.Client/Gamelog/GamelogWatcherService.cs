@@ -57,6 +57,9 @@ public sealed class GamelogWatcherService : ISingletonService
     /// already listening; a window opened later needs the names that arrived before it existed — the character
     /// column is opened mid-session by definition.
     /// </summary>
+    // ponytail: this should be the one source. MainWindowViewModel._observedCharacters still keeps its own copy of
+    // the same answer, fed from the same event — two sets tracking one fact drift apart. Fold that one into this
+    // when someone is next in that file (left alone here: ET-163 is working in it).
     public IReadOnlyCollection<string> ObservedCharacters
     {
         get { lock (_gate) return [.. _observed]; }
