@@ -50,6 +50,7 @@ internal sealed class GetActivityDetailQueryHandler(IDbContextFactory<ClientDbCo
             summary.Id, summary.GroupCode, summary.ActivityKind, summary.SiteName, summary.SolarSystemId,
             summary.StartedAtUtc, summary.StoppedAtUtc, summary.DurationSeconds,
             summary.LootIskGained, summary.LootIskLost, summary.LootIskNet, summary.BountyIsk, summary.ExpectedPayoutIsk,
+            summary.ParticipantCount, summary.PayoutEligibleCount,
             [.. runs.OrderBy(run => run.CharacterId).Select(run => _ToRunDto(run, lootByRun[run.Id]))],
             [.. bountyEntries.OrderBy(entry => entry.OccurredAtUtc)
                 .Select(entry => new RunBountyEntryDto(entry.RunId, entry.OccurredAtUtc, entry.Isk))],
@@ -64,6 +65,8 @@ internal sealed class GetActivityDetailQueryHandler(IDbContextFactory<ClientDbCo
     }
 
     private static ActivityRunDetailDto _ToRunDto(Run run, IEnumerable<RunLootCapture> lootCaptures) => new(
-        run.Id, run.CharacterId, run.Role, run.IsPayoutEligible,
+        run.Id, run.CharacterId, run.Role, run.IsParticipant, run.IsPayoutEligible,
+        run.StartedAtUtc, run.StoppedAtUtc, run.TimesCorrectedAtUtc,
+        run.AgentId, run.MissionLevel, run.Signature, run.FitNameSnapshot,
         [.. lootCaptures.OrderBy(capture => capture.CapturedAtUtc).Select(RunLootCaptureMapper.ToDto)]);
 }

@@ -220,6 +220,10 @@ public interface IDialogService
     /// like the other tools.</summary>
     void ShowManualRunStart(ManualRunStartViewModel viewModel);
 
+    /// <summary>Opens one saved activity's detail as a hosted module (ET-162). Keyed on the activity so two
+    /// activities are two tabs rather than one tab that quietly changes subject under the reader.</summary>
+    void ShowActivityDetail(ActivityDetailViewModel viewModel, Guid activitySummaryId);
+
     /// <summary>Save-a-preset dialog (ET-61): pick what goes in, name it, write it to one portable file. Modal — the
     /// file picker inside it belongs to the window, so the view-model never sees a path it did not ask for.</summary>
     Task ShowPresetExportAsync(PresetExportViewModel viewModel);

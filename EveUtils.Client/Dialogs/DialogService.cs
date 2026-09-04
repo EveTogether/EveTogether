@@ -404,6 +404,12 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void ShowAppraisal(AppraisalViewModel viewModel) =>
         Route(new AppraisalWindow(viewModel), "APPRAISAL", "tools", "appraisal");
 
+    public void ShowActivityDetail(ActivityDetailViewModel viewModel, Guid activitySummaryId)
+    {
+        _ = viewModel.LoadAsync();
+        Route(new ActivityDetailWindow(viewModel), "ACTIVITY", "runs", $"activity-{activitySummaryId}");
+    }
+
     public async Task ShowPresetExportAsync(PresetExportViewModel viewModel)
     {
         if (_owner is null) return;

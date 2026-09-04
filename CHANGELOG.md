@@ -22,6 +22,17 @@ taken from the matching `## vX.Y.Z` section below.
   with what each of them costs. Deleting a fleet stays where it was, on the fleet overview: it is not the same size
   of decision and no longer sits next to the one you take every week. The window also names any run of yours that is
   still going and says plainly that stopping does not throw it away.
+- **A saved activity can now be opened in full.** One screen per activity, folded into the same sections the run
+  window uses, showing the runs behind it, what you fought, what dropped and what it paid out. Which sections are
+  there depends on what you flew: a mission names its agent and its level and lists its rewards one form at a time,
+  a combat site shows enemies, bounty and loot. A section that is missing says why it is missing, in as many words —
+  a mission has no rats to collect a bounty from, and a site pays in what it drops rather than in a reward agreed
+  beforehand. A section that is there but empty says what was not measured, and never shows a "0": nothing was
+  captured is a different thing from nothing was worth anything. Loot is valued per item type from EVE Together's
+  own cached prices and never from the ISK column you copied, rows the price cache does not know are counted
+  separately rather than treated as worthless, and a capture you excluded stays on screen, marked, counting towards
+  nothing. A run whose start or end you corrected by hand says so beside its duration, because the corrected times
+  replace the measured ones and the figure alone can no longer tell you which it is.
 - **The server control panel can now take a backup and put one back.** One encrypted file holds everything a server
   needs to be rebuilt somewhere else: the whole database, the key that decrypts the stored ESI refresh tokens, and
   the TLS certificate your clients pinned. Restoring it on a fresh install brings the server back with every linked
