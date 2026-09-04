@@ -226,6 +226,14 @@
                                 <TextBlock Text="FLEET" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
+                        <Button Classes="railitem" Classes.active="{Binding IsRunsActive}"
+                                Command="{Binding LaunchModuleCommand}" CommandParameter="runs"
+                                ToolTip.Tip="Runs — what you flew, and what is running right now">
+                            <StackPanel HorizontalAlignment="Center" Spacing="5">
+                                <mi:MaterialIcon Classes="rail" Kind="RocketLaunchOutline"/>
+                                <TextBlock Text="RUNS" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                         <Button Classes="railitem" Classes.active="{Binding IsCompositionsActive}"
                                 Command="{Binding LaunchModuleCommand}" CommandParameter="compositions" ToolTip.Tip="Fleet Compositions">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">

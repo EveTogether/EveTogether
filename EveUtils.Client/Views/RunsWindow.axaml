@@ -1,0 +1,251 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="758" d:DesignHeight="720"
+        x:Class="EveUtils.Client.Views.RunsWindow"
+        x:DataType="vr:RunsOverviewViewModel"
+        Width="758" Height="720" MinWidth="420" MinHeight="320"
+        WindowStartupLocation="CenterOwner"
+        Title="Runs">
+
+    <!-- One layout, drawn from the space it is handed and never from the window: ModuleHostService moves this very
+         Content between a docked tab (758px) and a floating window, and there is no pop-out variant beside it.
+         758 is the width this is designed at — see RunsOverviewViewModel for why that, and not the window as it
+         happens to stand. Nothing folds behind a "⋯": the chips wrap onto a second line instead, because a reward
+         that disappears at the default width is exactly what ET-161 AC-3 forbids. -->
+    <DockPanel>
+
+        <!-- On the content root, not on the window: Window.Styles stay behind with the (never shown) window once
+             the module host re-parents this content into a tab. -->
+        <DockPanel.Styles>
+            <!-- The day band. Not a stored thing — an evening is the rows already on screen added up. -->
+            <Style Selector="Border.dayband">
+                <Setter Property="Background" Value="{StaticResource BgRowBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="Padding" Value="14,7"/>
+            </Style>
+            <Style Selector="TextBlock.daytitle">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="LetterSpacing" Value="1.8"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+
+            <!-- The whole row is the way into the detail (ET-162), so it is a button that fills its column rather
+                 than a link somewhere inside it. -->
+            <Style Selector="Button.activityrow">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="Padding" Value="0,8,14,8"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            </Style>
+            <Style Selector="Button.activityrow:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            </Style>
+            <Style Selector="Button.caretbtn">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="14,8,6,8"/>
+                <Setter Property="VerticalAlignment" Value="Top"/>
+            </Style>
+            <Style Selector="TextBlock.caret.expanded">
+                <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+            </Style>
+
+            <Style Selector="TextBlock.rowfigure">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11.5"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.rowfigure.dim">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.rowsite">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.rowkind">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="LetterSpacing" Value="1.4"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <!-- One line under the figures, never wrapped: it explains the row, it does not double its height. -->
+            <Style Selector="TextBlock.rowsub">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="TextWrapping" Value="NoWrap"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+        </DockPanel.Styles>
+
+        <!-- ══ Header ══ -->
+        <Border DockPanel.Dock="Top" Padding="14,12" BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource BorderBrush}">
+            <StackPanel Spacing="2">
+                <TextBlock Classes="panel-title" FontSize="13" Text="RUNS"/>
+                <TextBlock x:Name="OverviewStatus" Classes="hint" Margin="0" TextWrapping="Wrap"
+                           IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           Text="{Binding StatusMessage}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ══ Running ══ one lane per local character, running or not. A pilot sitting still keeps their lane and
+             their START: a toon that drops out of the band is a toon you forget (AC-6). Built for n lanes; today
+             at most one of them carries a run, because RunningRunLookup answers only for exactly one (ET-130). -->
+        <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource BorderBrush}">
+            <StackPanel Spacing="5">
+                <TextBlock Classes="label" Text="RUNNING"/>
+                <ItemsControl x:Name="LaneList" ItemsSource="{Binding Lanes}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vr:RunningLaneViewModel">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" Margin="0,3">
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding CharacterText}" FontSize="11.5"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Classes="rowsub" Text="{Binding StateText}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="1" Classes="rowfigure" Text="{Binding ClockText}"/>
+                                <Button Grid.Column="2" Classes="rowaction" MinWidth="62"
+                                        Content="{Binding ActionText}" Command="{Binding ActCommand}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock x:Name="LanesEmpty" Classes="hint" Margin="0" TextWrapping="Wrap"
+                           IsVisible="{Binding LanesEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           Text="{Binding LanesEmptyText}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ══ Finished activities ══ one row per activity, under the day it belongs to. -->
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl x:Name="DayList" ItemsSource="{Binding Days}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vr:RunsDayViewModel">
+                        <StackPanel>
+                            <Border Classes="dayband">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                    <TextBlock Classes="daytitle" Text="{Binding DayText}"/>
+                                    <TextBlock Grid.Column="1" Classes="sectionsummary" Text="{Binding SummaryText}"/>
+                                </Grid>
+                            </Border>
+                            <ItemsControl ItemsSource="{Binding Rows}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vr:ActivityOverviewRowViewModel">
+                                        <StackPanel>
+                                            <Grid ColumnDefinitions="Auto,*"
+                                                  Background="Transparent">
+                                                <Button Grid.Column="0" Classes="caretbtn"
+                                                        Command="{Binding ToggleCommand}"
+                                                        ToolTip.Tip="Show the runs behind this activity">
+                                                    <TextBlock Classes="caret" Classes.expanded="{Binding IsExpanded}"
+                                                               Text="&#x25B6;"/>
+                                                </Button>
+                                                <Button Grid.Column="1" Classes="activityrow"
+                                                        Command="{Binding OpenDetailCommand}">
+                                                    <StackPanel Spacing="3">
+                                                        <!-- The two figures the eye runs down a column for stay on
+                                                             the first line at every width; what explains them goes
+                                                             under it. -->
+                                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+                                                            <TextBlock Classes="rowfigure dim" Text="{Binding TimeText}"/>
+                                                            <!-- Name and kind in one run of text, so the kind stays
+                                                                 against the name at every width instead of drifting
+                                                                 to the far side of a star column, and the two trim
+                                                                 together when the name is long. -->
+                                                            <TextBlock Grid.Column="1" Classes="rowsite"
+                                                                       TextTrimming="CharacterEllipsis">
+                                                                <Run Text="{Binding SiteText}"/>
+                                                                <Run Text="{Binding KindText}" FontSize="9.5"
+                                                                     Foreground="{StaticResource TextDimBrush}"/>
+                                                            </TextBlock>
+                                                            <TextBlock Grid.Column="2" Classes="rowfigure"
+                                                                       Text="{Binding DurationText}"/>
+                                                            <TextBlock Grid.Column="3" Classes="rowfigure"
+                                                                       IsVisible="{Binding HasNet}"
+                                                                       Text="{Binding NetText}"/>
+                                                            <!-- Never a "0 ISK" where nothing was captured: a zero
+                                                                 reads as a valuation that came out at nothing. -->
+                                                            <TextBlock Grid.Column="3" Classes="rowsub"
+                                                                       IsVisible="{Binding !HasNet}"
+                                                                       Text="{Binding NoNetText}"/>
+                                                        </Grid>
+                                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                                            <TextBlock Classes="rowsub" Text="{Binding CrewText}"/>
+                                                            <TextBlock Grid.Column="1" Classes="rowsub"
+                                                                       Text="{Binding EnemiesText}"/>
+                                                        </Grid>
+                                                        <!-- Wraps rather than truncates: the strip grows a line, it
+                                                             never drops a reward form. -->
+                                                        <ItemsControl ItemsSource="{Binding Chips}">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate>
+                                                                    <WrapPanel/>
+                                                                </ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate DataType="vr:ActivityRewardChipViewModel">
+                                                                    <Border Classes="chip" Margin="0,2,6,0"
+                                                                            Classes.dim="{Binding IsKnownKind}"
+                                                                            Classes.warn="{Binding IsUnknownKind}">
+                                                                        <TextBlock Text="{Binding Text}"/>
+                                                                    </Border>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </StackPanel>
+                                                </Button>
+                                            </Grid>
+                                            <!-- The deelruns: six pilots on one site are six rows here and one row
+                                                 above, which is the whole of AC-5. -->
+                                            <Border Classes="sectionbody" IsVisible="{Binding IsExpanded}">
+                                                <StackPanel>
+                                                    <ItemsControl ItemsSource="{Binding SubRuns}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate DataType="vr:ActivityRunRowViewModel">
+                                                                <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto"
+                                                                      ColumnSpacing="10">
+                                                                    <StackPanel>
+                                                                        <TextBlock Text="{Binding CharacterText}"
+                                                                                   FontSize="11.5"
+                                                                                   Foreground="{StaticResource TextBrightBrush}"/>
+                                                                        <TextBlock Classes="rowsub"
+                                                                                   Text="{Binding StandingText}"/>
+                                                                    </StackPanel>
+                                                                    <TextBlock Grid.Column="1" Classes="rowsub"
+                                                                               Text="{Binding TimeSourceText}"/>
+                                                                    <TextBlock Grid.Column="2" Classes="rowfigure"
+                                                                               Text="{Binding DurationText}"/>
+                                                                </Grid>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    <TextBlock Classes="hint" Margin="0" TextWrapping="Wrap"
+                                                               IsVisible="{Binding SubRunsStatus, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                               Text="{Binding SubRunsStatus}"/>
+                                                </StackPanel>
+                                            </Border>
+                                            <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</v:ChromedWindow>

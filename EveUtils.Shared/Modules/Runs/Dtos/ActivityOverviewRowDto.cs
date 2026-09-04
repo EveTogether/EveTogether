@@ -21,6 +21,9 @@ public sealed record ActivityOverviewRowDto(
     int DurationSeconds,
     int RunsIncluded,
     int ParticipantCount,
+    /// <summary>Who flew it, distinct — so one row can name its crew without the reader having to open it. The
+    /// summary keeps no participant list of its own; these are the member runs' own character ids.</summary>
+    IReadOnlyList<long> CharacterIds,
     IReadOnlyList<ActivityRewardDto> Rewards,
     decimal? LootIskNet,
     int EnemyTypeCount,

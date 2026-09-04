@@ -3,12 +3,15 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 namespace EveUtils.Client.ViewModels.Runs;
 
 /// <summary>
-/// One of the runs behind an activity — one per character who flew it. Named by character id and not by name: the
-/// client never fills a participant list, so a name here would have to be invented (ET-131 gap 5).
+/// One of the runs behind an activity — one per character who flew it. Named by character id where there is nothing
+/// better: the client never fills a participant list, so a name here would have to be invented (ET-131 gap 5).
 /// </summary>
-public sealed class ActivityRunRowViewModel(ActivityRunDetailDto run)
+/// <param name="nameOf">Turns a character id into a name where the caller has one — for a local character it does,
+/// and the row above these already names the crew that way, so without it one row would name the same pilot two
+/// different ways. Left out, every row falls back to the id, which is what the detail screen still does.</param>
+public sealed class ActivityRunRowViewModel(ActivityRunDetailDto run, Func<long, string>? nameOf = null)
 {
-    public string CharacterText { get; } = $"character {run.CharacterId}";
+    public string CharacterText { get; } = nameOf?.Invoke(run.CharacterId) ?? $"character {run.CharacterId}";
 
     public string DurationText { get; } = run.StoppedAtUtc is { } stoppedAtUtc
         ? (stoppedAtUtc - run.StartedAtUtc).ToString(@"hh\:mm\:ss")

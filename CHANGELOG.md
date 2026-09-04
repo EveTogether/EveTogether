@@ -22,6 +22,17 @@ taken from the matching `## vX.Y.Z` section below.
   with what each of them costs. Deleting a fleet stays where it was, on the fleet overview: it is not the same size
   of decision and no longer sits next to the one you take every week. The window also names any run of yours that is
   still going and says plainly that stopping does not throw it away.
+- **There is now a RUNS screen, and it is the first place in the app where a finished run comes back.** Until now a
+  run left the screen the moment its window closed and there was nowhere to see what you flew yesterday. RUNS in the
+  rail opens the list: one row per activity — one site, flown once — however many of your pilots were on it, so six
+  toons on one site are one row that names all six and unfolds into six, not six rows that look like six evenings.
+  Above the list stands a lane per character with its own clock, and a pilot who is flying nothing keeps their lane
+  and their START, because a toon that quietly drops off the screen is a toon you forget. Each row carries the time,
+  the site, the crew, what you ran into, how long it took and what it paid — the payouts as separate chips beside
+  each other and never added into one figure, since loyalty points and Evermarks have no ISK price to convert
+  against. A reward form the screen has never seen still gets a chip of its own rather than disappearing. An
+  activity with no loot capture says so instead of showing a "0", which would read as a valuation that came out at
+  nothing. The rows sit under a day band with that day's total, and clicking one opens the activity in full.
 - **A saved activity can now be opened in full.** One screen per activity, folded into the same sections the run
   window uses, showing the runs behind it, what you fought, what dropped and what it paid out. Which sections are
   there depends on what you flew: a mission names its agent and its level and lists its rewards one form at a time,

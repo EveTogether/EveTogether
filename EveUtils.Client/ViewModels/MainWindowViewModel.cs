@@ -219,6 +219,10 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     public bool IsCompositionsActive => ActiveModule == "compositions";
     public bool IsToolsActive => ActiveModule == "tools";
 
+    /// <summary>Lit for the runs overview and for a single activity's detail alike: both are tagged "runs", and a
+    /// detail opened from a row is still the same place in the shell.</summary>
+    public bool IsRunsActive => ActiveModule == "runs";
+
     partial void OnIsFloatingChanged(bool value)
     {
         OnPropertyChanged(nameof(DockModeLabel));
@@ -260,6 +264,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         OnPropertyChanged(nameof(IsLogsActive));
         OnPropertyChanged(nameof(IsCompositionsActive));
         OnPropertyChanged(nameof(IsToolsActive));
+        OnPropertyChanged(nameof(IsRunsActive));
     }
 
     [RelayCommand] private void ToggleDockMode() => IsFloating = !IsFloating;
@@ -280,6 +285,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             case "esi": OpenEsiMetrics(); break;
             case "settings-sync": OpenSettingsSync(); break;
             case "appraisal": OpenAppraisal(); break;
+            case "runs": await OpenRunsAsync(); break;
             case "runs-start": await OpenManualRunStartAsync(); break;
             case "inbox": OpenInbox(); break;
             case "logs": OpenLogs(); break;
@@ -601,6 +607,19 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             _services.GetRequiredService<IEnumerable<IAppraisalProvider>>(),
             _services.GetRequiredService<ISdeAccessor>(),
             _dialogs));
+    }
+
+    /// <summary>Opens the runs screen (ET-161) — the only place in the app a saved run can be read back, and the
+    /// only way into an activity's detail. The character list comes from the registry as it stands now, because the
+    /// running band is a lane per character and a toon linked since app start would otherwise have none.</summary>
+    private async Task OpenRunsAsync()
+    {
+        if (_dialogs is null || _services is null)
+            return;
+
+        IReadOnlyList<Character> characters = await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
+        _dialogs.ShowRuns(new RunsOverviewViewModel(
+            _services.GetRequiredService<IDispatcher>(), _dialogs, _services, characters));
     }
 
     /// <summary>Opens the manual run-start screen (ET-163) — non-modal, like the other tools. A fresh view-model
