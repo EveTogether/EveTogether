@@ -251,7 +251,7 @@ public sealed class ClipboardSignatureOfferTests
         Assert.Equal(ActivityKind.Site, opened.Kind);
         Assert.Equal("Combat Site", opened.SignatureGroup);
         Assert.Equal("Haunted Yard", opened.SignatureName);
-        Assert.Equal(RunWindowOpenTrigger.CopiedSignature,
+        Assert.Equal(RunWindowOpenTrigger.CopiedFromClipboard,
             Assert.Single(env.Dialogs.ShownActivityWindowTriggers));
     }
 

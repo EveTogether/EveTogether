@@ -23,6 +23,8 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     private readonly Dictionary<string, int> _byName = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<int, List<SdeDogmaAttribute>> _attrs = new();
     private readonly List<SdeSite> _sites = [];
+    private readonly Dictionary<int, SdeAgent> _agents = new();
+    private readonly Dictionary<string, SdeAgent> _agentsByName = new(StringComparer.OrdinalIgnoreCase);
 
     public bool IsAvailable { get; private set; } = true;
     public SdeVersion? Version => new(1, DateTimeOffset.UnixEpoch);
@@ -52,6 +54,13 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     public FakeSdeAccessor AddSite(SdeSite site)
     {
         _sites.Add(site);
+        return this;
+    }
+
+    public FakeSdeAccessor AddAgent(SdeAgent agent)
+    {
+        _agents[agent.AgentId] = agent;
+        _agentsByName[agent.Name] = agent;
         return this;
     }
 
@@ -131,9 +140,10 @@ public sealed class FakeSdeAccessor : ISdeAccessor
             ? []
             : _sites.Where(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)).ToList();
 
-    // No agent/mission fixtures here — nothing under test today reads them through this fake.
-    public SdeAgent? GetAgent(int agentId) => null;
-    public SdeAgent? FindAgentByName(string name) => null;
+    public SdeAgent? GetAgent(int agentId) => _agents.TryGetValue(agentId, out var agent) ? agent : null;
+    public SdeAgent? FindAgentByName(string name) => _agentsByName.TryGetValue(name, out var agent) ? agent : null;
+
+    // No mission fixtures here — nothing under test today reads them through this fake.
     public SdeMission? GetMission(int missionId) => null;
 
     public void Close() { }

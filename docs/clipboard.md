@@ -228,6 +228,7 @@ returning line in `ClipboardInventoryParser.FindNameColumn`.
 | Reading the clipboard where the platform needs its own channel | `IClipboardChangeSource.ReadTextAsync` → `WaylandClipboardChangeSource` |
 | Platform change source (injectable, so tests replace it) | `IClipboardChangeSource` → `WindowsClipboardChangeSource` / `WaylandClipboardChangeSource` / `UnsupportedClipboardChangeSource` |
 | Signature detection, resolved before the watch starts (ET-79) | `App.OnFrameworkInitializationCompleted` → `ClipboardSignatureOffer` |
+| Mission detection, resolved before the watch starts (ET-172 sub 4) | `App.OnFrameworkInitializationCompleted` → `ClipboardMissionOffer` |
 
 ## Open verification (ET-79)
 

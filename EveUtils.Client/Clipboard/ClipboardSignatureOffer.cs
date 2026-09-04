@@ -159,7 +159,7 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
             if (pilot is { EsiCharacterId: { } characterId })
                 window.UseCharacter(characterId, pilot.Name);
 
-            _dialogs.ShowActivityWindow(window, RunWindowOpenTrigger.CopiedSignature);
+            _dialogs.ShowActivityWindow(window, RunWindowOpenTrigger.CopiedFromClipboard);
         }
         catch (Exception ex)
         {

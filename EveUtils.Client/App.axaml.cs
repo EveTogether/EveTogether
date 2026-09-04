@@ -57,6 +57,9 @@ public partial class App : Application
             // shipped without ever being subscribed, and every copy out of a loot window went past it.
             _ = Program.Services.GetRequiredService<Clipboard.ClipboardLootCapture>();
 
+            // Fourth consumer, same reason again (ET-172 sub 4).
+            _ = Program.Services.GetRequiredService<Clipboard.ClipboardMissionOffer>();
+
             // Clipboard watch: reads the persisted opt-in and starts only if the user turned it on (default off).
             // Started here rather than in Program because reading the clipboard needs the toplevel above (ET-57).
             var clipboardWatch = Program.Services.GetRequiredService<Clipboard.ClipboardWatchService>();

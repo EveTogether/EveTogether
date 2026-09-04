@@ -344,6 +344,17 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     // clipboard signature offer (ET-158), which has no button to press.
     public bool StartsOnArrival { get; set; }
 
+    // The mission's own facts, set by ClipboardMissionOffer (ET-172 sub 4) before the window is shown — null on
+    // every kind but Mission, same as Run.AgentId/MissionLevel themselves. The system comes from the agent's own
+    // station, never from the clipboard text (ET-172 sub 4 AC-4) — there is no location text to parse anyway.
+    public int? MissionAgentId { get; set; }
+    public int? MissionLevel { get; set; }
+    public int? MissionSolarSystemId { get; set; }
+
+    // The reward lines a mission's clipboard capture already carried at accept time, written onto the run the
+    // moment it starts rather than waited for — a mission is not looted the way a site is (ET-174 AC-4).
+    public IReadOnlyList<RunParameterInput> PendingParameters { get; set; } = [];
+
     // ── The six sections ────────────────────────────────────────────────────────────────────────────
 
     public ActivitySection Activity { get; } = new() { Title = "ACTIVITY", IsExpanded = true };
@@ -1470,7 +1481,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 // column holds. The name travels instead.
                 SiteTypeId: 0,
                 SiteName: SignatureName,
-                SolarSystemId: null,
+                SolarSystemId: Kind == ActivityKind.Mission ? MissionSolarSystemId : null,
                 GroupCode: GroupCode,
                 Signature: SignatureId,
                 FleetId: FleetId,
@@ -1481,7 +1492,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 SolarSystemName: SolarSystem,
                 // This window's own start button is the clipboard/signature path — the site comes from what the
                 // pilot pasted, not from a catalogue pick (ET-163).
-                Origin: EveUtils.Shared.Modules.Runs.Enums.RunOrigin.Clipboard));
+                Origin: EveUtils.Shared.Modules.Runs.Enums.RunOrigin.Clipboard,
+                // Every non-mission caller leaves these at their defaults (Site, null, null, empty) — only
+                // ClipboardMissionOffer ever sets MissionAgentId/MissionLevel/PendingParameters (ET-172 sub 4).
+                SiteTypeSource: Kind == ActivityKind.Mission ? SiteTypeSource.Mission : SiteTypeSource.Site,
+                AgentId: MissionAgentId,
+                MissionLevel: MissionLevel,
+                Parameters: PendingParameters));
         if (!started.IsSuccess)
         {
             _services.GetService<IToastService>()?.Show("Run not started",
@@ -2370,6 +2387,29 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         storedId is { Length: > 0 } stored && copiedId is { Length: > 0 } copied
             ? string.Equals(stored, copied, StringComparison.OrdinalIgnoreCase)
             : string.Equals(storedSite, copiedSite, StringComparison.Ordinal);
+
+    /// <summary>The mission half of <see cref="ApplySignature"/> — same rule, same reason (ET-158, applied to
+    /// missions in ET-172 sub 4). ponytail: no discard-and-switch for a different run already going here, since no
+    /// capture has ever shown two missions copied back to back — upgrade once one does.</summary>
+    public void ApplyMission(int? agentId, int? missionLevel, int? solarSystemId, string? agentName,
+        IReadOnlyList<RunParameterInput> parameters) =>
+        LastMission = _ApplyMissionSafelyAsync(agentId, missionLevel, solarSystemId, agentName, parameters);
+
+    /// <summary>The pending hand-over, so a test can await what a void call started.</summary>
+    internal Task LastMission { get; private set; } = Task.CompletedTask;
+
+    private async Task _ApplyMissionSafelyAsync(int? agentId, int? missionLevel, int? solarSystemId, string? agentName,
+        IReadOnlyList<RunParameterInput> parameters)
+    {
+        MissionAgentId = agentId;
+        MissionLevel = missionLevel;
+        MissionSolarSystemId = solarSystemId;
+        // A mission has no site name of its own (ET-172 sub 4) — the agent's name is the one thing this window can
+        // show for it, carried on the same field a site's name travels on rather than a new one just for this.
+        SignatureName = agentName;
+        PendingParameters = parameters;
+        await _StartOnArrivalAsync();
+    }
 
     /// <summary>
     /// What this window did with a copied signature, and why — the line that says which of the two routes ran,

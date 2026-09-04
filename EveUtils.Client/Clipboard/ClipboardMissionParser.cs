@@ -100,6 +100,13 @@ public static partial class ClipboardMissionParser
             && ClipboardInventoryParser.TryParseLocalNumber(trimmed[..^" ISK".Length].TrimEnd(), out var amount))
             return new ClipboardMissionReward(iskKind, amount, null, null);
 
+        // No real capture has ever shown a loyalty-point reward line; "<n> Loyalty Points" follows the ISK line's own
+        // shape (a localized number plus a literal suffix) since that is the only reward text this project has ever
+        // measured — treat this as an assumption, not a second measured form.
+        if (trimmed.EndsWith(" Loyalty Points", StringComparison.Ordinal)
+            && ClipboardInventoryParser.TryParseLocalNumber(trimmed[..^" Loyalty Points".Length].TrimEnd(), out var loyaltyPoints))
+            return new ClipboardMissionReward(RunParameterKey.LoyaltyPoints, loyaltyPoints, null, null);
+
         var itemMatch = ItemRewardPattern().Match(trimmed);
         if (itemMatch.Success && ClipboardInventoryParser.TryParseWholeNumber(itemMatch.Groups["qty"].Value, out var quantity))
             return new ClipboardMissionReward(RunParameterKey.Item, null, itemMatch.Groups["name"].Value.Trim(), quantity);
