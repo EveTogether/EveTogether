@@ -164,7 +164,7 @@ public class FleetRowActionWidthTests
             Assert.Equal(FleetRowActionWidths.View, Cost(ByLabel(cells, "Theirs public", "VIEW")));
             Assert.Equal(FleetRowActionWidths.Metrics, Cost(ByLabel(cells, "Theirs public", "METRICS")));
             Assert.Equal(FleetRowActionWidths.Leave, Cost(ByLabel(cells, "Theirs public", "LEAVE")));
-            Assert.Equal(FleetRowActionWidths.Disband, Cost(ByLabel(cells, "Mine finished", "DISBAND")));
+            Assert.Equal(FleetRowActionWidths.Delete, Cost(ByLabel(cells, "Mine finished", "DELETE")));
 
             // The "⋯" carries an icon rather than a label, so it is the one button without content.
             var overflow = cells.SelectMany(c => c.Buttons).First(b => b.Content is not string);

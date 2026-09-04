@@ -972,7 +972,8 @@
                                                 Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ShareRowCommand}" CommandParameter="{Binding}"/>
                                         <Button Classes="pick act danger" Content="LEAVE" IsVisible="{Binding ShowLeave}"
                                                 Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).LeaveRowCommand}" CommandParameter="{Binding}"/>
-                                        <Button Classes="pick act danger" Content="DISBAND" IsVisible="{Binding ShowDelete}"
+                                        <Button Classes="pick act danger" Content="DELETE" IsVisible="{Binding ShowDelete}"
+                                                ToolTip.Tip="Throw this finished fleet away. Its record goes with it."
                                                 Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).DeleteRowCommand}" CommandParameter="{Binding}"/>
                                         <Button Classes="pick act" IsVisible="{Binding HasOverflow}" ToolTip.Tip="More">
                                             <Button.Flyout>

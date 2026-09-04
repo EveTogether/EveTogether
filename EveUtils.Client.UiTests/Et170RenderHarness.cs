@@ -258,6 +258,10 @@ public class Et170RenderHarness
                 window.Width = 1578; window.Height = 900;
                 Shot(window, "02-wide-1578");
                 Log(log, "02 wide own window 1578", vm, (Control)window.Content!);
+                // FINISHED is folded by default (scherm 1), so its row is only ever seen after a click.
+                vm.ToggleFinishedCommand.Execute(null);
+                Shot(window, "10-finished-open-wide");
+                Log(log, "10 finished unfolded 1578", vm, (Control)window.Content!);
                 window.Close();
                 vm.Dispose();
             }

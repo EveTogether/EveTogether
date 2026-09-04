@@ -484,7 +484,7 @@ public sealed partial class FleetViewModel : ObservableObject
             if (ShowLeave)
                 width += FleetRowActionWidths.Leave;
             if (ShowDelete)
-                width += FleetRowActionWidths.Disband;
+                width += FleetRowActionWidths.Delete;
             return width;
         }
     }

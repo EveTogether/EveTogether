@@ -24,7 +24,9 @@ public static class FleetRowActionWidths
     public const double Metrics = 61;
     public const double Share = 51;
     public const double Leave = 48;
-    public const double Disband = 61;
+    /// <summary>DELETE on a finished row. The same command reads DISBAND behind the "⋯" of a live fleet, where that
+    /// is the right verb; there is nothing left to disband about a fleet that is already over (scherm 1: VERWIJDER).</summary>
+    public const double Delete = 55;
 
     /// <summary>The "⋯" button. It only stands when something is actually folded — so a row that puts its last
     /// action back on the bar gets these 31 px back, which is sometimes exactly what makes that action fit.</summary>
