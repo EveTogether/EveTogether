@@ -88,9 +88,16 @@ public partial class StartFleetWindow : ChromedWindow
         }
     }
 
-    /// <summary>"6 on the roster · 5 with a client · 3 yours" — the header over the member list.</summary>
-    private static string DescribeRoster(FleetStartPrompt prompt) => string.Create(CultureInfo.InvariantCulture,
-        $"MEMBERS — {prompt.RosterCount} on the roster · {prompt.AvailableCount} with a client · {prompt.MineCount} yours");
+    /// <summary>"6 on the roster · 5 with a client · 3 yours · 1 signed off" — the header over the member list.
+    /// The signed-off tail only appears when it applies — most fleets have never had one.</summary>
+    private static string DescribeRoster(FleetStartPrompt prompt)
+    {
+        var head = string.Create(CultureInfo.InvariantCulture,
+            $"MEMBERS — {prompt.RosterCount} on the roster · {prompt.AvailableCount} with a client · {prompt.MineCount} yours");
+        return prompt.SignedOffCount == 0
+            ? head
+            : head + string.Create(CultureInfo.InvariantCulture, $" · {prompt.SignedOffCount} signed off");
+    }
 
     /// <summary>What pressing START actually achieves, in members rather than in states.</summary>
     private static string DescribeWhatStarts(FleetStartPrompt prompt)
@@ -98,6 +105,12 @@ public partial class StartFleetWindow : ChromedWindow
         var linked = prompt.WillLinkCount == 1
             ? "1 member is free and will be linked."
             : string.Create(CultureInfo.InvariantCulture, $"{prompt.WillLinkCount} members are free and will be linked.");
+
+        if (prompt.SignedOffCount > 0)
+            linked += prompt.SignedOffCount == 1
+                ? " 1 member signed off this start and will not be linked — not a collision, they said so themselves."
+                : string.Create(CultureInfo.InvariantCulture,
+                    $" {prompt.SignedOffCount} members signed off this start and will not be linked — not a collision, they said so themselves.");
 
         if (prompt.ExternalCount == 0)
             return linked;

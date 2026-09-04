@@ -55,6 +55,9 @@ public sealed class ServerFleetClient(IFleetTransportClient fleets, string serve
     public Task<(bool Ok, string Message)> ReportMemberInGameFleetAsync(long memberId, bool inFleet) =>
         fleets.ReportMemberInGameFleetAsync(serverAddress, memberId, inFleet, actingCharacterId);
 
+    public Task<(bool Ok, string Message)> SetFleetMemberAvailabilityAsync(long memberId, FleetMemberAvailability availability, string? note) =>
+        fleets.SetFleetMemberAvailabilityAsync(serverAddress, memberId, availability, note, actingCharacterId);
+
     public Task<(bool Ok, string Message)> SetFleetCompositionAsync(long fleetId, long? compositionId) =>
         fleets.SetFleetCompositionAsync(serverAddress, fleetId, compositionId, actingCharacterId);
 

@@ -377,6 +377,17 @@ public sealed class RecordingDialogService : IDialogService
         return Task.FromResult(FleetSwitch);
     }
 
+    /// <summary>What the availability dialog answers with, and what it was asked (ET-169).</summary>
+    public FleetAvailabilitySubmission? FleetAvailabilitySubmission { get; set; }
+
+    public FleetAvailabilityPrompt? FleetAvailabilityPrompt { get; private set; }
+
+    public Task<FleetAvailabilitySubmission?> SetFleetMemberAvailabilityAsync(FleetAvailabilityPrompt prompt)
+    {
+        FleetAvailabilityPrompt = prompt;
+        return Task.FromResult(FleetAvailabilitySubmission);
+    }
+
     /// <summary>What the stop dialog answers with, and what it was asked. A test sets the exit it wants taken and
     /// reads the prompt back to check the fleet's state was described to the FC, without a window opening.</summary>
     public StopFleetChoice FleetExit { get; set; } = StopFleetChoice.Cancel;

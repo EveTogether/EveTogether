@@ -243,6 +243,15 @@ public sealed class RecordingFleetTransportClient : IFleetTransportClient
         return Accepted();
     }
 
+    /// <summary>The availability changes reported per member, so a test can assert the self-only sign-off fired.</summary>
+    public List<(long MemberId, FleetMemberAvailability Availability, string? Note, int ActingCharacterId)> ReportedAvailability { get; } = [];
+
+    public Task<(bool Ok, string Message)> SetFleetMemberAvailabilityAsync(string serverAddress, long memberId, FleetMemberAvailability availability, string? note, int actingCharacterId = 0, CancellationToken cancellationToken = default)
+    {
+        ReportedAvailability.Add((memberId, availability, note, actingCharacterId));
+        return Accepted();
+    }
+
     /// <summary>The invites a character is holding, per server.</summary>
     public Dictionary<string, IReadOnlyList<FleetInviteInfo>> PendingInvitesByServer { get; } = new();
 

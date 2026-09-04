@@ -9,24 +9,31 @@ namespace EveUtils.Client.Dialogs;
 /// </summary>
 /// <param name="ElsewhereFleetName">The started fleet this pilot counts for instead, or null when they are free.
 /// Present means "elsewhere active" — never "offline", which in this app means not logged in and nothing else.</param>
+/// <param name="IsSignedOff">Signed off this fleet's next start (ET-169) — stays on the roster, but is skipped
+/// on start exactly like an external is, and for the same dialog reason: starting cannot do anything for them.</param>
 public sealed record FleetStartMember(
     int CharacterId,
     string Name,
     bool IsMine,
     bool IsCommander,
     bool IsExternal,
-    string? ElsewhereFleetName)
+    string? ElsewhereFleetName,
+    bool IsSignedOff = false)
 {
     public bool IsElsewhereActive => !string.IsNullOrEmpty(ElsewhereFleetName);
 
     /// <summary>The tail of the roster line: what starting will do for this pilot, and — when it will do nothing —
     /// why. Whose pilot it is comes first, because that is what decides whether the answer is "switch them" or
-    /// "ask them".</summary>
+    /// "ask them". Signed off reads before elsewhere-active: a pilot cannot be both at once (signing off only
+    /// applies to a Forming fleet, and elsewhere-active describes a started one), but if the roster ever disagrees
+    /// this is the one that answers "will starting count them" — no.</summary>
     public string StateText => IsExternal
         ? "no client · never shares"
-        : IsElsewhereActive
-            ? (IsMine ? $"your pilot · in {ElsewhereFleetName}" : $"someone else's pilot · in {ElsewhereFleetName}")
-            : "free · will be linked";
+        : IsSignedOff
+            ? "signed off · not counted this time"
+            : IsElsewhereActive
+                ? (IsMine ? $"your pilot · in {ElsewhereFleetName}" : $"someone else's pilot · in {ElsewhereFleetName}")
+                : "free · will be linked";
 }
 
 /// <summary>What the commander decided in the start dialog (ET-168, scherm 2).</summary>
@@ -87,6 +94,10 @@ public sealed record FleetStartPrompt(
     public IReadOnlyList<FleetStartMember> MyAltsElsewhere { get; } =
         Members.Where(m => m.IsElsewhereActive && m.IsMine).ToList();
 
-    /// <summary>Whoever will be linked the moment this starts: on the roster, with a client, free.</summary>
-    public int WillLinkCount => Members.Count(m => !m.IsExternal && !m.IsElsewhereActive);
+    /// <summary>Signed off this fleet's next start (ET-169): stays on the roster, but neither counted nor asked —
+    /// distinct from the collision above, which is about a pilot busy elsewhere, not one who said not to count on them.</summary>
+    public int SignedOffCount { get; } = Members.Count(m => m.IsSignedOff);
+
+    /// <summary>Whoever will be linked the moment this starts: on the roster, with a client, free, and not signed off.</summary>
+    public int WillLinkCount => Members.Count(m => !m.IsExternal && !m.IsElsewhereActive && !m.IsSignedOff);
 }

@@ -65,6 +65,15 @@ internal sealed class FakeFleetClient : IFleetClient
         return Ok();
     }
 
+    /// <summary>The availability changes the window sent, so a test can assert the self-only sign-off fired.</summary>
+    public List<(long MemberId, FleetMemberAvailability Availability, string? Note)> ReportedAvailability { get; } = [];
+
+    public Task<(bool Ok, string Message)> SetFleetMemberAvailabilityAsync(long memberId, FleetMemberAvailability availability, string? note)
+    {
+        ReportedAvailability.Add((memberId, availability, note));
+        return Ok();
+    }
+
     public Task<(bool Ok, string Message)> SetFleetCompositionAsync(long fleetId, long? compositionId) => Ok();
     public Task<(bool Ok, string Message)> CoupleFleetToEsiAsync(long fleetId, long esiFleetId, int esiFleetBossId) => Ok();
     public Task<(bool Ok, string Message)> UncoupleFleetFromEsiAsync(long fleetId) => Ok();

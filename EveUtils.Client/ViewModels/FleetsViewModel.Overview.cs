@@ -12,6 +12,7 @@ using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels.Fleets;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Settings.Queries;
 using Microsoft.Extensions.DependencyInjection;
@@ -619,8 +620,8 @@ public sealed partial class FleetsViewModel
     /// JOIN / REQUEST gets a place on the row itself. Every action this row allows is drawn exactly once: on the row
     /// when its width and its group give it a place there, in this menu otherwise; never in both, never nowhere. The
     /// order things fold in is scherm 15's: STOP/START and MANAGE/VIEW keep the row at any width, SHARE folds first,
-    /// then METRICS, then LEAVE. The rarer management actions — edit, disband, adding pilots to a local fleet — live
-    /// here whatever the width.
+    /// then METRICS, then LEAVE, then SIGN OFF (ET-169). The rarer management actions — edit, disband, adding pilots
+    /// to a local fleet — live here whatever the width.
     ///
     /// JOIN belongs on the row when it fits (Jithran, 2026-09-04) and nothing scherm 1 draws may step aside for it,
     /// so it is measured rather than ruled: what the standing buttons take, plus JOIN, plus the "⋯" if anything is
@@ -639,6 +640,8 @@ public sealed partial class FleetsViewModel
             folded.Add(new("SHARE", new AsyncRelayCommand(() => OpenSharing(row))));
         if (row.CanLeave && !row.ShowLeave)
             folded.Add(new("LEAVE", new AsyncRelayCommand(() => LeaveRowAsync(row))));
+        if (row.CanSignOff && !row.ShowSignOff)
+            folded.Add(new("SIGN OFF", new AsyncRelayCommand(() => SignOffRowAsync(row))));
         if (row.IsLocal && row.IsMine && !row.IsFinished)
         {
             folded.Add(new("ADD CHARACTER", new AsyncRelayCommand(() => AddLocalCharacter(row))));
@@ -1008,6 +1011,60 @@ public sealed partial class FleetsViewModel
                 row.Info.EsiFleetId, row.Info.EsiFleetBossId));
         if (status is not FleetMemberRemovalStatus.Cancelled)
             StatusMessage = message;
+    }
+
+    /// <summary>SIGN OFF on a Forming fleet row (ET-169): one of my characters stays on the roster, but tells the
+    /// commander not to count on them next start. Includes the owner's own membership row — unlike LEAVE,
+    /// signing off never touches ownership.</summary>
+    [RelayCommand]
+    private Task SignOffRowAsync(FleetViewModel? row) =>
+        row is null ? Task.CompletedTask
+            : SignOffCharactersAsync(row, row.Members.Where(m => m.IsMine).ToList());
+
+    private async Task SignOffCharactersAsync(FleetViewModel row, IReadOnlyList<FleetMemberRowViewModel> candidates)
+    {
+        if (candidates.Count == 0)
+        {
+            StatusMessage = $"None of your characters are on '{row.Name}''s roster.";
+            return;
+        }
+
+        IReadOnlyList<int>? chosen = candidates.Count == 1
+            ? [candidates[0].CharacterId]
+            : await _dialogs.PickCharactersAsync($"Set availability for '{row.Name}' for which character(s)?",
+                candidates.Select(c => new CharacterPickOption(c.CharacterId, c.CharacterName, "member", Enabled: true)).ToList());
+        if (chosen is null || chosen.Count == 0)
+            return;
+
+        foreach (int characterId in chosen)
+            await SignOffCharacterAsync(row, characterId);
+    }
+
+    /// <summary>One of my characters, availability set or reversed for one fleet — self-only all the way down
+    /// to the handler, so <paramref name="characterId"/> is both who this is about and who acts.</summary>
+    private async Task SignOffCharacterAsync(FleetViewModel row, int characterId)
+    {
+        var member = row.Members.FirstOrDefault(m => m.CharacterId == characterId);
+        if (member is null)
+            return;
+
+        var prompt = new FleetAvailabilityPrompt(member.CharacterName, row.Name, member.Availability, member.AvailabilityNote);
+        var submission = await _dialogs.SetFleetMemberAvailabilityAsync(prompt);
+        if (submission is null)
+            return;
+
+        var client = ServerOrLocalClient(row.ServerAddress, characterId);
+        var (ok, message) = await client.SetFleetMemberAvailabilityAsync(member.MemberId, submission.Availability, submission.Note);
+        if (!ok)
+        {
+            StatusMessage = message;
+            return;
+        }
+
+        StatusMessage = submission.Availability == FleetMemberAvailability.SignedOff
+            ? $"{member.CharacterName} signed off '{row.Name}' — still on the roster."
+            : $"{member.CharacterName} is available for '{row.Name}' again.";
+        await _ReloadEverythingAsync();
     }
 
     // ── Sharing, read once per rebuild ──────────────────────────────────────────────────────────────────────────

@@ -43,7 +43,21 @@ internal sealed class StartFleetCommandHandler(IFleetRepository repository, IDis
         var alreadyActiveElsewhere = 0;
         foreach (var member in members)
         {
-            if (member.CharacterId == fleet.CreatorCharacterId || member.IsExternal)
+            // A sign-off (ET-169) covers only the next start — not every future one — so it is consumed
+            // here regardless of whether the member is skipped below. This also restores the "silence counts
+            // as available" default (NotSet) for a confirmed Available, matching the same one-time scope.
+            var signedOff = member.Availability == FleetMemberAvailability.SignedOff;
+            if (member.Availability != FleetMemberAvailability.NotSet)
+            {
+                member.Availability = FleetMemberAvailability.NotSet;
+                member.AvailabilityNote = null;
+                member.AvailabilityUpdatedAt = null;
+                await repository.UpdateMemberAsync(member, cancellationToken);
+            }
+
+            // Signed off: stays on the roster, but is neither notified nor counted as a collision — that
+            // tally is for members the creator did not expect to be missing.
+            if (member.CharacterId == fleet.CreatorCharacterId || member.IsExternal || signedOff)
                 continue;
 
             var elsewhere = (await repository.ListActiveMembershipsAsync(member.CharacterId, cancellationToken))

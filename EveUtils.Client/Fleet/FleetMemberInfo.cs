@@ -9,7 +9,9 @@ namespace EveUtils.Client.Fleet;
 /// <paramref name="FitSkillVerdict"/> is the pilot's own client's can-fly verdict for that fit,
 /// the badge fallback for pilots whose skills this client does not know locally.
 /// <paramref name="LastSeenAt"/> is when the server last saw this member's client publish into the fleet, or null when
-/// it never has — the difference between a pilot who left and one we have simply never heard from (ET-70).</summary>
+/// it never has — the difference between a pilot who left and one we have simply never heard from (ET-70).
+/// <paramref name="Availability"/> is this member's self-reported availability for the fleet's next start (ET-169),
+/// set and cleared by the member only; <paramref name="AvailabilityNote"/> is the optional short note that came with it.</summary>
 public sealed record FleetMemberInfo(
     long Id,
     int CharacterId,
@@ -20,4 +22,6 @@ public sealed record FleetMemberInfo(
     FitReferenceInfo? AssignedFit = null,
     long? AssignedCompositionEntryId = null,
     FitSkillVerdict FitSkillVerdict = FitSkillVerdict.Unknown,
-    DateTimeOffset? LastSeenAt = null);
+    DateTimeOffset? LastSeenAt = null,
+    FleetMemberAvailability Availability = FleetMemberAvailability.NotSet,
+    string? AvailabilityNote = null);

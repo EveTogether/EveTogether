@@ -360,6 +360,16 @@ public sealed class FleetClient(
                 InFleet = inFleet
             }, headers, cancellationToken: cancellationToken), cancellationToken);
 
+    public Task<(bool Ok, string Message)> SetFleetMemberAvailabilityAsync(
+        string serverAddress, long memberId, FleetMemberAvailability availability, string? note, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
+        ActionAsync(serverAddress, actingCharacterId, (client, headers) =>
+        {
+            var request = new SetFleetMemberAvailabilityRequest { MemberId = memberId, Availability = (int)availability };
+            if (note is not null)
+                request.Note = note;
+            return client.SetFleetMemberAvailabilityAsync(request, headers, cancellationToken: cancellationToken);
+        }, cancellationToken);
+
     public Task<IReadOnlyList<FleetMemberInfo>> ListMembersAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
         QueryAsync(serverAddress, actingCharacterId,
             (client, headers) => client.ListMembersAsync(new ListMembersRequest { FleetId = fleetId }, headers, ListDeadline(), cancellationToken),
@@ -368,7 +378,9 @@ public sealed class FleetClient(
                     m.AssignedFit is null ? null : MapFit(m.AssignedFit),
                     m.HasAssignedCompositionEntryId ? m.AssignedCompositionEntryId : null,
                     (FitSkillVerdict)m.FitSkillVerdict,
-                    m.HasLastSeenMs ? DateTimeOffset.FromUnixTimeMilliseconds(m.LastSeenMs) : null)).ToList()
+                    m.HasLastSeenMs ? DateTimeOffset.FromUnixTimeMilliseconds(m.LastSeenMs) : null,
+                    (FleetMemberAvailability)m.Availability,
+                    m.HasAvailabilityNote ? m.AvailabilityNote : null)).ToList()
                 : [], cancellationToken);
 
     public Task<IReadOnlyList<FleetInviteInfo>> ListPendingInvitesAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>

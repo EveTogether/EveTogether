@@ -494,6 +494,16 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.Property<long?>("AssignedCompositionEntryId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Availability")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AvailabilityNote")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("AvailabilityUpdatedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("CharacterId")
                         .HasColumnType("INTEGER");
 

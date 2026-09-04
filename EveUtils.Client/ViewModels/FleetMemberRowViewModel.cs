@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Imaging;
+using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 
 namespace EveUtils.Client.ViewModels;
@@ -24,11 +25,14 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
         FitReferenceInfo? assignedFit, MemberSkillBadge? skillBadge, IAsyncRelayCommand selectFitCommand,
         IAsyncRelayCommand? openFitCommand = null, IAsyncRelayCommand? leaveCommand = null, bool canLeave = false,
         FleetMemberFacts? menuFacts = null, IRelayCommand? removeCommand = null,
-        bool isMine = false, bool isFleetCommander = false, DateTimeOffset? lastSeenAt = null)
+        bool isMine = false, bool isFleetCommander = false, DateTimeOffset? lastSeenAt = null,
+        FleetMemberAvailability availability = FleetMemberAvailability.NotSet, string? availabilityNote = null)
     {
         IsMine = isMine;
         IsFleetCommander = isFleetCommander;
         LastSeenAt = lastSeenAt;
+        Availability = availability;
+        AvailabilityNote = availabilityNote;
         ShipName = menuFacts?.ShipName;
         MemberId = memberId;
         CharacterId = characterId;
@@ -69,6 +73,17 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
 
     /// <summary>Holds the fleet-commander seat on the ET roster.</summary>
     public bool IsFleetCommander { get; }
+
+    /// <summary>This member's self-reported availability for the fleet's next start (ET-169) — set and
+    /// cleared by the member only, never by this card.</summary>
+    public FleetMemberAvailability Availability { get; }
+
+    /// <summary>The optional note the member gave with their availability.</summary>
+    public string? AvailabilityNote { get; }
+
+    /// <summary>Signed off, and staying on the roster regardless — the one state worth a chip here; a
+    /// confirmed "available" or plain silence both read the same as an ordinary member.</summary>
+    public bool IsSignedOff => Availability == FleetMemberAvailability.SignedOff;
 
     /// <summary>The ship the assigned fit flies, or null when no fit is assigned.</summary>
     public string? ShipName { get; }
