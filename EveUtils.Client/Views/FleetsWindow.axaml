@@ -582,6 +582,13 @@
                 <Setter Property="FontWeight" Value="SemiBold"/>
             </Style>
             <!-- Scherm 1's line under an elsewhere-active member: why they are on the roster and still do not count. -->
+            <!-- The head of the unfolded roster block: the table's own head, one step quieter. -->
+            <Style Selector="Border.subhead">
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="Background" Value="#05FFFFFF"/>
+                <Setter Property="Padding" Value="0,3"/>
+            </Style>
             <Style Selector="Border.whynote">
                 <Setter Property="BorderBrush" Value="{StaticResource WarnBrush}"/>
                 <Setter Property="BorderThickness" Value="2,0,0,0"/>
@@ -981,6 +988,26 @@
                              of the rest with "show all N". A fleet of fifty costs the height of a fleet of six. -->
                         <Border Classes="subrows" IsVisible="{Binding IsExpanded}">
                             <StackPanel>
+                                <!-- Unfolded to the whole roster the list gets its own scroll, and the table's head
+                                     scrolls away above it — so the block carries its own, as scherm 12 draws it.
+                                     A short list stays under the table's head and needs none. -->
+                                <Border Classes="subhead" IsVisible="{Binding MembersExpanded}">
+                                    <!-- Same Grid.subrow margin as the rows under it, so the head sits on the list's
+                                         own columns rather than on the table head's. -->
+                                    <Grid Classes="subrow" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
+                                        <Border Grid.Column="0" Classes="cell status"/>
+                                        <Border Grid.Column="1" Classes="cell">
+                                            <!-- The same tree indent the member names carry, so MEMBER stands over them. -->
+                                            <StackPanel Classes="mnamerow"><TextBlock Classes="gridhead" Text="MEMBER"/></StackPanel>
+                                        </Border>
+                                        <Border Grid.Column="2" Classes="cell members"><TextBlock Classes="gridhead" Text="SHIP"/></Border>
+                                        <Border Grid.Column="3" Classes="cell fc"><TextBlock Classes="gridhead" Text="PRESENT"/></Border>
+                                        <Border Grid.Column="4" Classes="cell own"><TextBlock Classes="gridhead" Text="ROLE"/></Border>
+                                        <Border Grid.Column="5" Classes="cell doctrine"><TextBlock Classes="gridhead" Text="FIT"/></Border>
+                                        <Border Grid.Column="6" Classes="cell since"><TextBlock Classes="gridhead" Text="TAKING PART" TextAlignment="Right" HorizontalAlignment="Right"/></Border>
+                                        <Border Grid.Column="7" Classes="cell acts"/>
+                                    </Grid>
+                                </Border>
                                 <ScrollViewer MaxHeight="250" HorizontalScrollBarVisibility="Disabled">
                                     <ItemsControl ItemsSource="{Binding VisibleMembers}">
                                         <ItemsControl.ItemTemplate>
