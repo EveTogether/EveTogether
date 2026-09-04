@@ -44,7 +44,7 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             .AsNoTracking()
             .Where(run => run.State == RunState.Saved && !run.DeletedAtUtc.HasValue
                           && ((run.GroupCode != null && groupCodes.Contains(run.GroupCode)) || runIds.Contains(run.Id)))
-            .Select(run => new { run.Id, run.GroupCode })
+            .Select(run => new { run.Id, run.GroupCode, run.CharacterId })
             .ToListAsync(cancellationToken);
         Dictionary<Guid, string> activityKeyByRunId = memberRuns.ToDictionary(run => run.Id, run => run.GroupCode ?? run.Id.ToString());
 
@@ -56,17 +56,23 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             .Where(parameter => memberRunIds.Contains(parameter.RunId))
             .ToListAsync(cancellationToken);
         ILookup<string, RunParameter> rewardsByActivity = parameters.ToLookup(parameter => activityKeyByRunId[parameter.RunId]);
+        ILookup<string, long> crewByActivity = memberRuns.ToLookup(run => run.GroupCode ?? run.Id.ToString(), run => run.CharacterId);
 
         return Result<IReadOnlyList<ActivityOverviewRowDto>>.Success(
-            [.. page.Select(summary => _ToDto(summary, rewardsByActivity[summary.GroupCode ?? summary.RunId!.Value.ToString()]))]);
+            [.. page.Select(summary => _ToDto(
+                summary,
+                rewardsByActivity[summary.GroupCode ?? summary.RunId!.Value.ToString()],
+                crewByActivity[summary.GroupCode ?? summary.RunId!.Value.ToString()]))]);
     }
 
-    private static ActivityOverviewRowDto _ToDto(ActivitySummary summary, IEnumerable<RunParameter> rewardRows)
+    private static ActivityOverviewRowDto _ToDto(
+        ActivitySummary summary, IEnumerable<RunParameter> rewardRows, IEnumerable<long> crew)
     {
         RunParameter[] rewards = [.. rewardRows];
         return new ActivityOverviewRowDto(
             summary.Id, summary.GroupCode, summary.RunId, summary.ActivityKind, summary.SiteName, summary.SolarSystemId,
             summary.StartedAtUtc, summary.DurationSeconds, summary.RunsIncluded, summary.ParticipantCount,
+            [.. crew.Distinct().Order()],
             [.. rewards.GroupBy(reward => reward.ParameterKey)
                 .Select(group => new ActivityRewardDto(group.Key, _SumOrNull(group.Select(reward => reward.Amount))))],
             summary.LootIskNet, summary.EnemyTypeCount,

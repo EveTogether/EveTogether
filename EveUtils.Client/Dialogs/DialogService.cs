@@ -423,6 +423,12 @@ public sealed class DialogService : IDialogService, ISingletonService
         return viewModel.Applied;   // the window's own buttons never decide this — what was written does
     }
 
+    public void ShowRuns(RunsOverviewViewModel viewModel)
+    {
+        _ = viewModel.LoadAsync();
+        Route(new RunsWindow(viewModel), "RUNS", "runs", "runs");
+    }
+
     public void ShowManualRunStart(ManualRunStartViewModel viewModel) =>
         Route(new ManualRunStartWindow(viewModel), "START RUN", "runs-start", "runs-start");
 

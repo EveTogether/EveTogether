@@ -288,6 +288,12 @@ public sealed class RecordingDialogService : IDialogService
     public void ShowActivityDetail(ActivityDetailViewModel viewModel, Guid activitySummaryId) =>
         LastActivityDetail = viewModel;
 
+    /// <summary>The runs screen the shell was asked to open, or null — how a test asserts the RUNS rail reaches the
+    /// module without standing up the real window.</summary>
+    public RunsOverviewViewModel? LastRuns { get; private set; }
+
+    public void ShowRuns(RunsOverviewViewModel viewModel) => LastRuns = viewModel;
+
     /// <summary>The save-a-preset dialog the tool asked for, or null — and a hook to drive it (pick a path and
     /// export) without a window.</summary>
     public PresetExportViewModel? LastPresetExport { get; private set; }
