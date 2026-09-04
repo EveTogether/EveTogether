@@ -1,4 +1,5 @@
 using System;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
@@ -43,6 +44,10 @@ public partial class MainWindow : Window
     private bool _placementLoaded;          // true once the saved size is restored; gates saving until then
     private DispatcherTimer? _savePlacementDebounce;
 
+    // The host tabs the strip currently has no room for (ET-157). Backs TabOverflowList's ItemsSource; kept live
+    // even while the flyout is closed so it is already correct the moment it opens.
+    private readonly ObservableCollection<HostTab> _overflowHostTabs = [];
+
     public MainWindow()
     {
         InitializeComponent();
@@ -55,6 +60,52 @@ public partial class MainWindow : Window
         CharacterList.AddHandler(PointerPressedEvent, OnCharacterPointerPressed, RoutingStrategies.Tunnel);
         CharacterList.AddHandler(DragDrop.DragOverEvent, OnCharacterDragOver);
         CharacterList.AddHandler(DragDrop.DropEvent, OnCharacterDrop);
+
+        // Recomputed after every layout pass (tab added/closed/renamed, window resized) rather than on a narrower
+        // set of triggers — cheap for a handful of tabs, and it self-guards against feedback loops below.
+        TabOverflowList.ItemsSource = _overflowHostTabs;
+        HostTabsList.LayoutUpdated += (_, _) => RecomputeTabOverflow();
+    }
+
+    // HostTabsList's ItemsPanel is a plain horizontal StackPanel with no overflow of its own: tabs beyond its own
+    // width are clipped by the ListBox's ScrollViewer and become unreachable (ET-157). Rather than add horizontal
+    // scroll, those tabs are parked in TabOverflowButton's flyout — reading, from the realized containers' arranged
+    // bounds, which ones actually fall outside the strip.
+    private void RecomputeTabOverflow()
+    {
+        if (DataContext is not MainWindowViewModel vm) return;
+
+        var tabs = vm.HostTabs;
+        var available = HostTabsList.Bounds.Width;
+        var overflowFrom = tabs.Count;
+        for (var i = 0; i < tabs.Count; i++)
+        {
+            if (HostTabsList.ContainerFromIndex(i) is not { } container) { overflowFrom = tabs.Count; break; }
+            if (container.Bounds.Right > available + 0.5) { overflowFrom = i; break; }
+        }
+
+        var overflow = tabs.Skip(overflowFrom).ToList();
+        if (overflow.SequenceEqual(_overflowHostTabs)) return; // unchanged — stop here, or every apply below re-triggers this
+
+        _overflowHostTabs.Clear();
+        foreach (var tab in overflow) _overflowHostTabs.Add(tab);
+
+        TabOverflowButton.IsEnabled = _overflowHostTabs.Count > 0;
+        TabOverflowButton.Opacity = _overflowHostTabs.Count > 0 ? 1.0 : 0.35;
+        TabOverflowCountText.Text = _overflowHostTabs.Count > 0
+            ? _overflowHostTabs.Count.ToString(CultureInfo.InvariantCulture)
+            : string.Empty;
+    }
+
+    // Picking a tab from the overflow flyout selects it exactly like clicking it in the strip would (both bind
+    // through the same SelectedHostTab), then closes the flyout. Clearing the selection afterwards means picking the
+    // same tab again later still raises this instead of being swallowed as a no-op selection change.
+    private void OnTabOverflowSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (e.AddedItems.Count == 0 || e.AddedItems[0] is not HostTab tab || sender is not ListBox list) return;
+        if (DataContext is MainWindowViewModel vm) vm.SelectedHostTab = tab;
+        TabOverflowButton.Flyout?.Hide();
+        list.SelectedItem = null;
     }
 
     // Begin a drag carrying the pressed character row's id. A press on a button (chart / expand / gear) or a local-only row (id 0,

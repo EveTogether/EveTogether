@@ -462,16 +462,20 @@
             <!-- ── Module host: tabbed header + the docked "fits" home (library + live DPS + shared demo) ── -->
             <DockPanel Grid.Column="2" IsVisible="{Binding ShowHost}">
 
-                <!-- Host header: open-module tab strip (or HOME) + dock/undock toggle (D-182). Fixed height matches the
-                     CHARACTERS header so the two column headers line up exactly. -->
+                <!-- Host header: open-module tab strip (or HOME) + overflow + dock/undock toggle (D-182, ET-157).
+                     Fixed height matches the CHARACTERS header so the two column headers line up exactly. -->
                 <Border Classes="panel-header" DockPanel.Dock="Top" Height="40" Padding="12,0">
-                    <Grid ColumnDefinitions="*,Auto,Auto">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
                                     IsVisible="{Binding IsHomeShown}">
                             <TextBlock Classes="diamond" Text="◆"/>
                             <TextBlock Text="HOME" Classes="panel-title"/>
                         </StackPanel>
-                        <ListBox Grid.Column="0" Classes="hosttabs" IsVisible="{Binding !IsHomeShown}"
+                        <!-- A horizontal StackPanel has no overflow of its own — tabs that don't fit are clipped by the
+                             ListBox's own ScrollViewer and become unreachable (ET-157). The overflow button to its
+                             right (below) tracks which tabs fall outside HostTabsList's own width and parks those
+                             there instead, rather than adding horizontal scroll. -->
+                        <ListBox x:Name="HostTabsList" Grid.Column="0" Classes="hosttabs" IsVisible="{Binding !IsHomeShown}"
                                  ItemsSource="{Binding HostTabs}" SelectedItem="{Binding SelectedHostTab}">
                             <ListBox.ItemsPanel>
                                 <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
@@ -488,9 +492,39 @@
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
-                        <TextBlock Grid.Column="1" Text="{Binding DockModeLabel}" Classes="label" FontSize="9"
+                        <!-- Overflow (ET-157): a fixed width regardless of whether it currently has anything to show,
+                             so toggling it never changes HostTabsList's own available width — that would flip tabs in
+                             and out of overflow on every layout pass. Dim + no count = nothing hidden right now. -->
+                        <Button x:Name="TabOverflowButton" Grid.Column="1" Classes="winbtn" Width="30" Margin="6,0,0,0"
+                                IsVisible="{Binding !IsHomeShown}" IsEnabled="False" Opacity="0.35"
+                                ToolTip.Tip="Tabs that don't fit in the strip">
+                            <StackPanel Orientation="Horizontal" Spacing="2">
+                                <mi:MaterialIcon Classes="icon-sm" Kind="ChevronDown"/>
+                                <TextBlock x:Name="TabOverflowCountText" FontSize="9" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <Button.Flyout>
+                                <Flyout Placement="BottomEdgeAlignedRight">
+                                    <ListBox x:Name="TabOverflowList" Classes="hosttabs-overflow"
+                                             SelectionChanged="OnTabOverflowSelectionChanged">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="dlg:HostTab">
+                                                <Grid ColumnDefinitions="*,Auto" MinWidth="180">
+                                                    <TextBlock Grid.Column="0" Text="{Binding Title}" FontSize="11"
+                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                    <Button Grid.Column="1" Classes="tabclose" Command="{Binding CloseCommand}"
+                                                            ToolTip.Tip="Close this module">
+                                                        <mi:MaterialIcon Classes="icon-sm" Kind="Close"/>
+                                                    </Button>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Flyout>
+                            </Button.Flyout>
+                        </Button>
+                        <TextBlock Grid.Column="2" Text="{Binding DockModeLabel}" Classes="label" FontSize="9"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <Button Grid.Column="2" Classes="winbtn" Width="30"
+                        <Button Grid.Column="3" Classes="winbtn" Width="30"
                                 Command="{Binding ToggleDockModeCommand}"
                                 ToolTip.Tip="Dock / undock: switch all modules between the docked host and floating windows.">
                             <mi:MaterialIcon Kind="DockWindow"/>

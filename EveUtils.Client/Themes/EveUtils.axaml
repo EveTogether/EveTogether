@@ -491,6 +491,19 @@
     <Style Selector="ListBox.hosttabs ListBoxItem:selected /template/ ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
     </Style>
+
+    <!-- The tab-strip overflow flyout (ET-157): same tab look, laid out as a vertical list instead. -->
+    <Style Selector="ListBox.hosttabs-overflow">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="4"/>
+        <Setter Property="MaxHeight" Value="320"/>
+    </Style>
+    <Style Selector="ListBox.hosttabs-overflow ListBoxItem">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="Padding" Value="10,7"/>
+        <Setter Property="CornerRadius" Value="0"/>
+    </Style>
     <Style Selector="Button.tabclose">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="0"/>
