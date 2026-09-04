@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
-internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus)
+internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher)
     : ICommandHandler<SaveRunCommand, Result>
 {
     public async Task<Result> Handle(SaveRunCommand command, CancellationToken cancellationToken = default)
@@ -101,6 +101,9 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
             return Result.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
                 "A saved run cannot be saved again.", "Runs"));
         await eventBus.PublishAsync(new RunSavedEvent(command.RunId), EventTarget.Local, cancellationToken);
+        // Local-first: a run must show up in the summary the moment it is saved, not only after the next server
+        // sync — RunSynchronizationApplier triggers the same rebuild for the pulled-run path.
+        await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
         return Result.Success();
     }
 }

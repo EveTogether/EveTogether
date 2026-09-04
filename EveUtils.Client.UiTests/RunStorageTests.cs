@@ -4,6 +4,8 @@ using EveUtils.Client.Transport;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Market.Entities;
+using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
@@ -25,6 +27,13 @@ public sealed class RunStorageTests
         using var instance = TestClientInstance.Create();
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        // Tritanium and Mexallon are cached; Pyerite is deliberately left out so LootEntriesWithoutPrice still has
+        // something to count.
+        await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
+        [
+            new LocalMarketPrice { TypeId = 34, AveragePrice = 40, AdjustedPrice = 40, UpdatedAt = DateTimeOffset.UtcNow },
+            new LocalMarketPrice { TypeId = 36, AveragePrice = 20, AdjustedPrice = 20, UpdatedAt = DateTimeOffset.UtcNow }
+        ]);
 
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
             1234, "Homefront", 30000142), cancellationToken);
@@ -64,6 +73,243 @@ public sealed class RunStorageTests
         Assert.Equal(0.03m, summary.LootVolume);   // the volume column of an EVE inventory is the stack, not one unit
         Assert.Equal(75m, summary.BountyIsk);
         Assert.Equal(2, summary.SourceRevisionSum);
+    }
+
+    /// <summary>ET-159 AC-1: local-first means a run does not wait for a server sync to show up in the summary.
+    /// Counter-proof: drop the rebuild dispatch that SaveRunCommandHandler now sends after SAVE, and this goes red
+    /// on zero rows.</summary>
+    [AvaloniaFact]
+    public async Task SavedRun_WithoutAnyExplicitRebuildOrSync_AppearsInTheSummary()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142), cancellationToken);
+        Result saved = await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15),
+            StartedAtUtc.AddMinutes(16), [], [], [], []), cancellationToken);
+
+        Assert.True(started.IsSuccess);
+        Assert.True(saved.IsSuccess);
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        ActivitySummary summary = Assert.Single(await db.Set<ActivitySummary>().ToListAsync(cancellationToken));
+        Assert.Equal(started.Value, summary.RunId);
+    }
+
+    /// <summary>ET-159 AC-2: loot is valued through the type-id price lookup, never the clipboard's own ISK column —
+    /// including when the clipboard carried no price at all but the lookup does. Counter-proof: this is the test
+    /// that stood red before the fix (it used to see 1,000,000 from the clipboard instead of 30,000 from the
+    /// lookup).</summary>
+    [AvaloniaFact]
+    public async Task Rebuild_ValuesLootFromThePriceLookup_NotTheClipboard()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
+        [
+            new LocalMarketPrice { TypeId = 34, AveragePrice = 10_000, AdjustedPrice = 10_000, UpdatedAt = DateTimeOffset.UtcNow },
+            new LocalMarketPrice { TypeId = 35, AveragePrice = 500, AdjustedPrice = 500, UpdatedAt = DateTimeOffset.UtcNow }
+        ]);
+
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+            [new RunLootCaptureInput
+            {
+                CapturedAtUtc = StartedAtUtc.AddMinutes(10),
+                Source = LootCaptureSource.Clipboard,
+                Entries =
+                [
+                    // A clipboard price a million times too high for the lookup's 10,000 — the lookup must win.
+                    new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = 3, ClipboardPrice = 1_000_000m, LootKind = LootKind.Gained },
+                    // No clipboard price at all, yet the lookup knows one — it must still be counted.
+                    new RunLootEntryInput { ItemTypeId = 35, Name = "Pyerite", Quantity = 2, ClipboardPrice = null, LootKind = LootKind.Gained }
+                ]
+            }], [], [], []), cancellationToken);
+
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        ActivitySummary summary = Assert.Single(await db.Set<ActivitySummary>().ToListAsync(cancellationToken));
+        Assert.Equal(31_000m, summary.LootIskGained);   // 10,000×3 + 500×2, not 1,000,000
+    }
+
+    /// <summary>ET-159 AC-3: "without a price" is decided by the lookup, not by whether the clipboard happened to
+    /// carry a figure. Counter-proof: switch the counter back to <c>ClipboardPrice is null</c> and this goes red —
+    /// two of the three entries below flip which side of the count they land on.</summary>
+    [AvaloniaFact]
+    public async Task Rebuild_CountsEntriesWithoutPrice_FromTheLookupNotTheClipboard()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
+            [new LocalMarketPrice { TypeId = 36, AveragePrice = 20, AdjustedPrice = 20, UpdatedAt = DateTimeOffset.UtcNow }]);
+
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+            [new RunLootCaptureInput
+            {
+                CapturedAtUtc = StartedAtUtc.AddMinutes(10),
+                Source = LootCaptureSource.Clipboard,
+                Entries =
+                [
+                    // Has a clipboard price but no market price — counts as without a price.
+                    new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = 1, ClipboardPrice = 100m, LootKind = LootKind.Gained },
+                    // Same again, so the aggregate count actually differs from the buggy reading below.
+                    new RunLootEntryInput { ItemTypeId = 35, Name = "Pyerite", Quantity = 1, ClipboardPrice = 50m, LootKind = LootKind.Gained },
+                    // No clipboard price but a known market price — does not count.
+                    new RunLootEntryInput { ItemTypeId = 36, Name = "Mexallon", Quantity = 1, ClipboardPrice = null, LootKind = LootKind.Gained }
+                ]
+            }], [], [], []), cancellationToken);
+
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        ActivitySummary summary = Assert.Single(await db.Set<ActivitySummary>().ToListAsync(cancellationToken));
+        Assert.Equal(2, summary.LootEntriesWithoutPrice);   // the two lookup-misses, not the one null clipboard price
+    }
+
+    /// <summary>ET-159 AC-4: the expected payout follows the same equal split <c>RunPayoutSplit</c> makes, over the
+    /// activity's payout-eligible runs. Counter-proof: hardcode the field back to <c>0m</c> and this goes red.</summary>
+    [AvaloniaFact]
+    public async Task Rebuild_SplitsExpectedPayoutAcrossEligibleRuns_RatherThanAConstantZero()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
+            [new LocalMarketPrice { TypeId = 34, AveragePrice = 100_000, AdjustedPrice = 100_000, UpdatedAt = DateTimeOffset.UtcNow }]);
+
+        async Task SaveEligibleRunAsync(long characterId)
+        {
+            Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site, StartedAtUtc,
+                1234, "Homefront", 30000142, "HF-7QK2"), cancellationToken);
+            await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+                [new RunLootCaptureInput
+                {
+                    CapturedAtUtc = StartedAtUtc.AddMinutes(10),
+                    Source = LootCaptureSource.Clipboard,
+                    Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = 1, LootKind = LootKind.Gained }]
+                }], [], [], []), cancellationToken);
+        }
+        await SaveEligibleRunAsync(90000001);
+        await SaveEligibleRunAsync(90000002);
+
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        ActivitySummary summary = Assert.Single(await db.Set<ActivitySummary>().ToListAsync(cancellationToken));
+        Assert.Equal(200_000m, summary.LootIskGained);
+        Assert.Equal(2, summary.PayoutEligibleCount);
+        Assert.Equal(100_000m, summary.ExpectedPayoutIsk);   // 200,000 split evenly over the two eligible runs
+    }
+
+    /// <summary>Review fix on AC-4: one character can hold more than one payout-eligible run in the same activity
+    /// (ET-130), so the split must divide by eligible characters, not eligible runs — dividing by runs would halve
+    /// this character's share of their own two runs without anyone noticing.</summary>
+    [AvaloniaFact]
+    public async Task Rebuild_SplitsExpectedPayoutAcrossEligibleCharacters_NotRuns()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
+            [new LocalMarketPrice { TypeId = 34, AveragePrice = 100_000, AdjustedPrice = 100_000, UpdatedAt = DateTimeOffset.UtcNow }]);
+
+        async Task SaveEligibleRunAsync(long characterId)
+        {
+            Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site, StartedAtUtc,
+                1234, "Homefront", 30000142, "HF-7QK2"), cancellationToken);
+            await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+                [new RunLootCaptureInput
+                {
+                    CapturedAtUtc = StartedAtUtc.AddMinutes(10),
+                    Source = LootCaptureSource.Clipboard,
+                    Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = 1, LootKind = LootKind.Gained }]
+                }], [], [], []), cancellationToken);
+        }
+        await SaveEligibleRunAsync(90000001);   // this character's second eligible run in the same activity
+        await SaveEligibleRunAsync(90000001);
+        await SaveEligibleRunAsync(90000002);
+
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        ActivitySummary summary = Assert.Single(await db.Set<ActivitySummary>().ToListAsync(cancellationToken));
+        Assert.Equal(300_000m, summary.LootIskGained);
+        Assert.Equal(3, summary.PayoutEligibleCount);   // three eligible runs...
+        Assert.Equal(150_000m, summary.ExpectedPayoutIsk);   // ...but 300,000 split over two eligible characters
+    }
+
+    /// <summary>Review fix on AC-2/AC-3: <c>LootItemCount</c> already reads a missing quantity as zero pieces, so
+    /// the valuation must land on zero too, not on "one piece" — otherwise the same row counts as nothing in one
+    /// column and money in another.</summary>
+    [AvaloniaFact]
+    public async Task Rebuild_ValuesALootEntryWithoutAQuantity_AsZero_LikeItsItemCount()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
+            [new LocalMarketPrice { TypeId = 34, AveragePrice = 10_000, AdjustedPrice = 10_000, UpdatedAt = DateTimeOffset.UtcNow }]);
+
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+            [new RunLootCaptureInput
+            {
+                CapturedAtUtc = StartedAtUtc.AddMinutes(10),
+                Source = LootCaptureSource.Clipboard,
+                Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = null, LootKind = LootKind.Gained }]
+            }], [], [], []), cancellationToken);
+
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        ActivitySummary summary = Assert.Single(await db.Set<ActivitySummary>().ToListAsync(cancellationToken));
+        Assert.Equal(0m, summary.LootIskGained);
+        Assert.Equal(0, summary.LootItemCount);
+    }
+
+    /// <summary>ET-159 AC-5: discard unlinks, it does not delete — <c>GroupCode</c> goes null and
+    /// <c>FormerGroupCode</c> keeps the audit trail. Two runs that shared a group and were both discarded must land
+    /// as two separate activities. Counter-proof: group on <c>GroupCode ?? FormerGroupCode ?? RunId</c> instead, and
+    /// the two silently merge back into one.</summary>
+    [AvaloniaFact]
+    public async Task Rebuild_TwoDiscardedRunsThatSharedAGroup_StayTwoSeparateActivities()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        Result<Guid> first = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142, "HF-7QK2"), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(first.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16), [], [], [], []), cancellationToken);
+        Result<Guid> second = await dispatcher.Send(new StartRunCommand(90000002, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142, "HF-7QK2"), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(second.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16), [], [], [], []), cancellationToken);
+
+        await dispatcher.Send(new DiscardRunCommand(first.Value, StartedAtUtc.AddMinutes(16)), cancellationToken);
+        await dispatcher.Send(new DiscardRunCommand(second.Value, StartedAtUtc.AddMinutes(16)), cancellationToken);
+        await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
+
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        List<ActivitySummary> summaries = await db.Set<ActivitySummary>().ToListAsync(cancellationToken);
+        Assert.Equal(2, summaries.Count);
+        Assert.All(summaries, summary => Assert.Null(summary.GroupCode));
+    }
+
+    /// <summary>ET-159 AC-6: a run that has not been saved yet is not half an activity — the rebuild filters on
+    /// <c>State == Saved</c>. Counter-proof: drop that filter and a running run shows up with
+    /// <c>DurationSeconds == 0</c>.</summary>
+    [AvaloniaFact]
+    public async Task Rebuild_ExcludesARunThatIsNotYetSaved()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142), cancellationToken);
+
+        Result<int> rebuilt = await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
+
+        Assert.True(rebuilt.IsSuccess);
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        Assert.Empty(await db.Set<ActivitySummary>().ToListAsync(cancellationToken));
     }
 
     /// <summary>Loot copied while nothing is running is refused with a reason rather than filed somewhere.</summary>
