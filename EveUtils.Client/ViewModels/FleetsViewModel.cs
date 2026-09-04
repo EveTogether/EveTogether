@@ -245,7 +245,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             var rowsByFleet = new Dictionary<long, FleetViewModel>();
             var byFleet = new Dictionary<long, (FleetInfo Fleet, List<(int Id, string Name)> Chars)>();
             foreach (var session in sessions)
-                foreach (var fleet in (await _fleets.ListMyFleetsAsync(server, session.CharacterId)).Where(f => f.State == FleetState.Active))
+                foreach (var fleet in (await _fleets.ListMyFleetsAsync(server, session.CharacterId, includeConcluded: true)).Where(f => f.State == FleetState.Active))
                 {
                     if (!byFleet.TryGetValue(fleet.Id, out var entry))
                         byFleet[fleet.Id] = entry = (fleet, []);
@@ -642,8 +642,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
 
             foreach (var fleet in await _fleetRepository.ListByCreatorAsync(ownerId))
             {
-                if (!fleet.IsClientOnly || fleet.State != FleetState.Active || fleet.Activation == FleetActivation.Concluded)
-                    continue; // only client-only, still-active, not-concluded fleets show on this tab (concluded is hidden everywhere).
+                if (!fleet.IsClientOnly || fleet.State != FleetState.Active)
+                    continue; // client-only and not archived; a concluded one goes to the FINISHED band (ET-170).
 
                 var info = ToInfo(fleet);
                 var row = new FleetViewModel(info, ownerId, character.Name) { IsActive = active == fleet.Id };
@@ -664,7 +664,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     private static FleetInfo ToInfo(FleetEntity fleet) => new(
         fleet.Id, fleet.Name, fleet.Description, fleet.Visibility, fleet.State,
         fleet.CreatorCharacterId, fleet.FromTime, fleet.ToTime, fleet.CreatedAt, fleet.Activation, fleet.FleetCompositionId,
-        fleet.EsiFleetId, fleet.EsiFleetBossId);
+        fleet.EsiFleetId, fleet.EsiFleetBossId, fleet.EsiAutoApplyStructure, fleet.EsiAutoInviteMembers, fleet.ActivatedAt);
 
     /// <summary>Creates a client-only fleet: pick the owning local toon, name it, persist locally.</summary>
     [RelayCommand]

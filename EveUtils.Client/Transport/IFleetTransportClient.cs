@@ -71,7 +71,8 @@ public interface IFleetTransportClient
     /// viewer's open roster pick up a remote couple/unlink pushed as fleet.changed.</summary>
     Task<FleetInfo?> GetFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<FleetInfo>> ListMyFleetsAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default);
+    /// <param name="includeConcluded">Also the concluded ones — only the overview's FINISHED band asks (ET-170).</param>
+    Task<IReadOnlyList<FleetInfo>> ListMyFleetsAsync(string serverAddress, int actingCharacterId = 0, bool includeConcluded = false, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<FleetInfo>> ListOpenFleetsAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default);
 

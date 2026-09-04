@@ -210,6 +210,7 @@ public class FleetRosterFanOutTests
         long fleetId = await SeedFleetAsync(instance);
 
         var browser = await BrowserAsync(instance);
+        browser.LocalFleets[0].ToggleExpandedCommand.Execute(null);   // a row starts folded (ET-170); open it to paint its members
         var browserWindow = new FleetsWindow(browser) { Width = 760, Height = 700 };
         browserWindow.Show();
 

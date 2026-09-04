@@ -46,7 +46,7 @@ public sealed partial class FleetFilterChipViewModel(string label, int? characte
 public sealed partial class FleetsViewModel
 {
     private IReadOnlyList<Character> _knownCharacters = [];
-    private readonly HashSet<long> _openRows = [];
+    private readonly HashSet<FleetKey> _openRows = [];
     private readonly List<FleetViewModel> _allRows = [];
     private DispatcherTimer? _clock;
     private double _contentWidth = FleetOverviewLayout.WideBreakpoint;
@@ -74,6 +74,7 @@ public sealed partial class FleetsViewModel
     [NotifyPropertyChangedFor(nameof(IsLaneBand))]
     [NotifyPropertyChangedFor(nameof(LaneWidth))]
     [NotifyPropertyChangedFor(nameof(ShowLaneButtons))]
+    [NotifyPropertyChangedFor(nameof(LaneIsSlim))]
     private FleetOverviewLayoutState _layout = FleetOverviewLayout.Resolve(FleetOverviewLayout.WideBreakpoint, 0);
 
     public bool IsWide => Layout.IsWide;
@@ -81,6 +82,10 @@ public sealed partial class FleetsViewModel
     public bool IsLaneBand => !Layout.IsCompactBand;
     public double LaneWidth => Layout.LaneWidth;
     public bool ShowLaneButtons => Layout.ShowLaneButtons;
+
+    /// <summary>A lane too narrow for its buttons is the mockup's 758 px lane: name, fleet and a smaller clock, no
+    /// third line and no foot — the actions live in its context menu.</summary>
+    public bool LaneIsSlim => !Layout.ShowLaneButtons;
 
     [ObservableProperty] private string _headerFleetsText = "0 fleets";
     [ObservableProperty] private string _headerCharactersText = "";
@@ -102,6 +107,11 @@ public sealed partial class FleetsViewModel
 
     [RelayCommand]
     private void ToggleFinished() => IsFinishedExpanded = !IsFinishedExpanded;
+
+    /// <summary>The band's right-hand note: that it starts folded, and which filter shows only these.</summary>
+    public string FinishedFoldText => IsFinishedExpanded ? "unfolded" : "folded by default";
+
+    partial void OnIsFinishedExpandedChanged(bool value) => OnPropertyChanged(nameof(FinishedFoldText));
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsStatusAll))]
@@ -188,7 +198,7 @@ public sealed partial class FleetsViewModel
 
             row.RefreshVisibleMembers();
             DescribeOwnCharacters(row);
-            row.IsExpanded = _openRows.Contains(row.Id);
+            row.IsExpanded = _openRows.Contains(row.Key);
             row.RowExpansionChanged = _RememberRow;
             row.Tick(now);
         }
@@ -238,12 +248,12 @@ public sealed partial class FleetsViewModel
         row.OwnCharactersSubText = names;
     }
 
-    private void _RememberRow(long fleetId, bool expanded)
+    private void _RememberRow(FleetKey fleet, bool expanded)
     {
         if (expanded)
-            _openRows.Add(fleetId);
+            _openRows.Add(fleet);
         else
-            _openRows.Remove(fleetId);
+            _openRows.Remove(fleet);
     }
 
     // ── The band ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -443,7 +453,7 @@ public sealed partial class FleetsViewModel
 
     private void ApplyLayout()
     {
-        Layout = FleetOverviewLayout.Resolve(_contentWidth, Lanes.Count);
+        Layout = FleetOverviewLayout.Resolve(_contentWidth, Lanes.Count);   // padding follows the state the width implies
 
         foreach (var row in _allRows)
         {

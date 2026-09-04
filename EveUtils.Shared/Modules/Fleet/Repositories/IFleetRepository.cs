@@ -31,8 +31,10 @@ public interface IFleetRepository
     /// <summary>
     /// The active fleets a character is involved in — owns OR is a roster member of. The "MY FLEETS" list:
     /// a creator manages their own; a member who accepted an invite needs the fleet here so they can enter it.
+    /// A concluded fleet is finished and hidden by default; <paramref name="includeConcluded"/> lets the one screen
+    /// that keeps a record of them (the overview's FINISHED band, ET-170) ask for them.
     /// </summary>
-    Task<IReadOnlyList<FleetEntity>> ListForParticipantAsync(int characterId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<FleetEntity>> ListForParticipantAsync(int characterId, bool includeConcluded = false, CancellationToken cancellationToken = default);
 
     /// <summary>Active, publicly listable fleets on this server.</summary>
     Task<IReadOnlyList<FleetEntity>> ListOpenAsync(CancellationToken cancellationToken = default);

@@ -46,7 +46,7 @@ public sealed class RecordingFleetTransportClient : IFleetTransportClient
         return Accepted();
     }
 
-    public Task<IReadOnlyList<FleetInfo>> ListMyFleetsAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
+    public Task<IReadOnlyList<FleetInfo>> ListMyFleetsAsync(string serverAddress, int actingCharacterId = 0, bool includeConcluded = false, CancellationToken cancellationToken = default) =>
         UnreachableServers.Contains(serverAddress)
             ? throw new FleetTransportException("server unreachable")
             : Task.FromResult(MyFleetsByServer.TryGetValue(serverAddress, out var fleets) ? fleets : EmptyList<FleetInfo>());

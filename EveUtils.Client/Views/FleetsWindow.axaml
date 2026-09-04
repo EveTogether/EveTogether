@@ -166,7 +166,7 @@
                 <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
                 <Setter Property="BorderThickness" Value="1"/>
                 <Setter Property="Background" Value="#06FFFFFF"/>
-                <Setter Property="Padding" Value="9,7,9,9"/>
+                <Setter Property="Padding" Value="8,7"/>
             </Style>
             <Style Selector="DockPanel.wide Border.lane">
                 <Setter Property="Padding" Value="11,9"/>
@@ -177,6 +177,11 @@
                 <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
                 <Setter Property="HorizontalAlignment" Value="Left"/>
                 <Setter Property="VerticalAlignment" Value="Stretch"/>
+                <!-- Pulled out to the lane's own edge: the negative margin undoes the lane padding of its state. -->
+                <Setter Property="Margin" Value="-8,-7,6,-7"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.laneedge">
+                <Setter Property="Margin" Value="-11,-9,9,-9"/>
             </Style>
             <Style Selector="Border.laneedge.idle">
                 <Setter Property="Background" Value="{StaticResource TextDimBrush}"/>
@@ -521,6 +526,12 @@
             <Style Selector="DockPanel.wide TextBlock.tick">
                 <Setter Property="FontSize" Value="9"/>
             </Style>
+            <Style Selector="StackPanel.mnamerow">
+                <Setter Property="Margin" Value="14,0,0,0"/>
+            </Style>
+            <Style Selector="DockPanel.wide StackPanel.mnamerow">
+                <Setter Property="Margin" Value="17,0,0,0"/>
+            </Style>
             <Style Selector="TextBlock.mname">
                 <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
                 <Setter Property="FontSize" Value="10.5"/>
@@ -760,7 +771,7 @@
                                 </Border.ContextMenu>
                                 <Grid ColumnDefinitions="Auto,*">
                                     <Border Grid.Column="0" Classes="laneedge" Classes.idle="{Binding IsIdle}"
-                                            Classes.warn="{Binding IsElsewhereActive}" Margin="-9,-7,7,-9"/>
+                                            Classes.warn="{Binding IsElsewhereActive}"/>
                                     <StackPanel Grid.Column="1">
                                         <StackPanel Orientation="Horizontal" Spacing="7">
                                             <TextBlock Classes="lanename" Text="{Binding CharacterName}"/>
@@ -962,7 +973,7 @@
                                                         <TextBlock Classes="tick" Text="&#x2514;"/>
                                                     </Border>
                                                     <Border Grid.Column="1" Classes="cell" HorizontalAlignment="Stretch">
-                                                        <StackPanel Orientation="Horizontal" Spacing="7" Margin="17,0,0,0">
+                                                        <StackPanel Orientation="Horizontal" Spacing="7" Classes="mnamerow">
                                                             <TextBlock Classes="mname" Text="{Binding CharacterName}"/>
                                                             <Border Classes="chip ok" IsVisible="{Binding IsFleetCommander}"><TextBlock Text="FC"/></Border>
                                                             <Border Classes="chip dim" IsVisible="{Binding IsMine}"><TextBlock Text="your character"/></Border>
@@ -1086,7 +1097,7 @@
                                     <TextBlock Text="kept for the record — not startable"/>
                                 </Border>
                                 <TextBlock Grid.Column="4" Classes="bandnote" HorizontalAlignment="Right">
-                                    <Run Text="{Binding IsFinishedExpanded, Converter={x:Static BoolConverters.Not}, ConverterParameter=x, StringFormat={}}"/>
+                                    <Run Text="{Binding FinishedFoldText}"/> <Run Text="filter: finished" Foreground="{StaticResource TextDimBrush}" FontSize="9.5"/>
                                 </TextBlock>
                             </Grid>
                         </Border>

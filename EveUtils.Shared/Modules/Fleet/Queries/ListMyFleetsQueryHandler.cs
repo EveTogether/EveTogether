@@ -8,5 +8,5 @@ internal sealed class ListMyFleetsQueryHandler(IFleetRepository repository)
     : IQueryHandler<ListMyFleetsQuery, IReadOnlyList<FleetEntity>>
 {
     public Task<IReadOnlyList<FleetEntity>> Handle(ListMyFleetsQuery query, CancellationToken cancellationToken = default)
-        => repository.ListForParticipantAsync(query.CharacterId, cancellationToken);
+        => repository.ListForParticipantAsync(query.CharacterId, query.IncludeConcluded, cancellationToken);
 }

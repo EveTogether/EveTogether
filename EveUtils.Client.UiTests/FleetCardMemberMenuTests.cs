@@ -164,6 +164,7 @@ public class FleetCardMemberMenuTests
     {
         using var instance = CreateInstance(new RecordingDialogService());
         var (vm, _) = await LoadedCardAsync(instance);
+        vm.LocalFleets[0].IsExpanded = true;   // a row starts folded (ET-170); its members paint once it is opened
 
         var window = new Views.FleetsWindow(vm) { Width = 760, Height = 700 };
         window.Show();

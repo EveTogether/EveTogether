@@ -211,7 +211,9 @@ message FleetDto {
 }
 message GetFleetReply { bool found = 1; string message = 2; FleetDto fleet = 3; }
 
-message ListMyFleetsRequest {} // the authenticated character's own fleets
+message ListMyFleetsRequest { // the authenticated character's own fleets
+  bool include_concluded = 1; // ET-170: the overview's FINISHED band; off, a concluded fleet stays hidden as before
+}
 message ListFleetsReply { bool ok = 1; string message = 2; repeated FleetDto fleets = 3; }
 
 // --- Fleet structure: wings/squads (F2b). The acting character (from the session) must own the fleet the

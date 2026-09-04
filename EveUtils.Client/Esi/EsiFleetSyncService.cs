@@ -125,7 +125,7 @@ public sealed class EsiFleetSyncService(
     {
         try
         {
-            foreach (var fleet in await transport.ListMyFleetsAsync(serverAddress, characterId, cancellationToken))
+            foreach (var fleet in await transport.ListMyFleetsAsync(serverAddress, characterId, cancellationToken: cancellationToken))
             {
                 if (cancellationToken.IsCancellationRequested)
                     return;

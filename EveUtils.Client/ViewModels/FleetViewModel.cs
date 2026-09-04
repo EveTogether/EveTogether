@@ -118,13 +118,13 @@ public sealed partial class FleetViewModel : ObservableObject
     [ObservableProperty] private bool _isExpanded;
 
     /// <summary>Raised when the user folds or unfolds this row, so the window can remember it across a reload.</summary>
-    public Action<long, bool>? RowExpansionChanged { get; set; }
+    public Action<FleetKey, bool>? RowExpansionChanged { get; set; }
 
     [RelayCommand]
     private void ToggleExpanded()
     {
         IsExpanded = !IsExpanded;
-        RowExpansionChanged?.Invoke(Id, IsExpanded);
+        RowExpansionChanged?.Invoke(Key, IsExpanded);
     }
 
     /// <summary>"local" for a client-only fleet, the server's display name otherwise — where the fleet lives.</summary>
@@ -261,12 +261,17 @@ public sealed partial class FleetViewModel : ObservableObject
     /// <summary>Raised when the user folds or unfolds this card, so the window can remember it across a reload.</summary>
     public Action<long, bool>? MembersExpansionChanged { get; set; }
 
-    /// <summary>There are members beyond the highlighted ones — drives the summary line and its "show all N".
-    /// False for a fleet whose every member is highlighted, which then has no extra line and no extra click.</summary>
-    public bool CanShortenMembers => Members.Count > Members.Count(m => m.IsHighlighted);
+    /// <summary>A roster this size or smaller is drawn in full, externals included (screen 1: six pilots). Beyond it the
+    /// row folds to the members that matter (screen 12), so a fleet of fifty costs the height of a fleet of six.</summary>
+    public const int UnfoldedRosterLimit = 6;
+
+    /// <summary>There are members beyond the highlighted ones and the roster is too long to draw whole — drives the
+    /// summary line and its "show all N". False for a small fleet, or one whose every member is highlighted: no extra
+    /// line and no extra click.</summary>
+    public bool CanShortenMembers => Members.Count > UnfoldedRosterLimit && Members.Count > Members.Count(m => m.IsHighlighted);
 
     /// <summary>How many members the folded row leaves to the tally.</summary>
-    public int HiddenMemberCount => Math.Max(0, Members.Count - Members.Count(m => m.IsHighlighted));
+    public int HiddenMemberCount => CanShortenMembers ? Members.Count - Members.Count(m => m.IsHighlighted) : 0;
 
     /// <summary>The fold line's label: "show all 50" folded, "show fewer" once opened.</summary>
     public string MoreMembersLabel => MembersExpanded

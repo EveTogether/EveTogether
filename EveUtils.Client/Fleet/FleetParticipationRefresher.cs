@@ -80,7 +80,7 @@ public sealed class FleetParticipationRefresher(
             foreach (ClientSessionTokens session in loaded)
             {
                 IReadOnlyList<FleetInfo> fleets;
-                try { fleets = await transport.ListMyFleetsAsync(server, session.CharacterId, cancellationToken); }
+                try { fleets = await transport.ListMyFleetsAsync(server, session.CharacterId, cancellationToken: cancellationToken); }
                 catch { participants.AddRange(_LastAnsweredBy(server)); continue; }
 
                 List<FleetParticipant> answered = [];

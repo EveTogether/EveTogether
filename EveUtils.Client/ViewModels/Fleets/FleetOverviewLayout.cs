@@ -49,8 +49,10 @@ public static class FleetOverviewLayout
     /// <summary>A lane this wide has room for STOP / LEAVE / START beside the clock.</summary>
     public const double LaneButtonsMinWidth = 300;
 
-    /// <summary>The band's own horizontal padding, subtracted before lanes are measured against the width.</summary>
-    public const double BandHorizontalPadding = 24;
+    /// <summary>The band's own horizontal padding (both sides together), subtracted before lanes are measured against
+    /// the width: 12 a side in the narrow state, 14 a side in the wide one — the same numbers Border.band carries.</summary>
+    public const double NarrowBandPadding = 24;
+    public const double WideBandPadding = 28;
 
     public const double LaneGap = 6;
 
@@ -66,7 +68,8 @@ public static class FleetOverviewLayout
         if (double.IsNaN(contentWidth) || contentWidth <= 0)
             contentWidth = WideBreakpoint;
 
-        double inner = Math.Max(LaneMinWidth, contentWidth - BandHorizontalPadding);
+        bool isWide = contentWidth >= WideBreakpoint;
+        double inner = Math.Max(LaneMinWidth, contentWidth - (isWide ? WideBandPadding : NarrowBandPadding));
         int perRow = Math.Max(1, (int)Math.Floor((inner + LaneGap) / (LaneMinWidth + LaneGap)));
         double laneWidth = Math.Floor((inner - LaneGap * (perRow - 1)) / perRow);
 
@@ -74,7 +77,7 @@ public static class FleetOverviewLayout
         var density = rows <= MaxLaneRows ? FleetBandDensity.Lanes : FleetBandDensity.Compact;
 
         return new FleetOverviewLayoutState(
-            IsWide: contentWidth >= WideBreakpoint,
+            isWide,
             density,
             perRow,
             laneWidth,
