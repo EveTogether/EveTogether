@@ -1593,4 +1593,14 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void OpenMetrics() =>
         _dialogs.ShowFleetMetrics(new FleetMetricsViewModel(_services, _fleets, _fleet, _actingCharacterId));
+
+    /// <summary>
+    /// Back to the fleet overview (ET-171). Like metrics, this screen had no way back to the place it is opened
+    /// from — docked you could reach for the tab strip, floating there was nothing to reach for.
+    ///
+    /// Opening the overview re-selects the one already open rather than stacking a second: the module host de-dupes
+    /// on the module id and refreshes the standing one instead.
+    /// </summary>
+    [RelayCommand]
+    private void BackToFleets() => _dialogs.ShowFleets(new FleetsViewModel(_services));
 }

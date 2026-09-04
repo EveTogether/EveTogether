@@ -95,6 +95,10 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
 
     private readonly DispatcherTimer _presenceSweep;
 
+    // What this screen needs to open its neighbours (ET-171): the fleet it reports on and who is looking at it.
+    private readonly FleetInfo _fleet;
+    private readonly int _actingCharacterId;
+
     private List<int> _storedOrder = [];
     private int? _commanderCharacterId;
     private bool _layoutChosen;
@@ -116,6 +120,12 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         _fleets = fleets;
         _fleetId = fleet.Id;
         FleetName = fleet.Name;
+
+        // Held for the two exits below (ET-171): opening this fleet's roster needs the same fleet header and acting
+        // character the overview would have passed. The header is a snapshot from when this screen opened, which is
+        // what the overview hands over as well — the roster reloads its own on construction.
+        _fleet = fleet;
+        _actingCharacterId = actingCharacterId;
 
         // Who is looking. The removal action is the owner's alone — the server enforces that against the
         // authenticated character anyway, so this only keeps the option off a screen that could never use it.
@@ -219,6 +229,32 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
             "Compact: every figure on one line per member. Graphs show in the list and grid views.",
         _ => "One live graph per active member; location and bounty show when shared.",
     };
+
+    /// <summary>
+    /// Back to the fleet overview (ET-171). This screen used to have no exit at all: closing it was the only way
+    /// out, and where that left you depended on whether the modules happened to be docked or floating.
+    ///
+    /// The overview is a module like any other, so opening it re-selects the one already open (and refreshes it)
+    /// rather than stacking a second — the host de-dupes on the module id.
+    /// </summary>
+    [RelayCommand]
+    private void BackToFleets() => _dialogs?.ShowFleets(new FleetsViewModel(_services));
+
+    /// <summary>
+    /// Across to this fleet's roster (ET-171) — the other half of the pair the roster's own METRICS button already
+    /// had. Shown to viewers as well as to the owner: the roster is the members' screen too (it gates its own
+    /// owner-only actions on <c>isOwner</c>), and a member with no way across would be back at no exit at all.
+    /// </summary>
+    [RelayCommand]
+    private void OpenRoster()
+    {
+        if (_dialogs is null)
+            return;
+
+        _dialogs.ShowRoster(new FleetRosterViewModel(
+            _services, _fleets, _fleet, isOwner: _isOwner, _actingCharacterId,
+            compositions: (_fleets as IFleetCompositionClientSource)?.CreateCompositionClient(_services)));
+    }
 
     /// <summary>Switch the member layout and remember it for the next session.</summary>
     [RelayCommand]

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
 using CommunityToolkit.Mvvm.Input;
+using Material.Icons;
 
 namespace EveUtils.Client.Dialogs;
 
@@ -42,8 +43,14 @@ public sealed class ModuleHostService
     }
 
     /// <summary>Open a feature window as a module. Re-opening the same module id re-selects it. <paramref
-    /// name="moduleKey"/> tags the rail group so the rail can highlight the active tab's module.</summary>
-    public void Open(Window window, string title, string? moduleKey, string moduleId)
+    /// name="moduleKey"/> tags the rail group so the rail can highlight the active tab's module; <paramref
+    /// name="icon"/> is the symbol its tab carries (ET-171).
+    ///
+    /// The icon defaults for the sake of the tests that drive this service straight, which open a module to check
+    /// what the host does with it and have no opinion about its tab's symbol. <c>DialogService.Route</c>, the one
+    /// production caller, passes it for every screen.</summary>
+    public void Open(Window window, string title, string? moduleKey, string moduleId,
+        MaterialIconKind icon = MaterialIconKind.Application)
     {
         if (_owner is null) return;
         if (_host is null) { window.Show(_owner); return; }   // no host wired (e.g. some tests)
@@ -73,7 +80,7 @@ public sealed class ModuleHostService
             NameScope.SetNameScope(content, scope);
 
         var frame = new ModuleFrame { Window = window, Content = content, Title = title, Id = moduleId };
-        frame.Tab = new HostTab { Content = content, Title = title, ModuleKey = moduleKey, CloseCommand = new RelayCommand(() => Dismiss(frame)) };
+        frame.Tab = new HostTab { Content = content, Title = title, ModuleKey = moduleKey, Icon = icon, CloseCommand = new RelayCommand(() => Dismiss(frame)) };
         if (window is IHostableModuleWindow hostable)
             hostable.CloseRequested = () => Dismiss(frame);
         window.Closed += (_, _) => OnWindowClosed(frame);
@@ -101,6 +108,12 @@ public sealed class ModuleHostService
                 // the main window no longer minimizes it. The main window's close handler closes these explicitly.
                 if (!m.Shown) { m.Window.Show(); m.Shown = true; }
             }
+
+            // Docked, "select" means the tab the host switches to; floating there are no tabs, so the same intent has
+            // to be spoken as raising the window. Without this, asking for a module that is already open does nothing
+            // visible when it happens to sit behind the one you asked from — which is exactly the case ET-171's back
+            // buttons create: FLEETS from a fleet screen, with the overview already open behind it.
+            select?.Window.Activate();
         }
         else
         {

@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Avalonia.Controls;
+using Material.Icons;
 
 namespace EveUtils.Client.Dialogs;
 
@@ -18,6 +19,14 @@ public sealed class HostTab
     /// <summary>Rail group this module belongs to (fits/fleet/esi/inbox/logs), so the rail highlights the active
     /// tab's module. Null for modules with no rail entry (e.g. per-character metrics).</summary>
     public string? ModuleKey { get; init; }
+
+    /// <summary>
+    /// The symbol shown before the title in the strip (ET-171). Titles alone stopped being enough once one fleet
+    /// could account for three tabs — FLEETS, FLEET ROSTER · x and FLEET METRICS · x all begin with the same word,
+    /// and the strip trims from the right, so what is left of a squeezed tab is the part they share. The icon is on
+    /// the left, where trimming never reaches it, and it differs per screen rather than per rail group.
+    /// </summary>
+    public MaterialIconKind Icon { get; init; } = MaterialIconKind.Application;
 }
 
 /// <summary>

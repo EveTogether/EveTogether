@@ -12,8 +12,13 @@ namespace EveUtils.Client.Fleet;
 /// every roster call to the wrapped client. All multi-character routing is already in the transport client;
 /// this just supplies the bound context so the window doesn't pass server/character on every call.
 /// </summary>
-public sealed class ServerFleetClient(IFleetTransportClient fleets, string serverAddress, int actingCharacterId) : IFleetClient
+public sealed class ServerFleetClient(IFleetTransportClient fleets, string serverAddress, int actingCharacterId)
+    : IFleetClient, IFleetCompositionClientSource
 {
+    /// <summary>The doctrine library on the same server, read as the same character (ET-171).</summary>
+    public IFleetCompositionClient CreateCompositionClient(System.IServiceProvider services) =>
+        new ServerFleetCompositionClient(fleets, serverAddress, actingCharacterId);
+
     public Task<FleetInfo?> GetFleetAsync(long fleetId) =>
         fleets.GetFleetAsync(serverAddress, fleetId, actingCharacterId);
 
