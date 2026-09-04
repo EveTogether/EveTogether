@@ -565,13 +565,15 @@
                 <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
             </Style>
             <!-- The summary line under the highlighted members: "and 46 others — the fleet counts: …" -->
+            <!-- "and 46 others — the fleet counts:" is a member line like the ones above it, so it starts where they
+                 do. Left margins measured, not guessed: the text landed on x=27/29 against member names at 98/115. -->
             <Style Selector="StackPanel.noteline">
-                <Setter Property="Margin" Value="12,4,12,2"/>
+                <Setter Property="Margin" Value="83,4,12,2"/>
                 <Setter Property="Orientation" Value="Horizontal"/>
                 <Setter Property="Spacing" Value="6"/>
             </Style>
             <Style Selector="DockPanel.wide StackPanel.noteline">
-                <Setter Property="Margin" Value="14,5,14,2"/>
+                <Setter Property="Margin" Value="100,5,14,2"/>
             </Style>
             <Style Selector="TextBlock.note">
                 <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
@@ -689,8 +691,8 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="vm:FleetFilterChipViewModel">
-                                <Button Classes="pick" Classes.on="{Binding IsOn}" Content="{Binding Label}"
-                                        Command="{Binding SelectCommand}"/>
+                                <Button Classes="pick" Classes.on="{Binding IsOn}" Content="{Binding DisplayLabel}"
+                                        ToolTip.Tip="{Binding Label}" Command="{Binding SelectCommand}"/>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -867,7 +869,7 @@
                                     </StackPanel>
                                     <TextBlock Grid.Column="2" Classes="cfleet" Classes.idle="{Binding IsIdle}" Text="{Binding CompactFleetText}"/>
                                     <TextBlock Grid.Column="3" Classes="cclock" Classes.warn="{Binding IsElsewhereActive}"
-                                               Classes.idle="{Binding IsIdle}" Text="{Binding ClockText}"/>
+                                               Classes.idle="{Binding IsIdle}" Text="{Binding CompactClockText}"/>
                                 </Grid>
                             </Border>
                         </DataTemplate>

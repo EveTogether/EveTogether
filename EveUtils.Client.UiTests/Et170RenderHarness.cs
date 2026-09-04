@@ -202,6 +202,12 @@ public class Et170RenderHarness
         }
         foreach (var cell in root.GetVisualDescendants().OfType<Border>().Where(b => b.Classes.Contains("cell") && b.Parent is Grid g && g.Parent is Border pb && pb.Classes.Contains("gridhead")))
             log.AppendLine($"  headcell [{string.Join(" ", cell.Classes)}] w={cell.Bounds.Width:0.#} x={cell.Bounds.X:0.#} visible={cell.IsVisible}");
+        foreach (var line in root.GetVisualDescendants().OfType<Panel>().Where(b => b.Classes.Contains("noteline") && b.IsVisible))
+        {
+            var text = line.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => t.Classes.Contains("note"));
+            log.AppendLine($"  noteline x={((Visual)line).TranslatePoint(new Point(0, 0), root)?.X:0.#} " +
+                           $"textX={(text is null ? -1 : ((Visual)text).TranslatePoint(new Point(0, 0), root)?.X):0.#}");
+        }
         foreach (var head in root.GetVisualDescendants().OfType<Border>().Where(b => b.Classes.Contains("subhead") && b.IsVisible))
             foreach (var t in head.GetVisualDescendants().OfType<TextBlock>())
                 log.AppendLine($"  subhead [{t.Text}] x={((Visual)t).TranslatePoint(new Point(0, 0), root)?.X:0.#}");

@@ -34,6 +34,11 @@ public sealed partial class FleetFilterChipViewModel(string label, int? characte
     public int? CharacterId { get; } = characterId;
     public IRelayCommand SelectCommand { get; } = select;
     [ObservableProperty] private bool _isOn;
+
+    /// <summary>What the chip reads on the bar. The "all N" chip drops its count in the narrow toolbar: with it the
+    /// bar's width depended on how many pilots you have — twelve pushed it onto a second row where six fit — and the
+    /// count is already in the header chip beside the title.</summary>
+    [ObservableProperty] private string _displayLabel = label;
 }
 
 /// <summary>
@@ -83,6 +88,7 @@ public sealed partial class FleetsViewModel
         HiddenCharacterChips.Clear();
         foreach (var chip in CharacterChips)
         {
+            chip.DisplayLabel = chip.CharacterId is null && !Layout.IsWide ? "all" : chip.Label;
             if (Layout.IsWide || chip.CharacterId is null || chip.IsOn)
                 VisibleCharacterChips.Add(chip);
             else

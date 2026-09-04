@@ -97,7 +97,14 @@ public sealed partial class FleetLaneViewModel : ObservableObject
     /// again on the fleet's own row below (the amber edge, the ELSEWHERE chip, the member's "not linked").</summary>
     public bool ShowFootChips => !IsSlim && FootChips.Count > 0;
 
-    [ObservableProperty] private string _clockText = "--:--:--";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CompactClockText))]
+    private string _clockText = "--:--:--";
+
+    /// <summary>The compact line's clock. A lane card draws "--:--:--" for a pilot in no fleet — the shape of a clock
+    /// that is not running — but on a one-line row that reads as a running clock at a glance, so scherm 13 puts a
+    /// single dash there instead.</summary>
+    public string CompactClockText => IsIdle ? "—" : ClockText;
 
     /// <summary>Time since the fleet started, from the same stamp the row's clock counts from. Invariant (ET-34).</summary>
     public void Tick(DateTimeOffset now)
