@@ -12,7 +12,9 @@ namespace EveUtils.Client.Runs;
 
 public sealed class RunSynchronizationApplier(IDbContextFactory<ClientDbContext> contextFactory, IDispatcher dispatcher) : IScopedService
 {
-    public async Task ApplyAsync(IReadOnlyList<RunWirePayload> payloads, IReadOnlySet<Guid> pushedRunIds,
+    /// <summary>Applies what <paramref name="serverAddress"/> handed back. The runs land under a group-mate's own
+    /// character id, so the day list shows the whole activity rather than only this machine's half of it.</summary>
+    public async Task ApplyAsync(string serverAddress, IReadOnlyList<RunWirePayload> payloads, IReadOnlySet<Guid> pushedRunIds,
         CancellationToken cancellationToken = default)
     {
         if (payloads.Count == 0)
@@ -39,6 +41,7 @@ public sealed class RunSynchronizationApplier(IDbContextFactory<ClientDbContext>
             run.StartedAtUtc = _Anchor(run.StartedAtUtc, payload.SentAtUnixMilliseconds);
             run.StoppedAtUtc = run.StoppedAtUtc is { } stoppedAtUtc ? _Anchor(stoppedAtUtc, payload.SentAtUnixMilliseconds) : null;
             run.SyncState = RunSyncState.Synced;
+            run.SyncServerAddress = serverAddress;
             await db.Set<Run>().Where(candidate => candidate.Id == run.Id).ExecuteDeleteAsync(cancellationToken);
             db.Set<Run>().Add(run);
         }

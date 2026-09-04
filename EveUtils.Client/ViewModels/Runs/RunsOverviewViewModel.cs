@@ -8,6 +8,9 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Messaging;
+using EveUtils.Client.Notifications;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
@@ -17,6 +20,7 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
+using EveUtils.Shared.Transport;
 using Microsoft.Extensions.DependencyInjection;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
@@ -45,6 +49,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private readonly IServiceProvider _services;
     private readonly IReadOnlyDictionary<long, string> _namesById;
     private readonly DispatcherTimer? _clock;
+    private bool _canPublish;
 
     public RunsOverviewViewModel(CqrsDispatcher dispatcher, IDialogService dialogs, IServiceProvider services,
         IReadOnlyList<Character> characters, bool runClock = true)
@@ -56,6 +61,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             .Where(character => character.EsiCharacterId is > 0)
             .GroupBy(character => (long)character.EsiCharacterId!.Value)
             .ToDictionary(group => group.Key, group => group.First().Name);
+        SelectedTab = LocalTab;
 
         // A lane per local character, running or not — the roster is the band, and today it happens to hold at most
         // one running run because RunningRunLookup answers only when there is exactly one (ET-130 is what lifts that).
@@ -74,14 +80,35 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         _clock.Start();
     }
 
-    public ObservableCollection<RunsDayViewModel> Days { get; } = [];
+    /// <summary>Local first, then one tab per coupled server — the fit browser's strip, same sources, additive so a
+    /// server coupled while this screen is open gets a tab without the others being rebuilt under the reader.</summary>
+    public ObservableCollection<RunsTabViewModel> Tabs { get; } = [new("Local", null)];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLocalTabSelected))]
+    [NotifyPropertyChangedFor(nameof(ShowUnfinishedBand))]
+    private RunsTabViewModel? _selectedTab;
+
+    /// <summary>RUNNING and UNFINISHED show only here. A lane is a clock running on this machine and an unfinished run
+    /// is a decision owed on it; neither is something a server holds, so neither belongs under a server's name.</summary>
+    public bool IsLocalTabSelected => SelectedTab?.IsLocal ?? true;
+
+    /// <summary>Whether there is anything to choose between. A lone "Local" tab is a label for a choice that does not
+    /// exist, so the strip stays away until a server is coupled — the fit browser's rule.</summary>
+    [ObservableProperty] private bool _hasServerTabs;
+
+    private RunsTabViewModel LocalTab => Tabs[0];
 
     public ObservableCollection<RunningLaneViewModel> Lanes { get; }
 
     /// <summary>Stopped and never finished — their own band, above the days and outside them (ET-179).</summary>
     public ObservableCollection<UnfinishedRunViewModel> UnfinishedRuns { get; } = [];
 
-    [ObservableProperty] private bool _hasUnfinishedRuns;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowUnfinishedBand))]
+    private bool _hasUnfinishedRuns;
+
+    public bool ShowUnfinishedBand => HasUnfinishedRuns && IsLocalTabSelected;
 
     /// <summary>Why the band is empty, when it is. Null once there is at least one lane.</summary>
     public string? LanesEmptyText { get; }
@@ -99,23 +126,72 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         await _dispatcher.Send(new SaveRunsLeftUnfinishedCommand(DateTime.UtcNow), cancellationToken);
         await _LoadUnfinishedRunsAsync(cancellationToken);
 
+        await _RefreshServerTabsAsync(cancellationToken);
+
         Result<IReadOnlyList<ActivityOverviewRowDto>> overview =
             await _dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken);
-        Days.Clear();
+        foreach (RunsTabViewModel tab in Tabs)
+            tab.Days.Clear();
         if (!overview.IsSuccess || overview.Value is null)
         {
             StatusMessage = overview.Messages.Count > 0 ? overview.Messages[0].Text : "The activities could not be read.";
             return;
         }
 
-        List<ActivityOverviewRowViewModel> rows = [.. overview.Value.Select(row =>
-            new ActivityOverviewRowViewModel(row, _NameOf, _LoadSubRunsAsync, _OpenDetailAsync))];
-        foreach (IGrouping<DateTime, ActivityOverviewRowViewModel> day in rows.GroupBy(row => row.StartedAtLocal.Date))
-            Days.Add(new RunsDayViewModel(day.Key, [.. day]));
+        StatusMessage = null;
+        foreach (RunsTabViewModel tab in Tabs)
+            _FillTab(tab, overview.Value);
+    }
 
-        StatusMessage = Days.Count == 0
-            ? "No activity has been saved yet. A run shows up here the moment you save it."
-            : null;
+    /// <summary>
+    /// The activities this tab stands for: everything on Local, and on a server tab the ones whose runs carry that
+    /// server's address — including a group-mate's run, which the sync merged into the local database as its own row
+    /// under their character id.
+    ///
+    /// A run someone else flew SOLO on that server is not here, and that is the server's own rule rather than a gap
+    /// in this filter: <c>ServerRunSyncRepository.ListChangedAsync</c> hands back a run only to a character who holds
+    /// a run in the same group, so the server never tells us about it and no screen can show it.
+    /// </summary>
+    private void _FillTab(RunsTabViewModel tab, IReadOnlyList<ActivityOverviewRowDto> overview)
+    {
+        List<ActivityOverviewRowDto> rows = tab.ServerAddress is { } address
+            ? [.. overview.Where(row => row.ServerSyncStates.Any(state => state.ServerAddress == address))]
+            : [.. overview];
+
+        foreach (IGrouping<DateTime, ActivityOverviewRowViewModel> day in rows
+                     .Select(row => new ActivityOverviewRowViewModel(row, _NameOf, _LoadSubRunsAsync, _OpenDetailAsync,
+                         _canPublish ? _PublishAsync : null))
+                     .GroupBy(row => row.StartedAtLocal.Date))
+            tab.Days.Add(new RunsDayViewModel(day.Key, [.. day]));
+
+        tab.StatusMessage = tab.Days.Count > 0
+            ? null
+            : tab.IsLocal
+                ? "No activity has been saved yet. A run shows up here the moment you save it."
+                : "Nothing published to this server yet. Publish an activity from Local to put it here.";
+    }
+
+    /// <summary>Adds a tab for a server coupled since this screen was built, never rebuilding the strip: the reader's
+    /// chosen tab must survive a refresh. Which is also why a decoupled server keeps its tab until the screen is
+    /// reopened — the activities on it are still true.</summary>
+    private async Task _RefreshServerTabsAsync(CancellationToken cancellationToken)
+    {
+        IClientSessionStore? sessionStore = _services.GetService<IClientSessionStore>();
+        if (sessionStore is null)
+            return;
+
+        IServerRegistry? registry = _services.GetService<IServerRegistry>();
+        IReadOnlyList<string> servers = await sessionStore.ListServersAsync(cancellationToken);
+        _canPublish = servers.Count > 0;
+        foreach (string address in servers)
+        {
+            if (Tabs.Any(tab => tab.ServerAddress == address))
+                continue;
+
+            string header = registry is null ? address : await registry.DisplayNameAsync(address);
+            Tabs.Add(new RunsTabViewModel(header, address));
+        }
+        HasServerTabs = Tabs.Count > 1;
     }
 
     private async Task _LoadLanesAsync(CancellationToken cancellationToken)
@@ -170,6 +246,130 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         }
 
         await LoadAsync();
+    }
+
+    /// <summary>Publish one activity: pick the target as the fit browser does (one coupled server goes without
+    /// asking), say what travels, then queue and synchronise. Only runs of characters coupled to that server are
+    /// queued — the server refuses a run pushed by anyone but its owner, so a crewmate's run would sit Pending for a
+    /// push that can never be accepted.</summary>
+    private async Task _PublishAsync(ActivityOverviewRowViewModel row)
+    {
+        IClientSessionStore? sessionStore = _services.GetService<IClientSessionStore>();
+        if (sessionStore is null)
+            return;
+
+        IReadOnlyList<string> servers = await sessionStore.ListServersAsync();
+        if (servers.Count == 0)
+        {
+            _ReportPublish("Not coupled to any server — couple a character first.", ToastKind.Warning);
+            return;
+        }
+
+        IServerRegistry? registry = _services.GetService<IServerRegistry>();
+        string? targetAddress = servers.Count == 1 ? servers[0] : await _SelectServerAsync(servers, registry, row);
+        if (targetAddress is null)
+        {
+            _ReportPublish("Publish cancelled.", ToastKind.Information);
+            return;
+        }
+
+        if (_services.GetService<IRemoteBusConnector>()?.StateFor(targetAddress) != ServerConnectionState.Connected)
+        {
+            _ReportPublish("Not connected to that server.", ToastKind.Warning);
+            return;
+        }
+
+        Result<ActivityDetailDto> detail = await _dispatcher.Query(new GetActivityDetailQuery(row.ActivitySummaryId));
+        if (!detail.IsSuccess || detail.Value is null)
+        {
+            _ReportPublish(detail.Messages.Count > 0 ? detail.Messages[0].Text : "The activity could not be read.", ToastKind.Error);
+            return;
+        }
+
+        IReadOnlyList<ClientSessionTokens> coupled = await sessionStore.LoadAllAsync(targetAddress);
+        List<ActivityRunDetailDto> ownRuns = [.. detail.Value.Runs
+            .Where(run => coupled.Any(session => session.CharacterId == run.CharacterId))];
+        if (ownRuns.Count == 0)
+        {
+            _ReportPublish("No run in this activity belongs to a character coupled to that server.", ToastKind.Warning);
+            return;
+        }
+
+        string serverName = registry is null ? targetAddress : await registry.DisplayNameAsync(targetAddress);
+        if (!await _dialogs.ConfirmAsync($"Publish to {serverName}?", _WhatTravels(ownRuns.Count, serverName), "Publish"))
+        {
+            _ReportPublish("Publish cancelled.", ToastKind.Information);
+            return;
+        }
+
+        foreach (ActivityRunDetailDto run in ownRuns)
+        {
+            Result queued = await _dispatcher.Send(new QueueRunForServerSyncCommand(run.RunId, targetAddress));
+            if (queued.IsSuccess)
+                continue;
+
+            _ReportPublish(queued.Messages.Count > 0 ? queued.Messages[0].Text : "The run could not be queued.", ToastKind.Error);
+            return;
+        }
+
+        (bool accepted, string message) = await _SynchronizeAsync(targetAddress, ownRuns);
+
+        // Read back first and report second: the runs changed either way — queued, or queued and accepted — and a
+        // reload after the report would clear the status line that carries the outcome.
+        await LoadAsync();
+        if (accepted)
+            _ReportPublish($"Published to {serverName}.", ToastKind.Success, "Activity published");
+        else
+            // The runs stay Pending on purpose: they are still meant for this server, so the next publish retries
+            // them rather than the pilot having to notice they never arrived.
+            _ReportPublish($"Publish rejected: {message}", ToastKind.Error, "Publish rejected");
+    }
+
+    /// <summary>One synchronisation per owning character: the server attributes a push to the session it came in on,
+    /// so two of this machine's pilots in the same activity are two pushes, not one. Stops at the first refusal —
+    /// what the server said about it is worth more than a second attempt's message.</summary>
+    private async Task<(bool Accepted, string Message)> _SynchronizeAsync(
+        string targetAddress, IReadOnlyList<ActivityRunDetailDto> ownRuns)
+    {
+        using IServiceScope scope = _services.CreateScope();
+        RunSynchronizationService synchronization = scope.ServiceProvider.GetRequiredService<RunSynchronizationService>();
+        foreach (long characterId in ownRuns.Select(run => run.CharacterId).Distinct())
+        {
+            (bool accepted, string message) = await synchronization.SynchronizeAsync(targetAddress, characterId);
+            if (!accepted)
+                return (false, message);
+        }
+
+        return (true, string.Empty);
+    }
+
+    private async Task<string?> _SelectServerAsync(
+        IReadOnlyList<string> servers, IServerRegistry? registry, ActivityOverviewRowViewModel row)
+    {
+        var options = new List<ServerPickOption>();
+        foreach (string address in servers)
+            options.Add(new ServerPickOption(address, registry is null ? address : await registry.DisplayNameAsync(address)));
+        return await _dialogs.SelectServerAsync($"Publish '{row.SiteText}' to which server?", options);
+    }
+
+    /// <summary>
+    /// What the pilot is about to hand over, named rather than summarised as "this run will be shared". A run is not
+    /// a fit: a fit is a list of modules, a run is what you earned, what you flew and where you were. Someone who
+    /// presses publish has to know they are telling a server operator their location.
+    /// </summary>
+    private static string _WhatTravels(int runCount, string serverName) =>
+        $"{runCount} of your runs in this activity go to {serverName}. Three things travel with them.\n\n"
+        + "What you earned — every loot line with its item, quantity and price, and every bounty payout.\n"
+        + "The fit you flew — by name.\n"
+        + "Where you were — the solar system, and the signature if the run recorded one.\n\n"
+        + "The operator of that server can read all of it. Other pilots see it only if they flew this activity with you.";
+
+    /// <summary>Both sinks, one message: the screen's own status line for the reader who is looking at it, and a toast
+    /// for the one who moved on. Two different texts for one outcome is how a rejection goes unnoticed.</summary>
+    private void _ReportPublish(string message, ToastKind kind, string title = "Publish to server")
+    {
+        StatusMessage = message;
+        _services.GetService<IToastService>()?.Show(title, message, kind);
     }
 
     private void _OnClockTick(object? sender, EventArgs e)

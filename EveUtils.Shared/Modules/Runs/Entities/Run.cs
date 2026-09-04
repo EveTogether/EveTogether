@@ -60,6 +60,12 @@ public sealed class Run
     public string? FitContentHash { get; set; }
     public string? FitNameSnapshot { get; set; }
     public RunSyncState SyncState { get; set; }
+
+    /// <summary>The server <see cref="SyncState"/> and <see cref="LastPushedAtUtc"/> are about, or null while the run
+    /// has never been queued for one. Those two always meant "towards a server" without naming it, which with more
+    /// than one coupled server left "where does this run stand" unanswerable.</summary>
+    public string? SyncServerAddress { get; set; }
+
     public DateTime? LastPushedAtUtc { get; set; }
     public int Revision { get; set; }
     /// <summary>Detach from the shared run without touching anything the pilot owns. The one place the audit stamp

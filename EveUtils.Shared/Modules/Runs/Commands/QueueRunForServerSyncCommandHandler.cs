@@ -16,7 +16,9 @@ internal sealed class QueueRunForServerSyncCommandHandler(IDbContextFactory<Clie
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
         int changed = await db.Set<Run>().Where(run => run.Id == command.RunId)
-            .ExecuteUpdateAsync(properties => properties.SetProperty(run => run.SyncState, RunSyncState.Pending), cancellationToken);
+            .ExecuteUpdateAsync(properties => properties
+                .SetProperty(run => run.SyncState, RunSyncState.Pending)
+                .SetProperty(run => run.SyncServerAddress, command.ServerAddress), cancellationToken);
         return changed == 0
             ? Result.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound, "The run no longer exists.", "Runs"))
             : Result.Success();

@@ -46,7 +46,7 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             .AsNoTracking()
             .Where(run => run.State == RunState.Saved && !run.DeletedAtUtc.HasValue
                           && ((run.GroupCode != null && groupCodes.Contains(run.GroupCode)) || runIds.Contains(run.Id)))
-            .Select(run => new { run.Id, run.GroupCode, run.CharacterId, run.AutoSavedAtUtc })
+            .Select(run => new { run.Id, run.GroupCode, run.CharacterId, run.AutoSavedAtUtc, run.SyncServerAddress, run.SyncState })
             .ToListAsync(cancellationToken);
         Dictionary<Guid, string> activityKeyByRunId = memberRuns.ToDictionary(run => run.Id, run => run.GroupCode ?? run.Id.ToString());
 
@@ -62,17 +62,29 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
         HashSet<string> autoSavedActivities = [.. memberRuns
             .Where(run => run.AutoSavedAtUtc.HasValue)
             .Select(run => run.GroupCode ?? run.Id.ToString())];
+        // One entry per (activity, server), pending when any of that activity's runs is still queued for it. The
+        // address is matched out rather than tested, so an unpublished run drops out with nothing left to unwrap.
+        ILookup<string, ActivityServerSyncDto> syncByActivity = memberRuns
+            .SelectMany(run => run.SyncServerAddress is { } address
+                ? new[] { (Activity: run.GroupCode ?? run.Id.ToString(), Address: address, run.SyncState) }
+                : [])
+            .GroupBy(entry => (entry.Activity, entry.Address))
+            .Select(group => (group.Key.Activity, Sync: new ActivityServerSyncDto(
+                group.Key.Address, group.Any(entry => entry.SyncState == RunSyncState.Pending))))
+            .ToLookup(entry => entry.Activity, entry => entry.Sync);
 
         return Result<IReadOnlyList<ActivityOverviewRowDto>>.Success(
-            [.. page.Select(summary => _ToDto(
-                summary,
-                rewardsByActivity[summary.GroupCode ?? summary.RunId!.Value.ToString()],
-                crewByActivity[summary.GroupCode ?? summary.RunId!.Value.ToString()],
-                autoSavedActivities.Contains(summary.GroupCode ?? summary.RunId!.Value.ToString())))]);
+            [.. page.Select(summary =>
+            {
+                string activity = summary.GroupCode ?? summary.RunId!.Value.ToString();
+                return _ToDto(summary, rewardsByActivity[activity], crewByActivity[activity],
+                    autoSavedActivities.Contains(activity), syncByActivity[activity]);
+            })]);
     }
 
     private static ActivityOverviewRowDto _ToDto(
-        ActivitySummary summary, IEnumerable<RunParameter> rewardRows, IEnumerable<long> crew, bool hasAutoSavedRun)
+        ActivitySummary summary, IEnumerable<RunParameter> rewardRows, IEnumerable<long> crew, bool hasAutoSavedRun,
+        IEnumerable<ActivityServerSyncDto> serverSyncStates)
     {
         RunParameter[] rewards = [.. rewardRows];
         return new ActivityOverviewRowDto(
@@ -83,7 +95,8 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
                 .Select(group => new ActivityRewardDto(group.Key, _SumOrNull(group.Select(reward => reward.Amount))))],
             summary.BountyIsk, summary.LootIskNet, summary.EnemyTypeCount,
             rewards.Any(reward => reward.ParameterKey == RunParameterKey.Escalation),
-            hasAutoSavedRun);
+            hasAutoSavedRun,
+            [.. serverSyncStates]);
     }
 
     private static decimal? _SumOrNull(IEnumerable<decimal?> amounts)

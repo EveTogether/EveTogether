@@ -3,4 +3,4 @@ using EveUtils.Shared.Messaging;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
-public sealed record QueueRunForServerSyncCommand(Guid RunId) : ICommand<Result>;
+public sealed record QueueRunForServerSyncCommand(Guid RunId, string ServerAddress) : ICommand<Result>;

@@ -25,16 +25,19 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 {
     private readonly Func<ActivityOverviewRowViewModel, Task> _loadSubRuns;
     private readonly Func<ActivityOverviewRowViewModel, Task> _openDetail;
+    private readonly Func<ActivityOverviewRowViewModel, Task>? _publish;
     private bool _subRunsLoaded;
 
     public ActivityOverviewRowViewModel(
         ActivityOverviewRowDto row,
         Func<long, string> nameOf,
         Func<ActivityOverviewRowViewModel, Task> loadSubRuns,
-        Func<ActivityOverviewRowViewModel, Task> openDetail)
+        Func<ActivityOverviewRowViewModel, Task> openDetail,
+        Func<ActivityOverviewRowViewModel, Task>? publish = null)
     {
         _loadSubRuns = loadSubRuns;
         _openDetail = openDetail;
+        _publish = publish;
         ActivitySummaryId = row.ActivitySummaryId;
         StartedAtLocal = row.StartedAtUtc.ToLocalTime();
         Duration = TimeSpan.FromSeconds(row.DurationSeconds);
@@ -59,6 +62,10 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
             // number, never an activity without a fight.
             : "no enemies counted";
         HasAutoSavedRun = row.HasAutoSavedRun;
+        // Unlike a fit, which keeps no trace of having been shared, a run records where it stands towards a server —
+        // so the row says it rather than making the reader open the server tab to find out.
+        IsQueuedForServer = row.ServerSyncStates.Any(state => state.IsPending);
+        IsOnServer = row.ServerSyncStates.Count > 0 && !IsQueuedForServer;
         Chips = [.. row.Rewards
             .OrderBy(reward => (int)reward.ParameterKey)
             .Select(reward => new ActivityRewardChipViewModel(reward.ParameterKey, reward.Amount))];
@@ -88,6 +95,27 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     public bool HasAutoSavedRun { get; }
 
     public string AutoSavedText => "auto-saved";
+
+    /// <summary>On a server, and unchanged since it went there.</summary>
+    public bool IsOnServer { get; }
+
+    /// <summary>Queued for a server but not yet accepted by it — either never pushed, or edited after it was.</summary>
+    public bool IsQueuedForServer { get; }
+
+    public string SyncText => IsQueuedForServer ? "queued" : "published";
+
+    public bool HasSyncText => IsOnServer || IsQueuedForServer;
+
+    /// <summary>False when no server is coupled at all, which is also when the runs screen shows no server tab —
+    /// the same rule the fit browser follows rather than offering an action with nowhere to go.</summary>
+    public bool CanPublish => _publish is not null;
+
+    [RelayCommand]
+    private async Task PublishAsync()
+    {
+        if (_publish is not null)
+            await _publish(this);
+    }
 
     /// <summary>What stands where the net would be when neither a loot capture nor a bounty line was ever taken.
     /// Never a "0 ISK": a zero here reads as a valuation that was taken and came out at nothing (ET-161 AC-4,

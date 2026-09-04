@@ -7,6 +7,10 @@ namespace EveUtils.Shared.Modules.Runs.Dtos;
 /// against. Null when none of the underlying rows carried an amount (e.g. a bare <c>Escalation</c> observation).</summary>
 public sealed record ActivityRewardDto(RunParameterKey ParameterKey, decimal? Amount);
 
+/// <summary>Where one activity stands towards one server. <see cref="IsPending"/> is true while any of its runs is
+/// still queued for that server — a published activity that was edited afterwards re-queues itself.</summary>
+public sealed record ActivityServerSyncDto(string ServerAddress, bool IsPending);
+
 /// <summary>One row of the activity overview — <c>ActivitySummary</c> read back as-is, since it already groups on
 /// <c>GroupCode ?? RunId</c> ("one row per activity"). A solo run and a six-pilot fleet both land here through the
 /// same shape; nothing above distinguishes them.</summary>
@@ -34,4 +38,7 @@ public sealed record ActivityOverviewRowDto(
     /// <summary>At least one of the activity's runs was committed by the app itself, a day after it was stopped and
     /// never finished (ET-179). Kept apart from a pilot's own save so an activity nobody stood behind cannot pass
     /// for one that somebody did.</summary>
-    bool HasAutoSavedRun);
+    bool HasAutoSavedRun,
+    /// <summary>The servers this activity's runs were queued for or pushed to, from the runs themselves. Empty on an
+    /// activity that never left this machine.</summary>
+    IReadOnlyList<ActivityServerSyncDto> ServerSyncStates);

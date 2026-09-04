@@ -175,7 +175,7 @@ public sealed class RunsOverviewTests
 
         Assert.Single(root.GetVisualDescendants().OfType<Control>(),
             control => control.Classes.Contains("activityrow") && control.IsEffectivelyVisible);
-        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(viewModel.Days).Rows);
+        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(viewModel.Tabs[0].Days).Rows);
         foreach (Character character in Crew)
             Assert.Contains(character.Name, row.CrewText);
 
@@ -232,7 +232,7 @@ public sealed class RunsOverviewTests
             ]);
 
         Presented presented = await _PresentAsync(instance, 758, cancellationToken);
-        RunsDayViewModel day = Assert.Single(presented.ViewModel.Days);
+        RunsDayViewModel day = Assert.Single(presented.ViewModel.Tabs[0].Days);
         ActivityOverviewRowViewModel row = Assert.Single(day.Rows);
 
         Assert.True(row.HasNet);
@@ -264,7 +264,7 @@ public sealed class RunsOverviewTests
         List<string> texts = RenderedText.VisibleTexts(presented.Root);
 
         Assert.Equal(3, presented.ViewModel.UnfinishedRuns.Count);
-        Assert.Equal(2, Assert.Single(presented.ViewModel.Days).Rows.Count);
+        Assert.Equal(2, Assert.Single(presented.ViewModel.Tabs[0].Days).Rows.Count);
         Assert.Contains(texts, text => text == "UNFINISHED");
         Assert.Equal(3, texts.Count(text => text == "SAVE"));
     }
@@ -289,11 +289,11 @@ public sealed class RunsOverviewTests
         Assert.Empty(presented.ViewModel.UnfinishedRuns);
         if (!save)
         {
-            Assert.Empty(presented.ViewModel.Days);
+            Assert.Empty(presented.ViewModel.Tabs[0].Days);
             return;
         }
 
-        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(presented.ViewModel.Days).Rows);
+        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(presented.ViewModel.Tabs[0].Days).Rows);
         Assert.Equal("Homefront", row.SiteText);
     }
 
@@ -313,7 +313,7 @@ public sealed class RunsOverviewTests
                 bounties: [new RunBountyEntryInput { OccurredAtUtc = StartedAtUtc.AddMinutes(2), Isk = 500_000m }]);
 
         Presented presented = await _PresentAsync(instance, 758, cancellationToken);
-        RunsDayViewModel day = Assert.Single(presented.ViewModel.Days);
+        RunsDayViewModel day = Assert.Single(presented.ViewModel.Tabs[0].Days);
 
         Assert.Equal("2 activities · 0:30:00 flown · +1M ISK net", day.SummaryText);
     }
@@ -337,12 +337,12 @@ public sealed class RunsOverviewTests
         if (hoursSinceStop < 24)
         {
             Assert.Single(presented.ViewModel.UnfinishedRuns);
-            Assert.Empty(presented.ViewModel.Days);
+            Assert.Empty(presented.ViewModel.Tabs[0].Days);
             return;
         }
 
         Assert.Empty(presented.ViewModel.UnfinishedRuns);
-        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(presented.ViewModel.Days).Rows);
+        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(presented.ViewModel.Tabs[0].Days).Rows);
         Assert.True(row.HasAutoSavedRun);
         Assert.Contains(RenderedText.VisibleTexts(presented.Root), text => text == "auto-saved");
     }
