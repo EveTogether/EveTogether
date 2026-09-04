@@ -80,6 +80,21 @@ public interface ISdeAccessor
     /// Empty when the SDE is unavailable or <paramref name="name"/> is blank.</summary>
     IReadOnlyList<SdeSite> FindSitesByExactName(string name);
 
+    /// <summary>Looks up a single agent by id, with its solar system resolved through its station. Null when the
+    /// SDE is unavailable or no agent carries that id.</summary>
+    SdeAgent? GetAgent(int agentId);
+
+    /// <summary>Exact-name agent lookup across every SDE locale (ET-173 AC-4), the same TypeNameAlias route as
+    /// <see cref="TryGetTypeId"/>: the canonical English name first, then a locale alias. Agent names are globally
+    /// unique (10.966 agents, 10.966 distinct English names, zero ambiguity — measured, build 3492266), so this
+    /// returns at most one agent rather than a list. Null when the SDE is unavailable, <paramref name="name"/> is
+    /// blank, or no agent matches.</summary>
+    SdeAgent? FindAgentByName(string name);
+
+    /// <summary>Looks up a single mission by id, with its epic arc (if any) resolved. Null when the SDE is
+    /// unavailable or no mission carries that id.</summary>
+    SdeMission? GetMission(int missionId);
+
     /// <summary>Release the store file (drop pooled connections + stop serving queries) so the importer can overwrite
     /// it during the atomic swap — on Windows an open/pooled handle blocks <c>File.Move</c>. Pair with <see cref="Reopen"/>.</summary>
     void Close();
