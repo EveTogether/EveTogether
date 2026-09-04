@@ -822,6 +822,7 @@
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom"
                                                         IsVisible="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ShowLaneButtons}">
                                                 <Button Classes="pick" Classes.accent="{Binding PrimaryIsAccent}"
+                                                        Classes.warnbtn="{Binding PrimaryIsWarn}"
                                                         Content="{Binding PrimaryActionText}" Command="{Binding PrimaryCommand}"
                                                         IsVisible="{Binding HasPrimaryAction}"/>
                                                 <Button Classes="pick" Content="{Binding SecondaryActionText}"
@@ -1066,6 +1067,8 @@
                                                                     Command="{Binding SelectFitCommand}" ToolTip.Tip="{Binding SelectFitButtonLabel}"/>
                                                             <Button Classes="pick tiny" Content="open fit" IsVisible="{Binding HasAssignedFit}"
                                                                     Command="{Binding OpenFitCommand}" ToolTip.Tip="Open this fit's detail"/>
+                                                            <Button Classes="pick tiny warnbtn" Content="{Binding SwitchLabel}" IsVisible="{Binding CanSwitch}"
+                                                                    Command="{Binding SwitchCommand}" ToolTip.Tip="{Binding SwitchTooltip}"/>
                                                             <Button Classes="pick tiny" Content="leave" IsVisible="{Binding CanLeave}"
                                                                     Command="{Binding LeaveCommand}" ToolTip.Tip="Remove this character from the fleet"/>
                                                         </WrapPanel>

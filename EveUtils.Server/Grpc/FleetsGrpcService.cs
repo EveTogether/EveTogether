@@ -157,6 +157,59 @@ public sealed class FleetsGrpcService(
         return ToActionReply(result, "Concluded.");
     }
 
+    /// <summary>
+    /// Which roster members already count for another started fleet (ET-168). Read-only, and the half of the
+    /// collision only this server can see: a client knows where its own pilots are, never where someone else's is.
+    /// </summary>
+    public override async Task<ListMembersActiveElsewhereReply> ListMembersActiveElsewhere(
+        ListMembersActiveElsewhereRequest request, ServerCallContext context)
+    {
+        await AuthenticateAsync(context);
+
+        var members = await dispatcher.Query(new ListMembersActiveElsewhereQuery(request.FleetId), context.CancellationToken);
+        var reply = new ListMembersActiveElsewhereReply { Ok = true };
+        foreach (var member in members)
+            reply.Members.Add(new MemberActiveElsewhere
+            {
+                CharacterId = member.CharacterId,
+                ElsewhereFleetId = member.ElsewhereFleetId,
+                ElsewhereFleetName = member.ElsewhereFleetName
+            });
+        return reply;
+    }
+
+    /// <summary>Asks every member who is active elsewhere to come over — one call whether that is one member or
+    /// fifty (ET-168). Creator-only in the handler; it sends messages and touches no roster.</summary>
+    public override async Task<RequestFleetSwitchReply> RequestFleetSwitch(RequestFleetSwitchRequest request, ServerCallContext context)
+    {
+        var character = await AuthenticateAsync(context);
+
+        var only = request.OnlyCharacterId > 0 ? request.OnlyCharacterId : (int?)null;
+        var result = await dispatcher.Send(new RequestFleetSwitchCommand(request.FleetId, character, only), context.CancellationToken);
+        return result.IsSuccess
+            ? new RequestFleetSwitchReply { Accepted = true, Message = "Asked.", Asked = result.Value }
+            : new RequestFleetSwitchReply { Accepted = false, Message = FirstMessage(result) };
+    }
+
+    /// <summary>The member moves themselves into this fleet (ET-168): leave whatever they counted for, couple here.
+    /// The acting character comes from the session, so this can only ever move the caller's own character — which is
+    /// also why a commander may move their own alt and no one else's.</summary>
+    public override async Task<FleetActionReply> SwitchToFleet(SwitchToFleetRequest request, ServerCallContext context)
+    {
+        var character = await AuthenticateAsync(context);
+
+        var result = await dispatcher.Send(new SwitchToFleetCommand(request.FleetId, character), context.CancellationToken);
+        if (result.IsSuccess)
+        {
+            // Both rosters changed: the one gained a member, the ones left behind lost one. The fleet a switcher
+            // walked out of has watchers too, and they should not have to refresh to notice.
+            await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
+            foreach (var left in result.Value ?? [])
+                await BroadcastFleetChangedAsync(left, FleetChangeKind.RosterChanged, context.CancellationToken);
+        }
+        return ToActionReply(result, "Switched.");
+    }
+
     public override async Task<GetFleetReply> GetFleet(GetFleetRequest request, ServerCallContext context)
     {
         await AuthenticateAsync(context);

@@ -14,6 +14,7 @@ using EveUtils.Client.Notifications;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Transport;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;   // Result / ResultMessage, used by the ESI mirror helpers below
 using EveUtils.Shared.Modules.Fleet;
 using EveUtils.Shared.Modules.Fleet.Entities;
@@ -1426,30 +1427,68 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         _members = members;
         BuildCompositionFill();
 
-        // B-5: warn — don't block — when the coupled doctrine's minimums aren't met yet, so an FC can still
-        // start an under-strength pug/roam deliberately.
-        if (!CompositionFillBuilder.AllMinimaMet(_coupledComposition, members)
-            && !await _dialogs.ConfirmAsync("Start under-strength?",
-                "The coupled doctrine's minimums are not all met yet. Start the fleet anyway?", okText: "Start anyway"))
-            return;
-
-        // On-start ESI-invite seam: externals have no ESI session link → offer the (no-op) ESI-invite popup.
-        var unlinked = members.Count(m => m.IsExternal);
-        if (!await _dialogs.ConfirmStartFleetAsync(_fleet.Name, unlinked))
+        // B-5: under-strength warns, it never blocks — an FC starts a pug or a roam short on purpose. It is a note
+        // inside the start dialog rather than a yes/no in front of it: two dialogs for one press read as two
+        // decisions, and only one of them ever was one.
+        var choice = await _dialogs.PickFleetStartAsync(
+            await BuildStartPromptAsync(members, CompositionFillBuilder.AllMinimaMet(_coupledComposition, members)));
+        if (choice == FleetStartChoice.Cancel)
             return;
 
         var started = await _fleets.StartFleetAsync(_fleet.Id);
-        if (started.Ok)
-        {
-            UpdateActivationLabel(FleetActivation.Active);
-            StatusMessage = "Fleet started — now Active.";
-            if (_onActivationChanged is not null)
-                await _onActivationChanged();
-        }
-        else
+        if (!started.Ok)
         {
             StatusMessage = $"Start failed: {started.Message}";
+            return;
         }
+
+        UpdateActivationLabel(FleetActivation.Active);
+        StatusMessage = "Fleet started — now Active.";
+
+        // The ask goes out after the start, never with it: asking someone to leave a running fleet for one that is
+        // not running yet is asking them to count for nothing.
+        if (choice == FleetStartChoice.AskThemAll)
+        {
+            var asked = await _fleets.RequestFleetSwitchAsync(_fleet.Id);
+            StatusMessage = asked.Ok
+                ? string.Create(CultureInfo.InvariantCulture,
+                    $"Fleet started — now Active. Asked {asked.Asked} member(s) to switch over.")
+                : $"Fleet started, but nobody was asked to switch: {asked.Message}";
+        }
+
+        if (_onActivationChanged is not null)
+            await _onActivationChanged();
+    }
+
+    /// <summary>
+    /// What the start dialog is shown from this window (ET-168, scherm 2). Unlike the overview this screen sees one
+    /// fleet, so the collision comes wholly from the store the fleet lives in — which is also the only place that
+    /// can answer for someone else's pilot. Whose pilot is whose comes from this client's own character register,
+    /// because "your own alt you move yourself" turns on exactly that.
+    /// </summary>
+    private async Task<FleetStartPrompt> BuildStartPromptAsync(IReadOnlyList<FleetMemberInfo> members, bool minimaMet)
+    {
+        var elsewhere = (await _fleets.ListMembersActiveElsewhereAsync(_fleet.Id))
+            .ToDictionary(m => m.CharacterId, m => m.ElsewhereFleetName);
+
+        var mine = (await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync())
+            .Select(c => c.EsiCharacterId)
+            .OfType<int>()
+            .ToHashSet();
+
+        var rows = members
+            .Select(m => new FleetStartMember(
+                m.CharacterId,
+                NameFor(m.CharacterId),
+                mine.Contains(m.CharacterId),
+                m.CharacterId == _fleet.CreatorCharacterId,
+                m.IsExternal,
+                m.IsExternal ? null : elsewhere.GetValueOrDefault(m.CharacterId)))
+            .ToList();
+
+        // A client-only fleet's roster is the owner's own pilots and externals: nobody there has an inbox to ask.
+        // Read off the transport rather than the fleet, because "client-only" is a property of where it lives.
+        return new FleetStartPrompt(_fleet.Name, rows, CanAskThemAll: _fleets is not LocalFleetClient, minimaMet);
     }
 
     /// <summary>

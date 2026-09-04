@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Transport;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 
 namespace EveUtils.Client.UiTests;
@@ -120,6 +121,37 @@ public sealed class RecordingFleetTransportClient : IFleetTransportClient
     public (bool Ok, string Message) JoinResult { get; set; } = (true, string.Empty);
 
     public Task<(bool Ok, string Message)> JoinFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) => Task.FromResult(JoinResult);
+
+    /// <summary>The start collision this server reports (ET-168); empty unless a test stages one.</summary>
+    public List<FleetMemberElsewhereInfo> MembersActiveElsewhere { get; } = new();
+
+    public Task<IReadOnlyList<FleetMemberElsewhereInfo>> ListMembersActiveElsewhereAsync(
+        string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<FleetMemberElsewhereInfo>>(MembersActiveElsewhere);
+
+    /// <summary>Every "ask them all to switch" (ET-168), in call order.</summary>
+    public List<(string ServerAddress, long FleetId, int ActingCharacterId, int OnlyCharacterId)> SwitchRequestCalls { get; } = new();
+
+    public (bool Ok, string Message, int Asked) SwitchRequestResult { get; set; } = (true, string.Empty, 0);
+
+    public Task<(bool Ok, string Message, int Asked)> RequestFleetSwitchAsync(
+        string serverAddress, long fleetId, int actingCharacterId = 0, int onlyCharacterId = 0, CancellationToken cancellationToken = default)
+    {
+        SwitchRequestCalls.Add((serverAddress, fleetId, actingCharacterId, onlyCharacterId));
+        return Task.FromResult(SwitchRequestResult);
+    }
+
+    /// <summary>Every "move me over" (ET-168), in call order — the member's own act, so the character matters.</summary>
+    public List<(string ServerAddress, long FleetId, int ActingCharacterId)> SwitchToFleetCalls { get; } = new();
+
+    public (bool Ok, string Message) SwitchToFleetResult { get; set; } = (true, string.Empty);
+
+    public Task<(bool Ok, string Message)> SwitchToFleetAsync(
+        string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default)
+    {
+        SwitchToFleetCalls.Add((serverAddress, fleetId, actingCharacterId));
+        return Task.FromResult(SwitchToFleetResult);
+    }
 
     public Task<(bool Ok, string Message)> EnterFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) => Accepted();
 

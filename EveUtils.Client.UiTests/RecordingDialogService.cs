@@ -345,7 +345,28 @@ public sealed class RecordingDialogService : IDialogService
 
     public Task<string?> PromptTextAsync(string title, string header, string? defaultValue = null) =>
         OnPromptText(title, header, defaultValue);
-    public Task<bool> ConfirmStartFleetAsync(string fleetName, int unlinkedCount) => throw NotUsed();
+    /// <summary>What the start dialog answers with, and what it was asked (ET-168). A test sets the choice it wants
+    /// and reads the prompt back to check the collision was described to the FC, without a window opening.</summary>
+    public FleetStartChoice FleetStart { get; set; } = FleetStartChoice.Cancel;
+
+    public FleetStartPrompt? FleetStartPrompt { get; private set; }
+
+    public Task<FleetStartChoice> PickFleetStartAsync(FleetStartPrompt prompt)
+    {
+        FleetStartPrompt = prompt;
+        return Task.FromResult(FleetStart);
+    }
+
+    /// <summary>What the switch dialog answers with, and what it was asked (ET-168).</summary>
+    public bool FleetSwitch { get; set; }
+
+    public SwitchFleetPrompt? FleetSwitchPrompt { get; private set; }
+
+    public Task<bool> ConfirmFleetSwitchAsync(SwitchFleetPrompt prompt)
+    {
+        FleetSwitchPrompt = prompt;
+        return Task.FromResult(FleetSwitch);
+    }
 
     /// <summary>What the stop dialog answers with, and what it was asked. A test sets the exit it wants taken and
     /// reads the prompt back to check the fleet's state was described to the FC, without a window opening.</summary>

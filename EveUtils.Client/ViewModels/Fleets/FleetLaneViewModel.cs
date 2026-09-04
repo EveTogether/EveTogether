@@ -121,13 +121,20 @@ public sealed partial class FleetLaneViewModel : ObservableObject
         ClockText = string.Create(CultureInfo.InvariantCulture, $"{(int)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}");
     }
 
-    /// <summary>STOP for the commander, LEAVE for a member, START… for an idle pilot with a fleet standing by.</summary>
+    /// <summary>STOP for the commander, LEAVE for a member, START… for an idle pilot with a fleet standing by, and
+    /// "switch" for a pilot who is also rostered in a fleet they do not count for — scherm 1 draws that lane as
+    /// exactly "wissel" and "verlaat", so the switch takes the primary seat rather than adding a third button to a
+    /// row whose width was measured.</summary>
     public string PrimaryActionText { get; init; } = "";
     public IRelayCommand? PrimaryCommand { get; init; }
     public bool PrimaryIsAccent { get; init; }
+
+    /// <summary>The primary reads amber: the act that answers the amber lane it sits in.</summary>
+    public bool PrimaryIsWarn { get; init; }
     public bool HasPrimaryAction => PrimaryCommand is not null && PrimaryActionText.Length > 0;
 
-    /// <summary>"manage" for the commander, "metrics" for a member.</summary>
+    /// <summary>"manage" for the commander, "metrics" for a member, "leave" when this pilot is being offered the
+    /// switch — scherm 1 draws an elsewhere-active lane as exactly those two buttons.</summary>
     public string SecondaryActionText { get; init; } = "";
     public IRelayCommand? SecondaryCommand { get; init; }
     public bool HasSecondaryAction => SecondaryCommand is not null && SecondaryActionText.Length > 0;

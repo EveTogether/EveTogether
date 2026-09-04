@@ -10,8 +10,10 @@ using EveUtils.Shared.Modules.Fleet;
 using EveUtils.Shared.Modules.Fleet.Commands;
 using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Commands;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Queries;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -142,6 +144,12 @@ public sealed class ClientFleetService(IServiceScopeFactory scopeFactory) : ISin
         => DispatchAsync(d => d.Send(new TransferFleetOwnershipCommand(fleetId, newOwnerCharacterId, ownerCharacterId), cancellationToken));
 
     /// <summary>Starts the fleet (Forming → Active) via the Shared <see cref="StartFleetCommand"/>.</summary>
+    /// <summary>Which of a local fleet's members already count for another <i>local</i> started fleet (ET-168).
+    /// Local fleets are the owner's own pilots, so this is the collision between two of your own ops; a collision
+    /// with a server fleet is not visible from here and is worked out by the overview, which sees both.</summary>
+    public Task<IReadOnlyList<FleetMemberElsewhereInfo>> ListMembersActiveElsewhereAsync(long fleetId, CancellationToken cancellationToken = default)
+        => DispatchAsync(d => d.Query(new ListMembersActiveElsewhereQuery(fleetId), cancellationToken));
+
     public Task<Result> StartFleetAsync(long fleetId, int ownerCharacterId, CancellationToken cancellationToken = default)
         => DispatchAsync(d => d.Send(new StartFleetCommand(fleetId, ownerCharacterId), cancellationToken));
 
