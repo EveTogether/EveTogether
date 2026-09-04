@@ -163,6 +163,23 @@ rule, so it has to be strict. Parsing runs only on something already recognised,
   before the inventory rule, because several signature rows also carry an equal tab count per row
   and would otherwise be claimed as `Inventory` first. No word from the EVE UI is used as an anchor,
   so the shape is recognised the same way regardless of the client's language.
+- **Mission** (ET-175) — the first line ends in `" Objectives"` and a later line is exactly
+  `"Rewards"`. A mission capture cannot collide with `IsInventoryTable`: its header lines carry no
+  tabs, which already fails that rule's equal-tab-count check. `ClipboardMissionParser` reads the
+  block structure it opens — `Objectives`, `Rewards`, `Bonus Rewards`, switched by header line, never
+  by position — and never reads the location row next to `Report to <agent>`; the agent name is the
+  resolving key on its own (ET-172 sub 1), and the location text is free-form prose. The header
+  line's own name (`ClipboardMissionCapture.ObjectivesHeaderName`) is **not** the mission's name —
+  this one capture never states one, it only repeats the agent's. Built and fixtured on the one real
+  capture this project has (ET-129); there is no second one to design against.
+
+  **English-anchored, unlike Signature.** `" Objectives"`, `"Rewards"`, `"Report to "` and
+  `"within N hours"` are all literal English words, a break from ET-79 §4's deliberately
+  language-independent anchor (id pattern and scan percentage, no UI word). No alternative exists:
+  a mission block carries no id pattern to anchor on the way a scan signature does. This fails safe —
+  a non-English client's mission copy reads as `Unrecognised`, the same as anything else this
+  recogniser has never seen — but it is a real gap, not a chosen one, until a non-English capture
+  can be measured.
 
 **A stricter shape rule is not available from the material.** There are no negative captures — no
 spreadsheet selection, no web-page table — so a pasted spreadsheet with a consistent tab count is

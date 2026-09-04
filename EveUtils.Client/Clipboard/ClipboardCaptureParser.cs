@@ -30,4 +30,12 @@ public sealed class ClipboardCaptureParser(IFitTextImporter fitTextImporter)
 
         return ClipboardSignatureParser.Parse(capture.Text);
     }
+
+    public ClipboardMissionCapture? ParseMission(ClipboardCapture capture)
+    {
+        if (capture.Shape is not ClipboardShape.Mission)
+            throw new ArgumentException("The clipboard capture is not a mission.", nameof(capture));
+
+        return ClipboardMissionParser.Parse(capture.Text);
+    }
 }

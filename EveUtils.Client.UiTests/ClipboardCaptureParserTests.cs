@@ -1,6 +1,7 @@
 using EveUtils.Client.Clipboard;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fittings.Services.Parsers;
+using EveUtils.Shared.Modules.Runs.Enums;
 using Xunit;
 
 namespace EveUtils.Client.UiTests;
@@ -138,6 +139,91 @@ public sealed class ClipboardCaptureParserTests
         Assert.Equal(209, isogen.Quantity);
         Assert.NotNull(isogen.Volume);
         Assert.NotNull(isogen.Price);
+    }
+
+    // ET-175 AC-1: the one real mission capture this project has (ET-129, via ET-172's grooming), byte for byte.
+    [Fact]
+    public void Recognise_RaymondsMissionCapture_YieldsMissionShape()
+    {
+        string text = _Fixture("mission-aralin-jick.txt");
+
+        Assert.Equal(ClipboardShape.Mission, ClipboardShapeRecogniser.Recognise(text));
+    }
+
+    // ET-175 AC-2: a table row whose name column merely ends in the word "Objectives" still has more fields on
+    // the same line, so it fails the mission header's whole-line match and stays an ordinary inventory row.
+    [Fact]
+    public void Recognise_InventoryRowEndingInObjectivesText_StillWinsAsInventoryNotMission()
+    {
+        const string text = "Republic Fleet Objectives\t5\r\nRepublic Fleet Small Armor Repairer\t2";
+
+        Assert.Equal(ClipboardShape.Inventory, ClipboardShapeRecogniser.Recognise(text));
+    }
+
+    [Fact]
+    public void ParseMission_RaymondsCapture_ReadsNameAgentRewardsAndBonusWindow()
+    {
+        string text = _Fixture("mission-aralin-jick.txt");
+
+        var capture = ClipboardMissionParser.Parse(text);
+
+        Assert.NotNull(capture);
+        Assert.Equal("Aralin Jick", capture!.ObjectivesHeaderName); // AC-3
+        Assert.Equal("Aralin Jick", capture.AgentName); // AC-4
+        Assert.Equal(21600, capture.BonusWindowSeconds); // AC-6
+        Assert.Collection(capture.Rewards,
+            reward =>
+            {
+                Assert.Equal(RunParameterKey.Isk, reward.ParameterKey);
+                Assert.Equal(1000000m, reward.Amount); // AC-5: "1.000.000" is thousands, not a decimal
+            },
+            reward =>
+            {
+                Assert.Equal(RunParameterKey.BonusIsk, reward.ParameterKey);
+                Assert.Equal(1610000m, reward.Amount);
+            });
+
+        // AC-5: the same capture also carries "0,6" as a comma decimal, in the location row the parser above
+        // never reads. The shared TryParseLocalNumber must still read it correctly, not just the reward form.
+        Assert.True(ClipboardInventoryParser.TryParseLocalNumber("0,6", out var locationNumber));
+        Assert.Equal(0.6m, locationNumber);
+    }
+
+    [Fact]
+    public void ParseMission_EdgeCases_RefuseRatherThanGuess()
+    {
+        // AC-3: a first line without the "<agent> Objectives" header yields no mission name, while the rest of
+        // the block still reads normally.
+        const string missingHeader =
+            "Objectives\nThe following objectives must be completed to finish the mission:\n\nReport to Aralin Jick";
+        var missingHeaderCapture = ClipboardMissionParser.Parse(missingHeader);
+        Assert.NotNull(missingHeaderCapture);
+        Assert.Null(missingHeaderCapture!.ObjectivesHeaderName);
+        Assert.Equal("Aralin Jick", missingHeaderCapture.AgentName);
+
+        // AC-4: the location line is made to contradict "Report to Aralin Jick" on purpose. The parser never
+        // reads it, so the agent name follows "Report to" regardless.
+        const string contradictingLocation =
+            "Aralin Jick Objectives\nThe following objectives must be completed to finish the mission:\n\n" +
+            "Report to Aralin Jick\n \tAgent Location\t0,6 Jita IV - Moon 4 - Caldari Navy Assembly Plant";
+        Assert.Equal("Aralin Jick", ClipboardMissionParser.Parse(contradictingLocation)!.AgentName);
+
+        // AC-7: an item reward beside an ISK one. EVE Journal's own regexes drop a line shaped exactly like this
+        // one without a trace [gemeten, ET-172]; it must still count as a reward here.
+        const string itemReward =
+            "Aralin Jick Objectives\nThe following objectives must be completed to finish the mission:\n\n" +
+            "Report to Aralin Jick\n\nRewards\nThe following rewards will be yours if you complete this mission:\n" +
+            " \t1.000.000 ISK\n \t1 × Republic Fleet Small Armor Repairer";
+        var rewards = ClipboardMissionParser.Parse(itemReward)!.Rewards;
+        Assert.Equal(2, rewards.Count);
+        Assert.Equal(RunParameterKey.Item, rewards[1].ParameterKey);
+        Assert.Equal("Republic Fleet Small Armor Repairer", rewards[1].ItemName);
+        Assert.Equal(1, rewards[1].ItemQuantity);
+
+        // AC-8: a fragment copied without its block header carries no recognisable structure at all.
+        const string halfBlock =
+            "The following rewards will be awarded to you as a bonus if you complete the mission within 6 hours:\n \t1.610.000 ISK";
+        Assert.Null(ClipboardMissionParser.Parse(halfBlock));
     }
 
     private static string _Fixture(string name)

@@ -26,6 +26,8 @@ public static partial class ClipboardShapeRecogniser
     [GeneratedRegex(@"^[A-Za-z]{3}-\d{3}$")]
     private static partial Regex SignatureId();
 
+    private const string MissionObjectivesHeaderSuffix = " Objectives";
+
     public static ClipboardShape Recognise(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -34,12 +36,37 @@ public static partial class ClipboardShapeRecogniser
         if (FirstNonEmptyLine(text) is { } header && FitHeader().IsMatch(header))
             return ClipboardShape.Fit;
 
+        // A mission block's header lines carry no tabs, so it can never satisfy IsInventoryTable's equal-tab-count
+        // rule (ET-175 AC-2) — but it is checked here anyway, ahead of Signature and Inventory, for the same reason
+        // Signature is checked ahead of Inventory: the strictest, most specific shape decides first.
+        if (IsMissionShape(text))
+            return ClipboardShape.Mission;
+
         // Checked before IsInventoryTable: a copy of several signature rows also has an equal tab count on every
         // row, so the inventory check would otherwise claim it first (ET-79 AC-2).
         if (IsSignatureTable(text))
             return ClipboardShape.Signature;
 
         return IsInventoryTable(text) ? ClipboardShape.Inventory : ClipboardShape.Unrecognised;
+    }
+
+    // ET-175: a mission capture opens with "<agent> Objectives" and carries a "Rewards" block further down. Both
+    // are required — either word alone is common enough in ordinary copied text to misfire — but nothing past
+    // that is checked here, because recognition only decides the shape, not the content (ClipboardMissionParser).
+    private static bool IsMissionShape(string text)
+    {
+        if (FirstNonEmptyLine(text) is not { } header
+            || header.Length <= MissionObjectivesHeaderSuffix.Length
+            || !header.EndsWith(MissionObjectivesHeaderSuffix, StringComparison.Ordinal))
+            return false;
+
+        foreach (var line in text.Split('\n'))
+        {
+            if (line.TrimEnd('\r').Trim() == "Rewards")
+                return true;
+        }
+
+        return false;
     }
 
     // A scan-window copy is six tab-separated fields per row, the same in every language the client can run: no

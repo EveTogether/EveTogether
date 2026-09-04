@@ -9,7 +9,8 @@ public enum ClipboardShape
     Unrecognised,
     Fit,
     Inventory,
-    Signature
+    Signature,
+    Mission
 }
 
 /// <summary>
