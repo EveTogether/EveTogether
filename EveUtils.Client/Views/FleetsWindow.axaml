@@ -706,7 +706,7 @@
                         <mi:MaterialIcon Classes="icon-sm" Kind="DotsHorizontal"/>
                     </Button>
                 </WrapPanel>
-                <TextBox Grid.Column="1" x:Name="SearchBox" Classes="search" Watermark="search fleet, FC, member…"
+                <TextBox Grid.Column="1" x:Name="SearchBox" Classes="search" PlaceholderText="search fleet, FC, member…"
                          Text="{Binding SearchText, Mode=TwoWay}" VerticalAlignment="Center"/>
             </Grid>
         </Border>
