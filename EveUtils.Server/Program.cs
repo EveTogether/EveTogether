@@ -612,9 +612,10 @@ if (args.Contains("--fleet-activation-test"))
 if (args.Contains("--fleet-ownership-test"))
     return await FleetOwnershipCheck.RunAsync(app.Services);
 
-// One-active-fleet guard + Concluded lifecycle (2026-06-04): Conclude is creator-only/terminal and frees members,
-// the entry-guard blocks a second active fleet but allows advance sign-up to a Forming one, and the broadcast
-// tiebreak keeps a member coupled to the active fleet they were activated in first.
+// One-active-fleet guard + Concluded/Stopped lifecycles (2026-06-04, ET-166): Conclude is creator-only/terminal and
+// frees members; Stop is creator-only but reversible — roster kept, members freed, startable again, and refused on a
+// concluded fleet; the entry-guard blocks a second active fleet but allows advance sign-up to a Forming one, and the
+// broadcast tiebreak keeps a member coupled to the active fleet they were activated in first.
 if (args.Contains("--fleet-active-guard-test"))
     return await FleetActiveGuardCheck.RunAsync(app.Services);
 

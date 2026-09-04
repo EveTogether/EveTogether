@@ -264,6 +264,14 @@ public interface IDialogService
     /// </summary>
     Task<bool> ConfirmStartFleetAsync(string fleetName, int unlinkedCount);
 
+    /// <summary>
+    /// The way out of an active fleet (ET-166): stop it back to standing by, conclude it for good, or pull one of my
+    /// own characters out and leave it running. Returns the chosen exit, or <see cref="StopFleetChoice.Cancel"/> when
+    /// the FC backs out. Disbanding is not offered here — that lives on the fleet overview, and having it stand next
+    /// to Stop is what made stopping read as dangerous.
+    /// </summary>
+    Task<StopFleetChoice> PickFleetExitAsync(StopFleetPrompt prompt);
+
     /// <summary>Opens the per-fleet roster window — non-modal so it stays usable beside the fleets window.</summary>
     void ShowRoster(FleetRosterViewModel viewModel);
 

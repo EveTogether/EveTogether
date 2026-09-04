@@ -107,7 +107,24 @@ internal sealed class FakeFleetClient : IFleetClient
 
     public Task<(bool Ok, string Message)> RespondToJoinRequestAsync(long requestId, bool accept) => Ok();
     public Task<(bool Ok, string Message)> StartFleetAsync(long fleetId) => Ok();
-    public Task<(bool Ok, string Message)> ConcludeFleetAsync(long fleetId) => Ok();
+
+    /// <summary>The fleet ids a screen asked to stop / to conclude, so a test can assert which of the two exits the
+    /// stop dialog's choice actually took — the whole point of ET-166 is that they are not the same call.</summary>
+    public List<long> StoppedFleetIds { get; } = [];
+
+    public List<long> ConcludedFleetIds { get; } = [];
+
+    public Task<(bool Ok, string Message)> StopFleetAsync(long fleetId)
+    {
+        StoppedFleetIds.Add(fleetId);
+        return Ok();
+    }
+
+    public Task<(bool Ok, string Message)> ConcludeFleetAsync(long fleetId)
+    {
+        ConcludedFleetIds.Add(fleetId);
+        return Ok();
+    }
 
     private static Task<IReadOnlyList<T>> Empty<T>() => Task.FromResult<IReadOnlyList<T>>([]);
     private static Task<(bool Ok, string Message)> Ok() => Task.FromResult((true, string.Empty));

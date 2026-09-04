@@ -137,6 +137,16 @@ public sealed class FleetsGrpcService(
         return ToActionReply(result, "Started.");
     }
 
+    public override async Task<FleetActionReply> StopFleet(StopFleetRequest request, ServerCallContext context)
+    {
+        var character = await AuthenticateAsync(context);
+
+        var result = await dispatcher.Send(new StopFleetCommand(request.FleetId, character), context.CancellationToken);
+        if (result.IsSuccess)
+            await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.Stopped, context.CancellationToken);
+        return ToActionReply(result, "Stopped.");
+    }
+
     public override async Task<FleetActionReply> ConcludeFleet(ConcludeFleetRequest request, ServerCallContext context)
     {
         var character = await AuthenticateAsync(context);
@@ -877,6 +887,7 @@ public sealed class FleetsGrpcService(
             CreatedAt = f.CreatedAt.ToString("o"),
             LastActivityAt = f.LastActivityAt.ToString("o"),
             Activation = (int)f.Activation,
+            ActivatedAt = f.ActivatedAt?.ToString("o") ?? "",
             EsiAutoApplyStructure = f.EsiAutoApplyStructure,
             EsiAutoInviteMembers = f.EsiAutoInviteMembers
         };

@@ -40,6 +40,21 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
         _reconcileGate.Dispose();
     }
 
+    /// <summary>
+    /// This client's own runs still going in <paramref name="fleetId"/>, oldest first (ET-166). The FC is shown these
+    /// before stopping the fleet: a stop is bookkeeping, and a measurement under way survives it — so the screen has
+    /// to be able to name them rather than promise it in the abstract.
+    /// </summary>
+    public IReadOnlyList<FleetRunInProgress> ListRunsInProgress(long fleetId)
+    {
+        lock (_gate)
+            return [.. _runs.Values
+                .Where(run => run.Key.FleetId == fleetId)
+                .OrderBy(run => run.StartedAtUtc)
+                .Select(run => new FleetRunInProgress(
+                    run.CharacterId, run.SiteName, run.SolarSystemName, run.StartedAtUtc))];
+    }
+
     private async Task _OnRunStartedAsync(RunStartedEvent integrationEvent, CancellationToken cancellationToken)
     {
         RunStartedEventData started = integrationEvent.Data;
@@ -48,7 +63,8 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
 
         RunningRun run = new(started.RunId, started.CharacterId,
             RunGroupKey.For(fleetId, started.ActivityKind, started.SolarSystemName, started.SiteName),
-            started.GroupCode, started.StartedAtUtc, started.IsFleetCommander);
+            started.GroupCode, started.StartedAtUtc, started.IsFleetCommander,
+            started.SiteName, started.SolarSystemName);
         lock (_gate)
         {
             _runs[(run.Key, run.CharacterId)] = run;
@@ -205,11 +221,15 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
             string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
     }
 
+    // The site and system are kept alongside the key as the pilot read them: the key normalizes both to upper case
+    // so a group is not split by casing, and a screen showing them back should not shout.
     private sealed record RunningRun(
         Guid RunId,
         long CharacterId,
         RunGroupKey Key,
         string? GroupCode,
         DateTime StartedAtUtc,
-        bool IsFleetCommander);
+        bool IsFleetCommander,
+        string? SiteName = null,
+        string? SolarSystemName = null);
 }

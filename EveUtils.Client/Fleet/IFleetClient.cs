@@ -80,5 +80,9 @@ public interface IFleetClient
     Task<(bool Ok, string Message)> LeaveFleetAsync(long fleetId, int characterId);
     Task<(bool Ok, string Message)> RespondToJoinRequestAsync(long requestId, bool accept);
     Task<(bool Ok, string Message)> StartFleetAsync(long fleetId);
+
+    /// <summary>Stops the fleet (ET-166): Active → Forming. The roster stays, so the same fleet starts again next
+    /// time; its members are coupled to nothing in the meantime. Owner-only, and the way back Conclude is not.</summary>
+    Task<(bool Ok, string Message)> StopFleetAsync(long fleetId);
     Task<(bool Ok, string Message)> ConcludeFleetAsync(long fleetId);
 }

@@ -8,6 +8,9 @@ namespace EveUtils.Shared.Modules.Fleet.Entities;
 /// Conclude action when the op is over — a finished fleet kept for history. Only an <see cref="Active"/> fleet
 /// broadcasts metrics; <see cref="Forming"/> and <see cref="Concluded"/> fleets broadcast nothing, and a
 /// <see cref="Concluded"/> fleet can no longer be joined.
+/// The Stop action (ET-166) is the way back: <see cref="Active"/> → <see cref="Forming"/>, roster intact, so a
+/// recurring op stands by until next week instead of being concluded and recreated. Conclude stays the one-way
+/// exit; the two are separate transitions, not two names for the same thing.
 /// </summary>
 public enum FleetActivation
 {

@@ -29,7 +29,8 @@ public sealed class LocalFleetClient(
             : new FleetInfo(
                 fleet.Id, fleet.Name, fleet.Description, fleet.Visibility, fleet.State, fleet.CreatorCharacterId,
                 fleet.FromTime, fleet.ToTime, fleet.CreatedAt, fleet.Activation, fleet.FleetCompositionId,
-                fleet.EsiFleetId, fleet.EsiFleetBossId, fleet.EsiAutoApplyStructure, fleet.EsiAutoInviteMembers);
+                fleet.EsiFleetId, fleet.EsiFleetBossId, fleet.EsiAutoApplyStructure, fleet.EsiAutoInviteMembers,
+                fleet.ActivatedAt);
     }
 
     public async Task<IReadOnlyList<FleetMemberInfo>> ListMembersAsync(long fleetId) =>
@@ -170,6 +171,9 @@ public sealed class LocalFleetClient(
 
     public async Task<(bool Ok, string Message)> StartFleetAsync(long fleetId) =>
         Map(await local.StartFleetAsync(fleetId, ownerCharacterId));
+
+    public async Task<(bool Ok, string Message)> StopFleetAsync(long fleetId) =>
+        Map(await local.StopFleetAsync(fleetId, ownerCharacterId));
 
     public async Task<(bool Ok, string Message)> ConcludeFleetAsync(long fleetId) =>
         Map(await local.ConcludeFleetAsync(fleetId, ownerCharacterId));

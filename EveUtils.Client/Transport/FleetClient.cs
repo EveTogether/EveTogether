@@ -122,6 +122,12 @@ public sealed class FleetClient(
         ActionAsync(serverAddress, actingCharacterId, (client, headers) =>
             client.StartFleetAsync(new StartFleetRequest { FleetId = fleetId }, headers, cancellationToken: cancellationToken), cancellationToken);
 
+    /// <summary>Stops the fleet (ET-166): flips it Active → Forming so it stands by with its roster intact.
+    /// Creator-only.</summary>
+    public Task<(bool Ok, string Message)> StopFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
+        ActionAsync(serverAddress, actingCharacterId, (client, headers) =>
+            client.StopFleetAsync(new StopFleetRequest { FleetId = fleetId }, headers, cancellationToken: cancellationToken), cancellationToken);
+
     /// <summary>Concludes the fleet (2026-06-04): marks it finished (→ Concluded), kept for history. Creator-only.</summary>
     public Task<(bool Ok, string Message)> ConcludeFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
         ActionAsync(serverAddress, actingCharacterId, (client, headers) =>
@@ -664,7 +670,8 @@ public sealed class FleetClient(
         dto.HasEsiFleetId ? dto.EsiFleetId : null,
         dto.HasEsiFleetBossId ? dto.EsiFleetBossId : null,
         dto.EsiAutoApplyStructure,
-        dto.EsiAutoInviteMembers);
+        dto.EsiAutoInviteMembers,
+        ParseTime(dto.ActivatedAt));
 
     private static string FormatTime(DateTimeOffset? time) => time?.ToString("o", CultureInfo.InvariantCulture) ?? string.Empty;
 

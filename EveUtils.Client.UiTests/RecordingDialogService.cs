@@ -319,6 +319,18 @@ public sealed class RecordingDialogService : IDialogService
     public Task<string?> PromptTextAsync(string title, string header, string? defaultValue = null) =>
         OnPromptText(title, header, defaultValue);
     public Task<bool> ConfirmStartFleetAsync(string fleetName, int unlinkedCount) => throw NotUsed();
+
+    /// <summary>What the stop dialog answers with, and what it was asked. A test sets the exit it wants taken and
+    /// reads the prompt back to check the fleet's state was described to the FC, without a window opening.</summary>
+    public StopFleetChoice FleetExit { get; set; } = StopFleetChoice.Cancel;
+
+    public StopFleetPrompt? FleetExitPrompt { get; private set; }
+
+    public Task<StopFleetChoice> PickFleetExitAsync(StopFleetPrompt prompt)
+    {
+        FleetExitPrompt = prompt;
+        return Task.FromResult(FleetExit);
+    }
     public void ShowRoster(FleetRosterViewModel viewModel) => throw NotUsed();
     public void ShowFleetMetrics(FleetMetricsViewModel viewModel) => throw NotUsed();
     public Task ShowSdeUpdateAsync(SdeProgressViewModel viewModel) => throw NotUsed();

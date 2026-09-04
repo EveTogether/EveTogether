@@ -16,9 +16,12 @@ using FleetEntity = EveUtils.Shared.Modules.Fleet.Entities.Fleet;
 namespace EveUtils.Server;
 
 /// <summary>
-/// Headless proof for the "one active fleet per character" rule + the Concluded lifecycle (2026-06-04), runnable
-/// via <c>--fleet-active-guard-test</c>. Drives the real DI/dispatcher + the broadcast resolver to assert:
+/// Headless proof for the "one active fleet per character" rule + the Concluded and Stopped lifecycles
+/// (2026-06-04, ET-166), runnable via <c>--fleet-active-guard-test</c>. Drives the real DI/dispatcher + the
+/// broadcast resolver to assert:
 /// Conclude is creator-only and terminal (no re-start, no re-join) and frees its members from the active-lock;
+/// Stop is creator-only too but reversible — the fleet stands by with its roster, its members are freed, and it
+/// starts again — while a concluded fleet cannot be stopped back into standing by;
 /// the entry-guard blocks joining a *second* active fleet but still allows signing up to a Forming fleet; and
 /// the broadcast tiebreak keeps a member who is started into a second active fleet coupled to the one they were
 /// activated in first. Exit 0 = all passed.
@@ -67,6 +70,43 @@ public static class FleetActiveGuardCheck
             ok &= Check("Conclude is idempotent", (await dispatcher.Send(new ConcludeFleetCommand(f1, Owner1), ct)).IsSuccess);
             ok &= Check("a concluded fleet cannot be started again", !(await dispatcher.Send(new StartFleetCommand(f1, Owner1), ct)).IsSuccess);
             ok &= Check("a concluded fleet can no longer be joined", !(await dispatcher.Send(new JoinFleetCommand(f1, Stranger), ct)).IsSuccess);
+
+            // ---- Part 1b: Stop lifecycle (ET-166) — the way back Conclude deliberately is not ----
+            // Same three guards as Conclude, then the thing Conclude cannot do: the fleet stands by with its roster
+            // and runs again. This is what makes a weekly op a weekly op instead of a fleet recreated every week.
+            var f2 = (await dispatcher.Send(new CreateFleetCommand(
+                "Weekly Op", null, FleetVisibility.Public, null, null, FleetOfflineBehavior.StayOffline, Owner1), ct)).Value;
+            fleetIds.Add(f2);
+            ok &= Check("Stranger joins the weekly op", (await dispatcher.Send(new JoinFleetCommand(f2, Stranger), ct)).IsSuccess);
+            ok &= Check("creator starts the weekly op", (await dispatcher.Send(new StartFleetCommand(f2, Owner1), ct)).IsSuccess);
+            ok &= Check("its member counts toward the one-active-fleet rule while it runs",
+                (await repository.ListActiveMembershipsAsync(Stranger, ct)).Any(m => m.FleetId == f2));
+
+            var foreignStop = await dispatcher.Send(new StopFleetCommand(f2, Owner2), ct);
+            ok &= Check("non-creator Stop rejected (PERMISSION_DENIED)",
+                !foreignStop.IsSuccess && foreignStop.Messages.Any(m => m.Code == MessageCodes.PermissionDenied));
+
+            ok &= Check("creator can Stop", (await dispatcher.Send(new StopFleetCommand(f2, Owner1), ct)).IsSuccess);
+            var stopped = await dispatcher.Query(new GetFleetQuery(f2), ct);
+            ok &= Check("a stopped fleet is standing by again (Forming), not concluded and not archived",
+                stopped is { Activation: FleetActivation.Forming, State: FleetState.Active });
+            ok &= Check("its roster survives the stop",
+                await dispatcher.Query(new IsFleetMemberQuery(f2, Stranger), ct));
+            ok &= Check("its members are coupled to nothing — free for another fleet",
+                (await repository.ListActiveMembershipsAsync(Stranger, ct)).Count == 0);
+
+            ok &= Check("Stop is idempotent", (await dispatcher.Send(new StopFleetCommand(f2, Owner1), ct)).IsSuccess);
+            ok &= Check("a stopped fleet starts again — the whole point",
+                (await dispatcher.Send(new StartFleetCommand(f2, Owner1), ct)).IsSuccess);
+
+            // And it does not reopen the terminal state: f1 was concluded above and stays that way.
+            var stopConcluded = await dispatcher.Send(new StopFleetCommand(f1, Owner1), ct);
+            ok &= Check("a concluded fleet cannot be stopped back into standing by (ValidationFailed)",
+                !stopConcluded.IsSuccess && stopConcluded.Messages.Any(m => m.Code == MessageCodes.ValidationFailed));
+
+            // Leave the weekly op concluded so it takes no part in the entry-guard below.
+            ok &= Check("the weekly op concludes when it really is over",
+                (await dispatcher.Send(new ConcludeFleetCommand(f2, Owner1), ct)).IsSuccess);
 
             // ---- Part 2: entry-guard (one active fleet) — Pilot is free again now f1 is concluded ----
             var gActive = (await dispatcher.Send(new CreateFleetCommand(

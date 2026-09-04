@@ -144,6 +144,10 @@ public sealed class ClientFleetService(IServiceScopeFactory scopeFactory) : ISin
     public Task<Result> StartFleetAsync(long fleetId, int ownerCharacterId, CancellationToken cancellationToken = default)
         => DispatchAsync(d => d.Send(new StartFleetCommand(fleetId, ownerCharacterId), cancellationToken));
 
+    /// <summary>Stops the fleet (Active → Forming, roster kept) via the Shared <see cref="StopFleetCommand"/>.</summary>
+    public Task<Result> StopFleetAsync(long fleetId, int ownerCharacterId, CancellationToken cancellationToken = default)
+        => DispatchAsync(d => d.Send(new StopFleetCommand(fleetId, ownerCharacterId), cancellationToken));
+
     /// <summary>Concludes the fleet (→ Concluded, kept for history) via the Shared <see cref="ConcludeFleetCommand"/>.</summary>
     public Task<Result> ConcludeFleetAsync(long fleetId, int ownerCharacterId, CancellationToken cancellationToken = default)
         => DispatchAsync(d => d.Send(new ConcludeFleetCommand(fleetId, ownerCharacterId), cancellationToken));

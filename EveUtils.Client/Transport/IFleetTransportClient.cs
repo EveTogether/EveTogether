@@ -49,6 +49,8 @@ public interface IFleetTransportClient
 
     Task<(bool Ok, string Message)> StartFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default);
 
+    Task<(bool Ok, string Message)> StopFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default);
+
     Task<(bool Ok, string Message)> ConcludeFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default);
 
     Task<(bool Ok, string Message)> JoinFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default);
