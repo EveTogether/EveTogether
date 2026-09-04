@@ -1,0 +1,96 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels.Runs"
+        xmlns:sde="using:EveUtils.Shared.Modules.Sde.Dtos"
+        xmlns:identity="using:EveUtils.Shared.Identity"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="560"
+        x:Class="EveUtils.Client.Views.ManualRunStartWindow"
+        x:DataType="vm:ManualRunStartViewModel"
+        Width="640" Height="560" MinWidth="380" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Title="Start Run">
+
+    <!-- On the CONTENT, not on the window: docked, ModuleHostService reparents this DockPanel into a tab and
+         leaves anything on the window behind (ET-42) — same reason every other module window follows this rule. -->
+    <DockPanel Margin="14">
+
+        <DockPanel.Styles>
+            <Style Selector="Border.statusline">
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            </Style>
+            <Style Selector="Border.statusline.failed">
+                <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
+            </Style>
+        </DockPanel.Styles>
+
+        <TextBlock DockPanel.Dock="Top" Text="START RUN" FontWeight="Bold" FontSize="15" Margin="0,0,0,10"
+                   Foreground="{StaticResource TextBrightBrush}"/>
+
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="0,10,0,0">
+            <Border Grid.Column="0" Padding="11,7" Classes="statusline" Classes.failed="{Binding StatusIsError}"
+                    Background="#22000000" BorderThickness="1">
+                <TextBlock Text="{Binding Status}" FontSize="11" TextWrapping="Wrap"
+                           Foreground="{StaticResource TextBrightBrush}"/>
+            </Border>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Button Content="START" Classes="accent" Command="{Binding StartCommand}"/>
+                <Button Content="Close" Click="OnClose"/>
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer>
+            <StackPanel Spacing="10" MaxWidth="520" HorizontalAlignment="Left">
+
+                <StackPanel Spacing="3">
+                    <TextBlock Classes="label" Text="CHARACTER"/>
+                    <ComboBox ItemsSource="{Binding Characters}" SelectedItem="{Binding SelectedCharacter}"
+                              HorizontalAlignment="Stretch" MinWidth="260">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="identity:Character">
+                                <TextBlock Text="{Binding Name}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+
+                <StackPanel Spacing="3">
+                    <TextBlock Classes="label" Text="ACTIVITY"/>
+                    <ComboBox ItemsSource="{Binding ActivityKinds}" SelectedItem="{Binding SelectedActivityKind}"
+                              HorizontalAlignment="Stretch" MinWidth="260"/>
+                </StackPanel>
+
+                <StackPanel Spacing="3">
+                    <TextBlock Classes="label" Text="SITE"/>
+                    <TextBox PlaceholderText="Search the site catalogue…" Text="{Binding SiteQuery}"/>
+                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" MaxHeight="160"
+                            IsVisible="{Binding HasSiteResults}">
+                        <ListBox ItemsSource="{Binding SiteResults}" SelectedItem="{Binding SelectedSite}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="sde:SdeSite">
+                                    <TextBlock Text="{Binding Name}" FontSize="11"/>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+                    <TextBlock Text="{Binding SelectedSite.Name, StringFormat='Selected: {0}'}"
+                               IsVisible="{Binding HasSelectedSite}" FontSize="11"
+                               Foreground="{DynamicResource TextAccentBrush}"/>
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <!-- No STARTTIME field on purpose: starting now means the starttime is now. ACHTERAF INVOEREN
+                         is the one exception, for a run typed in after the fact (ET-163). -->
+                    <ToggleButton Content="ACHTERAF INVOEREN" IsChecked="{Binding IsBackdated}"
+                                  HorizontalAlignment="Left"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsBackdated}">
+                        <DatePicker SelectedDate="{Binding BackdatedDate}"/>
+                        <TimePicker SelectedTime="{Binding BackdatedTime}"/>
+                    </StackPanel>
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</v:ChromedWindow>

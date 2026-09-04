@@ -3,6 +3,7 @@ using EveUtils.Client.Theming;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
@@ -214,6 +215,10 @@ public interface IDialogService
     /// <summary>Opens the Appraisal tool as a hosted module — a docked tab or a floating window, like the other
     /// tools. Non-modal: pasting a second list is the next thing the user does, not a reason to reopen it.</summary>
     void ShowAppraisal(AppraisalViewModel viewModel);
+
+    /// <summary>Opens the manual run-start screen (ET-163) as a hosted module — a docked tab or a floating window,
+    /// like the other tools.</summary>
+    void ShowManualRunStart(ManualRunStartViewModel viewModel);
 
     /// <summary>Save-a-preset dialog (ET-61): pick what goes in, name it, write it to one portable file. Modal — the
     /// file picker inside it belongs to the window, so the view-model never sees a path it did not ask for.</summary>

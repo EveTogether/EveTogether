@@ -1265,7 +1265,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 // own run may control it without commanding anybody, and answering "am I the boss" is the
                 // authority's own job rather than something reassembled here (ET-147, ET-152).
                 IsFleetCommander: Authority.IsFleetCommander,
-                SolarSystemName: SolarSystem));
+                SolarSystemName: SolarSystem,
+                // This window's own start button is the clipboard/signature path — the site comes from what the
+                // pilot pasted, not from a catalogue pick (ET-163).
+                Origin: EveUtils.Shared.Modules.Runs.Enums.RunOrigin.Clipboard));
         if (!started.IsSuccess)
         {
             _services.GetService<IToastService>()?.Show("Run not started",

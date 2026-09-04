@@ -805,6 +805,9 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.Property<int?>("MissionLevel")
                         .HasColumnType("int");
 
+                    b.Property<int>("Origin")
+                        .HasColumnType("int");
+
                     b.Property<int>("Revision")
                         .HasColumnType("int");
 

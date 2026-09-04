@@ -766,6 +766,9 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.Property<int?>("MissionLevel")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Origin")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Revision")
                         .HasColumnType("INTEGER");
 

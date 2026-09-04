@@ -27,4 +27,7 @@ public sealed record StartRunCommand(
     // caller today starts a site or an abyssal run.
     SiteTypeSource SiteTypeSource = SiteTypeSource.Site,
     int? AgentId = null,
-    int? MissionLevel = null) : ICommand<Result<Guid>>;
+    int? MissionLevel = null,
+    // Unknown, not Clipboard: a caller that forgets to pass this has to show up as "we don't know", not silently
+    // claim the original path. Every real caller (clipboard and manual alike) passes its own.
+    RunOrigin Origin = RunOrigin.Unknown) : ICommand<Result<Guid>>;

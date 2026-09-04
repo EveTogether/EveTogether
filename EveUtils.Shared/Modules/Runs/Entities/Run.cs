@@ -36,6 +36,10 @@ public sealed class Run
     public int? SolarSystemId { get; set; }
     public string? Signature { get; set; }
 
+    /// <summary>Where this run came from — stored, never derived. A clipboard run has no site name as often as a
+    /// manual one has one, so nothing else on this row can stand in for it (ET-163).</summary>
+    public RunOrigin Origin { get; set; }
+
     /// <summary>The agent who handed out the mission, and its level. Null on everything that is not a mission.</summary>
     public int? AgentId { get; set; }
 
