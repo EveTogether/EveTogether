@@ -1,5 +1,6 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
+using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -7,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
+[ClientOnly]
 internal sealed class QueueRunForServerSyncCommandHandler(IDbContextFactory<ClientDbContext> contextFactory)
     : ICommandHandler<QueueRunForServerSyncCommand, Result>
 {

@@ -1,11 +1,13 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
+using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
+[ClientOnly]
 internal sealed class DiscardRunsInGroupCommandHandler(IDbContextFactory<ClientDbContext> contextFactory)
     : ICommandHandler<DiscardRunsInGroupCommand, Result<int>>
 {

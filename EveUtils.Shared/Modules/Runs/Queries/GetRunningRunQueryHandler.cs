@@ -1,5 +1,6 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
+using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
@@ -8,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Queries;
 
+[ClientOnly]
 internal sealed class GetRunningRunQueryHandler(IDbContextFactory<ClientDbContext> contextFactory)
     : IQueryHandler<GetRunningRunQuery, Result<RunningRunDto>>
 {
