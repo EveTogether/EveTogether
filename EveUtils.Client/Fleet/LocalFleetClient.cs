@@ -6,6 +6,7 @@ using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 
@@ -179,6 +180,15 @@ public sealed class LocalFleetClient(
 
     public Task<(bool Ok, string Message)> RespondToJoinRequestAsync(long requestId, bool accept) =>
         Task.FromResult((false, "A client-only fleet has no join requests."));
+
+    public Task<IReadOnlyList<FleetMemberElsewhereInfo>> ListMembersActiveElsewhereAsync(long fleetId) =>
+        local.ListMembersActiveElsewhereAsync(fleetId);
+
+    /// <summary>A client-only fleet's pilots are the owner's own characters and external pilots on trust: there is
+    /// nobody with an inbox to ask. Your own alt you move yourself, from the member row — that is owning the
+    /// character, not commanding the fleet (ET-168).</summary>
+    public Task<(bool Ok, string Message, int Asked)> RequestFleetSwitchAsync(long fleetId, int onlyCharacterId = 0) =>
+        Task.FromResult((false, "These are your own pilots — switch them from the member row instead of asking them.", 0));
 
     public async Task<(bool Ok, string Message)> StartFleetAsync(long fleetId) =>
         Map(await local.StartFleetAsync(fleetId, ownerCharacterId));

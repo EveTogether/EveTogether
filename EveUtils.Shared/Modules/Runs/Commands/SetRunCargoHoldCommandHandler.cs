@@ -17,17 +17,11 @@ internal sealed class SetRunCargoHoldCommandHandler(IDbContextFactory<ClientDbCo
     public async Task<Result<Guid>> Handle(SetRunCargoHoldCommand command, CancellationToken cancellationToken = default)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        Run? run = await db.Set<Run>()
-            .FirstOrDefaultAsync(candidate => candidate.Id == command.RunId && !candidate.DeletedAtUtc.HasValue, cancellationToken);
-        if (run is null)
-            return Result<Guid>.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound,
-                "The run no longer exists.", "Runs"));
+        Result<Run> opened = await RunLootWrites.OpenRunAsync(db, command.RunId, cancellationToken);
+        if (!opened.IsSuccess)
+            return Result<Guid>.Failure([.. opened.Messages]);
 
-        // Saving is the lock. The cargo holds stay adjustable until then and not a moment after — including on the
-        // run ET-179 finished on the pilot's behalf a day after STOP.
-        if (run.State is RunState.Saved)
-            return Result<Guid>.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
-                "This run is saved, so its loot can no longer be changed.", "Runs"));
+        Run run = opened.Value!;
 
         // The box only ever rewrites what the box itself wrote: a clipboard capture that happens to hold the role
         // right now was really copied out of EVE, and typing here must not overwrite it.

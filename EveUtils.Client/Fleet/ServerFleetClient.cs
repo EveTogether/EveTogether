@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using EveUtils.Client.Transport;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 
 namespace EveUtils.Client.Fleet;
@@ -102,6 +103,12 @@ public sealed class ServerFleetClient(IFleetTransportClient fleets, string serve
 
     public Task<(bool Ok, string Message)> RespondToJoinRequestAsync(long requestId, bool accept) =>
         fleets.RespondToJoinRequestAsync(serverAddress, requestId, accept, actingCharacterId);
+
+    public Task<IReadOnlyList<FleetMemberElsewhereInfo>> ListMembersActiveElsewhereAsync(long fleetId) =>
+        fleets.ListMembersActiveElsewhereAsync(serverAddress, fleetId, actingCharacterId);
+
+    public Task<(bool Ok, string Message, int Asked)> RequestFleetSwitchAsync(long fleetId, int onlyCharacterId = 0) =>
+        fleets.RequestFleetSwitchAsync(serverAddress, fleetId, actingCharacterId, onlyCharacterId);
 
     public Task<(bool Ok, string Message)> StartFleetAsync(long fleetId) =>
         fleets.StartFleetAsync(serverAddress, fleetId, actingCharacterId);

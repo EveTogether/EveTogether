@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Fleet;
 using EveUtils.Grpc;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using Grpc.Core;
 using GrpcFleets = EveUtils.Grpc.Fleets;
@@ -136,6 +137,44 @@ public sealed class FleetClient(
     public Task<(bool Ok, string Message)> JoinFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
         ActionAsync(serverAddress, actingCharacterId, (client, headers) =>
             client.JoinFleetAsync(new JoinFleetRequest { FleetId = fleetId }, headers, cancellationToken: cancellationToken), cancellationToken);
+
+    /// <summary>The start collision, read before pressing START (ET-168, scherm 2). A transport failure answers an
+    /// empty list rather than throwing: not knowing of a collision reads as "no collision", which is what the screen
+    /// showed before this existed, and is never worse than refusing to open the dialog at all.</summary>
+    public Task<IReadOnlyList<FleetMemberElsewhereInfo>> ListMembersActiveElsewhereAsync(
+        string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
+        QueryAsync(serverAddress, actingCharacterId,
+            (client, headers) => client.ListMembersActiveElsewhereAsync(
+                new ListMembersActiveElsewhereRequest { FleetId = fleetId }, headers, cancellationToken: cancellationToken),
+            reply => reply.Ok
+                ? reply.Members.Select(m => new FleetMemberElsewhereInfo(m.CharacterId, m.ElsewhereFleetId, m.ElsewhereFleetName)).ToList()
+                : [], cancellationToken);
+
+    /// <summary>One request to every member who is active elsewhere (ET-168). The count comes back so the caller can
+    /// say how many were asked instead of just that something happened.</summary>
+    public async Task<(bool Ok, string Message, int Asked)> RequestFleetSwitchAsync(
+        string serverAddress, long fleetId, int actingCharacterId = 0, int onlyCharacterId = 0, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var reply = await InvokeAsync(serverAddress, actingCharacterId, (client, headers) =>
+                client.RequestFleetSwitchAsync(
+                    new RequestFleetSwitchRequest { FleetId = fleetId, OnlyCharacterId = onlyCharacterId },
+                    headers, cancellationToken: cancellationToken),
+                cancellationToken);
+            return (reply.Accepted, reply.Message, reply.Asked);
+        }
+        catch (RpcException ex)
+        {
+            return (false, ex.Status.Detail, 0);
+        }
+    }
+
+    /// <summary>This character leaves whatever it counted for and couples here, as one act (ET-168).</summary>
+    public Task<(bool Ok, string Message)> SwitchToFleetAsync(
+        string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
+        ActionAsync(serverAddress, actingCharacterId, (client, headers) =>
+            client.SwitchToFleetAsync(new SwitchToFleetRequest { FleetId = fleetId }, headers, cancellationToken: cancellationToken), cancellationToken);
 
     public Task<(bool Ok, string Message)> EnterFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
         ActionAsync(serverAddress, actingCharacterId, (client, headers) =>

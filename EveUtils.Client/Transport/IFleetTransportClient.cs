@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Fleet;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 
 namespace EveUtils.Client.Transport;
@@ -54,6 +55,23 @@ public interface IFleetTransportClient
     Task<(bool Ok, string Message)> ConcludeFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default);
 
     Task<(bool Ok, string Message)> JoinFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default);
+
+    /// <summary>Which of a fleet's roster members already count for another started fleet (ET-168) — the half of the
+    /// start collision only the server can answer, because a client cannot see someone else's pilot's fleets.</summary>
+    Task<IReadOnlyList<FleetMemberElsewhereInfo>> ListMembersActiveElsewhereAsync(
+        string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default);
+
+    /// <summary>Asks every member who is active elsewhere to come over — one call whether it is one member or fifty
+    /// (ET-168). Creator-only. Returns how many were asked; it moves nobody. <paramref name="onlyCharacterId"/> narrows
+    /// it to a single member, which is what the member row's ask does.</summary>
+    Task<(bool Ok, string Message, int Asked)> RequestFleetSwitchAsync(
+        string serverAddress, long fleetId, int actingCharacterId = 0, int onlyCharacterId = 0, CancellationToken cancellationToken = default);
+
+    /// <summary>Moves <paramref name="actingCharacterId"/> into this fleet: leaves whatever started fleet it counted
+    /// for, then couples here (ET-168). Only ever the caller's own character — the server takes the acting character
+    /// from the session, which is why a commander may move their own alt and nobody else's.</summary>
+    Task<(bool Ok, string Message)> SwitchToFleetAsync(
+        string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default);
 
     Task<(bool Ok, string Message)> EnterFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default);
 

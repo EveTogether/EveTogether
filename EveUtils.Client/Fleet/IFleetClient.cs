@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 
 namespace EveUtils.Client.Fleet;
@@ -79,6 +80,18 @@ public interface IFleetClient
     /// leaves by disbanding/transferring instead.</summary>
     Task<(bool Ok, string Message)> LeaveFleetAsync(long fleetId, int characterId);
     Task<(bool Ok, string Message)> RespondToJoinRequestAsync(long requestId, bool accept);
+
+    /// <summary>Which roster members count for another started fleet right now (ET-168) — the collision the
+    /// commander must see before pressing START. Each store answers for what it can see: a server knows where
+    /// someone else's pilot is, the local store knows about local fleets, and the overview unions both with what it
+    /// already worked out for its own pilots.</summary>
+    Task<IReadOnlyList<FleetMemberElsewhereInfo>> ListMembersActiveElsewhereAsync(long fleetId);
+
+    /// <summary>Asks every member who is active elsewhere to come over, in one act — one member or fifty, the same
+    /// call (ET-168). It asks; it moves nobody and takes nobody off a roster. Returns how many were asked.
+    /// <paramref name="onlyCharacterId"/> narrows it to one member — the member row's ask.</summary>
+    Task<(bool Ok, string Message, int Asked)> RequestFleetSwitchAsync(long fleetId, int onlyCharacterId = 0);
+
     Task<(bool Ok, string Message)> StartFleetAsync(long fleetId);
 
     /// <summary>Stops the fleet (ET-166): Active → Forming. The roster stays, so the same fleet starts again next

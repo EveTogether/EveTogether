@@ -204,6 +204,70 @@
                 <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
             </Style>
 
+            <!-- ── The money column ── one width and one font for every amount in the LOOT section, so a row's value,
+                 a capture's subtotal and the totals strip all land on the same characters. Monospaced is what lines
+                 the decimals up; a proportional font puts every row's comma somewhere else. -->
+            <Style Selector="TextBlock.money">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <!-- An item name is the value of its row, not a label of it — so it may not borrow Grid.kv's first
+                 column, which is letterspaced and dimmed for the label it expects to find there. -->
+            <Style Selector="TextBlock.item">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="TextBlock.money.net">
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+            <!-- ── The totals strip ── the three figures as one block rather than three key/value rows that happen to
+                 follow each other, because what a pilot compares is LOOT against CONSUMED. -->
+            <Style Selector="Border.totals">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="8,6"/>
+                <Setter Property="Margin" Value="0,2,0,4"/>
+            </Style>
+
+            <!-- ── A capture that does not count ── still there, still readable, in dimmed ink with its subtotal
+                 struck through. Declared after .money so it wins: Avalonia takes the last matching style, and the
+                 whole point of these two rules is to overrule the ink above. -->
+            <Style Selector="Border.excluded TextBlock">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            </Style>
+            <Style Selector="Border.excluded TextBlock.money">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="TextDecorations" Value="Strikethrough"/>
+            </Style>
+
+            <!-- ── A link that opens something instead of setting it, in the one place that has to stay pressed:
+                 a capture's own rows, shown as they came in. Same ink as Button.link above, which it cannot borrow —
+                 a style selector names one control type. -->
+            <Style Selector="ToggleButton.link">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="Cursor" Value="Hand"/>
+            </Style>
+            <Style Selector="ToggleButton.link /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+            </Style>
+            <Style Selector="ToggleButton.link:checked /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+            </Style>
+
             <!-- ── The enemy stepper ── a row control, not a form field. The theme sizes a NumericUpDown like a text
                  box, which beside a 10.5pt enemy name put chevrons taller than every button in this window (ET-115).
                  Sized against Button.pick above, which is what the rest of the window is made of. -->
@@ -733,24 +797,34 @@
                               IsChecked="{Binding Loot.IsExpanded, Mode=TwoWay}"/>
                 <Border Classes="sectionbody" IsVisible="{Binding Loot.IsExpanded}">
                     <StackPanel>
-                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
-                            <TextBlock Text="LOOT"/>
-                            <TextBlock Grid.Column="1" Text="{Binding RunLoot.LootIskDisplay}"/>
-                        </Grid>
-                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
-                            <TextBlock Text="CONSUMED"/>
-                            <TextBlock Grid.Column="1" Text="{Binding RunLoot.ConsumedIskDisplay}"/>
-                        </Grid>
-                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
-                            <TextBlock Text="NET"/>
-                            <TextBlock Grid.Column="1" Text="{Binding RunLoot.NetIskDisplay}"/>
-                        </Grid>
+                        <!-- One strip, on the same money column as every amount under it, so the total a row belongs
+                             to is straight above it. NET carries the accent because it is the figure the run is
+                             judged on; LOOT and CONSUMED are what it is made of. -->
+                        <Border Classes="totals">
+                            <StackPanel Spacing="3">
+                                <Grid ColumnDefinitions="*,104">
+                                    <TextBlock Classes="label" Text="LOOT" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Classes="money" Text="{Binding RunLoot.LootIskDisplay}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,104">
+                                    <TextBlock Classes="label" Text="CONSUMED" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Classes="money" Text="{Binding RunLoot.ConsumedIskDisplay}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,104">
+                                    <TextBlock Classes="label" Text="NET" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Classes="money net" Text="{Binding RunLoot.NetIskDisplay}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
                         <!-- The caption names where these figures come from. It has to, and it has to be right: it read
                              "the clipboard column" long after the copied ISK stopped being kept at all. -->
                         <TextBlock Classes="hint" Text="{Binding IskLabel}"/>
+                        <!-- A capture that arrived after the pilot wrote his list out, said beside the totals it just
+                             moved. Loot that came in and does not count is the one mistake he would never see. -->
+                        <TextBlock Classes="hint" Margin="0" Text="{Binding RunLoot.AddedAfterEditNote}"/>
                         <!-- Which two captures the figures are the difference between — in BOTH ways of working, so
                              someone back on the clipboard way who sees an unexpected total can read why in one
-                             glance, and take the visible way out: exclude that capture. -->
+                             glance, and reach the control that decides it: the starting-hold list below. -->
                         <TextBlock Classes="hint" Margin="0" Text="{Binding RunLoot.DifferenceText}"/>
                         <TextBlock Classes="hint" Margin="0" Text="{Binding RunLoot.RunStatusMessage}"/>
 
@@ -777,6 +851,22 @@
                              section carries no controls at all. -->
                         <StackPanel Spacing="4" IsVisible="{Binding RunLoot.IsCargoDiffShown}">
                             <StackPanel Spacing="4" IsVisible="{Binding !RunLoot.IsLocked}">
+                                <!-- One place to say which capture the run started from. Two starting holds stay
+                                     impossible because SetRunLootCaptureRoleCommand takes the role off whoever had
+                                     it in the same write — this list is the shape of the question, not the guard. -->
+                                <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                                    <TextBlock Text="STARTS FROM" VerticalAlignment="Center"/>
+                                    <ComboBox Grid.Column="1" HorizontalAlignment="Right" MinWidth="200"
+                                              PlaceholderText="no starting hold — every capture counts"
+                                              ItemsSource="{Binding RunLoot.Captures}"
+                                              SelectedItem="{Binding RunLoot.CargoBeforeCapture, Mode=TwoWay}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate DataType="vr:RunLootCaptureRowViewModel">
+                                                <TextBlock Text="{Binding PickerText}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </Grid>
                                 <TextBlock Classes="hint" Margin="0" Text="STARTING HOLD"/>
                                 <TextBox AcceptsReturn="True" MinHeight="54" TextWrapping="NoWrap"
                                          PlaceholderText="Paste your cargo hold — Ctrl+A, Ctrl+C in the inventory window."
@@ -793,41 +883,107 @@
                         <!-- An editable section says until when; a fixed one says it is fixed. Never nothing. -->
                         <TextBlock Classes="hint" Text="{Binding RunLoot.EditableUntilText}"/>
 
-                        <ItemsControl ItemsSource="{Binding RunLoot.Captures}">
+                        <!-- ── The loot ── one list of the rows that count, whichever way they were registered, and
+                             not a stack per capture: if the text is the loot, the loot is one list. -->
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                            <TextBlock Text="LOOT" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Classes="hint" Margin="0" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" Text="{Binding RunLoot.ManualListCaption}"/>
+                            <Button Grid.Column="2" Classes="link" Content="edit as text"
+                                    IsVisible="{Binding RunLoot.CanEditLoot}"
+                                    Command="{Binding RunLoot.BeginLootEditCommand}"/>
+                        </Grid>
+
+                        <!-- Editing is replacement, not a correction script: what is in the box is what the loot
+                             becomes. The list it opens on is the list as it counts right now, in the form EVE itself
+                             copies, so a row can be pasted straight in from the game beside the ones already there. -->
+                        <StackPanel Spacing="4" IsVisible="{Binding RunLoot.IsEditingLoot}">
+                            <TextBox AcceptsReturn="True" MinHeight="90" TextWrapping="NoWrap"
+                                     FontFamily="{StaticResource MonoFont}"
+                                     PlaceholderText="Name, tab, quantity — one row per line."
+                                     Text="{Binding RunLoot.LootText, Mode=TwoWay}"/>
+                            <!-- A row that cannot be read greys "done" and says why, rather than being thrown away
+                                 without the pilot who typed it ever finding out. -->
+                            <TextBlock Classes="hint" Margin="0" Text="{Binding RunLoot.LootTextRefusal}"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Classes="pick" Content="done"
+                                        IsEnabled="{Binding RunLoot.CanFinishLootEdit}"
+                                        Command="{Binding RunLoot.FinishLootEditCommand}"/>
+                                <Button Classes="link" Content="back to the captures"
+                                        Command="{Binding RunLoot.CancelLootEditCommand}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <ItemsControl ItemsSource="{Binding RunLoot.CountedLines}"
+                                      IsVisible="{Binding !RunLoot.IsEditingLoot}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:ActivityLootLineViewModel">
+                                    <!-- The money column keeps its width whatever else is on the row, so every amount
+                                         in this section lands on the same characters. Spent is its own word rather
+                                         than loot with a minus in front of it, which is LootKind's own reading. -->
+                                    <Grid ColumnDefinitions="*,Auto,52,104" ColumnSpacing="8" Margin="0,2">
+                                        <TextBlock Classes="item" Text="{Binding Name}"/>
+                                        <TextBlock Grid.Column="1" Classes="label" VerticalAlignment="Center"
+                                                   Text="SPENT" IsVisible="{Binding IsLost}"/>
+                                        <TextBlock Grid.Column="2" Classes="money" Text="{Binding QuantityText}"/>
+                                        <TextBlock Grid.Column="3" Classes="money" Text="{Binding ValueText}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- ── The captures underneath ── every one of them, counted or not, with its own subtotal.
+                             That is what makes a correction readable back: #3 goes on saying two rows came in worth
+                             75.090,00 while the list above keeps 19.600,00 of it, and the difference is the edit. -->
+                        <ItemsControl ItemsSource="{Binding RunLoot.Captures}" Margin="0,8,0,0">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vr:RunLootCaptureRowViewModel">
-                                    <StackPanel Spacing="4">
-                                        <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                                            <TextBlock Text="{Binding CapturedAtDisplay}"/>
-                                            <Button Grid.Column="1" Classes="pick" Content="starting hold"
-                                                    IsVisible="{Binding $parent[ItemsControl].((va:ActivityWindowViewModel)DataContext).RunLoot.IsCargoDiffShown}"
-                                                    Command="{Binding $parent[ItemsControl].((va:ActivityWindowViewModel)DataContext).RunLoot.MakeCaptureCargoBeforeCommand}"
-                                                    CommandParameter="{Binding}"/>
-                                            <Button Grid.Column="2" Classes="pick" Content="{Binding InOutText}"
-                                                    IsVisible="{Binding !$parent[ItemsControl].((va:ActivityWindowViewModel)DataContext).RunLoot.IsLocked}"
-                                                    Command="{Binding $parent[ItemsControl].((va:ActivityWindowViewModel)DataContext).RunLoot.ToggleCaptureExcludedCommand}"
-                                                    CommandParameter="{Binding}"/>
-                                        </Grid>
-                                        <!-- What it is to the run, and where its bytes came from: two different
-                                             questions, and the strip answers both without a click. -->
-                                        <Grid Classes="kv" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
-                                            <TextBlock Classes="hint" Margin="0" Text="{Binding NumberDisplay}"/>
-                                            <TextBlock Grid.Column="1" Classes="hint" Margin="0" Text="{Binding SourceText}"/>
-                                            <TextBlock Grid.Column="2" Classes="hint" Margin="0" Text="{Binding RoleText}"/>
-                                        </Grid>
-                                        <TextBlock Classes="hint" Text="{Binding RepeatOfDisplay}"/>
-                                        <ItemsControl ItemsSource="{Binding Entries}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                                                        <TextBlock Text="{Binding Name}"/>
-                                                        <TextBlock Grid.Column="1" Text="{Binding Quantity}"/>
-                                                        <TextBlock Grid.Column="2" Text="{Binding ClipboardPrice, TargetNullValue='no price'}"/>
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
+                                    <Border Classes.excluded="{Binding IsExcluded}" Padding="0,2">
+                                        <StackPanel>
+                                            <Grid ColumnDefinitions="Auto,*,104" ColumnSpacing="8">
+                                                <TextBlock Classes="label" Text="{Binding NumberDisplay}"
+                                                           VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" Classes="label" VerticalAlignment="Center"
+                                                           Text="{Binding SourceText}"/>
+                                                <TextBlock Grid.Column="2" Classes="money"
+                                                           Text="{Binding SubtotalDisplay}"/>
+                                            </Grid>
+                                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,1,0,0">
+                                                <ToggleButton Classes="link" Content="{Binding LineCountText}"
+                                                              IsChecked="{Binding IsExpanded, Mode=TwoWay}"/>
+                                                <TextBlock Grid.Column="1" Classes="hint" Margin="0"
+                                                           Text="{Binding RoleText}"/>
+                                                <TextBlock Grid.Column="2" Classes="hint" Margin="0"
+                                                           Text="DOES NOT COUNT" IsVisible="{Binding IsExcluded}"/>
+                                            </Grid>
+                                            <TextBlock Classes="hint" Margin="0" Text="ADDED BELOW THE LIST"
+                                                       IsVisible="{Binding IsAddedAfterEdit}"/>
+                                            <!-- A repeat is the one exclusion worth arguing with — he really did loot
+                                                 the same thing twice. Every other one is his own edit, and the way
+                                                 back from an edit is to edit again. -->
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                <TextBlock Classes="hint" Margin="0" Text="{Binding RepeatOfDisplay}"/>
+                                                <Button Grid.Column="1" Classes="link" Content="add it anyway"
+                                                        IsVisible="{Binding CanReinclude}"
+                                                        Command="{Binding $parent[ItemsControl].((va:ActivityWindowViewModel)DataContext).RunLoot.ReincludeCaptureCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                            </Grid>
+                                            <!-- Its rows as they came in, read-only: the proof the correction can be
+                                                 read back against. -->
+                                            <ItemsControl ItemsSource="{Binding Entries}" IsVisible="{Binding IsExpanded}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid ColumnDefinitions="*,52,104" ColumnSpacing="8">
+                                                            <TextBlock Classes="hint" Margin="0" Text="{Binding Name}"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                            <TextBlock Grid.Column="1" Classes="hint" Margin="0"
+                                                                       TextAlignment="Right" Text="{Binding Quantity}"/>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

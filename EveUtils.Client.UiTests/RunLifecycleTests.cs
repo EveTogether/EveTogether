@@ -203,8 +203,10 @@ public sealed class RunLifecycleTests
 
         Assert.DoesNotContain("Prices are the clipboard column", window.IskLabel, StringComparison.Ordinal);
         Assert.Contains("price", window.IskLabel, StringComparison.OrdinalIgnoreCase);
-        // The one figure that IS the copied column is still named as such, so the line is not a second half-truth.
-        Assert.Contains("copied column", window.IskLabel, StringComparison.Ordinal);
+        // The caption used to carry a second sentence warning that the figure beside each row was the copied column
+        // instead. It was true, and it is gone because the rows are valued on type id now like everything else —
+        // the warning was answered rather than deleted, and one line says the whole thing.
+        Assert.DoesNotContain("copied column", window.IskLabel, StringComparison.Ordinal);
     }
 
     // ── The close question ──────────────────────────────────────────────────────────────────────────

@@ -1,0 +1,208 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dlg="using:EveUtils.Client.Dialogs"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="560" d:DesignHeight="640"
+        x:Class="EveUtils.Client.Views.StartFleetWindow"
+        x:Name="Root"
+        Width="560" SizeToContent="Height" MaxHeight="760"
+        WindowStartupLocation="CenterOwner"
+        Title="Start fleet">
+
+    <!-- Styles live on the content root, never on the window: ModuleHostService lifts Content out to dock a module
+         and anything left on the window stays behind (ET-42). This dialog is modal and never docked, but the rule is
+         cheap to keep and expensive to notice the one time a screen starts being routed. -->
+    <DockPanel Margin="16">
+        <DockPanel.Resources>
+            <!-- The theme has no warn brush of its own; this is the ink Border.chip.warn uses, and the same value
+                 the fleet overview declares, so the collision reads amber in exactly one shade across screens. -->
+            <SolidColorBrush x:Key="WarnBrush" Color="#FFE0B341"/>
+        </DockPanel.Resources>
+        <DockPanel.Styles>
+            <!-- The mockup's `okline`: a bordered block of prose that says what an act does. -->
+            <Style Selector="Border.okline">
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Background" Value="#05FFFFFF"/>
+                <Setter Property="Padding" Value="11,8"/>
+            </Style>
+            <Style Selector="Border.okline TextBlock">
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="LineHeight" Value="16"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            </Style>
+
+            <!-- The collision block. Amber-edged because it is the one thing on this screen that is not routine —
+                 not red: nothing here is wrong, and starting is not held up by it. -->
+            <Style Selector="Border.collide">
+                <Setter Property="BorderBrush" Value="#59E0B341"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Background" Value="#0DE0B341"/>
+                <Setter Property="Padding" Value="11,9"/>
+            </Style>
+            <Style Selector="TextBlock.collidehead">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11.5"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.collidebody">
+                <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="LineHeight" Value="16"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
+
+            <!-- One roster line. A pilot who is elsewhere reads dimmed with an amber tail — the same pairing the
+                 overview's member row uses, so the two screens say the same thing in the same way. -->
+            <Style Selector="Border.charopt">
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="9,6"/>
+            </Style>
+            <Style Selector="Border.charopt.busy">
+                <Setter Property="Opacity" Value="0.66"/>
+            </Style>
+            <Style Selector="TextBlock.charname">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11.5"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.charstate">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+            </Style>
+            <Style Selector="TextBlock.charstate.warn">
+                <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+            </Style>
+
+            <!-- The two-way pick, borrowed from the fleet overview so a button means the same thing in both. -->
+            <Style Selector="Button.pick">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="Padding" Value="9,4"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="MinHeight" Value="0"/>
+            </Style>
+            <Style Selector="Button.pick:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="Button.pick:disabled /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Opacity" Value="0.4"/>
+            </Style>
+            <Style Selector="Button.pick.on">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+        </DockPanel.Styles>
+
+        <!-- Header: the verb, and the fleet it applies to. -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,12">
+            <TextBlock Text="&#x25C6;" Classes="diamond"/>
+            <TextBlock Text="START FLEET" Classes="panel-title" VerticalAlignment="Center"/>
+            <Border Classes="chip dim">
+                <TextBlock x:Name="FleetNameChip" Text=""/>
+            </Border>
+        </StackPanel>
+
+        <!-- Footer: what the press will do about the collision, then back out / go through. -->
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,14,0,0">
+            <Border Grid.Column="0" Classes="chip warn" HorizontalAlignment="Left"
+                    x:Name="CollisionChip" IsVisible="False">
+                <TextBlock x:Name="CollisionChipText" Text=""/>
+            </Border>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button Content="Cancel" Click="OnCancel"/>
+                <Button Content="START FLEET &#x2192;" Click="OnConfirm" Classes="accent"/>
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="12">
+
+                <Border Classes="okline">
+                    <TextBlock Text="Starting links the members. From now on every linked character shares its location and its measurements with this fleet, and this is the fleet an activity points at when it asks who is with me. Standing by did none of that."/>
+                </Border>
+
+                <StackPanel Spacing="5">
+                    <TextBlock x:Name="MembersLabel" Text="MEMBERS" Classes="label" FontSize="9"/>
+                    <ItemsControl ItemsSource="{Binding Members, ElementName=Root}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="dlg:FleetStartMember">
+                                <Border Classes="charopt" Classes.busy="{Binding IsElsewhereActive}" Margin="0,0,0,5">
+                                    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*" ColumnSpacing="7">
+                                        <TextBlock Grid.Column="0" Classes="charname" Text="{Binding Name}"/>
+                                        <Border Grid.Column="1" Classes="chip ok" IsVisible="{Binding IsCommander}"><TextBlock Text="FC"/></Border>
+                                        <Border Grid.Column="2" Classes="chip dim" IsVisible="{Binding IsMine}"><TextBlock Text="yours"/></Border>
+                                        <Border Grid.Column="3" Classes="chip warn" IsVisible="{Binding IsElsewhereActive}"><TextBlock Text="ELSEWHERE ACTIVE"/></Border>
+                                        <TextBlock Grid.Column="4" Classes="charstate" Classes.warn="{Binding IsElsewhereActive}"
+                                                   Text="{Binding StateText}"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <!-- The collision. One line, one button, whatever the count — scherm 2, besluit 4. -->
+                <StackPanel Spacing="5" x:Name="CollisionBlock" IsVisible="False">
+                    <TextBlock Text="ACTIVE ELSEWHERE" Classes="label" FontSize="9"/>
+                    <Border Classes="collide">
+                        <StackPanel Spacing="6">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock x:Name="CollisionHead" Classes="collidehead" Text=""/>
+                                <Border Classes="chip dim" VerticalAlignment="Center">
+                                    <TextBlock x:Name="CollisionOfChip" Text=""/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Classes="collidebody"
+                                       Text="They are not linked and they stay on the roster. The rest of the fleet starts as usual — a collision never holds up the evening. Whoever switches later still joins in."/>
+                            <TextBlock x:Name="OwnAltsNote" Classes="hint" Margin="0" IsVisible="False" Text=""/>
+                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                <Button x:Name="AskButton" Classes="pick" Content="ask them all to switch" Click="OnAskThemAll"/>
+                                <Button x:Name="LeaveButton" Classes="pick on" Content="leave them" Click="OnLeaveThem"/>
+                            </StackPanel>
+                            <!-- A signpost, not a justification: where the per-member choice lives. Why the dialog
+                                 has no per-member choice of its own belongs in the PR, not on the screen. -->
+                            <TextBlock Classes="hint" Margin="0"
+                                       Text="To handle one of them on their own, use the member row in the overview or fleet management."/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <Border Classes="okline">
+                    <TextBlock x:Name="WillLinkText" Text=""/>
+                </Border>
+
+                <!-- Under-strength is a warning, never a gate: a pug or a roam is started short on purpose. -->
+                <Border Classes="collide" x:Name="UnderStrengthBlock" IsVisible="False">
+                    <StackPanel Spacing="4">
+                        <TextBlock Classes="collidehead" Text="The coupled doctrine's minimums are not all met."/>
+                        <TextBlock Classes="collidebody" Text="Starting anyway is fine — this is a note, not a gate."/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ESI-invite seam, kept from the old prompt: shown only when there is anyone it could apply to. -->
+                <StackPanel Spacing="4" x:Name="EsiBlock" IsVisible="False">
+                    <CheckBox x:Name="EsiInviteBox" Content="Invite members without an ESI link via in-game ESI"/>
+                    <TextBlock Classes="hint" Margin="0"
+                               Text="(Seam only — the in-game ESI invite is not wired up yet, so this option has no effect.)"/>
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</v:ChromedWindow>

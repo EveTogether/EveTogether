@@ -1,0 +1,153 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:sys="using:System"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="560" d:DesignHeight="560"
+        x:Class="EveUtils.Client.Views.SwitchFleetWindow"
+        x:Name="Root"
+        Width="560" SizeToContent="Height" MaxHeight="720"
+        WindowStartupLocation="CenterOwner"
+        Title="Switch fleet">
+
+    <!-- Styles on the content root, never on the window (ET-42): ModuleHostService lifts Content out to dock a
+         module and anything left on the window stays behind. -->
+    <DockPanel Margin="16">
+        <DockPanel.Resources>
+            <!-- The theme has no warn brush of its own; this is the ink Border.chip.warn uses, and the same value
+                 the fleet overview declares, so the collision reads amber in exactly one shade across screens. -->
+            <SolidColorBrush x:Key="WarnBrush" Color="#FFE0B341"/>
+        </DockPanel.Resources>
+        <DockPanel.Styles>
+            <Style Selector="TextBlock.kvlabel">
+                <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="LetterSpacing" Value="1.8"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.kvvalue">
+                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+                <Setter Property="FontSize" Value="11.5"/>
+                <Setter Property="HorizontalAlignment" Value="Right"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Border.okline">
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Background" Value="#05FFFFFF"/>
+                <Setter Property="Padding" Value="11,8"/>
+            </Style>
+            <Style Selector="Border.okline TextBlock">
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="LineHeight" Value="16"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.step">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="FontWeight" Value="Medium"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
+            <Style Selector="Border.collide">
+                <Setter Property="BorderBrush" Value="#59E0B341"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Background" Value="#0DE0B341"/>
+                <Setter Property="Padding" Value="11,9"/>
+            </Style>
+            <Style Selector="Border.collide TextBlock.head">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11.5"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
+            <Style Selector="Border.collide TextBlock.body">
+                <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="LineHeight" Value="16"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
+        </DockPanel.Styles>
+
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,12">
+            <TextBlock Text="&#x25C6;" Classes="diamond"/>
+            <TextBlock Text="SWITCH FLEET" Classes="panel-title" VerticalAlignment="Center"/>
+            <Border Classes="chip dim">
+                <TextBlock x:Name="CharacterChip" Text=""/>
+            </Border>
+        </StackPanel>
+
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,14,0,0">
+            <Border Grid.Column="0" Classes="chip dim" HorizontalAlignment="Left">
+                <TextBlock x:Name="FootChipText" Text=""/>
+            </Border>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button Content="Cancel" Click="OnCancel"/>
+                <Button Content="SWITCH &#x2192;" Click="OnConfirm" Classes="accent"/>
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="12">
+
+                <!-- Where this pilot counts now, and where they will count after. Two lines, because that is the
+                     whole of what a switch changes. -->
+                <StackPanel Spacing="4">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <TextBlock Grid.Column="0" Text="NOW" Classes="kvlabel"/>
+                        <TextBlock Grid.Column="1" x:Name="NowValue" Text="" Classes="kvvalue"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,*">
+                        <TextBlock Grid.Column="0" Text="NEXT" Classes="kvlabel"/>
+                        <TextBlock Grid.Column="1" x:Name="NextValue" Text="" Classes="kvvalue"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,*" x:Name="RunsRow" IsVisible="False">
+                        <TextBlock Grid.Column="0" Text="RUNS" Classes="kvlabel"/>
+                        <TextBlock Grid.Column="1" x:Name="RunsValue" Text="" Classes="kvvalue"
+                                   Foreground="{DynamicResource AccentBrightBrush}"/>
+                    </Grid>
+                </StackPanel>
+
+                <StackPanel Spacing="5">
+                    <TextBlock Text="WHAT HAPPENS" Classes="label" FontSize="9"/>
+                    <Border Classes="okline">
+                        <StackPanel Spacing="3">
+                            <TextBlock x:Name="StepOneHead" Classes="step" Text=""/>
+                            <TextBlock x:Name="StepOneBody" Text=""/>
+                        </StackPanel>
+                    </Border>
+                    <Border Classes="okline">
+                        <StackPanel Spacing="3">
+                            <TextBlock x:Name="StepTwoHead" Classes="step" Text=""/>
+                            <TextBlock Text="From that moment this character shares its location and its measurements there, and an activity you start points at that fleet."/>
+                        </StackPanel>
+                    </Border>
+                    <!-- Only when something is actually running: with no run going this step is a reassurance
+                         about nothing, and it pushes the two that matter up the screen. -->
+                    <Border Classes="okline" x:Name="StepThree" IsVisible="False">
+                        <StackPanel Spacing="3">
+                            <TextBlock Classes="step" Text="3 · Your run keeps going."/>
+                            <TextBlock Text="It keeps the fleet group it was given at the start and is saved as usual — switching only touches what begins after it."/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Only shown when something is actually running, so a switch is never taken on trust. -->
+                <StackPanel Spacing="5" x:Name="RunsBlock" IsVisible="False">
+                    <TextBlock x:Name="RunsBlockLabel" Text="" Classes="label" FontSize="9"/>
+                    <Border Classes="okline">
+                        <ItemsControl ItemsSource="{Binding RunsInProgress, ElementName=Root}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="sys:String">
+                                    <TextBlock Text="{Binding}" FontSize="11.5" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextBrightBrush}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Border>
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</v:ChromedWindow>
