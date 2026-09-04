@@ -29,6 +29,13 @@ public sealed class ServerApiOptions
     /// practice. Empty means the headers are ignored, because anyone may send them.
     /// </summary>
     public string[] KnownProxies { get; set; } = [];
+
+    /// <summary>
+    /// How often an open realtime connection re-checks its key. There is no revocation event to wait for, so this
+    /// is the longest a withdrawn key can keep a socket. A knob because a test has to shorten it, not because an
+    /// operator is expected to move it.
+    /// </summary>
+    public TimeSpan RealtimeKeyRecheck { get; set; } = TimeSpan.FromSeconds(30);
 }
 
 /// <summary>
@@ -62,6 +69,7 @@ public static class ServerApiHardening
         builder.Logging.AddFilter(HostingDiagnostics, LogLevel.Warning);
 
         IServiceCollection services = builder.Services;
+        services.AddSingleton(options); // the same instance the host binds, so the hub cannot read a second one
         services.AddRateLimiter(limiter =>
         {
             limiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;

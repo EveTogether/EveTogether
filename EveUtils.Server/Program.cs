@@ -132,7 +132,7 @@ builder.Services.AddAuthorization(options =>
 });
 builder.Services.AddServerApiDocs();                                    // OpenAPI document + Scalar reference
 ServerApiOptions serverApi = builder.AddServerApiHardening();           // per-key limit, CORS valve (shut), proxies
-builder.Services.AddSignalR();                                          // DPS stream hub
+builder.Services.AddSignalR();                                          // DPS stream hub + the API's realtime channel
 builder.Services.AddHostedService<DpsBroadcastBridge>();                // server bus → SignalR bridge
 builder.Services.AddHostedService<ServerTokenRefreshService>();         // token refresh
 builder.Services.AddHostedService<ServerSessionCleanupService>();       // purge expired sessions

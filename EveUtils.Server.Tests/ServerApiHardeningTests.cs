@@ -194,6 +194,7 @@ public class ServerApiHardeningTests
         builder.Services.AddAuthorization(options =>
             options.AddPolicy(ApiKeyAuthentication.Policy, ApiKeyAuthentication.BuildPolicy()));
         builder.Services.AddServerApiDocs();
+        builder.Services.AddSignalR(); // the API maps a hub, so a host that maps the API has to carry SignalR
         // Read from configuration rather than handed an object: the allowlist and the limit are settings, so the
         // binding is part of what has to work.
         ServerApiOptions hardening = builder.AddServerApiHardening();
