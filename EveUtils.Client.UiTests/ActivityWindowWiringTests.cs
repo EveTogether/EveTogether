@@ -11,6 +11,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
@@ -298,6 +299,47 @@ public class ActivityWindowWiringTests
         Assert.Equal(StoredRunState.Stopped, left.State);
         Assert.Null(left.DeletedAtUtc);
         window.Close();
+    }
+
+    /// <summary>
+    /// The other half of Raymond's 2026-09-04 report, and the older half: a run outlives its window, but it also
+    /// outlives the whole process. Quit with one going and the row stays Running with nobody left to stop it, so the
+    /// next window adopts it — he opened the app and was handed a run that had started the previous morning.
+    ///
+    /// The counter-proof is the middle of this test rather than a note under it: the window in between takes the run
+    /// over, exactly as his did. Only after the startup sweep has run does a fresh window come up on nothing.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ARunLeftRunningByAPreviousProcess_IsNotAdoptedOnceStartupHasSweptIt()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel first = await harness.OpenAsync();
+        first.SignatureId = "RUS-326";
+        first.SignatureName = "Sansha Hideaway";
+        await first.StartRunCommand.ExecuteAsync(null);
+        Guid open = first.RunId!.Value;
+        first.Dispose();   // the process goes away with the run still on the clock
+
+        // Counter-proof: this is what he got. Without the sweep the next window takes that run over.
+        ActivityWindowViewModel adopting = await harness.OpenAsync();
+        Assert.Equal(open, adopting.RunId);
+        adopting.Dispose();
+
+        // What startup does now, before any window exists.
+        Result<int> stopped = await harness.Services.GetRequiredService<IDispatcher>()
+            .Send(new StopRunsLeftRunningCommand(DateTime.UtcNow), TestContext.Current.CancellationToken);
+        Assert.Equal(1, stopped.Value);
+
+        ActivityWindowViewModel fresh = await harness.OpenAsync();
+        Assert.Null(fresh.RunId);
+        Assert.Equal(ActivityRunState.NotStarted, fresh.RunState);
+
+        // Stopped, never saved and never discarded: what becomes of it stays the pilot's call.
+        Run left = await _RunAsync(harness, open);
+        Assert.Equal(StoredRunState.Stopped, left.State);
+        Assert.Null(left.SavedAtUtc);
+        Assert.Null(left.DeletedAtUtc);
+        fresh.Dispose();
     }
 
     /// <summary>

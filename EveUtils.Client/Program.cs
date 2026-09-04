@@ -1,6 +1,9 @@
 using System;
 using System.Linq;
 using System.Threading;
+using EveUtils.Shared.Cqrs;
+using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Fittings.Repositories;
 using Avalonia;
 using EveUtils.Client.Composition;
@@ -42,6 +45,18 @@ sealed class Program
         {
             using var db = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContext();
             db.Database.Migrate();
+        }
+
+        // A run left on the clock by a previous process is ended here, before any window exists to adopt it. Raymond
+        // opened the app on 2026-09-04 and was handed a run that had started the previous morning — ELAPSED 1467:38 —
+        // because quitting with a run going leaves the row Running and nothing afterwards disagrees. Awaited rather
+        // than fired off: the window it protects can open the moment the shell does.
+        using (var scope = Services.CreateScope())
+        {
+            Result<int> stopped = scope.ServiceProvider.GetRequiredService<IDispatcher>()
+                .Send(new StopRunsLeftRunningCommand(DateTime.UtcNow)).GetAwaiter().GetResult();
+            if (stopped.IsSuccess && stopped.Value > 0)
+                Console.Error.WriteLine($"[startup] stopped {stopped.Value} run(s) left running by a previous session");
         }
 
         // Start background services (token refresh, ESI cache purge) — the client has no IHost so we start manually.
