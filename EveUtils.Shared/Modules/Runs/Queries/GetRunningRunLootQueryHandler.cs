@@ -29,10 +29,6 @@ internal sealed class GetRunningRunLootQueryHandler(IDbContextFactory<ClientDbCo
             .OrderBy(capture => capture.CapturedAtUtc)
             .ToListAsync(cancellationToken);
 
-        return Result<RunLootOverview>.Success(new RunLootOverview(run.Id, [.. captures.Select(_ToDto)]));
+        return Result<RunLootOverview>.Success(new RunLootOverview(run.Id, [.. captures.Select(RunLootCaptureMapper.ToDto)]));
     }
-
-    private static RunLootCaptureDto _ToDto(RunLootCapture capture) => new(
-        capture.Id, capture.CapturedAtUtc, capture.IsExcluded, capture.ContentHash,
-        [.. capture.Entries.Select(entry => new RunLootEntryDto(entry.ItemTypeId, entry.Name, entry.Quantity, entry.ClipboardPrice, entry.LootKind))]);
 }
