@@ -33,6 +33,13 @@ public sealed partial class RunLootViewModel : ViewModelBase
 
     public ObservableCollection<RunLootCaptureRowViewModel> Captures { get; } = [];
 
+    /// <summary>The run whose loot this section shows — set by the window that owns it, which has known the id all
+    /// along. This used to ask "which run is running" instead, so the section read the store's guess rather than
+    /// its own run: with eleven runs stopped and never saved that guess is ambiguous forever and the section stayed
+    /// empty behind "11 runs are running" (Raymond, 2026-09-04). Null is a window with no run yet, which is a
+    /// state to say out loud rather than a question to ask the store (ET-65 AC-7).</summary>
+    public Guid? RunId { get; set; }
+
     /// <summary>Null when at least one priced entry is included — never 0 for "no priced loot" (ET-65 AC-5).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TotalIskDisplay))]
@@ -77,7 +84,15 @@ public sealed partial class RunLootViewModel : ViewModelBase
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
-        Result<RunLootOverview> overview = await _dispatcher.Query(new GetRunningRunLootQuery(), cancellationToken);
+        if (RunId is not { } runId)
+        {
+            Captures.Clear();
+            RunStatusMessage = "No run yet, so there is no loot to show.";
+            _Recompute();
+            return;
+        }
+
+        Result<RunLootOverview> overview = await _dispatcher.Query(new GetRunLootQuery(runId), cancellationToken);
         Captures.Clear();
         if (!overview.IsSuccess)
         {

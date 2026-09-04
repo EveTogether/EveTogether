@@ -221,6 +221,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(IsSaveButtonVisible))]
     private Guid? _runId;
 
+    /// <summary>The LOOT section reads the run this window is on, so the id travels here rather than at each of the
+    /// six places that refresh it — one of which would have been forgotten.</summary>
+    partial void OnRunIdChanged(Guid? value)
+    {
+        if (RunLoot is not null)
+            RunLoot.RunId = value;
+    }
+
     /// <summary>The fleet this run belongs to, or null when the window was never told of one.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsFleetShown))]
