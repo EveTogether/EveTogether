@@ -45,7 +45,7 @@ Configure via **environment variables**. Nested keys use a double underscore (`_
 | `Server__DataDirectory` | no | Data directory, used only when `EVEUTILS_SERVER_DATA_DIR` is unset. |
 | `Server__AcceptNewIdentity` | no | `true` accepts a regenerated token-protector key — see [§7](#7-data-backups--upgrading). Never leave it on. |
 | `ServerApi__AllowedOrigins__0`, `__1`, … | no | Browser origins allowed to call the REST API. Empty (the default) sends no CORS headers at all — see [§8](#8-the-read-only-rest-api). |
-| `ServerApi__RateLimitPerMinute` | no | Requests per minute allowed to one API key (default `120`). |
+| `ServerApi__RateLimitPerMinute` | no | Requests per minute allowed to one API key, and to all keyless callers together (default `120`). |
 | `ServerApi__KnownProxies__0`, … | no | Addresses whose `X-Forwarded-*` headers may be believed. Empty (the default) ignores them. |
 
 ### Data directory
@@ -191,8 +191,10 @@ outside your control. Prefer the header wherever you can set one.
 ### Rate limiting
 
 Each key gets `ServerApi__RateLimitPerMinute` requests per minute (default `120`) and is counted on its own —
-one consumer running hot cannot slow another down. Over the limit answers `429` with a `Retry-After`.
-`/health` is never limited.
+one consumer running hot cannot slow another down. Callers arriving **without** a key share a single allowance
+of the same size between them; they only ever get `401` anyway, and leaving them uncounted would make the
+keyless path the one unlimited way in. Over the limit answers `429` with a `Retry-After`. `/health` and CORS
+preflight requests are never limited.
 
 ### CORS — off unless you turn it on
 

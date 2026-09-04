@@ -20,7 +20,8 @@ public sealed class ServerApiOptions
     /// </summary>
     public string[] AllowedOrigins { get; set; } = [];
 
-    /// <summary>Requests per minute allowed to one key.</summary>
+    /// <summary>Requests per minute allowed to one key — and, as one shared allowance, to everyone arriving
+    /// without one. A second knob for the keyless bucket can come the day a legitimate caller ends up in it.</summary>
     public int RateLimitPerMinute { get; set; } = 120;
 
     /// <summary>
@@ -45,6 +46,14 @@ public static class ServerApiHardening
     /// </summary>
     private const string HostingDiagnostics = "Microsoft.AspNetCore.Hosting.Diagnostics";
 
+    /// <summary>
+    /// The shared bucket for callers presenting nothing that parses as a key. Cannot collide with a real
+    /// partition: a prefix is lowercase hex, and this is not.
+    /// </summary>
+    // ponytail: a caller sending well-formed but wrong keys still gets a bucket per prefix, and that path does
+    // cost a database read — close it with a lookup-free check on the prefix's shape if it is ever abused.
+    private const string Keyless = "keyless";
+
     public static ServerApiOptions AddServerApiHardening(this WebApplicationBuilder builder)
     {
         ServerApiOptions options =
@@ -64,17 +73,17 @@ public static class ServerApiHardening
                 return ValueTask.CompletedTask;
             };
             limiter.AddPolicy(RateLimitPolicy, context =>
-                ApiKeyAuthentication.PresentedPrefix(context.Request) is { } prefix
-                    // On the key's public prefix, never on the address: the tunnel puts one address in front of
-                    // every consumer, so a limit per address is a limit on all of them at once.
-                    ? RateLimitPartition.GetFixedWindowLimiter(prefix, _ => new FixedWindowRateLimiterOptions
+                // On the key's public prefix, never on the address: the tunnel puts one address in front of every
+                // consumer, so a limit per address is a limit on all of them at once. Everyone arriving without a
+                // key shares one bucket instead — none of them is entitled to service, so sharing is the point,
+                // and leaving them unlimited would make the keyless path the only unbounded way in.
+                RateLimitPartition.GetFixedWindowLimiter(
+                    ApiKeyAuthentication.PresentedPrefix(context.Request) ?? Keyless,
+                    _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = options.RateLimitPerMinute,
                         Window = TimeSpan.FromMinutes(1)
-                    })
-                    // A caller with no key is refused by authorization without a database read, so there is
-                    // nothing here worth a bucket — and one shared bucket would be a limit per address after all.
-                    : RateLimitPartition.GetNoLimiter<string>("keyless"));
+                    }));
         });
 
         // Registered whatever the allowlist holds: with no origins the policy matches nothing and the middleware
@@ -98,8 +107,11 @@ public static class ServerApiHardening
         return options;
     }
 
-    /// <summary>Order matters: the real client address has to be in place before anything reads it, and a
-    /// preflight has to be answered before the auth it cannot carry a key through.</summary>
+    /// <summary>
+    /// Order is load-bearing. The real client address has to be in place before anything reads it, and CORS has to
+    /// come before the limiter: a preflight carries no key by definition, so behind the limiter it would land in
+    /// the keyless bucket and lock an allowlisted browser consumer out over traffic that is not its own.
+    /// </summary>
     public static void UseServerApiHardening(this IApplicationBuilder app, ServerApiOptions options)
     {
         if (options.KnownProxies.Length > 0)

@@ -54,6 +54,46 @@ public class ServerApiHardeningTests
         Assert.Equal(HttpStatusCode.OK, await host.StatusAsync("/api/v1/health", first));
     }
 
+    /// <summary>
+    /// The keyless path is the one anybody can take, so it may not be the one without a limit. All of them share
+    /// a single bucket — and the two things that must stay out of it are asserted from inside an exhausted one,
+    /// because that is the only state in which their exemption is worth anything.
+    /// </summary>
+    [Fact]
+    public async Task CallersWithoutAKey_ShareOneBucket_ThatCatchesNeitherHealthNorAPreflight()
+    {
+        await using Host host = await _StartAsync(new()
+        {
+            ["ServerApi:RateLimitPerMinute"] = "2",
+            ["ServerApi:AllowedOrigins:0"] = "https://widgets.example"
+        });
+
+        // Two different callers with nothing to identify them, so the third refusal can only come from a bucket
+        // they share — a bucket each, or none at all, would leave every one of these at 401.
+        HttpStatusCode[] keyless =
+        [
+            await host.StatusAsync(WhoAmI, key: null),
+            await host.StatusAsync(WhoAmI, key: "not-a-key"),
+            await host.StatusAsync(WhoAmI, key: null)
+        ];
+
+        Assert.Equal(
+            [HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized, HttpStatusCode.TooManyRequests], keyless);
+
+        // Ratified exception 4: /health is public and keyless, so it cannot be collateral of the keyless bucket.
+        Assert.Equal(HttpStatusCode.OK, await host.StatusAsync("/api/v1/health", key: null));
+
+        // A preflight carries no key by definition. If it fell in the bucket, an allowlisted browser consumer
+        // would be locked out by traffic that has nothing to do with it.
+        var preflight = new HttpRequestMessage(HttpMethod.Options, WhoAmI);
+        preflight.Headers.Add("Origin", "https://widgets.example");
+        preflight.Headers.Add("Access-Control-Request-Method", "GET");
+        using HttpResponseMessage answered = await host.Client.SendAsync(preflight, Ct);
+
+        Assert.NotEqual(HttpStatusCode.TooManyRequests, answered.StatusCode);
+        Assert.Contains("Access-Control-Allow-Origin", answered.Headers.Select(h => h.Key));
+    }
+
     // --- Expiry ---
 
     /// <summary>
@@ -205,7 +245,7 @@ public class ServerApiHardeningTests
             return Client.SendAsync(request, Ct);
         }
 
-        public async Task<HttpStatusCode> StatusAsync(string path, string key)
+        public async Task<HttpStatusCode> StatusAsync(string path, string? key)
         {
             using HttpResponseMessage response = await GetAsync(path, key);
             return response.StatusCode;
