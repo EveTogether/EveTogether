@@ -206,6 +206,38 @@ public sealed class RunLootViewModelTests
         Assert.Equal(100m, viewModel.TotalIsk);
     }
 
+    /// <summary>The number does what the clock used to: it tells two captures apart. It does it better on the case
+    /// the clock was worst at — a repeat reads "identical to #1" in one go, where two timestamps have to be compared
+    /// to each other. Numbering is the run's order and never the reading order's accident, so every later copy of
+    /// the same window points back at the first one and not at the copy before it.</summary>
+    [AvaloniaTheory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public async Task IdenticalCaptures_AreNumberedInOrder_AndEachPointsBackAtTheFirst(int copies)
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        Guid runId = await _StartRunAsync(dispatcher);
+        for (int copy = 0; copy < copies; copy++)
+            await _AddCaptureAsync(dispatcher, "SAME", typeId: 34);
+
+        var viewModel = new RunLootViewModel(dispatcher, new _Prices((34, 100))) { RunId = runId };
+        await viewModel.RefreshAsync(Token);
+
+        Assert.Equal(copies, viewModel.Captures.Count);
+        Assert.Equal("#1", viewModel.Captures[0].NumberDisplay);
+        Assert.Null(viewModel.Captures[0].RepeatOfDisplay);
+        foreach (RunLootCaptureRowViewModel repeat in viewModel.Captures.Skip(1))
+        {
+            Assert.Equal("not added · identical to #1", repeat.RepeatOfDisplay);
+            Assert.True(repeat.IsExcluded);
+            Assert.True(repeat.CanReinclude);   // the one exclusion with a way back: it may really have been looted twice
+        }
+
+        Assert.Equal($"#{copies}", viewModel.Captures[^1].NumberDisplay);
+        Assert.Equal(100m, viewModel.TotalIsk);   // the repeats add nothing, however many of them there are
+    }
+
     /// <summary>AC-7: a window with no run of its own is a state the reader is told about, not an unexplained empty
     /// list. The section no longer asks the store which run is running, so it no longer inherits that question's
     /// answer either — it says what it knows about itself.</summary>
