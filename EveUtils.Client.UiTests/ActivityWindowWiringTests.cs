@@ -1,7 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
+using EveUtils.Client.Esi;
+using EveUtils.Client.Notifications;
+using EveUtils.Client.Gamelog;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Runs;
@@ -829,6 +834,192 @@ public class ActivityWindowWiringTests
         Assert.Equal("Sansha Refuge", model.SignatureSiteText);
         Assert.True(model.HasSignature, "the window still reads no signature for a site the store already had");
         window.Close();
+    }
+
+    // ── The location watch starts and stops an abyssal run ──────────────────────────────────────────
+
+    private const int Aphend = 30002718;       // an ordinary high-sec system
+    private const int AbyssalRoom = 32000042;  // inside ADR01's range
+
+    private static readonly DateTime UndockedAt = new(2026, 9, 4, 21, 17, 33, DateTimeKind.Utc);
+
+    /// <summary>
+    /// An abyssal window standing by, for a pilot sitting in a named system the way one sits there before firing a
+    /// filament. Nothing here reaches into the window: readings go in at the seam the application reads ESI
+    /// through, and everything between that seam and the window is the real thing.
+    /// </summary>
+    private static async Task<ActivityWindowViewModel> _StandingByAbyssalAsync(ActivityWindowHarness harness)
+    {
+        var gamelog = harness.Services.GetRequiredService<GamelogClientService>();
+        gamelog.MapCharacter(ActivityWindowHarness.CharacterId, ActivityWindowHarness.CharacterName);
+        gamelog.SetLocation(ActivityWindowHarness.CharacterName, "Aphend", UndockedAt);
+        return await harness.OpenAsync(ActivityKind.Abyssal);
+    }
+
+    private static Task<ActivityWindowHarness> _WatchedHarnessAsync(ScriptedLocationWatch watch) =>
+        ActivityWindowHarness.CreateAsync(configure: services => services.AddSingleton<IEsiLocationMonitor>(watch));
+
+    /// <summary>
+    /// Going in presses START on a run that was already standing by, at the last moment ESI could prove the pilot
+    /// was OUTSIDE. Anchoring on the crossing instead would show time the pilot does not have: entry is written
+    /// nowhere and the watch only looks every few seconds, so the sighting is the floor and the crossing is not.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task GoingIntoTheAbyss_StartsTheStandingByRun_AtTheLastSightingOutside()
+    {
+        var watch = new ScriptedLocationWatch();
+        using ActivityWindowHarness harness = await _WatchedHarnessAsync(watch);
+        ActivityWindowViewModel window = await _StandingByAbyssalAsync(harness);
+        Assert.Equal(ActivityRunState.NotStarted, window.RunState);
+
+        watch.Report(Aphend, UndockedAt);
+        watch.Report(AbyssalRoom, UndockedAt.AddSeconds(6));
+        window.Refresh(UndockedAt.AddSeconds(6));
+
+        Assert.Equal(ActivityRunState.Running, window.RunState);
+        // The sighting, six seconds before the crossing was noticed — not the crossing.
+        Assert.Equal(UndockedAt, window.AnchorUtc);
+        await window.LastAbyssalEntry;
+        Assert.Equal(UndockedAt, (await _RunAsync(harness, window.RunId!.Value)).StartedAtUtc);
+    }
+
+    /// <summary>
+    /// Coming out presses STOP, and STOP is the pause it is everywhere else in this window: the row stays open, so
+    /// loot copied out of the wreck afterwards still lands on it. Saving is the pilot's, and nothing here does it.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ComingOutOfTheAbyss_StopsTheRun_ButDoesNotSaveIt()
+    {
+        var watch = new ScriptedLocationWatch();
+        using ActivityWindowHarness harness = await _WatchedHarnessAsync(watch);
+        ActivityWindowViewModel window = await _StandingByAbyssalAsync(harness);
+        watch.Report(Aphend, UndockedAt);
+        watch.Report(AbyssalRoom, UndockedAt.AddSeconds(6));
+        window.Refresh(UndockedAt.AddSeconds(6));
+        await window.LastAbyssalEntry;
+        Guid runId = window.RunId!.Value;
+
+        watch.Report(Aphend, UndockedAt.AddMinutes(14));
+        window.Refresh(UndockedAt.AddMinutes(14));
+
+        Assert.Equal(ActivityRunState.Stopped, window.RunState);
+        Assert.Equal(runId, window.RunId);
+
+        // The stop reaches the row on a task the window does not await, so the read waits for it rather than racing.
+        Run stored = await _RunAsync(harness, runId);
+        for (var attempt = 0; attempt < 40 && stored.State == StoredRunState.Running; attempt++)
+        {
+            await Task.Delay(25);
+            stored = await _RunAsync(harness, runId);
+        }
+
+        Assert.Equal(StoredRunState.Stopped, stored.State);
+        Assert.Null(stored.DeletedAtUtc);
+    }
+
+    /// <summary>
+    /// No sighting from outside, no automatic start — which is the app coming up while the pilot is already inside,
+    /// and equally a pilot whose location cannot be read at all. Both leave the run standing by rather than
+    /// inventing a start on a twenty-minute limit, and manual START is still the way in: registering an abyssal may
+    /// never depend on the watch working.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task WithoutASightingOutside_NothingStartsByItself_AndStartStillDoes()
+    {
+        var watch = new ScriptedLocationWatch();
+        using ActivityWindowHarness harness = await _WatchedHarnessAsync(watch);
+        ActivityWindowViewModel window = await _StandingByAbyssalAsync(harness);
+
+        watch.Report(AbyssalRoom, UndockedAt);
+        watch.Report(AbyssalRoom, UndockedAt.AddSeconds(6));
+        window.Refresh(UndockedAt.AddSeconds(6));
+
+        Assert.Equal(ActivityRunState.NotStarted, window.RunState);
+        Assert.Null(window.RunId);
+        Assert.True(window.IsStartButtonVisible, "the automatic way in took the manual one with it");
+
+        await window.StartRunCommand.ExecuteAsync(null);
+
+        Assert.Equal(ActivityRunState.Running, window.RunState);
+        Assert.NotNull(window.RunId);
+    }
+
+    /// <summary>
+    /// Nobody pressed this start, so a store that refuses it has to be said out loud. The window sets its own state
+    /// before the write, so without the rollback it would be left on a running clock with no run behind it — a
+    /// pilot already in a pocket, with every reason to believe the run is being recorded and nothing recording it.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AnAutomaticStartThatFails_PutsTheRunBackToStandingBy_AndSaysSo()
+    {
+        var watch = new ScriptedLocationWatch();
+        var toasts = new RecordingToastService();
+        using ActivityWindowHarness harness = await ActivityWindowHarness.CreateAsync(configure: services =>
+        {
+            services.AddSingleton<IEsiLocationMonitor>(watch);
+            services.AddSingleton<IToastService>(toasts);
+            _RefuseStartRunCommands(services);
+        });
+        ActivityWindowViewModel window = await _StandingByAbyssalAsync(harness);
+
+        watch.Report(Aphend, UndockedAt);
+        watch.Report(AbyssalRoom, UndockedAt.AddSeconds(6));
+        window.Refresh(UndockedAt.AddSeconds(6));
+        await window.LastAbyssalEntry;
+
+        Assert.Equal(ActivityRunState.NotStarted, window.RunState);
+        Assert.Null(window.AnchorUtc);
+        Assert.Null(window.RunId);
+        Assert.True(window.IsStartButtonVisible, "the clock was left running on a run that was never stored");
+        Assert.Contains(toasts.Toasts, toast => toast.Title == "Run not started");
+    }
+
+    /// <summary>Wraps the dispatcher the application composed rather than standing in for it, so everything except
+    /// the one refused command is still the real path.</summary>
+    private static void _RefuseStartRunCommands(IServiceCollection services)
+    {
+        ServiceDescriptor composed = services.Last(service => service.ServiceType == typeof(IDispatcher));
+        services.AddScoped<IDispatcher>(provider =>
+            new RefusesToStartRuns((IDispatcher)composed.ImplementationFactory!(provider)));
+    }
+
+    /// <summary>A locked database is the refusal that actually happens, and it arrives as a throw rather than a
+    /// failed <c>Result</c> — which is what makes it the case a swallowed task would hide.</summary>
+    private sealed class RefusesToStartRuns(IDispatcher inner) : IDispatcher
+    {
+        public Task<TResult> Query<TResult>(IQuery<TResult> query, CancellationToken cancellationToken = default) =>
+            inner.Query(query, cancellationToken);
+
+        public Task Send(ICommand command, CancellationToken cancellationToken = default) =>
+            inner.Send(command, cancellationToken);
+
+        public Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken cancellationToken = default) =>
+            command is RunCommands.StartRunCommand
+                ? throw new InvalidOperationException("database is locked")
+                : inner.Send(command, cancellationToken);
+    }
+
+    /// <summary>The one seam the application reads ESI locations through (<see cref="IEsiLocationMonitor"/>), with
+    /// the polling replaced by readings a test hands over — everything downstream of it is the real thing.</summary>
+    private sealed class ScriptedLocationWatch : IEsiLocationMonitor
+    {
+        private readonly Dictionary<int, Action<EsiLocationReading>> _readers = [];
+
+        public void Watch(int characterId, string characterName, Action<EsiLocationReading> onReading) =>
+            _readers.TryAdd(characterId, onReading);
+
+        public void UiReady() { }
+
+        public void Stop(int characterId) => _readers.Remove(characterId);
+
+        public bool IsWatching(int characterId) => _readers.ContainsKey(characterId);
+
+        /// <summary>One poll's answer, delivered the way the real watch delivers it.</summary>
+        public void Report(int solarSystemId, DateTime atUtc)
+        {
+            foreach (var reader in _readers.Values)
+                reader(new EsiLocationReading(solarSystemId, atUtc));
+        }
     }
 
     // ── The gamelog reaches the window ──────────────────────────────────────────────────────────────

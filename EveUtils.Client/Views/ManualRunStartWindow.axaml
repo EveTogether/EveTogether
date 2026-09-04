@@ -35,7 +35,9 @@
                       HorizontalAlignment="Stretch"/>
         </StackPanel>
 
-        <StackPanel Spacing="3">
+        <!-- Only a site is named by the catalogue. An abyssal pocket is not in it at all, so the field is gone
+             rather than left empty: a required field that can never be filled is what kept START grey. -->
+        <StackPanel Spacing="3" IsVisible="{Binding NeedsSite}">
             <TextBlock Classes="label" Text="SITE"/>
             <TextBox PlaceholderText="Search the site catalogue…" Text="{Binding SiteQuery}"/>
             <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" MaxHeight="160"
@@ -53,10 +55,11 @@
                        Foreground="{DynamicResource TextAccentBrush}"/>
         </StackPanel>
 
-        <StackPanel Spacing="3">
+        <StackPanel Spacing="3" IsVisible="{Binding CanBackdate}">
             <!-- No STARTTIME field on purpose: starting now means the starttime is now. BACKDATE is the one
                  exception, for a run typed in after the fact (ET-163) — so the toggle sits with the two time
-                 fields it governs rather than on its own. -->
+                 fields it governs rather than on its own. Absent for an abyssal: that run is handed over standing
+                 by, so there is no start time here for an earlier moment to move. -->
             <TextBlock Classes="label" Text="BACKDATE"/>
             <ToggleButton Content="Earlier moment" IsChecked="{Binding IsBackdated}" HorizontalAlignment="Left"/>
             <!-- Under the toggle, not beside it: the two pickers together are wider than the dialog, so a single
@@ -74,7 +77,7 @@
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,4,0,0">
             <Button Content="Cancel" Click="OnClose"/>
-            <Button Content="START RUN" Classes="accent" Command="{Binding StartCommand}"/>
+            <Button Content="{Binding StartButtonText}" Classes="accent" Command="{Binding StartCommand}"/>
         </StackPanel>
 
     </StackPanel>

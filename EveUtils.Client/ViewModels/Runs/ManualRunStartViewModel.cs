@@ -18,10 +18,13 @@ using EveUtils.Shared.Modules.Sde.Dtos;
 namespace EveUtils.Client.ViewModels.Runs;
 
 /// <summary>
-/// The manual entry to a run (ET-163): character, activity kind and a site picked from the SDE catalogue, started
-/// through the same <see cref="StartRunCommand"/> the clipboard/signature flow in ActivityWindowViewModel uses —
-/// this is the second production caller, not a second run type. The mission path is deliberately absent: its three
-/// autocompletes need SDE data that is not imported yet (ET-129).
+/// The manual entry to a run (ET-163): character, activity kind and — for a site — one picked from the SDE
+/// catalogue, started through the same <see cref="StartRunCommand"/> the clipboard/signature flow in
+/// ActivityWindowViewModel uses; this is the second production caller, not a second run type. The mission path is
+/// deliberately absent: its three autocompletes need SDE data that is not imported yet (ET-129).
+///
+/// An abyssal asks for neither: a pocket is not in the site catalogue, so requiring one left START grey for good,
+/// and the run it prepares does not begin running here — see <see cref="_PrepareAbyssalRun"/>.
 ///
 /// There is no STARTTIME field. Starting now means the starttime is now; BACKDATE is the one exception, for a run
 /// typed in after the fact.
@@ -60,7 +63,35 @@ public partial class ManualRunStartViewModel : ViewModelBase
 
     public IReadOnlyList<ActivityKind> ActivityKinds { get; } = [ActivityKind.Site, ActivityKind.Abyssal];
 
-    [ObservableProperty] private ActivityKind _selectedActivityKind;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    [NotifyPropertyChangedFor(nameof(IsAbyssal))]
+    [NotifyPropertyChangedFor(nameof(NeedsSite))]
+    [NotifyPropertyChangedFor(nameof(CanBackdate))]
+    [NotifyPropertyChangedFor(nameof(StartButtonText))]
+    private ActivityKind _selectedActivityKind;
+
+    public bool IsAbyssal => SelectedActivityKind is ActivityKind.Abyssal;
+
+    /// <summary>Whether this kind is named by a site from the catalogue. Only a site is: an abyssal pocket is not in
+    /// the catalogue at all, and a mission is named by its agent.</summary>
+    public bool NeedsSite => SelectedActivityKind is ActivityKind.Site;
+
+    /// <summary>An abyssal run is not given a start time here — <see cref="_PrepareAbyssalRun"/> hands over a run
+    /// that is not on the clock yet, so there is nothing for an earlier moment to move.</summary>
+    public bool CanBackdate => !IsAbyssal;
+
+    /// <summary>An abyssal starts no clock from this dialog, and a button that says otherwise is the whole reason
+    /// this screen was misread.</summary>
+    public string StartButtonText => IsAbyssal ? "PREPARE RUN" : "START RUN";
+
+    // A half-filled site behind a field that is no longer on screen is how a hidden choice comes back later: the
+    // kind decides what is asked, so changing it drops the answer to the question that is gone.
+    partial void OnSelectedActivityKindChanged(ActivityKind value)
+    {
+        SiteQuery = string.Empty;
+        SelectedSite = null;
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SiteResults))]
@@ -89,17 +120,28 @@ public partial class ManualRunStartViewModel : ViewModelBase
 
     [ObservableProperty] private bool _statusIsError;
 
-    public bool Started { get; private set; }
+    /// <summary>The dialog did what it was opened to do and the activity window has the run. Not "a clock is
+    /// running": an abyssal is handed over standing by, which is the whole point of <see cref="_PrepareAbyssalRun"/>.</summary>
+    public bool Completed { get; private set; }
 
     /// <summary>Raised once the run exists — the dialog's cue to go, the same signal SdeProgress uses.</summary>
     public event Action? CloseRequested;
 
-    private bool CanStart => SelectedCharacter is not null && SelectedSite is not null;
+    private bool CanStart => SelectedCharacter is not null && (!NeedsSite || SelectedSite is not null);
 
     [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (SelectedCharacter is not { EsiCharacterId: { } characterId } || SelectedSite is not { } site)
+        if (SelectedCharacter is not { EsiCharacterId: { } characterId, Name: { } characterName })
+            return;
+
+        if (IsAbyssal)
+        {
+            _PrepareAbyssalRun(characterId, characterName);
+            return;
+        }
+
+        if (SelectedSite is not { } site)
             return;
 
         // "Earlier moment" types a past moment; without it the starttime is simply now. Either way this is the
@@ -126,7 +168,7 @@ public partial class ManualRunStartViewModel : ViewModelBase
             return;
         }
 
-        Started = true;
+        Completed = true;
         StatusIsError = false;
 
         // The dialog goes first: the activity window must not come up behind a modal that is still standing. What
@@ -134,5 +176,22 @@ public partial class ManualRunStartViewModel : ViewModelBase
         // route the runs overview takes to a running lane, rather than a second one invented here.
         CloseRequested?.Invoke();
         _dialogs.ShowActivityWindow(_runWindowFor(SelectedActivityKind));
+    }
+
+    /// <summary>
+    /// Hand over an abyssal run standing by: no <see cref="StartRunCommand"/>, so no row, no start time, no clock.
+    /// You fire the filament long after setting the run up, and a clock started here would have spent minutes of a
+    /// twenty-minute limit while still docked. START or the location watch is what sets it going.
+    /// </summary>
+    private void _PrepareAbyssalRun(int characterId, string characterName)
+    {
+        Completed = true;
+        StatusIsError = false;
+
+        ActivityWindowViewModel window = _runWindowFor(ActivityKind.Abyssal);
+        // The pilot travels with it, so the window does not ask again for what this dialog already settled.
+        window.UseCharacter(characterId, characterName);
+        CloseRequested?.Invoke();
+        _dialogs.ShowActivityWindow(window);
     }
 }
