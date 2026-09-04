@@ -7,6 +7,7 @@ using EveUtils.Client.Clipboard;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Runs;
 using EveUtils.Shared.Modules.Sde.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -192,7 +193,7 @@ public sealed class ClipboardSignatureOfferTests
         env.Copy("AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU");
 
         var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
-        Assert.Equal(EveUtils.Client.ViewModels.Activity.ActivityKind.Site, opened.Kind);
+        Assert.Equal(ActivityKind.Site, opened.Kind);
         Assert.Equal("Combat Site", opened.SignatureGroup);
         Assert.Equal("Haunted Yard", opened.SignatureName);
         Assert.Equal(RunWindowOpenTrigger.CopiedSignature,

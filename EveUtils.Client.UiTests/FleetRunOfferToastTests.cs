@@ -17,10 +17,10 @@ using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Settings.Commands;
+using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using IDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
-using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 
 namespace EveUtils.Client.UiTests;
 
@@ -227,7 +227,7 @@ public sealed class FleetRunOfferToastTests
         {
             await _CommanderStartsAsync(bus);
             await bus.PublishAsync(new FleetRunDiscardedEvent(
-                new RunGroupDiscard(FleetId, StoredActivityKind.Site, GroupCode, DateTime.UtcNow)));
+                new RunGroupDiscard(FleetId, ActivityKind.Site, GroupCode, DateTime.UtcNow)));
 
             _Accept(toasts);
 
@@ -405,7 +405,7 @@ public sealed class FleetRunOfferToastTests
             if (row == "member-stop")
             {
                 await bus.PublishAsync(new FleetRunStoppedEvent(
-                    new RunGroupStop(FleetId, StoredActivityKind.Site, GroupCode, endedAt)));
+                    new RunGroupStop(FleetId, ActivityKind.Site, GroupCode, endedAt)));
                 await _SettleAsync(() => window.RunState == ActivityRunState.Stopped);
 
                 Assert.Equal(ActivityRunState.Stopped, window.RunState);
@@ -414,7 +414,7 @@ public sealed class FleetRunOfferToastTests
             }
 
             await bus.PublishAsync(new FleetRunDiscardedEvent(
-                new RunGroupDiscard(FleetId, StoredActivityKind.Site, GroupCode, endedAt)));
+                new RunGroupDiscard(FleetId, ActivityKind.Site, GroupCode, endedAt)));
             await _SettleAsync(() => window.GroupCode is null);
 
             // A member is the one this happened to, not the one who did it: the window stays and reads back what
@@ -428,7 +428,7 @@ public sealed class FleetRunOfferToastTests
     // ── Harness ─────────────────────────────────────────────────────────────────────────────────────
 
     private static RunGroupCodeStart _Start(bool isFleetCommander = true, DateTime? startedAt = null) => new(
-        FleetId, StoredActivityKind.Site, GroupCode, startedAt ?? DateTime.UtcNow, isFleetCommander,
+        FleetId, ActivityKind.Site, GroupCode, startedAt ?? DateTime.UtcNow, isFleetCommander,
         SiteName: "Blood Watch", SolarSystemName: "Osmon");
 
     private static async Task _CommanderStartsAsync(IEventBus bus)
@@ -448,7 +448,7 @@ public sealed class FleetRunOfferToastTests
     {
         using var scope = instance.Services.CreateScope();
         Assert.True((await scope.ServiceProvider.GetRequiredService<IDispatcher>().Send(new StartRunCommand(
-            CharacterId: 7, StoredActivityKind.Site, DateTime.UtcNow.AddMinutes(-5),
+            CharacterId: 7, ActivityKind.Site, DateTime.UtcNow.AddMinutes(-5),
             SiteTypeId: 0, SiteName: "Rogue Drone Asteroid Infestation", SolarSystemId: null,
             GroupCode: groupCode))).IsSuccess);
     }

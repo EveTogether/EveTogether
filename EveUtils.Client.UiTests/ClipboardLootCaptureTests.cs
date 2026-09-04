@@ -24,7 +24,7 @@ using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
 namespace EveUtils.Client.UiTests;
 
-public sealed class AbyssalLootCaptureTests
+public sealed class ClipboardLootCaptureTests
 {
     private const string Container = "Rifter\t1\t0,10 m3\t100,00 ISK\r\nDamage Control II\t2\t0,20 m3\t250,50 ISK";
     private const string SecondContainer = "Nanite Repair Paste\t5\t0,50 m3\t400,00 ISK\r\nEMP S\t100\t1,00 m3\t50,00 ISK";
@@ -461,7 +461,7 @@ public sealed class AbyssalLootCaptureTests
 
         private readonly TestClientInstance _instance;
         private readonly ClipboardWatchService _watch;
-        private readonly AbyssalLootCapture _capture;
+        private readonly ClipboardLootCapture _capture;
         private readonly FakeClipboardChangeSource _source;
 
         private Guid _runId;
@@ -474,12 +474,12 @@ public sealed class AbyssalLootCaptureTests
             _instance = instance;
             _watch = watch;
             _source = source;
-            _capture = new AbyssalLootCapture(watch, Toasts, sde, NullLogger<AbyssalLootCapture>.Instance, captureDispatcher);
+            _capture = new ClipboardLootCapture(watch, Toasts, sde, NullLogger<ClipboardLootCapture>.Instance, captureDispatcher);
         }
 
         private static CancellationToken Token => TestContext.Current.CancellationToken;
 
-        /// <param name="wrapDispatcher">Lets a test intercept the dispatcher calls <see cref="AbyssalLootCapture"/>
+        /// <param name="wrapDispatcher">Lets a test intercept the dispatcher calls <see cref="ClipboardLootCapture"/>
         /// itself makes (e.g. to fail a specific command), without touching the real one this Env's own helpers
         /// (StartRunAsync, CapturesAsync, ...) use.</param>
         /// <param name="prices">Overrides <see cref="UnitPrices"/> for a test that needs ET not to know a type.</param>

@@ -16,6 +16,7 @@ using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Transport;
+using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using FleetEntity = EveUtils.Shared.Modules.Fleet.Entities.Fleet;

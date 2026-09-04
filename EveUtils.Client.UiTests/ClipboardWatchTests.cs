@@ -97,8 +97,8 @@ public class ClipboardWatchTests
         Assert.Equal(0, dialogs.ClipboardReads);
 
         var delivered = new List<ClipboardCapture>();
-        var subscription = watch.Subscribe("Abyssal run loot", delivered.Add);
-        Assert.Equal(["Abyssal run loot"], watch.Consumers);
+        var subscription = watch.Subscribe("Run loot", delivered.Add);
+        Assert.Equal(["Run loot"], watch.Consumers);
 
         dialogs.ClipboardText = "correct horse battery staple";
         Copy(source);
@@ -297,7 +297,7 @@ public class ClipboardWatchTests
     /// <summary>
     /// A consumer subscribes in its constructor, and a singleton nobody asks for is never constructed — so a feature
     /// can be written, registered, tested and shipped without ever being subscribed. That is what happened to ET-65's
-    /// loot capture: <see cref="AbyssalLootCapture"/> was resolved nowhere but in its own tests, and every copy out of
+    /// loot capture: <see cref="ClipboardLootCapture"/> was resolved nowhere but in its own tests, and every copy out of
     /// a loot window went past it while the LOOT section said "no loot captured".
     ///
     /// Read off the constructors rather than from a list here, so the next consumer is covered without a second edit.

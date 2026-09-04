@@ -8,10 +8,10 @@ using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
+using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Settings.Entities;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.Extensions.DependencyInjection;
-using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 
 namespace EveUtils.Client.Runs;
 
@@ -156,10 +156,11 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
 
     private void _Open(RunGroupCodeStart start, Character? pilot = null)
     {
-        ActivityKind kind = start.ActivityKind == StoredActivityKind.Abyssal ? ActivityKind.Abyssal : ActivityKind.Site;
         Dispatcher.UIThread.Post(() =>
         {
-            ActivityWindowViewModel window = new(kind, _services);
+            // The commander's kind, passed on as it came. It used to be squeezed through "abyssal or else a site"
+            // here, which is how a remote start of any other kind arrived as a site (ET-174 AC-3).
+            ActivityWindowViewModel window = new(start.ActivityKind, _services);
             // The pilot first: joining creates this member's own run row, and that row is filed under whoever this
             // window is for.
             if (pilot is { EsiCharacterId: { } characterId })
