@@ -21,7 +21,8 @@ namespace EveUtils.Client.Clipboard;
 /// <summary>Shows what the SDE knows about a copied cosmic signature or anomaly (ET-79). One fully-scanned site is
 /// the exception: that starts its run outright, without a card and without taking the keyboard (ET-158, widened
 /// past combat-only by ET-177). The catalogue only enriches what is shown — it never gates whether the run starts
-/// (ET-178): Data Site, Relic Site and Wormhole are never in it at all, and that is not a reason to stay silent.</summary>
+/// (ET-178): Data Site, Relic Site and Wormhole are never in it at all, and that is not a reason to stay silent.
+/// A wormhole is the one thing kept out, and on its SDE type id rather than on that absence — see <see cref="IsWormhole"/>.</summary>
 public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
 {
     public const string FeatureName = "Signature detection";
@@ -71,8 +72,9 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         // Exactly one fully-scanned row is the whole case this feature can act on: half-scanned has no site, and 2+
         // rows is a menu. That one case now goes straight to a run (ET-158) instead of offering a button; the pilot
         // is in EVE, where an in-window toast is not visible anyway. The catalogue plays no part in this decision
-        // (ET-178): a name it does not carry is registered on its own name, same as one it does.
-        var recognised = rows.Where(row => row.Name is not null).ToList();
+        // (ET-178): a name it does not carry is registered on its own name, same as one it does. A wormhole drops
+        // out here rather than being hidden — it still gets its line on the card, it just never becomes a run.
+        var recognised = rows.Where(row => row.Name is not null && !IsWormhole(row.Name)).ToList();
         if (recognised is [{ } row])
         {
             StartRun(row);
@@ -215,4 +217,19 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
     /// a run (ET-178) — it only means there is nothing further to add.</summary>
     private IReadOnlyList<SdeSite> MatchSites(string name) => _sde.FindSitesByExactName(name);
 
+    /// <summary>A wormhole is a hole, not a site to run. On the SDE type id and not on the group column, because that
+    /// column is whatever language the client runs in (ET-79 §4); the catalogue cannot answer it either, carrying no
+    /// wormhole at all. Group 988 is nothing but wormholes and no site name in any of the eight locales resolves into
+    /// it — both measured on build 3494416.</summary>
+    private bool IsWormhole(string name) =>
+        _sde.TryGetTypeId(name, out int typeId)
+        && (WormholeTypeIdsOutsideTheWormholeGroup.Contains(typeId) || _sde.GetType(typeId)?.GroupId == WormholeGroupId);
+
+    private const int WormholeGroupId = 988;
+
+    // Unstable, Violent, Stable and Unidentified Wormhole — the four names the scan window writes for a hole nobody
+    // has been through yet. CCP files them under group 226 (Large Collidable Object) rather than 988, and 226 also
+    // holds real site names (Serpentis Fortress, Angel Hideout — 88 of the 1409 catalogue names are type names too),
+    // so the group cannot stand in for them. A fifth generic appearance name has to be added here by hand.
+    private static readonly int[] WormholeTypeIdsOutsideTheWormholeGroup = [26272, 32386, 32387, 34494];
 }

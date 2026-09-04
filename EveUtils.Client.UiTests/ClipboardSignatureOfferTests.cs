@@ -229,7 +229,6 @@ public sealed class ClipboardSignatureOfferTests
     [AvaloniaTheory]
     [InlineData(MeasuredHomefrontLine)]
     [InlineData("AAA-001	Anomalie cosmique	Site de combat	Haunted Yard	100,0%	0,50 AU")]
-    [InlineData("QLY-810\tCosmic Signature\tWormhole\tUnstable Wormhole\t100.0%\t11.66 AU")]
     public async Task ASiteTheCatalogueDoesNotCarryAtAll_StillStartsItsRunOnTheCopiedName(string copied)
     {
         using var env = await Env.StartAsync(); // catalogue deliberately empty
@@ -238,6 +237,29 @@ public sealed class ClipboardSignatureOfferTests
 
         Assert.Empty(env.Toasts.ActionToasts);
         Assert.True(Assert.Single(env.Dialogs.ShownActivityWindows).StartsOnArrival);
+    }
+
+    /// <summary>
+    /// A wormhole is a hole, not a site to run (Raymond, 2026-09-04, on his own window: TYPE Wormhole, SITE Unstable
+    /// Wormhole, a run started on it). ET-178 removed the last gate and took this with it, because the catalogue
+    /// carries no wormhole to say so with — the SDE type id does, and it is the same in every language. Row two
+    /// varies only the group column, which casts no vote either way; row three is the destination form, caught by
+    /// group 988 rather than by the four ids.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData("QLY-810\tCosmic Signature\tWormhole\tUnstable Wormhole\t100.0%\t11.66 AU")]
+    [InlineData("QLY-810\tSignature cosmique\tTrou de ver\tUnstable Wormhole\t100,0%\t11,66 AU")]
+    [InlineData("QLY-810\tCosmic Signature\tWormhole\tWormhole K162\t100.0%\t11.66 AU")]
+    public async Task ACopiedWormhole_NeverStartsARun_AndIsStillNamedOnTheCard(string copied)
+    {
+        using var env = await Env.StartAsync();
+        env.Sde.Add(26272, "Unstable Wormhole", 226, 2);   // where CCP files the four generic appearances
+        env.Sde.Add(30831, "Wormhole K162", 988, 2);
+
+        env.Copy(copied);
+
+        Assert.Empty(env.Dialogs.ShownActivityWindows);
+        Assert.StartsWith("QLY-810 · ", Assert.Single(env.Toasts.ActionToasts).Message);
     }
 
     // AC-5: a name the catalogue does carry, under a different signature, is still a miss for THIS name — no

@@ -451,6 +451,10 @@
                             IsVisible="{Binding IsStartButtonVisible}" Command="{Binding StartRunCommand}"/>
                     <Button x:Name="StopRunButton" Grid.Column="0" Classes="pick run" Content="STOP"
                             IsVisible="{Binding IsStopButtonVisible}" Command="{Binding StopRunCommand}"/>
+                    <!-- The same cell again: a copy only ever waits on a stopped run, so START and STOP are both
+                         off. The hint under the clock says what KEEP drops, which four letters cannot. -->
+                    <Button x:Name="KeepRunButton" Grid.Column="0" Classes="pick run" Content="KEEP"
+                            IsVisible="{Binding IsKeepRunButtonVisible}" Command="{Binding KeepRunCommand}"/>
                     <Button x:Name="SaveRunButton" Grid.Column="2" Classes="pick run" Content="SAVE"
                             IsVisible="{Binding IsSaveButtonVisible}" Command="{Binding SaveRunCommand}"/>
                     <!-- Discarding ends the run on every member's machine, so it confirms first (see the command). -->

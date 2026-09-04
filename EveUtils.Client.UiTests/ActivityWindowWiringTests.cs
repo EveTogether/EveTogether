@@ -101,7 +101,7 @@ public class ActivityWindowWiringTests
     /// hands the window over — nothing is saved or thrown away for him.
     /// </summary>
     [AvaloniaFact]
-    public async Task ASignatureCopiedOnARunningRun_ClosesThatRunOut_AndTakesTheNewSite()
+    public async Task ASignatureCopiedOnARunningRun_StopsThatRun_AndLeavesItStandingWhileTheCopyWaits()
     {
         using var harness = await ActivityWindowHarness.CreateAsync();
         ActivityWindowViewModel model = await harness.OpenAsync();
@@ -113,10 +113,12 @@ public class ActivityWindowWiringTests
 
         await model.ApplySignatureAsync("SUG-270", "Combat Site", "Drone Cluster", []);
 
-        Assert.Equal("Drone Cluster", model.SignatureName);
-        Assert.Equal(ActivityRunState.NotStarted, model.RunState);
-        Assert.Null(model.RunId);
-        Assert.True(model.IsStartButtonVisible);
+        // It used to close the run out here and take the copied site. The run is the pilot's, so it stays put and
+        // the copy waits behind it (Raymond, 2026-09-04) — which is why the window is still on Sansha Hideaway.
+        Assert.Equal("Sansha Hideaway", model.SignatureName);
+        Assert.Equal(ActivityRunState.Stopped, model.RunState);
+        Assert.Equal(open, model.RunId);
+        Assert.False(model.IsStartButtonVisible);
 
         Run left = await _RunAsync(harness, open!.Value);
         Assert.Equal(StoredRunState.Stopped, left.State);
@@ -124,12 +126,13 @@ public class ActivityWindowWiringTests
     }
 
     /// <summary>
-    /// The diagnosis line names the run it closed, not the one that replaced it. It read SignatureName after
-    /// _SetSignature had already moved that on, so it reported the site just copied as the site just ended — in the
-    /// one line whose whole job is telling us where to look.
+    /// The diagnosis line names the run left standing, not the one that was copied over it. It read SignatureName
+    /// after _SetSignature had already moved that on, so it reported the site just copied as the site just ended —
+    /// in the one line whose whole job is telling us where to look. Nothing moves that field any more, and the line
+    /// carries both names for the same reason it carried one.
     /// </summary>
     [AvaloniaFact]
-    public async Task TheDecisionLine_NamesTheRunThatWasClosed_NotTheOneThatReplacedIt()
+    public async Task TheDecisionLine_NamesTheRunLeftStanding_NotTheOneThatWasCopied()
     {
         var log = new RecordingLoggerProvider();
         using var harness = await ActivityWindowHarness.CreateAsync(
@@ -141,9 +144,9 @@ public class ActivityWindowWiringTests
 
         await model.ApplySignatureAsync("SUG-270", "Combat Site", "Drone Cluster", []);
 
-        string line = Assert.Single(log.Messages, message => message.Contains("closed out", StringComparison.Ordinal));
-        Assert.Contains("Sansha Hideaway", line, StringComparison.Ordinal);
-        Assert.DoesNotContain("closed out the open Drone Cluster", line, StringComparison.Ordinal);
+        string line = Assert.Single(log.Messages, message => message.Contains("so this waits", StringComparison.Ordinal));
+        Assert.Contains("the open Sansha Hideaway run", line, StringComparison.Ordinal);
+        Assert.DoesNotContain("the open Drone Cluster run", line, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -163,10 +166,11 @@ public class ActivityWindowWiringTests
 
         await model.ApplySignatureAsync("SUG-270", "Combat Site", "Sansha Refuge", []);
 
-        Assert.Equal("Sansha Refuge", model.SignatureName);
-        Assert.Equal("SUG-270", model.SignatureId);
-        Assert.Null(model.RunId);                                   // the old run is not this one
-        Assert.Equal(ActivityRunState.NotStarted, model.RunState);  // and its clock is not ours either
+        // A copy that waits is itself the proof this was read as another run: the same scan is adopted in silence
+        // and leaves nothing waiting (see the test below). The seventeen-minute clock is gone either way.
+        Assert.True(model.IsKeepRunButtonVisible);
+        Assert.Equal(ActivityRunState.Stopped, model.RunState);
+        Assert.Contains("Sansha Refuge is copied and waiting", model.ClockHint);
         Assert.Equal(StoredRunState.Stopped, (await _RunAsync(harness, first!.Value)).State);
     }
 
@@ -502,26 +506,96 @@ public class ActivityWindowWiringTests
     /// The other route, and the one that matters: a window already up takes the copy through ApplySignature instead.
     /// ET-100 survived four attempts because open and closed ran different code, so the same acceptance is proved on
     /// both rather than on whichever route was handy.
+    ///
+    /// Until 2026-09-04 this asserted the opposite — that the open run was closed out on the spot and the copied site
+    /// started in its place. That threw away what Raymond was flying without asking him. What it asserts now is what
+    /// a group run always did: the clock stops, the run is left standing, the window stays on the site it was on,
+    /// and the copy waits for SAVE, DISCARD or KEEP.
     /// </summary>
     [AvaloniaFact]
-    public async Task ACopiedSignature_OnAWindowAlreadyOpen_ClosesTheOldRunOut_AndStartsTheNewOne()
+    public async Task ACopiedSignature_OnAWindowAlreadyOpen_StopsTheRunAndWaits_InsteadOfThrowingItAway()
     {
         using var harness = await ActivityWindowHarness.CreateAsync();
         ActivityWindowViewModel model = await harness.OpenAsync();
         model.SignatureId = "RUS-326";
         model.SignatureName = "Sansha Hideaway";
         await model.StartRunCommand.ExecuteAsync(null);
-        Guid? closed = model.RunId;
+        Guid? open = model.RunId;
 
         model.StartsOnArrival = true;
         model.ApplySignature("SUG-270", "Combat Site", "Drone Cluster", []);
         await model.LastSignature;
 
-        Assert.Equal("Drone Cluster", model.SignatureName);
-        Assert.Equal(ActivityRunState.Running, model.RunState);
-        Assert.NotNull(model.RunId);            // NotEqual alone would also pass on no run at all
-        Assert.NotEqual(closed, model.RunId);
-        Assert.Equal(StoredRunState.Stopped, (await _RunAsync(harness, closed!.Value)).State);
+        Assert.Equal("Sansha Hideaway", model.SignatureName);
+        Assert.Equal(open, model.RunId);
+        Assert.Equal(ActivityRunState.Stopped, model.RunState);
+        Assert.Equal(StoredRunState.Stopped, (await _RunAsync(harness, open!.Value)).State);
+        // The question, and the three answers to it: START is off, and KEEP is the one that is on in its place.
+        Assert.False(model.IsStartButtonVisible);
+        Assert.True(model.IsKeepRunButtonVisible);
+        Assert.Contains("Drone Cluster is copied and waiting", model.ClockHint);
+    }
+
+    /// <summary>
+    /// The three ways out, and that each does what it says (Raymond, 2026-09-04). SAVE and DISCARD both end the run
+    /// and let the copy take over — SAVE used to let it go with the window instead — and KEEP is the only one that
+    /// answers the copy rather than the run: it drops it and leaves the pilot on what he was flying. The window it
+    /// was copied on never switches site itself in any of the three; the copy gets its own window or nothing.
+    ///
+    /// KEEP leaves the run RUNNING, not stopped: the clock was stopped to hold the copy and not by the pilot, so
+    /// answering the copy puts it back on. That is the whole difference between KEEP and simply ignoring the card.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData("save", StoredRunState.Saved, "Drone Cluster")]
+    [InlineData("discard", StoredRunState.Stopped, "Drone Cluster")]
+    [InlineData("keep", StoredRunState.Running, null)]
+    public async Task EachWayOutOfAWaitingCopy_DoesWhatItSays(string answer, StoredRunState left, string? takesOver)
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        harness.Dialogs.OnConfirm = (_, _) => Task.FromResult(true);
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        model.SignatureId = "RUS-326";
+        model.SignatureName = "Sansha Hideaway";
+        await model.StartRunCommand.ExecuteAsync(null);
+        Guid runId = model.RunId!.Value;
+        model.ApplySignature("SUG-270", "Combat Site", "Drone Cluster", []);
+        await model.LastSignature;
+
+        switch (answer)
+        {
+            case "save": await model.SaveRunCommand.ExecuteAsync(null); break;
+            case "discard": await model.DiscardRunCommand.ExecuteAsync(null); break;
+            default: await model.KeepRunCommand.ExecuteAsync(null); break;
+        }
+
+        Assert.Equal(left, (await _RunAsync(harness, runId)).State);
+        Assert.Equal(takesOver, harness.Dialogs.ShownActivityWindows.SingleOrDefault()?.SignatureName);
+        Assert.Equal("Sansha Hideaway", model.SignatureName);
+        Assert.False(model.IsKeepRunButtonVisible);   // all three answer the copy; none leaves it waiting
+    }
+
+    /// <summary>
+    /// The mission half of the same rule. ET-176 left ApplyMission without it on purpose, with a ponytail note that
+    /// it should wait for a real case; Raymond's report is that case, so a mission copied over a run in progress
+    /// asks the same question instead of writing itself over the site on screen.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ACopiedMission_OnARunAlreadyGoing_WaitsInsteadOfOverwritingIt()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        model.SignatureId = "RUS-326";
+        model.SignatureName = "Sansha Hideaway";
+        await model.StartRunCommand.ExecuteAsync(null);
+
+        model.ApplyMission(3019407, 4, 30005040, "Aralin Jick", []);
+        await model.LastMission;
+
+        Assert.Equal("Sansha Hideaway", model.SignatureName);
+        Assert.Null(model.MissionAgentId);
+        Assert.Equal(ActivityRunState.Stopped, model.RunState);
+        Assert.True(model.IsKeepRunButtonVisible);
+        Assert.Contains("Aralin Jick is copied and waiting", model.ClockHint);
     }
 
     /// <summary>
