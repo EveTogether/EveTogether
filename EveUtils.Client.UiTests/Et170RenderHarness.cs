@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -187,8 +188,17 @@ public class Et170RenderHarness
         foreach (var cell in root.GetVisualDescendants().OfType<Border>().Where(b => b.Classes.Contains("cell") && b.Parent is Grid g && g.Parent is Border pb && pb.Classes.Contains("gridhead")))
             log.AppendLine($"  headcell [{string.Join(" ", cell.Classes)}] w={cell.Bounds.Width:0.#} x={cell.Bounds.X:0.#} visible={cell.IsVisible}");
         var lanes = root.GetVisualDescendants().OfType<Border>().Where(b => b.Classes.Contains("lane")).ToList();
-        foreach (var lane in lanes.Take(3))
-            log.AppendLine($"  lanecard w={lane.Bounds.Width:0.#} h={lane.Bounds.Height:0.#} x={lane.Bounds.X:0.#} y={lane.Bounds.Y:0.#} slim={lane.Classes.Contains("slim")}");
+        foreach (var lane in lanes)
+        {
+            var name = lane.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => t.Classes.Contains("lanename"))?.Text;
+            var foot = lane.GetVisualDescendants().OfType<Control>().FirstOrDefault(p => p.Classes.Contains("lanefoot") && p.IsVisible);
+            double footWidth = foot?.Bounds.Width ?? 0;
+            double chipsRight = 0;
+            if (foot is not null)
+                foreach (var chip in foot.GetVisualDescendants().OfType<Border>().Where(b => b.Classes.Contains("chip")))
+                    chipsRight = Math.Max(chipsRight, ((Visual)chip).TranslatePoint(new Point(chip.Bounds.Width, 0), lane)?.X ?? 0);
+            log.AppendLine($"  lanecard [{name}] w={lane.Bounds.Width:0.#} h={lane.Bounds.Height:0.#} x={lane.Bounds.X:0.#} y={lane.Bounds.Y:0.#} slim={lane.Classes.Contains("slim")} foot={footWidth:0.#} chipsRight={chipsRight:0.#} overflow={Math.Max(0, chipsRight - lane.Bounds.Width):0.#}");
+        }
         var band = root.GetVisualDescendants().OfType<Border>().FirstOrDefault(b => b.Classes.Contains("band"));
         if (band is not null)
             log.AppendLine($"  band h={band.Bounds.Height:0.#} w={band.Bounds.Width:0.#}");

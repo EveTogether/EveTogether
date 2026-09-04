@@ -73,6 +73,7 @@ public sealed partial class FleetsViewModel
     [NotifyPropertyChangedFor(nameof(IsCompactBand))]
     [NotifyPropertyChangedFor(nameof(IsLaneBand))]
     [NotifyPropertyChangedFor(nameof(LaneWidth))]
+    [NotifyPropertyChangedFor(nameof(LaneMinWidth))]
     [NotifyPropertyChangedFor(nameof(ShowLaneButtons))]
     [NotifyPropertyChangedFor(nameof(LaneIsSlim))]
     private FleetOverviewLayoutState _layout = FleetOverviewLayout.Resolve(FleetOverviewLayout.WideBreakpoint, 0);
@@ -81,6 +82,13 @@ public sealed partial class FleetsViewModel
     public bool IsCompactBand => Layout.IsCompactBand;
     public bool IsLaneBand => !Layout.IsCompactBand;
     public double LaneWidth => Layout.LaneWidth;
+
+    /// <summary>What the band's grid is told a lane may not go below. It is the width the resolver already divided
+    /// the band into, less a few pixels of slack: the panel counts its own columns, and handing it the exact quotient
+    /// would let a pixel of rounding between the two cost a column. Rounding down cannot buy one — the next column up
+    /// needs a whole lane more. The view used to carry a literal 236 here, which is why the band stayed on slim cards
+    /// after the resolver had already picked full ones.</summary>
+    public double LaneMinWidth => Math.Max(1, Layout.LaneWidth - 4);
     public bool ShowLaneButtons => Layout.ShowLaneButtons;
 
     /// <summary>A lane too narrow for its buttons is the mockup's 758 px lane: name, fleet and a smaller clock, no
@@ -460,6 +468,9 @@ public sealed partial class FleetsViewModel
             row.IsWide = Layout.IsWide;
             BuildOverflow(row);
         }
+
+        foreach (var lane in Lanes)
+            lane.IsSlim = !Layout.ShowLaneButtons;
 
         // Column-first: the first half of the roster down the left column, the rest down the right.
         int left = (Lanes.Count + 1) / 2;

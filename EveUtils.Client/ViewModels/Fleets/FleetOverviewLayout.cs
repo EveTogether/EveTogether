@@ -46,7 +46,9 @@ public static class FleetOverviewLayout
     /// slack keep three lanes on a row when the host trims a border or two off the nominal width.</summary>
     public const double LaneMinWidth = 236;
 
-    /// <summary>A lane this wide has room for STOP / LEAVE / START beside the clock.</summary>
+    /// <summary>A lane this wide has room for STOP / LEAVE / START beside the clock, the third line under the fleet
+    /// name and the chips under the clock — the full lane of scherm 1. At the wide breakpoint the band fits three of
+    /// these on a row and hands each 380 px, which is the width the mockup draws a lane at.</summary>
     public const double LaneButtonsMinWidth = 300;
 
     /// <summary>The band's own horizontal padding (both sides together), subtracted before lanes are measured against
@@ -70,17 +72,33 @@ public static class FleetOverviewLayout
 
         bool isWide = contentWidth >= WideBreakpoint;
         double inner = Math.Max(LaneMinWidth, contentWidth - (isWide ? WideBandPadding : NarrowBandPadding));
-        int perRow = Math.Max(1, (int)Math.Floor((inner + LaneGap) / (LaneMinWidth + LaneGap)));
-        double laneWidth = Math.Floor((inner - LaneGap * (perRow - 1)) / perRow);
 
-        int rows = pilotCount == 0 ? 0 : (int)Math.Ceiling(pilotCount / (double)perRow);
-        var density = rows <= MaxLaneRows ? FleetBandDensity.Lanes : FleetBandDensity.Compact;
+        // Three forms, tried widest first — the band asks for the most it can have and gives up one thing at a time,
+        // which is the order scherm 15 sets out. Full lanes with their buttons; failing that the slim lane of
+        // scherm 10, which trades the buttons and the chips for a card that fits three to a row at 758; failing that
+        // one line per character (scherm 13). Nothing here counts pilots: it counts rows.
+        var roomy = Pack(inner, LaneButtonsMinWidth, pilotCount);
+        var slim = Pack(inner, LaneMinWidth, pilotCount);
+        bool showButtons = roomy.Rows <= MaxLaneRows && roomy.Width >= LaneButtonsMinWidth;
+        var chosen = showButtons ? roomy : slim;
 
-        return new FleetOverviewLayoutState(
-            isWide,
-            density,
-            perRow,
-            laneWidth,
-            ShowLaneButtons: laneWidth >= LaneButtonsMinWidth);
+        var density = chosen.Rows <= MaxLaneRows ? FleetBandDensity.Lanes : FleetBandDensity.Compact;
+
+        return new FleetOverviewLayoutState(isWide, density, chosen.PerRow, chosen.Width, showButtons);
+    }
+
+    /// <summary>How many lanes of at least <paramref name="minWidth"/> fit on a row of <paramref name="inner"/>, how
+    /// wide each then becomes once the leftover is divided over them, and how many rows that costs.</summary>
+    private static (int PerRow, double Width, int Rows) Pack(double inner, double minWidth, int pilotCount)
+    {
+        int fit = Math.Max(1, (int)Math.Floor((inner + LaneGap) / (minWidth + LaneGap)));
+        int rows = pilotCount == 0 ? 0 : (int)Math.Ceiling(pilotCount / (double)fit);
+
+        // Spread the lanes evenly over the rows they already cost rather than filling each row to the brim: six
+        // pilots where five fit are two rows of three, not five and a lone card. Same number of rows either way, so
+        // this is free — and it is the band scherm 1 draws.
+        int perRow = rows > 1 ? (int)Math.Ceiling(pilotCount / (double)rows) : fit;
+        double width = Math.Floor((inner - LaneGap * (perRow - 1)) / perRow);
+        return (perRow, width, rows);
     }
 }

@@ -3,7 +3,6 @@
         xmlns:vm="using:EveUtils.Client.ViewModels"
         xmlns:vf="using:EveUtils.Client.ViewModels.Fleets"
         xmlns:ctl="using:EveUtils.Client.Controls"
-        xmlns:sys="using:System"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
@@ -26,7 +25,6 @@
         <DockPanel.Resources>
             <!-- The theme has no warn brush of its own; this is the ink Border.chip.warn uses, so the two agree. -->
             <SolidColorBrush x:Key="WarnBrush" Color="#FFE0B341"/>
-            <sys:Double x:Key="LaneMinWidth">236</sys:Double>
         </DockPanel.Resources>
 
         <DockPanel.Styles>
@@ -223,9 +221,6 @@
                 <Setter Property="Margin" Value="0,4,0,0"/>
             </Style>
             <Style Selector="Border.lane.slim TextBlock.lanewhere">
-                <Setter Property="IsVisible" Value="False"/>
-            </Style>
-            <Style Selector="Border.lane.slim StackPanel.lanefoot">
                 <Setter Property="IsVisible" Value="False"/>
             </Style>
             <Style Selector="Border.lane.slim TextBlock.lanewhat">
@@ -758,7 +753,7 @@
                 <ItemsControl x:Name="LaneList" ItemsSource="{Binding Lanes}" IsVisible="{Binding IsLaneBand}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <ctl:FillGridPanel MinItemWidth="{StaticResource LaneMinWidth}" ColumnSpacing="6" RowSpacing="6"/>
+                            <ctl:FillGridPanel MinItemWidth="{Binding LaneMinWidth}" ColumnSpacing="6" RowSpacing="6"/>
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
@@ -776,7 +771,7 @@
                                         <StackPanel Orientation="Horizontal" Spacing="7">
                                             <TextBlock Classes="lanename" Text="{Binding CharacterName}"/>
                                             <Border Classes="chip" Classes.ok="{Binding IsRoleOk}" Classes.warn="{Binding IsRoleWarn}"
-                                                    Classes.dim="{Binding IsRoleDim}">
+                                                    Classes.dim="{Binding IsRoleDim}" IsVisible="{Binding ShowRoleChip}">
                                                 <TextBlock Text="{Binding RoleChipText}"/>
                                             </Border>
                                         </StackPanel>
@@ -795,23 +790,21 @@
                                                         Command="{Binding SecondaryCommand}" IsVisible="{Binding HasSecondaryAction}"/>
                                             </StackPanel>
                                         </Grid>
-                                        <StackPanel Classes="lanefoot" Orientation="Horizontal" Spacing="4" Margin="0,8,0,0"
-                                                    IsVisible="{Binding FootChips.Count}">
-                                            <ItemsControl ItemsSource="{Binding FootChips}">
-                                                <ItemsControl.ItemsPanel>
-                                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
-                                                </ItemsControl.ItemsPanel>
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate DataType="vf:FleetCountChipViewModel">
-                                                        <Border Classes="chip" Margin="0,0,4,2" Classes.ok="{Binding IsOk}"
-                                                                Classes.warn="{Binding IsWarning}" Classes.dim="{Binding IsDim}"
-                                                                Classes.val="{Binding IsValue}">
-                                                            <TextBlock Text="{Binding Text}"/>
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </StackPanel>
+                                        <ItemsControl Classes="lanefoot" ItemsSource="{Binding FootChips}" Margin="0,6,0,-2"
+                                                      IsVisible="{Binding ShowFootChips}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="vf:FleetCountChipViewModel">
+                                                    <Border Classes="chip" Margin="0,0,4,2" Classes.ok="{Binding IsOk}"
+                                                            Classes.warn="{Binding IsWarning}" Classes.dim="{Binding IsDim}"
+                                                            Classes.val="{Binding IsValue}">
+                                                        <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis"/>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
                                     </StackPanel>
                                 </Grid>
                             </Border>

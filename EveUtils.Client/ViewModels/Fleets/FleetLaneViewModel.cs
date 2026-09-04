@@ -48,12 +48,32 @@ public sealed partial class FleetLaneViewModel : ObservableObject
     /// <summary>Whether this pilot's EVE client is up, from the local sweep; null when the sweep is not available.</summary>
     public bool? IsInGame { get; init; }
 
-    public string RoleChipText => IsIdle ? "no active fleet" : IsElsewhereActive ? "ELSEWHERE ACTIVE" : IsFleetCommander ? "FC" : "member";
+    /// <summary>
+    /// The lane is drawn as the narrow card of scherm 10: name, fleet and clock, and nothing else. Set from
+    /// <c>FleetOverviewLayout</c> rather than read from a style, because the things it turns off are bound
+    /// locally and a local value beats a style setter (the ET-42 trap, here on <c>IsVisible</c>).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RoleChipText))]
+    [NotifyPropertyChangedFor(nameof(ShowRoleChip))]
+    [NotifyPropertyChangedFor(nameof(FleetText))]
+    [NotifyPropertyChangedFor(nameof(ShowFootChips))]
+    private bool _isSlim;
+
+    public string RoleChipText => IsIdle ? "no active fleet"
+        : IsElsewhereActive ? (IsSlim ? "ELSEWHERE" : "ELSEWHERE ACTIVE")
+        : IsFleetCommander ? "FC" : "member";
+
+    /// <summary>The slim card keeps only what its colour cannot say: FC, and that the pilot counts elsewhere. Being
+    /// an ordinary member is what a lane already means, and an idle lane says so on its fleet line instead.</summary>
+    public bool ShowRoleChip => !IsSlim || IsFleetCommander || IsElsewhereActive;
+
     public bool IsRoleOk => !IsIdle && !IsElsewhereActive && IsFleetCommander;
     public bool IsRoleWarn => !IsIdle && IsElsewhereActive;
     public bool IsRoleDim => IsIdle || (!IsElsewhereActive && !IsFleetCommander);
 
-    public string FleetText => Fleet?.Name ?? "—";
+    /// <summary>The slim card has no chip to say there is no fleet, so its fleet line says it in words.</summary>
+    public string FleetText => Fleet?.Name ?? (IsSlim ? "no active fleet" : "—");
     public string FleetOriginText => Fleet is null ? "" : $" · {Fleet.OriginText}";
 
     /// <summary>The third line: whom the pilot flies under, or what the fleet holds when they command it.</summary>
@@ -71,6 +91,10 @@ public sealed partial class FleetLaneViewModel : ObservableObject
 
     /// <summary>Chips under the clock: when the fleet started, what this pilot shares, where else they stand by.</summary>
     public ObservableCollection<FleetCountChipViewModel> FootChips { get; } = [];
+
+    /// <summary>The slim card drops the chips — there is no width for them, and everything they warn about is said
+    /// again on the fleet's own row below (the amber edge, the ELSEWHERE chip, the member's "not linked").</summary>
+    public bool ShowFootChips => !IsSlim && FootChips.Count > 0;
 
     [ObservableProperty] private string _clockText = "--:--:--";
 
