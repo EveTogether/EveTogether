@@ -158,6 +158,12 @@ public interface IDialogService
     /// the same "leave it alone" answer <see cref="RunWindowPresentation"/> gives once one is open.</summary>
     bool IsActivityWindowOpen { get; }
 
+    /// <summary>The pilot the open activity window is already for, or null when none is up or it has not settled on
+    /// one. Read by the clipboard offer so it does not put a modal question on screen that has been answered: a
+    /// window with a pilot has been asked once, and copying a signature is not a reason to ask again. A window
+    /// without one is a fair question, which is why this is the pilot and not merely "is a window open".</summary>
+    (int Id, string Name)? ActivityWindowPilot { get; }
+
     /// <summary>
     /// Opens the settings module: a docked tab in docked mode, a floating window otherwise — non-modal so it
     /// matches the rest of the module shell. <paramref name="currentDirectory"/> is the saved gamelog path (empty if

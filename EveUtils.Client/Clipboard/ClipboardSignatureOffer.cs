@@ -119,7 +119,20 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
 
             Character? pilot = flying is [{ } only] ? only : null;
             var startsOnArrival = true;
-            if (pilot is null && flying.Count > 1)
+
+            // A window already up that knows its pilot has been asked this once, and copying a site is not a reason
+            // to ask again: the answer would be the same, and the asking is a modal dialog taking the keyboard off
+            // EVE — the one thing ET-158 exists to avoid (Raymond, 2026-09-04). A window WITHOUT a pilot is still a
+            // fair question, which is why this reads the pilot rather than "is a window open".
+            //
+            // ponytail: this cannot tell "the same pilot carries on" from "he switched clients", because a clipboard
+            // copy carries no sender — Windows does not say which process copied, and the payload holds no pilot
+            // name. A copy made on a second client while the window is for the first is therefore filed under the
+            // first. That was already true before the question moved forward; giving the copy an owner is the open
+            // question from the 2026-09-02 analysis and wants the foreground EVE window, not a guess here.
+            bool answeredAlready = _dialogs.ActivityWindowPilot is not null;
+
+            if (pilot is null && flying.Count > 1 && !answeredAlready)
             {
                 int? picked = await _dialogs.PickCharacterAsync("Whose run is this?",
                     [.. flying.Select(character => new CharacterPickOption(

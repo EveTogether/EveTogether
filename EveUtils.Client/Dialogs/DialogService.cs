@@ -177,6 +177,9 @@ public sealed class DialogService : IDialogService, ISingletonService
 
     public bool IsActivityWindowOpen => _activityWindow is not null;
 
+    public (int Id, string Name)? ActivityWindowPilot =>
+        (_activityWindow?.DataContext as ActivityWindowViewModel)?.PickedCharacter;
+
     /// <summary>Open pop-out windows independent of the main window: floating modules + DPS overlays + fleet
     /// overlays + info cards. Used by the main window's close handler to decide whether to confirm before quitting.</summary>
     public int OpenPopoutCount =>
