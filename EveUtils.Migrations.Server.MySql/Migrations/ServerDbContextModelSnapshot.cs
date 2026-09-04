@@ -805,6 +805,9 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.Property<DateTime?>("LastPushedAtUtc")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<int?>("LootStrategy")
+                        .HasColumnType("int");
+
                     b.Property<int?>("MissionLevel")
                         .HasColumnType("int");
 

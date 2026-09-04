@@ -24,6 +24,7 @@ using EveUtils.Client.Theming;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.Views;
+using EveUtils.Shared.Data;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Fleet.Dtos;
@@ -33,7 +34,10 @@ using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Settings.Repositories;
+using EveUtils.Shared.Modules.Runs.Commands;
+using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -763,6 +767,9 @@ public class ActivityWindowTests
             abyssal.LootStrategyChoices.Select(choice => choice.Label),
             site.LootStrategyChoices.Select(choice => choice.Label));
         Assert.All(abyssal.LootStrategyChoices, choice => Assert.False(choice.IsSelected));
+        // Leaving the other cans is a site's move: an abyssal pocket is instanced, so there is nobody to leave them to.
+        Assert.Contains(RunLootStrategy.CherryPicked, site.LootStrategies);
+        Assert.DoesNotContain(RunLootStrategy.CherryPicked, abyssal.LootStrategies);
     }
 
     [AvaloniaFact]
@@ -792,18 +799,76 @@ public class ActivityWindowTests
         Assert.Null(third.LootStrategy);
     }
 
+    /// <summary>One key per kind. On the shared key the two kinds overwrote each other's answer, so the second
+    /// window of an evening opened on whatever the other kind had been asked last.</summary>
     [AvaloniaFact]
-    public async Task AStrategyRememberedFromTheOtherKindOfRun_ReadsAsUnset()
+    public async Task EachKindRemembersItsOwnStrategy_NotTheLastOneAnswered()
     {
         using var instance = TestClientInstance.Create();
-        await instance.Services.GetRequiredService<ISettingRepository>()
-            .UpsertAsync(ActivityWindowViewModel.LootStrategySettingKey, ActivityWindowViewModel.SiteLootStrategies[0]);
+
+        var site = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
+        await site.LoadAsync();
+        await site.SelectLootStrategyCommand.ExecuteAsync(0);
 
         var abyssal = new ActivityWindowViewModel(ActivityKind.Abyssal, instance.Services);
         await abyssal.LoadAsync();
-
         Assert.Null(abyssal.LootStrategy);
         Assert.All(abyssal.LootStrategyChoices, choice => Assert.False(choice.IsSelected));
+        await abyssal.SelectLootStrategyCommand.ExecuteAsync(2);
+
+        var nextSite = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
+        await nextSite.LoadAsync();
+        Assert.Equal(ActivityWindowViewModel.SiteLootStrategies[0], nextSite.LootStrategy);
+    }
+
+    /// <summary>Set, and stored — the whole point of the row. Both ways in: chosen before there is a run to write it
+    /// to, and chosen on one that is already going.</summary>
+    [AvaloniaTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TheChosenStrategy_IsOnTheStoredRun(bool chosenBeforeStart)
+    {
+        using ActivityWindowHarness harness = await ActivityWindowHarness.CreateAsync();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        ActivityWindowViewModel window = await harness.OpenAsync(ActivityKind.Site);
+        int cherryPicked = window.LootStrategies.ToList().IndexOf(RunLootStrategy.CherryPicked);
+
+        if (chosenBeforeStart)
+            await window.SelectLootStrategyCommand.ExecuteAsync(cherryPicked);
+        await window.StartRunCommand.ExecuteAsync(null);
+        if (!chosenBeforeStart)
+            await window.SelectLootStrategyCommand.ExecuteAsync(cherryPicked);
+
+        window.StopRun(DateTime.UtcNow);
+        await window.SaveRunCommand.ExecuteAsync(null);
+
+        await using ClientDbContext db = await harness.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        Run stored = Assert.Single(await db.Set<Run>().ToListAsync(cancellationToken));
+        Assert.Equal(RunLootStrategy.CherryPicked, stored.LootStrategy);
+    }
+
+    /// <summary>The case ET-179 was written for: the pilot answered and then never pressed SAVE. The chip writes the
+    /// answer onto the run there and then, so the save the app does a day later finds it already on the row.</summary>
+    [AvaloniaFact]
+    public async Task AStrategyOnARunNobodyFinished_SurvivesTheAppsOwnSave()
+    {
+        using ActivityWindowHarness harness = await ActivityWindowHarness.CreateAsync();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        ActivityWindowViewModel window = await harness.OpenAsync(ActivityKind.Site);
+
+        await window.StartRunCommand.ExecuteAsync(null);
+        await window.SelectLootStrategyCommand.ExecuteAsync(0);
+        window.StopRun(DateTime.UtcNow);
+
+        await harness.Services.GetRequiredService<Shared.Cqrs.IDispatcher>()
+            .Send(new SaveRunsLeftUnfinishedCommand(DateTime.UtcNow.AddDays(2)), cancellationToken);
+
+        await using ClientDbContext db = await harness.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        Run stored = Assert.Single(await db.Set<Run>().ToListAsync(cancellationToken));
+        Assert.NotNull(stored.AutoSavedAtUtc);
+        Assert.Equal(ActivityWindowViewModel.SiteLootStrategies[0], stored.LootStrategy);
     }
 
     [Fact]

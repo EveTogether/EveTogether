@@ -28,6 +28,10 @@ public sealed class RunWireData
     public string? SiteName { get; init; }
     public int? SolarSystemId { get; init; }
     public string? Signature { get; init; }
+
+    /// <summary>Travels with the run: dropping it here would lose on the wire exactly what the column was added to
+    /// keep.</summary>
+    public RunLootStrategy? LootStrategy { get; init; }
     public int? AgentId { get; init; }
     public int? MissionLevel { get; init; }
     public required RunRole Role { get; init; }
@@ -61,6 +65,7 @@ public sealed class RunWireData
         SiteName = run.SiteName,
         SolarSystemId = run.SolarSystemId,
         Signature = run.Signature,
+        LootStrategy = run.LootStrategy,
         AgentId = run.AgentId,
         MissionLevel = run.MissionLevel,
         Role = run.Role,
@@ -127,6 +132,7 @@ public sealed class RunWireData
             SiteName = SiteName,
             SolarSystemId = SolarSystemId,
             Signature = Signature,
+            LootStrategy = LootStrategy,
             AgentId = AgentId,
             MissionLevel = MissionLevel,
             Role = Role,

@@ -96,6 +96,10 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
                 // two apart afterwards — and it cannot be added back later for runs already saved without it.
                 .SetProperty(candidate => candidate.TimesCorrectedAtUtc, command.TimesCorrectedAtUtc)
                 .SetProperty(candidate => candidate.AutoSavedAtUtc, command.AutoSavedAtUtc)
+                // Null leaves the row's own answer alone: the chip already wrote it, and the app's own save of an
+                // unfinished run (ET-179) carries none and must not wipe it.
+                .SetProperty(candidate => candidate.LootStrategy,
+                    candidate => command.LootStrategy ?? candidate.LootStrategy)
                 .SetProperty(candidate => candidate.SavedAtUtc, command.SavedAtUtc)
                 .SetProperty(candidate => candidate.SyncState,
                     candidate => candidate.SyncState == RunSyncState.Local ? RunSyncState.Local : RunSyncState.Pending)
