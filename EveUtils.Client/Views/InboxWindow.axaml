@@ -65,9 +65,14 @@
                                                    IsVisible="{Binding HasBody}" Foreground="{StaticResource TextBrush}"/>
                                         <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0"
                                                     IsVisible="{Binding CanRespond}">
-                                            <Button Content="Accept" FontSize="10" Classes="accent" Command="{Binding AcceptCommand}"/>
-                                            <Button Content="Decline" FontSize="10" Command="{Binding DeclineCommand}"/>
+                                            <Button Content="{Binding AcceptLabel}" FontSize="10" Classes="accent" Command="{Binding AcceptCommand}"/>
+                                            <Button Content="{Binding DeclineLabel}" FontSize="10" Command="{Binding DeclineCommand}"/>
                                         </StackPanel>
+                                        <!-- "Later" has no button on purpose: leaving the row alone is the third
+                                             answer, and a row with two buttons reads as one that must be settled now. -->
+                                        <TextBlock Text="{Binding LaterHint}" FontSize="9.5" TextWrapping="Wrap"
+                                                   Foreground="{StaticResource TextDimBrush}"
+                                                   IsVisible="{Binding HasLaterHint}"/>
                                     </StackPanel>
                                 </Grid>
                             </Border>

@@ -9,10 +9,15 @@ using EveUtils.Shared.Modules.Messaging.Entities;
 namespace EveUtils.Client.ViewModels;
 
 /// <summary>
-/// One row in the inbox: a mail (title + body) or a fleet invite (title + Accept/Decline). When the same
-/// action is delivered to several of my coupled characters while multiboxing, those per-character copies are merged
-/// into a single row: the recipients are listed in the "To:" label and a response or delete fans out to every
-/// underlying copy, each answered on its own origin server.
+/// One row in the inbox: a mail (title + body), or something that can be answered — a fleet invite, or a fleet
+/// commander asking a pilot who is flying elsewhere to come over (ET-168). When the same action is delivered to
+/// several of my coupled characters while multiboxing, those per-character copies are merged into a single row: the
+/// recipients are listed in the "To:" label and a response or delete fans out to every underlying copy, each
+/// answered on its own origin server.
+///
+/// <para>The two answerable kinds do not read alike, so the buttons do not either. An invite is Accept/Decline. A
+/// switch request is <b>Switch</b> or <b>Stay where I am</b> — and the third answer, "later", is no button at all:
+/// leaving the message alone <i>is</i> the answer, and it keeps standing for as long as the fleet runs.</para>
 /// </summary>
 public partial class InboxItemViewModel : ObservableObject
 {
@@ -25,7 +30,27 @@ public partial class InboxItemViewModel : ObservableObject
     public string Title { get; }
     public string? Body { get; }
     public bool IsInvite { get; }
+
+    /// <summary>A fleet commander asking this pilot to leave the fleet they count for and come here (ET-168).</summary>
+    public bool IsSwitchRequest { get; }
+
     public bool HasBody => !string.IsNullOrWhiteSpace(Body);
+
+    /// <summary>Yes reads as what it does. "Accept" for an invite; for a switch request it is a move, and the pilot
+    /// should see that before pressing rather than after.</summary>
+    public string AcceptLabel => IsSwitchRequest ? "Switch to this fleet" : "Accept";
+
+    /// <summary>No is not leaving: declining a switch keeps the pilot on that fleet's roster, merely not linked, so
+    /// next week it is still there with them on it.</summary>
+    public string DeclineLabel => IsSwitchRequest ? "No, I'll stay where I am" : "Decline";
+
+    /// <summary>The third answer to a switch request, and the only one with no button: doing nothing. Said out
+    /// loud, because a row with two buttons reads as a question that has to be answered now.</summary>
+    public string? LaterHint => IsSwitchRequest
+        ? "Or leave it: the request keeps standing while the fleet runs, and switching an hour from now still counts."
+        : null;
+
+    public bool HasLaterHint => LaterHint is not null;
 
     /// <summary>"To: A, B, C" — every one of my characters this action was addressed to.</summary>
     public string RecipientLabel { get; }
@@ -39,8 +64,8 @@ public partial class InboxItemViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanRespond))]
     private MessageStatus _status;
 
-    /// <summary>An invite can be answered while still pending; mail and answered invites cannot.</summary>
-    public bool CanRespond => IsInvite && Status == MessageStatus.Pending;
+    /// <summary>An answerable kind can be answered while still pending; mail and answered ones cannot.</summary>
+    public bool CanRespond => (IsInvite || IsSwitchRequest) && Status == MessageStatus.Pending;
 
     public InboxItemViewModel(InboxViewModel owner, IReadOnlyList<ClientInboxMessage> messages, IReadOnlyList<string> recipientNames)
     {
@@ -51,6 +76,7 @@ public partial class InboxItemViewModel : ObservableObject
         Title = head.Title;
         Body = head.Body;
         IsInvite = head.Kind == MessageKind.FleetInvite;
+        IsSwitchRequest = head.Kind == MessageKind.FleetSwitchRequest;
         RecipientLabel = "To: " + string.Join(", ", recipientNames);
         TimestampLabel = FormatTimestamp(messages.Max(m => m.CreatedAt));
         _isRead = messages.All(m => m.IsRead);
@@ -58,9 +84,11 @@ public partial class InboxItemViewModel : ObservableObject
         _status = messages.Any(m => m.Status == MessageStatus.Pending) ? MessageStatus.Pending : head.Status;
     }
 
-    /// <summary>The pending invite copies that still need an answer — each replied to on its own origin server.</summary>
+    /// <summary>The copies that still need an answer — each replied to on its own origin server. Both answerable
+    /// kinds, because a switch request is delivered per coupled character exactly as an invite is.</summary>
     internal IReadOnlyList<ClientInboxMessage> PendingInvites =>
-        _messages.Where(m => m.Kind == MessageKind.FleetInvite && m.Status == MessageStatus.Pending).ToArray();
+        _messages.Where(m => m.Kind is MessageKind.FleetInvite or MessageKind.FleetSwitchRequest
+                             && m.Status == MessageStatus.Pending).ToArray();
 
     private static string FormatTimestamp(DateTimeOffset createdAtUtc)
     {

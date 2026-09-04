@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Transport;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 
 namespace EveUtils.Client.UiTests;
@@ -56,8 +57,11 @@ public sealed class RecordingFleetTransportClient : IFleetTransportClient
 
     // --- The rest of the surface is unused by these tests; provide harmless defaults. ---
 
+    /// <summary>Single fleets a test staged, for the paths that read one header rather than a list.</summary>
+    public Dictionary<long, FleetInfo> FleetsById { get; } = new();
+
     public Task<FleetInfo?> GetFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
-        Task.FromResult<FleetInfo?>(null);
+        Task.FromResult(FleetsById.TryGetValue(fleetId, out var fleet) ? fleet : null);
 
     public Task<(bool Ok, string Message, long FleetId)> CreateFleetAsync(
         string serverAddress, string name, string? description, FleetVisibility visibility,
@@ -121,6 +125,37 @@ public sealed class RecordingFleetTransportClient : IFleetTransportClient
 
     public Task<(bool Ok, string Message)> JoinFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) => Task.FromResult(JoinResult);
 
+    /// <summary>The start collision this server reports (ET-168); empty unless a test stages one.</summary>
+    public List<FleetMemberElsewhereInfo> MembersActiveElsewhere { get; } = new();
+
+    public Task<IReadOnlyList<FleetMemberElsewhereInfo>> ListMembersActiveElsewhereAsync(
+        string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<FleetMemberElsewhereInfo>>(MembersActiveElsewhere);
+
+    /// <summary>Every "ask them all to switch" (ET-168), in call order.</summary>
+    public List<(string ServerAddress, long FleetId, int ActingCharacterId, int OnlyCharacterId)> SwitchRequestCalls { get; } = new();
+
+    public (bool Ok, string Message, int Asked) SwitchRequestResult { get; set; } = (true, string.Empty, 0);
+
+    public Task<(bool Ok, string Message, int Asked)> RequestFleetSwitchAsync(
+        string serverAddress, long fleetId, int actingCharacterId = 0, int onlyCharacterId = 0, CancellationToken cancellationToken = default)
+    {
+        SwitchRequestCalls.Add((serverAddress, fleetId, actingCharacterId, onlyCharacterId));
+        return Task.FromResult(SwitchRequestResult);
+    }
+
+    /// <summary>Every "move me over" (ET-168), in call order — the member's own act, so the character matters.</summary>
+    public List<(string ServerAddress, long FleetId, int ActingCharacterId)> SwitchToFleetCalls { get; } = new();
+
+    public (bool Ok, string Message) SwitchToFleetResult { get; set; } = (true, string.Empty);
+
+    public Task<(bool Ok, string Message)> SwitchToFleetAsync(
+        string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default)
+    {
+        SwitchToFleetCalls.Add((serverAddress, fleetId, actingCharacterId));
+        return Task.FromResult(SwitchToFleetResult);
+    }
+
     public Task<(bool Ok, string Message)> EnterFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) => Accepted();
 
     /// <summary>Every recorded leave, in call order, so a test can assert which character was pulled from the fleet.</summary>
@@ -134,10 +169,14 @@ public sealed class RecordingFleetTransportClient : IFleetTransportClient
 
     public Task<(bool Ok, string Message)> RespondToInviteAsync(string serverAddress, long inviteId, bool accept, int actingCharacterId = 0, CancellationToken cancellationToken = default) => Accepted();
 
+    /// <summary>What answering a message comes back with; a test sets a refusal to drive the path where the server
+    /// turns an accept down — which is where the offer to switch instead lives (ET-168).</summary>
+    public (bool Ok, string Message) RespondToMessageResult { get; set; } = (true, string.Empty);
+
     public Task<(bool Ok, string Message)> RespondToMessageAsync(string serverAddress, long messageId, bool accept, int actingCharacterId = 0, CancellationToken cancellationToken = default)
     {
         RespondToMessageCalls.Add((serverAddress, messageId, accept, actingCharacterId));
-        return Accepted();
+        return Task.FromResult(RespondToMessageResult);
     }
 
     public Task<(bool Ok, string Message, long InviteId)> CreateInviteAsync(
@@ -204,8 +243,11 @@ public sealed class RecordingFleetTransportClient : IFleetTransportClient
         return Accepted();
     }
 
+    /// <summary>The invites a character is holding, per server.</summary>
+    public Dictionary<string, IReadOnlyList<FleetInviteInfo>> PendingInvitesByServer { get; } = new();
+
     public Task<IReadOnlyList<FleetInviteInfo>> ListPendingInvitesAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
-        Task.FromResult(EmptyList<FleetInviteInfo>());
+        Task.FromResult(PendingInvitesByServer.TryGetValue(serverAddress, out var invites) ? invites : EmptyList<FleetInviteInfo>());
 
     public Task<IReadOnlyList<FleetInviteInfo>> ListPendingFleetInvitesAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
         Task.FromResult(EmptyList<FleetInviteInfo>());

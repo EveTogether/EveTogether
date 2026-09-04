@@ -278,10 +278,20 @@ public interface IDialogService
     Task<string?> PromptTextAsync(string title, string header, string? defaultValue = null);
 
     /// <summary>
-    /// On-start ESI-invite prompt — a pure UI seam: when starting a fleet whose members lack an ESI link,
-    /// offers a no-op "invite via ESI" checkbox. Returns true if the owner pressed Start (proceed).
+    /// Starting a fleet, and the collision when a member is already flying elsewhere (ET-168, scherm 2). One summary
+    /// line and one button, whether one member is elsewhere or fifty; nothing is decided per member here. The
+    /// no-op "invite via ESI" seam lives in the same dialog. Returns what the commander chose, or
+    /// <see cref="FleetStartChoice.Cancel"/> when they backed out.
     /// </summary>
-    Task<bool> ConfirmStartFleetAsync(string fleetName, int unlinkedCount);
+    Task<FleetStartChoice> PickFleetStartAsync(FleetStartPrompt prompt);
+
+    /// <summary>
+    /// Moving one of my own pilots out of the fleet it counts for and into another one (ET-168, scherm 7). Shows
+    /// the two acts the code takes — leave, then couple — under a single button, and names the runs that keep
+    /// going. Returns true when the pilot goes. Only ever my own character: asking someone else is a request, not
+    /// this dialog.
+    /// </summary>
+    Task<bool> ConfirmFleetSwitchAsync(SwitchFleetPrompt prompt);
 
     /// <summary>
     /// The way out of an active fleet (ET-166): stop it back to standing by, conclude it for good, or pull one of my

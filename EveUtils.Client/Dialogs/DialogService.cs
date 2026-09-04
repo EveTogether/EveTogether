@@ -538,10 +538,17 @@ public sealed class DialogService : IDialogService, ISingletonService
         return await _Over(dialog).ShowDialog<string?>(_owner);
     }
 
-    public async Task<bool> ConfirmStartFleetAsync(string fleetName, int unlinkedCount)
+    public async Task<FleetStartChoice> PickFleetStartAsync(FleetStartPrompt prompt)
+    {
+        if (_owner is null) return FleetStartChoice.Cancel;
+        var dialog = new StartFleetWindow(prompt);
+        return await _Over(dialog).ShowDialog<FleetStartChoice>(_owner);
+    }
+
+    public async Task<bool> ConfirmFleetSwitchAsync(SwitchFleetPrompt prompt)
     {
         if (_owner is null) return false;
-        var dialog = new StartFleetEsiPromptWindow(fleetName, unlinkedCount);
+        var dialog = new SwitchFleetWindow(prompt);
         return await _Over(dialog).ShowDialog<bool>(_owner);
     }
 

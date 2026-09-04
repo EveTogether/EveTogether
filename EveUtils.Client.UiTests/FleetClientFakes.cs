@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Fleet;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 
 namespace EveUtils.Client.UiTests;
@@ -106,6 +107,26 @@ internal sealed class FakeFleetClient : IFleetClient
     }
 
     public Task<(bool Ok, string Message)> RespondToJoinRequestAsync(long requestId, bool accept) => Ok();
+
+    /// <summary>What this store reports as the start collision (ET-168) — the members counting for another started
+    /// fleet. Empty unless a test stages one.</summary>
+    public List<FleetMemberElsewhereInfo> MembersActiveElsewhere { get; } = [];
+
+    public Task<IReadOnlyList<FleetMemberElsewhereInfo>> ListMembersActiveElsewhereAsync(long fleetId) =>
+        Task.FromResult<IReadOnlyList<FleetMemberElsewhereInfo>>(MembersActiveElsewhere);
+
+    /// <summary>Every ask, as (fleet, member) — 0 for everyone who is elsewhere (ET-168).</summary>
+    public List<(long FleetId, int OnlyCharacterId)> SwitchRequestCalls { get; } = [];
+
+    /// <summary>What the ask answers with; a test can set a refusal to drive the failed-ask path.</summary>
+    public (bool Ok, string Message, int Asked) SwitchRequestResult { get; set; } = (true, string.Empty, 0);
+
+    public Task<(bool Ok, string Message, int Asked)> RequestFleetSwitchAsync(long fleetId, int onlyCharacterId = 0)
+    {
+        SwitchRequestCalls.Add((fleetId, onlyCharacterId));
+        return Task.FromResult(SwitchRequestResult);
+    }
+
     public Task<(bool Ok, string Message)> StartFleetAsync(long fleetId) => Ok();
 
     /// <summary>The fleet ids a screen asked to stop / to conclude, so a test can assert which of the two exits the

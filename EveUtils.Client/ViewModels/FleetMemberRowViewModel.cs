@@ -106,6 +106,7 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
     [NotifyPropertyChangedFor(nameof(IsElsewhereActive))]
     [NotifyPropertyChangedFor(nameof(IsLinkDim))]
     [NotifyPropertyChangedFor(nameof(NeedsAttention))]
+    [NotifyPropertyChangedFor(nameof(CanSwitch))]
     private FleetMemberLinkState _linkState = FleetMemberLinkState.StandingBy;
 
     public bool IsElsewhereActive => LinkState == FleetMemberLinkState.ElsewhereActive;
@@ -143,6 +144,31 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
     private string? _elsewhereNote;
 
     public bool HasElsewhereNote => !string.IsNullOrEmpty(ElsewhereNote);
+
+    // ── The one act on an elsewhere-active member (ET-168, scherm 1) ────────────────────────────────────────────
+
+    /// <summary>
+    /// What to do about a member who counts somewhere else: move them, or ask them to move. Supplied by the
+    /// overview's rebuild, because whether it applies depends on <see cref="LinkState"/>, which is only known once
+    /// every started fleet has been read. Null means there is nothing to offer here.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSwitch))]
+    private IAsyncRelayCommand? _switchCommand;
+
+    /// <summary>Only ever shown on a member who is elsewhere active — the row's whole reason for having it.</summary>
+    public bool CanSwitch => IsElsewhereActive && SwitchCommand is not null;
+
+    /// <summary>
+    /// Two verbs, and the difference between them is the whole rule: your own pilot you move, because it is your
+    /// character; anyone else's you ask, because which fleet a player stays in is theirs to decide. A commander
+    /// never pulls someone out of another fleet.
+    /// </summary>
+    public string SwitchLabel => IsMine ? "switch" : "ask to switch";
+
+    public string SwitchTooltip => IsMine
+        ? "Move this pilot here: leave the fleet it counts for, then link here"
+        : "Send this pilot a request to come over. They decide; nothing moves until they do.";
 
     /// <summary>The fleet commander, this client's own characters, and whoever asks for attention: the members
     /// a folded row always shows, whether the fleet has six pilots or fifty.</summary>

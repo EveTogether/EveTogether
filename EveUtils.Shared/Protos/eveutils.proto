@@ -73,6 +73,16 @@ service Fleets {
   // Conclude (2026-06-04): the creator marks the fleet finished (Forming/Active → Concluded), kept for history.
   // A concluded fleet broadcasts nothing and can no longer be joined or started. Creator-only; idempotent.
   rpc ConcludeFleet (ConcludeFleetRequest) returns (FleetActionReply);
+  // The collision at the start (ET-168). Read first: which roster members already count for another started
+  // fleet, so the commander sees it before pressing START rather than after. Only the server can answer for
+  // someone else's pilot. Then, once the fleet runs, one call asks all of them to come over — one request or
+  // fifty, the same call. It asks and nothing else: no roster is touched and nobody is moved.
+  rpc ListMembersActiveElsewhere (ListMembersActiveElsewhereRequest) returns (ListMembersActiveElsewhereReply);
+  rpc RequestFleetSwitch (RequestFleetSwitchRequest) returns (RequestFleetSwitchReply);
+  // The member's own answer to that request, and the one act a commander may never perform for anyone but their
+  // own alt: leave whatever started fleet you count for, and couple here. Two acts in the code, one here, because
+  // accepting while still active elsewhere is refused and the member should not have to know why.
+  rpc SwitchToFleet (SwitchToFleetRequest) returns (FleetActionReply);
   rpc GetFleet (GetFleetRequest) returns (GetFleetReply);
   rpc ListMyFleets (ListMyFleetsRequest) returns (ListFleetsReply);
 
@@ -187,6 +197,25 @@ message StartFleetRequest { int64 fleet_id = 1; }
 message StopFleetRequest { int64 fleet_id = 1; }  // ET-166: Active -> Forming, roster kept
 
 message ConcludeFleetRequest { int64 fleet_id = 1; }
+
+// ET-168 - the start collision.
+message ListMembersActiveElsewhereRequest { int64 fleet_id = 1; }
+message MemberActiveElsewhere {
+  int32 character_id = 1;
+  int64 elsewhere_fleet_id = 2;
+  string elsewhere_fleet_name = 3;
+}
+message ListMembersActiveElsewhereReply {
+  bool ok = 1;
+  string message = 2;
+  repeated MemberActiveElsewhere members = 3;
+}
+// only_character_id = 0 asks everyone who is active elsewhere (the start dialog's one button); a character id asks
+// that one member, which is the same act at the scale of a single member row.
+message RequestFleetSwitchRequest { int64 fleet_id = 1; int32 only_character_id = 2; }
+// asked = how many members were sent a request, so the commander gets the count back and not a bare "done".
+message RequestFleetSwitchReply { bool accepted = 1; string message = 2; int32 asked = 3; }
+message SwitchToFleetRequest { int64 fleet_id = 1; }
 
 message GetFleetRequest { int64 fleet_id = 1; }
 message FleetDto {

@@ -15,6 +15,7 @@ using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Transport;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Messaging.Dtos;
 using EveUtils.Shared.Modules.Messaging.Entities;
 using EveUtils.Shared.Modules.Messaging.Events;
@@ -145,12 +146,21 @@ public partial class InboxViewModel : ViewModelBase, ITransientService
                     [new ToastAction("Accept", () => _ = RespondAsync(invite, accept: true), ToastActionStyle.Affirmative),
                      new ToastAction("Decline", () => _ = RespondAsync(invite, accept: false), ToastActionStyle.Destructive)]);
                 break;
+
+            // The commander's "we have started — are you coming?" (ET-168). Both answers are on the toast, and
+            // letting it fade is the third one: the request stays in the inbox while the fleet runs.
+            case MessageKind.FleetSwitchRequest when _FindPendingInvite(payload) is { } request:
+                _toasts.Show(payload.Title, payload.Body, ToastKind.Information,
+                    [new ToastAction("Switch", () => _ = RespondAsync(request, accept: true), ToastActionStyle.Affirmative),
+                     new ToastAction("Stay put", () => _ = RespondAsync(request, accept: false))]);
+                break;
         }
     }
 
-    /// <summary>The just-reloaded merged inbox row for this delivery, if it still has a pending invite to answer.</summary>
+    /// <summary>The just-reloaded merged inbox row for this delivery, if it still has an answer outstanding.</summary>
     private InboxItemViewModel? _FindPendingInvite(MessageDeliveredPayload payload) =>
-        Messages.FirstOrDefault(m => m.IsInvite && m.CanRespond && m.Title == payload.Title && m.Body == payload.Body);
+        Messages.FirstOrDefault(m => (m.IsInvite || m.IsSwitchRequest) && m.CanRespond
+                                     && m.Title == payload.Title && m.Body == payload.Body);
 
     /// <summary>Called when the inbox window opens: mark everything read so the badge clears.</summary>
     public async Task OnOpenedAsync()
@@ -186,6 +196,15 @@ public partial class InboxViewModel : ViewModelBase, ITransientService
 
             // answer as the character that received the copy (the recipient), not the most-recent session.
             var result = await _fleetClient.RespondToMessageAsync(server, invite.ServerMessageId, accept, invite.RecipientCharacterId);
+
+            // Accepting an invite while this character is still flying in another started fleet is refused, and the
+            // refusal is right: the two are one character and only one of them can count (ET-168). What was wrong
+            // was leaving the pilot with an error and two acts to work out for themselves. Switching is offered
+            // here instead, with both steps named, and the invite is answered by the same act.
+            if (!result.Ok && accept && item.IsInvite
+                && await OfferSwitchInsteadAsync(server, invite) is true)
+                result = (true, string.Empty);
+
             if (result.Ok)
             {
                 await _store.SetStatusAsync(invite.Id, MessageStatus.Responded);
@@ -203,6 +222,53 @@ public partial class InboxViewModel : ViewModelBase, ITransientService
             Status = $"Failed: {lastError}";
 
         await ReloadAsync();
+    }
+
+    /// <summary>
+    /// The way through a refused invite (ET-168, scherm 7). In the code, coming over is two acts — leave the fleet
+    /// you count for, then couple here — and the second is refused outright while the first has not happened. This
+    /// asks once, showing both steps, and then has the server do them as one; the invite is accepted as part of it,
+    /// so the pilot never has to answer the same question twice.
+    ///
+    /// <para>Returns null when there was nothing to offer (no such invite, nothing to leave), false when the pilot
+    /// backed out or the switch failed — in both of those the original refusal is what they are told.</para>
+    /// </summary>
+    private async Task<bool?> OfferSwitchInsteadAsync(string server, ClientInboxMessage copy)
+    {
+        if (_fleetClient is null || _dialogs is null || copy.RefId is not { } inviteId)
+            return null;
+
+        var invite = (await _fleetClient.ListPendingInvitesAsync(server, copy.RecipientCharacterId))
+            .FirstOrDefault(i => i.Id == inviteId);
+        if (invite is null)
+            return null;
+
+        var target = await _fleetClient.GetFleetAsync(server, invite.FleetId, copy.RecipientCharacterId);
+        if (target is null)
+            return null;
+
+        // What this character counts for right now, on this server: the fleets a switch has to walk them out of.
+        var leaving = (await _fleetClient.ListMyFleetsAsync(server, copy.RecipientCharacterId))
+            .Where(f => f.Activation == FleetActivation.Active && f.Id != target.Id)
+            .OrderBy(f => f.ActivatedAt ?? DateTimeOffset.MaxValue)
+            .Select(f => new SwitchFleetLeaving(f.Name, f.ActivatedAt))
+            .ToList();
+        if (leaving.Count == 0)
+            return null;   // the refusal was about something else; do not offer an act that would not have helped
+
+        var name = _characters is null
+            ? $"Char {copy.RecipientCharacterId}"
+            : (await _characters.GetAllAsync()).FirstOrDefault(c => c.EsiCharacterId == copy.RecipientCharacterId)?.Name
+              ?? $"Char {copy.RecipientCharacterId}";
+
+        if (!await _dialogs.ConfirmFleetSwitchAsync(
+                new SwitchFleetPrompt(name, target.Name, target.ActivatedAt, leaving, [])))
+            return false;
+
+        var switched = await _fleetClient.SwitchToFleetAsync(server, target.Id, copy.RecipientCharacterId);
+        if (!switched.Ok)
+            Status = $"Switch failed: {switched.Message}";
+        return switched.Ok;
     }
 
     public async Task DeleteAsync(InboxItemViewModel item)

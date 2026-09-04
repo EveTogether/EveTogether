@@ -57,6 +57,11 @@ public sealed partial class FleetsViewModel
     private double _contentWidth = FleetOverviewLayout.WideBreakpoint;
     private MetricShareSnapshot _sharing = new(new Dictionary<string, string>(StringComparer.Ordinal));
 
+    /// <summary>The link rule as of the last rebuild — which started fleet each pilot counts for. Kept rather than
+    /// recomputed because the acts that came with ET-168 all start from it: the start dialog's collision line, the
+    /// member row's switch, and the fleets a switch has to walk a pilot out of.</summary>
+    private ActiveFleetLinks _links = ActiveFleetLinks.Empty;
+
     // ── What the screen binds ───────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>One lane per character of this client, in the character column's order — never the fleet's members.</summary>
@@ -224,7 +229,7 @@ public sealed partial class FleetsViewModel
         _allRows.AddRange(ServerGroups.SelectMany(g => g.Fleets).Concat(LocalFleets));
         var now = DateTimeOffset.UtcNow;
 
-        var links = new ActiveFleetLinks(_allRows
+        var links = _links = new ActiveFleetLinks(_allRows
             .Where(r => r.IsInActiveGroup)
             .Select(r => new ActiveFleetRoster(r.Key, r.Info.ActivatedAt, r.Members.Select(m => m.CharacterId).ToList())));
 
@@ -242,6 +247,7 @@ public sealed partial class FleetsViewModel
                     : null;
                 member.SharesNothing = member.IsMine && !row.IsFinished
                     && !_sharing.IsShared(row.Id, member.CharacterId, MetricKind.Dps);
+                member.SwitchCommand = SwitchCommandFor(row, member);
             }
 
             row.RefreshVisibleMembers();
@@ -269,6 +275,21 @@ public sealed partial class FleetsViewModel
             return null;
         return $"{member.CharacterName} is on this roster but counts for {other.Name}, "
              + "because that fleet started first — not in this fleet's metrics, and not in a fleet run here.";
+    }
+
+    /// <summary>
+    /// The act offered on a member who counts somewhere else (ET-168, scherm 1). Your own pilot you move yourself —
+    /// that is owning the character, not commanding the fleet — so it is offered wherever the pilot is mine.
+    /// Anyone else's you may only <i>ask</i>, and only as the fleet's commander, because that is who the server
+    /// lets send the request. Nothing at all on a member who is not elsewhere active.
+    /// </summary>
+    private IAsyncRelayCommand? SwitchCommandFor(FleetViewModel row, FleetMemberRowViewModel member)
+    {
+        if (member.LinkState != FleetMemberLinkState.ElsewhereActive)
+            return null;
+        if (member.IsMine)
+            return new AsyncRelayCommand(() => SwitchCharacterAsync(row, member.CharacterId));
+        return row.IsMine ? new AsyncRelayCommand(() => AskToSwitchAsync(row, member)) : null;
     }
 
     private static FleetMemberLinkState LinkStateOf(FleetViewModel row, FleetMemberRowViewModel member, ActiveFleetLinks links)
@@ -341,6 +362,13 @@ public sealed partial class FleetsViewModel
             var standingBy = _allRows.Where(r => r.IsStandingBy && r.Members.Any(m => m.CharacterId == id)).ToList();
             bool? inGame = _presence?.IsInGame(id, character.Name);
 
+            // A pilot rostered in a started fleet they do not count for is the one lane with something to be done
+            // about it, and it is this pilot's own act: leave the fleet they count for, and the other one takes over.
+            // Not offered when they command the fleet they would have to walk out of — a fleet keeps its owner.
+            var switchTo = elsewhere.Count > 0 && fleet is not null && fleet.Info.CreatorCharacterId != id
+                ? elsewhere[0]
+                : null;
+
             var lane = new FleetLaneViewModel(character)
             {
                 Fleet = fleet,
@@ -354,15 +382,19 @@ public sealed partial class FleetsViewModel
                         ? Count(fleet.Members.Count(m => m.LinkState == FleetMemberLinkState.Linked), "linked")
                           + (fleet.Members.Any(m => m.IsExternal) ? " · " + Count(fleet.Members.Count(m => m.IsExternal), "external") : "")
                         : $"FC: {fleet.CommanderText}{(fleet.IsMine ? " (you)" : "")}",
-                PrimaryActionText = fleet is null ? "START…" : fleet.IsMine && isCommander ? "STOP" : "LEAVE",
+                PrimaryActionText = fleet is null ? "START…" : switchTo is not null ? "switch" : fleet.IsMine && isCommander ? "STOP" : "LEAVE",
                 PrimaryIsAccent = fleet is null,
+                PrimaryIsWarn = switchTo is not null,
                 PrimaryCommand = fleet is null
                     ? StartForCharacterCommandFor(id, standingBy)
-                    : fleet.IsMine && isCommander
-                        ? new AsyncRelayCommand(() => StopRowAsync(fleet))
-                        : new AsyncRelayCommand(() => LeaveCharacterAsync(fleet, id)),
-                SecondaryActionText = fleet is null ? "" : isCommander ? "manage" : "metrics",
+                    : switchTo is not null
+                        ? SwitchLaneCommandFor(id, elsewhere)
+                        : fleet.IsMine && isCommander
+                            ? new AsyncRelayCommand(() => StopRowAsync(fleet))
+                            : new AsyncRelayCommand(() => LeaveCharacterAsync(fleet, id)),
+                SecondaryActionText = fleet is null ? "" : switchTo is not null ? "leave" : isCommander ? "manage" : "metrics",
                 SecondaryCommand = fleet is null ? null
+                    : switchTo is not null ? new AsyncRelayCommand(() => LeaveCharacterAsync(fleet!, id))
                     : isCommander ? new RelayCommand(() => ManageRow(fleet)) : new AsyncRelayCommand(() => MetricsRowAsync(fleet)),
                 RevealCommand = fleet is null ? null : new RelayCommand(() => Reveal(fleet)),
                 MenuItems = LaneMenu(fleet, id, isCommander, standingBy),
@@ -393,6 +425,21 @@ public sealed partial class FleetsViewModel
 
         LanesEmptyText = Lanes.Count == 0 ? "No characters yet — add one in the CHARACTERS column." : null;
     }
+
+    /// <summary>
+    /// "switch" on a lane: move this pilot to the started fleet they are rostered in but do not count for. With
+    /// exactly one such fleet there is nothing to choose; with several the lane says so and sends the reader to the
+    /// rows, where the choice is a member row per fleet rather than a guess made here.
+    /// </summary>
+    private IRelayCommand SwitchLaneCommandFor(int characterId, IReadOnlyList<FleetViewModel> elsewhere) =>
+        elsewhere.Count == 1
+            ? new AsyncRelayCommand(() => SwitchCharacterAsync(elsewhere[0], characterId))
+            : new RelayCommand(() =>
+            {
+                StatusMessage = string.Create(CultureInfo.InvariantCulture,
+                    $"{NameOf(characterId)} is on {elsewhere.Count} started rosters without counting for any of them — switch from the fleet's own member row.");
+                SetStatusFilter(FleetStatusFilter.Active);
+            });
 
     /// <summary>START… on an idle lane: the one standing-by fleet this pilot commands starts outright; with several
     /// the row's own START is the place to choose, and with none the button says why it does nothing.</summary>
@@ -428,6 +475,15 @@ public sealed partial class FleetsViewModel
                 items.Add(new("no fleet standing by for this character"));
             return items;
         }
+
+        // Every action of the lane again, so the compact line — which has no buttons at all — still reaches them.
+        foreach (var other in _links.ActiveFleetsOf(characterId)
+                     .Where(key => key != fleet.Key)
+                     .Select(key => _allRows.FirstOrDefault(r => r.Key == key))
+                     .OfType<FleetViewModel>())
+            items.Add(new($"switch to {other.Name}",
+                fleet.Info.CreatorCharacterId == characterId ? null : new AsyncRelayCommand(() => SwitchCharacterAsync(other, characterId)),
+                fleet.Info.CreatorCharacterId == characterId ? $"{NameOf(characterId)} commands {fleet.Name} — a fleet keeps its owner" : null));
 
         if (fleet.IsMine && isCommander)
             items.Add(new("STOP the fleet", new AsyncRelayCommand(() => StopRowAsync(fleet))));
@@ -688,27 +744,151 @@ public sealed partial class FleetsViewModel
             ? await CompositionClientFor(row.ServerAddress, row.ActingCharacterId).GetAsync(compositionId)
             : null;
 
-        if (!CompositionFillBuilder.AllMinimaMet(composition, members)
-            && !await _dialogs.ConfirmAsync("Start under-strength?",
-                "The coupled doctrine's minimums are not all met yet. Start the fleet anyway?", okText: "Start anyway"))
-            return;
-
-        if (!await _dialogs.ConfirmStartFleetAsync(row.Name, members.Count(m => m.IsExternal)))
+        // Under-strength used to be a yes/no in front of the start dialog. It is a note inside it now: two dialogs
+        // for one press read as two decisions, and only one of them was ever a decision.
+        var prompt = await BuildStartPromptAsync(row, client, CompositionFillBuilder.AllMinimaMet(composition, members));
+        var choice = await _dialogs.PickFleetStartAsync(prompt);
+        if (choice == FleetStartChoice.Cancel)
             return;
 
         var started = await client.StartFleetAsync(row.Id);
-        if (started.Ok)
-        {
-            StatusMessage = $"Started '{row.Name}'.";
-            _toasts.Show($"Started '{row.Name}'", "Its members are linked from now on.");
-            await _ReloadEverythingAsync();
-        }
-        else
+        if (!started.Ok)
         {
             StatusMessage = $"Start failed: {started.Message}";
             _toasts.Show("Start failed",
                 string.IsNullOrWhiteSpace(started.Message) ? $"Could not start '{row.Name}'." : started.Message, ToastKind.Error);
+            return;
         }
+
+        StatusMessage = $"Started '{row.Name}'.";
+        _toasts.Show($"Started '{row.Name}'", "Its members are linked from now on.");
+
+        // The ask comes after the start and not with it: a request to come over to a fleet that is not running yet
+        // is a request to leave a running one for nothing. Asking failing does not un-start the fleet — it says so
+        // and leaves the collision standing, which is exactly what "leave them" would have done.
+        if (choice == FleetStartChoice.AskThemAll && prompt.HasCollision)
+            await AskEveryoneElsewhereAsync(row, client);
+
+        await _ReloadEverythingAsync();
+    }
+
+    /// <summary>
+    /// What the start dialog is shown (ET-168, scherm 2). The collision is read from two places because neither
+    /// knows all of it: this client works out where its <i>own</i> pilots count, over every fleet it can see, local
+    /// ones included; the store the fleet lives in answers for someone else's pilot, which no client can see. What
+    /// the client knows first-hand wins, because it spans stores and the server's answer does not.
+    /// </summary>
+    private async Task<FleetStartPrompt> BuildStartPromptAsync(FleetViewModel row, IFleetClient client, bool minimaMet)
+    {
+        var reported = new Dictionary<int, string>();
+        foreach (var member in await client.ListMembersActiveElsewhereAsync(row.Id))
+            reported[member.CharacterId] = member.ElsewhereFleetName;
+
+        var members = row.Members
+            .Select(m => new FleetStartMember(
+                m.CharacterId, m.CharacterName, m.IsMine, m.IsFleetCommander, m.IsExternal,
+                m.IsExternal ? null : ElsewhereFleetNameFor(m.CharacterId, row) ?? Reported(m.CharacterId)))
+            .ToList();
+
+        // A client-only fleet's roster is your own pilots and external ones: there is no inbox to send a request to.
+        return new FleetStartPrompt(row.Name, members, CanAskThemAll: !row.IsLocal, minimaMet);
+
+        string? Reported(int characterId) => reported.TryGetValue(characterId, out var name) ? name : null;
+    }
+
+    /// <summary>The started fleet this pilot counts for, when it is not <paramref name="other"/> — the name that
+    /// turns "not linked" into something a reader can act on. Null when they count for nothing else.</summary>
+    private string? ElsewhereFleetNameFor(int characterId, FleetViewModel other) =>
+        _links.LinkedFleetOf(characterId) is { } key && key != other.Key
+            ? _allRows.FirstOrDefault(r => r.Key == key)?.Name
+            : null;
+
+    /// <summary>The FC's one button (ET-168, scherm 2): every member who is elsewhere gets the same request, in one
+    /// act, whether that is one member or fifty.</summary>
+    private async Task AskEveryoneElsewhereAsync(FleetViewModel row, IFleetClient client)
+    {
+        var asked = await client.RequestFleetSwitchAsync(row.Id);
+        if (!asked.Ok)
+        {
+            StatusMessage = $"Could not ask them to switch: {asked.Message}";
+            _toasts.Show("Nobody was asked",
+                string.IsNullOrWhiteSpace(asked.Message) ? "The request could not be sent." : asked.Message, ToastKind.Error);
+            return;
+        }
+
+        StatusMessage = asked.Asked == 1
+            ? "Asked 1 member to switch over."
+            : string.Create(CultureInfo.InvariantCulture, $"Asked {asked.Asked} members to switch over.");
+        _toasts.Show("Request sent", "They stay on the roster either way — switching is theirs to decide.");
+    }
+
+    /// <summary>
+    /// "Ask them to switch" on one member row (ET-168, scherm 1). The same request the start dialog sends to
+    /// everyone, aimed at a single pilot. It asks and nothing else: the member stays on this roster whatever they
+    /// answer, and a commander never pulls anyone out of another fleet.
+    /// </summary>
+    private async Task AskToSwitchAsync(FleetViewModel row, FleetMemberRowViewModel member)
+    {
+        var client = ServerOrLocalClient(row.ServerAddress, row.ActingCharacterId);
+        var asked = await client.RequestFleetSwitchAsync(row.Id, member.CharacterId);
+        StatusMessage = asked.Ok
+            ? $"Asked {member.CharacterName} to switch to '{row.Name}'."
+            : $"Could not ask {member.CharacterName}: {asked.Message}";
+        if (asked.Ok)
+            _toasts.Show($"Asked {member.CharacterName}", "They decide. Nothing moves until they do.");
+    }
+
+    /// <summary>
+    /// "Switch" on one of my own pilots (ET-168, scherm 1 and 7). Two acts made one: walk the pilot out of every
+    /// started fleet they are rostered in, which leaves this one as the only fleet they can count for. There is no
+    /// joining half here — a pilot is only ever offered this on a fleet whose roster they are already on, so what
+    /// stands between them and counting here is nothing but the fleet they are still in.
+    ///
+    /// <para>The dialog spells that out rather than hiding it, because "leave" is the part with a consequence
+    /// beyond tonight: it comes off that fleet's roster, and next week it will not be on it.</para>
+    /// </summary>
+    private async Task SwitchCharacterAsync(FleetViewModel row, int characterId)
+    {
+        var name = row.Members.FirstOrDefault(m => m.CharacterId == characterId)?.CharacterName ?? NameOf(characterId);
+        var leaving = _links.ActiveFleetsOf(characterId)
+            .Where(key => key != row.Key)
+            .Select(key => _allRows.FirstOrDefault(r => r.Key == key))
+            .OfType<FleetViewModel>()
+            .ToList();
+
+        if (leaving.Count == 0)
+        {
+            StatusMessage = $"{name} counts for no other started fleet — nothing to switch away from.";
+            return;
+        }
+
+        // A commander cannot walk out of their own fleet: it would leave it ownerless. The same rule the server
+        // enforces, said here before the pilot is asked to confirm something that would then be refused.
+        if (leaving.FirstOrDefault(r => r.Info.CreatorCharacterId == characterId) is { } owned)
+        {
+            StatusMessage = $"{name} commands '{owned.Name}'. Stop or conclude that fleet first, or hand it over.";
+            _toasts.Show("Cannot switch",
+                $"{name} commands '{owned.Name}' — a fleet always keeps its owner.", ToastKind.Error);
+            return;
+        }
+
+        var coordinator = _services.GetService<FleetRunGroupCodeCoordinator>();
+        var runs = leaving
+            .SelectMany(r => FleetRunsInProgress.Describe(coordinator, r.Id, NameOf, DateTime.UtcNow))
+            .ToList();
+
+        var prompt = new SwitchFleetPrompt(
+            name, row.Name, row.Info.ActivatedAt,
+            leaving.Select(r => new SwitchFleetLeaving(r.Name, r.Info.ActivatedAt)).ToList(),
+            runs);
+        if (!await _dialogs.ConfirmFleetSwitchAsync(prompt))
+            return;
+
+        foreach (var other in leaving)
+            await LeaveCharacterAsync(other, characterId);
+
+        StatusMessage = $"{name} switched to '{row.Name}'.";
+        await _ReloadEverythingAsync();
     }
 
     /// <summary>
