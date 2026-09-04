@@ -2227,10 +2227,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
 
         CharacterMetricsSnapshot snapshot = _gamelog.Snapshot(_runCharacterName);
+        bool? wasInside = InsideAbyssal;
         if (snapshot.AbyssalAnchor is not null)
             InsideAbyssal = true;
         else if (snapshot.Location is not null && snapshot.LocationUnavailableReason is null)
             InsideAbyssal = false;
+
+        _StartOrStopOnAbyssalCrossing(wasInside, snapshot.AbyssalAnchor, nowUtc);
 
         // Same rule as DpsViewModel.LocationDisplay, and for the same reason (ET-71): a pilot known to be out of the
         // game reads as that, never as the system they undocked in hours ago.
@@ -2242,6 +2245,58 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             ? "offline"
             : AbyssalSpace.Describe(snapshot.Location, snapshot.AbyssalAnchor, nowUtc)
               ?? EsiLocationReasonText.Describe(snapshot.LocationUnavailableReason);
+    }
+
+    /// <summary>
+    /// Let the location watch press this window's own START and STOP. STOP stays the pause it is everywhere else:
+    /// the row is left open, and SAVE and DISCARD stay the pilot's.
+    /// </summary>
+    private void _StartOrStopOnAbyssalCrossing(bool? wasInside, DateTime? anchorUtc, DateTime nowUtc)
+    {
+        if (!IsAbyssal)
+            return;
+
+        // The anchor leads, because it is the only thing that rules out a cold start inside: this branch is entered
+        // on wasInside null too, so the null check is what holds it. CharacterMetrics.SeenInside anchors ONLY when
+        // a poll has already placed this pilot outside, so a client that came up with them already in a pocket has
+        // no anchor and starts nothing — a start invented on a twenty-minute limit is worse than none.
+        if (anchorUtc is { } lastSeenOutsideUtc && wasInside is not true && InsideAbyssal is true
+            && RunState is ActivityRunState.NotStarted)
+            LastAbyssalEntry = _StartOnAbyssalEntryAsync(lastSeenOutsideUtc);
+        // On the crossing ESI observed, not on the state it reports: keyed on the state, the first outside reading
+        // would stop a run that was started by hand and never taken in. Coming out stops it whoever started it.
+        else if (wasInside is true && InsideAbyssal is false && RunState is ActivityRunState.Running)
+            StopRun(nowUtc);
+    }
+
+    /// <summary>The pending automatic start, so a test can await what a location reading set going.</summary>
+    internal Task LastAbyssalEntry { get; private set; } = Task.CompletedTask;
+
+    /// <summary>
+    /// The run's <c>StartedAtUtc</c> becomes <paramref name="lastSeenOutsideUtc"/>: <c>AbyssalAnchor</c>, which
+    /// <c>CharacterMetrics.SeenInside</c> set to the timestamp of the last poll that placed this pilot outside —
+    /// never the moment the crossing was noticed. Entry is written nowhere and the watch only looks every
+    /// <c>EsiLocationMonitor.PollInterval</c>, so this stays the floor <see cref="ClockHint"/> says it is.
+    /// </summary>
+    private async Task _StartOnAbyssalEntryAsync(DateTime lastSeenOutsideUtc)
+    {
+        try
+        {
+            StartManualRun(lastSeenOutsideUtc);
+            await _BeginEstimatedRunAsync(lastSeenOutsideUtc);
+        }
+        catch (Exception ex)
+        {
+            // Put back to standing by rather than left on a clock with no row behind it: nobody pressed this
+            // button, so a pilot who is already in a pocket would have no reason to doubt it was being recorded.
+            // Same treatment _StartOnArrivalAsync gives the other start nobody pressed.
+            RunState = ActivityRunState.NotStarted;
+            AnchorUtc = null;
+            OnPropertyChanged(nameof(IsStartButtonVisible));
+            _services.GetService<IToastService>()?.Show("Run not started",
+                $"Going into the abyss did not start this run: {ex.Message}. Press START to record it.",
+                ToastKind.Error);
+        }
     }
 
     public void Dispose()
