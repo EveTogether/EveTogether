@@ -112,6 +112,13 @@ taken from the matching `## vX.Y.Z` section below.
   `docker-compose.yml` already references instead of building it from source.
 
 ### Changed
+- **Copying a scanned combat site now starts the run straight away, instead of offering a card you had to come back
+  to the app to click.** The run window comes up on that site with the clock already going, behind whatever you are
+  looking at and without taking the keyboard — so you can stay in EVE and fly. If more than one of your characters
+  has an EVE client up it asks which of them this run is for, exactly as it already did elsewhere; with one
+  character it simply starts. This is only for a copy holding one fully scanned combat site: several sites at once,
+  a half-scanned one, or anything that is not a combat site still shows the card it always did. A run that belongs
+  to a fleet is untouched — that one still waits for the commander, and the copied site waits behind it.
 - **A run the fleet commander starts now arrives as a notification you accept, rather than a window that opens by
   itself.** The card names the site and the system, so a pilot flying something else entirely can see at a glance
   that this is not their run, and it stays on screen until you answer it — nothing takes it away, because a card

@@ -329,6 +329,81 @@ public class ActivityWindowWiringTests
         window.Close();
     }
 
+    // ── ET-158 — a copied combat site starts its own run, on both routes ────────────────────────────
+
+    /// <summary>
+    /// The route where no window was up. START is never pressed, so this proves LoadAsync itself starts the run —
+    /// and that it does so after the authority is worked out, which is what START is gated on.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ACopiedSignature_OnAWindowThatWasNotOpen_StartsTheRunWithoutTheButton()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+
+        var model = new ActivityWindowViewModel(ActivityKind.Site, harness.Services)
+        {
+            SignatureId = "RUS-326",
+            SignatureName = "Sansha Refuge",
+            StartsOnArrival = true
+        };
+        await model.LoadAsync();
+
+        Assert.Equal(ActivityRunState.Running, model.RunState);
+        Assert.NotNull(model.RunId);
+    }
+
+    /// <summary>
+    /// The other route, and the one that matters: a window already up takes the copy through ApplySignature instead.
+    /// ET-100 survived four attempts because open and closed ran different code, so the same acceptance is proved on
+    /// both rather than on whichever route was handy.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ACopiedSignature_OnAWindowAlreadyOpen_ClosesTheOldRunOut_AndStartsTheNewOne()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        model.SignatureId = "RUS-326";
+        model.SignatureName = "Sansha Hideaway";
+        await model.StartRunCommand.ExecuteAsync(null);
+        Guid? closed = model.RunId;
+
+        model.StartsOnArrival = true;
+        model.ApplySignature("SUG-270", "Combat Site", "Drone Cluster", []);
+        await model.LastSignature;
+
+        Assert.Equal("Drone Cluster", model.SignatureName);
+        Assert.Equal(ActivityRunState.Running, model.RunState);
+        Assert.NotNull(model.RunId);            // NotEqual alone would also pass on no run at all
+        Assert.NotEqual(closed, model.RunId);
+        Assert.Equal(StoredRunState.Stopped, (await _RunAsync(harness, closed!.Value)).State);
+    }
+
+    /// <summary>
+    /// A run that belongs to a group ends on every other member's machine, so it is the FC's to end and the copied
+    /// site waits behind it (ET-105 AC-1). An automatic start must not reach past that guard, which is why it hangs
+    /// on the START button's own condition rather than on a second copy of it.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ACopiedSignature_OnARunThatBelongsToAGroup_WaitsInsteadOfStartingByItself()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        model.SignatureId = "RUS-326";
+        model.SignatureName = "Sansha Hideaway";
+        await model.StartRunCommand.ExecuteAsync(null);
+        Guid? shared = model.RunId;
+        model.FleetId = 42;   // shared, so ending it is not this window's call
+
+        model.StartsOnArrival = true;
+        model.ApplySignature("SUG-270", "Combat Site", "Drone Cluster", []);
+        await model.LastSignature;
+
+        Assert.Equal(shared, model.RunId);
+        Assert.Equal("Sansha Hideaway", model.SignatureName);
+        Assert.NotEqual(ActivityRunState.Running, model.RunState);
+        Assert.False(model.IsStartButtonVisible);
+    }
+
     private static async Task<Run> _RunAsync(ActivityWindowHarness harness, Guid runId)
     {
         await using ClientDbContext db = await harness.Services

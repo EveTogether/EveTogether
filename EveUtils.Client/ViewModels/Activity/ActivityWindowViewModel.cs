@@ -324,6 +324,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(HasShipRestriction))]
     private IReadOnlyList<SdeSite> _matchedSites = [];
 
+    // Whether this window starts its run by itself once it has settled, instead of waiting for START. Set by the
+    // clipboard signature offer (ET-158), which has no button to press.
+    public bool StartsOnArrival { get; set; }
+
     // ── The six sections ────────────────────────────────────────────────────────────────────────────
 
     public ActivitySection Activity { get; } = new() { Title = "ACTIVITY", IsExpanded = true };
@@ -728,6 +732,32 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (RunLoot is not null)
             await RunLoot.RefreshAsync();
         Refresh(DateTime.UtcNow);
+        // After Refresh, never before it: that is where the authority is worked out, and START is gated on it.
+        await _StartOnArrivalAsync();
+    }
+
+    // The window being open or closed decided which of two routes a copied signature took, and fixing only one of
+    // them is what kept ET-100 alive through four attempts. Both routes come here, and both come here only after
+    // the state they settle, so this sees the window a pilot would have been looking at.
+    private async Task _StartOnArrivalAsync()
+    {
+        // Deliberately the START button's own condition rather than a copy of it: a group run left standing owns
+        // this window until the FC decides, and an automatic start must not reach past that either (ET-105 AC-1).
+        if (!StartsOnArrival || !IsStartButtonVisible)
+            return;
+
+        try
+        {
+            await StartRunAsync();
+        }
+        catch (Exception ex)
+        {
+            // One caller is a void hand-over and the other an async void OnOpened, so an escape here is an
+            // unobserved task or a crash on the UI thread. Same treatment the signature hand-over gives its own.
+            _services.GetService<IToastService>()?.Show("Run not started",
+                $"Could not start the run on {SignatureName}: {ex.Message}", ToastKind.Error);
+            _SignatureDecision($"the automatic start failed: {ex.Message}", SignatureName ?? "(no site)");
+        }
     }
 
     /// <summary>
@@ -2213,7 +2243,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             _services.GetService<IToastService>()?.Show("Site not switched",
                 $"Could not close the open run to make room for {name}: {ex.Message}", ToastKind.Error);
             _SignatureDecision($"failed: {ex.Message}", name);
+            return; // a switch that failed leaves a window nobody should start a run on
         }
+
+        await _StartOnArrivalAsync();
     }
 
     /// <summary>

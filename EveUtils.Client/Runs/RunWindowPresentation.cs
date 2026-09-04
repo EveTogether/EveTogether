@@ -8,7 +8,11 @@ public enum RunWindowOpenTrigger
 
     /// <summary>The fleet commander started the shared run and this window is coming up on someone else's machine
     /// (ET-105 AC-2). That pilot may be mid-fight in EVE, and a window that grabs the keyboard there costs a ship.</summary>
-    RemoteFleetCommander
+    RemoteFleetCommander,
+
+    /// <summary>A copied combat-site signature opened this window and started its run by itself (ET-158). The whole
+    /// point is that the pilot never leaves EVE, so this must not take the keyboard either.</summary>
+    CopiedSignature
 }
 
 public enum RunWindowActivation
