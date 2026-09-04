@@ -39,7 +39,9 @@ public class Et170RenderHarness
     private const string Server = "krahwinkel-it.nl:7443";
     private const int Ravnholt = 1001, Kaska = 1002, Torv = 1003, Bex = 1004, Deio = 1005, Nilsa = 1006;
     private const int Aurel = 900001, Tessa = 900002, Doro = 900003, Vaari = 900004, Selo = 900005, Crowd = 910000;
-    private static readonly string OutDir = Environment.GetEnvironmentVariable("ET170_SHOTS") ?? @"C:\Users\info\AppData\Local\Temp\et170\renders";
+    // The fallback used to be one developer's own profile path, so this test failed on every machine but that one.
+    private static readonly string OutDir = Environment.GetEnvironmentVariable("ET170_SHOTS")
+        ?? Path.Combine(Path.GetTempPath(), "et170", "renders");
 
     private sealed class FakePresence(HashSet<int> mine, HashSet<int> online) : ILocalCharacterPresence
     {

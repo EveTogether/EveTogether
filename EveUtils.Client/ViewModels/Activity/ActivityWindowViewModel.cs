@@ -796,17 +796,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <summary>
     /// The caption over the ISK figures in the loot section. It names its own source on purpose, and it used to name
     /// the wrong one: it read "Prices are the clipboard column as it stood at the copy" long after the ISK in a
-    /// copied line stopped being held at all. LOOT, CONSUMED and NET are valued on type id out of the price cache
-    /// EVE Together refreshes hourly, which is the rule for every figure in this app.
+    /// copied line stopped being held at all.
     ///
-    /// The per-line figure under this caption is the copied column, and it is the only thing here that is: naming
-    /// both is the difference between a total a pilot can act on and one whose source he has to guess. Which cache
-    /// snapshot valued them is <see cref="RunLootViewModel.TotalIskLabel"/>'s to say, and it says it beside the
-    /// total rather than twice.
+    /// It then carried a second sentence warning that the figure beside each row was the copied column instead. That
+    /// sentence was true and is now gone, because the rows are valued the same way the totals are — a warning worth
+    /// removing by making it wrong rather than by deleting it. Which cache snapshot valued them is
+    /// <see cref="RunLootViewModel.TotalIskLabel"/>'s to say, and it says it beside the total rather than twice.
     /// </summary>
-    public string IskLabel =>
-        "Prices come from EVE Together's own hourly price lookup on type id. The figure beside each line is the "
-        + "copied column, and is not what these add up.";
+    public string IskLabel => "Prices come from EVE Together's own hourly price lookup on type id.";
 
     // ── Lifecycle ───────────────────────────────────────────────────────────────────────────────────
 
