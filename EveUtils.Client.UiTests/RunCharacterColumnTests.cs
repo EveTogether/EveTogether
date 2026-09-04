@@ -16,6 +16,7 @@ using EveUtils.Client.Imaging;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Path = Avalonia.Controls.Shapes.Path;

@@ -48,7 +48,7 @@ public sealed class ClipboardCaptureParserTests
     /// <summary>
     /// Close cardinality no longer decides anything on its own: the group column here has MORE distinct values
     /// than the names, so the shape alone picks the wrong one. That is why both columns are offered — whether the
-    /// right one wins is settled against the SDE, in <c>AbyssalLootCaptureTests</c>.
+    /// right one wins is settled against the SDE, in <c>ClipboardLootCaptureTests</c>.
     /// </summary>
     [Fact]
     public void ParseInventory_CloseTextColumnCardinality_OffersBothColumnsRatherThanDeciding()

@@ -13,11 +13,11 @@ using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.Extensions.DependencyInjection;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
-using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
@@ -161,9 +161,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         {
             // The run window adopts the stored running run itself, so it only has to be opened; it is also the one
             // place that owns STOP and SAVE, which is why this lane does not carry a second copy of either.
-            // Its own kind knows only two shapes, so the mapping is the one FleetRunWindowPresenter already makes.
-            ActivityKind kind = run.ActivityKind == StoredActivityKind.Abyssal ? ActivityKind.Abyssal : ActivityKind.Site;
-            _dialogs.ShowActivityWindow(new ActivityWindowViewModel(kind, _services));
+            _dialogs.ShowActivityWindow(new ActivityWindowViewModel(run.ActivityKind, _services));
         }
         else if (_services.GetService<ISdeAccessor>() is { } sde)
             // Handed only this pilot, so the screen opens on the lane the operator pressed rather than on whoever

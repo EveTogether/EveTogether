@@ -14,7 +14,7 @@ using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
-using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
+using EveUtils.Shared.Modules.Runs.Enums;
 using LootCaptureSource = EveUtils.Shared.Modules.Runs.Enums.LootCaptureSource;
 using LootKind = EveUtils.Shared.Modules.Runs.Enums.LootKind;
 using StoredRunState = EveUtils.Shared.Modules.Runs.Enums.RunState;
@@ -54,7 +54,7 @@ public class ActivityWindowWiringTests
         Assert.True(running.IsSuccess, "START left no running run in the store");
         Assert.Equal(model.RunId, running.Value!.Id);
         Assert.Equal("Sansha Hideaway", running.Value.SiteName);
-        Assert.Equal(StoredActivityKind.Site, running.Value.ActivityKind);
+        Assert.Equal(ActivityKind.Site, running.Value.ActivityKind);
         Assert.Equal(ActivityWindowHarness.CharacterId, running.Value.CharacterId);
 
         // And the LOOT section is on the same run: the clipboard's own command finds it, and the window shows it.
@@ -423,7 +423,7 @@ public class ActivityWindowWiringTests
         before.KeepDataOnDispose = true;
         var instanceName = before.InstanceName;
         Result<Guid> started = await before.Services.GetRequiredService<IDispatcher>().Send(
-            new RunCommands.StartRunCommand(90000001, StoredActivityKind.Site, DateTime.UtcNow.AddHours(-1),
+            new RunCommands.StartRunCommand(90000001, ActivityKind.Site, DateTime.UtcNow.AddHours(-1),
                 SiteTypeId: 0, SiteName: "Sansha Hideaway", SolarSystemId: null));
         Assert.True(started.IsSuccess);
         before.Dispose();   // the application closes; the run stays open
@@ -801,7 +801,7 @@ public class ActivityWindowWiringTests
         Result<RunningRunDto> running = await harness.Services.GetRequiredService<IDispatcher>()
             .Query(new GetRunningRunQuery());
         Assert.True(running.IsSuccess, "the fleet's envelope started a clock but no run");
-        Assert.Equal(StoredActivityKind.Abyssal, running.Value!.ActivityKind);
+        Assert.Equal(ActivityKind.Abyssal, running.Value!.ActivityKind);
     }
 
     // ── The four buttons against the four states ────────────────────────────────────────────────────

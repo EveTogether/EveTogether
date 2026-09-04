@@ -16,10 +16,10 @@ using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Queries;
+using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using IDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
-using StoredActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 
 namespace EveUtils.Client.UiTests;
 
@@ -70,7 +70,7 @@ public sealed class RunLifecycleTests
         if (row == "stopped-by-commander")
         {
             await bus.PublishAsync(new FleetRunStoppedEvent(
-                new RunGroupStop(FleetId, StoredActivityKind.Site, GroupCode, DateTime.UtcNow)));
+                new RunGroupStop(FleetId, ActivityKind.Site, GroupCode, DateTime.UtcNow)));
             await _Settle(() => joined.RunState == ActivityRunState.Stopped);
         }
         else
@@ -139,7 +139,7 @@ public sealed class RunLifecycleTests
             Assert.NotNull(fc.GroupCode);
 
             using var joined = new ActivityWindowViewModel(ActivityKind.Site, member.Services);
-            joined.JoinFleetRun(new RunGroupCodeStart(FleetId, StoredActivityKind.Site,
+            joined.JoinFleetRun(new RunGroupCodeStart(FleetId, ActivityKind.Site,
                 row == "matching-code" ? fc.GroupCode! : "HF-ELSE", DateTime.UtcNow.AddMinutes(-4), true,
                 "Suspicious Signal: Secure the Intel", "Shousran", "RUS-326"));
             await _Settle(() => joined.RunId is not null);
@@ -181,7 +181,7 @@ public sealed class RunLifecycleTests
         await _SeedAsync(instance);
 
         using var joined = new ActivityWindowViewModel(ActivityKind.Site, instance.Services) { SignatureId = memberHas };
-        joined.JoinFleetRun(new RunGroupCodeStart(FleetId, StoredActivityKind.Site, GroupCode, DateTime.UtcNow, true,
+        joined.JoinFleetRun(new RunGroupCodeStart(FleetId, ActivityKind.Site, GroupCode, DateTime.UtcNow, true,
             "Suspicious Signal: Secure the Intel", "Shousran", "RUS-326"));
         await _Settle(() => joined.RunId is not null);
 
@@ -327,7 +327,7 @@ public sealed class RunLifecycleTests
         Guid ownRow = joined.RunId!.Value;
 
         await bus.PublishAsync(new FleetRunDiscardedEvent(
-            new RunGroupDiscard(FleetId, StoredActivityKind.Site, GroupCode, DateTime.UtcNow)));
+            new RunGroupDiscard(FleetId, ActivityKind.Site, GroupCode, DateTime.UtcNow)));
         await _Settle(() => joined.RunState == ActivityRunState.Discarded);
 
         Assert.Equal(ActivityRunState.Discarded, joined.RunState);
@@ -348,7 +348,7 @@ public sealed class RunLifecycleTests
     // ── Harness ─────────────────────────────────────────────────────────────────────────────────────
 
     private static RunGroupCodeStart _Start(DateTime startedAt) => new(
-        FleetId, StoredActivityKind.Site, GroupCode, startedAt, true,
+        FleetId, ActivityKind.Site, GroupCode, startedAt, true,
         "Suspicious Signal: Secure the Intel", "Shousran", "RUS-326");
 
     private static TestClientInstance _Instance(out RecordingDialogService dialogs, out RecordingToastService toasts)

@@ -17,21 +17,23 @@ using Microsoft.Extensions.Logging;
 
 namespace EveUtils.Client.Clipboard;
 
-public sealed class AbyssalLootCapture : ISingletonService, IDisposable
+/// <summary>Loot copied out of an EVE inventory window, onto whichever run is going (ET-65). Nothing here asks what
+/// kind of run that is — it was only ever named after the abyss because that was the only kind at the time.</summary>
+public sealed class ClipboardLootCapture : ISingletonService, IDisposable
 {
-    public const string FeatureName = "Abyssal run loot";
+    public const string FeatureName = "Run loot";
 
     private readonly IToastService _toasts;
     private readonly ISdeAccessor _sde;
     private readonly IDispatcher _dispatcher;
-    private readonly ILogger<AbyssalLootCapture> _logger;
+    private readonly ILogger<ClipboardLootCapture> _logger;
     private readonly Lock _gate = new();
     private readonly IDisposable _subscription;
 
     private string? _openFingerprint;
 
-    public AbyssalLootCapture(ClipboardWatchService clipboardWatch, IToastService toasts, ISdeAccessor sde,
-        ILogger<AbyssalLootCapture> logger,
+    public ClipboardLootCapture(ClipboardWatchService clipboardWatch, IToastService toasts, ISdeAccessor sde,
+        ILogger<ClipboardLootCapture> logger,
         IDispatcher dispatcher)
     {
         _toasts = toasts;
