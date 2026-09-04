@@ -43,6 +43,10 @@ public sealed class Run
     public int? SolarSystemId { get; set; }
     public string? Signature { get; set; }
 
+    /// <summary>How this run was looted, or null while the pilot has not said. Stored on the run and not derived:
+    /// nothing else on the row can tell a site that was blitzed from one that was cleared out.</summary>
+    public RunLootStrategy? LootStrategy { get; set; }
+
     /// <summary>Where this run came from — stored, never derived. A clipboard run has no site name as often as a
     /// manual one has one, so nothing else on this row can stand in for it (ET-163).</summary>
     public RunOrigin Origin { get; set; }

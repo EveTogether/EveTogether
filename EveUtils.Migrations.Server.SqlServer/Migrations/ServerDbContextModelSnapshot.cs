@@ -805,6 +805,9 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                     b.Property<DateTime?>("LastPushedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("LootStrategy")
+                        .HasColumnType("int");
+
                     b.Property<int?>("MissionLevel")
                         .HasColumnType("int");
 

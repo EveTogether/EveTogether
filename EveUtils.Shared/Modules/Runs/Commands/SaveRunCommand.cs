@@ -1,6 +1,7 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
@@ -21,4 +22,7 @@ public sealed record SaveRunCommand(
     DateTime? TimesCorrectedAtUtc = null,
     /// <summary>Set only by <see cref="SaveRunsLeftUnfinishedCommand"/>: the app committed this run itself, nobody
     /// pressed SAVE. Null on every pilot-driven save, which is all of them but that one.</summary>
-    DateTime? AutoSavedAtUtc = null) : ICommand<Result>;
+    DateTime? AutoSavedAtUtc = null,
+    /// <summary>How the run was looted. Normally already on the row — the chip writes it the moment it is pressed —
+    /// and set here for the one case that never had a row to write to: a strategy chosen before START.</summary>
+    RunLootStrategy? LootStrategy = null) : ICommand<Result>;

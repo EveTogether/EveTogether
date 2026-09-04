@@ -65,8 +65,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public const string TierSettingKey = "ui.activity.tier";
 
-    /// <summary>Remembered for the same reason as the tier: you loot the same way several runs in a row.</summary>
-    public const string LootStrategySettingKey = "ui.activity.lootstrategy";
+    /// <summary>Remembered for the same reason as the tier: you loot the same way several runs in a row. One key per
+    /// kind, because the kinds loot in different words and a shared key had them overwriting each other's answer.</summary>
+    public static string LootStrategySettingKey(ActivityKind kind) =>
+        $"ui.activity.lootstrategy.{kind.ToString().ToLowerInvariant()}";
 
     /// <summary>Once a second. The readout is a clock, and a clock cannot be read faster than it ticks.</summary>
     public static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(1);
@@ -77,10 +79,29 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     /// <summary>How much of the pocket you opened. Kinds loot in different vocabularies, so each gets its own list
     /// rather than one that half fits each — and a kind with nothing sensible to offer gets none.</summary>
-    public static IReadOnlyList<string> AbyssalLootStrategies { get; } =
-        ["bioadaptive only", "bioadaptive + triglavian", "all cans"];
+    public static IReadOnlyList<RunLootStrategy> AbyssalLootStrategies { get; } =
+        [RunLootStrategy.BioadaptiveOnly, RunLootStrategy.BioadaptiveAndTriglavian, RunLootStrategy.AllCans];
 
-    public static IReadOnlyList<string> SiteLootStrategies { get; } = ["blitzed", "cleared", "full clear"];
+    /// <summary>In order of how much of the site you did, which is why cherry-picked stands second and not last.
+    /// Cherry-picking is a site's move and only a site's: an abyssal pocket is instanced for you and your fleet, so
+    /// there is nobody to leave the other cans to.</summary>
+    public static IReadOnlyList<RunLootStrategy> SiteLootStrategies { get; } =
+        [RunLootStrategy.Blitzed, RunLootStrategy.CherryPicked, RunLootStrategy.Cleared, RunLootStrategy.FullClear];
+
+    /// <summary>The words on the chips. They live here and not in the stored value, so rewording one never reaches a
+    /// run that was already saved.</summary>
+    private static string LabelOf(RunLootStrategy strategy) => strategy switch
+    {
+        RunLootStrategy.BioadaptiveOnly => "bioadaptive only",
+        RunLootStrategy.BioadaptiveAndTriglavian => "bioadaptive + triglavian",
+        RunLootStrategy.AllCans => "all cans",
+        RunLootStrategy.Blitzed => "blitzed",
+        RunLootStrategy.Cleared => "cleared",
+        RunLootStrategy.FullClear => "full clear",
+        RunLootStrategy.CherryPicked => "cherry-picked",
+        // A run written by a newer build: its own name beats an empty chip.
+        _ => strategy.ToString()
+    };
 
     // Amber then red, on the last five and the last two minutes. Both are enough time to leave, which is the only
     // decision the clock exists to inform.
@@ -164,7 +185,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             .ToList();
 
         LootStrategyChoices = LootStrategies
-            .Select((strategy, index) => new ActivityChoice { Index = index, Label = strategy })
+            .Select((strategy, index) => new ActivityChoice { Index = index, Label = LabelOf(strategy) })
             .ToList();
 
         Sections = [Activity, Enemies, Fit, Fleet, Bounty, Loot];
@@ -294,13 +315,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     /// <summary>What was looted and what was left. Without it "19 minutes" says nothing — which is why it is set
     /// here rather than only displayed.</summary>
-    [ObservableProperty] private string? _lootStrategy;
+    [ObservableProperty] private RunLootStrategy? _lootStrategy;
 
     public IReadOnlyList<ActivityChoice> LootStrategyChoices { get; }
 
     /// <summary>The list this run's kind loots by. Empty is a real answer and not a gap: a mission is not looted in
     /// these words at all, so it gets no list rather than the site list it never fitted (ET-174 AC-4).</summary>
-    public IReadOnlyList<string> LootStrategies => Kind switch
+    public IReadOnlyList<RunLootStrategy> LootStrategies => Kind switch
     {
         ActivityKind.Abyssal => AbyssalLootStrategies,
         ActivityKind.Site => SiteLootStrategies,
@@ -781,10 +802,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 AbyssalWeather.All.Count);
             TierIndex = _Restore(settings.FirstOrDefault(s => s.Key == TierSettingKey)?.Value, Tiers.Count);
 
-            // A remembered strategy from the other kind of run addresses nothing here, so it reads as unset — the same
-            // rule the two indices get.
-            string? strategy = settings.FirstOrDefault(s => s.Key == LootStrategySettingKey)?.Value;
-            LootStrategy = LootStrategies.Contains(strategy) ? strategy : null;
+            // A remembered strategy this kind does not loot by addresses nothing here, so it reads as unset — the
+            // same rule the two indices get.
+            string? remembered = settings.FirstOrDefault(s => s.Key == LootStrategySettingKey(Kind))?.Value;
+            LootStrategy = LootStrategies.Cast<RunLootStrategy?>()
+                .FirstOrDefault(candidate => candidate.ToString() == remembered);
         }
 
         _SyncChoices();
@@ -1404,7 +1426,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         LootStrategy = LootStrategy == LootStrategies[index] ? null : LootStrategies[index];
         _SyncChoices();
         Refresh(DateTime.UtcNow);
-        await _PersistAsync(LootStrategySettingKey, LootStrategy ?? string.Empty);
+        await _PersistAsync(LootStrategySettingKey(Kind), LootStrategy?.ToString() ?? string.Empty);
+        // Onto the run the moment it is pressed, so a run the app finishes by itself (ET-179) keeps the answer. A
+        // strategy chosen before START has no row yet and reaches the run through SAVE.
+        if (RunId is { } runId)
+        {
+            using var scope = _services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+                .Send(new SetRunLootStrategyCommand(runId, LootStrategy));
+        }
     }
 
     [RelayCommand]
@@ -1797,7 +1827,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             runId, EffectiveStopUtc ?? nowUtc, nowUtc, [], _bounties, _enemyObservations?.ToInputs() ?? [], [],
             // Null leaves the row's own start alone; only a hand-corrected start travels.
             CorrectedStartUtc,
-            IsTimeCorrected ? nowUtc : null));
+            IsTimeCorrected ? nowUtc : null,
+            LootStrategy: LootStrategy));
         if (!result.IsSuccess)
         {
             RunNoticeText = result.Messages.FirstOrDefault()?.Text ?? "Could not save this run.";
@@ -2573,7 +2604,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             choice.IsSelected = choice.Index == TierIndex;
 
         foreach (var choice in LootStrategyChoices)
-            choice.IsSelected = choice.Label == LootStrategy;
+            choice.IsSelected = LootStrategy is { } chosen && LootStrategies[choice.Index] == chosen;
     }
 
     private async Task _PersistAsync(string key, string value)

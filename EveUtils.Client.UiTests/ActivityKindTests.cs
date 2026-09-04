@@ -79,16 +79,17 @@ public sealed class ActivityKindTests
         Assert.Equal(ActivityKind.Mission, Assert.Single(dialogs.ShownActivityWindows).Kind);
     }
 
-    /// <summary>AC-4. "Full clear" is a site's word and means nothing on a mission, so a mission is offered no list
-    /// at all rather than one it half fits — and the row goes with it, because an empty question reads as a window
-    /// that failed to load.</summary>
+    /// <summary>AC-4. "Full clear" and "cherry-picked" are a site's words and mean nothing on a mission, so a mission
+    /// is offered no list at all rather than one it half fits — and the row goes with it, because an empty question
+    /// reads as a window that failed to load.</summary>
     [AvaloniaFact]
     public async Task AMissionWindow_IsOfferedNoLootStrategy()
     {
         using var harness = await ActivityWindowHarness.CreateAsync();
         ActivityWindowViewModel window = await harness.OpenAsync(ActivityKind.Mission);
 
-        Assert.DoesNotContain("full clear", window.LootStrategies);
+        Assert.DoesNotContain(RunLootStrategy.FullClear, window.LootStrategies);
+        Assert.DoesNotContain(RunLootStrategy.CherryPicked, window.LootStrategies);
         Assert.Empty(window.LootStrategyChoices);
         Assert.False(window.IsLootStrategyShown);
     }

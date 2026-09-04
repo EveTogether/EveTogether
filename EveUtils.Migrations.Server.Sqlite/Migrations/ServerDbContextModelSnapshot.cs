@@ -766,6 +766,9 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.Property<DateTime?>("LastPushedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("LootStrategy")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int?>("MissionLevel")
                         .HasColumnType("INTEGER");
 
