@@ -132,6 +132,18 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
     /// Being offline is counted, not flagged — it is presence, not participation.</summary>
     public bool NeedsAttention => IsElsewhereActive || SharesNothing;
 
+    /// <summary>
+    /// Why this member sits on the roster and yet does not count here: the started fleet they are linked to instead.
+    /// Null unless they are elsewhere active. Scherm 1 spells this out under the row rather than leaving a bare
+    /// "not linked" to be guessed at — the whole screen exists to make this one situation readable, and "not linked"
+    /// on its own is exactly what a reader mistakes for "offline".
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasElsewhereNote))]
+    private string? _elsewhereNote;
+
+    public bool HasElsewhereNote => !string.IsNullOrEmpty(ElsewhereNote);
+
     /// <summary>The fleet commander, this client's own characters, and whoever asks for attention: the members
     /// a folded row always shows, whether the fleet has six pilots or fifty.</summary>
     public bool IsHighlighted => IsFleetCommander || IsMine || NeedsAttention;

@@ -200,6 +200,9 @@ public sealed partial class FleetsViewModel
                     PresenceState.Unknown,
                     FleetMemberPresence.IsSilent(member.LastSeenAt, now));
                 member.LinkState = LinkStateOf(row, member, links);
+                member.ElsewhereNote = member.LinkState == FleetMemberLinkState.ElsewhereActive
+                    ? ElsewhereNoteFor(member, links)
+                    : null;
                 member.SharesNothing = member.IsMine && !row.IsFinished
                     && !_sharing.IsShared(row.Id, member.CharacterId, MetricKind.Dps);
             }
@@ -215,6 +218,20 @@ public sealed partial class FleetsViewModel
         ApplyFilters();
         DescribeTotals(links);
         ApplyLayout();
+    }
+
+    /// <summary>The line under an elsewhere-active member: which fleet they count for instead, and that it is the
+    /// earlier start that decided it. Both halves matter — the fleet names the situation, the reason says it is a
+    /// rule and not a fault.</summary>
+    private string? ElsewhereNoteFor(FleetMemberRowViewModel member, ActiveFleetLinks links)
+    {
+        if (links.LinkedFleetOf(member.CharacterId) is not { } key)
+            return null;
+        var other = _allRows.FirstOrDefault(r => r.Key == key);
+        if (other is null)
+            return null;
+        return $"{member.CharacterName} is on this roster but counts for {other.Name}, "
+             + "because that fleet started first — not in this fleet's metrics, and not in a fleet run here.";
     }
 
     private static FleetMemberLinkState LinkStateOf(FleetViewModel row, FleetMemberRowViewModel member, ActiveFleetLinks links)

@@ -198,6 +198,15 @@ public class Et170RenderHarness
         }
         foreach (var cell in root.GetVisualDescendants().OfType<Border>().Where(b => b.Classes.Contains("cell") && b.Parent is Grid g && g.Parent is Border pb && pb.Classes.Contains("gridhead")))
             log.AppendLine($"  headcell [{string.Join(" ", cell.Classes)}] w={cell.Bounds.Width:0.#} x={cell.Bounds.X:0.#} visible={cell.IsVisible}");
+        foreach (var note in root.GetVisualDescendants().OfType<Border>().Where(b => b.Classes.Contains("whynote") && b.IsVisible))
+        {
+            double noteX = ((Visual)note).TranslatePoint(new Point(0, 0), root)?.X ?? -1;
+            var text = note.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault();
+            double textX = text is null ? -1 : ((Visual)text).TranslatePoint(new Point(0, 0), root)?.X ?? -1;
+            log.AppendLine($"  whynote x={noteX:0.#} textX={textX:0.#} w={note.Bounds.Width:0.#} h={note.Bounds.Height:0.#}");
+        }
+        foreach (var nm in root.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Classes.Contains("mname") && t.IsVisible).Take(1))
+            log.AppendLine($"  membername x={((Visual)nm).TranslatePoint(new Point(0, 0), root)?.X:0.#}");
         var lanes = root.GetVisualDescendants().OfType<Border>().Where(b => b.Classes.Contains("lane")).ToList();
         foreach (var lane in lanes)
         {

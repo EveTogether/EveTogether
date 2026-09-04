@@ -579,6 +579,23 @@
                 <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
             </Style>
+            <!-- Scherm 1's line under an elsewhere-active member: why they are on the roster and still do not count. -->
+            <Style Selector="Border.whynote">
+                <Setter Property="BorderBrush" Value="{StaticResource WarnBrush}"/>
+                <Setter Property="BorderThickness" Value="2,0,0,0"/>
+                <Setter Property="Padding" Value="9,3,0,5"/>
+                <!-- Left margin measured, not guessed: the note's text lands on the member name's own x (98 narrow,
+                     115 wide) once the 2 px edge and 9 px padding are counted off. -->
+                <Setter Property="Margin" Value="87,0,12,3"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.whynote">
+                <Setter Property="Margin" Value="104,0,14,4"/>
+            </Style>
+            <Style Selector="Border.whynote TextBlock">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
             <Style Selector="TextBlock.empty">
                 <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
                 <Setter Property="FontSize" Value="10.5"/>
@@ -957,6 +974,7 @@
                                     <ItemsControl ItemsSource="{Binding VisibleMembers}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="vm:FleetMemberRowViewModel">
+                                              <StackPanel>
                                                 <Grid Classes="subrow" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto" Background="Transparent">
                                                     <Grid.ContextMenu>
                                                         <ContextMenu ItemsSource="{Binding MemberMenu}"
@@ -1010,6 +1028,10 @@
                                                         </WrapPanel>
                                                     </Border>
                                                 </Grid>
+                                                <Border Classes="whynote" IsVisible="{Binding HasElsewhereNote}">
+                                                    <TextBlock Text="{Binding ElsewhereNote}"/>
+                                                </Border>
+                                              </StackPanel>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
