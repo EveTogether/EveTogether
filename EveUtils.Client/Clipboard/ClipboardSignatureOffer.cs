@@ -18,8 +18,10 @@ using EveUtils.Shared.Modules.Sde.Dtos;
 
 namespace EveUtils.Client.Clipboard;
 
-/// <summary>Shows what the SDE knows about a copied cosmic signature or anomaly (ET-79). One fully-scanned combat
-/// site is the exception: that starts its run outright, without a card and without taking the keyboard (ET-158).</summary>
+/// <summary>Shows what the SDE knows about a copied cosmic signature or anomaly (ET-79). One fully-scanned site is
+/// the exception: that starts its run outright, without a card and without taking the keyboard (ET-158, widened
+/// past combat-only by ET-177). The catalogue only enriches what is shown — it never gates whether the run starts
+/// (ET-178): Data Site, Relic Site and Wormhole are never in it at all, and that is not a reason to stay silent.</summary>
 public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
 {
     public const string FeatureName = "Signature detection";
@@ -68,8 +70,9 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
 
         // Exactly one fully-scanned row is the whole case this feature can act on: half-scanned has no site, and 2+
         // rows is a menu. That one case now goes straight to a run (ET-158) instead of offering a button; the pilot
-        // is in EVE, where an in-window toast is not visible anyway.
-        var recognised = rows.Where(row => IsActivitySite(row.Group) && row.Name is not null).ToList();
+        // is in EVE, where an in-window toast is not visible anyway. The catalogue plays no part in this decision
+        // (ET-178): a name it does not carry is registered on its own name, same as one it does.
+        var recognised = rows.Where(row => row.Name is not null).ToList();
         if (recognised is [{ } row])
         {
             StartRun(row);
@@ -79,10 +82,6 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         _toasts.Show("Signature copied", BuildMessage(rows), ToastKind.Information,
             [new ToastAction("Close", () => CloseOffer(fingerprint))], () => CloseOffer(fingerprint), FeatureName);
     }
-
-    // Wormholes are excluded for now. This still matches the group text literally in English — SiteNameAlias (ET-79)
-    // covers site names, not the scan-window group column.
-    private static bool IsActivitySite(string? siteType) => siteType?.EndsWith("Combat Site", StringComparison.Ordinal) is true;
 
     // _openFingerprint is deliberately left standing here, unlike the card path: it is what stops a second change
     // notification for the same copy from starting a second run. ponytail: an identical re-copy is therefore ignored
@@ -159,7 +158,7 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
             if (pilot is { EsiCharacterId: { } characterId })
                 window.UseCharacter(characterId, pilot.Name);
 
-            _dialogs.ShowActivityWindow(window, RunWindowOpenTrigger.CopiedSignature);
+            _dialogs.ShowActivityWindow(window, RunWindowOpenTrigger.CopiedFromClipboard);
         }
         catch (Exception ex)
         {
@@ -201,19 +200,19 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         return string.Join('\n', lines);
     }
 
+    // ET-178 AC-3: a catalogue miss says nothing here — same as a match with nothing to add (ET-79 AC-6's silence
+    // extended to the whole line instead of just the missing fields). The name itself already says what was copied.
     private string DescribeSignature(string signatureId, string name)
     {
         var matches = MatchSites(name);
-        if (matches.Count == 0)
-            return $"{signatureId} · {name} — not in the site catalogue";
-
-        var suffix = SdeSiteDescription.DescribeMatches(matches);
+        var suffix = matches.Count == 0 ? string.Empty : SdeSiteDescription.DescribeMatches(matches);
         return suffix.Length == 0 ? $"{signatureId} · {name}" : $"{signatureId} · {name} — {suffix}";
     }
 
     /// <summary>The one route from a copied site name into the catalogue — the toast and the window it opens must
     /// not answer differently. Exact match across every SDE locale (ET-79 AC-4); a miss does not prove the site is
-    /// missing (Data Site, Relic Site and Wormhole are not in the catalogue at all), so neither caller says it is.</summary>
+    /// missing (Data Site, Relic Site and Wormhole are not in the catalogue at all) and no longer stops it becoming
+    /// a run (ET-178) — it only means there is nothing further to add.</summary>
     private IReadOnlyList<SdeSite> MatchSites(string name) => _sde.FindSitesByExactName(name);
 
 }

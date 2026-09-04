@@ -207,7 +207,9 @@ public static class ClipboardInventoryParser
         return TryParseLocalNumber(value[..^unit.Length].TrimEnd(), out number);
     }
 
-    private static bool TryParseWholeNumber(string field, out long number)
+    // internal: reused by ClipboardMissionParser (ET-175) for the plain digit runs in a mission capture — an item
+    // reward's quantity and the bonus window's hour count carry no separator, so this is the same trap-free parse.
+    internal static bool TryParseWholeNumber(string field, out long number)
     {
         number = default;
         var value = field.Trim();
@@ -260,7 +262,9 @@ public static class ClipboardInventoryParser
         }
     }
 
-    private static bool TryParseLocalNumber(string value, out decimal number)
+    // internal: reused by ClipboardMissionParser (ET-175) for reward amounts — same locale trap, same fix, no
+    // second implementation.
+    internal static bool TryParseLocalNumber(string value, out decimal number)
     {
         number = default;
         if (value.Length == 0)

@@ -13,6 +13,7 @@ using EveUtils.Client.Views;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.DependencyInjection;
 
 namespace EveUtils.Client.Dialogs;
@@ -137,16 +138,24 @@ public sealed class DialogService : IDialogService, ISingletonService
                 // The incoming view model is dropped here, so what it was asked to do travels with the signature or an
                 // automatic start would only ever happen on the window that did not exist yet (ET-158).
                 open.StartsOnArrival = viewModel.StartsOnArrival;
-                // Including whose run it is, and before ApplySignature rather than after: that is what settles the
-                // character, and a caller that already asked would otherwise be asked again by the window that was
-                // already up.
+                // Including whose run it is, and before ApplySignature/ApplyMission rather than after: that is what
+                // settles the character, and a caller that already asked would otherwise be asked again by the window
+                // that was already up.
                 //
                 // Only to a window with no run of its own. A run on the clock belongs to the pilot who started it, and
-                // ApplySignature may well keep it — a copy of the site already being flown changes nothing — so writing
-                // a different pilot over it would leave the header, the gamelog filter and the stored row disagreeing.
+                // the apply below may well keep it — a copy of what is already being flown changes nothing — so
+                // writing a different pilot over it would leave the header, the gamelog filter and the stored row
+                // disagreeing.
                 if (open.RunId is null && viewModel.PickedCharacter is { } pilot)
                     open.UseCharacter(pilot.Id, pilot.Name);
-                open.ApplySignature(viewModel.SignatureId, viewModel.SignatureGroup, signature, viewModel.MatchedSites);
+
+                // A mission carries no scan id and no site catalogue match — same two routes ET-158 fixed for a
+                // signature, applied to what ClipboardMissionOffer hands over instead (ET-172 sub 4).
+                if (viewModel.Kind == ActivityKind.Mission)
+                    open.ApplyMission(viewModel.MissionAgentId, viewModel.MissionLevel, viewModel.MissionSolarSystemId,
+                        signature, viewModel.PendingParameters);
+                else
+                    open.ApplySignature(viewModel.SignatureId, viewModel.SignatureGroup, signature, viewModel.MatchedSites);
             }
             else
             {

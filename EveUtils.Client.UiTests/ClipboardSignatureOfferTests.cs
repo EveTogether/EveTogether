@@ -28,11 +28,10 @@ public sealed class ClipboardSignatureOfferTests
     private const string MeasuredHomefrontLine =
         "IMM-760	Cosmic Anomaly	Homefront Operation Site - Combat Site	Suspicious Signal: Secure the Intel	100,0%	0,50 AU";
 
-    // ET-79 AC-4: the English-only fallback text is gone now that site names resolve across every SDE locale — a
-    // miss means the site is not in the catalogue (the expected case for Data Site, Relic Site and Wormhole), not
-    // that matching was limited to English.
+    // ET-178 AC-3: a catalogue miss states the name and nothing else — not "not in the site catalogue" (a fact about
+    // what is missing) and not an English-only fallback either (ET-79 AC-4).
     [AvaloniaFact]
-    public async Task UnmatchedSignatureName_StatesTheSiteIsNotInTheCatalogue_NotAnEnglishOnlyLimitation()
+    public async Task UnmatchedSignatureName_JustNamesTheSignature_SayingNeitherWhatIsMissingNorAnEnglishLimitation()
     {
         using var env = await Env.StartAsync();
 
@@ -42,7 +41,8 @@ public sealed class ClipboardSignatureOfferTests
                  "KDC-305\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t1.10 AU");
 
         var message = Assert.Single(env.Toasts.ActionToasts).Message;
-        Assert.Contains("not in the site catalogue", message);
+        Assert.Contains("KDC-304 · Ruined Blood Raider Crystal Quarry", message);
+        Assert.DoesNotContain("not in the site catalogue", message);
         Assert.DoesNotContain("English", message);
     }
 
@@ -117,6 +117,10 @@ public sealed class ClipboardSignatureOfferTests
     public async Task AFullyScannedCombatSite_StartsItsRunItself_WithNoCardAtAll(string copied)
     {
         using var env = await Env.StartAsync();
+        // Registered in the catalogue on purpose — same as a real scan, where the site usually is one it knows —
+        // to prove starting still works when it does (ET-178 leaves that path alone; a miss is covered elsewhere).
+        env.Sde.AddSite(Site(1263, "Haunted Yard", archetype: "Combat Sites", archetypeId: 24));
+        env.Sde.AddSite(Site(1264, "Suspicious Signal: Secure the Intel", archetype: "Homefront Operations", archetypeId: 70));
 
         env.Copy(copied);
 
@@ -154,6 +158,9 @@ public sealed class ClipboardSignatureOfferTests
         var registry = env.Services.GetRequiredService<ICharacterRegistry>();
         await registry.AddOrUpdateAsync(new Character("First Pilot", 90000001));
         await registry.AddOrUpdateAsync(new Character("Second Pilot", 90000002));
+        // Registered in the catalogue so the window opens with its archetype filled in; not required to auto-start
+        // (ET-178), just kept realistic for a row this test also inspects.
+        env.Sde.AddSite(Site(1264, "Suspicious Signal: Secure the Intel", archetype: "Homefront Operations", archetypeId: 70));
         if (windowAlreadyHasPilot)
             env.Dialogs.ActivityWindowPilot = (90000001, "First Pilot");
 
@@ -176,15 +183,78 @@ public sealed class ClipboardSignatureOfferTests
         Assert.True(opened.StartsOnArrival);
     }
 
-    [AvaloniaFact]
-    public async Task FullyScannedNonEnglishCombatSite_ShowsNoStartRunButton()
+    // ── ET-177 — the catalogue decides, for every archetype it carries ──────────────────────────────
+
+    // AC-1 + AC-3: Emergency Aid: Convoy is a Homefront Operations dungeon (measured build 3492266) — a name whose
+    // group column never says "Combat Site". Without the fix this row is invisible to the old group-text check and
+    // nothing happens; the empty and fabricated-foreign-language rows prove the column itself carries no vote once
+    // the catalogue confirms the name (Raymond, 2026-09-04: the catalogue hit is the whole bar — no per-archetype
+    // list to guess at or maintain).
+    [AvaloniaTheory]
+    [InlineData("XXX-001\tCosmic Anomaly\t\tEmergency Aid: Convoy\t100.0%\t1.00 AU")]
+    [InlineData("XXX-001\tCosmic Anomaly\tOpération de front intérieur\tEmergency Aid: Convoy\t100.0%\t1.00 AU")]
+    public async Task ACatalogueKnownHomefront_StartsItsRun_RegardlessOfTheGroupColumn(string copied)
     {
         using var env = await Env.StartAsync();
+        env.Sde.AddSite(Site(1265, "Emergency Aid: Convoy", archetype: "Homefront Operations", archetypeId: 70));
 
-        env.Copy("AAA-001	Anomalie cosmique	Site de combat	Haunted Yard	100,0%	0,50 AU");
+        env.Copy(copied);
 
+        Assert.Empty(env.Toasts.ActionToasts);
+        Assert.True(Assert.Single(env.Dialogs.ShownActivityWindows).StartsOnArrival);
+    }
+
+    // AC-5: the existing "2+ rows is a menu" rule holds for the widened set too, not only for combat.
+    [AvaloniaFact]
+    public async Task TwoCatalogueKnownHomefronts_ShowNoStartRunButton()
+    {
+        using var env = await Env.StartAsync();
+        env.Sde.AddSite(Site(1265, "Emergency Aid: Convoy", archetype: "Homefront Operations", archetypeId: 70));
+        env.Sde.AddSite(Site(1267, "Raid: Narcotics Lab", archetype: "Homefront Operations", archetypeId: 70));
+
+        env.Copy("XXX-001\tCosmic Anomaly\t\tEmergency Aid: Convoy\t100.0%\t1.00 AU\r\n" +
+                 "XXX-003\tCosmic Anomaly\t\tRaid: Narcotics Lab\t100.0%\t1.00 AU");
+
+        Assert.Empty(env.Dialogs.ShownActivityWindows);
         var offer = Assert.Single(env.Toasts.ActionToasts);
         Assert.Equal(new[] { "Close" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
+    }
+
+    // ── ET-178 — the catalogue enriches; it never gates whether a scan becomes a run ────────────────
+
+    // AC-1: a fully-scanned row starts its run on the name the clipboard gave, whether or not the SDE has ever
+    // heard of it. Data Site, Relic Site and Wormhole are never in the catalogue at all (that is the expected
+    // case, not a fault); gas sites and sleeper caches share exactly this property and need no ticket of their
+    // own. Without the fix this is a "not in the site catalogue" toast and no run — the tegenproef.
+    [AvaloniaTheory]
+    [InlineData(MeasuredHomefrontLine)]
+    [InlineData("AAA-001	Anomalie cosmique	Site de combat	Haunted Yard	100,0%	0,50 AU")]
+    [InlineData("QLY-810\tCosmic Signature\tWormhole\tUnstable Wormhole\t100.0%\t11.66 AU")]
+    public async Task ASiteTheCatalogueDoesNotCarryAtAll_StillStartsItsRunOnTheCopiedName(string copied)
+    {
+        using var env = await Env.StartAsync(); // catalogue deliberately empty
+
+        env.Copy(copied);
+
+        Assert.Empty(env.Toasts.ActionToasts);
+        Assert.True(Assert.Single(env.Dialogs.ShownActivityWindows).StartsOnArrival);
+    }
+
+    // AC-5: a name the catalogue does carry, under a different signature, is still a miss for THIS name — no
+    // fuzzy fallback borrows another site's row. The fixture never models locale aliasing (see FakeSdeAccessor),
+    // so a French name it never registered is exactly this case.
+    [AvaloniaFact]
+    public async Task ASiteNameTheCatalogueDoesNotCarry_StillStartsItsRun_WithoutBorrowingAnotherSitesData()
+    {
+        using var env = await Env.StartAsync();
+        env.Sde.AddSite(Site(1263, "Suspicious Signal: Secure the Intel", ded: 4));
+
+        env.Copy("IMM-760	Cosmic Anomaly	Homefront Operation Site - Combat Site	Signal suspect : sécuriser les renseignements	100,0%	0,50 AU");
+
+        Assert.Empty(env.Toasts.ActionToasts);
+        var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
+        Assert.True(opened.StartsOnArrival);
+        Assert.Empty(opened.MatchedSites);
     }
 
     // AC-1 tegenproef: the same single row, but under the scan threshold — Group/Name null is the normal
@@ -195,17 +265,6 @@ public sealed class ClipboardSignatureOfferTests
         using var env = await Env.StartAsync();
 
         env.Copy("CCC-003\tCosmic Signature\t\t\t25.0%\t-");
-
-        var offer = Assert.Single(env.Toasts.ActionToasts);
-        Assert.Equal(new[] { "Close" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
-    }
-
-    [AvaloniaFact]
-    public async Task FullyScannedWormhole_ShowsNoStartRunButton()
-    {
-        using var env = await Env.StartAsync();
-
-        env.Copy("QLY-810\tCosmic Signature\tWormhole\tUnstable Wormhole\t100.0%\t11.66 AU");
 
         var offer = Assert.Single(env.Toasts.ActionToasts);
         Assert.Equal(new[] { "Close" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
@@ -244,6 +303,7 @@ public sealed class ClipboardSignatureOfferTests
     public async Task ACopiedCombatSite_OpensTheActivityWindow_WithTheRowsGroupAndName_AndWithoutTakingFocus()
     {
         using var env = await Env.StartAsync();
+        env.Sde.AddSite(Site(1263, "Haunted Yard", archetype: "Combat Sites", archetypeId: 24));
 
         env.Copy("AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU");
 
@@ -251,7 +311,7 @@ public sealed class ClipboardSignatureOfferTests
         Assert.Equal(ActivityKind.Site, opened.Kind);
         Assert.Equal("Combat Site", opened.SignatureGroup);
         Assert.Equal("Haunted Yard", opened.SignatureName);
-        Assert.Equal(RunWindowOpenTrigger.CopiedSignature,
+        Assert.Equal(RunWindowOpenTrigger.CopiedFromClipboard,
             Assert.Single(env.Dialogs.ShownActivityWindowTriggers));
     }
 
@@ -261,6 +321,7 @@ public sealed class ClipboardSignatureOfferTests
     public async Task TheSameCopyReportedTwice_OpensOnlyOneWindow()
     {
         using var env = await Env.StartAsync();
+        env.Sde.AddSite(Site(1263, "Haunted Yard", archetype: "Combat Sites", archetypeId: 24));
         const string text = "AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU";
 
         env.Copy(text);
@@ -276,7 +337,7 @@ public sealed class ClipboardSignatureOfferTests
     {
         using var env = await Env.StartAsync();
         env.Sde.AddSite(Site(1263, "Suspicious Signal: Secure the Intel", archetype: "Homefront Operations",
-            faction: "Caldari State", ded: 4, restricted: true,
+            archetypeId: 70, faction: "Caldari State", ded: 4, restricted: true,
             groups: [new SdeGroup(420, 6, "Destroyer", true), new SdeGroup(25, 6, "Frigate", true)]));
 
         env.Copy(MeasuredHomefrontLine);
@@ -292,45 +353,10 @@ public sealed class ClipboardSignatureOfferTests
             opened.Activity.HeaderSummary);
     }
 
-    // Tegenproef: a site the catalogue does not carry. The window says what it knows — the name — and nothing about
-    // the shape of our own catalogue, which tells the pilot nothing he can act on.
-    [AvaloniaFact]
-    public async Task ASiteTheCatalogueDoesNotCarry_ShowsTheNameAndNothingAboutOurCatalogue()
-    {
-        using var env = await Env.StartAsync(); // catalogue deliberately empty
-
-        env.Copy(MeasuredHomefrontLine);
-
-        var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
-        Assert.Equal("Suspicious Signal: Secure the Intel", opened.SignatureSiteText);
-        Assert.Equal("Suspicious Signal: Secure the Intel", opened.Activity.HeaderSummary);
-        Assert.DoesNotContain("catalogue", opened.SignatureSiteText, StringComparison.OrdinalIgnoreCase);
-
-        // And no row is shown that could only say it knows nothing.
-        Assert.Null(opened.ShipRestrictionText);
-        Assert.False(opened.HasShipRestriction);
-    }
-
-    // A name the catalogue does not carry (here: a French name the fixture never registered) is a miss, not proof
-    // the site is missing — see the "not in the site catalogue" test above. The toast says that at the copy, where
-    // it is still actionable; the window that follows shows the site, not our matching trouble.
-    [AvaloniaFact]
-    public async Task SiteNameTheCatalogueDoesNotCarry_TheWindowShowsTheNameAndNothingAboutOurMatching()
-    {
-        using var env = await Env.StartAsync();
-        env.Sde.AddSite(Site(1263, "Suspicious Signal: Secure the Intel", ded: 4));
-
-        env.Copy("IMM-760	Cosmic Anomaly	Homefront Operation Site - Combat Site	Signal suspect : sécuriser les renseignements	100,0%	0,50 AU");
-
-        var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
-        Assert.Equal("Signal suspect : sécuriser les renseignements", opened.SignatureSiteText);
-        Assert.DoesNotContain("DED 4", opened.SignatureSiteText);
-    }
-
-    private static SdeSite Site(int dungeonId, string name, string? archetype = null, string? faction = null,
-        int? ded = null, bool restricted = false, IReadOnlyList<SdeGroup>? groups = null) =>
-        new(dungeonId, name, archetype is null ? null : 1, archetype, faction is null ? null : 1, faction, null, ded,
-            restricted, groups ?? []);
+    private static SdeSite Site(int dungeonId, string name, string? archetype = null, int? archetypeId = null,
+        string? faction = null, int? ded = null, bool restricted = false, IReadOnlyList<SdeGroup>? groups = null) =>
+        new(dungeonId, name, archetypeId ?? (archetype is null ? null : 1), archetype, faction is null ? null : 1,
+            faction, null, ded, restricted, groups ?? []);
 
     private sealed class Env : IDisposable
     {

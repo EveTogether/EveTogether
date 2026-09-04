@@ -346,7 +346,7 @@ public class ActivityWindowWiringTests
         };
         incoming.UseCharacter(90000002, "Second Pilot");
 
-        dialogs.ShowActivityWindow(incoming, RunWindowOpenTrigger.CopiedSignature);
+        dialogs.ShowActivityWindow(incoming, RunWindowOpenTrigger.CopiedFromClipboard);
         await open.LastSignature;
         await ActivityWindowHarness.WaitUntil(() => open.RunId is not null);
 

@@ -4,6 +4,7 @@ using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
+using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Events;
@@ -49,6 +50,18 @@ internal sealed class StartRunCommandHandler(IDbContextFactory<ClientDbContext> 
             SyncState = RunSyncState.Local,
             Revision = 1
         });
+        foreach (RunParameterInput parameter in command.Parameters ?? [])
+            db.Set<RunParameter>().Add(new RunParameter
+            {
+                Id = Guid.CreateVersion7(),
+                RunId = id,
+                ParameterKey = parameter.ParameterKey,
+                TypedValue = parameter.TypedValue,
+                Amount = parameter.Amount,
+                ItemTypeId = parameter.ItemTypeId,
+                BonusWindowSeconds = parameter.BonusWindowSeconds,
+                ObservedAtUtc = parameter.ObservedAtUtc
+            });
         await db.SaveChangesAsync(cancellationToken);
         await eventBus.PublishAsync(new RunStartedEvent(id, command.CharacterId, command.ActivityKind, command.StartedAtUtc,
             command.FleetId, groupCode, command.IsFleetCommander, command.SolarSystemName, command.SiteName),

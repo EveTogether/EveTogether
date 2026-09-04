@@ -1,5 +1,6 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
@@ -30,4 +31,7 @@ public sealed record StartRunCommand(
     int? MissionLevel = null,
     // Unknown, not Clipboard: a caller that forgets to pass this has to show up as "we don't know", not silently
     // claim the original path. Every real caller (clipboard and manual alike) passes its own.
-    RunOrigin Origin = RunOrigin.Unknown) : ICommand<Result<Guid>>;
+    RunOrigin Origin = RunOrigin.Unknown,
+    // What a mission's clipboard capture already knows at accept time — the reward lines, not the loot found later.
+    // Empty for every caller but a mission (ET-172 sub 4): a site or an abyssal run has nothing to give here yet.
+    IReadOnlyList<RunParameterInput>? Parameters = null) : ICommand<Result<Guid>>;
