@@ -22,11 +22,11 @@ public sealed class RunsDayViewModel
         string activities = $"{rows.Count} {(rows.Count == 1 ? "activity" : "activities")}";
         string flownText = $"{(int)flown.TotalHours}:{flown.Minutes:00}:{flown.Seconds:00} flown";
 
-        // The day says nothing rather than "0 ISK" when not one of its activities has a loot capture, for the same
-        // reason the row does: a zero here would read as an evening that was valued and came to nothing.
+        // The day says nothing rather than "0 ISK" when not one of its activities has a figure, for the same reason
+        // the row does: a zero here would read as an evening that was valued and came to nothing.
         decimal[] known = [.. rows.Where(row => row.NetIsk.HasValue).Select(row => row.NetIsk!.Value)];
         string netText = known.Length == 0
-            ? "no loot captured"
+            ? "nothing recorded to value"
             : (known.Sum() < 0 ? string.Empty : "+") + ActivityRewardChipViewModel.Compact(known.Sum()) + " ISK net";
 
         SummaryText = $"{activities} · {flownText} · {netText}";

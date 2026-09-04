@@ -25,6 +25,9 @@ public sealed record ActivityOverviewRowDto(
     /// summary keeps no participant list of its own; these are the member runs' own character ids.</summary>
     IReadOnlyList<long> CharacterIds,
     IReadOnlyList<ActivityRewardDto> Rewards,
+    /// <summary>What the gamelog's bounty lines paid out, summed over the activity's runs. Not a member of
+    /// <see cref="Rewards"/>: those are a mission's <em>stated</em> reward forms, this is money that arrived.</summary>
+    decimal BountyIsk,
     decimal? LootIskNet,
     int EnemyTypeCount,
     bool HasEscalation);

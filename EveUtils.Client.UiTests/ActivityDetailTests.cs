@@ -326,6 +326,41 @@ public sealed class ActivityDetailTests
         return (window, root);
     }
 
+    /// <summary>
+    /// Acceptatie 2026-09-04, bevinding 2: ENEMIES may not claim to have measured what it never measured.
+    /// <c>SaveRunCommandHandler</c> stores only observations that carry a count, and the count is typed by hand
+    /// (ET-106), so an empty list means nobody counted — never "no combat". Measured on a copy of the operator's
+    /// own store: nine of eleven activities said "no combat measured" while the gamelog had written between 7 and
+    /// 406 combat samples inside each of those very runs, and 136 bounty payouts besides.
+    ///
+    /// This run is exactly that shape — uncounted enemies, bounty on the same screen. Counter-proof: put the old
+    /// wording back and the two assertions below go red, on a screen that shows the bounty disproving it.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task UncountedEnemiesBesideABountyFigure_DoNotReadAsAMeasurement()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15),
+            StartedAtUtc.AddMinutes(16), [],
+            [new RunBountyEntryInput { OccurredAtUtc = StartedAtUtc.AddMinutes(3), Isk = 214_188m }],
+            // Seen in the gamelog, never counted — which is what SAVE drops, and what the screen then has to
+            // describe without inventing a measurement.
+            [new RunEnemyObservationInput { Count = 0, EnemyTypeId = 111, EnemyName = "Centii Scavenger", FirstObservedAtUtc = StartedAtUtc, LastObservedAtUtc = StartedAtUtc.AddMinutes(1) }],
+            []), cancellationToken);
+
+        List<string> texts = await _RenderAsync(instance, cancellationToken);
+
+        Assert.Contains(texts, text => text == $"{214_188m:N2} ISK");        // the bounty is on screen
+        Assert.DoesNotContain(texts, text => text.Contains("no combat measured"));
+        Assert.DoesNotContain(texts, text => text.Contains("That is a measurement, not an empty list"));
+        Assert.Contains(texts, text => text == "none counted");
+        Assert.Contains(texts, text => text.StartsWith("Enemies are saved only once you count them"));
+    }
+
     private static async Task<ActivityDetailWindow> _WindowAsync(
         TestClientInstance instance, double width, CancellationToken cancellationToken)
     {
