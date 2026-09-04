@@ -10,8 +10,9 @@ namespace EveUtils.Shared.Modules.Sde.Import;
 /// Builds a fresh read-only SDE SQLite file from a downloaded JSONL zip. Streams each dataset line-by-line
 /// (no full-DOM), bulk-inserts in one transaction with build-time pragmas (journal/sync off — it is a throwaway
 /// file until the swap), then creates the indexes. The slot/hardpoint table is pre-computed while reading
-/// typeDogma so fit parsers never join dogma at runtime. Heavy datasets (map*, materials, blueprints) are
-/// ignored — only the minimal subset is imported (data-minimalisation).
+/// typeDogma so fit parsers never join dogma at runtime. Only the minimal subset of each dataset is imported
+/// (data-minimalisation) — missions.jsonl's eight-language message/reward blocks and mapSolarSystems.jsonl's
+/// wormhole/planet fields stay out even though the files themselves are now read.
 /// </summary>
 public sealed class SdeSqliteBuilder
 {
@@ -19,10 +20,14 @@ public sealed class SdeSqliteBuilder
 
     // Entry names are flat in the zip (verified build 3374020 — no sde/ submap). Order: dependency-light first.
     // archetypes/factions/typeLists are read purely as lookups for the Site rows, so they must precede dungeons.
+    // Likewise mapSolarSystems/npcStations/agentTypes are lookups for the Agent rows and must precede
+    // npcCharacters (ET-173); missions and epicArcs carry no such dependency and can come last.
     private static readonly string[] Datasets =
     [
         "categories.jsonl", "groups.jsonl", "dogmaAttributes.jsonl", "dogmaEffects.jsonl", "types.jsonl", "typeDogma.jsonl",
-        "archetypes.jsonl", "factions.jsonl", "typeLists.jsonl", "dungeons.jsonl"
+        "archetypes.jsonl", "factions.jsonl", "typeLists.jsonl", "dungeons.jsonl",
+        "mapSolarSystems.jsonl", "npcStations.jsonl", "agentTypes.jsonl", "npcCharacters.jsonl",
+        "missions.jsonl", "epicArcs.jsonl"
     ];
 
     /// <summary>

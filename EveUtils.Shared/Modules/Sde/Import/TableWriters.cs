@@ -14,6 +14,7 @@ namespace EveUtils.Shared.Modules.Sde.Import;
 /// plain <c>name</c> string, and typeDogma drives both the per-type dogma rows and the pre-computed slot table.
 /// archetypes/factions/typeLists write no rows of their own — they accumulate into lookups that the later
 /// dungeons pass denormalises onto each Site row (hence the dataset order in <see cref="SdeSqliteBuilder"/>).
+/// npcStations/agentTypes follow the same lookup-only shape for the later npcCharacters pass (ET-173).
 /// </summary>
 internal sealed partial class TableWriters
 {
@@ -28,10 +29,17 @@ internal sealed partial class TableWriters
     private readonly SqliteCommand _typeAlias;
     private readonly SqliteCommand _site;
     private readonly SqliteCommand _siteAlias;
+    private readonly SqliteCommand _solarSystem;
+    private readonly SqliteCommand _agent;
+    private readonly SqliteCommand _agentAlias;
+    private readonly SqliteCommand _mission;
+    private readonly SqliteCommand _epicArcMission;
 
     private readonly Dictionary<long, string> _archetypeNames = [];
     private readonly Dictionary<long, string> _factionNames = [];
     private readonly Dictionary<long, int[]> _shipGroupsByTypeList = [];
+    private readonly Dictionary<long, long> _solarSystemsByStation = [];
+    private readonly Dictionary<long, string> _agentTypeNames = [];
 
     public TableWriters(SqliteConnection connection, SqliteTransaction transaction)
     {
@@ -74,6 +82,24 @@ internal sealed partial class TableWriters
         _siteAlias = Prepare(connection, transaction,
             "INSERT INTO SiteNameAlias (dungeonId, nameKey, locale) VALUES ($dungeonId, $nameKey, $locale);",
             "$dungeonId", "$nameKey", "$locale");
+        _solarSystem = Prepare(connection, transaction,
+            "INSERT INTO SolarSystem (solarSystemId, nameEn, securityStatus) VALUES ($solarSystemId, $nameEn, $securityStatus);",
+            "$solarSystemId", "$nameEn", "$securityStatus");
+        _agent = Prepare(connection, transaction,
+            "INSERT INTO Agent (agentId, nameEn, nameKey, level, agentTypeId, agentTypeName, divisionId, isLocator, corporationId, locationId, solarSystemId) " +
+            "VALUES ($agentId, $nameEn, $nameKey, $level, $agentTypeId, $agentTypeName, $divisionId, $isLocator, $corporationId, $locationId, $solarSystemId);",
+            "$agentId", "$nameEn", "$nameKey", "$level", "$agentTypeId", "$agentTypeName", "$divisionId", "$isLocator",
+            "$corporationId", "$locationId", "$solarSystemId");
+        _agentAlias = Prepare(connection, transaction,
+            "INSERT INTO AgentNameAlias (agentId, nameKey, locale) VALUES ($agentId, $nameKey, $locale);",
+            "$agentId", "$nameKey", "$locale");
+        _mission = Prepare(connection, transaction,
+            "INSERT INTO Mission (missionId, nameEn, agentTypeId, killMissionDungeonId) " +
+            "VALUES ($missionId, $nameEn, $agentTypeId, $killMissionDungeonId);",
+            "$missionId", "$nameEn", "$agentTypeId", "$killMissionDungeonId");
+        _epicArcMission = Prepare(connection, transaction,
+            "INSERT INTO EpicArcMission (missionId, arcId) VALUES ($missionId, $arcId);",
+            "$missionId", "$arcId");
     }
 
     public void Insert(string dataset, JsonElement element)
@@ -90,6 +116,12 @@ internal sealed partial class TableWriters
             case "factions.jsonl": CollectFaction(element); break;
             case "typeLists.jsonl": CollectTypeList(element); break;
             case "dungeons.jsonl": InsertSite(element); break;
+            case "mapSolarSystems.jsonl": InsertSolarSystem(element); break;
+            case "npcStations.jsonl": CollectStationSystem(element); break;
+            case "agentTypes.jsonl": CollectAgentType(element); break;
+            case "npcCharacters.jsonl": InsertAgent(element); break;
+            case "missions.jsonl": InsertMission(element); break;
+            case "epicArcs.jsonl": InsertEpicArcMissions(element); break;
         }
     }
 
@@ -315,6 +347,111 @@ internal sealed partial class TableWriters
                 groups.UnionWith(ids);
         }
         return any ? "[" + string.Join(",", groups) + "]" : DBNull.Value;
+    }
+
+    private void InsertSolarSystem(JsonElement e)
+    {
+        _solarSystem.Parameters["$solarSystemId"].Value = Key(e);
+        _solarSystem.Parameters["$nameEn"].Value = EnName(e, "name");
+        _solarSystem.Parameters["$securityStatus"].Value = Double(e, "securityStatus");
+        _solarSystem.ExecuteNonQuery();
+    }
+
+    private void CollectStationSystem(JsonElement e)
+    {
+        if (e.TryGetProperty("solarSystemID", out var v) && v.ValueKind == JsonValueKind.Number)
+            _solarSystemsByStation[Key(e)] = v.GetInt64();
+    }
+
+    private void CollectAgentType(JsonElement e)
+    {
+        if (NullableEnName(e, "name") is string name && name.Length > 0)
+            _agentTypeNames[Key(e)] = name;
+    }
+
+    // Only npcCharacters rows with an `agent` sub-object are agents (ET-173 AC-2) — 10.966 of 11.393 measured,
+    // the rest are generic NPCs such as corporation CEOs. solarSystemId comes from the station dict collected
+    // while reading npcStations.jsonl, so it stays null (not a lookup failure) when that dataset is unavailable.
+    private void InsertAgent(JsonElement e)
+    {
+        if (!e.TryGetProperty("agent", out var agent) || agent.ValueKind != JsonValueKind.Object)
+            return;
+
+        var agentId = Key(e);
+        var name = EnName(e, "name");
+        var locationId = Int(e, "locationID");
+        var agentTypeId = Int(agent, "agentTypeID");
+
+        _agent.Parameters["$agentId"].Value = agentId;
+        _agent.Parameters["$nameEn"].Value = name;
+        _agent.Parameters["$nameKey"].Value = SqliteSdeAccessor.NameKey(name);
+        _agent.Parameters["$level"].Value = Int(agent, "level");
+        _agent.Parameters["$agentTypeId"].Value = agentTypeId;
+        _agent.Parameters["$agentTypeName"].Value = Lookup(_agentTypeNames, agentTypeId);
+        _agent.Parameters["$divisionId"].Value = Int(agent, "divisionID");
+        _agent.Parameters["$isLocator"].Value = Bool(agent, "isLocator");
+        _agent.Parameters["$corporationId"].Value = Int(e, "corporationID");
+        _agent.Parameters["$locationId"].Value = locationId;
+        _agent.Parameters["$solarSystemId"].Value =
+            _solarSystemsByStation.TryGetValue(locationId, out var systemId) ? systemId : DBNull.Value;
+        _agent.ExecuteNonQuery();
+        _WriteAgentNameAliases(agentId, e, name);
+    }
+
+    // Locale-agnostic name import for agents, the TypeNameAlias route (ET-173 AC-4): one row per non-English
+    // locale, English stays canonical on Agent.nameKey — not the SiteNameAlias route, which exists because a
+    // handful of English site names carry a non-ASCII character; no such case is known for agent names.
+    private void _WriteAgentNameAliases(long agentId, JsonElement e, string englishName)
+    {
+        if (!e.TryGetProperty("name", out var nameObject) || nameObject.ValueKind != JsonValueKind.Object)
+            return;
+        var englishKey = SqliteSdeAccessor.NameKey(englishName);
+        foreach (var locale in nameObject.EnumerateObject())
+        {
+            if (locale.NameEquals("en") || locale.Value.ValueKind != JsonValueKind.String)
+                continue;
+            var localized = locale.Value.GetString();
+            if (string.IsNullOrWhiteSpace(localized))
+                continue;
+            var key = SqliteSdeAccessor.NameKey(localized);
+            if (key == englishKey)
+                continue;
+            _agentAlias.Parameters["$agentId"].Value = agentId;
+            _agentAlias.Parameters["$nameKey"].Value = key;
+            _agentAlias.Parameters["$locale"].Value = locale.Name;
+            _agentAlias.ExecuteNonQuery();
+        }
+    }
+
+    // Name and keys only (ET-173) — the eight-language message/reward blocks are the bulk of missions.jsonl's
+    // 53 MB raw and are not imported.
+    private void InsertMission(JsonElement e)
+    {
+        _mission.Parameters["$missionId"].Value = Key(e);
+        _mission.Parameters["$nameEn"].Value = EnName(e, "name");
+        _mission.Parameters["$agentTypeId"].Value = NullableInt(e, "agentTypeID");
+        _mission.Parameters["$killMissionDungeonId"].Value =
+            e.TryGetProperty("killMission", out var killMission) && killMission.ValueKind == JsonValueKind.Object
+                ? NullableInt(killMission, "dungeonID")
+                : DBNull.Value;
+        _mission.ExecuteNonQuery();
+    }
+
+    // missionId -> arcId only (ET-173 AC-6, deliberately minimal); the nextMissions chain graph is a read
+    // concern for ET-131, not an import concern.
+    private void InsertEpicArcMissions(JsonElement e)
+    {
+        var arcId = Key(e);
+        if (!e.TryGetProperty("missions", out var missions) || missions.ValueKind != JsonValueKind.Array)
+            return;
+        foreach (var mission in missions.EnumerateArray())
+        {
+            if (!mission.TryGetProperty("_key", out var missionId) || missionId.ValueKind != JsonValueKind.Number)
+                continue;
+            _epicArcMission.Parameters["$missionId"].Value = missionId.GetInt64();
+            _epicArcMission.Parameters["$arcId"].Value = arcId;
+            _epicArcMission.ExecuteNonQuery();
+        }
     }
 
     private static object Lookup(Dictionary<long, string> names, object id) =>

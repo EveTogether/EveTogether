@@ -131,6 +131,11 @@ public sealed class FakeSdeAccessor : ISdeAccessor
             ? []
             : _sites.Where(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)).ToList();
 
+    // No agent/mission fixtures here — nothing under test today reads them through this fake.
+    public SdeAgent? GetAgent(int agentId) => null;
+    public SdeAgent? FindAgentByName(string name) => null;
+    public SdeMission? GetMission(int missionId) => null;
+
     public void Close() { }
     public void Reopen() { }
 

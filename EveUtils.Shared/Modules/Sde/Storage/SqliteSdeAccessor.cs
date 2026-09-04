@@ -562,5 +562,89 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
         return result;
     }
 
+    private const string AgentSelect =
+        """
+        SELECT a.agentId, a.nameEn, a.level, a.agentTypeId, a.agentTypeName, a.divisionId, a.isLocator,
+               a.corporationId, a.locationId, a.solarSystemId, s.nameEn
+        FROM Agent a LEFT JOIN SolarSystem s ON s.solarSystemId = a.solarSystemId
+        """;
+
+    public SdeAgent? GetAgent(int agentId)
+    {
+        using var connection = Open();
+        if (connection is null)
+            return null;
+        using var command = connection.CreateCommand();
+        command.CommandText = AgentSelect + " WHERE a.agentId = $id;";
+        command.Parameters.AddWithValue("$id", agentId);
+        using var reader = command.ExecuteReader();
+        return reader.Read() ? ReadAgent(reader) : null;
+    }
+
+    public SdeAgent? FindAgentByName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return null;
+        using var connection = Open();
+        if (connection is null)
+            return null;
+        using var command = connection.CreateCommand();
+        // Same priority rule as TryGetTypeId: the canonical English name first, then a locale alias.
+        command.CommandText = AgentSelect +
+            """
+
+            WHERE a.agentId = (
+                SELECT agentId FROM (
+                    SELECT agentId, 0 AS pri FROM Agent WHERE nameKey = $key
+                    UNION ALL
+                    SELECT agentId, 1 AS pri FROM AgentNameAlias WHERE nameKey = $key
+                )
+                ORDER BY pri
+                LIMIT 1
+            );
+            """;
+        command.Parameters.AddWithValue("$key", NameKey(name));
+        using var reader = command.ExecuteReader();
+        return reader.Read() ? ReadAgent(reader) : null;
+    }
+
+    private static SdeAgent ReadAgent(SqliteDataReader reader) =>
+        new(
+            reader.GetInt32(0),
+            reader.GetString(1),
+            reader.GetInt32(2),
+            reader.GetInt32(3),
+            reader.IsDBNull(4) ? null : reader.GetString(4),
+            reader.GetInt32(5),
+            reader.GetInt64(6) != 0,
+            reader.GetInt32(7),
+            reader.GetInt32(8),
+            reader.IsDBNull(9) ? null : reader.GetInt32(9),
+            reader.IsDBNull(10) ? null : reader.GetString(10));
+
+    public SdeMission? GetMission(int missionId)
+    {
+        using var connection = Open();
+        if (connection is null)
+            return null;
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT m.missionId, m.nameEn, m.agentTypeId, m.killMissionDungeonId, e.arcId
+            FROM Mission m LEFT JOIN EpicArcMission e ON e.missionId = m.missionId
+            WHERE m.missionId = $id;
+            """;
+        command.Parameters.AddWithValue("$id", missionId);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read())
+            return null;
+        return new SdeMission(
+            reader.GetInt32(0),
+            reader.GetString(1),
+            reader.IsDBNull(2) ? null : reader.GetInt32(2),
+            reader.IsDBNull(3) ? null : reader.GetInt32(3),
+            reader.IsDBNull(4) ? null : reader.GetInt32(4));
+    }
+
     internal static string NameKey(string name) => name.Trim().ToLowerInvariant();
 }
