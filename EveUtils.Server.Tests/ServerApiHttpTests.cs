@@ -144,10 +144,12 @@ public class ServerApiHttpTests : IAsyncLifetime
         builder.Services.AddAuthorization(options =>
             options.AddPolicy(ApiKeyAuthentication.Policy, ApiKeyAuthentication.BuildPolicy()));
         builder.Services.AddServerApiDocs();
+        ServerApiOptions hardening = builder.AddServerApiHardening();
 
         _app = builder.Build();
         // Port 0: the OS hands out a free one, so a parallel run has nothing to collide with.
         _app.Urls.Add("http://127.0.0.1:0");
+        _app.UseServerApiHardening(hardening);
         _app.UseAuthentication();
         _app.UseAuthorization();
         _app.MapServerApi();

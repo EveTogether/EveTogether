@@ -44,6 +44,9 @@ Configure via **environment variables**. Nested keys use a double underscore (`_
 | `EVEUTILS_SERVER_DATA_DIR` | no | Data directory. Set to `/data` in the image — leave it alone under Docker. |
 | `Server__DataDirectory` | no | Data directory, used only when `EVEUTILS_SERVER_DATA_DIR` is unset. |
 | `Server__AcceptNewIdentity` | no | `true` accepts a regenerated token-protector key — see [§7](#7-data-backups--upgrading). Never leave it on. |
+| `ServerApi__AllowedOrigins__0`, `__1`, … | no | Browser origins allowed to call the REST API. Empty (the default) sends no CORS headers at all — see [§8](#8-the-read-only-rest-api). |
+| `ServerApi__RateLimitPerMinute` | no | Requests per minute allowed to one API key (default `120`). |
+| `ServerApi__KnownProxies__0`, … | no | Addresses whose `X-Forwarded-*` headers may be believed. Empty (the default) ignores them. |
 
 ### Data directory
 
@@ -167,3 +170,52 @@ records who downloaded it.
   new identity is really what you want, start once with `--accept-new-identity` (or `Server__AcceptNewIdentity=true`)
   and pair every character again.
 - **Upgrade:** `docker compose pull && docker compose up -d`. Database migrations apply automatically on start.
+
+## 8. The read-only REST API
+
+External consumers — your own site, a dashboard, tooling from fellow players — read server data over
+`/api/v1`, guarded by an API key you mint under **Access → API keys** in the control panel. The API is
+read-only: there is no endpoint that changes anything. `/health`, `/openapi/v1.json` and `/scalar` are public
+and need no key, so a consumer can read the contract before it has one.
+
+### Keys
+
+The key is shown once, at creation. Only its prefix and a hash are stored, so a lost key is replaced, not
+recovered. Give a key an **expiry** when you create it — the list shows when each key expires and when it was
+last used, which is how you spot one nobody needs any more and revoke it.
+
+Send the key in the `X-API-KEY` header. `?apikey=` works too, for browsers and embeds that cannot set a
+header, but **proxies and CDNs routinely log query strings**, so a key sent that way can end up in logs
+outside your control. Prefer the header wherever you can set one.
+
+### Rate limiting
+
+Each key gets `ServerApi__RateLimitPerMinute` requests per minute (default `120`) and is counted on its own —
+one consumer running hot cannot slow another down. Over the limit answers `429` with a `Retry-After`.
+`/health` is never limited.
+
+### CORS — off unless you turn it on
+
+By default the API sends **no CORS headers**, which is what server-to-server callers and `curl` need and what
+keeps a public API from being read by any page that feels like it. Browser code on another origin needs that
+origin allowlisted:
+
+```
+ServerApi__AllowedOrigins__0=https://your-dashboard.example
+ServerApi__AllowedOrigins__1=https://another.example
+```
+
+List origins exactly (scheme, host, and port when non-standard). There is deliberately no "allow any origin"
+setting.
+
+### Behind a reverse proxy or tunnel
+
+`X-Forwarded-*` headers are ignored unless you name the proxy that may send them, because anyone can send
+them:
+
+```
+ServerApi__KnownProxies__0=127.0.0.1
+```
+
+Set this and the real client address reaches the logs; leave it and every request looks like it came from the
+proxy.

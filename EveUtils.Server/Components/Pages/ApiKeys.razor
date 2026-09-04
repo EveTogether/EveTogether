@@ -25,6 +25,7 @@
 <Card Title="API keys" Count="@_keys.Count.ToString()">
     <HeaderAction>
         <input @bind="_label" placeholder="Label" style="min-width:200px" />
+        <input type="date" @bind="_expiresOn" title="Last day this key works — leave empty for a key that never expires" />
         <button class="accent" @onclick="CreateAsync">+ CREATE</button>
     </HeaderAction>
     <ChildContent>
@@ -35,17 +36,19 @@
         else
         {
             <table>
-                <thead><tr><th>Label</th><th>Prefix</th><th>Scopes</th><th>Owner</th><th>Last used</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>Label</th><th>Prefix</th><th>Scopes</th><th>Owner</th><th>Last used</th><th>Expires</th><th>Status</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var key in _keys)
                     {
+                        var status = Status(key);
                         <tr>
                             <td class="bright">@key.Label</td>
                             <td class="dim" style="font-family:monospace;">@key.Prefix</td>
                             <td class="dim">@string.Join(", ", key.Scopes)</td>
                             <td class="dim">@(key.OwnerCharacterId?.ToString() ?? "all server data")</td>
                             <td class="dim">@(key.LastUsedAt?.ToString("u") ?? "never")</td>
-                            <td class="@(key.IsActive ? "ok" : "dim")">@(key.IsActive ? "active" : "revoked")</td>
+                            <td class="dim">@(key.ExpiresAt?.ToString("u") ?? "never")</td>
+                            <td class="@(status == "active" ? "ok" : "dim")">@status</td>
                             <td style="text-align:right">
                                 @if (key.IsActive)
                                 {

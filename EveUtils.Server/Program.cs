@@ -130,6 +130,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(ApiKeyAuthentication.Policy, ApiKeyAuthentication.BuildPolicy());
 });
 builder.Services.AddServerApiDocs();                                    // OpenAPI document + Scalar reference
+ServerApiOptions serverApi = builder.AddServerApiHardening();           // per-key limit, CORS valve (shut), proxies
 builder.Services.AddSignalR();                                          // DPS stream hub
 builder.Services.AddHostedService<DpsBroadcastBridge>();                // server bus → SignalR bridge
 builder.Services.AddHostedService<ServerTokenRefreshService>();         // token refresh
@@ -217,6 +218,7 @@ if (args.Contains("--dogma-eft"))
     return await DogmaEftCheck.RunAsync(app.Services, args);
 
 app.UseStaticFiles();  // serves wwwroot (the DPS stream page)
+app.UseServerApiHardening(serverApi); // ahead of auth: a preflight carries no key, and the limit is cheaper than one
 app.UseAuthentication(); // admin-panel cookie auth
 app.UseAuthorization();
 app.UseAntiforgery();  // required by the interactive Blazor components

@@ -17,7 +17,12 @@ public partial class ApiKeys : ComponentBase
     private IReadOnlyList<ApiKeyDto> _keys = [];
     private NewApiKeyDto? _created;
     private string _label = string.Empty;
+    private DateTime? _expiresOn;
     private string? _error;
+
+    /// <summary>What the key does right now, which "active" alone stops saying the moment an expiry passes.</summary>
+    private static string Status(ApiKeyDto key) =>
+        !key.IsActive ? "revoked" : key.ExpiresAt <= DateTimeOffset.UtcNow ? "expired" : "active";
 
     protected override async Task OnInitializedAsync() => await _LoadAsync();
 
@@ -28,8 +33,11 @@ public partial class ApiKeys : ComponentBase
         _error = null;
         var createdBy = AuthState is null ? "unknown" : (await AuthState).User.Identity?.Name ?? "unknown";
 
+        // The picked date is the last day the key works, so it expires at the end of it rather than at its start.
+        DateTimeOffset? expiresAt = _expiresOn is { } on ? new DateTimeOffset(on.Date.AddDays(1), TimeSpan.Zero) : null;
+
         Result<NewApiKeyDto> result = await Dispatcher.Send(
-            new CreateApiKeyCommand(_label, ApiKeyScopes.All, createdBy));
+            new CreateApiKeyCommand(_label, ApiKeyScopes.All, createdBy, ExpiresAt: expiresAt));
         if (!result.IsSuccess || result.Value is not { } created)
         {
             _error = string.Join(" ", result.Messages.Select(m => m.Text));
@@ -38,6 +46,7 @@ public partial class ApiKeys : ComponentBase
 
         _created = created;
         _label = string.Empty;
+        _expiresOn = null;
         await _LoadAsync();
     }
 

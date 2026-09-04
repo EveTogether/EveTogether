@@ -21,10 +21,15 @@ public sealed class ApiKeyAuthenticationHandler(
     IApiKeyRepository repository) : AuthenticationHandler<AuthenticationSchemeOptions>(options, loggerFactory, encoder)
 {
     private const string Rejected = "Invalid API key.";
+    private const string Expired = "The API key has expired.";
+
+    /// <summary>What the 401 will say. A field because the challenge is a second call into this same per-request
+    /// handler, and by then the reason the key failed is no longer on the table.</summary>
+    private string _reason = Rejected;
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        var presented = _Presented();
+        string? presented = ApiKeyAuthentication.Presented(Request);
         if (presented is null)
             return AuthenticateResult.NoResult();
 
@@ -36,10 +41,22 @@ public sealed class ApiKeyAuthenticationHandler(
             return AuthenticateResult.Fail(Rejected);
 
         var now = DateTimeOffset.UtcNow;
-        if (!key.IsActive || key.ExpiresAt is { } expiresAt && expiresAt <= now)
+        if (!key.IsActive)
             return AuthenticateResult.Fail(Rejected);
+        if (key.ExpiresAt is { } expiresAt && expiresAt <= now)
+        {
+            // Named, unlike the others: reaching this branch already took the whole valid secret, so saying so
+            // tells an attacker nothing and tells the owner of a dead key exactly what to do about it.
+            _reason = Expired;
+            return AuthenticateResult.Fail(Expired);
+        }
 
         await repository.TouchLastUsedAsync(key.Id, now, Context.RequestAborted);
+
+        // The audit line: who, when, and what they asked for. The prefix names the key without being it, and the
+        // path is written without its query string — that is where ?apikey= would otherwise ride along.
+        Logger.LogInformation("API key {Prefix} ({Label}) used {Method} {Path} from {Client}",
+            key.Prefix, key.Label, Request.Method, Request.Path, Context.Connection.RemoteIpAddress);
 
         List<Claim> claims =
         [
@@ -55,15 +72,14 @@ public sealed class ApiKeyAuthenticationHandler(
         return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name));
     }
 
-    private string? _Presented()
+    /// <summary>
+    /// The 401 says why in the standard place, so a consumer can tell an expired key from a wrong one without the
+    /// key itself appearing anywhere in the answer.
+    /// </summary>
+    protected override Task HandleChallengeAsync(AuthenticationProperties properties)
     {
-        if (Request.Headers.TryGetValue(ApiKeyAuthentication.HeaderName, out var header) &&
-            !string.IsNullOrWhiteSpace(header.ToString()))
-            return header.ToString();
-
-        return Request.Query.TryGetValue(ApiKeyAuthentication.QueryName, out var query) &&
-               !string.IsNullOrWhiteSpace(query.ToString())
-            ? query.ToString()
-            : null;
+        Response.StatusCode = StatusCodes.Status401Unauthorized;
+        Response.Headers.WWWAuthenticate = $"{Scheme.Name} error=\"invalid_key\", error_description=\"{_reason}\"";
+        return Task.CompletedTask;
     }
 }

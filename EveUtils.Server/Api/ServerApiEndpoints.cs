@@ -2,6 +2,7 @@ using System.Security.Claims;
 using EveUtils.Server.Api.Dtos;
 using EveUtils.Shared.App;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Scalar.AspNetCore;
 
 namespace EveUtils.Server.Api;
@@ -20,10 +21,16 @@ public static class ServerApiEndpoints
         endpoints.MapOpenApi();            // GET /openapi/v1.json — keyless
         endpoints.MapScalarApiReference(); // interactive reference at /scalar — keyless
 
-        RouteGroupBuilder api = endpoints.MapGroup("/api/v1").RequireAuthorization(ApiKeyAuthentication.Policy);
+        RouteGroupBuilder api = endpoints.MapGroup("/api/v1")
+            .RequireAuthorization(ApiKeyAuthentication.Policy)
+            .RequireRateLimiting(ServerApiHardening.RateLimitPolicy)
+            .RequireCors(ServerApiHardening.CorsPolicy);
 
-        // Public liveness probe: a consumer must be able to see the server is up before it has a key.
-        api.MapGet("/health", () => new ApiHealthResponse("ok", AppInfo.Version, ApiVersion)).AllowAnonymous();
+        // Public liveness probe: a consumer must be able to see the server is up before it has a key — and, for
+        // the same reason, without a key's limit standing in the way.
+        api.MapGet("/health", () => new ApiHealthResponse("ok", AppInfo.Version, ApiVersion))
+            .AllowAnonymous()
+            .DisableRateLimiting();
 
         api.MapGet("/whoami", (ClaimsPrincipal user) => Results.Ok(ApiWhoAmIResponse.From(user)));
 
