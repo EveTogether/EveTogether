@@ -198,6 +198,16 @@ public class Et170RenderHarness
         }
         foreach (var cell in root.GetVisualDescendants().OfType<Border>().Where(b => b.Classes.Contains("cell") && b.Parent is Grid g && g.Parent is Border pb && pb.Classes.Contains("gridhead")))
             log.AppendLine($"  headcell [{string.Join(" ", cell.Classes)}] w={cell.Bounds.Width:0.#} x={cell.Bounds.X:0.#} visible={cell.IsVisible}");
+        foreach (var bar in root.GetVisualDescendants().OfType<Border>().Where(b => b.Classes.Contains("toolbar")))
+        {
+            var wrap = bar.GetVisualDescendants().OfType<WrapPanel>().FirstOrDefault();
+            var search = bar.GetVisualDescendants().OfType<TextBox>().FirstOrDefault();
+            double widest = 0;
+            if (wrap is not null)
+                foreach (var child in wrap.Children)
+                    widest = Math.Max(widest, (((Visual)child).TranslatePoint(new Point(child.Bounds.Width, 0), wrap)?.X) ?? 0);
+            log.AppendLine($"  toolbar h={bar.Bounds.Height:0.#} wrap w={wrap?.Bounds.Width:0.#} h={wrap?.Bounds.Height:0.#} widestChildRight={widest:0.#} search w={search?.Bounds.Width:0.#}");
+        }
         foreach (var note in root.GetVisualDescendants().OfType<Border>().Where(b => b.Classes.Contains("whynote") && b.IsVisible))
         {
             double noteX = ((Visual)note).TranslatePoint(new Point(0, 0), root)?.X ?? -1;

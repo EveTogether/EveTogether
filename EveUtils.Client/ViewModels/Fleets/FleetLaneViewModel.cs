@@ -85,8 +85,9 @@ public sealed partial class FleetLaneViewModel : ObservableObject
         : StandingByCount switch
         {
             0 => "no active fleet",
-            1 => "no active fleet · 1 standing by",
-            var n => string.Create(CultureInfo.InvariantCulture, $"no active fleet · {n} standing by"),
+            // Short on purpose: this line shares its column with a fleet name, and the long form was the one that
+            // ran into the ellipsis at 758 (scherm 13 writes it just as short).
+            var n => string.Create(CultureInfo.InvariantCulture, $"no active fleet · {n} ready"),
         };
 
     /// <summary>Chips under the clock: when the fleet started, what this pilot shares, where else they stand by.</summary>

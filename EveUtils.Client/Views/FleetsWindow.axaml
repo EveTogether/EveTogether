@@ -124,8 +124,10 @@
                 <Setter Property="LetterSpacing" Value="1.8"/>
                 <Setter Property="Margin" Value="8,0,8,0"/>
             </Style>
+            <!-- Measured, not guessed: at 758 the picks plus the character chips and their overflow need 635 px, and
+                 the toolbar has 606 to give at a 120 px search box. 88 puts the whole bar back on one row. -->
             <Style Selector="Border.toolbar TextBox.search">
-                <Setter Property="Width" Value="120"/>
+                <Setter Property="Width" Value="88"/>
                 <Setter Property="FontSize" Value="10"/>
                 <Setter Property="Padding" Value="6,3"/>
                 <Setter Property="MinHeight" Value="0"/>
@@ -673,7 +675,7 @@
                             Command="{Binding SetStatusFilterCommand}" CommandParameter="{x:Static vm:FleetStatusFilter.Finished}"/>
                     <TextBlock Classes="label" Text="CHARACTER"
                                IsVisible="{Binding CharacterChips.Count}"/>
-                    <ItemsControl ItemsSource="{Binding CharacterChips}">
+                    <ItemsControl ItemsSource="{Binding VisibleCharacterChips}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
@@ -684,6 +686,15 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    <!-- Narrow: the pilots that do not fit on the bar, in the same pick menu the rows use. -->
+                    <Button x:Name="CharacterOverflow" Classes="pick" IsVisible="{Binding HasHiddenCharacterChips}"
+                            ToolTip.Tip="Filter on one of your other characters">
+                        <Button.Flyout>
+                            <MenuFlyout ItemsSource="{Binding HiddenCharacterChips}"
+                                        ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>
+                        </Button.Flyout>
+                        <mi:MaterialIcon Classes="icon-sm" Kind="DotsHorizontal"/>
+                    </Button>
                 </WrapPanel>
                 <TextBox Grid.Column="1" x:Name="SearchBox" Classes="search" Watermark="search fleet, FC, member…"
                          Text="{Binding SearchText, Mode=TwoWay}" VerticalAlignment="Center"/>

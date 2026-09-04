@@ -67,6 +67,30 @@ public sealed partial class FleetsViewModel
 
     public ObservableCollection<FleetFilterChipViewModel> CharacterChips { get; } = [];
 
+    /// <summary>The character chips the toolbar draws, and the ones it folds behind "⋯". At 758 there is no room for
+    /// a chip per pilot — scherm 10 keeps "all N" and the pick that is on, and puts the rest in the overflow — while
+    /// the wide toolbar shows every one and folds nothing.</summary>
+    public ObservableCollection<FleetFilterChipViewModel> VisibleCharacterChips { get; } = [];
+
+    /// <summary>The folded ones as menu lines, so they use the one fleet menu theme this app already has.</summary>
+    public ObservableCollection<FleetMemberMenuItemViewModel> HiddenCharacterChips { get; } = [];
+
+    public bool HasHiddenCharacterChips => HiddenCharacterChips.Count > 0;
+
+    private void SplitCharacterChips()
+    {
+        VisibleCharacterChips.Clear();
+        HiddenCharacterChips.Clear();
+        foreach (var chip in CharacterChips)
+        {
+            if (Layout.IsWide || chip.CharacterId is null || chip.IsOn)
+                VisibleCharacterChips.Add(chip);
+            else
+                HiddenCharacterChips.Add(new(chip.Label, chip.SelectCommand));
+        }
+        OnPropertyChanged(nameof(HasHiddenCharacterChips));
+    }
+
     /// <summary>The two states of the table and the two densities of the band, from the width the view reports.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsWide))]
@@ -157,6 +181,7 @@ public sealed partial class FleetsViewModel
         CharacterFilter = characterId;
         foreach (var chip in CharacterChips)
             chip.IsOn = chip.CharacterId == characterId;
+        SplitCharacterChips();
         ApplyFilters();
     }
 
@@ -469,6 +494,8 @@ public sealed partial class FleetsViewModel
                 CharacterChips.Add(new(character.Name, id, new RelayCommand(() => SetCharacterFilter(id))) { IsOn = CharacterFilter == id });
             }
         }
+
+        SplitCharacterChips();
     }
 
     private static string Count(int n, string noun) => string.Create(CultureInfo.InvariantCulture, $"{n} {noun}");
@@ -488,6 +515,8 @@ public sealed partial class FleetsViewModel
 
         foreach (var lane in Lanes)
             lane.IsSlim = !Layout.ShowLaneButtons;
+
+        SplitCharacterChips();
 
         // Column-first: the first half of the roster down the left column, the rest down the right.
         int left = (Lanes.Count + 1) / 2;
