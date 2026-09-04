@@ -97,6 +97,32 @@ public sealed class RunStorageTests
         Assert.Equal(started.Value, summary.RunId);
     }
 
+    /// <summary>ET-178 AC-2: a site named from a copied signature the catalogue never carries stores
+    /// SiteTypeSource.Uncatalogued, not Site — both still carry SiteTypeId 0, and without the distinct source that
+    /// run reads back no differently from one nobody ever named at all. Counter-proof: collapse Uncatalogued back
+    /// to Site and the two rows below stop being tellable apart.</summary>
+    [AvaloniaFact]
+    public async Task ACatalogueLessSiteRun_ReadsBackDifferentlyFromAnUnfilledOne_EvenWithTheSameZeroId()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        Result<Guid> catalogueLess = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site,
+            StartedAtUtc, 0, "Ruined Blood Raider Crystal Quarry", null, SiteTypeSource: SiteTypeSource.Uncatalogued),
+            cancellationToken);
+        Result<Guid> unfilled = await dispatcher.Send(new StartRunCommand(90000002, ActivityKind.Site,
+            StartedAtUtc, 0, null, null), cancellationToken);
+
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        Run named = await db.Set<Run>().SingleAsync(r => r.Id == catalogueLess.Value, cancellationToken);
+        Run blank = await db.Set<Run>().SingleAsync(r => r.Id == unfilled.Value, cancellationToken);
+        Assert.Equal(SiteTypeSource.Uncatalogued, named.SiteTypeSource);
+        Assert.Equal(SiteTypeSource.Site, blank.SiteTypeSource);
+        Assert.Equal(0, named.SiteTypeId);
+        Assert.Equal(0, blank.SiteTypeId);
+    }
+
     /// <summary>ET-159 AC-2: loot is valued through the type-id price lookup, never the clipboard's own ISK column —
     /// including when the clipboard carried no price at all but the lookup does. Counter-proof: this is the test
     /// that stood red before the fix (it used to see 1,000,000 from the clipboard instead of 30,000 from the

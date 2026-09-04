@@ -1493,9 +1493,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 // This window's own start button is the clipboard/signature path — the site comes from what the
                 // pilot pasted, not from a catalogue pick (ET-163).
                 Origin: EveUtils.Shared.Modules.Runs.Enums.RunOrigin.Clipboard,
-                // Every non-mission caller leaves these at their defaults (Site, null, null, empty) — only
-                // ClipboardMissionOffer ever sets MissionAgentId/MissionLevel/PendingParameters (ET-172 sub 4).
-                SiteTypeSource: Kind == ActivityKind.Mission ? SiteTypeSource.Mission : SiteTypeSource.Site,
+                // Every non-mission caller leaves AgentId/MissionLevel/Parameters at their defaults (null, null,
+                // empty) — only ClipboardMissionOffer ever sets them (ET-172 sub 4). A site with a copied name the
+                // catalogue never carries is Uncatalogued, not Site with a blank id (ET-178 AC-2): otherwise it
+                // reads back no differently from a site that was never named at all.
+                SiteTypeSource: Kind switch
+                {
+                    ActivityKind.Mission => SiteTypeSource.Mission,
+                    ActivityKind.Site when SignatureName is not null && MatchedSites.Count == 0 => SiteTypeSource.Uncatalogued,
+                    _ => SiteTypeSource.Site
+                },
                 AgentId: MissionAgentId,
                 MissionLevel: MissionLevel,
                 Parameters: PendingParameters));
