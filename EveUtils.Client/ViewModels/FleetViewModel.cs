@@ -206,11 +206,13 @@ public sealed partial class FleetViewModel : ObservableObject
         SinceSubText = string.Create(CultureInfo.InvariantCulture, $"created {Info.CreatedAt.ToLocalTime():dd-MM}");
     }
 
-    /// <summary>The window tells each row which of the two table states it is drawn in (ET-170): wide gives METRICS
-    /// and SHARE their own buttons; narrow keeps STOP/START and MANAGE and folds the rest behind "⋯".</summary>
+    /// <summary>The window tells each row which of the two table states it is drawn in (ET-170): wide gives METRICS,
+    /// SHARE and LEAVE their own buttons; narrow keeps STOP/START and MANAGE/VIEW and folds the rest behind "⋯" —
+    /// two buttons plus an overflow, which is what scherm 10 has room for at 758.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowMetricsButton))]
     [NotifyPropertyChangedFor(nameof(ShowShareButton))]
+    [NotifyPropertyChangedFor(nameof(ShowLeave))]
     private bool _isWide;
 
     /// <summary>The secondary actions behind the "⋯" button, built by the window from what this row allows.</summary>
@@ -227,13 +229,22 @@ public sealed partial class FleetViewModel : ObservableObject
     public bool StartEnabled => IsStandingBy && IsMine;
 
     /// <summary>A member who is not the owner leaves rather than stops.</summary>
-    public bool ShowLeave => !IsFinished && IsParticipating && !IsMine;
+    public bool CanLeave => !IsFinished && IsParticipating && !IsMine;
+
+    /// <summary>LEAVE keeps its place on the wide row (scherm 1) and moves behind "⋯" when the row is narrow.</summary>
+    public bool ShowLeave => IsWide && CanLeave;
 
     /// <summary>A finished fleet has one thing left to do with it.</summary>
     public bool ShowDelete => IsFinished && IsMine;
 
-    public bool ShowMetricsButton => IsWide && ShowMetricsActions && !IsFinished;
-    public bool ShowShareButton => IsWide && ShowMetricsActions && !IsFinished;
+    /// <summary>METRICS stands on the row of a started fleet: that is the fleet that has something to measure right
+    /// now. A standing-by fleet keeps it behind "⋯" — scherm 1 gives its READY rows START, MANAGE and SHARE and no
+    /// METRICS, which is also what keeps the wide row at the four buttons it draws.</summary>
+    public bool ShowMetricsButton => IsWide && ShowMetricsActions && IsInActiveGroup;
+
+    /// <summary>SHARE is the owner's switch — what this fleet's members share with each other. On someone else's
+    /// fleet it is not mine to set, so it is not on the row (scherm 1: the Sansha row has no DEEL).</summary>
+    public bool ShowShareButton => IsWide && IsMine && !IsFinished;
 
     /// <summary>My characters that are members of this fleet, shown as leaf rows under the fleet node (stream B / B-2):
     /// each with their role, assigned fit, can-fly badge and a SELECT FIT action. Since ET-170 this is the whole
@@ -417,11 +428,18 @@ public sealed partial class FleetViewModel : ObservableObject
     /// or one I already own/participate in where another alt is still free.</summary>
     private bool CanAddCharacter => IsMine || IsParticipating || IsDiscoverable;
 
-    /// <summary>JOIN (public) / REQUEST (invite-only) stay visible for any fleet I relate to — including one I own or
-    /// already fly with one character — so I can bring another alt in. They only disable when no character is free
-    /// (so "all my characters are already in" reads as a greyed-out button, not a missing one).</summary>
-    public bool ShowJoin => IsPublic && CanAddCharacter && !IsLocal && !IsFinished;
-    public bool ShowRequest => IsInviteOnly && CanAddCharacter && !IsLocal && !IsFinished;
+    /// <summary>JOIN (public) / REQUEST (invite-only) apply to any fleet I relate to — including one I own or already
+    /// fly with one character — so I can bring another alt in. They only disable when no character is free, so "all my
+    /// characters are already in" reads as a greyed-out action and not a missing one.</summary>
+    public bool CanJoin => IsPublic && CanAddCharacter && !IsLocal && !IsFinished;
+    public bool CanRequest => IsInviteOnly && CanAddCharacter && !IsLocal && !IsFinished;
+
+    /// <summary>On the row they are the "get in" action, so they stand there only for a fleet I am not in yet. Once
+    /// I am in, bringing another alt is management and lives behind "⋯" at every width — scherm 1 carries no JOIN on
+    /// the Sansha row I already fly in, and no REQUEST on my own Sunday DED row. Greyed-out rather than missing is
+    /// kept: the overflow entry is the one that disables itself with the reason.</summary>
+    public bool ShowJoin => CanJoin && !IsMine && !IsParticipating;
+    public bool ShowRequest => CanRequest && !IsMine && !IsParticipating;
     public bool JoinEnabled => CanJoinHere;
 
     /// <summary>Owner → MANAGE (full roster), member → VIEW (same roster, read-only structure + assigned fits).</summary>
@@ -440,15 +458,20 @@ public sealed partial class FleetViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowMetricsActions));
         OnPropertyChanged(nameof(ShowMetricsButton));
         OnPropertyChanged(nameof(ShowShareButton));
+        OnPropertyChanged(nameof(CanJoin));
+        OnPropertyChanged(nameof(CanRequest));
         OnPropertyChanged(nameof(ShowJoin));
         OnPropertyChanged(nameof(ShowRequest));
         OnPropertyChanged(nameof(ShowStop));
         OnPropertyChanged(nameof(ShowStart));
+        OnPropertyChanged(nameof(CanLeave));
         OnPropertyChanged(nameof(ShowLeave));
     }
 
     partial void OnIsDiscoverableChanged(bool value)
     {
+        OnPropertyChanged(nameof(CanJoin));
+        OnPropertyChanged(nameof(CanRequest));
         OnPropertyChanged(nameof(ShowJoin));
         OnPropertyChanged(nameof(ShowRequest));
     }

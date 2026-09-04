@@ -89,9 +89,13 @@ public class FleetCardAltActionsTests
 
         var card = Assert.Single(Assert.Single(vm.ServerGroups).Fleets);
         Assert.True(card.IsMine);
-        Assert.True(card.ShowJoin);          // public → JOIN, even though it's my own fleet
-        Assert.False(card.ShowRequest);
+        Assert.True(card.CanJoin);           // public → joining with an alt is on the table, own fleet or not
+        Assert.False(card.CanRequest);
         Assert.True(card.JoinEnabled);       // Catbank is free to join
+        // Since ET-170 the row's own JOIN is the "get into this fleet" action, so a fleet I am already in keeps the
+        // alt-join behind "⋯" instead (scherm 1 draws no JOIN on a row I already fly in).
+        Assert.False(card.ShowJoin);
+        Assert.Contains(card.OverflowItems, i => i.Label == "JOIN WITH ANOTHER CHARACTER" && i.Command is not null);
     }
 
     [AvaloniaFact]
@@ -109,9 +113,11 @@ public class FleetCardAltActionsTests
         var vm = await LoadedVmAsync(instance, Me, Catbank);
 
         var card = Assert.Single(Assert.Single(vm.ServerGroups).Fleets);
-        Assert.True(card.ShowRequest);       // invite-only → REQUEST
-        Assert.False(card.ShowJoin);
+        Assert.True(card.CanRequest);        // invite-only → REQUEST rather than JOIN
+        Assert.False(card.CanJoin);
         Assert.True(card.JoinEnabled);
+        Assert.False(card.ShowRequest);      // my own fleet: behind "⋯", as scherm 1 draws it
+        Assert.Contains(card.OverflowItems, i => i.Label == "REQUEST FOR ANOTHER CHARACTER" && i.Command is not null);
     }
 
     [AvaloniaFact]
@@ -129,7 +135,12 @@ public class FleetCardAltActionsTests
         var vm = await LoadedVmAsync(instance, Me, Catbank);
 
         var card = Assert.Single(Assert.Single(vm.ServerGroups).Fleets);
-        Assert.True(card.ShowJoin);          // visible so "all in" reads as greyed-out, not missing
+        Assert.True(card.CanJoin);
         Assert.False(card.JoinEnabled);      // no character free to join
+        // Still never missing: the entry stands in the overflow and disables itself with the reason, so "all my
+        // characters are already in" reads as a greyed-out action rather than a vanished one.
+        var entry = Assert.Single(card.OverflowItems, i => i.Label == "JOIN WITH ANOTHER CHARACTER");
+        Assert.Null(entry.Command);
+        Assert.Equal("Every one of your characters on this server is already in", entry.Tooltip);
     }
 }

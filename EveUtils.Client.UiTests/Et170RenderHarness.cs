@@ -15,6 +15,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Avalonia.Controls.Primitives;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Platform;
@@ -185,6 +186,16 @@ public class Et170RenderHarness
             log.AppendLine($"  lane {lane.CharacterName}: {lane.RoleChipText} | {lane.FleetText}{lane.FleetOriginText} | {lane.WhereText} | {lane.ClockText} | {lane.PrimaryActionText}/{lane.SecondaryActionText} | chips: {string.Join(", ", lane.FootChips.Select(c => c.Text))}");
         foreach (var row in vm.ActiveFleets.Concat(vm.StandingByFleets).Concat(vm.FinishedFleets))
             log.AppendLine($"  row {row.GroupStatusText} {row.Name} | {row.KindText} | {row.NarrowSubText} | n={row.MemberCountText} ({row.MemberCountSubText}) | fc={row.CommanderText} ({row.CommanderSubText}) | own={row.OwnCharactersText} / {row.OwnCharactersSubText} | {row.SinceText} / {row.SinceSubText} | expanded={row.IsExpanded} visible={row.VisibleMembers.Count} hidden={row.HiddenMemberCount} chips={string.Join(",", row.HiddenMemberChips.Select(c => c.Text))} overflow={row.OverflowItems.Count}");
+        foreach (var cell in root.GetVisualDescendants().OfType<Border>().Where(b => b.Classes.Contains("cell acts") || (b.Classes.Contains("cell") && b.Classes.Contains("acts"))))
+        {
+            if (cell.Parent is Grid ag && ag.Parent is Border ab && ab.Classes.Contains("gridhead"))
+                continue;
+            var name = cell.FindAncestorOfType<Grid>()?.GetVisualDescendants().OfType<TextBlock>()
+                .FirstOrDefault(t => t.Classes.Contains("nm"))?.Text;
+            var buttons = cell.GetVisualDescendants().OfType<Button>().Where(b => b.IsVisible).Select(b =>
+                (b.Content as string ?? "⋯") + (b.IsEnabled ? "" : "(off)")).ToList();
+            log.AppendLine($"  acts [{name}] rows={(cell.Bounds.Height > 30 ? 2 : 1)} h={cell.Bounds.Height:0.#} w={cell.Bounds.Width:0.#} → {string.Join(" ", buttons)}");
+        }
         foreach (var cell in root.GetVisualDescendants().OfType<Border>().Where(b => b.Classes.Contains("cell") && b.Parent is Grid g && g.Parent is Border pb && pb.Classes.Contains("gridhead")))
             log.AppendLine($"  headcell [{string.Join(" ", cell.Classes)}] w={cell.Bounds.Width:0.#} x={cell.Bounds.X:0.#} visible={cell.IsVisible}");
         var lanes = root.GetVisualDescendants().OfType<Border>().Where(b => b.Classes.Contains("lane")).ToList();

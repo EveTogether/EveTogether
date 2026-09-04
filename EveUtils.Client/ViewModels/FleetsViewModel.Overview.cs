@@ -481,26 +481,28 @@ public sealed partial class FleetsViewModel
     }
 
     /// <summary>
-    /// What goes behind the "⋯" on a row. The overflow fills from the right (ET-170, screen 15): SHARE folds first,
-    /// then METRICS; STOP/START and MANAGE stay on the row at every width. The rarer management actions — edit,
-    /// disband, adding pilots to a local fleet, a second character joining — live here at every width.
+    /// What goes behind the "⋯" on a row. Every action this row allows is drawn exactly once: on the row when its
+    /// width and its group give it a place there, in this menu otherwise — never in both, and never nowhere. The
+    /// order things fold in is scherm 15's: STOP/START and MANAGE/VIEW keep the row at any width, SHARE folds first,
+    /// then METRICS, then LEAVE. The rarer management actions — edit, disband, adding pilots to a local fleet,
+    /// bringing a second character in — live here whatever the width.
     /// </summary>
     private void BuildOverflow(FleetViewModel row)
     {
         row.OverflowItems.Clear();
         bool inFleet = row.IsMine || row.IsParticipating;
-        if (!row.IsWide && inFleet && !row.IsFinished)
-        {
+        if (inFleet && !row.IsFinished && !row.ShowMetricsButton)
             row.OverflowItems.Add(new("METRICS", new AsyncRelayCommand(() => MetricsRowAsync(row))));
+        if (row.IsMine && !row.IsFinished && !row.ShowShareButton)
             row.OverflowItems.Add(new("SHARE", new AsyncRelayCommand(() => OpenSharing(row))));
-        }
-        if (!row.IsWide && row.ShowLeave)
+        if (row.CanLeave && !row.ShowLeave)
             row.OverflowItems.Add(new("LEAVE", new AsyncRelayCommand(() => LeaveRowAsync(row))));
-        if (row.IsParticipating && row.ShowJoin)
+        if (row.CanJoin && !row.ShowJoin)
             row.OverflowItems.Add(new("JOIN WITH ANOTHER CHARACTER", row.JoinEnabled ? new AsyncRelayCommand(() => Join(row)) : null,
                 row.JoinEnabled ? null : "Every one of your characters on this server is already in"));
-        if (row.IsParticipating && row.ShowRequest)
-            row.OverflowItems.Add(new("REQUEST FOR ANOTHER CHARACTER", row.JoinEnabled ? new AsyncRelayCommand(() => Request(row)) : null));
+        if (row.CanRequest && !row.ShowRequest)
+            row.OverflowItems.Add(new("REQUEST FOR ANOTHER CHARACTER", row.JoinEnabled ? new AsyncRelayCommand(() => Request(row)) : null,
+                row.JoinEnabled ? null : "Every one of your characters on this server is already in"));
         if (row.IsLocal && row.IsMine && !row.IsFinished)
         {
             row.OverflowItems.Add(new("ADD CHARACTER", new AsyncRelayCommand(() => AddLocalCharacter(row))));
