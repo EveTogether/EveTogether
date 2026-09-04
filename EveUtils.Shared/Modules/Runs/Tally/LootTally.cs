@@ -6,28 +6,56 @@ namespace EveUtils.Shared.Modules.Runs.Tally;
 /// cannot total one way while it is running and another way once it is saved.</summary>
 public static class LootTally
 {
-    /// <summary>Without a cargo hold to start from, every capture is loot — the reading a pilot who never pastes a
-    /// starting hold keeps. With one, the loot is the difference between two holds and the moments in between count
-    /// towards nothing, because that difference already covers them.</summary>
+    /// <summary>Which two captures the difference runs between, as indexes into <paramref name="captures"/>.
+    /// <c>Before</c> is -1 when no starting hold is named and every capture simply counts; <c>After</c> is -1 when a
+    /// starting hold has nothing after it yet. The window names these two on screen and <see cref="Count"/> counts
+    /// between them — one answer, so the caption cannot say one thing while the figures say another.</summary>
+    public static (int Before, int After) Ends(IReadOnlyList<LootTallyCapture> captures)
+    {
+        int before = _LastWithRole(captures, LootCaptureRole.CargoBefore);
+        if (before < 0)
+            return (-1, -1);
+
+        // A named ending hold is the ending hold wherever it sits in the run: pasting the two boxes in the other
+        // order must not leave the run uncounted. Only when none is named does the last capture become it — which is
+        // what makes a capture arriving late win without the pilot having to say so again.
+        int after = _LastWithRole(captures, LootCaptureRole.CargoAfter);
+        return (before, after >= 0 ? after : _LastCountedAfter(captures, before));
+    }
+
+    /// <summary>Without a starting hold, every capture is loot — the reading a pilot who never pastes one keeps.
+    /// With one, the loot is the difference between two holds and the moments in between count towards nothing,
+    /// because that difference already covers them.</summary>
     public static IReadOnlyList<LootTallyLine> Count(IReadOnlyList<LootTallyCapture> captures)
     {
-        // FindLast, both times: two captures carrying the same role is a state the picker cannot produce but the
-        // model allows — a synced run, or a second way in built later — and the latest one wins, which is the same
-        // answer a capture arriving late gets everywhere else here. Never the reading order's accident.
-        List<LootTallyCapture> counted = [.. captures.Where(capture => !capture.IsExcluded)];
-        int before = counted.FindLastIndex(capture => capture.Role == LootCaptureRole.CargoBefore);
+        (int before, int after) = Ends(captures);
         if (before < 0)
-            return [.. counted.SelectMany(capture => capture.Lines)];
-
-        // No hold named as the end of the run: the last capture is it, which is what makes a capture arriving late
-        // win without the pilot having to say so again.
-        int after = counted.FindLastIndex(capture => capture.Role == LootCaptureRole.CargoAfter);
-        if (after <= before)
-            after = counted.Count - 1;
+            return [.. captures.Where(capture => !capture.IsExcluded).SelectMany(capture => capture.Lines)];
 
         // A starting hold with nothing after it is a run that has not been counted yet, not a run that lost its
         // whole cargo.
-        return after <= before ? [] : _Difference(counted[before], counted[after]);
+        return after < 0 ? [] : _Difference(captures[before], captures[after]);
+    }
+
+    /// <summary>Two captures carrying the same role is a state the picker cannot produce but the model allows — a
+    /// synced run, or a second way in built later — and the latest one wins, which is the answer a capture arriving
+    /// late gets everywhere else here. Never the reading order's accident.</summary>
+    private static int _LastWithRole(IReadOnlyList<LootTallyCapture> captures, LootCaptureRole role)
+    {
+        for (int index = captures.Count - 1; index >= 0; index--)
+            if (!captures[index].IsExcluded && captures[index].Role == role)
+                return index;
+
+        return -1;
+    }
+
+    private static int _LastCountedAfter(IReadOnlyList<LootTallyCapture> captures, int before)
+    {
+        for (int index = captures.Count - 1; index > before; index--)
+            if (!captures[index].IsExcluded)
+                return index;
+
+        return -1;
     }
 
     private static IReadOnlyList<LootTallyLine> _Difference(LootTallyCapture before, LootTallyCapture after)

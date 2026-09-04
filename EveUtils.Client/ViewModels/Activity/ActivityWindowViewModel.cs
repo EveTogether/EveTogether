@@ -70,6 +70,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public static string LootStrategySettingKey(ActivityKind kind) =>
         $"ui.activity.lootstrategy.{kind.ToString().ToLowerInvariant()}";
 
+    /// <summary>Which way this kind registers loot, remembered per kind for the reason the strategy is: in the abyss
+    /// filaments and ammunition go up and a starting cargo hold earns its keep, on a combat site you only ever pick
+    /// things up. Absent means <see cref="ActivityLootMode.Clipboard"/>, which is what keeps a pilot who never opens
+    /// this row on exactly the way he has now.</summary>
+    public static string LootModeSettingKey(ActivityKind kind) =>
+        $"ui.activity.lootmode.{kind.ToString().ToLowerInvariant()}";
+
     /// <summary>Once a second. The readout is a clock, and a clock cannot be read faster than it ticks.</summary>
     public static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(1);
 
@@ -87,6 +94,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// there is nobody to leave the other cans to.</summary>
     public static IReadOnlyList<RunLootStrategy> SiteLootStrategies { get; } =
         [RunLootStrategy.Blitzed, RunLootStrategy.CherryPicked, RunLootStrategy.Cleared, RunLootStrategy.FullClear];
+
+    /// <summary>Clipboard first, and first for good: it is the default and the one nobody has to choose.</summary>
+    public static IReadOnlyList<ActivityLootMode> LootModes { get; } =
+        [ActivityLootMode.Clipboard, ActivityLootMode.CargoDiff];
+
+    private static string LabelOf(ActivityLootMode mode) =>
+        mode is ActivityLootMode.CargoDiff ? "start + end hold" : "clipboard";
 
     /// <summary>The words on the chips. They live here and not in the stored value, so rewording one never reaches a
     /// run that was already saved.</summary>
@@ -166,7 +180,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _fleetRunStoppedSubscription = services.GetService<IEventBus>()?.Subscribe<FleetRunStoppedEvent>(_OnFleetRunStopped);
         _fleetRunDiscardedSubscription = services.GetService<IEventBus>()?.Subscribe<FleetRunDiscardedEvent>(_OnFleetRunDiscarded);
         RunLoot = services.GetService<CqrsDispatcher>() is { } dispatcher
-            ? new RunLootViewModel(dispatcher, services.GetService<IAppraisalProvider>())
+            ? new RunLootViewModel(dispatcher, services.GetService<IAppraisalProvider>(), services.GetService<ISdeAccessor>())
             : null;
         if (RunLoot is not null)
             RunLoot.PropertyChanged += (_, _) => _RefreshSummaries();
@@ -186,6 +200,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         LootStrategyChoices = LootStrategies
             .Select((strategy, index) => new ActivityChoice { Index = index, Label = LabelOf(strategy) })
+            .ToList();
+
+        LootModeChoices = LootModes
+            .Select((mode, index) => new ActivityChoice { Index = index, Label = LabelOf(mode) })
             .ToList();
 
         Sections = [Activity, Enemies, Fit, Fleet, Bounty, Loot];
@@ -318,6 +336,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [ObservableProperty] private RunLootStrategy? _lootStrategy;
 
     public IReadOnlyList<ActivityChoice> LootStrategyChoices { get; }
+
+    /// <summary>Which way this window's LOOT section is worked. The controls of the way you do not use are not on
+    /// screen; the figures are not this row's business either way (Zyra, 2026-09-04).</summary>
+    [ObservableProperty] private ActivityLootMode _lootMode;
+
+    public IReadOnlyList<ActivityChoice> LootModeChoices { get; }
 
     /// <summary>The list this run's kind loots by. Empty is a real answer and not a gap: a mission is not looted in
     /// these words at all, so it gets no list rather than the site list it never fitted (ET-174 AC-4).</summary>
@@ -807,6 +831,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             string? remembered = settings.FirstOrDefault(s => s.Key == LootStrategySettingKey(Kind))?.Value;
             LootStrategy = LootStrategies.Cast<RunLootStrategy?>()
                 .FirstOrDefault(candidate => candidate.ToString() == remembered);
+
+            // Anything unreadable reads as clipboard, which is the only default that cannot surprise anyone.
+            LootMode = settings.FirstOrDefault(s => s.Key == LootModeSettingKey(Kind))?.Value == nameof(ActivityLootMode.CargoDiff)
+                ? ActivityLootMode.CargoDiff
+                : ActivityLootMode.Clipboard;
         }
 
         _SyncChoices();
@@ -1435,6 +1464,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
                 .Send(new SetRunLootStrategyCommand(runId, LootStrategy));
         }
+    }
+
+    [RelayCommand]
+    private async Task SelectLootModeAsync(int index)
+    {
+        LootMode = LootModes[index];
+        _SyncChoices();
+        await _PersistAsync(LootModeSettingKey(Kind), LootMode.ToString());
     }
 
     [RelayCommand]
@@ -2660,6 +2697,25 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         foreach (var choice in LootStrategyChoices)
             choice.IsSelected = LootStrategy is { } chosen && LootStrategies[choice.Index] == chosen;
+
+        foreach (var choice in LootModeChoices)
+            choice.IsSelected = LootModes[choice.Index] == LootMode;
+    }
+
+    /// <summary>The mode moves controls on and off screen and nothing else — the figures follow the roles on the
+    /// captures, so switching back and forth cannot change what the run is worth.</summary>
+    partial void OnLootModeChanged(ActivityLootMode value)
+    {
+        if (RunLoot is not null)
+            RunLoot.IsCargoDiffShown = value is ActivityLootMode.CargoDiff;
+    }
+
+    /// <summary>SAVE is the lock, and so is ET-179 finishing a run left standing: a committed run's loot carries no
+    /// controls at all, which is the whole difference between an editable section and a fixed one.</summary>
+    partial void OnRunStateChanged(ActivityRunState value)
+    {
+        if (RunLoot is not null)
+            RunLoot.IsLocked = value is ActivityRunState.Saved;
     }
 
     private async Task _PersistAsync(string key, string value)
