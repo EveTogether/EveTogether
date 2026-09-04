@@ -14,6 +14,14 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- **A fleet can now be stopped instead of only being finished.** Stopping puts a fleet back to standing by with its
+  roster, its doctrine and its name intact, so the op you fly every Wednesday is started again next week rather than
+  recreated from scratch. Its members are released the moment it stops and can fly in another fleet straight away.
+  Finishing a fleet — **CONCLUDE** — still does exactly what it did and is still one way only; it has moved off the
+  roster header into the window that **STOP** opens, where the three ways out of a running fleet stand side by side
+  with what each of them costs. Deleting a fleet stays where it was, on the fleet overview: it is not the same size
+  of decision and no longer sits next to the one you take every week. The window also names any run of yours that is
+  still going and says plainly that stopping does not throw it away.
 - **The server control panel can now take a backup and put one back.** One encrypted file holds everything a server
   needs to be rebuilt somewhere else: the whole database, the key that decrypts the stored ESI refresh tokens, and
   the TLS certificate your clients pinned. Restoring it on a fresh install brings the server back with every linked

@@ -66,6 +66,10 @@ service Fleets {
   // Start (6.5, D-137): the creator flips the fleet from Forming to Active and the roster is notified.
   // Creator-only via the owning fleet; fleet.edit gated. Idempotent on an already-started fleet.
   rpc StartFleet (StartFleetRequest) returns (FleetActionReply);
+  // Stop (ET-166): the creator flips the fleet back from Active to Forming — the way back Conclude is not. The
+  // roster survives, so a recurring op stands by until next time; its members are coupled to nothing meanwhile.
+  // Creator-only; idempotent on an already-standing-by fleet; refused on a concluded one.
+  rpc StopFleet (StopFleetRequest) returns (FleetActionReply);
   // Conclude (2026-06-04): the creator marks the fleet finished (Forming/Active → Concluded), kept for history.
   // A concluded fleet broadcasts nothing and can no longer be joined or started. Creator-only; idempotent.
   rpc ConcludeFleet (ConcludeFleetRequest) returns (FleetActionReply);
@@ -180,6 +184,7 @@ message FleetActionReply { bool accepted = 1; string message = 2; }
 message DisbandFleetRequest { int64 fleet_id = 1; }
 
 message StartFleetRequest { int64 fleet_id = 1; }
+message StopFleetRequest { int64 fleet_id = 1; }  // ET-166: Active -> Forming, roster kept
 
 message ConcludeFleetRequest { int64 fleet_id = 1; }
 
@@ -202,6 +207,7 @@ message FleetDto {
   optional int32 esi_fleet_boss_id = 15;      // the in-game boss character of the coupled fleet
   bool esi_auto_apply_structure = 16;         // Auto Apply: push new wings/squads to ESI automatically (D-218)
   bool esi_auto_invite_members = 17;          // Auto Invite: invite joining/assigned members to ESI automatically (D-218)
+  string activated_at = 18;                   // when the fleet was last started; empty = never (ET-166: "active for hh:mm:ss")
 }
 message GetFleetReply { bool found = 1; string message = 2; FleetDto fleet = 3; }
 

@@ -32,8 +32,13 @@
                     <Button Content="METRICS" FontSize="10" Command="{Binding OpenMetricsCommand}"/>
                     <Button Content="START" FontSize="10" Classes="accent"
                             IsVisible="{Binding CanStart}" Command="{Binding StartCommand}"/>
-                    <Button Content="CONCLUDE" FontSize="10" Classes="danger"
-                            IsVisible="{Binding CanConclude}" Command="{Binding ConcludeCommand}"/>
+                    <!-- STOP, not CONCLUDE (ET-166). One exit button for the owner of a running fleet: the choice
+                         between standing the fleet back down, ending it for good, and pulling one pilot out is made
+                         in the dialog it opens, where the three read as the different acts they are. A header of
+                         same-sized buttons made concluding the obvious way out of a fleet you meant to run again. -->
+                    <Button Content="STOP" FontSize="10" Classes="accent"
+                            IsVisible="{Binding CanStop}" Command="{Binding StopCommand}"
+                            ToolTip.Tip="Stop, conclude, or leave this fleet"/>
                     <!-- Self-leave from the roster (D-215): only shown when I'm a non-owner member here -->
                     <Button Content="LEAVE" FontSize="10" Classes="danger"
                             IsVisible="{Binding CanLeaveFleet}" Command="{Binding LeaveFleetCommand}"

@@ -112,6 +112,8 @@ public sealed class RecordingFleetTransportClient : IFleetTransportClient
 
     public Task<(bool Ok, string Message)> StartFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) => Accepted();
 
+    public Task<(bool Ok, string Message)> StopFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) => Accepted();
+
     public Task<(bool Ok, string Message)> ConcludeFleetAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default) => Accepted();
 
     /// <summary>Result returned by <see cref="JoinFleetAsync"/> — default accepted; a test can set a failure to drive the failed-join path.</summary>

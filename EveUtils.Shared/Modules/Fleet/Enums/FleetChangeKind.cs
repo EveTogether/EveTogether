@@ -8,5 +8,11 @@ public enum FleetChangeKind
     Activated,
     Concluded,
     RosterChanged,
-    CompositionChanged
+    CompositionChanged,
+
+    /// <summary>The fleet went back to standing by (Active → Forming, ET-166) — its members are coupled to nothing
+    /// again, so the surfaces that react to <see cref="Activated"/> have to re-read. Appended rather than slotted in
+    /// beside <see cref="Activated"/> on purpose: this travels the wire between a client and a server that update
+    /// separately, so the existing values must keep the numbers they already have.</summary>
+    Stopped
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -670,6 +671,11 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _canStart;
     [ObservableProperty] private bool _canConclude;
 
+    /// <summary>STOP is offered on an active fleet the acting character owns — the way back to standing by (ET-166).
+    /// Same condition as <see cref="CanConclude"/> on purpose: they are the two exits from one state, and the choice
+    /// between them is made in the stop dialog rather than by two buttons of equal weight in the header.</summary>
+    [ObservableProperty] private bool _canStop;
+
     private void UpdateActivationLabel(FleetActivation activation)
     {
         ActivationLabel = activation switch
@@ -682,6 +688,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         // CONCLUDE only applies to an Active fleet (the op ran); a Forming fleet is cancelled via Disband, and a
         // Concluded one is terminal.
         CanConclude = _isOwner && activation == FleetActivation.Active;
+        CanStop = CanConclude;
     }
 
     [RelayCommand]
@@ -1445,19 +1452,105 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// The way out of an active fleet (ET-166). One button, because the FC's question is "how do I get out of this
+    /// tonight" and the three answers to it are only distinguishable side by side: stopping puts the fleet back on
+    /// standby with its roster (the recurring op's whole point), concluding is the terminal exit that already
+    /// existed, and leaving pulls one of my own pilots out without touching the fleet. Disbanding is deliberately
+    /// not among them — it lives on the fleet overview, and standing next to Stop is what made it read as the same
+    /// weight of decision.
+    /// </summary>
     [RelayCommand]
-    private async Task Conclude()
+    private async Task Stop()
     {
-        if (!CanConclude)
+        if (!CanStop)
             return;
 
-        if (!await _dialogs.ConfirmAsync(
-                "Conclude fleet",
-                $"Mark '{_fleet.Name}' as concluded? It is kept for history but can no longer be joined or started, " +
-                "and its members are free to join another fleet.",
-                okText: "Conclude"))
-            return;
+        switch (await _dialogs.PickFleetExitAsync(BuildStopPrompt()))
+        {
+            case StopFleetChoice.Stop:
+                await StopFleetAsync();
+                break;
+            case StopFleetChoice.Conclude:
+                await ConcludeFleetAsync();
+                break;
+            case StopFleetChoice.LeaveOnly:
+                await LeaveFleet();
+                break;
+        }
+    }
 
+    private StopFleetPrompt BuildStopPrompt()
+    {
+        // "Mine" is what this screen already means by it: the characters LEAVE would offer, plus the character I am
+        // acting as. Anything left over that is not external is somebody else's pilot.
+        HashSet<int> mine = [.. _leavableCharacters.Select(c => c.Id), _actingCharacterId];
+        var own = _members.Count(m => !m.IsExternal && mine.Contains(m.CharacterId));
+        var external = _members.Count(m => m.IsExternal);
+
+        return new StopFleetPrompt(
+            _fleet.Name,
+            _fleet.ActivatedAt,
+            own,
+            _members.Count - own - external,
+            external,
+            DescribeRunsInProgress(),
+            _leavableCharacters.Count);
+    }
+
+    /// <summary>
+    /// This client's own runs still going in this fleet, as lines the dialog prints unchanged. Only this machine's
+    /// runs are visible here, and that is the right scope: the FC is being told what stopping does to the
+    /// measurements in front of them. Empty when nothing is running, or when the coordinator is not in the graph.
+    /// </summary>
+    private IReadOnlyList<string> DescribeRunsInProgress()
+    {
+        if (_services.GetService<FleetRunGroupCodeCoordinator>() is not { } coordinator)
+            return [];
+
+        var now = DateTime.UtcNow;
+        return [.. coordinator.ListRunsInProgress(_fleet.Id).Select(run =>
+        {
+            var elapsed = now - run.StartedAtUtc;
+            if (elapsed < TimeSpan.Zero)
+                elapsed = TimeSpan.Zero;
+
+            var where = string.IsNullOrWhiteSpace(run.SiteName) ? run.SolarSystemName : run.SiteName;
+            var name = NameFor((int)run.CharacterId);
+            // Invariant: this is a clock, and the tests run on a machine whose culture is not English (ET-34).
+            return string.IsNullOrWhiteSpace(where)
+                ? string.Create(CultureInfo.InvariantCulture, $"{name} — {elapsed:hh\\:mm\\:ss}")
+                : string.Create(CultureInfo.InvariantCulture, $"{name} — {where}, {elapsed:hh\\:mm\\:ss}");
+        })];
+    }
+
+    private async Task StopFleetAsync()
+    {
+        var stopped = await _fleets.StopFleetAsync(_fleet.Id);
+        if (stopped.Ok)
+        {
+            UpdateActivationLabel(FleetActivation.Forming);
+            StatusMessage = "Fleet stopped — standing by again.";
+            _toasts.Show($"Stopped '{_fleet.Name}'", "It is standing by with its roster — press START to run it again.");
+            if (_onActivationChanged is not null)
+                await _onActivationChanged();
+        }
+        else
+        {
+            StatusMessage = $"Stop failed: {stopped.Message}";
+            _toasts.Show("Stop failed",
+                string.IsNullOrWhiteSpace(stopped.Message) ? $"Could not stop '{_fleet.Name}'." : stopped.Message,
+                ToastKind.Error);
+        }
+    }
+
+    /// <summary>
+    /// Conclude, reached from the stop dialog rather than from a header button of its own since ET-166. It carries
+    /// no confirmation prompt: the dialog already offered it as the exit marked "cannot be undone" and had the FC
+    /// press a red CONCLUDE FLEET, and a second window asking the same question says it worse than the first did.
+    /// </summary>
+    private async Task ConcludeFleetAsync()
+    {
         var concluded = await _fleets.ConcludeFleetAsync(_fleet.Id);
         if (concluded.Ok)
         {

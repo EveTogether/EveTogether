@@ -22,4 +22,9 @@ public sealed record FleetInfo(
     long? EsiFleetId = null,
     int? EsiFleetBossId = null,
     bool EsiAutoApplyStructure = false,
-    bool EsiAutoInviteMembers = false);
+    bool EsiAutoInviteMembers = false,
+
+    /// <summary>When the fleet was last started, or null when it never was — what "active for 01:26:27" is read
+    /// from (ET-166). Only meaningful while <see cref="Activation"/> is Active; a Stop leaves it standing as the
+    /// record of the last run and the next Start overwrites it.</summary>
+    DateTimeOffset? ActivatedAt = null);

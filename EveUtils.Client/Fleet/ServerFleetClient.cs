@@ -101,6 +101,9 @@ public sealed class ServerFleetClient(IFleetTransportClient fleets, string serve
     public Task<(bool Ok, string Message)> StartFleetAsync(long fleetId) =>
         fleets.StartFleetAsync(serverAddress, fleetId, actingCharacterId);
 
+    public Task<(bool Ok, string Message)> StopFleetAsync(long fleetId) =>
+        fleets.StopFleetAsync(serverAddress, fleetId, actingCharacterId);
+
     public Task<(bool Ok, string Message)> ConcludeFleetAsync(long fleetId) =>
         fleets.ConcludeFleetAsync(serverAddress, fleetId, actingCharacterId);
 }

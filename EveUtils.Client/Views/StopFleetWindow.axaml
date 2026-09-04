@@ -1,0 +1,145 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dlg="using:EveUtils.Client.Dialogs"
+        xmlns:sys="using:System"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="520" d:DesignHeight="600"
+        x:Class="EveUtils.Client.Views.StopFleetWindow"
+        x:Name="Root"
+        Width="520" SizeToContent="Height" MaxHeight="720"
+        WindowStartupLocation="CenterOwner"
+        Title="Stop fleet">
+
+    <!-- Styles live on the content root, never on the window: ModuleHostService lifts Content out to dock a module
+         and anything left on the window stays behind (ET-42). This dialog is modal and never docked, but the rule is
+         cheap to keep and expensive to notice the one time a screen starts being routed. -->
+    <DockPanel Margin="16">
+        <DockPanel.Styles>
+            <!-- The three ways out, as cards. The selected one takes the accent border + soft fill; the rest sit on
+                 the resting row tint. Both come from the faction resources through DynamicResource, so a faction
+                 swap re-tints them live and no local Foreground can out-rank a style setter. -->
+            <Style Selector="ListBox.exits ListBoxItem">
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="0,0,0,6"/>
+            </Style>
+            <Style Selector="ListBox.exits ListBoxItem /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="11,9"/>
+            </Style>
+            <Style Selector="ListBox.exits ListBoxItem:selected /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            </Style>
+            <!-- A key/value line in the state block: dim spaced label left, value right. -->
+            <Style Selector="TextBlock.kvlabel">
+                <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="LetterSpacing" Value="1.8"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.kvvalue">
+                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+                <Setter Property="FontSize" Value="11.5"/>
+                <Setter Property="HorizontalAlignment" Value="Right"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+        </DockPanel.Styles>
+
+        <!-- Header: the verb, and the fleet it applies to. -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,12">
+            <TextBlock Text="◆" Classes="diamond"/>
+            <TextBlock Text="STOP FLEET" Classes="panel-title" VerticalAlignment="Center"/>
+            <Border Classes="chip dim">
+                <TextBlock x:Name="FleetNameChip" Text=""/>
+            </Border>
+        </StackPanel>
+
+        <!-- Footer: what survives this, then back out / go through. The confirm button's label AND weight follow the
+             selection — accent for the reversible stop, red for the terminal conclude — because "these are not the
+             same act" is the whole point of the screen. -->
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,14,0,0">
+            <Border Grid.Column="0" Classes="chip warn" HorizontalAlignment="Left"
+                    x:Name="RunsKeepGoingChip" IsVisible="False">
+                <TextBlock x:Name="RunsKeepGoingText" Text=""/>
+            </Border>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button Content="Cancel" Click="OnCancel"/>
+                <Button x:Name="ConfirmButton" Content="STOP FLEET →" Click="OnConfirm" Classes="accent"/>
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="12">
+
+                <!-- What this fleet is right now, so the decision is made against its state and not its name. -->
+                <StackPanel Spacing="4">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <TextBlock Grid.Column="0" Text="ACTIVE" Classes="kvlabel"/>
+                        <TextBlock Grid.Column="1" x:Name="ActiveValue" Text="" Classes="kvvalue"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,*">
+                        <TextBlock Grid.Column="0" Text="COUPLED" Classes="kvlabel"/>
+                        <TextBlock Grid.Column="1" x:Name="CoupledValue" Text="" Classes="kvvalue"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,*" x:Name="RunsRow" IsVisible="False">
+                        <TextBlock Grid.Column="0" Text="RUNS" Classes="kvlabel"/>
+                        <TextBlock Grid.Column="1" x:Name="RunsValue" Text="" Classes="kvvalue"
+                                   Foreground="{DynamicResource AccentBrightBrush}"/>
+                    </Grid>
+                </StackPanel>
+
+                <StackPanel Spacing="5">
+                    <TextBlock Text="WHAT DO YOU WANT TO DO?" Classes="label" FontSize="9"/>
+                    <ListBox x:Name="ExitList" Classes="exits" SelectionMode="Single"
+                             ItemsSource="{Binding Options, ElementName=Root}"
+                             SelectionChanged="OnExitChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="dlg:StopFleetOption">
+                                <StackPanel Spacing="3">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="{Binding Title}" FontSize="12.5"
+                                                   FontWeight="SemiBold" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource TextBrightBrush}"/>
+                                        <Border Grid.Column="1" Classes="chip" Margin="8,0,0,0"
+                                                Classes.ok="{Binding IsRecommended}"
+                                                Classes.warn="{Binding IsIrreversible}"
+                                                Classes.dim="{Binding IsNeutral}">
+                                            <TextBlock Text="{Binding Note}"/>
+                                        </Border>
+                                    </Grid>
+                                    <TextBlock Text="{Binding Hint}" FontSize="11" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextAccentBrush}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </StackPanel>
+
+                <!-- Only shown when something is actually running: a measurement under way survives a stop, and the
+                     FC should read that off named runs rather than take it on trust. -->
+                <StackPanel Spacing="5" x:Name="RunsBlock" IsVisible="False">
+                    <TextBlock x:Name="RunsBlockLabel" Text="" Classes="label" FontSize="9"/>
+                    <Border Classes="panel" Padding="11,9">
+                        <StackPanel Spacing="4">
+                            <ItemsControl ItemsSource="{Binding RunsInProgress, ElementName=Root}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="sys:String">
+                                        <TextBlock Text="{Binding}" FontSize="11.5" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource TextBrightBrush}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock TextWrapping="Wrap" FontSize="11"
+                                       Foreground="{DynamicResource TextDimBrush}"
+                                       Text="They keep running and are saved as usual, with the fleet group they were given at the start. Stopping is bookkeeping — it does not throw away a measurement that is under way."/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</v:ChromedWindow>

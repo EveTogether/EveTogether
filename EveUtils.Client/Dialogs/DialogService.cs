@@ -469,6 +469,13 @@ public sealed class DialogService : IDialogService, ISingletonService
         return await _Over(dialog).ShowDialog<bool>(_owner);
     }
 
+    public async Task<StopFleetChoice> PickFleetExitAsync(StopFleetPrompt prompt)
+    {
+        if (_owner is null) return StopFleetChoice.Cancel;
+        var dialog = new StopFleetWindow(prompt);
+        return await _Over(dialog).ShowDialog<StopFleetChoice>(_owner);
+    }
+
     public void ShowRoster(FleetRosterViewModel viewModel) =>
         // One roster module per fleet (de-duped on the fleet id): MANAGE on a second fleet opens its own window
         // instead of re-selecting the first fleet's roster, which used to stay bound to the original fleet.
