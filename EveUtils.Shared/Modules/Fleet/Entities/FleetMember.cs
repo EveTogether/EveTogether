@@ -54,4 +54,18 @@ public sealed class FleetMember
     /// <summary>The in-game ESI fleet member id once this member is matched to the live fleet; null
     /// until linked. Distinct from <see cref="CharacterId"/> — ESI keys move/kick by this member id.</summary>
     public long? EsiMemberId { get; set; }
+
+    /// <summary>Self-reported availability for this fleet's next start (ET-169); set and cleared by
+    /// this member only. CLR-default <see cref="FleetMemberAvailability.NotSet"/> — silence counts as
+    /// available. Reset to <see cref="FleetMemberAvailability.NotSet"/> whenever the fleet starts.</summary>
+    public FleetMemberAvailability Availability { get; set; }
+
+    /// <summary>When <see cref="Availability"/> was last set by the member; null until they have said
+    /// anything. Cleared alongside <see cref="Availability"/> on start.</summary>
+    public DateTimeOffset? AvailabilityUpdatedAt { get; set; }
+
+    /// <summary>The optional short note the member gave with their availability ("kan zondag niet,
+    /// volgende week wel") — what the commander sees beyond just the state. Cleared alongside
+    /// <see cref="Availability"/> on start.</summary>
+    public string? AvailabilityNote { get; set; }
 }

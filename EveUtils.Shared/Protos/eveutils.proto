@@ -105,6 +105,9 @@ service Fleets {
   // never leave that client, D-179 — only the verdict travels). Self-only; broadcast as fleet.changed on change.
   rpc ReportMemberFitVerdict (ReportMemberFitVerdictRequest) returns (FleetActionReply);
   rpc ReportMemberInGameFleet (ReportMemberInGameFleetRequest) returns (FleetActionReply);  // D-126 M6: self-only in-game presence
+  // ET-169: signs a member off a Forming fleet's next start, or reverses it, without touching the roster.
+  // Self-only, strictly — unlike every other roster rpc here, not even the creator may call this for someone else.
+  rpc SetFleetMemberAvailability (SetFleetMemberAvailabilityRequest) returns (FleetActionReply);
   rpc ListMembers (ListMembersRequest) returns (ListMembersReply);
   // Ownership transfer (P2.7): the creator hands the fleet to another member; the old owner stays a member.
   // Creator-only via the owning fleet; fleet.edit gated.
@@ -273,9 +276,13 @@ message AssignMemberFitRequest { int64 member_id = 1; FitReferenceDto fit = 2; o
 // 9 = FitSkillVerdict (FC-6 cross-client). 10 = unix ms this member's client last published into the fleet, absent
 // when it never has (ET-70) — it lets a just-opened screen tell "gone" from "never heard of", which it cannot work
 // out from a live stream it has only been listening to for a second.
-message MemberDto { int64 id = 1; int32 character_id = 2; int64 wing_id = 3; int64 squad_id = 4; int32 role = 5; bool is_external = 6; FitReferenceDto assigned_fit = 7; optional int64 assigned_composition_entry_id = 8; int32 fit_skill_verdict = 9; optional int64 last_seen_ms = 10; }
+// 9 = FitSkillVerdict (FC-6 cross-client). 10 = unix ms this member's client last published into the fleet, absent
+// when it never has (ET-70). 11/12 = self-reported availability for the fleet's next start (ET-169, FleetMemberAvailability)
+// plus the optional note the member gave with it — absent note when none was given, not empty string.
+message MemberDto { int64 id = 1; int32 character_id = 2; int64 wing_id = 3; int64 squad_id = 4; int32 role = 5; bool is_external = 6; FitReferenceDto assigned_fit = 7; optional int64 assigned_composition_entry_id = 8; int32 fit_skill_verdict = 9; optional int64 last_seen_ms = 10; int32 availability = 11; optional string availability_note = 12; }
 message ReportMemberFitVerdictRequest { int64 member_id = 1; int32 verdict = 2; }  // verdict = FitSkillVerdict; self-only
 message ReportMemberInGameFleetRequest { int64 member_id = 1; bool in_fleet = 2; }  // self-only in-game presence (D-126 M6)
+message SetFleetMemberAvailabilityRequest { int64 member_id = 1; int32 availability = 2; optional string note = 3; }  // availability = FleetMemberAvailability; self-only, strictly (ET-169)
 message ListMembersRequest { int64 fleet_id = 1; }
 message ListMembersReply { bool ok = 1; string message = 2; repeated MemberDto members = 3; }
 

@@ -1,0 +1,85 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="420"
+        x:Class="EveUtils.Client.Views.FleetAvailabilityWindow"
+        x:Name="Root"
+        Width="480" SizeToContent="Height" MaxHeight="600"
+        WindowStartupLocation="CenterOwner"
+        Title="Availability">
+
+    <!-- Styles on the content root, never on the window (ET-42): ModuleHostService lifts Content out to dock a
+         module and anything left on the window stays behind. -->
+    <DockPanel Margin="16">
+        <DockPanel.Styles>
+            <Style Selector="Border.okline">
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Background" Value="#05FFFFFF"/>
+                <Setter Property="Padding" Value="11,8"/>
+            </Style>
+            <Style Selector="Border.okline TextBlock">
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="LineHeight" Value="16"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            </Style>
+            <Style Selector="RadioButton.avail">
+                <Setter Property="Padding" Value="10,8"/>
+                <Setter Property="Margin" Value="0,0,0,6"/>
+            </Style>
+            <Style Selector="TextBlock.hint">
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
+        </DockPanel.Styles>
+
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,12">
+            <TextBlock Text="&#x25C6;" Classes="diamond"/>
+            <TextBlock Text="AVAILABILITY" Classes="panel-title" VerticalAlignment="Center"/>
+            <Border Classes="chip dim">
+                <TextBlock x:Name="HeaderChip" Text=""/>
+            </Border>
+        </StackPanel>
+
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,14,0,0">
+            <Border Grid.Column="0" Classes="chip dim" HorizontalAlignment="Left">
+                <TextBlock Text="you stay on the roster either way"/>
+            </Border>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button Content="Cancel" Click="OnCancel"/>
+                <Button Content="SAVE &#x2192;" Click="OnConfirm" Classes="accent"/>
+            </StackPanel>
+        </Grid>
+
+        <StackPanel Spacing="12">
+            <TextBlock Text="WILL YOU BE THERE NEXT TIME THIS STARTS?" Classes="label" FontSize="9"/>
+
+            <StackPanel>
+                <RadioButton x:Name="AvailableOption" GroupName="availability" Classes="avail">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Yes, count me in" Foreground="{DynamicResource TextBrightBrush}"/>
+                        <TextBlock Text="The default. A member who says nothing at all reads the same way." Classes="hint"/>
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton x:Name="SignedOffOption" GroupName="availability" Classes="avail">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="No, not this time" Foreground="{DynamicResource TextBrightBrush}"/>
+                        <TextBlock Text="You stay on the roster. The commander sees they asked you, and that they should not count on you." Classes="hint"/>
+                    </StackPanel>
+                </RadioButton>
+            </StackPanel>
+
+            <StackPanel Spacing="5">
+                <TextBlock Text="NOTE — OPTIONAL" Classes="label" FontSize="9"/>
+                <TextBox x:Name="NoteBox" PlaceholderText="e.g. can't make Sunday, free again next week"/>
+            </StackPanel>
+
+            <Border Classes="okline">
+                <TextBlock Text="This is not leaving. Your fit stays assigned and you stay on the roster. Signing off covers only the next time this fleet starts — after that you read as available again, the same as anyone who never said anything."/>
+            </Border>
+        </StackPanel>
+    </DockPanel>
+</v:ChromedWindow>

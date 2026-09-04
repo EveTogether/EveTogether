@@ -135,6 +135,10 @@ public interface IFleetTransportClient
     /// <summary>Reports the acting pilot's own in-game fleet presence.</summary>
     Task<(bool Ok, string Message)> ReportMemberInGameFleetAsync(string serverAddress, long memberId, bool inFleet, int actingCharacterId = 0, CancellationToken cancellationToken = default);
 
+    /// <summary>Signs the acting pilot off a Forming fleet's next start, or reverses it (ET-169). Self-only,
+    /// strictly — not even the fleet's creator may call this for someone else.</summary>
+    Task<(bool Ok, string Message)> SetFleetMemberAvailabilityAsync(string serverAddress, long memberId, FleetMemberAvailability availability, string? note, int actingCharacterId = 0, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<FleetMemberInfo>> ListMembersAsync(string serverAddress, long fleetId, int actingCharacterId = 0, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<FleetInviteInfo>> ListPendingInvitesAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default);

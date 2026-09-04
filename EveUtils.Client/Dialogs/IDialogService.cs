@@ -293,6 +293,10 @@ public interface IDialogService
     /// </summary>
     Task<bool> ConfirmFleetSwitchAsync(SwitchFleetPrompt prompt);
 
+    /// <summary>Signs a member off a Forming fleet's next start, or reverses it (ET-169, scherm 7) — the
+    /// member stays on the roster either way. Returns null when cancelled.</summary>
+    Task<FleetAvailabilitySubmission?> SetFleetMemberAvailabilityAsync(FleetAvailabilityPrompt prompt);
+
     /// <summary>
     /// The way out of an active fleet (ET-166): stop it back to standing by, conclude it for good, or pull one of my
     /// own characters out and leave it running. Returns the chosen exit, or <see cref="StopFleetChoice.Cancel"/> when

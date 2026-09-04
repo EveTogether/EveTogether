@@ -270,6 +270,14 @@
                                         <TextBlock Classes="offline" FontSize="10" VerticalAlignment="Center" Text="◉ offline"
                                                    IsVisible="{Binding Node.IsOffline, FallbackValue=False}"
                                                    ToolTip.Tip="Not in game — their EVE client is closed, or their EVE Together has stopped reporting."/>
+                                        <!-- Availability for the fleet's next start (ET-169) — set by the member only. This is the
+                                             roster's complete member list (an unplaced member has no tree leaf at all), so this is
+                                             where "who is signed off" has to be visible, not just in the tree. -->
+                                        <Border Classes="chip good" IsVisible="{Binding Node.ShowsAvailable, FallbackValue=False}"><TextBlock Text="AVAILABLE"/></Border>
+                                        <Border Classes="chip dim" IsVisible="{Binding Node.ShowsNoReply, FallbackValue=False}"><TextBlock Text="NO REPLY"/></Border>
+                                        <Border Classes="chip warn" IsVisible="{Binding Node.ShowsSignedOff, FallbackValue=False}" ToolTip.Tip="{Binding Node.AvailabilityTooltip}">
+                                            <TextBlock Text="SIGNED OFF"/>
+                                        </Border>
                                     </StackPanel>
                                     <Border Grid.Column="1" Background="{DynamicResource AccentSoftBrush}"
                                             CornerRadius="3" Padding="5,1" VerticalAlignment="Center">
@@ -475,6 +483,14 @@
                                     <TextBlock Classes="offline" FontSize="10" VerticalAlignment="Center" Text="◉ offline"
                                                IsVisible="{Binding IsOffline}"
                                                ToolTip.Tip="Not in game — their EVE client is closed, or their EVE Together has stopped reporting."/>
+                                    <!-- Availability for the fleet's next start (ET-169) — set by the member only. Shown for every
+                                         non-external member so "nobody has said anything" reads the same as an explicit yes, not as
+                                         a gap in the roster. -->
+                                    <Border Classes="chip good" IsVisible="{Binding ShowsAvailable}"><TextBlock Text="AVAILABLE"/></Border>
+                                    <Border Classes="chip dim" IsVisible="{Binding ShowsNoReply}"><TextBlock Text="NO REPLY"/></Border>
+                                    <Border Classes="chip warn" IsVisible="{Binding ShowsSignedOff}" ToolTip.Tip="{Binding AvailabilityTooltip}">
+                                        <TextBlock Text="SIGNED OFF"/>
+                                    </Border>
                                     <TextBlock Text="{Binding AssignedFitLabel}" Classes="label" FontSize="10" VerticalAlignment="Center"/>
                                     <mi:MaterialIcon Classes="icon-sm" Kind="Check" Foreground="{DynamicResource TextAccentBrush}"
                                                IsVisible="{Binding CanFly}" ToolTip.Tip="{Binding SkillBadgeTooltip}"/>

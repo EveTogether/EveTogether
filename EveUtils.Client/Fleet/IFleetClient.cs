@@ -47,6 +47,11 @@ public interface IFleetClient
     /// rejects a report for anyone but the acting character.</summary>
     Task<(bool Ok, string Message)> ReportMemberInGameFleetAsync(long memberId, bool inFleet);
 
+    /// <summary>Signs the acting pilot off this Forming fleet's next start, or reverses it (ET-169) — the
+    /// member stays on the roster either way. Self-only, strictly: not even the fleet's creator may call this
+    /// for someone else, the one roster-affecting call in this interface that is never creator-usable.</summary>
+    Task<(bool Ok, string Message)> SetFleetMemberAvailabilityAsync(long memberId, FleetMemberAvailability availability, string? note);
+
     /// <summary>Couples a composition to this fleet, or unlinks it when <paramref name="compositionId"/> is null
     /// . Only allowed while the fleet is forming.</summary>
     Task<(bool Ok, string Message)> SetFleetCompositionAsync(long fleetId, long? compositionId);

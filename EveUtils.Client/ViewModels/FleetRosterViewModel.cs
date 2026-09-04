@@ -1489,7 +1489,8 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
                 mine.Contains(m.CharacterId),
                 m.CharacterId == _fleet.CreatorCharacterId,
                 m.IsExternal,
-                m.IsExternal ? null : elsewhere.GetValueOrDefault(m.CharacterId)))
+                m.IsExternal ? null : elsewhere.GetValueOrDefault(m.CharacterId),
+                m.Availability == FleetMemberAvailability.SignedOff))
             .ToList();
 
         // A client-only fleet's roster is the owner's own pilots and externals: nobody there has an inbox to ask.

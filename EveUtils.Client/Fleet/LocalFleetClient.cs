@@ -47,7 +47,7 @@ public sealed class LocalFleetClient(
 
     public async Task<IReadOnlyList<FleetMemberInfo>> ListMembersAsync(long fleetId) =>
         (await repository.ListMembersAsync(fleetId))
-            .Select(m => new FleetMemberInfo(m.Id, m.CharacterId, m.WingId, m.SquadId, m.Role, m.IsExternal, _FromFit(m.AssignedFit), m.AssignedCompositionEntryId, m.FitSkillVerdict, m.LastSeenAt))
+            .Select(m => new FleetMemberInfo(m.Id, m.CharacterId, m.WingId, m.SquadId, m.Role, m.IsExternal, _FromFit(m.AssignedFit), m.AssignedCompositionEntryId, m.FitSkillVerdict, m.LastSeenAt, m.Availability, m.AvailabilityNote))
             .ToList();
 
     private static FitReferenceInfo? _FromFit(FitReference? fit) => fit is null ? null : new FitReferenceInfo(
@@ -101,6 +101,17 @@ public sealed class LocalFleetClient(
         if (member is null)
             return (false, "Fleet member not found.");
         return Map(await local.ReportMemberInGameFleetAsync(memberId, inFleet, member.CharacterId));
+    }
+
+    /// <summary>For a client-only fleet this client IS the pilot's client for all its local toons, so the
+    /// sign-off acts as the member's own character — never as <c>ownerCharacterId</c> — to satisfy the
+    /// handler's self-only rule.</summary>
+    public async Task<(bool Ok, string Message)> SetFleetMemberAvailabilityAsync(long memberId, FleetMemberAvailability availability, string? note)
+    {
+        var member = await repository.GetMemberAsync(memberId);
+        if (member is null)
+            return (false, "Fleet member not found.");
+        return Map(await local.SetFleetMemberAvailabilityAsync(memberId, availability, note, member.CharacterId));
     }
 
     public async Task<(bool Ok, string Message)> SetFleetCompositionAsync(long fleetId, long? compositionId) =>

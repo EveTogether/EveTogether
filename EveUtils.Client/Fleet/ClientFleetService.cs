@@ -119,6 +119,13 @@ public sealed class ClientFleetService(IServiceScopeFactory scopeFactory) : ISin
         long memberId, bool inFleet, int actingCharacterId, CancellationToken cancellationToken = default)
         => DispatchAsync(d => d.Send(new ReportMemberInGameFleetCommand(memberId, inFleet, actingCharacterId), cancellationToken));
 
+    /// <summary>Signs the acting pilot off this fleet's next start, or reverses it, via the Shared
+    /// <see cref="SetFleetMemberAvailabilityCommand"/>. Self-only, strictly — <paramref name="actingCharacterId"/>
+    /// must be the member's own character even for a client-only fleet's owner.</summary>
+    public Task<Result> SetFleetMemberAvailabilityAsync(
+        long memberId, FleetMemberAvailability availability, string? note, int actingCharacterId, CancellationToken cancellationToken = default)
+        => DispatchAsync(d => d.Send(new SetFleetMemberAvailabilityCommand(memberId, availability, note, actingCharacterId), cancellationToken));
+
     /// <summary>Renames a wing via the Shared <see cref="RenameWingCommand"/> (client-only roster management).</summary>
     public Task<Result> RenameWingAsync(long wingId, string name, int ownerCharacterId, CancellationToken cancellationToken = default)
         => DispatchAsync(d => d.Send(new RenameWingCommand(wingId, name, ownerCharacterId), cancellationToken));

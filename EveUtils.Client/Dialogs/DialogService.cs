@@ -558,6 +558,13 @@ public sealed class DialogService : IDialogService, ISingletonService
         return await _Over(dialog).ShowDialog<bool>(_owner);
     }
 
+    public async Task<FleetAvailabilitySubmission?> SetFleetMemberAvailabilityAsync(FleetAvailabilityPrompt prompt)
+    {
+        if (_owner is null) return null;
+        var dialog = new FleetAvailabilityWindow(prompt);
+        return await _Over(dialog).ShowDialog<FleetAvailabilitySubmission?>(_owner);
+    }
+
     public async Task<StopFleetChoice> PickFleetExitAsync(StopFleetPrompt prompt)
     {
         if (_owner is null) return StopFleetChoice.Cancel;

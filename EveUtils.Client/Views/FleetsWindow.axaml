@@ -973,6 +973,9 @@
                                                 Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).MetricsRowCommand}" CommandParameter="{Binding}"/>
                                         <Button Classes="pick act" Content="SHARE" IsVisible="{Binding ShowShareButton}"
                                                 Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ShareRowCommand}" CommandParameter="{Binding}"/>
+                                        <Button Classes="pick act" Content="SIGN OFF" IsVisible="{Binding ShowSignOff}"
+                                                ToolTip.Tip="Stay on the roster, but tell the commander not to count on you next start"
+                                                Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).SignOffRowCommand}" CommandParameter="{Binding}"/>
                                         <Button Classes="pick act danger" Content="LEAVE" IsVisible="{Binding ShowLeave}"
                                                 Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).LeaveRowCommand}" CommandParameter="{Binding}"/>
                                         <Button Classes="pick act danger" Content="DELETE" IsVisible="{Binding ShowDelete}"
@@ -1034,6 +1037,9 @@
                                                             <Border Classes="chip dim" IsVisible="{Binding IsMine}"><TextBlock Text="your character"/></Border>
                                                             <Border Classes="chip warn" IsVisible="{Binding IsElsewhereActive}"><TextBlock Text="ELSEWHERE ACTIVE"/></Border>
                                                             <Border Classes="chip warn" IsVisible="{Binding SharesNothing}"><TextBlock Text="shares nothing"/></Border>
+                                                            <Border Classes="chip warn" IsVisible="{Binding IsSignedOff}" ToolTip.Tip="{Binding AvailabilityNote}">
+                                                                <TextBlock Text="SIGNED OFF"/>
+                                                            </Border>
                                                             <Border Classes="chip dim" IsVisible="{Binding IsExternal}"><TextBlock Text="external"/></Border>
                                                         </StackPanel>
                                                     </Border>

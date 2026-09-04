@@ -523,6 +523,16 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.Property<long?>("AssignedCompositionEntryId")
                         .HasColumnType("bigint");
 
+                    b.Property<int>("Availability")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("AvailabilityNote")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset?>("AvailabilityUpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("CharacterId")
                         .HasColumnType("integer");
 

@@ -379,6 +379,20 @@ public sealed class FleetsGrpcService(
             : new FleetActionReply { Accepted = false, Message = FirstMessage(result) };
     }
 
+    public override async Task<FleetActionReply> SetFleetMemberAvailability(SetFleetMemberAvailabilityRequest request, ServerCallContext context)
+    {
+        var character = await AuthenticateAsync(context);
+
+        // Self-only, strictly, enforced in the handler: unlike every other roster rpc here, the fleet's own
+        // creator has no standing to call this for someone else either.
+        var result = await dispatcher.Send(new SetFleetMemberAvailabilityCommand(
+            request.MemberId, (FleetMemberAvailability)request.Availability,
+            request.HasNote ? request.Note : null, character), context.CancellationToken);
+        if (result.IsSuccess && await fleets.GetMemberAsync(request.MemberId, context.CancellationToken) is { } member)
+            await BroadcastFleetChangedAsync(member.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
+        return ToActionReply(result, "Availability set.");
+    }
+
     public override async Task<ListMembersReply> ListMembers(ListMembersRequest request, ServerCallContext context)
     {
         await AuthenticateAsync(context);
@@ -396,7 +410,8 @@ public sealed class FleetsGrpcService(
                 Role = (int)member.Role,
                 IsExternal = member.IsExternal,
                 AssignedFit = member.AssignedFit is null ? null : ToFitDto(member.AssignedFit),
-                FitSkillVerdict = (int)member.FitSkillVerdict
+                FitSkillVerdict = (int)member.FitSkillVerdict,
+                Availability = (int)member.Availability
             };
             if (member.AssignedCompositionEntryId is long entryId)
                 dto.AssignedCompositionEntryId = entryId;
@@ -404,6 +419,8 @@ public sealed class FleetsGrpcService(
             // one of them is grounds for calling the pilot offline (ET-70).
             if (member.LastSeenAt is { } lastSeen)
                 dto.LastSeenMs = lastSeen.ToUnixTimeMilliseconds();
+            if (member.AvailabilityNote is { } note)
+                dto.AvailabilityNote = note;
             reply.Members.Add(dto);
         }
         return reply;

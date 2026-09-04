@@ -23,6 +23,10 @@ public sealed class FleetMemberConfiguration : IEntityTypeConfiguration<FleetMem
         // Pilot-reported can-fly verdict: int-stored enum, CLR-default Unknown (0).
         builder.Property(m => m.FitSkillVerdict).IsRequired();
 
+        // Self-reported availability (ET-169): int-stored enum, CLR-default NotSet (0).
+        builder.Property(m => m.Availability).IsRequired();
+        builder.Property(m => m.AvailabilityNote).HasMaxLength(200);
+
         builder.HasOne<Fleet>()
             .WithMany()
             .HasForeignKey(m => m.FleetId)

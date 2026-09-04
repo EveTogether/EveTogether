@@ -213,6 +213,7 @@ public sealed partial class FleetViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowMetricsButton))]
     [NotifyPropertyChangedFor(nameof(ShowShareButton))]
     [NotifyPropertyChangedFor(nameof(ShowLeave))]
+    [NotifyPropertyChangedFor(nameof(ShowSignOff))]
     [NotifyPropertyChangedFor(nameof(ShowJoin))]
     [NotifyPropertyChangedFor(nameof(ShowRequest))]
     private bool _isWide;
@@ -238,6 +239,17 @@ public sealed partial class FleetViewModel : ObservableObject
 
     /// <summary>LEAVE keeps its place on the wide row (scherm 1) and moves behind "⋯" when the row is narrow.</summary>
     public bool ShowLeave => IsWide && CanLeave;
+
+    /// <summary>SIGN OFF applies on a Forming fleet with at least one of my characters rostered (ET-169) —
+    /// including an alt of mine on a fleet I also own, since signing off never touches ownership the way
+    /// leaving would. It is the member's own act on a fleet that has not started yet; once it starts there is
+    /// nothing left to sign off from until it stands by again.</summary>
+    public bool CanSignOff => IsStandingBy && IsParticipating;
+
+    /// <summary>Kept off the row itself when I also own the fleet (mirrors <see cref="CanLeave"/>'s own
+    /// <c>!IsMine</c>) so it never has to share the row with MANAGE/SHARE — the owner's own alt can still reach
+    /// it from "⋯". The common case is the mockup's: signing off a fleet someone else runs.</summary>
+    public bool ShowSignOff => IsWide && CanSignOff && !IsMine;
 
     /// <summary>A finished fleet has one thing left to do with it.</summary>
     public bool ShowDelete => IsFinished && IsMine;
@@ -483,6 +495,8 @@ public sealed partial class FleetViewModel : ObservableObject
                 width += FleetRowActionWidths.Share;
             if (ShowLeave)
                 width += FleetRowActionWidths.Leave;
+            if (ShowSignOff)
+                width += FleetRowActionWidths.SignOff;
             if (ShowDelete)
                 width += FleetRowActionWidths.Delete;
             return width;
@@ -519,6 +533,8 @@ public sealed partial class FleetViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowStart));
         OnPropertyChanged(nameof(CanLeave));
         OnPropertyChanged(nameof(ShowLeave));
+        OnPropertyChanged(nameof(CanSignOff));
+        OnPropertyChanged(nameof(ShowSignOff));
     }
 
     partial void OnIsDiscoverableChanged(bool value)

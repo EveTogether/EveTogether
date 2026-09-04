@@ -24,6 +24,9 @@ public static class FleetRowActionWidths
     public const double Metrics = 61;
     public const double Share = 51;
     public const double Leave = 48;
+    /// <summary>SIGN OFF on a Forming fleet row (ET-169) — a member's own act, so it can stand beside LEAVE on the
+    /// same row rather than only ever replacing it.</summary>
+    public const double SignOff = 63;
     /// <summary>DELETE on a finished row. The same command reads DISBAND behind the "⋯" of a live fleet, where that
     /// is the right verb; there is nothing left to disband about a fleet that is already over (scherm 1: VERWIJDER).</summary>
     public const double Delete = 55;

@@ -433,7 +433,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
                     : null,
                 isMine,
                 isFleetCommander: member.WingId < 0 && member.Role == FleetRole.FleetCommander,
-                member.LastSeenAt);
+                member.LastSeenAt, member.Availability, member.AvailabilityNote);
             row.Members.Add(leaf);
             if (portraits is not null && isMine)
                 _ = leaf.LoadPortraitAsync(portraits);   // B-3 hex portrait, best-effort (opt-in images)

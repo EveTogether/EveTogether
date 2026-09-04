@@ -132,4 +132,14 @@ public sealed partial class MemberNodeViewModel : ObservableObject, IFleetMember
     public bool HasSkillGap => _skillBadge is { CanFly: false };
 
     public string SkillBadgeTooltip => _skillBadge?.Tooltip ?? string.Empty;
+
+    // --- availability for the fleet's next start (ET-169): set by the member only, never by this window. An
+    // external member has no client to set it from, so none of the three chips apply to them. ---
+
+    public bool ShowsAvailable => !Member.IsExternal && Member.Availability == FleetMemberAvailability.Available;
+    public bool ShowsNoReply => !Member.IsExternal && Member.Availability == FleetMemberAvailability.NotSet;
+    public bool ShowsSignedOff => !Member.IsExternal && Member.Availability == FleetMemberAvailability.SignedOff;
+
+    /// <summary>The note the member gave when signing off, or a placeholder when they gave none.</summary>
+    public string AvailabilityTooltip => Member.AvailabilityNote is { Length: > 0 } note ? note : "No note given.";
 }
