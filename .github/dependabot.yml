@@ -15,6 +15,12 @@ updates:
       grpc:
         patterns:
           - "Grpc.*"
+    ignore:
+      # Held at 2.x: the Microsoft.AspNetCore.OpenApi 10.0.x source generator writes
+      # IOpenApiMediaType.Example, which became read-only in Microsoft.OpenApi 3.x (CS0200).
+      # See the PackageReference comment in EveUtils.Client.csproj.
+      - dependency-name: "Microsoft.OpenApi"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
