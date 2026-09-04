@@ -2311,7 +2311,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         // This pilot's own run: closed out here and now — stopped and unlinked, never deleted — so the window is on
         // the site just copied. A group run is left standing, because ending it reaches every other member.
-        if (RunId is { } runId && GroupCode is null && FleetId is null)
+        //
+        // Shared-ness is GroupCode and nothing else, the same as in _AdoptRunningRunAsync. FleetId used to be in
+        // here too, and it is the other route's half of one bug: being in a fleet tonight does not make this run
+        // somebody else's to end (ET-152). Both routes carry this decision, and fixing one of them is what kept it
+        // alive four times over — so this line and that one change together or not at all.
+        if (RunId is { } runId && GroupCode is null)
         {
             string? closed = SignatureName;   // read before _SetSignature moves it on to the copied site
             using var scope = _services.CreateScope();

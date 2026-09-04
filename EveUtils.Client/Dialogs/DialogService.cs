@@ -116,8 +116,12 @@ public sealed class DialogService : IDialogService, ISingletonService
             open.StartsOnArrival = viewModel.StartsOnArrival;
             // Including whose run it is, and before ApplySignature rather than after: that is what settles the
             // character, and a caller that already asked would otherwise be asked again by the window that was
-            // already up. A run on the clock still wins — _AdoptRunningRunAsync takes that run's own character.
-            if (viewModel.PickedCharacter is { } pilot)
+            // already up.
+            //
+            // Only to a window with no run of its own. A run on the clock belongs to the pilot who started it, and
+            // ApplySignature may well keep it — a copy of the site already being flown changes nothing — so writing
+            // a different pilot over it would leave the header, the gamelog filter and the stored row disagreeing.
+            if (open.RunId is null && viewModel.PickedCharacter is { } pilot)
                 open.UseCharacter(pilot.Id, pilot.Name);
             open.ApplySignature(viewModel.SignatureId, viewModel.SignatureGroup, signature, viewModel.MatchedSites);
         }

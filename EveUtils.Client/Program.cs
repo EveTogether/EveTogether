@@ -47,18 +47,6 @@ sealed class Program
             db.Database.Migrate();
         }
 
-        // A run left on the clock by a previous process is ended here, before any window exists to adopt it. Raymond
-        // opened the app on 2026-09-04 and was handed a run that had started the previous morning — ELAPSED 1467:38 —
-        // because quitting with a run going leaves the row Running and nothing afterwards disagrees. Awaited rather
-        // than fired off: the window it protects can open the moment the shell does.
-        using (var scope = Services.CreateScope())
-        {
-            Result<int> stopped = scope.ServiceProvider.GetRequiredService<IDispatcher>()
-                .Send(new StopRunsLeftRunningCommand(DateTime.UtcNow)).GetAwaiter().GetResult();
-            if (stopped.IsSuccess && stopped.Value > 0)
-                Console.Error.WriteLine($"[startup] stopped {stopped.Value} run(s) left running by a previous session");
-        }
-
         // Start background services (token refresh, ESI cache purge) — the client has no IHost so we start manually.
         // Fire-and-forget discards a faulting Task silently, so route every start through RunResilient, which
         // logs an unobserved fault instead of letting a dead background task disappear.
@@ -200,6 +188,24 @@ sealed class Program
         // Live gamelog watcher: tails the configured/auto-detected EVE gamelog directory and feeds real
         // per-character DPS into the gamelog service (replaces the synthetic feeder for live data).
         RunResilient(Services.GetRequiredService<EveUtils.Client.Gamelog.GamelogWatcherService>().StartAsync(refreshCts.Token), "gamelog-watcher");
+
+        // A run left on the clock by a previous process is ended here, before any window exists to adopt it. Raymond
+        // opened the app on 2026-09-04 and was handed a run that had started the previous morning — ELAPSED 1467:38 —
+        // because quitting with a run going leaves the row Running and nothing afterwards disagrees.
+        //
+        // Below every --diagnostic argument above, all of which return before this line: --smoke and --sde-check open
+        // the same database, and a diagnostic run has no business ending a run the pilot is flying.
+        //
+        // ponytail: "a previous process" is really "no other process", which holds because one data directory is one
+        // client — that is what EVEUTILS_INSTANCE exists to keep true. A second launch against the same directory
+        // would stop the first one's run. Give the row the session that owns it if that ever stops being true.
+        using (var scope = Services.CreateScope())
+        {
+            Result<int> stopped = scope.ServiceProvider.GetRequiredService<IDispatcher>()
+                .Send(new StopRunsLeftRunningCommand(DateTime.UtcNow)).GetAwaiter().GetResult();
+            if (stopped.IsSuccess && stopped.Value > 0)
+                Console.Error.WriteLine($"[startup] stopped {stopped.Value} run(s) left running by a previous session");
+        }
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }

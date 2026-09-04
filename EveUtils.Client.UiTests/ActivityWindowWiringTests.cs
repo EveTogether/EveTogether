@@ -329,7 +329,11 @@ public class ActivityWindowWiringTests
         // Two clients up and nobody asked yet, so this window has settled on no pilot at all — Raymond's case.
         var open = new ActivityWindowViewModel(ActivityKind.Site, harness.Services);
         dialogs.ShowActivityWindow(open, RunWindowOpenTrigger.LocalUser);
-        await ActivityWindowHarness.WaitUntil(() => open.IsStartButtonVisible);
+        // The window loads itself from OnOpened, so wait for that to finish rather than for the first state that
+        // happens to be readable: the LOOT status is set near the end of LoadAsync, and handing the copy over while
+        // the load is still mid-flight leaves it running against a disposed harness once the test returns.
+        await ActivityWindowHarness.WaitUntil(() => open.RunLoot?.RunStatusMessage is not null);
+        Assert.True(open.IsStartButtonVisible);
         Assert.Null(open.PickedCharacter);
 
         // What the clipboard offer now hands over: the copy, and the pilot it already asked about.
@@ -534,7 +538,12 @@ public class ActivityWindowWiringTests
         model.SignatureName = "Sansha Hideaway";
         await model.StartRunCommand.ExecuteAsync(null);
         Guid? shared = model.RunId;
-        model.FleetId = 42;   // shared, so ending it is not this window's call
+        // Shared is the group code, and the fleet id is only where it is filed (ET-152). This used to say FleetId
+        // alone, which asserted the very conflation ET-152 removed — being in a fleet is not what makes a run
+        // somebody else's to end, and Raymond's own solo run was held hostage by exactly that reading (2026-09-04).
+        // The rule this test is about is unchanged: a run that belongs to a GROUP still waits for its commander.
+        model.GroupCode = "HF-7QK2";
+        model.FleetId = 42;
 
         model.StartsOnArrival = true;
         model.ApplySignature("SUG-270", "Combat Site", "Drone Cluster", []);
