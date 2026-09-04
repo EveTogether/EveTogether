@@ -218,6 +218,9 @@ public class LocalFleetMemberVisibilityTests
         var fleets = instance.Services.GetRequiredService<ClientFleetService>();
         Assert.True((await fleets.AddLocalCharacterAsync(fleetId, Alt, Owner)).IsSuccess);
         Assert.True((await fleets.AddExternalAsync(fleetId, External, Owner)).IsSuccess);
+        // The question here is who this client publishes for, so the fleet has to be one that publishes at all: a
+        // fleet is created Forming and only a started one contributes participation (ET-165).
+        Assert.True((await fleets.StartFleetAsync(fleetId, Owner)).IsSuccess);
 
         var vm = await LoadedFleetsAsync(instance);
         await WaitForAsync(() => vm.LocalFleets[0].Members.Count >= 3);
