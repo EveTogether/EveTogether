@@ -116,7 +116,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private bool _isDiscarding;
     private int? _runCharacterId;
     private int? _namedCharacterId;
-    private (string? Id, string? Group, string Name, IReadOnlyList<SdeSite> Sites)? _pendingSignature;
+    private PendingCopy? _pendingCopy;
     private string? _runCharacterName;
     private int? _commanderNameId;
     private string? _commanderName;
@@ -195,6 +195,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(ClockHint))]
     [NotifyPropertyChangedFor(nameof(IsStartButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsStopButtonVisible))]
+    [NotifyPropertyChangedFor(nameof(IsKeepRunButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsDiscardButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsSaveButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsTimeCorrectionShown))]
@@ -516,12 +517,31 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     // Start, stop and discard steer the run for everybody in it, so all three hang off the same authority (AC-4).
     // Start and stop are the same slot seen from two sides and never both apply: a run that is going can only be
     // stopped, and offering to re-start it over itself is what put START next to a ticking clock.
-    /// <summary>Hidden while a copied site is waiting: the only two answers there are SAVE and DISCARD, and START
-    /// would pick the run being waited on back up.</summary>
+    /// <summary>Hidden while a copy is waiting: the answers there are SAVE, DISCARD and KEEP, and START would pick
+    /// the run being waited on back up without answering any of them.</summary>
     public bool IsStartButtonVisible =>
-        Authority.CanControl && RunState != ActivityRunState.Running && _pendingSignature is null;
+        Authority.CanControl && RunState != ActivityRunState.Running && _pendingCopy is null;
 
     public bool IsStopButtonVisible => Authority.CanControl && RunState == ActivityRunState.Running;
+
+    /// <summary>The third way out of a copy waiting behind a run (Raymond, 2026-09-04): SAVE and DISCARD both end
+    /// the run and let the copy take over, and this one throws the copy away instead. It takes START's slot, which
+    /// is empty for exactly as long as something is waiting.</summary>
+    public bool IsKeepRunButtonVisible => Authority.CanControl && _pendingCopy is not null;
+
+    /// <summary>Drop the waiting copy and carry on. The clock was stopped to hold that copy, not by the pilot, so
+    /// this puts it back on — down START's own resume branch, so there is one way to pick a stopped run up and not
+    /// two. Leaving him to press START himself would cost a second trip out of EVE for a pause he never asked for
+    /// (Raymond, 2026-09-04).</summary>
+    [RelayCommand]
+    private async Task KeepRunAsync()
+    {
+        _pendingCopy = null;
+        // Not an ObservableProperty, so the two things it alone decides say so themselves; RunState carries the rest.
+        OnPropertyChanged(nameof(IsKeepRunButtonVisible));
+        OnPropertyChanged(nameof(ClockHint));
+        await StartRunAsync();
+    }
 
     /// <summary>A saved run is committed; there is nothing left to throw away, and RunDiscard would not take it back
     /// either (ET-105 AC-1).</summary>
@@ -647,8 +667,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public string ClockHint => IsAbyssal
         ? (FleetMemberCount > 1 ? $"{FleetStatusText}: the envelope is the earliest anchored run. " : string.Empty)
           + "The clock is a floor — the moment of entry cannot be observed, so this is at most what is left."
-        : _pendingSignature is { } waiting
-            ? $"{waiting.Name} is copied and waiting. Save or discard this {SignatureName} run and it takes over."
+        : _pendingCopy is { } waiting
+            ? $"{waiting.Name} is copied and waiting. Save or discard this {SignatureName} run and it takes over; "
+              + "KEEP drops the copy and puts the clock back on this run."
             : RunState == ActivityRunState.Stopped
                 // STOP is a pause, not an end (Raymond, 2026-09-02): stepping out mid-site and coming back has to
                 // cost you nothing, so START picks the same run back up. What ends a run is SAVE or DISCARD.
@@ -888,7 +909,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 return false;
             }
 
-            _pendingSignature = (SignatureId, SignatureGroup, copied, MatchedSites);
+            _pendingCopy = new PendingCopy(Kind, copied, StartsOnArrival, SignatureId, SignatureGroup, MatchedSites,
+                null, null, null, []);
             SignatureId = run.Signature;
             SignatureGroup = null;
             SignatureName = run.SiteName;
@@ -916,7 +938,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _StartEnemyObservations();
 
         // After the state above: StopRun only acts on a run it considers running.
-        if (_pendingSignature is not null)
+        if (_pendingCopy is not null)
             StopRun(DateTime.UtcNow);
 
         return true;
@@ -933,7 +955,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         // A run the signature check above decided is a DIFFERENT site is on its way to being stopped, so it does not
         // join this fleet's group — it was never this window's run.
-        if (_pendingSignature is not null)
+        if (_pendingCopy is not null)
             return;
 
         if (GroupCode is not { } fleetGroupCode || string.Equals(run.GroupCode, fleetGroupCode, StringComparison.Ordinal))
@@ -1792,6 +1814,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // Only here, and only for this window: the run is committed and there is nothing left to do to it. A failed
         // save falls out above with the reason still on screen, and a group's other members keep their own windows —
         // saving is each member's own, and only the FC's DISCARD reaches anybody else (ET-105).
+        // Saving is one of the two answers to a waiting copy, so it hands it on the same way DISCARD does; until
+        // 2026-09-04 the copy simply went with the window.
+        _SendPendingCopyToANewWindow();
         CloseRequested?.Invoke();
     }
 
@@ -1851,7 +1876,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // Thrown away means this window is done, so it closes (ET-155). It used to be cleaned out and left standing
         // ready for the next START, which is the very shape in which old run state kept coming back. Only here: a
         // refused command and a cancelled confirmation both fall out above with the window still on its run.
-        _SendPendingSignatureToANewWindow();
+        _SendPendingCopyToANewWindow();
         GroupCode = null;   // the group ended with the run, which is what a discard reaches the other members to say.
         CloseRequested?.Invoke();
     }
@@ -1862,20 +1887,32 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// hands to <see cref="IDialogService.ShowActivityWindow"/> — so the copy is answered the way every other copy
     /// is, rather than evaporating with the window that was holding it (ET-155).
     /// </summary>
-    private void _SendPendingSignatureToANewWindow()
+    private void _SendPendingCopyToANewWindow()
     {
-        if (_pendingSignature is not { } pending || _services.GetService<IDialogService>() is not { } dialogs)
+        if (_pendingCopy is not { } pending || _services.GetService<IDialogService>() is not { } dialogs)
             return;
 
-        _pendingSignature = null;
-        dialogs.ShowActivityWindow(new ActivityWindowViewModel(Kind, _services)
+        _pendingCopy = null;
+        dialogs.ShowActivityWindow(new ActivityWindowViewModel(pending.Kind, _services)
         {
-            SignatureId = pending.Id,
-            SignatureGroup = pending.Group,
+            SignatureId = pending.SignatureId,
+            SignatureGroup = pending.SignatureGroup,
             SignatureName = pending.Name,
-            MatchedSites = pending.Sites
+            MatchedSites = pending.Sites,
+            MissionAgentId = pending.AgentId,
+            MissionLevel = pending.MissionLevel,
+            MissionSolarSystemId = pending.SolarSystemId,
+            PendingParameters = pending.Parameters,
+            StartsOnArrival = pending.StartsOnArrival
         });
     }
+
+    /// <summary>A copy waiting behind the run on screen — a site, or a mission with its agent. Plain data rather than
+    /// a built view model: that constructor subscribes to the gamelog and five event-bus topics, so a parked one
+    /// would answer them.</summary>
+    private sealed record PendingCopy(ActivityKind Kind, string Name, bool StartsOnArrival, string? SignatureId,
+        string? SignatureGroup, IReadOnlyList<SdeSite> Sites, int? AgentId, int? MissionLevel, int? SolarSystemId,
+        IReadOnlyList<RunParameterInput> Parameters);
 
     /// <summary>
     /// Answer the close on a run that is not saved yet. The question lives here because a run outlives its window in
@@ -2342,38 +2379,22 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         if (RunState is ActivityRunState.NotStarted || _IsSameRun(SignatureId, SignatureName, id, name))
         {
-            _pendingSignature = null;
+            _pendingCopy = null;
             _SetSignature(id, group, name, sites);
             _SignatureDecision("no run of another site was open", name);
             Refresh(DateTime.UtcNow);
             return;
         }
 
-        // This pilot's own run: closed out here and now — stopped and unlinked, never deleted — so the window is on
-        // the site just copied. A group run is left standing, because ending it reaches every other member.
-        //
-        // Shared-ness is GroupCode and nothing else, the same as in _AdoptRunningRunAsync. FleetId used to be in
-        // here too, and it is the other route's half of one bug: being in a fleet tonight does not make this run
-        // somebody else's to end (ET-152). Both routes carry this decision, and fixing one of them is what kept it
-        // alive four times over — so this line and that one change together or not at all.
-        if (RunId is { } runId && GroupCode is null)
-        {
-            string? closed = SignatureName;   // read before _SetSignature moves it on to the copied site
-            using var scope = _services.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
-                .Send(new DiscardRunCommand(runId, DateTime.UtcNow));
-            _ResetForNewRun();
-            _SetSignature(id, group, name, sites);
-            _SignatureDecision($"closed out the open {closed} run", name);
-            if (RunLoot is not null)
-                await RunLoot.RefreshAsync();
-            Refresh(DateTime.UtcNow);
-            return;
-        }
-
-        _pendingSignature = (id, group, name, sites);
+        // A run of another site was going, and it is the pilot's to end — never this window's. It used to be
+        // discarded here on the spot whenever it was solo, which threw away what he was flying without asking
+        // (Raymond, 2026-09-04). Now every run takes the one route a group run always took: the clock stops, the
+        // copy waits, and SAVE, DISCARD or KEEP answers it. GroupCode no longer decides anything here, so this route
+        // and _AdoptRunningRunAsync's own close-out no longer read the same — that one is about a run left in the
+        // store rather than one being flown, and it keeps its discard until a report says otherwise.
+        _pendingCopy = new PendingCopy(ActivityKind.Site, name, StartsOnArrival, id, group, sites, null, null, null, []);
         StopRun(DateTime.UtcNow);
-        _SignatureDecision("the open run belongs to a group, so it waits", name);
+        _SignatureDecision($"the open {SignatureName} run is not this one, so this waits", name);
         Refresh(DateTime.UtcNow);
     }
 
@@ -2398,8 +2419,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             : string.Equals(storedSite, copiedSite, StringComparison.Ordinal);
 
     /// <summary>The mission half of <see cref="ApplySignature"/> — same rule, same reason (ET-158, applied to
-    /// missions in ET-172 sub 4). ponytail: no discard-and-switch for a different run already going here, since no
-    /// capture has ever shown two missions copied back to back — upgrade once one does.</summary>
+    /// missions in ET-172 sub 4), and since Raymond's 2026-09-04 report the same waiting path too: a mission copied
+    /// over a run in progress asks instead of overwriting it, which is the real case ET-176 was waiting for.</summary>
     public void ApplyMission(int? agentId, int? missionLevel, int? solarSystemId, string? agentName,
         IReadOnlyList<RunParameterInput> parameters) =>
         LastMission = _ApplyMissionSafelyAsync(agentId, missionLevel, solarSystemId, agentName, parameters);
@@ -2410,6 +2431,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private async Task _ApplyMissionSafelyAsync(int? agentId, int? missionLevel, int? solarSystemId, string? agentName,
         IReadOnlyList<RunParameterInput> parameters)
     {
+        // A run that is not this one was going: the same wait a copied signature gets, for the same reason. Guarded
+        // on a named agent because the waiting copy is what a new window is later built from, and a window has to
+        // open on something the pilot recognises rather than on a stand-in this method made up.
+        if (agentName is { Length: > 0 } waiting && RunState is not ActivityRunState.NotStarted
+            && !_IsSameRun(SignatureId, SignatureName, null, waiting))
+        {
+            _pendingCopy = new PendingCopy(ActivityKind.Mission, waiting, StartsOnArrival, null, null, [], agentId,
+                missionLevel, solarSystemId, parameters);
+            StopRun(DateTime.UtcNow);
+            _SignatureDecision($"the open {SignatureName} run is not this one, so this waits", waiting);
+            Refresh(DateTime.UtcNow);
+            return;
+        }
+
         MissionAgentId = agentId;
         MissionLevel = missionLevel;
         MissionSolarSystemId = solarSystemId;
@@ -2433,15 +2468,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _services.GetService<ILoggerFactory>()?.CreateLogger<ActivityWindowViewModel>().LogWarning(
             "Copied signature {Signature}: {What} (run {RunId}, state {State}, group {Group}, fleet {Fleet}).",
             name, what, RunId, RunState, GroupCode, FleetId);
-
-    private void _ApplyPendingSignature()
-    {
-        if (_pendingSignature is not { } pending)
-            return;
-
-        _pendingSignature = null;
-        _SetSignature(pending.Id, pending.Group, pending.Name, pending.Sites);
-    }
 
     private string _LootItemCount()
     {
