@@ -8,6 +8,7 @@ using EveUtils.Shared.Cqrs.Permissions;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Messaging.Wire;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.ServerAuth.Services;
 using Grpc.Core;
 using Microsoft.Extensions.DependencyInjection;

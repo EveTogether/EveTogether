@@ -11,6 +11,7 @@ using EveUtils.Shared.Modules.Fleet.Commands;
 using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Commands;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Enums;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -144,9 +145,15 @@ public sealed class ClientFleetService(IServiceScopeFactory scopeFactory) : ISin
     public Task<Result> StartFleetAsync(long fleetId, int ownerCharacterId, CancellationToken cancellationToken = default)
         => DispatchAsync(d => d.Send(new StartFleetCommand(fleetId, ownerCharacterId), cancellationToken));
 
-    /// <summary>Stops the fleet (Active → Forming, roster kept) via the Shared <see cref="StopFleetCommand"/>.</summary>
-    public Task<Result> StopFleetAsync(long fleetId, int ownerCharacterId, CancellationToken cancellationToken = default)
-        => DispatchAsync(d => d.Send(new StopFleetCommand(fleetId, ownerCharacterId), cancellationToken));
+    /// <summary>Stops the fleet (Active → Forming, roster kept) via the Shared <see cref="StopFleetCommand"/>.
+    /// <paramref name="trigger"/> is <see cref="FleetStopTrigger.Manual"/> for a pressed button and carries the
+    /// reason when <see cref="LocalFleetAutoStopService"/> stands a client-only fleet down by itself (ET-167).</summary>
+    public Task<Result> StopFleetAsync(
+        long fleetId,
+        int ownerCharacterId,
+        FleetStopTrigger trigger = FleetStopTrigger.Manual,
+        CancellationToken cancellationToken = default)
+        => DispatchAsync(d => d.Send(new StopFleetCommand(fleetId, ownerCharacterId, trigger), cancellationToken));
 
     /// <summary>Concludes the fleet (→ Concluded, kept for history) via the Shared <see cref="ConcludeFleetCommand"/>.</summary>
     public Task<Result> ConcludeFleetAsync(long fleetId, int ownerCharacterId, CancellationToken cancellationToken = default)

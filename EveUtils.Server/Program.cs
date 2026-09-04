@@ -190,7 +190,8 @@ builder.Services.AddSingleton<ConnectedClients>();
 builder.Services.AddHostedService<EventBusKeepaliveService>(); // liveness ping → clients detect a vanished server (tunnel half-open), ghosts get evicted
 builder.Services.AddScoped<FleetBroadcastResolver>();       // Live broadcast set = roster members ∩ presence
 builder.Services.AddScoped<FleetCleanupRunner>();           // one cleanup sweep (archive/hard-delete)
-builder.Services.AddHostedService<FleetCleanupService>();   // periodic fleet cleanup
+builder.Services.AddScoped<FleetAutoStopRunner>();          // one auto-stop sweep (emptied/gone-quiet fleet → standing by)
+builder.Services.AddHostedService<FleetCleanupService>();   // periodic fleet pass: auto-stop, then cleanup
 
 // Belt-and-suspenders on top of the bulletproof loops: a faulting BackgroundService must never tear down
 // the host. The refresh loops already swallow per-cycle exceptions and keep running.
@@ -574,6 +575,11 @@ if (args.Contains("--fleet-participation-test"))
 
 if (args.Contains("--fleet-cleanup-test"))
     return await FleetCleanupCheck.RunAsync(app.Services);
+
+// Auto-stop headless proof (ET-167): the brake and policy decision tables, plus a real sweep that stands an emptied
+// and a gone-quiet fleet down, leaves a busy one and a just-started one alone, and stops nothing at 11:00 UTC.
+if (args.Contains("--fleet-autostop-test"))
+    return await FleetAutoStopCheck.RunAsync(app.Services);
 
 if (args.Contains("--message-test"))
     return await MessageQueueCheck.RunAsync(app.Services);

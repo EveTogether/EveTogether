@@ -3,16 +3,19 @@ using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Shared.DependencyInjection;
-using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace EveUtils.Server.Grpc;
+namespace EveUtils.Shared.Modules.Fleet.Metrics;
 
 /// <summary>
-/// Keeps each member's <c>LastSeenAt</c> fresh from live fleet traffic — <see cref="FleetActivityTracker"/>'s pattern
-/// one level down, from the fleet to the member (ET-70). The fleet-level clock cannot answer this: one pilot still
+/// Keeps each member's <c>LastSeenAt</c> fresh from live fleet traffic — <c>FleetActivityTracker</c>'s pattern one
+/// level down, from the fleet to the member (ET-70). The fleet-level clock cannot answer this: one pilot still
 /// publishing keeps the whole fleet's <c>LastActivityAt</c> current while everybody else has closed their client.
+///
+/// Host-agnostic, and shared rather than server-only since ET-167. The server feeds it from the event-bus stream; a
+/// client feeds it for its client-only fleets, whose traffic never reaches a server at all and which would otherwise
+/// have no record of presence to reason about when the app is opened again.
 ///
 /// This is the half of "who is offline" no message can report. A client that is shut down never sends anything saying
 /// so, so the only evidence is its traffic stopping, and the only place that can see traffic stop for a pilot on

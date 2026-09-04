@@ -33,7 +33,7 @@ public class FleetParticipationPublishTests
             new FleetParticipant(95000001, 11, ClientOnly: true),
             new FleetParticipant(95000002, 22, ClientOnly: true),
         ]);
-        var publisher = new FleetMetricPublisher(participation, [new FixedMetricSource(MetricKind.Dps)], bus, share);
+        var publisher = new FleetMetricPublisher(participation, [new FixedMetricSource(MetricKind.Dps)], bus, share, Tracker(instance));
 
         await publisher.PublishTickAsync(unixMs: 1, cancellationToken);
 
@@ -52,9 +52,15 @@ public class FleetParticipationPublishTests
         var count = 0;
         bus.Subscribe<FleetMetricEvent>((_, _) => { count++; return Task.CompletedTask; });
 
-        var publisher = new FleetMetricPublisher(new FleetParticipation(), [new FixedMetricSource(MetricKind.Dps)], bus, share);
+        var publisher = new FleetMetricPublisher(new FleetParticipation(), [new FixedMetricSource(MetricKind.Dps)], bus, share, Tracker(instance));
         await publisher.PublishTickAsync(unixMs: 1, cancellationToken);
 
         Assert.Equal(0, count);
     }
+
+    /// <summary>The real per-member presence writer out of the client's own DI (ET-167). Feeding the publisher the
+    /// live one rather than a stub keeps these tests honest about what a tick now does.</summary>
+    private static FleetMemberActivityTracker Tracker(TestClientInstance instance) =>
+        instance.Services.GetRequiredService<FleetMemberActivityTracker>();
+
 }
