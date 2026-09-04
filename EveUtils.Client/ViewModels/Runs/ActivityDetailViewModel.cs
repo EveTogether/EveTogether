@@ -33,13 +33,15 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     private readonly CqrsDispatcher _dispatcher;
     private readonly IMarketPriceRepository? _prices;
     private readonly Guid _activitySummaryId;
+    private readonly Func<long, string>? _nameOf;
 
     public ActivityDetailViewModel(CqrsDispatcher dispatcher, Guid activitySummaryId,
-        IMarketPriceRepository? prices = null)
+        IMarketPriceRepository? prices = null, Func<long, string>? nameOf = null)
     {
         _dispatcher = dispatcher;
         _activitySummaryId = activitySummaryId;
         _prices = prices;
+        _nameOf = nameOf;
     }
 
     public ActivitySection Activity { get; } = new() { Title = "ACTIVITY", IsExpanded = true };
@@ -239,7 +241,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     {
         RunRows.Clear();
         foreach (ActivityRunDetailDto run in detail.Runs)
-            RunRows.Add(new ActivityRunRowViewModel(run));
+            RunRows.Add(new ActivityRunRowViewModel(run, _nameOf));
 
         // The count is the summary's, over distinct characters — that figure is real. Only the names are missing,
         // and saying so beats a blank block that leaves the reader guessing which of the two it is looking at.
