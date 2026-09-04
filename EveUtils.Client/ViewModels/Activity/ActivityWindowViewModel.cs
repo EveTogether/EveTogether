@@ -13,6 +13,7 @@ using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Gamelog;
+using EveUtils.Client.Imaging;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Platform;
 using EveUtils.Client.ViewModels;
@@ -509,6 +510,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         $"You are in {FleetsInPlay} started fleets at once, so this run belongs to none of them and is not shared. "
         + "Conclude the ones you are not flying to file it under one.";
 
+    // ── The character column ────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// My characters, in the order the pilot arranged them, as the switch between their runs (ET-164). Every
+    /// registered character is here — not only the ones flying — so a resting toon can be switched to rather than
+    /// having to be found somewhere else, and so the column does not change length under the pointer.
+    ///
+    /// It degenerates to one row instead of disappearing: until ET-130 there is at most one run on the clock, and a
+    /// column that hid itself at n≤1 would be a column nobody ever saw.
+    /// </summary>
+    public ObservableCollection<RunCharacterRowViewModel> RunCharacters { get; } = [];
+
+    public bool HasRunCharacters => RunCharacters.Count > 0;
+
     // ── Who was on the run ──────────────────────────────────────────────────────────────────────────
 
     public ObservableCollection<RunParticipantViewModel> Participants { get; } = [];
@@ -708,6 +723,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         _SyncChoices();
         await _ResolveCharacterAsync(mayAsk: false);
+        await _LoadRunCharactersAsync();
         await _AdoptRunningRunAsync();
         if (RunLoot is not null)
             await RunLoot.RefreshAsync();
@@ -1029,6 +1045,81 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         ActingCharacterName = name;
     }
 
+    /// <summary>
+    /// Fill the character column and fetch each portrait once. Two sources, the same pair the main window's
+    /// character list merges: the registry in the pilot's own order, then the names only a gamelog has ever
+    /// mentioned. The second source is the whole point — the registry cannot hold a character without an
+    /// <c>EsiCharacterId</c> at all, so without it the unlinked pilot could never appear in this column.
+    /// </summary>
+    private async Task _LoadRunCharactersAsync()
+    {
+        if (_services.GetService<ICharacterRegistry>() is not { } registry)
+            return;
+
+        RunCharacters.Clear();
+        foreach (Character character in await registry.GetAllAsync())
+            RunCharacters.Add(new RunCharacterRowViewModel(character));
+
+        IEnumerable<string> unlinked = _services.GetService<GamelogWatcherService>()?.ObservedCharacters ?? [];
+        foreach (string name in unlinked.OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
+            if (RunCharacters.All(row => !string.Equals(row.Name, name, StringComparison.OrdinalIgnoreCase)))
+                RunCharacters.Add(new RunCharacterRowViewModel(new Character(name)));
+
+        OnPropertyChanged(nameof(HasRunCharacters));
+        _RefreshRunCharacters();
+
+        if (_services.GetService<ICharacterPortraitProvider>() is not { } portraits)
+            return;
+
+        foreach (RunCharacterRowViewModel row in RunCharacters)
+            await row.LoadPortraitAsync(portraits);
+    }
+
+    /// <summary>
+    /// Put this window's state onto the column. Only the acting character can be restless: this window holds the
+    /// one run there is until ET-130 lets a second exist, so red and amber are its own clock rather than something
+    /// each row could work out for itself.
+    /// </summary>
+    private void _RefreshRunCharacters()
+    {
+        if (RunCharacters.Count == 0)
+            return;
+
+        int? acting = _ActingCharacterId();
+        foreach (RunCharacterRowViewModel row in RunCharacters)
+        {
+            row.IsSelected = row.IsEsiLinked && row.CharacterId == acting;
+            row.HasRunningRun = row.IsSelected && RunState is ActivityRunState.Running;
+            row.Attention = (row.HasRunningRun, IsClockCritical, IsClockWarning) switch
+            {
+                (true, true, _) => RunCharacterAttention.Critical,
+                (true, _, true) => RunCharacterAttention.Warning,
+                _ => RunCharacterAttention.None
+            };
+        }
+
+        // The refusal changes with the run's state, and the clock is the only thing that moves that state here.
+        SelectRunCharacterCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Switch the window to this character. Refused while a run is on the clock — moving the window off a running
+    /// run would leave it filed under a pilot who is no longer looking at it — and refused for an unlinked
+    /// character, who has no id to file anything under.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanSelectRunCharacter))]
+    private void SelectRunCharacter(RunCharacterRowViewModel row)
+    {
+        _runCharacterId = row.CharacterId;
+        _runCharacterName = row.Name;
+        _namedCharacterId = null;
+        _ = _RefreshActingCharacterAsync();
+        _RefreshRunCharacters();
+    }
+
+    private bool CanSelectRunCharacter(RunCharacterRowViewModel? row) =>
+        row is { IsEsiLinked: true } && RunState is not ActivityRunState.Running;
+
     /// <summary>Fill the run's fit from ET-101's reading. Clock-driven like the fleet command is, so starting a run
     /// fills it without the player confirming anything. An unlinked fit comes back through the same reading, so it
     /// survives this window being closed and reopened mid-run.</summary>
@@ -1149,6 +1240,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _ = RefreshFleetCommandAsync(nowUtc);
         _ = RefreshFitAsync();
         _ = _RefreshActingCharacterAsync();
+        _RefreshRunCharacters();
         _ShareRunLootWithFleet();
     }
 

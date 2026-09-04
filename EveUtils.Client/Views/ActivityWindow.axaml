@@ -254,6 +254,66 @@
                 <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
             </Style>
+
+            <!-- ── The character column ── the same hex the main window's character list draws, at the size a
+                 switcher can afford. Only the fill differs between the three cases; the shape never does. -->
+            <Style Selector="Border.charcolumn">
+                <Setter Property="Width" Value="56"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="0,0,1,0"/>
+            </Style>
+            <Style Selector="Button.charhex">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="Padding" Value="0,7"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Button.charhex:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            </Style>
+            <Style Selector="Button.charhex.on /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            </Style>
+            <!-- A toon with nothing on the clock dims whole — ring and fill together, so it reads as resting
+                 rather than as a signal of its own. -->
+            <Style Selector="Button.charhex.resting Panel.charhexart">
+                <Setter Property="Opacity" Value="0.42"/>
+            </Style>
+
+            <Style Selector="Path.charring">
+                <Setter Property="Fill" Value="{DynamicResource HexBrandBrush}"/>
+            </Style>
+            <Style Selector="Path.charring.warn">
+                <Setter Property="Fill" Value="{StaticResource ValueBrush}"/>
+            </Style>
+            <Style Selector="Path.charring.crit">
+                <Setter Property="Fill" Value="{StaticResource RedBrush}"/>
+            </Style>
+            <!-- No ESI link is not a faction colour: the ring goes neutral so the hatching is what stands out. -->
+            <Style Selector="Path.charring.unlinked">
+                <Setter Property="Fill" Value="{StaticResource TextDimBrush}"/>
+            </Style>
+
+            <!-- The dot repeats the ring's colour rather than adding a second signal. -->
+            <Style Selector="Ellipse.chardot">
+                <Setter Property="Fill" Value="{StaticResource ValueBrush}"/>
+            </Style>
+            <Style Selector="Ellipse.chardot.crit">
+                <Setter Property="Fill" Value="{StaticResource RedBrush}"/>
+            </Style>
+
+            <Style Selector="TextBlock.charinitials">
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="FontWeight" Value="Bold"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="HorizontalAlignment" Value="Center"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.charinitials.unlinked">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
         </DockPanel.Styles>
 
         <!-- ══ Header ══ the run, what is known about it, and the three chrome buttons every pop-out carries. -->
@@ -296,6 +356,66 @@
                 <v:OverlayChromeButtons Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Top"
                                         FillOpacity="{Binding #OverlayRoot.FillOpacity, Mode=TwoWay}"/>
             </Grid>
+        </Border>
+
+        <!-- ══ The character column ══ (ET-164) which of my toons this window is on. Docked before the clock so it
+             runs the full height beside it, and every row is the same template: the pilot without an ESI link is
+             one of the six and not a branch around them. -->
+        <Border DockPanel.Dock="Left" Classes="charcolumn" IsVisible="{Binding HasRunCharacters}">
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="RunCharacterColumn" ItemsSource="{Binding RunCharacters}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="va:RunCharacterRowViewModel">
+                            <Button Classes="charhex"
+                                    Classes.on="{Binding IsSelected}"
+                                    Classes.resting="{Binding IsResting}"
+                                    ToolTip.Tip="{Binding Tooltip}"
+                                    Command="{Binding $parent[ItemsControl].((va:ActivityWindowViewModel)DataContext).SelectRunCharacterCommand}"
+                                    CommandParameter="{Binding}">
+                                <Panel Classes="charhexart" Width="40" Height="44">
+                                    <Path Classes="charring"
+                                          Classes.warn="{Binding IsWarning}"
+                                          Classes.crit="{Binding IsCritical}"
+                                          Classes.unlinked="{Binding ShowsUnlinked}"
+                                          Data="M20,0 L40,11 L40,33 L20,44 L0,33 L0,11 Z"/>
+                                    <Panel Width="35" Height="39" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Panel.Clip>
+                                            <PathGeometry Figures="M17.5,0 L35,9.75 L35,29.25 L17.5,39 L0,29.25 L0,9.75 Z"/>
+                                        </Panel.Clip>
+                                        <!-- The ring is a ring, not a tint: without this plate a red or amber ring
+                                             floods the whole hex through the translucent fills above it, which is
+                                             the one option Raymond struck off — it makes the face unreadable. -->
+                                        <Border Background="{StaticResource BgPanelBrush}"/>
+                                        <!-- No ESI link: hatched, with the initials. Its own form, because there is
+                                             no portrait to be had here with images on OR off — unlike the glyph
+                                             below, which is a render that did not arrive. -->
+                                        <Panel IsVisible="{Binding ShowsUnlinked}">
+                                            <Border Background="{StaticResource BgRowAltBrush}"/>
+                                            <!-- Stretch=None: the default fits the geometry to the panel, which
+                                                 squashes five diagonals into one solid block. -->
+                                            <Path Stretch="None" Opacity="0.45"
+                                                  Stroke="{StaticResource TextDimBrush}" StrokeThickness="5"
+                                                  Data="M-24,39 L15,0 M-12,39 L27,0 M0,39 L39,0 M12,39 L51,0 M24,39 L63,0"/>
+                                            <TextBlock Classes="charinitials unlinked" Text="{Binding Initials}"/>
+                                        </Panel>
+                                        <!-- Linked, but no render: images off, offline, or a fetch that failed. -->
+                                        <Border Background="{DynamicResource AccentSoftBrush}" IsVisible="{Binding ShowsGlyph}">
+                                            <TextBlock Classes="charinitials" Text="{Binding Initials}"/>
+                                        </Border>
+                                        <Image Source="{Binding Portrait}" Stretch="UniformToFill"
+                                               IsVisible="{Binding ShowsPortrait}"/>
+                                    </Panel>
+                                    <!-- On the flat right side, where it stays findable over a light portrait. -->
+                                    <Ellipse Classes="chardot" Classes.crit="{Binding IsCritical}"
+                                             IsVisible="{Binding HasAttentionDot}"
+                                             Width="7" Height="7" Margin="0,0,-1,0"
+                                             HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                </Panel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
         </Border>
 
         <!-- ══ The clock ══ the envelope as what it is: two moments and the time between them. A per-member bar chart

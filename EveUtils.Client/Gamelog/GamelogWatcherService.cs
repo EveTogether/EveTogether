@@ -35,6 +35,7 @@ public sealed class GamelogWatcherService : ISingletonService
 
     private readonly Channel<Parsed> _events = Channel.CreateUnbounded<Parsed>(new UnboundedChannelOptions { SingleReader = true });
     private readonly Lock _gate = new();
+    private readonly HashSet<string> _observed = new(StringComparer.OrdinalIgnoreCase);
 
     private GameLogWatcher? _watcher;
     private Task? _pump;
@@ -50,6 +51,19 @@ public sealed class GamelogWatcherService : ISingletonService
     /// <summary>Raised with a character name the moment its gamelog is detected (UI: surface as local-only) and on
     /// every subsequent location change (jump/undock), so a row can refresh its system live.</summary>
     public event Action<string>? CharacterObserved;
+
+    /// <summary>
+    /// Every character name this watcher has seen a gamelog for. The event alone only serves a subscriber that was
+    /// already listening; a window opened later needs the names that arrived before it existed — the character
+    /// column is opened mid-session by definition.
+    /// </summary>
+    // ponytail: this should be the one source. MainWindowViewModel._observedCharacters still keeps its own copy of
+    // the same answer, fed from the same event — two sets tracking one fact drift apart. Fold that one into this
+    // when someone is next in that file (left alone here: ET-163 is working in it).
+    public IReadOnlyCollection<string> ObservedCharacters
+    {
+        get { lock (_gate) return [.. _observed]; }
+    }
 
     /// <summary>The directory currently being watched (null until started).</summary>
     public string? CurrentDirectory { get; private set; }
@@ -98,8 +112,17 @@ public sealed class GamelogWatcherService : ISingletonService
     private void OnEventParsed(object? sender, GameLogEventArgs e) =>
         _events.Writer.TryWrite(new Parsed(e.CharacterName, e.LogEvent));
 
-    private void OnCharacterDetected(object? sender, string characterName) =>
+    private void OnCharacterDetected(object? sender, string characterName) => _Observe(characterName);
+
+    // One place that both remembers the name and announces it: a raise that skipped the set would leave a pilot out
+    // of every window opened after them, which is the very gap the set exists to close.
+    private void _Observe(string characterName)
+    {
+        lock (_gate)
+            _observed.Add(characterName);
+
         CharacterObserved?.Invoke(characterName);
+    }
 
     private async Task PumpAsync(CancellationToken cancellationToken)
     {
@@ -137,7 +160,7 @@ public sealed class GamelogWatcherService : ISingletonService
                             // first detection. Without this, only characters whose location was seeded by an earlier
                             // roster rebuild ever show a system.
                             _gamelog.SetLocation(item.Character, l.System, l.Timestamp);
-                            CharacterObserved?.Invoke(item.Character);
+                            _Observe(item.Character);
                             break;
                         case NotifyEvent n:
                             _gamelog.AddNotify(item.Character, n.Timestamp, n.Message);
