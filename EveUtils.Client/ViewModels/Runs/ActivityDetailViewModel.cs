@@ -333,10 +333,12 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         if (!IsEscalationShown)
             absent.Add($"no ESCALATION — {noun} does not escalate");
 
+        // Named rather than dropped because a section that is simply missing reads exactly like one that is empty,
+        // and the two mean opposite things. The line says which sections and why; it does not explain itself to the
+        // reader, who came here to see their run and not the reasoning behind the screen.
         AbsentSectionsText = absent.Count == 0
             ? null
-            : $"Not shown for this kind of activity: {string.Join("; ", absent)}. A section that is simply missing " +
-              "reads the same as one that is empty, which is why they are named here rather than dropped.";
+            : $"Not shown for this kind of activity: {string.Join("; ", absent)}.";
     }
 
     private static bool _IsRewardParameter(RunParameterDto parameter) =>
