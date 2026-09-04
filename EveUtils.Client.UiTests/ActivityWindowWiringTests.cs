@@ -675,6 +675,24 @@ public class ActivityWindowWiringTests
             .Query(new GetRunningRunQuery())).IsSuccess);
     }
 
+    /// <summary>Acceptatiebevinding 9, 2026-09-04: every one of the operator's 26 stored runs is solo, and DISCARD
+    /// asked every one of them about "every member of the fleet". The confirm text has to track the same test the
+    /// rest of this window uses for shared-ness (GroupCode, not FleetId) — a solo run reaches nobody but this
+    /// window, so the warning it shows must not describe one that reaches a fleet.</summary>
+    [AvaloniaFact]
+    public async Task Discard_OnASoloRun_DoesNotClaimAFleet()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        await model.StartRunCommand.ExecuteAsync(null);
+        Assert.Null(model.GroupCode);
+        harness.Dialogs.OnConfirm = (_, _) => Task.FromResult(true);
+
+        await model.DiscardRunCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain("fleet", harness.Dialogs.LastConfirmMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// Closing the window does not end the run, so opening one again has to find it rather than start a second —
     /// two running rows is the state that breaks every loot copy afterwards.
@@ -707,6 +725,33 @@ public class ActivityWindowWiringTests
             .Query(new GetRunningRunQuery());
         Assert.True(running.IsSuccess, "reopening started a second run beside the first");
         Assert.Equal(running.Value!.StartedAtUtc, reopened.AnchorUtc);
+        window.Close();
+    }
+
+    /// <summary>Acceptatiebevinding 3, 2026-09-04: a manual START (ManualRunStartViewModel.StartAsync) sends
+    /// StartRunCommand straight to the store and then opens a fresh window on it — no signature is ever copied into
+    /// that window, so <c>_AdoptRunningRunAsync</c> is the only place the site name can come from. Its plain path
+    /// carried RunId, the character, the clock — everything except SignatureName, so the window that came up read
+    /// "no signature" for a site the store already had.</summary>
+    [AvaloniaFact]
+    public async Task ManualStart_OpensOnTheSiteAlreadyInTheStore()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        Result<Guid> started = await harness.Services.GetRequiredService<IDispatcher>().Send(
+            new RunCommands.StartRunCommand(ActivityWindowHarness.CharacterId, ActivityKind.Site, DateTime.UtcNow,
+                SiteTypeId: 17155, SiteName: "Sansha Refuge", SolarSystemId: null,
+                SiteTypeSource: SiteTypeSource.Site, Origin: RunOrigin.Manual));
+        Assert.True(started.IsSuccess);
+
+        var model = new ActivityWindowViewModel(ActivityKind.Site, harness.Services);
+        var window = new ActivityWindow(model);
+        window.Show();
+        await ActivityWindowHarness.WaitUntil(() => model.RunId is not null);
+        OverlayShots.Capture(window, "eveutils-activity-manual-start-adopts-site");
+
+        Assert.Equal("Sansha Refuge", model.SignatureName);
+        Assert.Equal("Sansha Refuge", model.SignatureSiteText);
+        Assert.True(model.HasSignature, "the window still reads no signature for a site the store already had");
         window.Close();
     }
 

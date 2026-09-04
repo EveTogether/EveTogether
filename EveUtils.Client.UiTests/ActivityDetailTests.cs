@@ -35,6 +35,29 @@ public sealed class ActivityDetailTests
         public HostTab? SelectedHostTab { get; set; }
     }
 
+    /// <summary>Acceptatiebevinding 8, 2026-09-04: the overview named this pilot "RaymondKrah"; one click into the
+    /// detail screen he read "character 883434905" — this screen built its run rows without the nameOf delegate
+    /// RunsOverviewViewModel already carries for the same character. Counter-proof: take the delegate back out of
+    /// the constructor call below and this goes red, back on the bare id.</summary>
+    [AvaloniaFact]
+    public async Task RunRow_NamesTheCharacter_WhenTheCallerHasAName()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunAsync(dispatcher, 90000001, null, cancellationToken);
+        Result<IReadOnlyList<ActivityOverviewRowDto>> overview =
+            await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(overview));
+
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IMarketPriceRepository>(),
+            nameOf: id => id == 90000001 ? "RaymondKrah" : $"character {id}");
+        await viewModel.LoadAsync(cancellationToken);
+
+        Assert.Equal("RaymondKrah", Assert.Single(viewModel.RunRows).CharacterText);
+    }
+
     /// <summary>AC-1, mission half: a mission names its agent and its level and shows REWARDS, and carries no
     /// BOUNTY or LOOT section. Counter-proof: give every kind the same fixed block of sections and this goes red on
     /// a visible BOUNTY heading.</summary>

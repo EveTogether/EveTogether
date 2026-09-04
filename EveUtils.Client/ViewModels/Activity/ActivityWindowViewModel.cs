@@ -882,6 +882,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             MatchedSites = [];
             _SignatureDecision("the run left open belongs to a group, so it waits", copied);
         }
+        else if (SignatureName is not { Length: > 0 })
+        {
+            // No signature was copied into this window at all — a manual START (ET-163) or the runs-overview
+            // lane — so the run being adopted is the only source for what site this is. The mismatch branch
+            // above already carries this for the run it closes out or waits on; this is the same field for
+            // the plain case, which used to leave SITE reading "not known yet" for a site the store already had.
+            SignatureId = run.Signature;
+            SignatureName = run.SiteName;
+        }
 
         RunId = run.Id;
         AnchorUtc = run.StartedAtUtc;
@@ -1786,9 +1795,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
 
         var dialogs = _services.GetRequiredService<IDialogService>();
-        if (!await dialogs.ConfirmAsync("Discard this run?",
-                "This ends the run for every member of the fleet. Nobody loses what they already saved — their run "
-                + "stays, on its own, no longer part of this group.", "Discard"))
+        // Shared-ness is GroupCode and nothing else (ET-152) — the same test the rest of this window uses, so the
+        // question this dialog asks matches what DISCARD actually does below: a solo run reaches nobody but this
+        // window, and saying "the fleet" over one is the wrong warning read at the moment it matters most.
+        string discardMessage = GroupCode is not null
+            ? "This ends the run for every member of the fleet. Nobody loses what they already saved — their run "
+              + "stays, on its own, no longer part of this group."
+            : "This ends the run. Nothing already saved is lost — it just won't be added to.";
+        if (!await dialogs.ConfirmAsync("Discard this run?", discardMessage, "Discard"))
             return;
 
         DateTime nowUtc = DateTime.UtcNow;

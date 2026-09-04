@@ -150,7 +150,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private Task _OpenDetailAsync(ActivityOverviewRowViewModel row)
     {
         _dialogs.ShowActivityDetail(
-            new ActivityDetailViewModel(_dispatcher, row.ActivitySummaryId, _services.GetService<IMarketPriceRepository>()),
+            new ActivityDetailViewModel(_dispatcher, row.ActivitySummaryId,
+                _services.GetService<IMarketPriceRepository>(), _NameOf),
             row.ActivitySummaryId);
         return Task.CompletedTask;
     }
