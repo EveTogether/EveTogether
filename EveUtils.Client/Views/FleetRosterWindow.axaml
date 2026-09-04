@@ -14,6 +14,40 @@
 
     <DockPanel>
 
+        <!-- Navigation (ET-171): where you can go from here. FLEETS is the way home; METRICS is the other screen for
+             this same fleet, and moves here from the header because it is an exit and not something you do to the
+             fleet. The trail names the fleet, which is what tells three tabs all called FLEET something apart.
+             Styles for this bar live in Themes/EveUtils.axaml, not on this window: the module host lifts this
+             DockPanel out to dock it and anything left on the window would not travel with it (ET-42). -->
+        <Border DockPanel.Dock="Top" Classes="fleetnav">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                <Button Grid.Column="0" x:Name="BackToFleetsButton" Classes="navlink" Margin="0,0,10,0"
+                        Command="{Binding BackToFleetsCommand}"
+                        ToolTip.Tip="Back to the fleet overview">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <mi:MaterialIcon Classes="icon-sm" Kind="ArrowLeft"/>
+                        <TextBlock Text="FLEETS" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Button Classes="crumblink" Content="FLEETS" Command="{Binding BackToFleetsCommand}"
+                            ToolTip.Tip="Back to the fleet overview"/>
+                    <TextBlock Classes="crumb" Text="›"/>
+                    <TextBlock Classes="crumb" Text="{Binding FleetName}"/>
+                    <TextBlock Classes="crumb" Text="›"/>
+                    <TextBlock Classes="crumb here" Text="ROSTER"/>
+                </StackPanel>
+                <Button Grid.Column="3" x:Name="NavMetricsButton" Classes="navlink"
+                        Command="{Binding OpenMetricsCommand}"
+                        ToolTip.Tip="Live metrics for this fleet">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <TextBlock Text="METRICS" VerticalAlignment="Center"/>
+                        <mi:MaterialIcon Classes="icon-sm" Kind="ArrowRight"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+
         <!-- Header: fleet name + activation + lifecycle/actions -->
         <Border DockPanel.Dock="Top" Height="48" Background="#EA080604"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
@@ -29,7 +63,8 @@
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <Button Content="REFRESH" FontSize="10" Command="{Binding RefreshCommand}"/>
-                    <Button Content="METRICS" FontSize="10" Command="{Binding OpenMetricsCommand}"/>
+                    <!-- METRICS used to sit here, between REFRESH and the lifecycle buttons. It is in the navigation
+                         bar above now (ET-171): this row is what you do to the fleet, that bar is where you go. -->
                     <Button Content="START" FontSize="10" Classes="accent"
                             IsVisible="{Binding CanStart}" Command="{Binding StartCommand}"/>
                     <!-- STOP, not CONCLUDE (ET-166). One exit button for the owner of a running fleet: the choice

@@ -123,7 +123,7 @@ public class FleetMetricsLayoutTests
 
     private static async Task<(Window Root, FleetMetricsViewModel Vm)> ShowAsync(
         TestClientInstance instance, FleetMetricsLayout layout, Shell shell, double width,
-        FakeFleetClient? fleets = null)
+        FakeFleetClient? fleets = null, double height = 620)
     {
         fleets ??= Roster();
         var vm = await BuildViewModelAsync(instance, fleets, fleets.Members.Count);
@@ -133,7 +133,7 @@ public class FleetMetricsLayoutTests
 
         vm.SetLayoutCommand.Execute(layout);
 
-        var window = new FleetMetricsWindow(vm) { Width = width, Height = 620 };
+        var window = new FleetMetricsWindow(vm) { Width = width, Height = height };
         Window root = window;
         if (shell is Shell.DockedTab)
         {
@@ -145,7 +145,7 @@ public class FleetMetricsLayoutTests
 
             // Stand the reparented content in a plain window: the module's own window is deliberately not the host,
             // which is exactly what this path has to survive.
-            root = new Window { Width = width, Height = 620, Content = Assert.Single(display.HostTabs).Content };
+            root = new Window { Width = width, Height = height, Content = Assert.Single(display.HostTabs).Content };
         }
 
         root.Show();
@@ -625,7 +625,10 @@ public class FleetMetricsLayoutTests
         using var instance = CreateInstance();
 
         // Five members over three columns at 1000: two rows of cards, shorter than the viewport. The operator's case.
-        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Grid, shell, 1000, RosterOf(5));
+        // Taller than this file's default 620 because ET-171's navigation bar took a strip off the top of this
+        // screen: at 620 the two rows of cards now reach the bottom, and the guard below would pass the test by
+        // making its premise false rather than by the panel behaving.
+        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Grid, shell, 1000, RosterOf(5), height: 700);
 
         ItemsControl host = MemberHost(root, vm);
         FillGridPanel panel = Assert.Single(host.GetVisualDescendants().OfType<FillGridPanel>());

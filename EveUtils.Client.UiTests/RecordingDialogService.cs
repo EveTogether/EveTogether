@@ -183,7 +183,16 @@ public sealed class RecordingDialogService : IDialogService
 
     public Task ShowCharacterAsync(CharacterDialogViewModel viewModel) => throw NotUsed();
     public Task<bool> ShowServerTrustAsync(string displayName, string address, string fingerprint, string statusLabel) => throw NotUsed();
-    public void ShowFleets(FleetsViewModel viewModel) => throw NotUsed();
+    /// <summary>Where a screen asked to navigate to (ET-171). These three used to throw, because until the fleet
+    /// screens grew their exits nothing but the shell ever opened them. They record instead of throwing: a screen
+    /// asking to go somewhere is now ordinary, and what a test wants to know is where it asked to go.</summary>
+    public List<FleetsViewModel> OpenedFleetOverviews { get; } = [];
+
+    public List<FleetRosterViewModel> OpenedRosters { get; } = [];
+
+    public List<FleetMetricsViewModel> OpenedFleetMetrics { get; } = [];
+
+    public void ShowFleets(FleetsViewModel viewModel) => OpenedFleetOverviews.Add(viewModel);
     public void ShowMetrics(MetricsWindowViewModel viewModel) => throw NotUsed();
     public Task ShowAboutAsync(AboutViewModel viewModel) => throw NotUsed();
     public void ShowDpsOverlay(DpsViewModel tracker) => throw NotUsed();
@@ -358,8 +367,8 @@ public sealed class RecordingDialogService : IDialogService
         FleetExitPrompt = prompt;
         return Task.FromResult(FleetExit);
     }
-    public void ShowRoster(FleetRosterViewModel viewModel) => throw NotUsed();
-    public void ShowFleetMetrics(FleetMetricsViewModel viewModel) => throw NotUsed();
+    public void ShowRoster(FleetRosterViewModel viewModel) => OpenedRosters.Add(viewModel);
+    public void ShowFleetMetrics(FleetMetricsViewModel viewModel) => OpenedFleetMetrics.Add(viewModel);
     public Task ShowSdeUpdateAsync(SdeProgressViewModel viewModel) => throw NotUsed();
     public void SwitchMode() { }
 

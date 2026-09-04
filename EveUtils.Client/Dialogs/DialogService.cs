@@ -15,6 +15,7 @@ using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.DependencyInjection;
+using Material.Icons;
 
 namespace EveUtils.Client.Dialogs;
 
@@ -51,8 +52,11 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void SwitchMode() => _moduleHost.SwitchMode();
 
     // Opens a non-modal feature window as a module: a docked tab, or a floating window — handled by the host.
-    private void Route(Window window, string title, string? moduleKey, string moduleId) =>
-        _moduleHost.Open(window, title, moduleKey, moduleId);
+    // The icon is the tab's, and is chosen per SCREEN rather than per rail group (ET-171): one fleet can put three
+    // tabs in the strip and they all read "FLEET…", so a symbol shared by the whole group would separate nothing.
+    // Where a screen has a rail entry the rail's own icon is reused, so the strip and the rail agree.
+    private void Route(Window window, string title, string? moduleKey, string moduleId, MaterialIconKind icon) =>
+        _moduleHost.Open(window, title, moduleKey, moduleId, icon);
 
     /// <summary>
     /// Watches a load this service starts but does not await, so a fault is seen instead of vanishing into an
@@ -369,12 +373,12 @@ public sealed class DialogService : IDialogService, ISingletonService
     }
 
     public void ShowFleets(FleetsViewModel viewModel) =>
-        Route(new FleetsWindow(viewModel), "FLEETS", "fleet", "fleets");
+        Route(new FleetsWindow(viewModel), "FLEETS", "fleet", "fleets", MaterialIconKind.AccountGroupOutline);
 
     public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false)
     {
         var window = new SettingsWindow(currentDirectory, detectedDefault, shareLocation, shareBounty, shareCombat, loadTypeImages, currentFaction, sdeVersionLabel, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, localApiStatusLabel, localApiServer, checkUpdatesOnStartup, clipboardWatch, onApply, initialCategory, openFleetRunWindowImmediately);
-        Route(window, "SETTINGS", "settings", "settings"); // docked tab in docked mode, floating window otherwise
+        Route(window, "SETTINGS", "settings", "settings", MaterialIconKind.TuneVariant); // docked tab in docked mode, floating window otherwise
     }
 
     public async Task<bool> ShowFleetSharingAsync(FleetShareViewModel viewModel)
@@ -384,7 +388,7 @@ public sealed class DialogService : IDialogService, ISingletonService
     }
 
     public void ShowMetrics(MetricsWindowViewModel viewModel) =>
-        Route(new MetricsWindow(viewModel), "METRICS", null, "metrics");
+        Route(new MetricsWindow(viewModel), "METRICS", null, "metrics", MaterialIconKind.ChartBar);
 
     public async Task ShowAboutAsync(AboutViewModel viewModel)
     {
@@ -420,7 +424,7 @@ public sealed class DialogService : IDialogService, ISingletonService
         window.Closed += (_, _) => tcs.TrySetResult(false);
 
         var title = string.IsNullOrWhiteSpace(viewModel.Name) ? viewModel.Title : viewModel.Name;
-        Route(window, title, "compositions", viewModel.ModuleId);
+        Route(window, title, "compositions", viewModel.ModuleId, MaterialIconKind.ViewGridOutline);
         return tcs.Task;
     }
 
@@ -439,28 +443,28 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void ShowInbox(InboxViewModel viewModel)
     {
         _Observe(viewModel.OnOpenedAsync(), "the inbox could not be marked as read");
-        Route(new InboxWindow(viewModel), "INBOX", "inbox", "inbox");
+        Route(new InboxWindow(viewModel), "INBOX", "inbox", "inbox", MaterialIconKind.EmailOutline);
     }
 
     public void ShowLogs(ClientLogViewModel viewModel) =>
-        Route(new LogsWindow(viewModel), "APP LOGS", "logs", "app-logs");
+        Route(new LogsWindow(viewModel), "APP LOGS", "logs", "app-logs", MaterialIconKind.FileDocumentOutline);
 
     public void ShowEsiMetrics(EsiMetricsViewModel viewModel) =>
-        Route(new EsiMetricsWindow(viewModel), "ESI METRICS", "esi", "esi-metrics");
+        Route(new EsiMetricsWindow(viewModel), "ESI METRICS", "esi", "esi-metrics", MaterialIconKind.ChartBar);
 
     public void ShowSettingsSync(SettingsSyncViewModel viewModel) =>
-        Route(new SettingsSyncWindow(viewModel), "EVE SETTINGS SYNC", "tools", "settings-sync");
+        Route(new SettingsSyncWindow(viewModel), "EVE SETTINGS SYNC", "tools", "settings-sync", MaterialIconKind.Sync);
 
     public void ShowSettingsBackups(SettingsBackupsViewModel viewModel) =>
-        Route(new SettingsBackupsWindow(viewModel), "SETTINGS BACKUPS", "tools", "settings-backups");
+        Route(new SettingsBackupsWindow(viewModel), "SETTINGS BACKUPS", "tools", "settings-backups", MaterialIconKind.BackupRestore);
 
     public void ShowAppraisal(AppraisalViewModel viewModel) =>
-        Route(new AppraisalWindow(viewModel), "APPRAISAL", "tools", "appraisal");
+        Route(new AppraisalWindow(viewModel), "APPRAISAL", "tools", "appraisal", MaterialIconKind.CurrencyUsd);
 
     public void ShowActivityDetail(ActivityDetailViewModel viewModel, Guid activitySummaryId)
     {
         _Observe(viewModel.LoadAsync(), "this screen could not be read");
-        Route(new ActivityDetailWindow(viewModel), "ACTIVITY", "runs", $"activity-{activitySummaryId}");
+        Route(new ActivityDetailWindow(viewModel), "ACTIVITY", "runs", $"activity-{activitySummaryId}", MaterialIconKind.TimelineTextOutline);
     }
 
     public async Task ShowPresetExportAsync(PresetExportViewModel viewModel)
@@ -479,7 +483,7 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void ShowRuns(RunsOverviewViewModel viewModel)
     {
         _Observe(viewModel.LoadAsync(), "this screen could not be read");
-        Route(new RunsWindow(viewModel), "RUNS", "runs", "runs");
+        Route(new RunsWindow(viewModel), "RUNS", "runs", "runs", MaterialIconKind.RocketLaunchOutline);
     }
 
     /// <summary>A modal dialog rather than a docked module (ET-163 nazorg): filling in a run is a moment, not a
@@ -495,16 +499,18 @@ public sealed class DialogService : IDialogService, ISingletonService
         // One fit-browser module for the whole app (not per-entity, unlike roster/metrics): re-opening re-selects
         // it and refreshes instead of silently handing back the library as it stood at first open (ET-48, same
         // pattern as ET-46).
-        Route(new FitBrowserWindow(viewModel), "FIT BROWSER", "fits", "fit-browser");
+        Route(new FitBrowserWindow(viewModel), "FIT BROWSER", "fits", "fit-browser", MaterialIconKind.WrenchOutline);
 
     public void ShowCompositions(CompositionsViewModel viewModel) =>
         // Same fix as the fit browser above: one compositions module for the whole app, refreshed on re-open
         // instead of re-selecting a stale one (ET-48).
-        Route(new CompositionsWindow(viewModel), "COMPOSITIONS", "compositions", "compositions");
+        Route(new CompositionsWindow(viewModel), "COMPOSITIONS", "compositions", "compositions", MaterialIconKind.ViewGridOutline);
 
     public void ShowFitDetail(FitDetailWindowViewModel viewModel) =>
+        // The fits wrench, shared with the browser: a fit detail is titled after the fit, so its tab is the one that
+        // most needs something saying which module it belongs to at all.
         Route(new FitDetailWindow(viewModel), string.IsNullOrWhiteSpace(viewModel.Name) ? "FIT DETAIL" : viewModel.Name,
-            "fits", viewModel.ModuleId);
+            "fits", viewModel.ModuleId, MaterialIconKind.WrenchOutline);
 
     public void ShowTypeInfo(TypeInfoWindowViewModel viewModel)
     {
@@ -556,7 +562,7 @@ public sealed class DialogService : IDialogService, ISingletonService
         // One roster module per fleet (de-duped on the fleet id): MANAGE on a second fleet opens its own window
         // instead of re-selecting the first fleet's roster, which used to stay bound to the original fleet.
         Route(new FleetRosterWindow(viewModel), $"FLEET ROSTER · {viewModel.FleetName}",
-            "fleet", $"fleet-roster:{viewModel.FleetId}");
+            "fleet", $"fleet-roster:{viewModel.FleetId}", MaterialIconKind.FormatListBulletedSquare);
 
     public void ShowFleetMetrics(FleetMetricsViewModel viewModel) =>
         // One metrics module per fleet, same as the roster above: the title alone used to identify it, so METRICS on
@@ -564,7 +570,7 @@ public sealed class DialogService : IDialogService, ISingletonService
         // module and refreshes its roster — the host calls IRefreshableModule — so a member who joined while the
         // screen stood open is not missing from the totals and the WITH FC badge (ET-46).
         Route(new FleetMetricsWindow(viewModel), $"FLEET METRICS · {viewModel.FleetName}",
-            "fleet", $"fleet-metrics:{viewModel.FleetId}");
+            "fleet", $"fleet-metrics:{viewModel.FleetId}", MaterialIconKind.ChartLine);
 
     public async Task ShowSdeUpdateAsync(SdeProgressViewModel viewModel)
     {

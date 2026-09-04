@@ -516,6 +516,76 @@
         <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
     </Style>
 
+    <!-- ── The fleet screens' navigation bar (ET-171) ──
+
+         One strip, the same on every fleet screen: where you can go from here on the left, what this screen is about
+         on the right of it, and the screen's own actions after that. It lives here rather than in each window's own
+         DockPanel.Styles for the reason ET-42 wrote down — a rule left on a window is dropped when the module host
+         lifts the content out to dock it, so the docked tab and the floating window would not look alike. An
+         app-level style is seen from both.
+
+         It sits between the window chrome and the screen's header on purpose: the header says which fleet this is,
+         the bar says where this fleet's other screens are. -->
+    <Style Selector="Border.fleetnav">
+        <Setter Property="Background" Value="#04FFFFFF"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="Padding" Value="12,6"/>
+    </Style>
+
+    <!-- Quiet until pointed at, like the overview's own row buttons: navigation is not the thing you came for. -->
+    <Style Selector="Button.navlink">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Padding" Value="8,3"/>
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="LetterSpacing" Value="1.1"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.navlink:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+
+    <!-- The trail: FLEETS › <this fleet> › THIS SCREEN. With several fleet tabs open, all of them titled FLEET
+         something, this is where the screen says which fleet you are looking at without you having to read the tab
+         you arrived through — and in a floating window there is no tab to read at all. -->
+    <Style Selector="TextBlock.crumb">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="FontSize" Value="9.5"/>
+        <Setter Property="LetterSpacing" Value="1.2"/>
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <!-- The leaf: where you are. Bright, and not a button — you are already here. -->
+    <Style Selector="TextBlock.crumb.here">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+    </Style>
+    <!-- An earlier step, which is a place you can go back to. Underlined dotted so it reads as a link at 9.5px,
+         where a colour difference alone does not carry. -->
+    <Style Selector="Button.crumblink">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Padding" Value="1,0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="FontSize" Value="9.5"/>
+        <Setter Property="LetterSpacing" Value="1.2"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.crumblink:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+
     <!-- DataGrid (Avalonia.Controls.DataGrid, added for the FITS fit-browser, D-148). The Fluent DataGrid
          theme is included in App.axaml; these tweaks blend it into the dark EVE panel look. -->
     <Style Selector="DataGrid">

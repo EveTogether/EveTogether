@@ -1,9 +1,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Composition;
+using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 
@@ -19,8 +21,17 @@ namespace EveUtils.Client.Fleet;
 /// onto that position (no round-trip — the owner vouches for their own character).
 /// </summary>
 public sealed class LocalFleetClient(
-    ClientFleetService local, IFleetRepository repository, ICharacterRegistry characters, int ownerCharacterId) : IFleetClient
+    ClientFleetService local, IFleetRepository repository, ICharacterRegistry characters, int ownerCharacterId)
+    : IFleetClient, IFleetCompositionClientSource
 {
+    /// <summary>The local doctrine library for the same owner (ET-171). The composition repository is the one
+    /// thing this client does not already hold, so it comes from the provider.</summary>
+    public IFleetCompositionClient CreateCompositionClient(System.IServiceProvider services) =>
+        new LocalFleetCompositionClient(
+            local,
+            services.GetRequiredService<IFleetCompositionRepository>(),
+            ownerCharacterId);
+
     public async Task<FleetInfo?> GetFleetAsync(long fleetId)
     {
         var fleet = await repository.GetAsync(fleetId);

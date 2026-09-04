@@ -333,6 +333,59 @@
             </Style>
         </DockPanel.Styles>
 
+        <!-- Navigation (ET-171): the whole of this screen's exits, which until now was nothing at all — the density
+             switcher and the pop-outs are the only other buttons on it, and neither of them leads anywhere. Both
+             ways back are here: home to the overview, and across to this fleet's roster.
+
+             It is first in the DockPanel so it reads directly under the window chrome, above the figures, and it
+             keeps the outer 14 px margin rather than bleeding to the edge — this screen is laid out inset and a
+             full-bleed strip would be the only thing on it that is not.
+
+             Styles live in Themes/EveUtils.axaml so the docked tab and the floating window look alike (ET-42). -->
+        <Border DockPanel.Dock="Top" Classes="fleetnav" Margin="0,0,0,12">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,*">
+                <Button Grid.Column="0" x:Name="BackToFleetsButton" Classes="navlink" Margin="0,0,6,0"
+                        Command="{Binding BackToFleetsCommand}"
+                        ToolTip.Tip="Back to the fleet overview">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <mi:MaterialIcon Classes="icon-sm" Kind="ArrowLeft"/>
+                        <TextBlock Text="FLEETS" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <!-- ROSTER, not MANAGE: the same screen serves the owner and the members, and it is the name the
+                     screen already carries in its tab and its title. MANAGE would promise the members more than
+                     they get there. -->
+                <Button Grid.Column="1" x:Name="OpenRosterButton" Classes="navlink" Margin="0,0,10,0"
+                        Command="{Binding OpenRosterCommand}"
+                        ToolTip.Tip="This fleet's roster: members, wings and doctrine">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <mi:MaterialIcon Classes="icon-sm" Kind="ArrowLeft"/>
+                        <TextBlock Text="ROSTER" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Button Classes="crumblink" Content="FLEETS" Command="{Binding BackToFleetsCommand}"
+                            ToolTip.Tip="Back to the fleet overview"/>
+                    <TextBlock Classes="crumb" Text="›"/>
+                    <Button Classes="crumblink" Content="{Binding FleetName}" Command="{Binding OpenRosterCommand}"
+                            ToolTip.Tip="This fleet's roster"/>
+                    <TextBlock Classes="crumb" Text="›"/>
+                    <TextBlock Classes="crumb here" Text="METRICS"/>
+                </StackPanel>
+                <!-- The whole fleet as a pop-out. It sat beside the WITH FC badge in the header; the mockup counts it
+                     among this screen's exits, and it is one — a way to keep watching the fleet while looking at
+                     something else. Still marked with OpenInNew, like the per-member pop-outs in the rows (ET-72). -->
+                <Button Grid.Column="3" x:Name="PopOutFleetButton" Classes="navlink" HorizontalAlignment="Right"
+                        Command="{Binding PopOutFleetCommand}"
+                        ToolTip.Tip="Pop the fleet out: an always-on-top overlay with the WITH FC ratio, who is taking the most damage and who is being neuted the most">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <mi:MaterialIcon Classes="icon-sm" Kind="OpenInNew"/>
+                        <TextBlock Text="FLEET" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+
         <!-- Header: fleet name + roll-up totals -->
         <Border DockPanel.Dock="Top" Classes="panel" Padding="14,12" Margin="0,0,0,12">
             <Grid ColumnDefinitions="*,Auto">
@@ -348,17 +401,8 @@
                                 ToolTip.Tip="{Binding CommanderPresence.Tooltip}">
                             <TextBlock Text="{Binding CommanderPresence.BadgeText}"/>
                         </Border>
-                        <!-- The whole fleet as a pop-out, beside the per-member pop-out buttons in the rows below and
-                             marked the same way (ET-72). -->
-                        <Button x:Name="PopOutFleetButton" FontSize="9.5" LetterSpacing="1.2"
-                                Padding="8,2" VerticalAlignment="Center"
-                                Command="{Binding PopOutFleetCommand}"
-                                ToolTip.Tip="Pop the fleet out: an always-on-top overlay with the WITH FC ratio, who is taking the most damage and who is being neuted the most">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <mi:MaterialIcon Classes="icon-sm" Kind="OpenInNew"/>
-                                <TextBlock Text="FLEET" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
+                        <!-- The FLEET pop-out stood here. It is in the navigation bar above now (ET-171), where the
+                             mockup puts it and where it reads as what it is: a way off this screen. -->
                     </StackPanel>
                 </StackPanel>
                 <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto" VerticalAlignment="Center">
