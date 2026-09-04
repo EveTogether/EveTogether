@@ -938,6 +938,9 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.Property<bool>("IsExcluded")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("char(36)");
 

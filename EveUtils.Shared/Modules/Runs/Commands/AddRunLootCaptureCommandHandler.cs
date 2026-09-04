@@ -41,6 +41,7 @@ internal sealed class AddRunLootCaptureCommandHandler(IDbContextFactory<ClientDb
             RunId = run.Id,
             CapturedAtUtc = command.Capture.CapturedAtUtc,
             Source = command.Capture.Source,
+            Role = command.Capture.Role,
             ContentHash = command.Capture.ContentHash,
             IsExcluded = repeatOf is not null
         };

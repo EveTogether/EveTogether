@@ -79,6 +79,7 @@ public sealed class RunWireData
         {
             CapturedAtUtc = capture.CapturedAtUtc,
             Source = capture.Source,
+            Role = capture.Role,
             ContentHash = capture.ContentHash,
             IsExcluded = capture.IsExcluded,
             Entries = capture.Entries.Select(entry => new RunLootEntryInput
@@ -151,6 +152,7 @@ public sealed class RunWireData
                 RunId = run.Id,
                 CapturedAtUtc = capture.CapturedAtUtc,
                 Source = capture.Source,
+                Role = capture.Role,
                 ContentHash = capture.ContentHash,
                 IsExcluded = capture.IsExcluded
             };

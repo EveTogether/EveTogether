@@ -42,6 +42,7 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
                 RunId = run.Id,
                 CapturedAtUtc = capture.CapturedAtUtc,
                 Source = capture.Source,
+                Role = capture.Role,
                 ContentHash = capture.ContentHash
             };
             foreach (RunLootEntryInput entry in capture.Entries)

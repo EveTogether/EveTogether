@@ -9,6 +9,6 @@ namespace EveUtils.Shared.Modules.Runs.Queries;
 internal static class RunLootCaptureMapper
 {
     public static RunLootCaptureDto ToDto(RunLootCapture capture) => new(
-        capture.Id, capture.CapturedAtUtc, capture.IsExcluded, capture.ContentHash,
+        capture.Id, capture.CapturedAtUtc, capture.IsExcluded, capture.ContentHash, capture.Source, capture.Role,
         [.. capture.Entries.Select(entry => new RunLootEntryDto(entry.ItemTypeId, entry.Name, entry.Quantity, entry.ClipboardPrice, entry.LootKind))]);
 }

@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
@@ -10,6 +11,7 @@ public sealed partial class RunLootCaptureRowViewModel : ObservableObject
 {
     public Guid CaptureId { get; }
     public DateTime CapturedAtUtc { get; }
+    public LootCaptureRole Role { get; }
     public DateTime? RepeatOfCapturedAtUtc { get; }
     public IReadOnlyList<RunLootEntryDto> Entries { get; }
 
@@ -29,6 +31,7 @@ public sealed partial class RunLootCaptureRowViewModel : ObservableObject
     {
         CaptureId = dto.CaptureId;
         CapturedAtUtc = dto.CapturedAtUtc;
+        Role = dto.Role;
         RepeatOfCapturedAtUtc = repeatOfCapturedAtUtc;
         Entries = dto.Entries;
         _isExcluded = dto.IsExcluded;

@@ -9,6 +9,7 @@ using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
+using EveUtils.Shared.Modules.Runs.Tally;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
 namespace EveUtils.Client.ViewModels.Runs;
@@ -189,24 +190,29 @@ public sealed partial class RunLootViewModel : ViewModelBase
             _unitPrices[row.Line.TypeId] = (decimal)row.Price!.Estimate;
     }
 
+    /// <summary>Which captures count, and for how much, is <see cref="LootTally"/>'s answer and not this window's —
+    /// the stored run is rebuilt from the same rule, so the figures here are the figures it will keep.</summary>
     private void _Recompute()
     {
-        List<RunLootEntryDto> included = [.. Captures.Where(capture => !capture.IsExcluded).SelectMany(capture => capture.Entries)];
-        TotalIsk = _Sum(included);
-        EntriesWithoutPrice = included.Count(entry => !_unitPrices.ContainsKey(entry.ItemTypeId));
-        LootIsk = _Sum(included.Where(entry => entry.LootKind == LootKind.Gained));
-        ConsumedIsk = _Sum(included.Where(entry => entry.LootKind == LootKind.Lost));
+        // No volume: a capture row carries none, and nothing on this screen totals one.
+        IReadOnlyList<LootTallyLine> counted = LootTally.Count([.. Captures.Select(capture =>
+            new LootTallyCapture(capture.Role, capture.IsExcluded, [.. capture.Entries.Select(entry =>
+                new LootTallyLine(entry.ItemTypeId, entry.Quantity, null, entry.LootKind))]))]);
+        TotalIsk = _Sum(counted);
+        EntriesWithoutPrice = counted.Count(line => !_unitPrices.ContainsKey(line.ItemTypeId));
+        LootIsk = _Sum(counted.Where(line => line.LootKind == LootKind.Gained));
+        ConsumedIsk = _Sum(counted.Where(line => line.LootKind == LootKind.Lost));
         NetIsk = LootIsk is null && ConsumedIsk is null ? null : (LootIsk ?? 0m) - (ConsumedIsk ?? 0m);
         OnPropertyChanged(nameof(TotalIskLabel));
     }
 
     /// <summary>A market price is per unit, so the quantity is what turns it into a line value. No quantity column
     /// means one of it — the same reading <c>SdeInventoryResolver</c> takes.</summary>
-    private decimal? _Sum(IEnumerable<RunLootEntryDto> entries)
+    private decimal? _Sum(IEnumerable<LootTallyLine> lines)
     {
-        decimal[] values = [.. entries
-            .Where(entry => _unitPrices.ContainsKey(entry.ItemTypeId))
-            .Select(entry => _unitPrices[entry.ItemTypeId] * (entry.Quantity ?? 1))];
+        decimal[] values = [.. lines
+            .Where(line => _unitPrices.ContainsKey(line.ItemTypeId))
+            .Select(line => _unitPrices[line.ItemTypeId] * (line.Quantity ?? 1))];
         return values.Length == 0 ? null : values.Sum();
     }
 
