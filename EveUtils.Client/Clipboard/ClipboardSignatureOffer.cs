@@ -18,8 +18,10 @@ using EveUtils.Shared.Modules.Sde.Dtos;
 
 namespace EveUtils.Client.Clipboard;
 
-/// <summary>Shows what the SDE knows about a copied cosmic signature or anomaly (ET-79). One fully-scanned combat
-/// site is the exception: that starts its run outright, without a card and without taking the keyboard (ET-158).</summary>
+/// <summary>Shows what the SDE knows about a copied cosmic signature or anomaly (ET-79). One fully-scanned site the
+/// catalogue knows by name is the exception: that starts its run outright, without a card and without taking the
+/// keyboard (ET-158, widened past combat-only by ET-177 — the catalogue hit is the whole bar, no per-archetype
+/// list to maintain).</summary>
 public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
 {
     public const string FeatureName = "Signature detection";
@@ -69,7 +71,7 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         // Exactly one fully-scanned row is the whole case this feature can act on: half-scanned has no site, and 2+
         // rows is a menu. That one case now goes straight to a run (ET-158) instead of offering a button; the pilot
         // is in EVE, where an in-window toast is not visible anyway.
-        var recognised = rows.Where(row => IsActivitySite(row.Group) && row.Name is not null).ToList();
+        var recognised = rows.Where(row => row.Name is not null && IsAutoStartEligible(row.Name)).ToList();
         if (recognised is [{ } row])
         {
             StartRun(row);
@@ -80,9 +82,9 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
             [new ToastAction("Close", () => CloseOffer(fingerprint))], () => CloseOffer(fingerprint), FeatureName);
     }
 
-    // Wormholes are excluded for now. This still matches the group text literally in English — SiteNameAlias (ET-79)
-    // covers site names, not the scan-window group column.
-    private static bool IsActivitySite(string? siteType) => siteType?.EndsWith("Combat Site", StringComparison.Ordinal) is true;
+    // The catalogue is the only vote, on every archetype it carries — a name the SDE does not know cannot be judged
+    // (that gap is ET-178's, not this one's). The group column never enters this decision (ET-177 AC-3).
+    private bool IsAutoStartEligible(string name) => MatchSites(name).Count > 0;
 
     // _openFingerprint is deliberately left standing here, unlike the card path: it is what stops a second change
     // notification for the same copy from starting a second run. ponytail: an identical re-copy is therefore ignored
