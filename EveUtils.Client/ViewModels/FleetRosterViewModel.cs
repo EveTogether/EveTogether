@@ -1503,26 +1503,8 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
     /// runs are visible here, and that is the right scope: the FC is being told what stopping does to the
     /// measurements in front of them. Empty when nothing is running, or when the coordinator is not in the graph.
     /// </summary>
-    private IReadOnlyList<string> DescribeRunsInProgress()
-    {
-        if (_services.GetService<FleetRunGroupCodeCoordinator>() is not { } coordinator)
-            return [];
-
-        var now = DateTime.UtcNow;
-        return [.. coordinator.ListRunsInProgress(_fleet.Id).Select(run =>
-        {
-            var elapsed = now - run.StartedAtUtc;
-            if (elapsed < TimeSpan.Zero)
-                elapsed = TimeSpan.Zero;
-
-            var where = string.IsNullOrWhiteSpace(run.SiteName) ? run.SolarSystemName : run.SiteName;
-            var name = NameFor((int)run.CharacterId);
-            // Invariant: this is a clock, and the tests run on a machine whose culture is not English (ET-34).
-            return string.IsNullOrWhiteSpace(where)
-                ? string.Create(CultureInfo.InvariantCulture, $"{name} — {elapsed:hh\\:mm\\:ss}")
-                : string.Create(CultureInfo.InvariantCulture, $"{name} — {where}, {elapsed:hh\\:mm\\:ss}");
-        })];
-    }
+    private IReadOnlyList<string> DescribeRunsInProgress() =>
+        FleetRunsInProgress.Describe(_services.GetService<FleetRunGroupCodeCoordinator>(), _fleet.Id, NameFor, DateTime.UtcNow);
 
     private async Task StopFleetAsync()
     {

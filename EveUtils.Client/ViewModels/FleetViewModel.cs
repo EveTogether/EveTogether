@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.ViewModels.Fleets;
 using EveUtils.Shared.Modules.Fleet.Entities;
 
 namespace EveUtils.Client.ViewModels;
@@ -40,6 +42,7 @@ public sealed partial class FleetViewModel : ObservableObject
         StatusLabel = $"{VisibilityLabel} · {ActivationLabel}";
         StateLabel = ActivationLabel.ToUpperInvariant();
         IsForming = fleet.Activation == FleetActivation.Forming;
+        Group = fleet.Activation.ToGroup();
         // Which of my coupled characters this row belongs to: owner for my fleets, the
         // member character for participating ones. Shown on the row and used as the acting char for its actions.
         CharacterLabel = string.IsNullOrEmpty(characterName) ? "" : $"{characterName}{(IsMine ? " · owner" : "")}";
@@ -54,6 +57,9 @@ public sealed partial class FleetViewModel : ObservableObject
 
     /// <summary>The coupled server's display name, used for the per-server grouping header in the listing.</summary>
     public string? ServerName { get; }
+
+    /// <summary>Where this fleet lives, as the one key the link rule tells fleets apart by (ET-170).</summary>
+    public FleetKey Key => new(ServerAddress, Id);
 
     public long Id { get; }
     public string Name { get; }
@@ -91,27 +97,159 @@ public sealed partial class FleetViewModel : ObservableObject
     /// <summary>This is the fleet the client is currently participating in — drives the active highlight.</summary>
     [ObservableProperty] private bool _isActive;
 
+    // ── The overview's three bands (ET-170) ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>Which band of the overview this row sits in, read off the fleet's activation.</summary>
+    public FleetOverviewGroup Group { get; }
+
+    public bool IsInActiveGroup => Group == FleetOverviewGroup.Active;
+    public bool IsStandingBy => Group == FleetOverviewGroup.StandingBy;
+    public bool IsFinished => Group == FleetOverviewGroup.Finished;
+
+    /// <summary>The status cell: a filled dot for a started fleet, a hollow one standing by, a cross when finished.</summary>
+    public string GroupStatusText => Group switch
+    {
+        FleetOverviewGroup.Active => "● ACTIVE",
+        FleetOverviewGroup.Finished => "✕ DONE",
+        _ => "○ READY",
+    };
+
+    /// <summary>The row is unfolded to its members. Remembered across reloads by the window, like the fold below.</summary>
+    [ObservableProperty] private bool _isExpanded;
+
+    /// <summary>Raised when the user folds or unfolds this row, so the window can remember it across a reload.</summary>
+    public Action<long, bool>? RowExpansionChanged { get; set; }
+
+    [RelayCommand]
+    private void ToggleExpanded()
+    {
+        IsExpanded = !IsExpanded;
+        RowExpansionChanged?.Invoke(Id, IsExpanded);
+    }
+
+    /// <summary>"local" for a client-only fleet, the server's display name otherwise — where the fleet lives.</summary>
+    public string OriginText => IsLocal ? "local" : (string.IsNullOrWhiteSpace(ServerName) ? ServerAddress ?? "server" : ServerName);
+
+    /// <summary>The wide row's second line under the name: where it lives and who may join.</summary>
+    public string KindText => $"{OriginText} · {VisibilityLabel.ToLowerInvariant()}";
+
+    /// <summary>The narrow row's second line: where it lives, and what became of the "your characters" column
+    /// (ET-170, screen 10) — the information never goes away, only its place does.</summary>
+    public string NarrowSubText => OwnCharactersText == "—"
+        ? KindText
+        : $"{OriginText} · {OwnCharactersText.ToLowerInvariant()}{(OwnCharactersSubText is { Length: > 0 } sub ? $" · {sub}" : "")}";
+
+    public string MemberCountText => MemberCount.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>Under the member count: how many of them are external pilots, or a dash.</summary>
+    public string MemberCountSubText
+    {
+        get
+        {
+            int external = Members.Count(m => m.IsExternal);
+            return external == 0 ? "—" : $"{external.ToString(CultureInfo.InvariantCulture)} external";
+        }
+    }
+
+    /// <summary>The fleet commander's name, resolved from the roster, falling back to the owner label.</summary>
+    public string CommanderText => Members.FirstOrDefault(m => m.IsFleetCommander)?.CharacterName ?? OwnerLabel;
+
+    public string CommanderSubText => IsMine ? "you" : "not you";
+
+    /// <summary>"3 linked" / "2 standing by" / "—": how many of this client's own characters this fleet holds and in
+    /// what state — the column the narrow form folds into a second line under the name.</summary>
+    [ObservableProperty] private string _ownCharactersText = "—";
+
+    /// <summary>"1 elsewhere active" / the names standing by / "" — what qualifies the count above.</summary>
+    [ObservableProperty] private string _ownCharactersSubText = "";
+
+    partial void OnOwnCharactersTextChanged(string value) => OnPropertyChanged(nameof(NarrowSubText));
+    partial void OnOwnCharactersSubTextChanged(string value) => OnPropertyChanged(nameof(NarrowSubText));
+
+    public string DoctrineText => CompositionName ?? "—";
+
+    /// <summary>The figure at the right: a running clock for a started fleet, the day it last ran while standing by.</summary>
+    [ObservableProperty] private string _sinceText = "—";
+
+    /// <summary>Under the figure: "since 20:14" for a started fleet, "last started 21:40" or "created 28-08" otherwise.</summary>
+    [ObservableProperty] private string _sinceSubText = "";
+
+    /// <summary>Recomputes the clock cell. Invariant on purpose — this is a clock and the tests run on a machine
+    /// whose culture is not English (ET-34).</summary>
+    public void Tick(DateTimeOffset now)
+    {
+        if (IsInActiveGroup && Info.ActivatedAt is { } started)
+        {
+            var elapsed = now - started;
+            if (elapsed < TimeSpan.Zero)
+                elapsed = TimeSpan.Zero;
+            SinceText = string.Create(CultureInfo.InvariantCulture, $"{(int)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}");
+            SinceSubText = string.Create(CultureInfo.InvariantCulture, $"since {started.ToLocalTime():HH:mm}");
+            return;
+        }
+
+        if (IsInActiveGroup)
+        {
+            SinceText = "--:--:--";
+            SinceSubText = "started, time unknown";
+            return;
+        }
+
+        if (Info.ActivatedAt is { } last)
+        {
+            SinceText = string.Create(CultureInfo.InvariantCulture, $"{last.ToLocalTime():dd-MM}");
+            SinceSubText = string.Create(CultureInfo.InvariantCulture, $"last started {last.ToLocalTime():HH:mm}");
+            return;
+        }
+
+        SinceText = "—";
+        SinceSubText = string.Create(CultureInfo.InvariantCulture, $"created {Info.CreatedAt.ToLocalTime():dd-MM}");
+    }
+
+    /// <summary>The window tells each row which of the two table states it is drawn in (ET-170): wide gives METRICS
+    /// and SHARE their own buttons; narrow keeps STOP/START and MANAGE and folds the rest behind "⋯".</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowMetricsButton))]
+    [NotifyPropertyChangedFor(nameof(ShowShareButton))]
+    private bool _isWide;
+
+    /// <summary>The secondary actions behind the "⋯" button, built by the window from what this row allows.</summary>
+    public ObservableCollection<FleetMemberMenuItemViewModel> OverflowItems { get; } = [];
+
+    public bool HasOverflow => OverflowItems.Count > 0;
+
+    /// <summary>STOP shows on a started fleet. Only its owner may press it, so for anyone else it stands disabled
+    /// rather than missing — a button that is not there teaches nobody who may press it.</summary>
+    public bool ShowStop => IsInActiveGroup && (IsMine || IsParticipating);
+    public bool StopEnabled => IsInActiveGroup && IsMine;
+
+    public bool ShowStart => IsStandingBy && (IsMine || IsParticipating);
+    public bool StartEnabled => IsStandingBy && IsMine;
+
+    /// <summary>A member who is not the owner leaves rather than stops.</summary>
+    public bool ShowLeave => !IsFinished && IsParticipating && !IsMine;
+
+    /// <summary>A finished fleet has one thing left to do with it.</summary>
+    public bool ShowDelete => IsFinished && IsMine;
+
+    public bool ShowMetricsButton => IsWide && ShowMetricsActions && !IsFinished;
+    public bool ShowShareButton => IsWide && ShowMetricsActions && !IsFinished;
+
     /// <summary>My characters that are members of this fleet, shown as leaf rows under the fleet node (stream B / B-2):
-    /// each with their role, assigned fit, can-fly badge and a SELECT FIT action. Empty for browser rows
-    /// (discoverable ≠ joined). The same fleet is listed once and aggregates all my coupled characters in it.
-    /// A client-only fleet's card carries the WHOLE roster instead, externals included (ET-46) — which is why this
-    /// list needs shortening at all. The card binds <see cref="VisibleMembers"/>, not this.</summary>
+    /// each with their role, assigned fit, can-fly badge and a SELECT FIT action. Since ET-170 this is the whole
+    /// roster of every fleet, server ones included — the unfolded row shows the fleet commander and whoever asks for
+    /// attention, and those are rarely mine. The row binds <see cref="VisibleMembers"/>, not this.</summary>
     public ObservableCollection<FleetMemberRowViewModel> Members { get; } = [];
 
-    // --- The shortened member list (ET-53) ---
+    // --- The shortened member list (ET-53, re-cut by ET-170) ---
 
     /// <summary>
-    /// How many member leaves a card shows before it shortens the list. Six rather than the five first suggested:
-    /// the ranking below puts the fleet commander first and this client's own characters next, and a multiboxer
-    /// flying four alts plus the FC already fills five — with six there is still a slot left for the first pilot who
-    /// is neither, which is the whole reason a shortened list is worth looking at. Beyond that the card stops being
-    /// an overview: at ~40px a leaf, six is roughly a third of the window's height for one of possibly several cards.
+    /// What the unfolded row actually draws. Folded, it is the members that answer the three questions a row is
+    /// unfolded for — are my pilots in it, do they count, and is anything wrong: the fleet commander, this client's
+    /// own characters, and whoever is not linked or shares nothing. Everyone else is a tally on one line with a
+    /// "show all N". So a fleet of fifty costs the height of a fleet of six, and the one member who silently does
+    /// not take part can never disappear behind a click (ET-170, screen 12).
     /// </summary>
-    public const int CollapsedMemberLimit = 6;
-
-    /// <summary>What the card actually draws: <see cref="Members"/> in full when unfolded, otherwise the first
-    /// <see cref="CollapsedMemberLimit"/> of them — which the loader has ordered fleet commander first, then this
-    /// client's own characters, then external pilots, then the rest.</summary>
     public ObservableCollection<FleetMemberRowViewModel> VisibleMembers { get; } = [];
 
     /// <summary>The member list is unfolded. Kept across reloads by the fleets window, so removing a pilot from an
@@ -123,32 +261,31 @@ public sealed partial class FleetViewModel : ObservableObject
     /// <summary>Raised when the user folds or unfolds this card, so the window can remember it across a reload.</summary>
     public Action<long, bool>? MembersExpansionChanged { get; set; }
 
-    /// <summary>There are more members than a folded card shows — drives the "+ n more" line. False for a small
-    /// fleet, which then has no extra line and no extra click at all.</summary>
-    public bool CanShortenMembers => Members.Count > CollapsedMemberLimit;
+    /// <summary>There are members beyond the highlighted ones — drives the summary line and its "show all N".
+    /// False for a fleet whose every member is highlighted, which then has no extra line and no extra click.</summary>
+    public bool CanShortenMembers => Members.Count > Members.Count(m => m.IsHighlighted);
 
-    /// <summary>How many members the folded card leaves out, and how many of those are external pilots. An external
-    /// has a row on this card and nowhere else in the client (ET-46), so a hidden one is worth naming rather than
-    /// counting silently — it is what tells the FC there is something under the line they cannot see elsewhere.</summary>
-    private int HiddenMemberCount => Math.Max(0, Members.Count - CollapsedMemberLimit);
+    /// <summary>How many members the folded row leaves to the tally.</summary>
+    public int HiddenMemberCount => Math.Max(0, Members.Count - Members.Count(m => m.IsHighlighted));
 
-    private int _hiddenExternalCount;
+    /// <summary>The fold line's label: "show all 50" folded, "show fewer" once opened.</summary>
+    public string MoreMembersLabel => MembersExpanded
+        ? "show fewer"
+        : string.Create(CultureInfo.InvariantCulture, $"show all {Members.Count}");
 
-    /// <summary>The fold line's label. "+ 45 more" on a client-only card, whose list is the whole roster; "+ 2 more of
-    /// yours" on a server card, whose list is only my own characters, so the number never reads as the fleet's size.</summary>
-    public string MoreMembersLabel
+    /// <summary>"and 46 others — the fleet counts:" — the lead of the summary line under the highlighted members.</summary>
+    public string HiddenMembersText
     {
         get
         {
-            if (MembersExpanded)
-                return "▴ SHOW FEWER";
-
-            string subject = IsLocal ? "more" : "more of yours";
-            return _hiddenExternalCount > 0
-                ? $"▾ + {HiddenMemberCount} {subject} · {_hiddenExternalCount} external"
-                : $"▾ + {HiddenMemberCount} {subject}";
+            int hidden = HiddenMemberCount;
+            return hidden == 1 ? "and 1 other — the fleet counts:" : string.Create(CultureInfo.InvariantCulture, $"and {hidden} others — the fleet counts:");
         }
     }
+
+    /// <summary>The tallies on the summary line: linked · share nothing · offline · external, over the whole roster.
+    /// Not decoration — see fifty members but 43 linked and you know the metrics are over 43 (ET-170).</summary>
+    public ObservableCollection<FleetCountChipViewModel> HiddenMemberChips { get; } = [];
 
     /// <summary>"24 in fleet" — how many pilots the fleet holds, which is information in itself and therefore stays
     /// on the card whether the member list is folded or not.</summary>
@@ -168,22 +305,57 @@ public sealed partial class FleetViewModel : ObservableObject
         MembersExpansionChanged?.Invoke(Id, MembersExpanded);
     }
 
+    /// <summary>
+    /// Who the list shows first: the fleet commander, then this client's own characters, then whoever asks for
+    /// attention, then external pilots, then everyone else in roster order. Listing the first few off the roster is
+    /// the one ordering that answers nobody's question.
+    /// </summary>
+    private static int Rank(FleetMemberRowViewModel member) =>
+        member.IsFleetCommander ? 0
+        : member.IsMine ? 1
+        : member.NeedsAttention ? 2
+        : member.IsExternal ? 3
+        : 4;
+
     /// <summary>Rebuilds <see cref="VisibleMembers"/> from <see cref="Members"/>. Called by the loader once the leaves
-    /// are in, and by the fold toggle.</summary>
+    /// are in, by the overview rebuild once every member's link state is known, and by the fold toggle.</summary>
     public void RefreshVisibleMembers()
     {
+        var ordered = Members.OrderBy(Rank).ToList();   // stable: roster order survives inside a rank
         var shown = MembersExpanded || !CanShortenMembers
-            ? (IReadOnlyList<FleetMemberRowViewModel>)Members
-            : Members.Take(CollapsedMemberLimit).ToList();
+            ? ordered
+            : ordered.Where(m => m.IsHighlighted).ToList();
 
         VisibleMembers.Clear();
         foreach (var member in shown)
             VisibleMembers.Add(member);
 
-        _hiddenExternalCount = Members.Skip(CollapsedMemberLimit).Count(m => m.IsExternal);
+        HiddenMemberChips.Clear();
+        int linked = Members.Count(m => m.LinkState == FleetMemberLinkState.Linked);
+        int sharesNothing = Members.Count(m => m.SharesNothing);
+        int offline = Members.Count(m => m.IsOffline);
+        int external = Members.Count(m => m.IsExternal);
+        int elsewhere = Members.Count(m => m.IsElsewhereActive);
+        if (IsInActiveGroup)
+            HiddenMemberChips.Add(new(Count(linked, "linked")));
+        if (elsewhere > 0)
+            HiddenMemberChips.Add(new(Count(elsewhere, "elsewhere active"), FleetChipTone.Warn));
+        if (sharesNothing > 0)
+            HiddenMemberChips.Add(new(sharesNothing == 1 ? "1 shares nothing" : Count(sharesNothing, "share nothing"), FleetChipTone.Warn));
+        if (offline > 0)
+            HiddenMemberChips.Add(new(Count(offline, "offline")));
+        if (external > 0)
+            HiddenMemberChips.Add(new(Count(external, "external")));
+
         OnPropertyChanged(nameof(CanShortenMembers));
+        OnPropertyChanged(nameof(HiddenMemberCount));
+        OnPropertyChanged(nameof(HiddenMembersText));
         OnPropertyChanged(nameof(MoreMembersLabel));
+        OnPropertyChanged(nameof(MemberCountSubText));
+        OnPropertyChanged(nameof(CommanderText));
     }
+
+    private static string Count(int n, string noun) => string.Create(CultureInfo.InvariantCulture, $"{n} {noun}");
 
     /// <summary>The doctrine coupled to this fleet, shown as a pill on the node; null when none is coupled.</summary>
     [ObservableProperty] private string? _compositionName;
@@ -191,7 +363,11 @@ public sealed partial class FleetViewModel : ObservableObject
     /// <summary>Drives the doctrine pill's visibility — only shown when a composition is coupled.</summary>
     public bool HasComposition => !string.IsNullOrEmpty(CompositionName);
 
-    partial void OnCompositionNameChanged(string? value) => OnPropertyChanged(nameof(HasComposition));
+    partial void OnCompositionNameChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasComposition));
+        OnPropertyChanged(nameof(DoctrineText));
+    }
 
     /// <summary>Per-role doctrine fill for the discoverable browser card (stream B / B-1): a "DPS 24 / 40" pill per
     /// role-group with a minimum, so a pilot sees how full each role already is without joining. Empty when the fleet
@@ -202,6 +378,7 @@ public sealed partial class FleetViewModel : ObservableObject
     /// happens to list, so the total stays visible however short the list is (ET-53).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MemberCountLabel))]
+    [NotifyPropertyChangedFor(nameof(MemberCountText))]
     private int _memberCount;
 
     // ── Unified-overview state: set by the loader after the per-server merge so one fleet row
@@ -238,8 +415,8 @@ public sealed partial class FleetViewModel : ObservableObject
     /// <summary>JOIN (public) / REQUEST (invite-only) stay visible for any fleet I relate to — including one I own or
     /// already fly with one character — so I can bring another alt in. They only disable when no character is free
     /// (so "all my characters are already in" reads as a greyed-out button, not a missing one).</summary>
-    public bool ShowJoin => IsPublic && CanAddCharacter;
-    public bool ShowRequest => IsInviteOnly && CanAddCharacter;
+    public bool ShowJoin => IsPublic && CanAddCharacter && !IsLocal && !IsFinished;
+    public bool ShowRequest => IsInviteOnly && CanAddCharacter && !IsLocal && !IsFinished;
     public bool JoinEnabled => CanJoinHere;
 
     /// <summary>Owner → MANAGE (full roster), member → VIEW (same roster, read-only structure + assigned fits).</summary>
@@ -256,8 +433,13 @@ public sealed partial class FleetViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(ShowRosterButton));
         OnPropertyChanged(nameof(ShowMetricsActions));
+        OnPropertyChanged(nameof(ShowMetricsButton));
+        OnPropertyChanged(nameof(ShowShareButton));
         OnPropertyChanged(nameof(ShowJoin));
         OnPropertyChanged(nameof(ShowRequest));
+        OnPropertyChanged(nameof(ShowStop));
+        OnPropertyChanged(nameof(ShowStart));
+        OnPropertyChanged(nameof(ShowLeave));
     }
 
     partial void OnIsDiscoverableChanged(bool value)
@@ -268,5 +450,12 @@ public sealed partial class FleetViewModel : ObservableObject
 
     partial void OnCanJoinHereChanged(bool value) => OnPropertyChanged(nameof(JoinEnabled));
 
-    partial void OnOwnerNameChanged(string value) => OnPropertyChanged(nameof(OwnerLabel));
+    partial void OnOwnerNameChanged(string value)
+    {
+        OnPropertyChanged(nameof(OwnerLabel));
+        OnPropertyChanged(nameof(CommanderText));
+    }
+
+    /// <summary>Tells the row its overflow menu changed, so "⋯" appears or goes.</summary>
+    public void OverflowChanged() => OnPropertyChanged(nameof(HasOverflow));
 }
