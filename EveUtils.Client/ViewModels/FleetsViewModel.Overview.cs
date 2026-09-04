@@ -424,6 +424,17 @@ public sealed partial class FleetsViewModel
 
     // ── The bands and their filters ─────────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The order inside a group (scherm 1 and 10 draw the same one): the fleets you own first — those are the ones
+    /// you can start, stop and manage, so those are the ones you came for — then the ones you only fly in. Within
+    /// each, most recently run first, and a fleet that has never run falls back on when it was made. Left to itself
+    /// the list came out in load order, servers before local, which put your own running fleet under someone else's.
+    /// </summary>
+    private static IEnumerable<FleetViewModel> InScreenOrder(IEnumerable<FleetViewModel> rows) =>
+        rows.OrderByDescending(r => r.IsMine)
+            .ThenByDescending(r => r.Info.ActivatedAt ?? r.Info.CreatedAt)
+            .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase);
+
     private void ApplyFilters()
     {
         IEnumerable<FleetViewModel> rows = _allRows;
@@ -439,9 +450,9 @@ public sealed partial class FleetsViewModel
         }
 
         var kept = rows.ToList();
-        Refill(ActiveFleets, kept.Where(r => r.IsInActiveGroup));
-        Refill(StandingByFleets, kept.Where(r => r.IsStandingBy));
-        Refill(FinishedFleets, kept.Where(r => r.IsFinished));
+        Refill(ActiveFleets, InScreenOrder(kept.Where(r => r.IsInActiveGroup)));
+        Refill(StandingByFleets, InScreenOrder(kept.Where(r => r.IsStandingBy)));
+        Refill(FinishedFleets, InScreenOrder(kept.Where(r => r.IsFinished)));
 
         bool filtered = CharacterFilter is not null || !string.IsNullOrWhiteSpace(SearchText);
         ActiveEmptyText = ActiveFleets.Count > 0 ? null : filtered ? "No started fleet matches the filter." : "No fleet is running.";
