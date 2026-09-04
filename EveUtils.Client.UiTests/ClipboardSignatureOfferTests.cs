@@ -5,6 +5,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Runs;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -13,7 +14,7 @@ namespace EveUtils.Client.UiTests;
 
 /// <summary>
 /// <see cref="ClipboardSignatureOffer"/> (ET-79): what the toast says about a copied scan signature, built only
-/// from what the SDE actually carries.
+/// from what the SDE actually carries — and (ET-158) the one copy that says it with a run instead of a card.
 /// </summary>
 public sealed class ClipboardSignatureOfferTests
 {
@@ -30,7 +31,10 @@ public sealed class ClipboardSignatureOfferTests
     {
         using var env = await Env.StartAsync();
 
-        env.Copy("KDC-304\tCosmic Signature\tCombat Site\tRuined Blood Raider Crystal Quarry\t100.0%\t2.71 AU");
+        // Two recognised rows, because one on its own no longer produces a card at all (ET-158) and this is about
+        // what the card says.
+        env.Copy("KDC-304\tCosmic Signature\tCombat Site\tRuined Blood Raider Crystal Quarry\t100.0%\t2.71 AU\r\n" +
+                 "KDC-305\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t1.10 AU");
 
         var message = Assert.Single(env.Toasts.ActionToasts).Message;
         Assert.Contains("not in the site catalogue", message);
@@ -81,7 +85,9 @@ public sealed class ClipboardSignatureOfferTests
     public async Task RecopyingTheSamePayload_WhileTheCardIsOpen_DoesNotStackACard_ButAsksAgainAfterItCloses()
     {
         using var env = await Env.StartAsync();
-        const string text = "AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU";
+        // Two recognised rows: one on its own goes straight to a run and never puts a card up (ET-158).
+        const string text = "AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU\r\n" +
+                            "BBB-002\tCosmic Signature\tCombat Site\tGuardian's Gala\t100.0%\t1.10 AU";
 
         env.Copy(text);
         env.Copy(text); // same payload, card still open — must not stack a second card
@@ -92,41 +98,26 @@ public sealed class ClipboardSignatureOfferTests
         Assert.Equal(2, env.Toasts.ActionToasts.Count);
     }
 
-    // ── ET-100 — the "Start run" button on the signature toast ──────────────────────────────────────
+    // ── ET-158 — one fully-scanned combat site starts its own run ───────────────────────────────────
 
-    [AvaloniaFact]
-    public async Task FullyScannedCombatSite_ShowsStartRunButton_Affirmative()
+    // ET-158: the one case this feature can act on no longer offers a button, it starts the run. No card at all —
+    // the pilot is in EVE, where an in-window toast is not visible anyway, and the run coming up is the answer.
+    // The three rows are the three shapes the scan window writes that column in, plus one unscanned line to prove
+    // it is the recognised row that counts and not the row count.
+    [AvaloniaTheory]
+    [InlineData("AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU\r\n" +
+                "CCC-003\tCosmic Signature\t\t\t25.0%\t-")]
+    [InlineData("AAA-001\tCosmic Anomaly\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU")]
+    [InlineData(MeasuredHomefrontLine)]
+    public async Task AFullyScannedCombatSite_StartsItsRunItself_WithNoCardAtAll(string copied)
     {
         using var env = await Env.StartAsync();
 
-        env.Copy("AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU\r\n" +
-                 "CCC-003\tCosmic Signature\t\t\t25.0%\t-");
+        env.Copy(copied);
 
-        var offer = Assert.Single(env.Toasts.ActionToasts);
-        Assert.Equal(new[] { "Close", "Start run" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
-        Assert.Equal(ToastActionStyle.Affirmative, offer.Actions[1].Style);
-    }
-
-    [AvaloniaFact]
-    public async Task FullyScannedAnomaly_ShowsStartRunButton()
-    {
-        using var env = await Env.StartAsync();
-
-        env.Copy("AAA-001\tCosmic Anomaly\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU");
-
-        var offer = Assert.Single(env.Toasts.ActionToasts);
-        Assert.Equal(new[] { "Close", "Start run" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
-    }
-
-    [AvaloniaFact]
-    public async Task FullyScannedHomefrontOperationSite_ShowsStartRunButton()
-    {
-        using var env = await Env.StartAsync();
-
-        env.Copy(MeasuredHomefrontLine);
-
-        var offer = Assert.Single(env.Toasts.ActionToasts);
-        Assert.Equal(new[] { "Close", "Start run" }, Array.ConvertAll(offer.Actions.ToArray(), a => a.Label));
+        Assert.Empty(env.Toasts.ActionToasts);
+        Assert.Empty(env.Toasts.Toasts);
+        Assert.True(Assert.Single(env.Dialogs.ShownActivityWindows).StartsOnArrival);
     }
 
     [AvaloniaFact]
@@ -190,53 +181,42 @@ public sealed class ClipboardSignatureOfferTests
         Assert.Equal("2 more not fully scanned yet", offer.Message);
     }
 
-    // AC-3: the window opens with what the clipboard actually said, not a placeholder.
+    // AC-3: the window opens with what the clipboard actually said, not a placeholder. And it must not reach for the
+    // keyboard: the whole point of ET-158 is that the pilot never leaves EVE, so a window that grabs focus mid-fight
+    // costs exactly what ET-105 AC-2 said it costs.
     [AvaloniaFact]
-    public async Task ClickingStartRun_OpensTheActivityWindow_WithTheRowsGroupAndName()
+    public async Task ACopiedCombatSite_OpensTheActivityWindow_WithTheRowsGroupAndName_AndWithoutTakingFocus()
     {
         using var env = await Env.StartAsync();
-        env.Copy("AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU");
 
-        env.Toasts.ActionToasts[0].Actions[1].Run(); // "Start run"
+        env.Copy("AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU");
 
         var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
         Assert.Equal(EveUtils.Client.ViewModels.Activity.ActivityKind.Site, opened.Kind);
         Assert.Equal("Combat Site", opened.SignatureGroup);
         Assert.Equal("Haunted Yard", opened.SignatureName);
+        Assert.Equal(RunWindowOpenTrigger.CopiedSignature,
+            Assert.Single(env.Dialogs.ShownActivityWindowTriggers));
     }
 
-    // AC-5 tegenproef: without the started-run guard, this opens two.
+    // Tegenproef: the clipboard can report one copy more than once, and there is no button left whose own guard
+    // would catch it. Without the fingerprint guard this is two windows and two runs.
     [AvaloniaFact]
-    public async Task ClickingStartRunTwice_OnTheSameCard_OpensOnlyOneWindow()
-    {
-        using var env = await Env.StartAsync();
-        env.Copy("AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU");
-
-        env.Toasts.ActionToasts[0].Actions[1].Run();
-        env.Toasts.ActionToasts[0].Actions[1].Run();
-
-        Assert.Single(env.Dialogs.ShownActivityWindows);
-    }
-
-    // Tegenproef: StartRun must close its own offer, or a fresh copy of the exact same signature keeps being
-    // silently swallowed by the still-open fingerprint guard (_openFingerprint never clears without it).
-    [AvaloniaFact]
-    public async Task StartRun_ClosesItsOwnOffer_SoARecopyOfTheSameSignatureAsksAgain()
+    public async Task TheSameCopyReportedTwice_OpensOnlyOneWindow()
     {
         using var env = await Env.StartAsync();
         const string text = "AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU";
 
         env.Copy(text);
-        env.Toasts.ActionToasts[0].Actions[1].Run(); // "Start run"
+        env.Copy(text);
 
-        env.Copy(text); // same payload — must ask again, not be swallowed by the guard the first card left behind
-        Assert.Equal(2, env.Toasts.ActionToasts.Count);
+        Assert.Single(env.Dialogs.ShownActivityWindows);
     }
 
     // ── The ACTIVITY section, filled from the catalogue ─────────────────────────────────────────────
 
     [AvaloniaFact]
-    public async Task StartRunFromTheMeasuredLine_FillsTheActivitySectionFromTheCatalogue()
+    public async Task TheMeasuredLine_FillsTheActivitySectionFromTheCatalogue()
     {
         using var env = await Env.StartAsync();
         env.Sde.AddSite(Site(1263, "Suspicious Signal: Secure the Intel", archetype: "Homefront Operations",
@@ -244,7 +224,6 @@ public sealed class ClipboardSignatureOfferTests
             groups: [new SdeGroup(420, 6, "Destroyer", true), new SdeGroup(25, 6, "Frigate", true)]));
 
         env.Copy(MeasuredHomefrontLine);
-        env.Toasts.ActionToasts[0].Actions[1].Run(); // "Start run"
 
         var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
         // TYPE stays the scan window's own words: the SDE carries no scanner-type mapping to enrich it with.
@@ -260,12 +239,11 @@ public sealed class ClipboardSignatureOfferTests
     // Tegenproef: a site the catalogue does not carry. The window says what it knows — the name — and nothing about
     // the shape of our own catalogue, which tells the pilot nothing he can act on.
     [AvaloniaFact]
-    public async Task StartRunForASiteTheCatalogueDoesNotCarry_ShowsTheNameAndNothingAboutOurCatalogue()
+    public async Task ASiteTheCatalogueDoesNotCarry_ShowsTheNameAndNothingAboutOurCatalogue()
     {
         using var env = await Env.StartAsync(); // catalogue deliberately empty
 
         env.Copy(MeasuredHomefrontLine);
-        env.Toasts.ActionToasts[0].Actions[1].Run();
 
         var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
         Assert.Equal("Suspicious Signal: Secure the Intel", opened.SignatureSiteText);
@@ -287,9 +265,6 @@ public sealed class ClipboardSignatureOfferTests
         env.Sde.AddSite(Site(1263, "Suspicious Signal: Secure the Intel", ded: 4));
 
         env.Copy("IMM-760	Cosmic Anomaly	Homefront Operation Site - Combat Site	Signal suspect : sécuriser les renseignements	100,0%	0,50 AU");
-        Assert.Contains("not in the site catalogue", env.Toasts.ActionToasts[0].Message);
-
-        env.Toasts.ActionToasts[0].Actions[1].Run();
 
         var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
         Assert.Equal("Signal suspect : sécuriser les renseignements", opened.SignatureSiteText);

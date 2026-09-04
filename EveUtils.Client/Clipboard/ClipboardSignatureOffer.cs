@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Modules.Sde;
@@ -12,7 +13,8 @@ using EveUtils.Shared.Modules.Sde.Dtos;
 
 namespace EveUtils.Client.Clipboard;
 
-/// <summary>Shows what the SDE knows about a copied cosmic signature or anomaly, without starting anything (ET-79).</summary>
+/// <summary>Shows what the SDE knows about a copied cosmic signature or anomaly (ET-79). One fully-scanned combat
+/// site is the exception: that starts its run outright, without a card and without taking the keyboard (ET-158).</summary>
 public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
 {
     public const string FeatureName = "Signature detection";
@@ -28,7 +30,6 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
     private readonly IDisposable _subscription;
 
     private string? _openFingerprint;
-    private string? _startedRunFingerprint;
 
     public ClipboardSignatureOffer(ClipboardWatchService clipboardWatch, IToastService toasts, ISdeAccessor sde,
         IDialogService dialogs, IServiceProvider services)
@@ -59,41 +60,29 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         }
 
         var rows = ClipboardSignatureParser.Parse(capture.Text);
-        var actions = new List<ToastAction> { new("Close", () => CloseOffer(fingerprint)) };
 
-        // ET-100 testopener: ET-98's window (merged same day) has no way in otherwise. Not the abyssal opener (that
-        // needs a filament, not a signature) and not final — a later opener may replace or keep this. Needs exactly
-        // one fully-scanned row: half-scanned opens empty, 2+ rows is a menu a toast is the wrong surface for.
+        // Exactly one fully-scanned row is the whole case this feature can act on: half-scanned has no site, and 2+
+        // rows is a menu. That one case now goes straight to a run (ET-158) instead of offering a button; the pilot
+        // is in EVE, where an in-window toast is not visible anyway.
         var recognised = rows.Where(row => IsActivitySite(row.Group) && row.Name is not null).ToList();
         if (recognised is [{ } row])
-            actions.Add(new ToastAction("Start run", () => StartRun(fingerprint, row), ToastActionStyle.Affirmative));
+        {
+            StartRun(row);
+            return; // no card at all: the run coming up on the copied site is the confirmation
+        }
 
-        _toasts.Show("Signature copied", BuildMessage(rows), ToastKind.Information, actions,
-            () => CloseOffer(fingerprint), FeatureName);
+        _toasts.Show("Signature copied", BuildMessage(rows), ToastKind.Information,
+            [new ToastAction("Close", () => CloseOffer(fingerprint))], () => CloseOffer(fingerprint), FeatureName);
     }
 
     // Wormholes are excluded for now. This still matches the group text literally in English — SiteNameAlias (ET-79)
     // covers site names, not the scan-window group column.
     private static bool IsActivitySite(string? siteType) => siteType?.EndsWith("Combat Site", StringComparison.Ordinal) is true;
 
-    private void StartRun(string fingerprint, ClipboardSignatureRow row)
-    {
-        lock (_gate)
-        {
-            // Guards the same click landing twice before the card visually closes — without it, two clicks open two
-            // windows (ET-100 AC-5). Left set until the card's own close does its usual cleanup, so this alone does
-            // not defeat the guard above.
-            if (_startedRunFingerprint == fingerprint)
-                return;
-
-            _startedRunFingerprint = fingerprint;
-
-            // The offer itself is answered now, so a fresh copy of the same signature must ask again rather than be
-            // swallowed by a guard the card's own (possibly much later) close would otherwise have to clear.
-            if (_openFingerprint == fingerprint)
-                _openFingerprint = null;
-        }
-
+    // _openFingerprint is deliberately left standing here, unlike the card path: it is what stops a second change
+    // notification for the same copy from starting a second run. ponytail: an identical re-copy is therefore ignored
+    // until something else is copied — drop the guard on a window-closed signal if that ever bites.
+    private void StartRun(ClipboardSignatureRow row) =>
         _dialogs.ShowActivityWindow(new ActivityWindowViewModel(ActivityKind.Site, _services)
         {
             // The scan id travels with the site: two Sansha Refuges scanned an hour apart are two runs, and only
@@ -101,9 +90,9 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
             SignatureId = row.SignatureId,
             SignatureGroup = row.Group,
             SignatureName = row.Name,
-            MatchedSites = MatchSites(row.Name!)
-        });
-    }
+            MatchedSites = MatchSites(row.Name!),
+            StartsOnArrival = true
+        }, RunWindowOpenTrigger.CopiedSignature);
 
     private void CloseOffer(string fingerprint)
     {
@@ -111,8 +100,6 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         {
             if (_openFingerprint == fingerprint)
                 _openFingerprint = null;
-            if (_startedRunFingerprint == fingerprint)
-                _startedRunFingerprint = null;
         }
     }
 

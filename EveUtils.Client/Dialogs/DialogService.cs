@@ -110,7 +110,12 @@ public sealed class DialogService : IDialogService, ISingletonService
         // raise the window on the previous site (Raymond, 2026-09-02).
         if (_activityWindow?.DataContext is ActivityWindowViewModel open && !ReferenceEquals(open, viewModel)
             && viewModel.SignatureName is { Length: > 0 } signature)
+        {
+            // The incoming view model is dropped here, so what it was asked to do travels with the signature or an
+            // automatic start would only ever happen on the window that did not exist yet (ET-158).
+            open.StartsOnArrival = viewModel.StartsOnArrival;
             open.ApplySignature(viewModel.SignatureId, viewModel.SignatureGroup, signature, viewModel.MatchedSites);
+        }
 
         switch (RunWindowPresentation.Decide(trigger, _activityWindow is not null))
         {
