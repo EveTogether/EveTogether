@@ -36,6 +36,21 @@ public sealed class FleetParticipationRefresher(
     private readonly Lock _gate = new();
 
     /// <summary>
+    /// The one rule both halves of the sweep answer to: a fleet counts as participation once it is on the books
+    /// (<see cref="FleetState.Active"/>) <i>and</i> has actually been started (<see cref="FleetActivation.Active"/>).
+    /// Signing up in advance to a Forming fleet is membership without broadcast — you only share once the FC has
+    /// started it — and a Concluded fleet is over.
+    ///
+    /// It sits here as one predicate rather than twice inline because the two halves had already drifted: the
+    /// server half asked for Active while the client-only half let through anything that was merely not Concluded.
+    /// Two locally prepared fleets were then enough to leave <c>ActivityWindowViewModel._ActingFleetId</c> with a
+    /// set of two and no answer, so a run lost its group code and went silently solo without a single fleet having
+    /// been started (ET-165).
+    /// </summary>
+    internal static bool Participates(FleetState state, FleetActivation activation) =>
+        state == FleetState.Active && activation == FleetActivation.Active;
+
+    /// <summary>
     /// Sweeps every coupled server and the local repository and replaces the participation set. This is the only
     /// writer, so the set never depends on which screen happened to sweep last.
     /// </summary>
@@ -68,11 +83,8 @@ public sealed class FleetParticipationRefresher(
                 try { fleets = await transport.ListMyFleetsAsync(server, session.CharacterId, cancellationToken); }
                 catch { participants.AddRange(_LastAnsweredBy(server)); continue; }
 
-                // Signing up in advance to a Forming fleet is membership without broadcast: you only share once the
-                // FC has actually started it.
                 List<FleetParticipant> answered = [];
-                foreach (FleetInfo fleet in fleets
-                             .Where(fleet => fleet.State == FleetState.Active && fleet.Activation == FleetActivation.Active))
+                foreach (FleetInfo fleet in fleets.Where(fleet => Participates(fleet.State, fleet.Activation)))
                     answered.Add(new FleetParticipant(session.CharacterId, fleet.Id, ClientOnly: false,
                         await _CommanderOfAsync(server, fleet.Id, session.CharacterId, cancellationToken)));
 
@@ -83,8 +95,10 @@ public sealed class FleetParticipationRefresher(
     }
 
     /// <summary>
-    /// A client-only fleet lives purely in this client, so it is read from the local repository and always
-    /// participates — its samples feed local graphs and never leave the machine.
+    /// A client-only fleet lives purely in this client, so it is read from the local repository rather than asked
+    /// for over a wire — its samples feed local graphs and never leave the machine. It answers to the same
+    /// <see cref="Participates"/> rule as a server fleet: living locally says where the fleet is kept, not whether
+    /// it has been started.
     /// </summary>
     private async Task _AddClientOnlyFleetsAsync(List<FleetParticipant> participants, CancellationToken cancellationToken)
     {
@@ -101,7 +115,7 @@ public sealed class FleetParticipationRefresher(
         foreach (int ownerId in mine)
         foreach (FleetEntity fleet in await repository.ListByCreatorAsync(ownerId, cancellationToken))
         {
-            if (!fleet.IsClientOnly || fleet.State != FleetState.Active || fleet.Activation == FleetActivation.Concluded)
+            if (!fleet.IsClientOnly || !Participates(fleet.State, fleet.Activation))
                 continue;
 
             IReadOnlyList<FleetMember> roster = await repository.ListMembersAsync(fleet.Id, cancellationToken);

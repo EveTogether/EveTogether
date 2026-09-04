@@ -162,6 +162,12 @@ taken from the matching `## vX.Y.Z` section below.
   pending review.
 
 ### Fixed
+- **A fleet you set up for later no longer costs your run its fleet.** A fleet you create but never start is a plan,
+  not an operation — but a local one was counted as though you were flying it. Two of those standing by was enough
+  for the app to be unable to say which fleet a run belonged to, so the run was filed under none of them and shared
+  with nobody, without a word about it. A fleet now only counts once its commander has started it, whether it lives
+  on a server or only on your own machine. And should you genuinely be in more than one started fleet at once, the
+  run window says so and says what it means, instead of quietly going solo.
 - **A member row in the compact fleet-metrics view can be grabbed anywhere on it, not just on its text.** The row
   showed the move cursor across its full width but only answered on the words themselves: pressing, dragging or
   right-clicking the gaps between the figures did nothing at all, which on a wide window was most of the row. Both
