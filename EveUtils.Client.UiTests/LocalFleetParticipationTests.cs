@@ -45,6 +45,10 @@ public class LocalFleetParticipationTests
         await repository.AddMemberAsync(new FleetMember
             { FleetId = fleetId, CharacterId = alt2, Role = FleetRole.SquadMember, WingId = -1, SquadId = -1, JoinTime = now });
 
+        // The fleet is flying, not merely set up for later: a fleet is created Forming and one that was never
+        // started contributes no participation at all, local or not (ET-165).
+        Assert.True((await fleetService.StartFleetAsync(fleetId, fc)).IsSuccess);
+
         var vm = new FleetsViewModel(services);
         for (var i = 0; i < 100 && vm.LocalFleets.Count == 0; i++)
             await Task.Delay(50);

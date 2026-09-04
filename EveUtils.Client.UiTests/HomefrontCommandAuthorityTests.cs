@@ -550,12 +550,17 @@ public sealed class HomefrontCommandAuthorityTests
         /// </summary>
         private void _CreateRealFleet(int characterId)
         {
+            ClientFleetService fleets = Services.GetRequiredService<ClientFleetService>();
             Services.GetRequiredService<ICharacterRegistry>()
                 .AddOrUpdateAsync(new Character("Jithran", characterId)).GetAwaiter().GetResult();
-            Result<long> created = Services.GetRequiredService<ClientFleetService>()
-                .CreateLocalFleetAsync("HF", null, characterId).GetAwaiter().GetResult();
+            Result<long> created = fleets.CreateLocalFleetAsync("HF", null, characterId).GetAwaiter().GetResult();
             Assert.True(created.IsSuccess);
             FleetId = created.Value;
+
+            // "Already in a fleet" means one the FC has started. A fleet is created Forming, and a fleet merely set
+            // up for later is membership without broadcast — it contributes no participation at all (ET-165), so
+            // without this START the sweep below would rightly find nothing.
+            Assert.True(fleets.StartFleetAsync(FleetId, characterId).GetAwaiter().GetResult().IsSuccess);
 
             // What MainWindowViewModel's startup chain reaches through Home.RefreshAsync() — the one sweep a pilot
             // gets without opening anything.

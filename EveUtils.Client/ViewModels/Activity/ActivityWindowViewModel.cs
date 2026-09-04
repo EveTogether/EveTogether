@@ -226,7 +226,22 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <summary>The fleet this run belongs to, or null when the window was never told of one.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsFleetShown))]
+    [NotifyPropertyChangedFor(nameof(HasFleetNotice))]
     private long? _fleetId;
+
+    /// <summary>
+    /// How many fleets this window's pilot is in, as the last sweep counted them. More than one is the state
+    /// <see cref="_ActingFleetId"/> answers with null — it cannot pick a fleet for the player — and a run with no
+    /// fleet id is filed under nobody and shared with nobody.
+    ///
+    /// Held so the window can say that out loud. It used to happen in silence: two fleets was enough to turn a run
+    /// solo with no toast, no warning and no gap on screen to notice (ET-165). The same rule ET-65 AC-7 set for the
+    /// run controls — an empty state is a state, not silence.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFleetNotice))]
+    [NotifyPropertyChangedFor(nameof(FleetNoticeText))]
+    private int _fleetsInPlay;
 
     [ObservableProperty] private string? _groupCode;
 
@@ -479,6 +494,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public bool IsCommandStatusShown => !Authority.CanControl;
 
     public string CommandStatusText => Authority.StatusText;
+
+    /// <summary>
+    /// Why this run has no fleet while the pilot plainly has several. Only when both halves are true: several
+    /// fleets in play <i>and</i> no fleet id came out of it — with a fleet settled there is nothing to report, and
+    /// with one fleet there was never a question.
+    /// </summary>
+    public bool HasFleetNotice => FleetsInPlay > 1 && FleetId is null;
+
+    /// <summary>Says which way the run went and what would settle it. Not a warning about a fault: two started
+    /// fleets is a legitimate state, and the window's job is to make the consequence visible rather than to refuse
+    /// it.</summary>
+    public string FleetNoticeText =>
+        $"You are in {FleetsInPlay} started fleets at once, so this run belongs to none of them and is not shared. "
+        + "Conclude the ones you are not flying to file it under one.";
 
     // ── Who was on the run ──────────────────────────────────────────────────────────────────────────
 
@@ -947,14 +976,23 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// pressed that button had no fleet id, and with it no group code and no announcement to his fleet (ET-152).
     ///
     /// Null while several fleets are in play at once, the same way the character is null while several are: that is a
-    /// question rather than a gap, and START is where it gets asked.
+    /// question rather than a gap. It is not answered here — this window cannot pick which of a pilot's fleets a run
+    /// belongs to — but it is no longer swallowed either: the count goes to <see cref="FleetsInPlay"/> and the
+    /// window says why the run went solo (ET-165).
     /// </summary>
-    private long? _ActingFleetId()
+    private static long? _ActingFleetId(List<long> myFleetIds) => myFleetIds is [{ } only] ? only : null;
+
+    /// <summary>
+    /// Every fleet this window's pilot is in right now. One list rather than a count beside a pick, so
+    /// <see cref="_ActingFleetId"/> and <see cref="FleetsInPlay"/> can never disagree about how many there were —
+    /// a notice explaining a state the window is not in would be worse than the silence it replaces.
+    /// </summary>
+    private List<long> _MyFleetIds()
     {
         IEnumerable<FleetParticipant> mine = _Participation();
         if (_runCharacterId is { } characterId)
             mine = mine.Where(participant => participant.CharacterId == characterId);
-        return mine.Select(participant => participant.FleetId).Distinct().ToList() is [{ } only] ? only : null;
+        return mine.Select(participant => participant.FleetId).Distinct().ToList();
     }
 
     private IReadOnlyList<FleetParticipant> _Participation() =>
@@ -1433,7 +1471,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // A run filed under a group belongs to the fleet whose commander made that group, and a membership sweep
         // that has not answered yet must not take it away again: on a joining member the announcement arrives
         // before his own participation does, and the first tick erased the fleet id it had just been handed.
-        long? fleetId = _ActingFleetId() ?? (GroupCode is not null ? FleetId : null);
+        List<long> inPlay = _MyFleetIds();
+        long? fleetId = _ActingFleetId(inPlay) ?? (GroupCode is not null ? FleetId : null);
+        // Counted off the same list the pick was made on, so the notice and the outcome are one reading of the set
+        // rather than two that a sweep in between could have pulled apart.
+        FleetsInPlay = inPlay.Count;
         // The same character the rest of the window works from. It used to fall back to IActiveFleetState, which
         // holds whichever character a fleets-window row was last selected as — so a fleet commander flying a
         // different toon than that row's acting one was compared against his own fleet's boss id and told only the
