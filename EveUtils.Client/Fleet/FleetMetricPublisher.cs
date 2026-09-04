@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Events;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.DependencyInjection;
 
 namespace EveUtils.Client.Fleet;
@@ -28,7 +29,8 @@ public sealed class FleetMetricPublisher(
     IFleetParticipation participation,
     IEnumerable<IFleetMetricSource> sources,
     IEventBus eventBus,
-    IMetricShareSettings shareSettings) : ISingletonService
+    IMetricShareSettings shareSettings,
+    FleetMemberActivityTracker memberActivity) : ISingletonService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(1);
 
@@ -101,6 +103,18 @@ public sealed class FleetMetricPublisher(
             // A client-only fleet lives purely in this client — its samples feed the local graphs only and
             // are NEVER pushed over gRPC. A server-backed fleet keeps the reroute (Both: local UI + server).
             var target = participant.ClientOnly ? EventTarget.Local : EventTarget.Both;
+
+            // For a server fleet the server stamps LastSeenAt off the arriving stream; a client-only fleet's samples
+            // never leave this machine, so nobody would ever stamp it and the local roster would have no record of
+            // presence at all. Same tracker, same throttle, written into the local database instead (ET-167) — which
+            // is what lets the next start of this app tell a fleet that stood idle for days from one closed a minute
+            // ago. Unshared metrics are irrelevant here: the tick arriving is the evidence, not what is in it.
+            if (participant.ClientOnly)
+                await memberActivity.NoteAsync(
+                    participant.FleetId,
+                    participant.CharacterId,
+                    DateTimeOffset.FromUnixTimeMilliseconds(unixMs),
+                    cancellationToken);
 
             foreach (var source in _sources)
             foreach (var sample in source.Sample(participant.FleetId, participant.CharacterId, unixMs))

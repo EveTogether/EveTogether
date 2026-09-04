@@ -181,6 +181,20 @@ sealed class Program
         // Brings the run window up on every member's screen when the FC starts — without taking focus (ET-105).
         _ = Services.GetRequiredService<EveUtils.Client.Runs.FleetRunWindowPresenter>();
 
+        // Settle up the client-only fleets that were left running when this app was last closed (ET-167). Awaited
+        // rather than fired off, and awaited BEFORE the publisher starts: the publisher's first tick stamps those
+        // very fleets as seen, and a reckoning racing it would read the silence it was meant to measure as presence.
+        // A couple of local reads; a failure here may not keep the app from opening.
+        try
+        {
+            Services.GetRequiredService<EveUtils.Client.Fleet.LocalFleetAutoStopService>()
+                .ReconcileAsync(DateTimeOffset.UtcNow).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[bg:local-fleet-auto-stop] failed: {ex}");
+        }
+
         // Fleet metric publisher: shares the active fleet's metrics at ~1 Hz. GUI mode only —
         // the headless test drives the tick itself.
         Services.GetRequiredService<EveUtils.Client.Fleet.FleetMetricPublisher>().Start();

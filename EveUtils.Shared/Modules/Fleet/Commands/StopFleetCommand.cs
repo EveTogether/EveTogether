@@ -1,6 +1,7 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Cqrs.Permissions;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Enums;
 
 namespace EveUtils.Shared.Modules.Fleet.Commands;
 
@@ -14,6 +15,16 @@ namespace EveUtils.Shared.Modules.Fleet.Commands;
 /// this one stops. Only the creator may stop it (enforced on <see cref="ActingCharacterId"/> in the handler);
 /// <c>fleet.edit</c> is gated server-side. Idempotent on an already-Forming fleet; refused on a Concluded one, which
 /// is terminal.
+///
+/// <para><paramref name="Trigger"/> says who decided (ET-167). The automatic stop is not a second command and not a
+/// way past the creator check: the sweep sends this one, with the owner's id in <paramref name="ActingCharacterId"/>,
+/// so it satisfies the same guard on the same terms a pressed button does. What it may not do is arrive looking like
+/// a pressed button — hence the trigger, which decides who is told and in what words.</para>
 /// </summary>
+/// <param name="Trigger">Who stopped it. Defaults to <see cref="FleetStopTrigger.Manual"/> so every existing caller
+/// keeps meaning exactly what it meant.</param>
 [RequiresPermission(FleetPermissions.Edit)]
-public sealed record StopFleetCommand(long FleetId, int ActingCharacterId) : ICommand<Result>;
+public sealed record StopFleetCommand(
+    long FleetId,
+    int ActingCharacterId,
+    FleetStopTrigger Trigger = FleetStopTrigger.Manual) : ICommand<Result>;

@@ -551,7 +551,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// it.</summary>
     public string FleetNoticeText =>
         $"You are in {FleetsInPlay} started fleets at once, so this run belongs to none of them and is not shared. "
-        + "Conclude the ones you are not flying to file it under one.";
+        // "Stop", not "conclude" (ET-166 follow-up): concluding is one-way, so a pilot who took this advice
+        // literally threw away the recurring fleet it was only asking them to step out of for tonight.
+        + "Stop the ones you are not flying to file it under one.";
 
     // ── The character column ────────────────────────────────────────────────────────────────────────
 

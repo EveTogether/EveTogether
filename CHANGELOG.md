@@ -22,6 +22,22 @@ taken from the matching `## vX.Y.Z` section below.
   with what each of them costs. Deleting a fleet stays where it was, on the fleet overview: it is not the same size
   of decision and no longer sits next to the one you take every week. The window also names any run of yours that is
   still going and says plainly that stopping does not throw it away.
+- **A fleet that has run out of people now stands itself down.** An op nobody is flying any more goes back to standing
+  by on its own, so a fleet left running overnight is not still "active" in the morning, blocking the pilots on it from
+  joining anything else. Two things bring it about: everybody has left the roster, or everybody's client has gone
+  quiet. It happens for a fleet on a server even when the FC has closed their own client, because the server is
+  watching; a fleet that lives only in your client settles up the next time you open the app. Either way it is a
+  **stop**, never a conclude — the roster, the doctrine and the name stay exactly where they were and the fleet is
+  started again with one press.
+  The two are not treated alike, because one of them lies during downtime. "Everyone left" is taken at face value at
+  any hour: whoever left stayed gone. "Everyone is offline" is held back through Tranquility's daily 11:00 UTC window,
+  through any stretch where EVE is unreachable, for a couple of minutes after either of those, and for a couple of
+  minutes after the server itself restarts — the moments when the whole fleet looks absent and none of them has
+  actually gone anywhere. A fleet nobody has published into yet is never read as emptied either, so starting one
+  before your pilots log in is safe. One pilot still flying keeps a fleet running however quiet the rest are.
+  An automatic stop is credited to the fleet's owner and to nobody else — no member's client can stand a fleet down —
+  and it says in so many words that it was automatic and which of the two reasons applied, both in the mail the roster
+  receives and in the server's log. The owner is written to as well, which a stop they pressed themselves does not do.
 - **There is now a RUNS screen, and it is the first place in the app where a finished run comes back.** Until now a
   run left the screen the moment its window closed and there was nowhere to see what you flew yesterday. RUNS in the
   rail opens the list: one row per activity — one site, flown once — however many of your pilots were on it, so six

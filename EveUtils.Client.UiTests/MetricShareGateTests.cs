@@ -149,11 +149,11 @@ public class MetricShareGateTests
         participation.Set([new FleetParticipant(Owner, FleetId, ClientOnly: true)]);
         var share = instance.Services.GetRequiredService<IMetricShareSettings>();
 
-        await new FleetMetricPublisher(participation, [new FixedMetricSource(MetricKind.Dps)], bus, share)
+        await new FleetMetricPublisher(participation, [new FixedMetricSource(MetricKind.Dps)], bus, share, Tracker(instance))
             .PublishTickAsync(1, cancellationToken);
         Assert.Contains(MetricKind.Dps, capture.Local); // opted OUT, but it is your own graph
 
-        await new FleetMetricPublisher(participation, [new FixedMetricSource(MetricKind.Location)], bus, share)
+        await new FleetMetricPublisher(participation, [new FixedMetricSource(MetricKind.Location)], bus, share, Tracker(instance))
             .PublishTickAsync(2, cancellationToken);
         Assert.Contains(MetricKind.Location, capture.Local); // opt-IN default is off, but local-only still draws it
 
@@ -204,7 +204,7 @@ public class MetricShareGateTests
         var participation = new FleetParticipation();
         participation.Set([new FleetParticipant(Owner, FleetId, ClientOnly: false)]);
         var share = instance.Services.GetRequiredService<IMetricShareSettings>();
-        return new FleetMetricPublisher(participation, [new FixedMetricSource(kind)], bus, share);
+        return new FleetMetricPublisher(participation, [new FixedMetricSource(kind)], bus, share, Tracker(instance));
     }
 
     private static async Task SetSettingAsync(TestClientInstance instance, string key, string value, CancellationToken cancellationToken)
@@ -213,4 +213,10 @@ public class MetricShareGateTests
         await scope.ServiceProvider.GetRequiredService<IDispatcher>()
             .Send(new SetSettingCommand(key, value), cancellationToken);
     }
+
+    /// <summary>The real per-member presence writer out of the client's own DI (ET-167). Feeding the publisher the
+    /// live one rather than a stub keeps these tests honest about what a tick now does.</summary>
+    private static FleetMemberActivityTracker Tracker(TestClientInstance instance) =>
+        instance.Services.GetRequiredService<FleetMemberActivityTracker>();
+
 }
