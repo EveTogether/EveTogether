@@ -215,10 +215,19 @@ sealed class Program
         // would stop the first one's run. Give the row the session that owns it if that ever stops being true.
         using (var scope = Services.CreateScope())
         {
-            Result<int> stopped = scope.ServiceProvider.GetRequiredService<IDispatcher>()
+            var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
+            Result<int> stopped = dispatcher
                 .Send(new StopRunsLeftRunningCommand(DateTime.UtcNow)).GetAwaiter().GetResult();
             if (stopped.IsSuccess && stopped.Value > 0)
                 Console.Error.WriteLine($"[startup] stopped {stopped.Value} run(s) left running by a previous session");
+
+            // And the ones stopped a day ago and never finished are committed as they stand (ET-179). After the line
+            // above on purpose: a run this session's predecessor left going was stopped a moment ago, so it is the
+            // pilot's to finish for the next day rather than the app's to save now.
+            Result<int> autoSaved = dispatcher
+                .Send(new SaveRunsLeftUnfinishedCommand(DateTime.UtcNow)).GetAwaiter().GetResult();
+            if (autoSaved.IsSuccess && autoSaved.Value > 0)
+                Console.Error.WriteLine($"[startup] saved {autoSaved.Value} run(s) left unfinished for over a day");
         }
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);

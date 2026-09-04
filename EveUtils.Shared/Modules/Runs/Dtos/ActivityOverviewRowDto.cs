@@ -30,4 +30,8 @@ public sealed record ActivityOverviewRowDto(
     decimal BountyIsk,
     decimal? LootIskNet,
     int EnemyTypeCount,
-    bool HasEscalation);
+    bool HasEscalation,
+    /// <summary>At least one of the activity's runs was committed by the app itself, a day after it was stopped and
+    /// never finished (ET-179). Kept apart from a pilot's own save so an activity nobody stood behind cannot pass
+    /// for one that somebody did.</summary>
+    bool HasAutoSavedRun);

@@ -771,6 +771,9 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.Property<int?>("AgentId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("AutoSavedAtUtc")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<long>("CharacterId")
                         .HasColumnType("bigint");
 

@@ -18,6 +18,10 @@ public sealed class RunWireData
     /// <summary>Travels with the run so the "corrected or measured" verdict survives a sync (ET-98); dropping it
     /// here would lose on the wire exactly what the column was added to keep.</summary>
     public DateTime? TimesCorrectedAtUtc { get; init; }
+
+    /// <summary>Travels for the same reason: a run the app saved by itself must still read as one after a sync
+    /// (ET-179).</summary>
+    public DateTime? AutoSavedAtUtc { get; init; }
     public DateTime? DeletedAtUtc { get; init; }
     public required int SiteTypeId { get; init; }
     public required SiteTypeSource SiteTypeSource { get; init; }
@@ -50,6 +54,7 @@ public sealed class RunWireData
         StoppedAtUtc = run.StoppedAtUtc,
         SavedAtUtc = run.SavedAtUtc,
         TimesCorrectedAtUtc = run.TimesCorrectedAtUtc,
+        AutoSavedAtUtc = run.AutoSavedAtUtc,
         DeletedAtUtc = run.DeletedAtUtc,
         SiteTypeId = run.SiteTypeId,
         SiteTypeSource = run.SiteTypeSource,
@@ -115,6 +120,7 @@ public sealed class RunWireData
             StoppedAtUtc = StoppedAtUtc,
             SavedAtUtc = SavedAtUtc,
             TimesCorrectedAtUtc = TimesCorrectedAtUtc,
+            AutoSavedAtUtc = AutoSavedAtUtc,
             DeletedAtUtc = DeletedAtUtc,
             SiteTypeId = SiteTypeId,
             SiteTypeSource = SiteTypeSource,

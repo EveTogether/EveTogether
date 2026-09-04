@@ -18,4 +18,7 @@ public sealed record SaveRunCommand(
     /// <summary>Set when either time was corrected by hand, so the stored run keeps saying so. The caller says it
     /// rather than the handler working it out: a corrected stop is indistinguishable from a measured one by the
     /// time it arrives here, and a fact nobody records is a fact nobody can recover later.</summary>
-    DateTime? TimesCorrectedAtUtc = null) : ICommand<Result>;
+    DateTime? TimesCorrectedAtUtc = null,
+    /// <summary>Set only by <see cref="SaveRunsLeftUnfinishedCommand"/>: the app committed this run itself, nobody
+    /// pressed SAVE. Null on every pilot-driven save, which is all of them but that one.</summary>
+    DateTime? AutoSavedAtUtc = null) : ICommand<Result>;

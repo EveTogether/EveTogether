@@ -129,6 +129,39 @@
             </StackPanel>
         </Border>
 
+        <!-- ══ Unfinished ══ stopped and then left there. Its own band, above the days and never a row inside one:
+             a run that was never saved must not count towards an evening's total (ET-179 AC-3). Gone entirely once
+             the last one is dealt with — an empty band would be a permanent reminder of nothing. -->
+        <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource BorderBrush}" IsVisible="{Binding HasUnfinishedRuns}">
+            <StackPanel Spacing="5">
+                <TextBlock Classes="label" Text="UNFINISHED"/>
+                <TextBlock Classes="hint" Margin="0" TextWrapping="Wrap"
+                           Text="Stopped, but never saved or thrown away. A day after it stopped, a run here is saved as it stands."/>
+                <ScrollViewer MaxHeight="180" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="UnfinishedList" ItemsSource="{Binding UnfinishedRuns}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vr:UnfinishedRunViewModel">
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10" Margin="0,3">
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock FontSize="11.5" TextTrimming="CharacterEllipsis"
+                                                   Foreground="{StaticResource TextBrightBrush}"
+                                                   Text="{Binding TitleText}"/>
+                                        <TextBlock Classes="rowsub" Text="{Binding StoppedText}"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Classes="rowfigure" Text="{Binding DurationText}"/>
+                                    <Button Grid.Column="2" Classes="rowaction" MinWidth="62"
+                                            Content="SAVE" Command="{Binding SaveCommand}"/>
+                                    <Button Grid.Column="3" Classes="rowaction" MinWidth="62"
+                                            Content="DELETE" Command="{Binding DeleteCommand}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </StackPanel>
+        </Border>
+
         <!-- ══ Finished activities ══ one row per activity, under the day it belongs to. -->
         <ScrollViewer HorizontalScrollBarVisibility="Disabled">
             <ItemsControl x:Name="DayList" ItemsSource="{Binding Days}">
@@ -182,9 +215,15 @@
                                                                        IsVisible="{Binding !HasNet}"
                                                                        Text="{Binding NoNetText}"/>
                                                         </Grid>
-                                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
                                                             <TextBlock Classes="rowsub" Text="{Binding CrewText}"/>
+                                                            <!-- Only on a row nobody committed themselves: an
+                                                                 activity that was auto-saved a day after it stopped
+                                                                 must not read as one a pilot stood behind. -->
                                                             <TextBlock Grid.Column="1" Classes="rowsub"
+                                                                       IsVisible="{Binding HasAutoSavedRun}"
+                                                                       Text="{Binding AutoSavedText}"/>
+                                                            <TextBlock Grid.Column="2" Classes="rowsub"
                                                                        Text="{Binding EnemiesText}"/>
                                                         </Grid>
                                                         <!-- Wraps rather than truncates: the strip grows a line, it

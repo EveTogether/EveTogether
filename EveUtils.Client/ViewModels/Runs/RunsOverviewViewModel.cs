@@ -12,6 +12,7 @@ using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Repositories;
+using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
@@ -77,6 +78,11 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     public ObservableCollection<RunningLaneViewModel> Lanes { get; }
 
+    /// <summary>Stopped and never finished — their own band, above the days and outside them (ET-179).</summary>
+    public ObservableCollection<UnfinishedRunViewModel> UnfinishedRuns { get; } = [];
+
+    [ObservableProperty] private bool _hasUnfinishedRuns;
+
     /// <summary>Why the band is empty, when it is. Null once there is at least one lane.</summary>
     public string? LanesEmptyText { get; }
 
@@ -88,6 +94,10 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
         await _LoadLanesAsync(cancellationToken);
+        // The deadline is judged here as well as at startup: this screen is where a day-old stopped run would
+        // otherwise sit and be offered as unfinished long after it stopped being that (ET-179).
+        await _dispatcher.Send(new SaveRunsLeftUnfinishedCommand(DateTime.UtcNow), cancellationToken);
+        await _LoadUnfinishedRunsAsync(cancellationToken);
 
         Result<IReadOnlyList<ActivityOverviewRowDto>> overview =
             await _dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken);
@@ -115,6 +125,51 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         DateTime nowUtc = DateTime.UtcNow;
         foreach (RunningLaneViewModel lane in Lanes)
             lane.Attach(run is not null && (long?)lane.Character.EsiCharacterId == run.CharacterId ? run : null, nowUtc);
+    }
+
+    private async Task _LoadUnfinishedRunsAsync(CancellationToken cancellationToken)
+    {
+        Result<IReadOnlyList<UnfinishedRunDto>> unfinished =
+            await _dispatcher.Query(new GetUnfinishedRunsQuery(), cancellationToken);
+        UnfinishedRuns.Clear();
+        foreach (UnfinishedRunDto run in unfinished.Value ?? [])
+            UnfinishedRuns.Add(new UnfinishedRunViewModel(run, _NameOf(run.CharacterId),
+                _SaveUnfinishedRunAsync, _DeleteUnfinishedRunAsync));
+        HasUnfinishedRuns = UnfinishedRuns.Count > 0;
+    }
+
+    /// <summary>Commit the run as it stands. Nothing is handed along: what the run window watched died with it, and
+    /// the loot captures and bounty lines it wrote as they came in are already on the row.</summary>
+    private async Task _SaveUnfinishedRunAsync(UnfinishedRunViewModel run)
+    {
+        DateTime nowUtc = DateTime.UtcNow;
+        Result saved = await _dispatcher.Send(
+            new SaveRunCommand(run.RunId, run.StoppedAtUtc ?? nowUtc, nowUtc, [], [], [], []));
+        await _AfterFinishingAsync(saved, "The run could not be saved.");
+    }
+
+    private async Task _DeleteUnfinishedRunAsync(UnfinishedRunViewModel run)
+    {
+        if (!await _dialogs.ConfirmAsync("Throw this run away?",
+                $"{run.SiteText} on {run.CharacterText} goes, with the loot and bounty recorded on it. "
+                + "Saving keeps it instead.", "Delete"))
+            return;
+
+        Result deleted = await _dispatcher.Send(new DeleteRunCommand(run.RunId, DateTime.UtcNow));
+        await _AfterFinishingAsync(deleted, "The run could not be thrown away.");
+    }
+
+    /// <summary>The whole screen is read again rather than the row taken off the list: saving moves a run into the
+    /// days below, so a list that only dropped its own row would show the run nowhere at all (ET-179 AC-2).</summary>
+    private async Task _AfterFinishingAsync(Result outcome, string fallbackMessage)
+    {
+        if (!outcome.IsSuccess)
+        {
+            StatusMessage = outcome.Messages.Count > 0 ? outcome.Messages[0].Text : fallbackMessage;
+            return;
+        }
+
+        await LoadAsync();
     }
 
     private void _OnClockTick(object? sender, EventArgs e)
