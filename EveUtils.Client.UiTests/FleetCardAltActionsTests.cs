@@ -18,6 +18,11 @@ namespace EveUtils.Client.UiTests;
 /// REQUEST stay offered even on my own / already-joined fleet), and each of my non-owner characters in a fleet gets a
 /// per-leaf LEAVE so an alt can leave while the owner stays. Drives the real <see cref="FleetsViewModel"/> over the
 /// faked transport.
+///
+/// Since ET-170 the offer keeps its place on the row wherever the row has the width for it — visible and greyed out
+/// beats one click deeper (Jithran, 2026-09-04) — and folds into the "⋯" with the same reason where it does not.
+/// Which of the two happens is a measured width sum; <see cref="FleetRowActionWidthTests"/> guards the arithmetic,
+/// these tests guard that the offer is never lost either way.
 /// </summary>
 public class FleetCardAltActionsTests
 {
@@ -92,10 +97,11 @@ public class FleetCardAltActionsTests
         Assert.True(card.CanJoin);           // public → joining with an alt is on the table, own fleet or not
         Assert.False(card.CanRequest);
         Assert.True(card.JoinEnabled);       // Catbank is free to join
-        // Since ET-170 the row's own JOIN is the "get into this fleet" action, so a fleet I am already in keeps the
-        // alt-join behind "⋯" instead (scherm 1 draws no JOIN on a row I already fly in).
-        Assert.False(card.ShowJoin);
-        Assert.Contains(card.OverflowItems, i => i.Label == "JOIN WITH ANOTHER CHARACTER" && i.Command is not null);
+
+        // START · JOIN · MANAGE · SHARE · "⋯" is 233 of the 250 the wide actions cell has, so JOIN stands on the row
+        // and is not repeated in the menu.
+        Assert.True(card.ShowJoin);
+        Assert.DoesNotContain(card.OverflowItems, i => i.Label == "JOIN WITH ANOTHER CHARACTER");
     }
 
     [AvaloniaFact]
@@ -116,8 +122,14 @@ public class FleetCardAltActionsTests
         Assert.True(card.CanRequest);        // invite-only → REQUEST rather than JOIN
         Assert.False(card.CanJoin);
         Assert.True(card.JoinEnabled);
-        Assert.False(card.ShowRequest);      // my own fleet: behind "⋯", as scherm 1 draws it
-        Assert.Contains(card.OverflowItems, i => i.Label == "REQUEST FOR ANOTHER CHARACTER" && i.Command is not null);
+
+        // The one case on this fixture where the row genuinely has no room: REQUEST is 63 px against JOIN's 42, so
+        // START · REQUEST · MANAGE · SHARE · "⋯" comes to 254 of 250. Nothing scherm 1 draws may step aside for it,
+        // so REQUEST folds — and the menu line is a live command, not an explanation.
+        Assert.False(card.ShowRequest);
+        var folded = Assert.Single(card.OverflowItems, i => i.Label == "REQUEST FOR ANOTHER CHARACTER");
+        Assert.NotNull(folded.Command);
+        Assert.Equal(card.JoinHint, folded.Tooltip);
     }
 
     [AvaloniaFact]
@@ -136,11 +148,10 @@ public class FleetCardAltActionsTests
 
         var card = Assert.Single(Assert.Single(vm.ServerGroups).Fleets);
         Assert.True(card.CanJoin);
+        Assert.True(card.ShowJoin);          // visible so "all in" reads as greyed-out, not missing
         Assert.False(card.JoinEnabled);      // no character free to join
-        // Still never missing: the entry stands in the overflow and disables itself with the reason, so "all my
-        // characters are already in" reads as a greyed-out action rather than a vanished one.
-        var entry = Assert.Single(card.OverflowItems, i => i.Label == "JOIN WITH ANOTHER CHARACTER");
-        Assert.Null(entry.Command);
-        Assert.Equal("Every one of your characters on this server is already in", entry.Tooltip);
+        // And the button says why it is off, on the row itself — the reason has to travel with the action wherever
+        // the width happens to put it.
+        Assert.Equal("Every one of your characters on this server is already in", card.JoinHint);
     }
 }

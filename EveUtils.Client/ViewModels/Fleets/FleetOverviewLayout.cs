@@ -22,12 +22,15 @@ public enum FleetBandDensity
 /// <param name="LaneWidth">The width every lane card is given, so a row of them fills the band edge to edge.</param>
 /// <param name="ShowLaneButtons">Whether a lane card has room for its buttons beside the clock. Below that width the
 /// actions live in the lane's context menu — the same trade the compact form makes.</param>
+/// <param name="ActionsWidth">What the actions cell on a fleet row is given. It grows with the width rather than
+/// standing at one number, because that is what decides whether JOIN keeps its place on the row.</param>
 public sealed record FleetOverviewLayoutState(
     bool IsWide,
     FleetBandDensity Density,
     int LanesPerRow,
     double LaneWidth,
-    bool ShowLaneButtons)
+    bool ShowLaneButtons,
+    double ActionsWidth)
 {
     public bool IsCompactBand => Density == FleetBandDensity.Compact;
 }
@@ -58,6 +61,20 @@ public static class FleetOverviewLayout
 
     public const double LaneGap = 6;
 
+    /// <summary>
+    /// The actions cell on a fleet row. The narrow state has room for two buttons and an overflow (scherm 10); the
+    /// wide one starts at the 250 px that holds scherm 1's four, and grows to 320 — enough for the heaviest row this
+    /// screen can draw, your own started invite-only fleet at STOP · REQUEST · MANAGE · METRICS · SHARE · "⋯" = 311.
+    /// It only grows out of width the fleet name does not need: every fixed column and gap of the wide table comes to
+    /// 720 px, and the name is served first up to <see cref="NameFloor"/> — comfortably past the 210 px it has at the
+    /// breakpoint — so the actions cell stays at its floor until the name has room to spare.
+    /// </summary>
+    public const double NarrowActionsWidth = 150;
+    public const double MinActionsWidth = 250;
+    public const double MaxActionsWidth = 320;
+    public const double FixedColumnsWidth = 720;
+    public const double NameFloor = 280;
+
     /// <summary>The band folds to one line per character once its lanes need more rows than this.</summary>
     public const int MaxLaneRows = 2;
 
@@ -84,7 +101,11 @@ public static class FleetOverviewLayout
 
         var density = chosen.Rows <= MaxLaneRows ? FleetBandDensity.Lanes : FleetBandDensity.Compact;
 
-        return new FleetOverviewLayoutState(isWide, density, chosen.PerRow, chosen.Width, showButtons);
+        double actions = isWide
+            ? Math.Clamp(contentWidth - FixedColumnsWidth - NameFloor, MinActionsWidth, MaxActionsWidth)
+            : NarrowActionsWidth;
+
+        return new FleetOverviewLayoutState(isWide, density, chosen.PerRow, chosen.Width, showButtons, actions);
     }
 
     /// <summary>How many lanes of at least <paramref name="minWidth"/> fit on a row of <paramref name="inner"/>, how

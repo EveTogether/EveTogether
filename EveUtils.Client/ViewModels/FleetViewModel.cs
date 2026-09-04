@@ -213,7 +213,12 @@ public sealed partial class FleetViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowMetricsButton))]
     [NotifyPropertyChangedFor(nameof(ShowShareButton))]
     [NotifyPropertyChangedFor(nameof(ShowLeave))]
+    [NotifyPropertyChangedFor(nameof(ShowJoin))]
+    [NotifyPropertyChangedFor(nameof(ShowRequest))]
     private bool _isWide;
+
+    /// <summary>The width the actions cell is drawn at, handed down by the window — the budget JOIN has to fit in.</summary>
+    [ObservableProperty] private double _actionsWidth = FleetOverviewLayout.MinActionsWidth;
 
     /// <summary>The secondary actions behind the "⋯" button, built by the window from what this row allows.</summary>
     public ObservableCollection<FleetMemberMenuItemViewModel> OverflowItems { get; } = [];
@@ -434,13 +439,61 @@ public sealed partial class FleetViewModel : ObservableObject
     public bool CanJoin => IsPublic && CanAddCharacter && !IsLocal && !IsFinished;
     public bool CanRequest => IsInviteOnly && CanAddCharacter && !IsLocal && !IsFinished;
 
-    /// <summary>On the row they are the "get in" action, so they stand there only for a fleet I am not in yet. Once
-    /// I am in, bringing another alt is management and lives behind "⋯" at every width — scherm 1 carries no JOIN on
-    /// the Sansha row I already fly in, and no REQUEST on my own Sunday DED row. Greyed-out rather than missing is
-    /// kept: the overflow entry is the one that disables itself with the reason.</summary>
-    public bool ShowJoin => CanJoin && !IsMine && !IsParticipating;
-    public bool ShowRequest => CanRequest && !IsMine && !IsParticipating;
+    /// <summary>
+    /// Whether JOIN / REQUEST got a place on the row this time. Set by the window, which is the only party that
+    /// knows both what else the row is drawing and what the "⋯" would otherwise hold — see
+    /// <c>FleetsViewModel.BuildOverflow</c>.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowJoin))]
+    [NotifyPropertyChangedFor(nameof(ShowRequest))]
+    private bool _joinOnRow;
+
+    /// <summary>
+    /// On the row whenever the row has the width for it (Jithran, 2026-09-04: "als het past zou de join in de rij het
+    /// beste zijn"). Greyed-out rather than one click deeper is the whole point, so the button carries the reason it
+    /// is off in a tooltip that shows while disabled. At 758 the row has room for two buttons and an overflow —
+    /// scherm 10 and scherm 15 both say so — and there JOIN folds into the menu, reason and all.
+    /// </summary>
+    public bool ShowJoin => IsWide && CanJoin && JoinOnRow;
+    public bool ShowRequest => IsWide && CanRequest && JoinOnRow;
     public bool JoinEnabled => CanJoinHere;
+
+    /// <summary>What JOIN or REQUEST would cost this row, whichever of the two it is; 0 when neither applies.</summary>
+    public double JoinActionWidth => CanRequest ? FleetRowActionWidths.Request : CanJoin ? FleetRowActionWidths.Join : 0;
+
+    /// <summary>
+    /// What the buttons that always stand on this row already take. These are the ones scherm 1 draws, and none of
+    /// them may be pushed off to make room for JOIN — so this sum is the budget JOIN has to fit beside.
+    /// </summary>
+    public double StandingActionsWidth
+    {
+        get
+        {
+            double width = 0;
+            if (ShowStop)
+                width += FleetRowActionWidths.Stop;
+            if (ShowStart)
+                width += FleetRowActionWidths.Start;
+            if (ShowRosterButton)
+                width += IsMine ? FleetRowActionWidths.Manage : FleetRowActionWidths.View;
+            if (ShowMetricsButton)
+                width += FleetRowActionWidths.Metrics;
+            if (ShowShareButton)
+                width += FleetRowActionWidths.Share;
+            if (ShowLeave)
+                width += FleetRowActionWidths.Leave;
+            if (ShowDelete)
+                width += FleetRowActionWidths.Disband;
+            return width;
+        }
+    }
+
+    /// <summary>Why JOIN / REQUEST is off, or what it does when it is on — the same sentence the overflow line
+    /// carries, so the answer does not depend on where the action happens to be drawn.</summary>
+    public string JoinHint => JoinEnabled
+        ? "Bring one or more of your characters into this fleet"
+        : "Every one of your characters on this server is already in";
 
     /// <summary>Owner → MANAGE (full roster), member → VIEW (same roster, read-only structure + assigned fits).</summary>
     public bool ShowRosterButton => IsMine || IsParticipating;
@@ -476,7 +529,11 @@ public sealed partial class FleetViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowRequest));
     }
 
-    partial void OnCanJoinHereChanged(bool value) => OnPropertyChanged(nameof(JoinEnabled));
+    partial void OnCanJoinHereChanged(bool value)
+    {
+        OnPropertyChanged(nameof(JoinEnabled));
+        OnPropertyChanged(nameof(JoinHint));
+    }
 
     partial void OnOwnerNameChanged(string value)
     {

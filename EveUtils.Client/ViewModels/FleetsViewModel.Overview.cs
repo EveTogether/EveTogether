@@ -98,6 +98,7 @@ public sealed partial class FleetsViewModel
     [NotifyPropertyChangedFor(nameof(IsLaneBand))]
     [NotifyPropertyChangedFor(nameof(LaneWidth))]
     [NotifyPropertyChangedFor(nameof(LaneMinWidth))]
+    [NotifyPropertyChangedFor(nameof(ActionsWidth))]
     [NotifyPropertyChangedFor(nameof(ShowLaneButtons))]
     [NotifyPropertyChangedFor(nameof(LaneIsSlim))]
     private FleetOverviewLayoutState _layout = FleetOverviewLayout.Resolve(FleetOverviewLayout.WideBreakpoint, 0);
@@ -113,6 +114,11 @@ public sealed partial class FleetsViewModel
     /// needs a whole lane more. The view used to carry a literal 236 here, which is why the band stayed on slim cards
     /// after the resolver had already picked full ones.</summary>
     public double LaneMinWidth => Math.Max(1, Layout.LaneWidth - 4);
+
+    /// <summary>What every actions cell in the table is drawn at — header, fleet row, member row and the unfolded
+    /// roster's own head, all from this one number so none of them can disagree with the arithmetic that decided
+    /// whether JOIN still fits on the row.</summary>
+    public double ActionsWidth => Layout.ActionsWidth;
     public bool ShowLaneButtons => Layout.ShowLaneButtons;
 
     /// <summary>A lane too narrow for its buttons is the mockup's 758 px lane: name, fleet and a smaller clock, no
@@ -521,6 +527,7 @@ public sealed partial class FleetsViewModel
         foreach (var row in _allRows)
         {
             row.IsWide = Layout.IsWide;
+            row.ActionsWidth = Layout.ActionsWidth;
             BuildOverflow(row);
         }
 
@@ -538,37 +545,52 @@ public sealed partial class FleetsViewModel
     }
 
     /// <summary>
-    /// What goes behind the "⋯" on a row. Every action this row allows is drawn exactly once: on the row when its
-    /// width and its group give it a place there, in this menu otherwise — never in both, and never nowhere. The
+    /// What goes behind the "⋯" on a row, and — the one thing that is decided rather than merely sorted — whether
+    /// JOIN / REQUEST gets a place on the row itself. Every action this row allows is drawn exactly once: on the row
+    /// when its width and its group give it a place there, in this menu otherwise; never in both, never nowhere. The
     /// order things fold in is scherm 15's: STOP/START and MANAGE/VIEW keep the row at any width, SHARE folds first,
-    /// then METRICS, then LEAVE. The rarer management actions — edit, disband, adding pilots to a local fleet,
-    /// bringing a second character in — live here whatever the width.
+    /// then METRICS, then LEAVE. The rarer management actions — edit, disband, adding pilots to a local fleet — live
+    /// here whatever the width.
+    ///
+    /// JOIN belongs on the row when it fits (Jithran, 2026-09-04) and nothing scherm 1 draws may step aside for it,
+    /// so it is measured rather than ruled: what the standing buttons take, plus JOIN, plus the "⋯" if anything is
+    /// left to fold, against the width the actions cell actually has. It never stands on a narrow row — there the
+    /// row is two buttons and an overflow, which is what scherm 10 and scherm 15 both give it.
     /// </summary>
     private void BuildOverflow(FleetViewModel row)
     {
-        row.OverflowItems.Clear();
+        // Everything that folds no matter what. Built first, because whether the "⋯" itself stands is part of the
+        // width JOIN has to fit beside.
+        var folded = new List<FleetMemberMenuItemViewModel>();
         bool inFleet = row.IsMine || row.IsParticipating;
         if (inFleet && !row.IsFinished && !row.ShowMetricsButton)
-            row.OverflowItems.Add(new("METRICS", new AsyncRelayCommand(() => MetricsRowAsync(row))));
+            folded.Add(new("METRICS", new AsyncRelayCommand(() => MetricsRowAsync(row))));
         if (row.IsMine && !row.IsFinished && !row.ShowShareButton)
-            row.OverflowItems.Add(new("SHARE", new AsyncRelayCommand(() => OpenSharing(row))));
+            folded.Add(new("SHARE", new AsyncRelayCommand(() => OpenSharing(row))));
         if (row.CanLeave && !row.ShowLeave)
-            row.OverflowItems.Add(new("LEAVE", new AsyncRelayCommand(() => LeaveRowAsync(row))));
-        if (row.CanJoin && !row.ShowJoin)
-            row.OverflowItems.Add(new("JOIN WITH ANOTHER CHARACTER", row.JoinEnabled ? new AsyncRelayCommand(() => Join(row)) : null,
-                row.JoinEnabled ? null : "Every one of your characters on this server is already in"));
-        if (row.CanRequest && !row.ShowRequest)
-            row.OverflowItems.Add(new("REQUEST FOR ANOTHER CHARACTER", row.JoinEnabled ? new AsyncRelayCommand(() => Request(row)) : null,
-                row.JoinEnabled ? null : "Every one of your characters on this server is already in"));
+            folded.Add(new("LEAVE", new AsyncRelayCommand(() => LeaveRowAsync(row))));
         if (row.IsLocal && row.IsMine && !row.IsFinished)
         {
-            row.OverflowItems.Add(new("ADD CHARACTER", new AsyncRelayCommand(() => AddLocalCharacter(row))));
-            row.OverflowItems.Add(new("ADD EXTERNAL PILOT", new AsyncRelayCommand(() => AddLocalExternal(row))));
+            folded.Add(new("ADD CHARACTER", new AsyncRelayCommand(() => AddLocalCharacter(row))));
+            folded.Add(new("ADD EXTERNAL PILOT", new AsyncRelayCommand(() => AddLocalExternal(row))));
         }
         if (row.ShowOwnerActions && !row.IsFinished)
-            row.OverflowItems.Add(new("EDIT", new AsyncRelayCommand(() => EditFleet(row))));
+            folded.Add(new("EDIT", new AsyncRelayCommand(() => EditFleet(row))));
         if (row.IsMine && !row.IsFinished)
-            row.OverflowItems.Add(new("DISBAND", new AsyncRelayCommand(() => DeleteRowAsync(row)), "Archives the fleet. Not the same as STOP."));
+            folded.Add(new("DISBAND", new AsyncRelayCommand(() => DeleteRowAsync(row)), "Archives the fleet. Not the same as STOP."));
+
+        bool wantsJoin = row.CanJoin || row.CanRequest;
+        double onTheRow = row.StandingActionsWidth + row.JoinActionWidth
+                        + (folded.Count > 0 ? FleetRowActionWidths.Overflow : 0);
+        row.JoinOnRow = wantsJoin && row.IsWide && onTheRow <= row.ActionsWidth;
+
+        row.OverflowItems.Clear();
+        foreach (var item in folded)
+            row.OverflowItems.Add(item);
+        if (row.CanJoin && !row.ShowJoin)
+            row.OverflowItems.Add(new("JOIN WITH ANOTHER CHARACTER", row.JoinEnabled ? new AsyncRelayCommand(() => Join(row)) : null, row.JoinHint));
+        if (row.CanRequest && !row.ShowRequest)
+            row.OverflowItems.Add(new("REQUEST FOR ANOTHER CHARACTER", row.JoinEnabled ? new AsyncRelayCommand(() => Request(row)) : null, row.JoinHint));
         row.OverflowChanged();
     }
 

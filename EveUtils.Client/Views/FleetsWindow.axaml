@@ -420,11 +420,12 @@
                 <Setter Property="HorizontalAlignment" Value="Right"/>
             </Style>
             <Style Selector="DockPanel.wide Border.cell.since"><Setter Property="Width" Value="90"/></Style>
+            <!-- The actions cell takes its width from the layout (FleetOverviewLayout.ActionsWidth) and not from a
+                 number here: that same width is what decides whether JOIN still fits on the row, and two places
+                 holding it is how the band ended up on slim lanes earlier in this ticket. -->
             <Style Selector="Border.cell.acts">
-                <Setter Property="Width" Value="150"/>
                 <Setter Property="Margin" Value="0"/>
             </Style>
-            <Style Selector="DockPanel.wide Border.cell.acts"><Setter Property="Width" Value="250"/></Style>
             <Style Selector="Border.cell.acts Button.pick.act">
                 <Setter Property="Padding" Value="6,2"/>
                 <Setter Property="FontSize" Value="9"/>
@@ -891,7 +892,7 @@
                 <Border Grid.Column="4" Classes="cell own"><TextBlock Classes="gridhead" Text="YOUR CHARACTERS"/></Border>
                 <Border Grid.Column="5" Classes="cell doctrine"><TextBlock Classes="gridhead" Text="DOCTRINE"/></Border>
                 <Border Grid.Column="6" Classes="cell since"><TextBlock Classes="gridhead" Text="SINCE / LAST" TextAlignment="Right" HorizontalAlignment="Right"/></Border>
-                <Border Grid.Column="7" Classes="cell acts"/>
+                <Border Grid.Column="7" Classes="cell acts" Width="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ActionsWidth}"/>
             </Grid>
         </Border>
 
@@ -948,7 +949,7 @@
                                         <TextBlock Classes="sub right" Text="{Binding SinceSubText}"/>
                                     </StackPanel>
                                 </Border>
-                                <Border Grid.Column="7" Classes="cell acts">
+                                <Border Grid.Column="7" Classes="cell acts" Width="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ActionsWidth}">
                                     <WrapPanel HorizontalAlignment="Right">
                                         <Button Classes="pick act danger" Content="STOP" IsVisible="{Binding ShowStop}" IsEnabled="{Binding StopEnabled}"
                                                 ToolTip.Tip="Back to standing by — only the fleet's owner stops it" ToolTip.ShowOnDisabled="True"
@@ -957,9 +958,10 @@
                                                 ToolTip.Tip="Start the fleet — only the fleet's owner starts it" ToolTip.ShowOnDisabled="True"
                                                 Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).StartRowCommand}" CommandParameter="{Binding}"/>
                                         <Button Classes="pick act accent" Content="JOIN" IsVisible="{Binding ShowJoin}" IsEnabled="{Binding JoinEnabled}"
-                                                ToolTip.Tip="Join with one or more of your characters"
+                                                ToolTip.Tip="{Binding JoinHint}" ToolTip.ShowOnDisabled="True"
                                                 Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).JoinCommand}" CommandParameter="{Binding}"/>
                                         <Button Classes="pick act" Content="REQUEST" IsVisible="{Binding ShowRequest}" IsEnabled="{Binding JoinEnabled}"
+                                                ToolTip.Tip="{Binding JoinHint}" ToolTip.ShowOnDisabled="True"
                                                 Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).RequestCommand}" CommandParameter="{Binding}"/>
                                         <Button Classes="pick act" Content="{Binding RosterButtonLabel}" IsVisible="{Binding ShowRosterButton}"
                                                 ToolTip.Tip="The fleet structure and who flies which fit"
@@ -1005,7 +1007,7 @@
                                         <Border Grid.Column="4" Classes="cell own"><TextBlock Classes="gridhead" Text="ROLE"/></Border>
                                         <Border Grid.Column="5" Classes="cell doctrine"><TextBlock Classes="gridhead" Text="FIT"/></Border>
                                         <Border Grid.Column="6" Classes="cell since"><TextBlock Classes="gridhead" Text="TAKING PART" TextAlignment="Right" HorizontalAlignment="Right"/></Border>
-                                        <Border Grid.Column="7" Classes="cell acts"/>
+                                        <Border Grid.Column="7" Classes="cell acts" Width="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ActionsWidth}"/>
                                     </Grid>
                                 </Border>
                                 <ScrollViewer MaxHeight="250" HorizontalScrollBarVisibility="Disabled">
@@ -1055,7 +1057,7 @@
                                                         <TextBlock Classes="num" Classes.amber="{Binding IsElsewhereActive}" Classes.dim="{Binding IsLinkDim}"
                                                                    Text="{Binding LinkText}" HorizontalAlignment="Right"/>
                                                     </Border>
-                                                    <Border Grid.Column="7" Classes="cell acts">
+                                                    <Border Grid.Column="7" Classes="cell acts" Width="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ActionsWidth}">
                                                         <WrapPanel HorizontalAlignment="Right">
                                                             <Button Classes="pick tiny" Content="fit" IsVisible="{Binding IsMine}"
                                                                     Command="{Binding SelectFitCommand}" ToolTip.Tip="{Binding SelectFitButtonLabel}"/>

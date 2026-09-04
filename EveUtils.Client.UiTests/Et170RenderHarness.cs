@@ -192,9 +192,13 @@ public class Et170RenderHarness
                 continue;
             var name = cell.FindAncestorOfType<Grid>()?.GetVisualDescendants().OfType<TextBlock>()
                 .FirstOrDefault(t => t.Classes.Contains("nm"))?.Text;
-            var buttons = cell.GetVisualDescendants().OfType<Button>().Where(b => b.IsVisible).Select(b =>
-                (b.Content as string ?? "⋯") + (b.IsEnabled ? "" : "(off)")).ToList();
-            log.AppendLine($"  acts [{name}] rows={(cell.Bounds.Height > 30 ? 2 : 1)} h={cell.Bounds.Height:0.#} w={cell.Bounds.Width:0.#} → {string.Join(" ", buttons)}");
+            var live = cell.GetVisualDescendants().OfType<Button>().Where(b => b.IsVisible).ToList();
+            var buttons = live.Select(b => (b.Content as string ?? "⋯") + (b.IsEnabled ? "" : "(off)")
+                + $"={b.Bounds.Width + b.Margin.Left + b.Margin.Right:0.#}").ToList();
+            int buttonRows = live.Select(b => Math.Round(((Visual)b).TranslatePoint(new Point(0, 0), cell)?.Y ?? 0)).Distinct().Count();
+            // What a single row of them would need: every button's own width plus the 3 px margin between two picks.
+            double needed = live.Sum(b => b.Bounds.Width + b.Margin.Left + b.Margin.Right);
+            log.AppendLine($"  acts [{name}] buttonRows={buttonRows} needs={needed:0.#} of w={cell.Bounds.Width:0.#} h={cell.Bounds.Height:0.#} → {string.Join(" ", buttons)}");
         }
         foreach (var cell in root.GetVisualDescendants().OfType<Border>().Where(b => b.Classes.Contains("cell") && b.Parent is Grid g && g.Parent is Border pb && pb.Classes.Contains("gridhead")))
             log.AppendLine($"  headcell [{string.Join(" ", cell.Classes)}] w={cell.Bounds.Width:0.#} x={cell.Bounds.X:0.#} visible={cell.IsVisible}");
