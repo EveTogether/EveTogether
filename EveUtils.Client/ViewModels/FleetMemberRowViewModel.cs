@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Imaging;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 
 namespace EveUtils.Client.ViewModels;
 
@@ -22,8 +23,13 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
         long memberId, int characterId, string characterName, string roleLabel,
         FitReferenceInfo? assignedFit, MemberSkillBadge? skillBadge, IAsyncRelayCommand selectFitCommand,
         IAsyncRelayCommand? openFitCommand = null, IAsyncRelayCommand? leaveCommand = null, bool canLeave = false,
-        FleetMemberFacts? menuFacts = null, IRelayCommand? removeCommand = null)
+        FleetMemberFacts? menuFacts = null, IRelayCommand? removeCommand = null,
+        bool isMine = false, bool isFleetCommander = false, DateTimeOffset? lastSeenAt = null)
     {
+        IsMine = isMine;
+        IsFleetCommander = isFleetCommander;
+        LastSeenAt = lastSeenAt;
+        ShipName = menuFacts?.ShipName;
         MemberId = memberId;
         CharacterId = characterId;
         CharacterName = characterName;
@@ -55,6 +61,92 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
 
     /// <summary>The shared fleet-member information block, plus the removal when this viewer owns the fleet.</summary>
     public IReadOnlyList<FleetMemberMenuItemViewModel> MemberMenu { get; }
+
+    // ── The overview's sub-row (ET-170): who this is to me, whether they are here, and whether they count. ──
+
+    /// <summary>One of this client's own characters — the reason the fleet row concerns me at all.</summary>
+    public bool IsMine { get; }
+
+    /// <summary>Holds the fleet-commander seat on the ET roster.</summary>
+    public bool IsFleetCommander { get; }
+
+    /// <summary>The ship the assigned fit flies, or null when no fit is assigned.</summary>
+    public string? ShipName { get; }
+
+    public string ShipText => ShipName ?? "—";
+
+    /// <summary>When the server last heard this member's client, as read from the roster; feeds the presence verdict.</summary>
+    public DateTimeOffset? LastSeenAt { get; }
+
+    /// <summary>Presence as the one shared definition reads it (ET-70): our own pilot from the local sweep, anyone
+    /// else from how long their client has been silent. Set by the overview rebuild, not at construction, because it
+    /// needs the clock.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PresenceText))]
+    [NotifyPropertyChangedFor(nameof(IsOnline))]
+    [NotifyPropertyChangedFor(nameof(IsOffline))]
+    [NotifyPropertyChangedFor(nameof(IsPresenceUnknown))]
+    private FleetMemberPresenceState _presence = FleetMemberPresenceState.Unknown;
+
+    public bool IsOnline => Presence == FleetMemberPresenceState.Online;
+    public bool IsOffline => Presence == FleetMemberPresenceState.Offline;
+    public bool IsPresenceUnknown => Presence == FleetMemberPresenceState.Unknown;
+
+    public string PresenceText => Presence switch
+    {
+        FleetMemberPresenceState.Online => "online",
+        FleetMemberPresenceState.Offline => "offline",
+        _ => "unknown",
+    };
+
+    /// <summary>Whether the member counts for this fleet — the axis this whole screen exists for. Set by the
+    /// overview rebuild once every started fleet is known, since the answer depends on the others.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LinkText))]
+    [NotifyPropertyChangedFor(nameof(IsElsewhereActive))]
+    [NotifyPropertyChangedFor(nameof(IsLinkDim))]
+    [NotifyPropertyChangedFor(nameof(NeedsAttention))]
+    private FleetMemberLinkState _linkState = FleetMemberLinkState.StandingBy;
+
+    public bool IsElsewhereActive => LinkState == FleetMemberLinkState.ElsewhereActive;
+
+    /// <summary>"standing by", "no client" and "finished" are states of the fleet, not of the pilot, and read dim.</summary>
+    public bool IsLinkDim => LinkState is FleetMemberLinkState.StandingBy or FleetMemberLinkState.NoClient or FleetMemberLinkState.Finished;
+
+    public string LinkText => LinkState switch
+    {
+        FleetMemberLinkState.Linked => "linked",
+        FleetMemberLinkState.ElsewhereActive => "not linked",
+        FleetMemberLinkState.StandingBy => "standing by",
+        FleetMemberLinkState.NoClient => "no client",
+        _ => "—",
+    };
+
+    /// <summary>One of my characters whose sharing for this fleet is switched off: on the roster, linked, and yet
+    /// contributing nothing — the third axis, and the third reason a member belongs on the short list.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NeedsAttention))]
+    private bool _sharesNothing;
+
+    /// <summary>The member the fold may never hide (ET-170): not linked while the fleet runs, or sharing nothing.
+    /// Being offline is counted, not flagged — it is presence, not participation.</summary>
+    public bool NeedsAttention => IsElsewhereActive || SharesNothing;
+
+    /// <summary>
+    /// Why this member sits on the roster and yet does not count here: the started fleet they are linked to instead.
+    /// Null unless they are elsewhere active. Scherm 1 spells this out under the row rather than leaving a bare
+    /// "not linked" to be guessed at — the whole screen exists to make this one situation readable, and "not linked"
+    /// on its own is exactly what a reader mistakes for "offline".
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasElsewhereNote))]
+    private string? _elsewhereNote;
+
+    public bool HasElsewhereNote => !string.IsNullOrEmpty(ElsewhereNote);
+
+    /// <summary>The fleet commander, this client's own characters, and whoever asks for attention: the members
+    /// a folded row always shows, whether the fleet has six pilots or fifty.</summary>
+    public bool IsHighlighted => IsFleetCommander || IsMine || NeedsAttention;
 
     public long MemberId { get; }
     public int CharacterId { get; }

@@ -11,6 +11,7 @@ using EveUtils.Client.Fleet;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Messaging;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Platform;
 using EveUtils.Client.Transport;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Shared.Cqrs;
@@ -59,8 +60,12 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     private readonly HashSet<long> _expandedCards = [];
     private readonly IRemoteBusConnector _busConnector;
     private readonly ICharacterInfoService? _characterInfo; // resolves owner names for fleets I don't own (best-effort)
+    private readonly ILocalCharacterPresence? _presence;   // whether one of MY pilots has an EVE client up (ET-70)
+    private readonly IDisposable? _presenceSubscription;
 
-    public FleetsViewModel(IServiceProvider services)
+    /// <param name="runClock">Whether the band and the started rows keep a ticking clock. A test hands it the time
+    /// itself through <see cref="Tick"/>; a DispatcherTimer there would go on ticking for the rest of the session.</param>
+    public FleetsViewModel(IServiceProvider services, bool runClock = true)
     {
         _services = services;
         _fleets = services.GetRequiredService<IFleetTransportClient>();
@@ -89,7 +94,10 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         // a client restart (previously only a fleet.changed event or a restart re-fetched the list).
         _busConnector = services.GetRequiredService<IRemoteBusConnector>();
         _busConnector.StateChanged += _OnServerConnectionStateChanged;
+        _presence = services.GetService<ILocalCharacterPresence>();
+        _presenceSubscription = _presence?.Subscribe(() => _ = RebuildOverviewAsync());
 
+        StartClock(runClock);
         _ = InitializeAsync();
     }
 
@@ -131,6 +139,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _rosterSubscription.Dispose();
+        _presenceSubscription?.Dispose();
+        StopClock();
         _busConnector.StateChanged -= _OnServerConnectionStateChanged;
     }
 
@@ -210,6 +220,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             StatusMessage = $"Could not reach {string.Join(", ", UnreachableServers.Select(g => g.ServerName))} — decouple below if stale.";
 
         await _participationRefresher.RefreshAsync();
+        await RebuildOverviewAsync();
     }
 
     /// <summary>Loads one coupled server's fleets in isolation. A transport failure (server down/unreachable) is caught
@@ -234,7 +245,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             var rowsByFleet = new Dictionary<long, FleetViewModel>();
             var byFleet = new Dictionary<long, (FleetInfo Fleet, List<(int Id, string Name)> Chars)>();
             foreach (var session in sessions)
-                foreach (var fleet in (await _fleets.ListMyFleetsAsync(server, session.CharacterId)).Where(f => f.State == FleetState.Active))
+                foreach (var fleet in (await _fleets.ListMyFleetsAsync(server, session.CharacterId, includeConcluded: true)).Where(f => f.State == FleetState.Active))
                 {
                     if (!byFleet.TryGetValue(fleet.Id, out var entry))
                         byFleet[fleet.Id] = entry = (fleet, []);
@@ -375,27 +386,27 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         var evaluator = _services.GetService<IMemberFitSkillEvaluator>();
         var portraits = _services.GetService<ICharacterPortraitProvider>();
 
-        // Which members the card lists. A SERVER fleet's card is the "my characters in this fleet" list it was
-        // designed as — that roster belongs to someone else and its other members have their own screens. A
-        // CLIENT-ONLY fleet's card is the fleet itself: ADD TOON and ADD EXTERNAL sit on it, and an external pilot
-        // is by definition not coupled here, so filtering on `names` dropped exactly the members you can add no
-        // other way (ET-46). Every member belongs on that card, and their name comes from the same day-cached
-        // public lookup the roster and the metrics screen use.
-        var listed = server is null ? members : members.Where(m => names.ContainsKey(m.CharacterId));
-        foreach (var member in listed.OrderBy(m => CardRank(m, names)))   // stable: roster order survives inside a rank
+        // Every member of every fleet, since ET-170: the unfolded row shows the fleet commander and whoever is not
+        // linked or shares nothing, and on a server fleet those are rarely my own pilots. A client-only fleet lists
+        // its externals too (ET-46) — an external is by definition not coupled here, and this row is the only place
+        // in the client where they appear at all. Names of pilots who are not mine come from the same day-cached
+        // public lookup the roster and the metrics screen use. Only MY pilots get the skill evaluation, the verdict
+        // report and the portrait: those are this client's answers about its own characters, and fifty lookups of
+        // things it cannot know would cost a fifty-man fleet its load time for nothing.
+        foreach (var member in members.OrderBy(m => CardRank(m, names)))   // stable: roster order survives inside a rank
         {
-            var characterName = names.TryGetValue(member.CharacterId, out var known)
-                ? known
-                : await ExternalNameAsync(member.CharacterId);
-            var badge = evaluator is null ? null : await evaluator.EvaluateAsync(member.CharacterId, member.AssignedFit);
-            await ReportOwnVerdictAsync(member, badge, server);
+            bool isMine = names.TryGetValue(member.CharacterId, out var known);
+            var characterName = isMine ? known! : await ExternalNameAsync(member.CharacterId);
+            var badge = evaluator is null || !isMine ? null : await evaluator.EvaluateAsync(member.CharacterId, member.AssignedFit);
+            if (isMine)
+                await ReportOwnVerdictAsync(member, badge, server);
             // Skills this client doesn't know locally (no read_skills scope / not imported) still get a badge from the
             // pilot's OWN client's reported verdict, so a can-fly/skills-missing badge shows for every member, not only mine.
             badge ??= WireSkillBadge(member.FitSkillVerdict);
             var assignedFit = member.AssignedFit;
             // A non-owner character on a server fleet gets a per-leaf LEAVE (multi-box): pull this alt out while the
             // owner — and any other of my characters in the fleet — stays. The owner's own character never leaves.
-            var canLeave = server is not null && member.CharacterId != fleet.CreatorCharacterId;
+            var canLeave = isMine && server is not null && member.CharacterId != fleet.CreatorCharacterId;
 
             // The shared member menu (ET-44). This card has no live metric stream of its own, so it carries the
             // roster facts only. Removal is the fleet owner's, which on this card means a client-only fleet: a
@@ -419,9 +430,12 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
                 facts,
                 canRemove
                     ? new AsyncRelayCommand(() => RemoveMemberFromCardAsync(row, fleet, member, characterName, server))
-                    : null);
+                    : null,
+                isMine,
+                isFleetCommander: member.WingId < 0 && member.Role == FleetRole.FleetCommander,
+                member.LastSeenAt);
             row.Members.Add(leaf);
-            if (portraits is not null)
+            if (portraits is not null && isMine)
                 _ = leaf.LoadPortraitAsync(portraits);   // B-3 hex portrait, best-effort (opt-in images)
         }
 
@@ -612,6 +626,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         LocalFleets.Clear();
         var active = _activeFleet.ActiveFleetId;
         var characters = await _characters.GetAllAsync();
+        _knownCharacters = characters;
         CanInteractLocal = characters.Count > 0;
 
         // Every local character is a potential member-leaf name (a client-only fleet can hold any of them).
@@ -627,8 +642,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
 
             foreach (var fleet in await _fleetRepository.ListByCreatorAsync(ownerId))
             {
-                if (!fleet.IsClientOnly || fleet.State != FleetState.Active || fleet.Activation == FleetActivation.Concluded)
-                    continue; // only client-only, still-active, not-concluded fleets show on this tab (concluded is hidden everywhere).
+                if (!fleet.IsClientOnly || fleet.State != FleetState.Active)
+                    continue; // client-only and not archived; a concluded one goes to the FINISHED band (ET-170).
 
                 var info = ToInfo(fleet);
                 var row = new FleetViewModel(info, ownerId, character.Name) { IsActive = active == fleet.Id };
@@ -643,12 +658,13 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
 
         HasLocalFleets = LocalFleets.Count > 0;
         await _participationRefresher.RefreshAsync();
+        await RebuildOverviewAsync();
     }
 
     private static FleetInfo ToInfo(FleetEntity fleet) => new(
         fleet.Id, fleet.Name, fleet.Description, fleet.Visibility, fleet.State,
         fleet.CreatorCharacterId, fleet.FromTime, fleet.ToTime, fleet.CreatedAt, fleet.Activation, fleet.FleetCompositionId,
-        fleet.EsiFleetId, fleet.EsiFleetBossId);
+        fleet.EsiFleetId, fleet.EsiFleetBossId, fleet.EsiAutoApplyStructure, fleet.EsiAutoInviteMembers, fleet.ActivatedAt);
 
     /// <summary>Creates a client-only fleet: pick the owning local toon, name it, persist locally.</summary>
     [RelayCommand]

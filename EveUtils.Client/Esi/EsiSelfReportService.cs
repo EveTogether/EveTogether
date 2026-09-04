@@ -92,7 +92,7 @@ public sealed class EsiSelfReportService(
     /// </summary>
     public async Task ReportForCharacterAsync(string server, int characterId, CancellationToken cancellationToken = default)
     {
-        var myFleets = await transport.ListMyFleetsAsync(server, characterId, cancellationToken);
+        var myFleets = await transport.ListMyFleetsAsync(server, characterId, cancellationToken: cancellationToken);
 
         // Gate the /characters/{id}/fleet/ ESI read behind "am I a non-boss member of any coupled fleet?". Without one
         // there is nothing to report into, so the read is pure waste — and would otherwise keep 404-polling that endpoint

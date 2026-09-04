@@ -87,7 +87,7 @@ public sealed partial class LocalApiQueries
         {
             // a fleet can hold several of my coupled characters — list it once (dedupe by fleet id).
             foreach (var session in await sessions.LoadAllAsync(server, cancellationToken))
-                foreach (var fleet in (await transport.ListMyFleetsAsync(server, session.CharacterId, cancellationToken))
+                foreach (var fleet in (await transport.ListMyFleetsAsync(server, session.CharacterId, cancellationToken: cancellationToken))
                              .Where(f => f.State == FleetState.Active))
                 {
                     if (!seen.Add(fleet.Id)) continue;

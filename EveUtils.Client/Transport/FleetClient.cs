@@ -187,9 +187,9 @@ public sealed class FleetClient(
         }
     }
 
-    public Task<IReadOnlyList<FleetInfo>> ListMyFleetsAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
+    public Task<IReadOnlyList<FleetInfo>> ListMyFleetsAsync(string serverAddress, int actingCharacterId = 0, bool includeConcluded = false, CancellationToken cancellationToken = default) =>
         QueryOrThrowAsync(serverAddress, actingCharacterId,
-            (client, headers) => client.ListMyFleetsAsync(new ListMyFleetsRequest(), headers, ListDeadline(), cancellationToken),
+            (client, headers) => client.ListMyFleetsAsync(new ListMyFleetsRequest { IncludeConcluded = includeConcluded }, headers, ListDeadline(), cancellationToken),
             reply => reply.Ok ? reply.Fleets.Select(MapFleet).ToList() : throw NotOk(reply.Message), cancellationToken);
 
     public Task<IReadOnlyList<FleetInfo>> ListOpenFleetsAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>

@@ -48,14 +48,15 @@ internal sealed class FleetRepository(IDbContextFactory<SharedDbContext> context
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<FleetEntity>> ListForParticipantAsync(int characterId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<FleetEntity>> ListForParticipantAsync(int characterId, bool includeConcluded = false, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
         var memberFleetIds = db.Set<FleetMember>().Where(m => m.CharacterId == characterId).Select(m => m.FleetId);
-        // A concluded fleet is finished — it is hidden everywhere, so it never shows in MyFleets/Participating either (2026-06-10).
+        // A concluded fleet is finished — hidden everywhere (2026-06-10) except the overview's FINISHED band, which
+        // asks for it by name (ET-170). Archived fleets stay out either way.
         return await db.Set<FleetEntity>()
             .Where(f => f.State == FleetState.Active
-                        && f.Activation != FleetActivation.Concluded
+                        && (includeConcluded || f.Activation != FleetActivation.Concluded)
                         && (f.CreatorCharacterId == characterId || memberFleetIds.Contains(f.Id)))
             .OrderByDescending(f => f.Id)
             .AsNoTracking()

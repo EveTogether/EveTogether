@@ -173,7 +173,7 @@ public sealed class FleetsGrpcService(
 
         // "My fleets" = fleets I own OR am a member of — a member who accepted an invite must see the fleet
         // to enter it; the per-row edit/disband stays gated on the creator check client-side.
-        var fleets = await dispatcher.Query(new ListMyFleetsQuery(character), context.CancellationToken);
+        var fleets = await dispatcher.Query(new ListMyFleetsQuery(character, request.IncludeConcluded), context.CancellationToken);
         var reply = new ListFleetsReply { Ok = true };
         foreach (var fleet in fleets)
             reply.Fleets.Add(ToDto(fleet));

@@ -1,84 +1,34 @@
 <v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:vf="using:EveUtils.Client.ViewModels.Fleets"
         xmlns:ctl="using:EveUtils.Client.Controls"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-        mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="640"
+        mc:Ignorable="d" d:DesignWidth="758" d:DesignHeight="720"
         x:Class="EveUtils.Client.Views.FleetsWindow"
         x:DataType="vm:FleetsViewModel"
         x:Name="FleetsRoot"
-        Width="720" Height="640"
+        Width="758" Height="720" MinWidth="420" MinHeight="320"
         WindowStartupLocation="CenterOwner"
         Title="Fleets">
 
-    <v:ChromedWindow.Resources>
-        <!-- Member leaf (stream B / B-2): one of my characters under a fleet node — role, assigned fit (FC-4),
-             can-fly badge (FC-6) and a SELECT FIT action that opens the composition-scoped picker. Shared by the
-             Participating and My Fleets tabs (one template, no duplication). -->
-        <DataTemplate x:Key="MemberLeafTemplate" x:DataType="vm:FleetMemberRowViewModel">
-            <Grid ColumnDefinitions="Auto,130,*,Auto,Auto" Margin="22,3,4,3" Background="Transparent">
-                <!-- The shared fleet-member menu (ET-44), the same one fleet metrics and the roster mount. Since
-                     ET-46 this card is a client-only fleet's whole roster, so an external pilot has no other row
-                     anywhere in this window — this is their only manage surface. -->
-                <Grid.ContextMenu>
-                    <ContextMenu ItemsSource="{Binding MemberMenu}"
-                                 ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>
-                </Grid.ContextMenu>
-                <!-- Hex portrait (B-3): the pilot's ESI render clipped to the EVE hexagon, initial-glyph fallback -->
-                <Panel Grid.Column="0" Width="30" Height="34" VerticalAlignment="Center" Margin="0,0,9,0">
-                    <Panel.Clip>
-                        <PathGeometry Figures="M15,0 L30,8.5 L30,25.5 L15,34 L0,25.5 L0,8.5 Z"/>
-                    </Panel.Clip>
-                    <Border Background="{DynamicResource AccentSoftBrush}" IsVisible="{Binding !HasPortrait}">
-                        <TextBlock Text="{Binding Initial}" FontSize="12" FontWeight="Bold"
-                                   Foreground="{DynamicResource AccentBrightBrush}"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <Image Source="{Binding Portrait}" Stretch="UniformToFill" IsVisible="{Binding HasPortrait}"/>
-                </Panel>
-                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding CharacterName}" FontSize="11.5" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextBrightBrush}" TextTrimming="CharacterEllipsis"/>
-                    <StackPanel Orientation="Horizontal" Spacing="5">
-                        <!-- Small accent role-dot (B-3), matching the mockup's role marker -->
-                        <Border Width="5" Height="5" CornerRadius="1" VerticalAlignment="Center"
-                                Background="{DynamicResource AccentBrightBrush}"/>
-                        <TextBlock Text="{Binding RoleLabel}" FontSize="9" Classes="label"/>
-                    </StackPanel>
-                </StackPanel>
-                <Button Grid.Column="2" Content="{Binding AssignedFitName}" Command="{Binding OpenFitCommand}"
-                        IsEnabled="{Binding HasAssignedFit}" VerticalAlignment="Center" Margin="10,0" Padding="0"
-                        Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Left"
-                        FontSize="11.5" Foreground="{DynamicResource TextAccentBrush}" Cursor="Hand"
-                        ToolTip.Tip="Open this fit's detail"/>
-                <mi:MaterialIcon Grid.Column="3" Classes="icon-sm" Kind="Check" Margin="0,0,8,0"
-                                 Foreground="{DynamicResource TextAccentBrush}"
-                                 IsVisible="{Binding ShowCanFly}" ToolTip.Tip="{Binding SkillTooltip}"/>
-                <mi:MaterialIcon Grid.Column="3" Classes="icon-sm" Kind="AlertOutline" Margin="0,0,8,0"
-                                 Foreground="#E0B341"
-                                 IsVisible="{Binding ShowSkillGap}" ToolTip.Tip="{Binding SkillTooltip}"/>
-                <!-- The third state of the same badge, so it has to come from the same set as the other two. -->
-                <mi:MaterialIcon Grid.Column="3" Classes="icon-sm" Kind="HelpCircleOutline" Margin="0,0,8,0"
-                                 Foreground="#7A8290" ToolTip.ShowOnDisabled="True"
-                                 IsVisible="{Binding ShowSkillUnknown}" ToolTip.Tip="{Binding UnknownSkillTooltip}"/>
-                <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                    <Button Content="{Binding SelectFitButtonLabel}" Classes="accent" FontSize="9"
-                            Padding="8,2" Command="{Binding SelectFitCommand}"/>
-                    <!-- Pull just this character out of the fleet (D-215, multi-box); shown for my non-owner alts -->
-                    <Button Content="LEAVE" FontSize="9" Padding="8,2" IsVisible="{Binding CanLeave}"
-                            Command="{Binding LeaveCommand}" ToolTip.Tip="Remove this character from the fleet"/>
-                </StackPanel>
-            </Grid>
-        </DataTemplate>
-    </v:ChromedWindow.Resources>
+    <!-- ET-170: the fleet overview. One content, two states: the table is drawn narrow (a 758 px tab on the start-up
+         window) or wide (~1578 px maximised), and the band of lanes folds to one line per character once its cards
+         no longer fit within two rows. The view reports its width to the view model (code-behind); the view model
+         answers with IsWide / IsCompactBand, and the `wide` class on this root is what the column styles key on.
+         Everything — styles, resources, the class — sits on the DockPanel and not on the window, because the module
+         host lifts the content out of the window to dock it (ET-42). -->
+    <DockPanel x:Name="OverviewRoot" Classes.wide="{Binding IsWide}">
 
-    <DockPanel>
+        <DockPanel.Resources>
+            <!-- The theme has no warn brush of its own; this is the ink Border.chip.warn uses, so the two agree. -->
+            <SolidColorBrush x:Key="WarnBrush" Color="#FFE0B341"/>
+        </DockPanel.Resources>
 
-        <!-- Fleet-state pill (B-3, option B): the fleet's ACTIVE / FORMING state on its own pill, accent-green by default
-             and amber while forming — separate from the participation dot (D-122). Shared over the four tabs. -->
         <DockPanel.Styles>
+            <!-- ── Pills that older tests and screens still probe: kept exactly as they were. ── -->
             <Style Selector="Border.statepill">
                 <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
                 <Setter Property="BorderThickness" Value="1"/>
@@ -96,55 +46,677 @@
             <Style Selector="Border.statepill.forming > TextBlock">
                 <Setter Property="Foreground" Value="#E0B341"/>
             </Style>
-            <!-- The member list's fold line (ET-53): "▾ + 45 more" / "▴ SHOW FEWER". Deliberately quiet and inset to the
-                 member leaves' own indent — it reads as the tail of the list rather than a fifth action on the card. -->
-            <Style Selector="Button.morelink">
+
+            <!-- ── Flat text buttons (the mockup's `pick`): quiet until pressed. ── -->
+            <Style Selector="Button.pick">
                 <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="BorderThickness" Value="0"/>
-                <Setter Property="Padding" Value="0"/>
-                <Setter Property="Margin" Value="22,1,0,0"/>
-                <Setter Property="FontSize" Value="10"/>
-                <Setter Property="HorizontalAlignment" Value="Left"/>
-                <Setter Property="Cursor" Value="Hand"/>
-                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
-            </Style>
-            <Style Selector="Button.morelink:pointerover /template/ ContentPresenter">
-                <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="TextBlock.Foreground" Value="{DynamicResource AccentBrightBrush}"/>
-            </Style>
-            <!-- Doctrine pill (B-3): the coupled composition "◆ name" as a bordered accent pill, matching the mockup. -->
-            <Style Selector="Border.docpill">
-                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
                 <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="CornerRadius" Value="9"/>
-                <Setter Property="Padding" Value="8,1"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="Padding" Value="9,4"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="MinHeight" Value="0"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
-            <Style Selector="Border.docpill > TextBlock">
+            <Style Selector="Button.pick:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="Button.pick:disabled /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Opacity" Value="0.4"/>
+            </Style>
+            <Style Selector="Button.pick.on">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+            <Style Selector="Button.pick.accent">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="Button.pick.danger">
+                <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+            </Style>
+            <Style Selector="Button.pick.danger:pointerover /template/ ContentPresenter">
+                <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+                <Setter Property="Background" Value="#1AEF5A5A"/>
+            </Style>
+            <Style Selector="Button.pick.warnbtn">
+                <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+                <Setter Property="BorderBrush" Value="#59E0B341"/>
+            </Style>
+            <!-- On a row: smaller, and no outer margin (the WrapPanel spaces them). -->
+            <Style Selector="Button.pick.act">
+                <Setter Property="Padding" Value="7,3"/>
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="Margin" Value="0,0,3,0"/>
+            </Style>
+            <Style Selector="Button.pick.tiny">
+                <Setter Property="Padding" Value="6,2"/>
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="Margin" Value="0,0,3,0"/>
+            </Style>
+            <!-- The toolbar's picks are one size at 758 and another when there is room. -->
+            <Style Selector="Border.toolbar Button.pick">
+                <Setter Property="Padding" Value="7,3"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="Margin" Value="0,0,5,0"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.toolbar Button.pick">
+                <Setter Property="Padding" Value="9,4"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="Margin" Value="0,0,6,0"/>
+            </Style>
+            <Style Selector="Border.toolbar TextBlock.label">
                 <Setter Property="FontSize" Value="9"/>
+                <Setter Property="LetterSpacing" Value="1.4"/>
+                <Setter Property="Margin" Value="6,0,6,0"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.toolbar TextBlock.label">
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="LetterSpacing" Value="1.8"/>
+                <Setter Property="Margin" Value="8,0,8,0"/>
+            </Style>
+            <!-- Measured, not guessed: at 758 the picks plus the character chips and their overflow need 635 px, and
+                 the toolbar has 606 to give at a 120 px search box. 88 puts the whole bar back on one row. -->
+            <Style Selector="Border.toolbar TextBox.search">
+                <Setter Property="Width" Value="88"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="Padding" Value="6,3"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Margin" Value="6,0,0,0"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.toolbar TextBox.search">
+                <Setter Property="Width" Value="186"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Padding" Value="8,5"/>
+            </Style>
+
+            <!-- ── Chips: the theme's Border.chip, plus the mockup's amber value chip. ── -->
+            <Style Selector="Border.chip.val">
+                <Setter Property="BorderBrush" Value="#73F5B042"/>
+                <Setter Property="TextElement.Foreground" Value="{StaticResource ValueBrush}"/>
+                <Setter Property="TextElement.FontFamily" Value="{StaticResource MonoFont}"/>
+            </Style>
+
+            <!-- ── The band: one lane per own character. ── -->
+            <Style Selector="Border.band">
+                <Setter Property="Padding" Value="12,9"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="Background" Value="#03FFFFFF"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.band">
+                <Setter Property="Padding" Value="14,12,14,14"/>
+            </Style>
+            <Style Selector="TextBlock.bandcount">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Border.lane">
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Background" Value="#06FFFFFF"/>
+                <Setter Property="Padding" Value="8,7"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.lane">
+                <Setter Property="Padding" Value="11,9"/>
+            </Style>
+            <!-- The 2 px edge is a second border inside the lane, so its colour is a class and not the border's. -->
+            <Style Selector="Border.laneedge">
+                <Setter Property="Width" Value="2"/>
+                <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="HorizontalAlignment" Value="Left"/>
+                <Setter Property="VerticalAlignment" Value="Stretch"/>
+                <!-- Pulled out to the lane's own edge: the negative margin undoes the lane padding of its state. -->
+                <Setter Property="Margin" Value="-8,-7,6,-7"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.laneedge">
+                <Setter Property="Margin" Value="-11,-9,9,-9"/>
+            </Style>
+            <Style Selector="Border.laneedge.idle">
+                <Setter Property="Background" Value="{StaticResource TextDimBrush}"/>
+            </Style>
+            <Style Selector="Border.laneedge.warn">
+                <Setter Property="Background" Value="{StaticResource WarnBrush}"/>
+            </Style>
+            <Style Selector="Border.lane.idle">
+                <Setter Property="Opacity" Value="0.74"/>
+            </Style>
+            <Style Selector="TextBlock.lanename">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11.5"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="TextBlock.lanewhat">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="TextBlock.lanewhere">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                <Setter Property="Margin" Value="0,1,0,7"/>
+            </Style>
+            <Style Selector="TextBlock.laneclock">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="FontSize" Value="19"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Bottom"/>
+            </Style>
+            <!-- A lane without room for its buttons drops to the mockup's 758 px lane: no third line, a 15 px clock. -->
+            <Style Selector="Border.lane.slim TextBlock.laneclock">
+                <Setter Property="FontSize" Value="15"/>
+                <Setter Property="Margin" Value="0,4,0,0"/>
+            </Style>
+            <Style Selector="Border.lane.slim TextBlock.lanewhere">
+                <Setter Property="IsVisible" Value="False"/>
+            </Style>
+            <Style Selector="Border.lane.slim TextBlock.lanewhat">
+                <Setter Property="FontSize" Value="10"/>
+            </Style>
+            <Style Selector="Border.lane.slim TextBlock.lanename">
+                <Setter Property="FontSize" Value="11"/>
+            </Style>
+            <Style Selector="Border.lane.warn TextBlock.laneclock">
+                <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+            </Style>
+            <Style Selector="Border.lane.idle TextBlock.laneclock">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            </Style>
+            <Style Selector="Border.lane Button.pick">
+                <Setter Property="Padding" Value="7,3"/>
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="Margin" Value="4,0,0,0"/>
+            </Style>
+
+            <!-- The compact band: one line per character, two columns. -->
+            <Style Selector="Grid.cline">
+                <Setter Property="Margin" Value="0"/>
+            </Style>
+            <Style Selector="Border.clinewrap">
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="Padding" Value="2,5"/>
+            </Style>
+            <Style Selector="Border.clinewrap.idle">
+                <Setter Property="Opacity" Value="0.62"/>
+            </Style>
+            <Style Selector="Border.cdot">
+                <Setter Property="Width" Value="6"/>
+                <Setter Property="Height" Value="6"/>
+                <Setter Property="CornerRadius" Value="3"/>
+                <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Border.cdot.warn">
+                <Setter Property="Background" Value="{StaticResource WarnBrush}"/>
+            </Style>
+            <Style Selector="Border.cdot.idle">
+                <Setter Property="Background" Value="{StaticResource TextDimBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.cname">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="TextBlock.cfleet">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="TextBlock.cfleet.idle">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.cclock">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="FontSize" Value="11.5"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.cclock.warn">
+                <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.cclock.idle">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            </Style>
+
+            <!-- ── The table: column header, group bands, fleet rows, member sub-rows. ── -->
+            <Style Selector="Border.gridhead">
+                <Setter Property="Background" Value="{StaticResource BgHeaderBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="Padding" Value="12,6"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.gridhead">
+                <Setter Property="Padding" Value="14,8"/>
+            </Style>
+            <Style Selector="TextBlock.gridhead">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="9"/>
+                <Setter Property="LetterSpacing" Value="1.4"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="DockPanel.wide TextBlock.gridhead">
+                <Setter Property="LetterSpacing" Value="1.6"/>
+            </Style>
+
+            <Style Selector="Border.groupband">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="0,1,0,0"/>
+                <Setter Property="Padding" Value="12,5"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.groupband">
+                <Setter Property="Padding" Value="14,7"/>
+            </Style>
+            <Style Selector="Border.groupband.dim">
+                <Setter Property="Background" Value="{StaticResource BgRowAltBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.bandtitle">
+                <Setter Property="FontSize" Value="9"/>
+                <Setter Property="FontWeight" Value="Bold"/>
+                <Setter Property="LetterSpacing" Value="1.5"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Border.groupband.dim TextBlock.bandtitle">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.bandnote">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="TextBlock.bandnote.sub">
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            </Style>
+            <!-- FINISHED's band is a button: the whole band folds and unfolds the group. -->
+            <Style Selector="Button.bandbtn">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            </Style>
+            <Style Selector="Button.bandbtn:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            </Style>
+
+            <!-- A fleet row is a button: clicking anywhere on it that is not another button unfolds it. -->
+            <Style Selector="Button.fleetrow">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="Padding" Value="12,6"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            </Style>
+            <Style Selector="DockPanel.wide Button.fleetrow">
+                <Setter Property="Padding" Value="14,8"/>
+            </Style>
+            <Style Selector="Button.fleetrow:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            </Style>
+            <Style Selector="Button.fleetrow.open /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+            </Style>
+            <Style Selector="Button.fleetrow.open:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+            </Style>
+
+            <!-- The cells. Every row and sub-row and the header share these, so the columns line up by construction.
+                 Narrow and wide widths from the mockup's h-row and actrow grids; the gap is a margin on the cell so
+                 a hidden column costs nothing. -->
+            <Style Selector="Border.cell">
+                <Setter Property="Margin" Value="0,0,8,0"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="HorizontalAlignment" Value="Left"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.cell">
+                <Setter Property="Margin" Value="0,0,10,0"/>
+            </Style>
+            <Style Selector="Border.cell.status"><Setter Property="Width" Value="64"/></Style>
+            <Style Selector="DockPanel.wide Border.cell.status"><Setter Property="Width" Value="74"/></Style>
+            <Style Selector="Border.cell.members"><Setter Property="Width" Value="72"/></Style>
+            <Style Selector="DockPanel.wide Border.cell.members"><Setter Property="Width" Value="92"/></Style>
+            <Style Selector="Border.cell.fc"><Setter Property="Width" Value="96"/></Style>
+            <Style Selector="DockPanel.wide Border.cell.fc"><Setter Property="Width" Value="116"/></Style>
+            <Style Selector="Border.cell.own">
+                <Setter Property="Width" Value="128"/>
+                <Setter Property="IsVisible" Value="False"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.cell.own"><Setter Property="IsVisible" Value="True"/></Style>
+            <Style Selector="Border.cell.doctrine">
+                <Setter Property="Width" Value="132"/>
+                <Setter Property="IsVisible" Value="False"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.cell.doctrine"><Setter Property="IsVisible" Value="True"/></Style>
+            <Style Selector="Border.cell.since">
+                <Setter Property="Width" Value="84"/>
+                <Setter Property="HorizontalAlignment" Value="Right"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.cell.since"><Setter Property="Width" Value="90"/></Style>
+            <!-- The actions cell takes its width from the layout (FleetOverviewLayout.ActionsWidth) and not from a
+                 number here: that same width is what decides whether JOIN still fits on the row, and two places
+                 holding it is how the band ended up on slim lanes earlier in this ticket. -->
+            <Style Selector="Border.cell.acts">
+                <Setter Property="Margin" Value="0"/>
+            </Style>
+            <Style Selector="Border.cell.acts Button.pick.act">
+                <Setter Property="Padding" Value="6,2"/>
+                <Setter Property="FontSize" Value="9"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.cell.acts Button.pick.act">
+                <Setter Property="Padding" Value="7,3"/>
+                <Setter Property="FontSize" Value="9.5"/>
+            </Style>
+
+            <!-- Row text -->
+            <Style Selector="TextBlock.st">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="FontSize" Value="9"/>
+                <Setter Property="LetterSpacing" Value="1"/>
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="DockPanel.wide TextBlock.st">
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="LetterSpacing" Value="1.2"/>
+            </Style>
+            <Style Selector="TextBlock.st.on">
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.caret.expanded">
+                <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+            </Style>
+            <Style Selector="TextBlock.nm">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11.5"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="DockPanel.wide TextBlock.nm">
+                <Setter Property="FontSize" Value="12"/>
+            </Style>
+            <Style Selector="TextBlock.kind">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="9"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="DockPanel.wide TextBlock.kind">
+                <Setter Property="FontSize" Value="9.5"/>
+            </Style>
+            <Style Selector="TextBlock.who">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="DockPanel.wide TextBlock.who">
+                <Setter Property="FontSize" Value="11"/>
+            </Style>
+            <Style Selector="TextBlock.sub">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="9"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="DockPanel.wide TextBlock.sub">
+                <Setter Property="FontSize" Value="9.5"/>
+            </Style>
+            <Style Selector="TextBlock.dur">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+            </Style>
+            <Style Selector="DockPanel.wide TextBlock.dur">
+                <Setter Property="FontSize" Value="11.5"/>
+            </Style>
+            <Style Selector="TextBlock.sub.right">
+                <Setter Property="TextAlignment" Value="Right"/>
+            </Style>
+
+            <!-- Member sub-rows -->
+            <Style Selector="Border.subrows">
+                <Setter Property="Background" Value="{StaticResource BgRowBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="Padding" Value="0,3,0,6"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.subrows">
+                <Setter Property="Padding" Value="0,4,0,8"/>
+            </Style>
+            <Style Selector="Grid.subrow">
+                <Setter Property="Margin" Value="12,3"/>
+            </Style>
+            <Style Selector="DockPanel.wide Grid.subrow">
+                <Setter Property="Margin" Value="14,5"/>
+            </Style>
+            <Style Selector="TextBlock.tick">
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="FontSize" Value="8"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="HorizontalAlignment" Value="Right"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="DockPanel.wide TextBlock.tick">
+                <Setter Property="FontSize" Value="9"/>
+            </Style>
+            <Style Selector="StackPanel.mnamerow">
+                <Setter Property="Margin" Value="14,0,0,0"/>
+            </Style>
+            <Style Selector="DockPanel.wide StackPanel.mnamerow">
+                <Setter Property="Margin" Value="17,0,0,0"/>
+            </Style>
+            <Style Selector="TextBlock.mname">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="DockPanel.wide TextBlock.mname">
+                <Setter Property="FontSize" Value="11"/>
+            </Style>
+            <Style Selector="TextBlock.mtext">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="DockPanel.wide TextBlock.mtext">
+                <Setter Property="FontSize" Value="11"/>
+            </Style>
+            <Style Selector="TextBlock.num">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="DockPanel.wide TextBlock.num">
+                <Setter Property="FontSize" Value="11"/>
+            </Style>
+            <Style Selector="TextBlock.num.amber">
+                <Setter Property="Foreground" Value="{StaticResource ValueBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.num.dim">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            </Style>
+            <!-- The summary line under the highlighted members: "and 46 others — the fleet counts: …" -->
+            <!-- "and 46 others — the fleet counts:" is a member line like the ones above it, so it starts where they
+                 do. Left margins measured, not guessed: the text landed on x=27/29 against member names at 98/115. -->
+            <Style Selector="StackPanel.noteline">
+                <Setter Property="Margin" Value="83,4,12,2"/>
+                <Setter Property="Orientation" Value="Horizontal"/>
+                <Setter Property="Spacing" Value="6"/>
+            </Style>
+            <Style Selector="DockPanel.wide StackPanel.noteline">
+                <Setter Property="Margin" Value="100,5,14,2"/>
+            </Style>
+            <Style Selector="TextBlock.note">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.note.to">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+            <!-- Scherm 1's line under an elsewhere-active member: why they are on the roster and still do not count. -->
+            <!-- The head of the unfolded roster block: the table's own head, one step quieter. -->
+            <Style Selector="Border.subhead">
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="Background" Value="#05FFFFFF"/>
+                <Setter Property="Padding" Value="0,3"/>
+            </Style>
+            <Style Selector="Border.whynote">
+                <Setter Property="BorderBrush" Value="{StaticResource WarnBrush}"/>
+                <Setter Property="BorderThickness" Value="2,0,0,0"/>
+                <Setter Property="Padding" Value="9,3,0,5"/>
+                <!-- Left margin measured, not guessed: the note's text lands on the member name's own x (98 narrow,
+                     115 wide) once the 2 px edge and 9 px padding are counted off. -->
+                <Setter Property="Margin" Value="87,0,12,3"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.whynote">
+                <Setter Property="Margin" Value="104,0,14,4"/>
+            </Style>
+            <Style Selector="Border.whynote TextBlock">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
+            <Style Selector="TextBlock.empty">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="Margin" Value="12,8"/>
+            </Style>
+            <Style Selector="DockPanel.wide TextBlock.empty">
+                <Setter Property="Margin" Value="14,9"/>
+            </Style>
+
+            <!-- Footer -->
+            <Style Selector="Border.footbar">
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="0,1,0,0"/>
+                <Setter Property="Padding" Value="12,6"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.footbar">
+                <Setter Property="Padding" Value="14,9"/>
+            </Style>
+            <Style Selector="TextBlock.foot">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="DockPanel.wide TextBlock.foot">
+                <Setter Property="FontSize" Value="10"/>
+            </Style>
+            <Style Selector="TextBlock.foot.mono">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.foot.amber">
+                <Setter Property="Foreground" Value="{StaticResource ValueBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.foot.bright">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
             </Style>
         </DockPanel.Styles>
 
-        <!-- Header: server + acting character -->
-        <Border DockPanel.Dock="Top" Height="40" Background="#EA080604"
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-            <Grid Margin="14,0" ColumnDefinitions="*,Auto">
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <TextBlock Text="FLEETS" FontWeight="Bold" FontSize="13" LetterSpacing="2.2"
-                               Foreground="{StaticResource TextBrightBrush}"/>
-                    <TextBlock Text="{Binding ServerLabel}" FontSize="11" VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextAccentBrush}"/>
-                </StackPanel>
-                <Button Grid.Column="1" Content="REFRESH" FontSize="10" Command="{Binding RefreshCommand}"/>
+        <!-- ══ Header ══ ◆ FLEETS · counts · the coupled server · REFRESH -->
+        <Border DockPanel.Dock="Top" Classes="panel-header">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto">
+                <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,8,0"/>
+                <TextBlock Grid.Column="1" Classes="panel-title" FontSize="13" Text="FLEETS" VerticalAlignment="Center"/>
+                <Border Grid.Column="2" Classes="chip dim" Margin="10,0,0,0">
+                    <TextBlock x:Name="HeaderFleets" Text="{Binding HeaderFleetsText}"/>
+                </Border>
+                <Border Grid.Column="3" Classes="chip ok" Margin="6,0,0,0"
+                        IsVisible="{Binding HeaderCharactersText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <TextBlock x:Name="HeaderCharacters" Text="{Binding HeaderCharactersText}"/>
+                </Border>
+                <TextBlock Grid.Column="5" Text="{Binding ServerLabel}" FontSize="10.5" VerticalAlignment="Center"
+                           Margin="0,0,10,0" Foreground="{DynamicResource TextAccentBrush}"/>
+                <Button Grid.Column="6" Classes="pick" Content="REFRESH" Command="{Binding RefreshCommand}"/>
             </Grid>
         </Border>
 
-        <!-- Status line -->
+        <!-- ══ Toolbar ══ + NEW FLEET · STATUS picks · CHARACTER chips · search -->
+        <Border DockPanel.Dock="Top" Classes="toolbar" Padding="12,7" Background="#04FFFFFF"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="*,Auto">
+                <WrapPanel Grid.Column="0" VerticalAlignment="Center">
+                    <Button x:Name="NewFleetButton" Classes="pick accent" Content="+ NEW FLEET"
+                            Command="{Binding NewFleetCommand}" IsEnabled="{Binding CanInteract}"
+                            ToolTip.Tip="A fleet on a coupled server"/>
+                    <Button x:Name="NewLocalFleetButton" Classes="pick" Content="+ NEW LOCAL FLEET"
+                            Command="{Binding NewLocalFleetCommand}" IsEnabled="{Binding CanInteractLocal}"
+                            ToolTip.Tip="A fleet that lives in this client only"/>
+                    <TextBlock Classes="label" Text="STATUS"/>
+                    <Button Classes="pick" Classes.on="{Binding IsStatusAll}" Content="all"
+                            Command="{Binding SetStatusFilterCommand}" CommandParameter="{x:Static vm:FleetStatusFilter.All}"/>
+                    <Button Classes="pick" Classes.on="{Binding IsStatusActive}" Content="active"
+                            Command="{Binding SetStatusFilterCommand}" CommandParameter="{x:Static vm:FleetStatusFilter.Active}"/>
+                    <Button Classes="pick" Classes.on="{Binding IsStatusStandingBy}" Content="standing by"
+                            Command="{Binding SetStatusFilterCommand}" CommandParameter="{x:Static vm:FleetStatusFilter.StandingBy}"/>
+                    <Button Classes="pick" Classes.on="{Binding IsStatusFinished}" Content="finished"
+                            Command="{Binding SetStatusFilterCommand}" CommandParameter="{x:Static vm:FleetStatusFilter.Finished}"/>
+                    <TextBlock Classes="label" Text="CHARACTER"
+                               IsVisible="{Binding CharacterChips.Count}"/>
+                    <ItemsControl ItemsSource="{Binding VisibleCharacterChips}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:FleetFilterChipViewModel">
+                                <Button Classes="pick" Classes.on="{Binding IsOn}" Content="{Binding DisplayLabel}"
+                                        ToolTip.Tip="{Binding Label}" Command="{Binding SelectCommand}"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <!-- Narrow: the pilots that do not fit on the bar, in the same pick menu the rows use. -->
+                    <Button x:Name="CharacterOverflow" Classes="pick" IsVisible="{Binding HasHiddenCharacterChips}"
+                            ToolTip.Tip="Filter on one of your other characters">
+                        <Button.Flyout>
+                            <MenuFlyout ItemsSource="{Binding HiddenCharacterChips}"
+                                        ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>
+                        </Button.Flyout>
+                        <mi:MaterialIcon Classes="icon-sm" Kind="DotsHorizontal"/>
+                    </Button>
+                </WrapPanel>
+                <TextBox Grid.Column="1" x:Name="SearchBox" Classes="search" PlaceholderText="search fleet, FC, member…"
+                         Text="{Binding SearchText, Mode=TwoWay}" VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+
+        <!-- ══ Status line (bottom) ══ -->
         <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="0,1,0,0" Padding="12,7">
-            <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center"
-                       Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+                BorderThickness="0,1,0,0" Padding="12,6"
+                IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextAccentBrush}" FontSize="10.5"/>
         </Border>
 
         <!-- Unreachable / stale servers: a coupled server that did not respond (e.g. an old dev/test server left in
@@ -174,212 +746,427 @@
             </StackPanel>
         </Border>
 
-        <Grid Margin="10" RowDefinitions="*,12,Auto">
+        <!-- ══ Footer ══ totals · where the fleets live · the three axes, spelled out once -->
+        <Border DockPanel.Dock="Bottom" Classes="footbar">
+            <StackPanel Spacing="6">
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                    <TextBlock Grid.Column="0" x:Name="FooterTotals" Classes="foot" Text="{Binding FooterText}"/>
+                    <Border Grid.Column="1" Classes="chip dim" Margin="10,0,0,0"
+                            IsVisible="{Binding SourcesText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Text="{Binding SourcesText}"/>
+                    </Border>
+                    <TextBlock Grid.Column="3" Classes="foot" IsVisible="{Binding IsWide}"
+                               Text="A fleet's runs also appear on RUNS — there as activities, here as a fleet."/>
+                </Grid>
+                <WrapPanel IsVisible="{Binding IsWide}">
+                    <TextBlock Classes="label" FontSize="9" Text="THREE DIFFERENT THINGS" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                    <Border Classes="chip good" Margin="0,0,3,0"><TextBlock Text="online"/></Border>
+                    <TextBlock Classes="foot" Text="/" Margin="0,0,3,0"/>
+                    <Border Classes="chip dim"><TextBlock Text="offline"/></Border>
+                    <TextBlock Classes="foot" Text="— is this pilot logged in?" Margin="6,0,14,0"/>
+                    <TextBlock Classes="foot bright mono" Text="linked" FontFamily="{StaticResource MonoFont}"/>
+                    <TextBlock Classes="foot" Text="/" Margin="3,0"/>
+                    <TextBlock Classes="foot amber" Text="not linked" FontFamily="{StaticResource MonoFont}"/>
+                    <TextBlock Classes="foot" Text="— do they take part in this fleet?" Margin="6,0,14,0"/>
+                    <Border Classes="chip dim"><TextBlock Text="shares nothing"/></Border>
+                    <TextBlock Classes="foot" Text="— is their sharing switched off?" Margin="6,0,14,0"/>
+                    <TextBlock Classes="foot" Text="A member can be online and still not linked."/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
 
-            <!-- Top: one unified overview (D-105) — every fleet in a single list, grouped per coupled server with a
-                 Local fleets section at the bottom. Each card shows where it lives, its owner and only the actions
-                 my relationship allows (manage / view / join / leave). No more Browser/Participating/My Fleets tabs. -->
-            <DockPanel Grid.Row="0">
-                <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,0,0,8" Margin="0,0,0,6">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <Button Content="+ NEW FLEET" FontSize="10" Command="{Binding NewFleetCommand}" IsEnabled="{Binding CanInteract}"/>
-                        <Button Content="+ NEW LOCAL FLEET" FontSize="10" Command="{Binding NewLocalFleetCommand}" IsEnabled="{Binding CanInteractLocal}"/>
-                    </StackPanel>
-                </Border>
-                <ScrollViewer>
-                    <StackPanel>
-                        <!-- Server-grouped fleets: owned + joined + discoverable, merged into one row each. -->
-                        <ItemsControl ItemsSource="{Binding ServerGroups}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:FleetServerGroupViewModel">
-                                    <StackPanel Margin="0,0,0,10">
-                                        <Border Classes="server-group-header">
-                                            <Grid ColumnDefinitions="*,Auto">
-                                                <TextBlock Grid.Column="0" Text="{Binding ServerName}" Classes="server-group-title"
-                                                           VerticalAlignment="Center"/>
-                                                <Button Grid.Column="1" Content="DECOUPLE" FontSize="9" Classes="danger"
-                                                        ToolTip.Tip="Remove this server: decouple all your characters and drop it from the list"
-                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).DecoupleServerCommand}"
-                                                        CommandParameter="{Binding}"/>
-                                            </Grid>
-                                        </Border>
-                                        <ItemsControl ItemsSource="{Binding Fleets}">
+        <!-- ══ The band ══ one lane per own character: in which started fleet is this pilot? -->
+        <Border DockPanel.Dock="Top" Classes="band">
+            <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="Auto,Auto,*">
+                    <TextBlock Grid.Column="0" Classes="label" Text="NOW ACTIVE" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" x:Name="LanesHeader" Classes="bandcount" Margin="10,0,0,0"
+                               Text="{Binding LanesHeaderText}"/>
+                    <TextBlock Grid.Column="2" Classes="hint" Margin="20,0,0,0" HorizontalAlignment="Right"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsWide}"
+                               Text="One lane per character — a character counts for at most one active fleet. A pilot in none keeps their lane."/>
+                </Grid>
+
+                <!-- Lanes: cards, as many per row as fit at 236 px, filling the width (ET-108's grid). -->
+                <ItemsControl x:Name="LaneList" ItemsSource="{Binding Lanes}" IsVisible="{Binding IsLaneBand}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <ctl:FillGridPanel MinItemWidth="{Binding LaneMinWidth}" ColumnSpacing="6" RowSpacing="6"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vf:FleetLaneViewModel">
+                            <Border Classes="lane" Classes.idle="{Binding IsIdle}" Classes.warn="{Binding IsElsewhereActive}"
+                                    Classes.slim="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).LaneIsSlim}">
+                                <Border.ContextMenu>
+                                    <ContextMenu ItemsSource="{Binding MenuItems}"
+                                                 ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>
+                                </Border.ContextMenu>
+                                <Grid ColumnDefinitions="Auto,*">
+                                    <Border Grid.Column="0" Classes="laneedge" Classes.idle="{Binding IsIdle}"
+                                            Classes.warn="{Binding IsElsewhereActive}"/>
+                                    <StackPanel Grid.Column="1">
+                                        <StackPanel Orientation="Horizontal" Spacing="7">
+                                            <TextBlock Classes="lanename" Text="{Binding CharacterName}"/>
+                                            <Border Classes="chip" Classes.ok="{Binding IsRoleOk}" Classes.warn="{Binding IsRoleWarn}"
+                                                    Classes.dim="{Binding IsRoleDim}" IsVisible="{Binding ShowRoleChip}">
+                                                <TextBlock Text="{Binding RoleChipText}"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Classes="lanewhat" Margin="0,2,0,0">
+                                            <Run Text="{Binding FleetText}"/><Run Text="{Binding FleetOriginText}" Foreground="{StaticResource TextDimBrush}"/>
+                                        </TextBlock>
+                                        <TextBlock Classes="lanewhere" Text="{Binding WhereText}"/>
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Grid.Column="0" Classes="laneclock" Text="{Binding ClockText}"/>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom"
+                                                        IsVisible="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ShowLaneButtons}">
+                                                <Button Classes="pick" Classes.accent="{Binding PrimaryIsAccent}"
+                                                        Content="{Binding PrimaryActionText}" Command="{Binding PrimaryCommand}"
+                                                        IsVisible="{Binding HasPrimaryAction}"/>
+                                                <Button Classes="pick" Content="{Binding SecondaryActionText}"
+                                                        Command="{Binding SecondaryCommand}" IsVisible="{Binding HasSecondaryAction}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <ItemsControl Classes="lanefoot" ItemsSource="{Binding FootChips}" Margin="0,6,0,-2"
+                                                      IsVisible="{Binding ShowFootChips}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="vm:FleetViewModel">
-                                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                                                            Background="#10FFFFFF" Margin="2,3" Padding="10,8">
-                                                        <StackPanel Spacing="6">
-                                                            <!-- name + state/doctrine/visibility pills -->
-                                                            <StackPanel Orientation="Horizontal" Spacing="7">
-                                                                <TextBlock Text="●" FontSize="10" VerticalAlignment="Center"
-                                                                           Foreground="{DynamicResource AccentBrightBrush}"
-                                                                           IsVisible="{Binding IsActive}" ToolTip.Tip="The fleet you're currently in"/>
-                                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"
-                                                                           VerticalAlignment="Center" Foreground="{StaticResource TextBrightBrush}"/>
-                                                                <Border Classes="docpill" IsVisible="{Binding HasComposition}">
-                                                                    <TextBlock Text="{Binding CompositionName, StringFormat='◆ {0}'}"/>
-                                                                </Border>
-                                                                <Border Classes="statepill" Classes.forming="{Binding IsForming}">
-                                                                    <TextBlock Text="{Binding StateLabel}"/>
-                                                                </Border>
-                                                                <TextBlock Text="{Binding VisibilityLabel}" Classes="label" FontSize="9" VerticalAlignment="Center"/>
-                                                            </StackPanel>
-                                                            <!-- owner -->
-                                                            <TextBlock Classes="label" FontSize="9"
-                                                                       Text="{Binding OwnerLabel, StringFormat='Owner: {0}'}"/>
-                                                            <!-- doctrine fill + live member count (discoverable info) -->
-                                                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                                                <ItemsControl ItemsSource="{Binding RoleFill}">
-                                                                    <ItemsControl.ItemsPanel>
-                                                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="6"/></ItemsPanelTemplate>
-                                                                    </ItemsControl.ItemsPanel>
-                                                                    <ItemsControl.ItemTemplate>
-                                                                        <DataTemplate x:DataType="vm:CompositionFillRoleViewModel">
-                                                                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                                                                                    CornerRadius="3" Padding="7,2" IsVisible="{Binding HasGroupCount}">
-                                                                                <StackPanel Orientation="Horizontal" Spacing="5">
-                                                                                    <TextBlock Text="{Binding RoleName}" FontSize="10" FontWeight="SemiBold"
-                                                                                               Foreground="{StaticResource TextBrightBrush}"/>
-                                                                                    <TextBlock Text="{Binding GroupCount}" FontSize="10"
-                                                                                               Foreground="{DynamicResource AccentBrightBrush}"/>
-                                                                                </StackPanel>
-                                                                            </Border>
-                                                                        </DataTemplate>
-                                                                    </ItemsControl.ItemTemplate>
-                                                                </ItemsControl>
-                                                                <TextBlock Text="{Binding MemberCount, StringFormat='{}{0} in fleet'}"
-                                                                           Classes="label" FontSize="9" VerticalAlignment="Center"/>
-                                                            </StackPanel>
-                                                            <!-- my characters in this fleet (joined), shortened past a
-                                                                 handful (ET-53) — the fold line below opens the rest -->
-                                                            <ItemsControl ItemsSource="{Binding VisibleMembers}"
-                                                                          ItemTemplate="{StaticResource MemberLeafTemplate}"
-                                                                          IsVisible="{Binding IsParticipating}" Margin="0,2,0,0"/>
-                                                            <Button Classes="morelink" Content="{Binding MoreMembersLabel}"
-                                                                    IsVisible="{Binding CanShortenMembers}"
-                                                                    Command="{Binding ToggleMembersCommand}"
-                                                                    ToolTip.Tip="Show every member of this fleet on the card"/>
-                                                            <!-- relationship-driven actions -->
-                                                            <WrapPanel Margin="0,2,0,0">
-                                                                <Button Content="JOIN" FontSize="9" Classes="accent" Margin="0,0,3,3" IsVisible="{Binding ShowJoin}"
-                                                                        IsEnabled="{Binding JoinEnabled}"
-                                                                        ToolTip.Tip="Join with one or more of your characters"
-                                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).JoinCommand}"
-                                                                        CommandParameter="{Binding}"/>
-                                                                <Button Content="REQUEST" FontSize="9" Margin="0,0,3,3" IsVisible="{Binding ShowRequest}"
-                                                                        IsEnabled="{Binding JoinEnabled}"
-                                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).RequestCommand}"
-                                                                        CommandParameter="{Binding}"/>
-                                                                <Button Content="{Binding RosterButtonLabel}" FontSize="9" Margin="0,0,3,3" IsVisible="{Binding ShowRosterButton}"
-                                                                        ToolTip.Tip="View the fleet structure and who flies which fit"
-                                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ManageCommand}"
-                                                                        CommandParameter="{Binding}"/>
-                                                                <Button Content="EDIT" FontSize="9" Margin="0,0,3,3" IsVisible="{Binding ShowOwnerActions}"
-                                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).EditFleetCommand}"
-                                                                        CommandParameter="{Binding}"/>
-                                                                <Button Content="DISBAND" FontSize="9" Margin="0,0,3,3" IsVisible="{Binding ShowOwnerActions}"
-                                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).DisbandCommand}"
-                                                                        CommandParameter="{Binding}"/>
-                                                                <Button Content="OPEN METRICS" FontSize="9" Margin="0,0,3,3" IsVisible="{Binding ShowMetricsActions}"
-                                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).OpenMetricsCommand}"
-                                                                        CommandParameter="{Binding}"/>
-                                                                <Button Content="SHARING" FontSize="9" Margin="0,0,3,3" IsVisible="{Binding ShowMetricsActions}"
-                                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).OpenSharingCommand}"
-                                                                        CommandParameter="{Binding}"/>
-                                                            </WrapPanel>
-                                                        </StackPanel>
+                                                <DataTemplate DataType="vf:FleetCountChipViewModel">
+                                                    <Border Classes="chip" Margin="0,0,4,2" Classes.ok="{Binding IsOk}"
+                                                            Classes.warn="{Binding IsWarning}" Classes.dim="{Binding IsDim}"
+                                                            Classes.val="{Binding IsValue}">
+                                                        <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis"/>
                                                     </Border>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
                                     </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <!-- Local fleets: client-only, no server. Own management set, ENTER stays local. -->
-                        <StackPanel IsVisible="{Binding HasLocalFleets}">
-                            <Border Classes="server-group-header">
-                                <TextBlock Text="Local fleets" Classes="server-group-title"/>
+                                </Grid>
                             </Border>
-                            <ItemsControl ItemsSource="{Binding LocalFleets}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:FleetViewModel">
-                                        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                                                Background="#10FFFFFF" Margin="2,3" Padding="10,8">
-                                            <StackPanel Spacing="6">
-                                                <StackPanel Orientation="Horizontal" Spacing="7">
-                                                    <TextBlock Text="●" FontSize="10" VerticalAlignment="Center"
-                                                               Foreground="{DynamicResource AccentBrightBrush}"
-                                                               IsVisible="{Binding IsActive}" ToolTip.Tip="The fleet you're currently in"/>
-                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"
-                                                               VerticalAlignment="Center" Foreground="{StaticResource TextBrightBrush}"/>
-                                                    <Border Classes="statepill" Classes.forming="{Binding IsForming}">
-                                                        <TextBlock Text="{Binding StateLabel}"/>
-                                                    </Border>
-                                                </StackPanel>
-                                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                                    <TextBlock Classes="label" FontSize="9"
-                                                               Text="{Binding OwnerLabel, StringFormat='Owner: {0}'}"
-                                                               Foreground="{DynamicResource TextAccentBrush}"/>
-                                                    <!-- How many pilots are in the fleet, folded list or not (ET-53) -->
-                                                    <TextBlock Classes="label" FontSize="9" VerticalAlignment="Center"
-                                                               Text="{Binding MemberCountLabel}"/>
-                                                </StackPanel>
-                                                <!-- the whole roster since ET-46 (externals included), shortened past a
-                                                     handful by ET-53; the fold line below opens the rest inline -->
-                                                <ItemsControl ItemsSource="{Binding VisibleMembers}"
-                                                              ItemTemplate="{StaticResource MemberLeafTemplate}"
-                                                              IsVisible="{Binding IsParticipating}" Margin="0,2,0,0"/>
-                                                <Button Classes="morelink" Content="{Binding MoreMembersLabel}"
-                                                        IsVisible="{Binding CanShortenMembers}"
-                                                        Command="{Binding ToggleMembersCommand}"
-                                                        ToolTip.Tip="Show every member of this fleet on the card"/>
-                                                <WrapPanel Margin="0,2,0,0">
-                                                    <Button Content="MANAGE" FontSize="9" Margin="0,0,3,3"
-                                                            Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ManageLocalCommand}"
-                                                            CommandParameter="{Binding}"/>
-                                                    <Button Content="ADD TOON" FontSize="9" Margin="0,0,3,3"
-                                                            Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).AddLocalCharacterCommand}"
-                                                            CommandParameter="{Binding}"/>
-                                                    <Button Content="ADD EXTERNAL" FontSize="9" Margin="0,0,3,3"
-                                                            Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).AddLocalExternalCommand}"
-                                                            CommandParameter="{Binding}"/>
-                                                    <Button Content="OPEN METRICS" FontSize="9" Classes="accent" Margin="0,0,3,3"
-                                                            Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).OpenMetricsLocalCommand}"
-                                                            CommandParameter="{Binding}"/>
-                                                    <Button Content="SHARING" FontSize="9" Margin="0,0,3,3"
-                                                            Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).OpenSharingCommand}"
-                                                            CommandParameter="{Binding}"/>
-                                                    <Button Content="DISBAND" FontSize="9" Margin="0,0,3,3"
-                                                            Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).DisbandLocalCommand}"
-                                                            CommandParameter="{Binding}"/>
-                                                </WrapPanel>
-                                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Compact: one line per character in two columns, once the lanes would need a third row. The
+                     actions live in the line's context menu — the same trade the narrow lane makes. -->
+                <Grid x:Name="CompactBand" ColumnDefinitions="*,18,*" IsVisible="{Binding IsCompactBand}">
+                    <Grid.Resources>
+                        <DataTemplate x:Key="CompactLine" DataType="vf:FleetLaneViewModel">
+                            <Border Classes="clinewrap" Classes.idle="{Binding IsIdle}">
+                                <Border.ContextMenu>
+                                    <ContextMenu ItemsSource="{Binding MenuItems}"
+                                                 ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>
+                                </Border.ContextMenu>
+                                <Grid ColumnDefinitions="8,*,*,Auto" ColumnSpacing="9">
+                                    <Border Grid.Column="0" Classes="cdot" Classes.warn="{Binding IsElsewhereActive}" Classes.idle="{Binding IsIdle}"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5">
+                                        <TextBlock Classes="cname" Text="{Binding CharacterName}"/>
+                                        <Border Classes="chip ok" IsVisible="{Binding IsRoleOk}"><TextBlock Text="FC"/></Border>
+                                        <Border Classes="chip warn" IsVisible="{Binding IsRoleWarn}"><TextBlock Text="ELSEWHERE"/></Border>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Classes="cfleet" Classes.idle="{Binding IsIdle}" Text="{Binding CompactFleetText}"/>
+                                    <TextBlock Grid.Column="3" Classes="cclock" Classes.warn="{Binding IsElsewhereActive}"
+                                               Classes.idle="{Binding IsIdle}" Text="{Binding CompactClockText}"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </Grid.Resources>
+                    <ItemsControl Grid.Column="0" ItemsSource="{Binding CompactLeft}" ItemTemplate="{StaticResource CompactLine}"/>
+                    <ItemsControl Grid.Column="2" ItemsSource="{Binding CompactRight}" ItemTemplate="{StaticResource CompactLine}"/>
+                </Grid>
+
+                <TextBlock x:Name="LanesEmpty" Classes="hint" Margin="0" TextWrapping="Wrap"
+                           IsVisible="{Binding LanesEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           Text="{Binding LanesEmptyText}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ══ The column header ══ -->
+        <Border DockPanel.Dock="Top" Classes="gridhead">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
+                <Border Grid.Column="0" Classes="cell status"><TextBlock Classes="gridhead" Text="STATUS"/></Border>
+                <Border Grid.Column="1" Classes="cell"><TextBlock Classes="gridhead" Text="FLEET"/></Border>
+                <Border Grid.Column="2" Classes="cell members"><TextBlock Classes="gridhead" Text="MEMBERS"/></Border>
+                <Border Grid.Column="3" Classes="cell fc"><TextBlock Classes="gridhead" Text="FC"/></Border>
+                <Border Grid.Column="4" Classes="cell own"><TextBlock Classes="gridhead" Text="YOUR CHARACTERS"/></Border>
+                <Border Grid.Column="5" Classes="cell doctrine"><TextBlock Classes="gridhead" Text="DOCTRINE"/></Border>
+                <Border Grid.Column="6" Classes="cell since"><TextBlock Classes="gridhead" Text="SINCE / LAST" TextAlignment="Right" HorizontalAlignment="Right"/></Border>
+                <Border Grid.Column="7" Classes="cell acts" Width="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ActionsWidth}"/>
+            </Grid>
+        </Border>
+
+        <!-- ══ The three bands ══ -->
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <ScrollViewer.Resources>
+
+                <!-- One fleet row: the same eight cells as the header, folded to a second line when narrow. -->
+                <DataTemplate x:Key="FleetRowTemplate" DataType="vm:FleetViewModel">
+                    <StackPanel>
+                        <Button Classes="fleetrow" Classes.open="{Binding IsExpanded}" Command="{Binding ToggleExpandedCommand}"
+                                ToolTip.Tip="Unfold to the members">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
+                                <Border Grid.Column="0" Classes="cell status">
+                                    <TextBlock Classes="st" Classes.on="{Binding IsInActiveGroup}" Text="{Binding GroupStatusText}"/>
+                                </Border>
+                                <Border Grid.Column="1" Classes="cell" HorizontalAlignment="Stretch">
+                                    <Grid ColumnDefinitions="Auto,*">
+                                        <TextBlock Grid.Column="0" Classes="caret" Classes.expanded="{Binding IsExpanded}" Text="&#x25B6;"
+                                                   Margin="0,0,6,0"/>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Classes="nm" Text="{Binding Name}"/>
+                                            <TextBlock Classes="kind" Text="{Binding KindText}"
+                                                       IsVisible="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).IsWide}"/>
+                                            <TextBlock Classes="kind" Text="{Binding NarrowSubText}"
+                                                       IsVisible="{Binding !#FleetsRoot.((vm:FleetsViewModel)DataContext).IsWide}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                                <Border Grid.Column="2" Classes="cell members">
+                                    <StackPanel>
+                                        <TextBlock Classes="who" Text="{Binding MemberCountText}"/>
+                                        <TextBlock Classes="sub" Text="{Binding MemberCountSubText}"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Column="3" Classes="cell fc">
+                                    <StackPanel>
+                                        <TextBlock Classes="who" Text="{Binding CommanderText}"/>
+                                        <TextBlock Classes="sub" Text="{Binding CommanderSubText}"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Column="4" Classes="cell own">
+                                    <StackPanel>
+                                        <TextBlock Classes="who" Text="{Binding OwnCharactersText}"/>
+                                        <TextBlock Classes="sub" Text="{Binding OwnCharactersSubText}"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Column="5" Classes="cell doctrine">
+                                    <TextBlock Classes="who" Text="{Binding DoctrineText}"/>
+                                </Border>
+                                <Border Grid.Column="6" Classes="cell since">
+                                    <StackPanel HorizontalAlignment="Right">
+                                        <TextBlock Classes="dur" Text="{Binding SinceText}"/>
+                                        <TextBlock Classes="sub right" Text="{Binding SinceSubText}"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Column="7" Classes="cell acts" Width="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ActionsWidth}">
+                                    <WrapPanel HorizontalAlignment="Right">
+                                        <Button Classes="pick act danger" Content="STOP" IsVisible="{Binding ShowStop}" IsEnabled="{Binding StopEnabled}"
+                                                ToolTip.Tip="Back to standing by — only the fleet's owner stops it" ToolTip.ShowOnDisabled="True"
+                                                Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).StopRowCommand}" CommandParameter="{Binding}"/>
+                                        <Button Classes="pick act accent" Content="START" IsVisible="{Binding ShowStart}" IsEnabled="{Binding StartEnabled}"
+                                                ToolTip.Tip="Start the fleet — only the fleet's owner starts it" ToolTip.ShowOnDisabled="True"
+                                                Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).StartRowCommand}" CommandParameter="{Binding}"/>
+                                        <Button Classes="pick act accent" Content="JOIN" IsVisible="{Binding ShowJoin}" IsEnabled="{Binding JoinEnabled}"
+                                                ToolTip.Tip="{Binding JoinHint}" ToolTip.ShowOnDisabled="True"
+                                                Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).JoinCommand}" CommandParameter="{Binding}"/>
+                                        <Button Classes="pick act" Content="REQUEST" IsVisible="{Binding ShowRequest}" IsEnabled="{Binding JoinEnabled}"
+                                                ToolTip.Tip="{Binding JoinHint}" ToolTip.ShowOnDisabled="True"
+                                                Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).RequestCommand}" CommandParameter="{Binding}"/>
+                                        <Button Classes="pick act" Content="{Binding RosterButtonLabel}" IsVisible="{Binding ShowRosterButton}"
+                                                ToolTip.Tip="The fleet structure and who flies which fit"
+                                                Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ManageRowCommand}" CommandParameter="{Binding}"/>
+                                        <Button Classes="pick act" Content="METRICS" IsVisible="{Binding ShowMetricsButton}"
+                                                Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).MetricsRowCommand}" CommandParameter="{Binding}"/>
+                                        <Button Classes="pick act" Content="SHARE" IsVisible="{Binding ShowShareButton}"
+                                                Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ShareRowCommand}" CommandParameter="{Binding}"/>
+                                        <Button Classes="pick act danger" Content="LEAVE" IsVisible="{Binding ShowLeave}"
+                                                Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).LeaveRowCommand}" CommandParameter="{Binding}"/>
+                                        <Button Classes="pick act danger" Content="DELETE" IsVisible="{Binding ShowDelete}"
+                                                ToolTip.Tip="Throw this finished fleet away. Its record goes with it."
+                                                Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).DeleteRowCommand}" CommandParameter="{Binding}"/>
+                                        <Button Classes="pick act" IsVisible="{Binding HasOverflow}" ToolTip.Tip="More">
+                                            <Button.Flyout>
+                                                <MenuFlyout ItemsSource="{Binding OverflowItems}"
+                                                            ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>
+                                            </Button.Flyout>
+                                            <mi:MaterialIcon Classes="icon-sm" Kind="DotsHorizontal"/>
+                                        </Button>
+                                    </WrapPanel>
+                                </Border>
+                            </Grid>
+                        </Button>
+
+                        <!-- The members: the fleet commander, my characters, whoever asks for attention — and a tally
+                             of the rest with "show all N". A fleet of fifty costs the height of a fleet of six. -->
+                        <Border Classes="subrows" IsVisible="{Binding IsExpanded}">
+                            <StackPanel>
+                                <!-- Unfolded to the whole roster the list gets its own scroll, and the table's head
+                                     scrolls away above it — so the block carries its own, as scherm 12 draws it.
+                                     A short list stays under the table's head and needs none. -->
+                                <Border Classes="subhead" IsVisible="{Binding MembersExpanded}">
+                                    <!-- Same Grid.subrow margin as the rows under it, so the head sits on the list's
+                                         own columns rather than on the table head's. -->
+                                    <Grid Classes="subrow" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
+                                        <Border Grid.Column="0" Classes="cell status"/>
+                                        <Border Grid.Column="1" Classes="cell">
+                                            <!-- The same tree indent the member names carry, so MEMBER stands over them. -->
+                                            <StackPanel Classes="mnamerow"><TextBlock Classes="gridhead" Text="MEMBER"/></StackPanel>
                                         </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
+                                        <Border Grid.Column="2" Classes="cell members"><TextBlock Classes="gridhead" Text="SHIP"/></Border>
+                                        <Border Grid.Column="3" Classes="cell fc"><TextBlock Classes="gridhead" Text="PRESENT"/></Border>
+                                        <Border Grid.Column="4" Classes="cell own"><TextBlock Classes="gridhead" Text="ROLE"/></Border>
+                                        <Border Grid.Column="5" Classes="cell doctrine"><TextBlock Classes="gridhead" Text="FIT"/></Border>
+                                        <Border Grid.Column="6" Classes="cell since"><TextBlock Classes="gridhead" Text="TAKING PART" TextAlignment="Right" HorizontalAlignment="Right"/></Border>
+                                        <Border Grid.Column="7" Classes="cell acts" Width="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ActionsWidth}"/>
+                                    </Grid>
+                                </Border>
+                                <ScrollViewer MaxHeight="250" HorizontalScrollBarVisibility="Disabled">
+                                    <ItemsControl ItemsSource="{Binding VisibleMembers}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="vm:FleetMemberRowViewModel">
+                                              <StackPanel>
+                                                <Grid Classes="subrow" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto" Background="Transparent">
+                                                    <Grid.ContextMenu>
+                                                        <ContextMenu ItemsSource="{Binding MemberMenu}"
+                                                                     ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>
+                                                    </Grid.ContextMenu>
+                                                    <Border Grid.Column="0" Classes="cell status">
+                                                        <TextBlock Classes="tick" Text="&#x2514;"/>
+                                                    </Border>
+                                                    <Border Grid.Column="1" Classes="cell" HorizontalAlignment="Stretch">
+                                                        <StackPanel Orientation="Horizontal" Spacing="7" Classes="mnamerow">
+                                                            <TextBlock Classes="mname" Text="{Binding CharacterName}"/>
+                                                            <Border Classes="chip ok" IsVisible="{Binding IsFleetCommander}"><TextBlock Text="FC"/></Border>
+                                                            <Border Classes="chip dim" IsVisible="{Binding IsMine}"><TextBlock Text="your character"/></Border>
+                                                            <Border Classes="chip warn" IsVisible="{Binding IsElsewhereActive}"><TextBlock Text="ELSEWHERE ACTIVE"/></Border>
+                                                            <Border Classes="chip warn" IsVisible="{Binding SharesNothing}"><TextBlock Text="shares nothing"/></Border>
+                                                            <Border Classes="chip dim" IsVisible="{Binding IsExternal}"><TextBlock Text="external"/></Border>
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <Border Grid.Column="2" Classes="cell members">
+                                                        <TextBlock Classes="mtext" Text="{Binding ShipText}"/>
+                                                    </Border>
+                                                    <Border Grid.Column="3" Classes="cell fc">
+                                                        <Panel>
+                                                            <TextBlock Classes="mtext" Text="{Binding RoleLabel}"
+                                                                       IsVisible="{Binding !#FleetsRoot.((vm:FleetsViewModel)DataContext).IsWide}"/>
+                                                            <Border Classes="chip" Classes.good="{Binding IsOnline}" Classes.dim="{Binding !IsOnline}"
+                                                                    HorizontalAlignment="Left"
+                                                                    IsVisible="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).IsWide}">
+                                                                <TextBlock Text="{Binding PresenceText}"/>
+                                                            </Border>
+                                                        </Panel>
+                                                    </Border>
+                                                    <Border Grid.Column="4" Classes="cell own">
+                                                        <TextBlock Classes="mtext" Text="{Binding RoleLabel}"/>
+                                                    </Border>
+                                                    <Border Grid.Column="5" Classes="cell doctrine">
+                                                        <TextBlock Classes="mtext" Text="{Binding AssignedFitName}"/>
+                                                    </Border>
+                                                    <Border Grid.Column="6" Classes="cell since">
+                                                        <TextBlock Classes="num" Classes.amber="{Binding IsElsewhereActive}" Classes.dim="{Binding IsLinkDim}"
+                                                                   Text="{Binding LinkText}" HorizontalAlignment="Right"/>
+                                                    </Border>
+                                                    <Border Grid.Column="7" Classes="cell acts" Width="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ActionsWidth}">
+                                                        <WrapPanel HorizontalAlignment="Right">
+                                                            <Button Classes="pick tiny" Content="fit" IsVisible="{Binding IsMine}"
+                                                                    Command="{Binding SelectFitCommand}" ToolTip.Tip="{Binding SelectFitButtonLabel}"/>
+                                                            <Button Classes="pick tiny" Content="open fit" IsVisible="{Binding HasAssignedFit}"
+                                                                    Command="{Binding OpenFitCommand}" ToolTip.Tip="Open this fit's detail"/>
+                                                            <Button Classes="pick tiny" Content="leave" IsVisible="{Binding CanLeave}"
+                                                                    Command="{Binding LeaveCommand}" ToolTip.Tip="Remove this character from the fleet"/>
+                                                        </WrapPanel>
+                                                    </Border>
+                                                </Grid>
+                                                <Border Classes="whynote" IsVisible="{Binding HasElsewhereNote}">
+                                                    <TextBlock Text="{Binding ElsewhereNote}"/>
+                                                </Border>
+                                              </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                                <StackPanel Classes="noteline" IsVisible="{Binding CanShortenMembers}">
+                                    <TextBlock Classes="tick" Text="&#x251C;" Margin="0,0,4,0"/>
+                                    <TextBlock Classes="note to" Text="{Binding HiddenMembersText}" IsVisible="{Binding !MembersExpanded}"/>
+                                    <ItemsControl ItemsSource="{Binding HiddenMemberChips}" IsVisible="{Binding !MembersExpanded}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="vf:FleetCountChipViewModel">
+                                                <Border Classes="chip" Margin="0,0,4,0" Classes.warn="{Binding IsWarning}" Classes.dim="{Binding IsDim}">
+                                                    <TextBlock Text="{Binding Text}"/>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Button Classes="pick tiny" Content="{Binding MoreMembersLabel}" Command="{Binding ToggleMembersCommand}"
+                                            ToolTip.Tip="Every member of this fleet, in its own scrolling block"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
-                </ScrollViewer>
-            </DockPanel>
+                </DataTemplate>
+            </ScrollViewer.Resources>
 
+            <StackPanel>
+                <!-- ACTIVE -->
+                <StackPanel IsVisible="{Binding ShowActiveGroup}">
+                    <Border Classes="groupband">
+                        <Grid ColumnDefinitions="Auto,Auto,Auto,*">
+                            <TextBlock Grid.Column="0" Classes="bandtitle" Text="ACTIVE"/>
+                            <Border Grid.Column="1" Classes="chip ok" Margin="10,0,0,0"><TextBlock x:Name="ActiveSummary" Text="{Binding ActiveSummaryText}"/></Border>
+                            <Border Grid.Column="2" Classes="chip dim" Margin="6,0,0,0"
+                                    IsVisible="{Binding ActiveCharactersSummaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                <TextBlock Text="{Binding ActiveCharactersSummaryText}"/>
+                            </Border>
+                            <TextBlock Grid.Column="3" Classes="bandnote" HorizontalAlignment="Right" IsVisible="{Binding IsWide}">
+                                <Run Text="A character belongs here"/> <Run Text="at most once" Foreground="{StaticResource TextDimBrush}" FontSize="9.5"/>
+                            </TextBlock>
+                        </Grid>
+                    </Border>
+                    <ItemsControl x:Name="ActiveList" ItemsSource="{Binding ActiveFleets}" ItemTemplate="{StaticResource FleetRowTemplate}"/>
+                    <TextBlock Classes="empty" Text="{Binding ActiveEmptyText}"
+                               IsVisible="{Binding ActiveEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                </StackPanel>
 
-            <!-- Bottom: a slim status bar for the selected/active fleet — LEAVE lives here; the live member graphs
-                 are in the OPEN METRICS window. -->
-            <Border Grid.Row="2" Classes="panel">
-                <Border Classes="panel-header">
-                    <Grid ColumnDefinitions="*,Auto">
-                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
-                            <TextBlock Classes="diamond" Text="◆"/>
-                            <TextBlock Classes="panel-title" Text="{Binding ActiveFleetLabel}"/>
-                        </StackPanel>
-                        <Button Grid.Column="1" Content="LEAVE" FontSize="10"
-                                IsVisible="{Binding IsParticipating}" Command="{Binding LeaveCommand}"/>
-                    </Grid>
-                </Border>
-            </Border>
-        </Grid>
+                <!-- STANDING BY -->
+                <StackPanel IsVisible="{Binding ShowStandingByGroup}">
+                    <Border Classes="groupband dim">
+                        <Grid ColumnDefinitions="Auto,Auto,Auto,*">
+                            <TextBlock Grid.Column="0" Classes="bandtitle" Text="STANDING BY"/>
+                            <Border Grid.Column="1" Classes="chip dim" Margin="10,0,0,0"><TextBlock x:Name="StandingBySummary" Text="{Binding StandingBySummaryText}"/></Border>
+                            <Border Grid.Column="2" Classes="chip dim" Margin="6,0,0,0" IsVisible="{Binding IsWide}">
+                                <TextBlock Text="kept between two evenings"/>
+                            </Border>
+                            <TextBlock Grid.Column="3" Classes="bandnote" HorizontalAlignment="Right" IsVisible="{Binding IsWide}">
+                                <Run Text="A character may stand by"/> <Run Text="in as many as it likes" Foreground="{StaticResource TextDimBrush}" FontSize="9.5"/>
+                            </TextBlock>
+                        </Grid>
+                    </Border>
+                    <ItemsControl x:Name="StandingByList" ItemsSource="{Binding StandingByFleets}" ItemTemplate="{StaticResource FleetRowTemplate}"/>
+                    <TextBlock Classes="empty" Text="{Binding StandingByEmptyText}"
+                               IsVisible="{Binding StandingByEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                </StackPanel>
+
+                <!-- FINISHED: folded by default; the band itself unfolds it. -->
+                <StackPanel IsVisible="{Binding ShowFinishedGroup}">
+                    <Button x:Name="FinishedBand" Classes="bandbtn" Command="{Binding ToggleFinishedCommand}">
+                        <Border Classes="groupband dim">
+                            <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*">
+                                <TextBlock Grid.Column="0" Classes="caret" Classes.expanded="{Binding IsFinishedExpanded}" Text="&#x25B6;" Margin="0,0,6,0"/>
+                                <TextBlock Grid.Column="1" Classes="bandtitle" Text="FINISHED"/>
+                                <Border Grid.Column="2" Classes="chip dim" Margin="10,0,0,0"><TextBlock x:Name="FinishedSummary" Text="{Binding FinishedSummaryText}"/></Border>
+                                <Border Grid.Column="3" Classes="chip dim" Margin="6,0,0,0" IsVisible="{Binding IsWide}">
+                                    <TextBlock Text="kept for the record — not startable"/>
+                                </Border>
+                                <TextBlock Grid.Column="4" Classes="bandnote" HorizontalAlignment="Right">
+                                    <Run Text="{Binding FinishedFoldText}"/> <Run Text="filter: finished" Foreground="{StaticResource TextDimBrush}" FontSize="9.5"/>
+                                </TextBlock>
+                            </Grid>
+                        </Border>
+                    </Button>
+                    <StackPanel IsVisible="{Binding IsFinishedExpanded}">
+                        <ItemsControl x:Name="FinishedList" ItemsSource="{Binding FinishedFleets}" ItemTemplate="{StaticResource FleetRowTemplate}"/>
+                        <TextBlock Classes="empty" Text="{Binding FinishedEmptyText}"
+                                   IsVisible="{Binding FinishedEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
     </DockPanel>
 </v:ChromedWindow>

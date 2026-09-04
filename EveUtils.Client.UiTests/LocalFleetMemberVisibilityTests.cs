@@ -144,6 +144,7 @@ public class LocalFleetMemberVisibilityTests
 
         var vm = await LoadedFleetsAsync(instance);
         await WaitForAsync(() => vm.LocalFleets[0].Members.Count >= 2);
+        vm.LocalFleets[0].IsExpanded = true;   // a row starts folded (ET-170); its members paint once it is opened
 
         var window = new Views.FleetsWindow(vm) { Width = 760, Height = 700 };
         window.Show();
