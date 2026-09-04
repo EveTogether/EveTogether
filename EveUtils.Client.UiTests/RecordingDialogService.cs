@@ -8,6 +8,7 @@ using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 
@@ -274,6 +275,12 @@ public sealed class RecordingDialogService : IDialogService
     public AppraisalViewModel? LastAppraisal { get; private set; }
 
     public void ShowAppraisal(AppraisalViewModel viewModel) => LastAppraisal = viewModel;
+
+    /// <summary>The manual run-start screen the shell was asked to open, or null — how a test asserts the Tools
+    /// menu reaches the module without standing up the real window.</summary>
+    public ManualRunStartViewModel? LastManualRunStart { get; private set; }
+
+    public void ShowManualRunStart(ManualRunStartViewModel viewModel) => LastManualRunStart = viewModel;
 
     /// <summary>The save-a-preset dialog the tool asked for, or null — and a hook to drive it (pick a path and
     /// export) without a window.</summary>

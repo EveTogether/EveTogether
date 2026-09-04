@@ -43,6 +43,7 @@ internal sealed class StartRunCommandHandler(IDbContextFactory<ClientDbContext> 
             IsPayoutEligible = command.IsPayoutEligible,
             FitContentHash = command.FitContentHash,
             FitNameSnapshot = command.FitNameSnapshot,
+            Origin = command.Origin,
             SyncState = RunSyncState.Local,
             Revision = 1
         });

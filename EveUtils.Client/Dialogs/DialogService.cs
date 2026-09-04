@@ -6,6 +6,7 @@ using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
@@ -410,6 +411,9 @@ public sealed class DialogService : IDialogService, ISingletonService
         await _Over(new PresetImportWindow(viewModel)).ShowDialog(_owner);
         return viewModel.Applied;   // the window's own buttons never decide this — what was written does
     }
+
+    public void ShowManualRunStart(ManualRunStartViewModel viewModel) =>
+        Route(new ManualRunStartWindow(viewModel), "START RUN", "runs-start", "runs-start");
 
     public void ShowFitBrowser(FitBrowserViewModel viewModel) =>
         // One fit-browser module for the whole app (not per-entity, unlike roster/metrics): re-opening re-selects

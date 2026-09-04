@@ -15,6 +15,7 @@ using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fittings;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.EveSettings;
 using EveUtils.Client.Platform;
@@ -279,6 +280,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             case "esi": OpenEsiMetrics(); break;
             case "settings-sync": OpenSettingsSync(); break;
             case "appraisal": OpenAppraisal(); break;
+            case "runs-start": await OpenManualRunStartAsync(); break;
             case "inbox": OpenInbox(); break;
             case "logs": OpenLogs(); break;
             case "settings": await OpenSettings(); break;
@@ -599,6 +601,20 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             _services.GetRequiredService<IEnumerable<IAppraisalProvider>>(),
             _services.GetRequiredService<ISdeAccessor>(),
             _dialogs));
+    }
+
+    /// <summary>Opens the manual run-start screen (ET-163) — non-modal, like the other tools. A fresh view-model
+    /// per open, read from the character registry as it stands now rather than as it stood at app start.</summary>
+    private async Task OpenManualRunStartAsync()
+    {
+        if (_dialogs is null || _services is null)
+            return;
+
+        IReadOnlyList<Character> characters = await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
+        _dialogs.ShowManualRunStart(new ManualRunStartViewModel(
+            _services.GetRequiredService<IDispatcher>(),
+            _services.GetRequiredService<ISdeAccessor>(),
+            characters));
     }
 
     /// <summary>Open the FITS fit-browser window: the Local library plus a tab per coupled server, each a
