@@ -12,6 +12,7 @@ using EveUtils.Shared.Modules.Sde.Dtos;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using ActivityWindowViewModel = EveUtils.Client.ViewModels.Activity.ActivityWindowViewModel;
 
 namespace EveUtils.Client.UiTests;
 
@@ -26,8 +27,12 @@ public sealed class ManualRunStartTests
     private static TestClientInstance CreateInstance() => TestClientInstance.Create(services =>
         services.AddSingleton<ISdeAccessor>(new FakeSdeAccessor().AddSite(Site)));
 
-    private static ManualRunStartViewModel CreateViewModel(TestClientInstance instance, long characterId = 90000002) =>
-        new(instance.Services.GetRequiredService<IDispatcher>(), instance.Services.GetRequiredService<ISdeAccessor>(),
+    private static ManualRunStartViewModel CreateViewModel(TestClientInstance instance,
+        RecordingDialogService? dialogs = null, long characterId = 90000002) =>
+        new(instance.Services.GetRequiredService<IDispatcher>(),
+            instance.Services.GetRequiredService<ISdeAccessor>(),
+            dialogs ?? new RecordingDialogService(),
+            kind => new ActivityWindowViewModel(kind, instance.Services),
             [new Character("Manual Pilot", (int)characterId)]) { SelectedSite = Site };
 
     // AC-1's counterproof: a second command or a second run type for the manual path would break this — the
@@ -48,6 +53,26 @@ public sealed class ManualRunStartTests
             .CreateDbContextAsync(cancellationToken);
         Assert.True(vm.Started);
         Assert.Equal(2, await db.Set<Run>().CountAsync(cancellationToken));
+    }
+
+    // ET-163 nazorg's own counterproof: START used to create the run and leave a sentence behind in the dialog —
+    // no clock, no loot, no STOP, and no way to the screen that has them. The run has to arrive where every other
+    // run lives, by the same route the clipboard flow takes, and the dialog has to be gone by then.
+    [AvaloniaFact]
+    public async Task Start_OpensTheActivityWindowOnTheRun_AndClosesTheDialog()
+    {
+        using var instance = CreateInstance();
+        var dialogs = new RecordingDialogService();
+        var vm = CreateViewModel(instance, dialogs);
+        bool closed = false;
+        vm.CloseRequested += () => closed = true;
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.True(vm.Started);
+        Assert.True(closed, "the dialog was left standing after its work was done");
+        ActivityWindowViewModel opened = Assert.Single(dialogs.ShownActivityWindows);
+        Assert.Equal(ActivityKind.Site, opened.Kind);
     }
 
     // A caller that forgets Origin has to read as "we don't know" rather than silently become a claim about

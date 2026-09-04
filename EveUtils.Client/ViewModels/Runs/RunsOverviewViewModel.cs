@@ -155,7 +155,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         return Task.CompletedTask;
     }
 
-    private Task _ActOnLaneAsync(RunningLaneViewModel lane)
+    private async Task _ActOnLaneAsync(RunningLaneViewModel lane)
     {
         if (lane.Run is { } run)
         {
@@ -164,11 +164,10 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             _dialogs.ShowActivityWindow(new ActivityWindowViewModel(run.ActivityKind, _services));
         }
         else if (_services.GetService<ISdeAccessor>() is { } sde)
-            // Handed only this pilot, so the screen opens on the lane the operator pressed rather than on whoever
+            // Handed only this pilot, so the dialog opens on the lane the operator pressed rather than on whoever
             // happens to sort first.
-            _dialogs.ShowManualRunStart(new ManualRunStartViewModel(_dispatcher, sde, [lane.Character]));
-
-        return Task.CompletedTask;
+            await _dialogs.ShowManualRunStartAsync(new ManualRunStartViewModel(_dispatcher, sde, _dialogs,
+                kind => new ActivityWindowViewModel(kind, _services), [lane.Character]));
     }
 
     public void Dispose()

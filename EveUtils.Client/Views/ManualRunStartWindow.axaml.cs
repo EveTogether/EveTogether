@@ -1,27 +1,23 @@
-using System;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
-using EveUtils.Client.Dialogs;
 using EveUtils.Client.ViewModels.Runs;
 
 namespace EveUtils.Client.Views;
 
-/// <summary>The manual run-start screen (ET-163), hosted like the other feature modules: a docked tab when docked,
-/// its own window when floating.</summary>
-public partial class ManualRunStartWindow : ChromedWindow, IHostableModuleWindow
+/// <summary>The manual run-start dialog (ET-163): a modal filling-in moment, closed by its own view model the
+/// moment the run exists — from there the run lives in the activity window, like every other run.</summary>
+public partial class ManualRunStartWindow : ChromedWindow
 {
-    public Action? CloseRequested { get; set; }
-
     public ManualRunStartWindow()
     {
         AvaloniaXamlLoader.Load(this);
     }
 
-    public ManualRunStartWindow(ManualRunStartViewModel viewModel) : this() => DataContext = viewModel;
-
-    private void OnClose(object? sender, RoutedEventArgs e)
+    public ManualRunStartWindow(ManualRunStartViewModel viewModel) : this()
     {
-        if (CloseRequested is not null) CloseRequested();
-        else Close();
+        DataContext = viewModel;
+        viewModel.CloseRequested += Close;   // the run is started; the dialog has nothing left to show
     }
+
+    private void OnClose(object? sender, RoutedEventArgs e) => Close();
 }

@@ -222,9 +222,9 @@ public interface IDialogService
     /// tools. Non-modal: pasting a second list is the next thing the user does, not a reason to reopen it.</summary>
     void ShowAppraisal(AppraisalViewModel viewModel);
 
-    /// <summary>Opens the manual run-start screen (ET-163) as a hosted module — a docked tab or a floating window,
-    /// like the other tools.</summary>
-    void ShowManualRunStart(ManualRunStartViewModel viewModel);
+    /// <summary>Opens the manual run-start dialog (ET-163): modal, and gone again as soon as the run exists —
+    /// from there the run is the activity window's, the same one the clipboard route lands in.</summary>
+    Task ShowManualRunStartAsync(ManualRunStartViewModel viewModel);
 
     /// <summary>Opens one saved activity's detail as a hosted module (ET-162). Keyed on the activity so two
     /// activities are two tabs rather than one tab that quietly changes subject under the reader.</summary>

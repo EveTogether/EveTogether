@@ -280,11 +280,15 @@ public sealed class RecordingDialogService : IDialogService
 
     public void ShowAppraisal(AppraisalViewModel viewModel) => LastAppraisal = viewModel;
 
-    /// <summary>The manual run-start screen the shell was asked to open, or null — how a test asserts the Tools
-    /// menu reaches the module without standing up the real window.</summary>
+    /// <summary>The manual run-start dialog the shell was asked to open, or null — how a test asserts the Tools
+    /// menu reaches it without standing up the real window.</summary>
     public ManualRunStartViewModel? LastManualRunStart { get; private set; }
 
-    public void ShowManualRunStart(ManualRunStartViewModel viewModel) => LastManualRunStart = viewModel;
+    public Task ShowManualRunStartAsync(ManualRunStartViewModel viewModel)
+    {
+        LastManualRunStart = viewModel;
+        return Task.CompletedTask;
+    }
 
     /// <summary>The activity detail the shell was asked to open, or null.</summary>
     public ActivityDetailViewModel? LastActivityDetail { get; private set; }
