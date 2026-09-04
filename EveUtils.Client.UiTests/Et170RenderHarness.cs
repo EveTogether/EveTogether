@@ -18,6 +18,7 @@ using Avalonia.VisualTree;
 using Avalonia.Controls.Primitives;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Theming;
 using EveUtils.Client.Transport;
@@ -143,6 +144,13 @@ public class Et170RenderHarness
         await local.StartFleetAsync(done, Ravnholt);
         await local.ConcludeFleetAsync(done, Ravnholt);
         await Stamp(repository, done, now.AddDays(-11));
+
+        // One of my own pilots in the big fleet has their sharing switched off. That is the third axis, and the one
+        // reason besides "not linked" that a member may never end up behind "show all 50" (scherm 12's amber chip).
+        if (fifty)
+            await instance.Services.GetRequiredService<EveUtils.Shared.Cqrs.IDispatcher>()
+                .Send(new EveUtils.Shared.Modules.Settings.Commands.SetSettingCommand(
+                    MetricShareSnapshot.OverrideKeyFor(24, Torv, MetricKind.Dps), "false"));
 
         var vm = new FleetsViewModel(instance.Services, runClock: false);
         for (var i = 0; i < 200 && !(vm.LocalFleets.Count == 3 && vm.ServerGroups.Count == 1 && vm.ActiveFleets.Count >= 2); i++)
