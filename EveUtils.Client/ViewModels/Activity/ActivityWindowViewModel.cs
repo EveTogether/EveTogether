@@ -933,6 +933,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _runCharacterName = characterName;
     }
 
+    /// <summary>The pilot this window has been given or has settled on, so a hand-over to a window that is already
+    /// up can carry it (<c>DialogService.ShowActivityWindow</c>). Without this the caller could ask before opening
+    /// and still have the open window ask a second time — the half of the two routes that ET-158's AC-5 is about,
+    /// and the half that fixing only one of them left broken four times over.</summary>
+    public (int Id, string Name)? PickedCharacter =>
+        _runCharacterId is { } id && _runCharacterName is { } name ? (id, name) : null;
+
     /// <summary>
     /// Take over the run the fleet commander announced. Joining used to be the group code and the fleet id and
     /// nothing else, so a member landed on a brand-new window that was NOT STARTED while the commander's clock had

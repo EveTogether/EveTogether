@@ -114,6 +114,11 @@ public sealed class DialogService : IDialogService, ISingletonService
             // The incoming view model is dropped here, so what it was asked to do travels with the signature or an
             // automatic start would only ever happen on the window that did not exist yet (ET-158).
             open.StartsOnArrival = viewModel.StartsOnArrival;
+            // Including whose run it is, and before ApplySignature rather than after: that is what settles the
+            // character, and a caller that already asked would otherwise be asked again by the window that was
+            // already up. A run on the clock still wins — _AdoptRunningRunAsync takes that run's own character.
+            if (viewModel.PickedCharacter is { } pilot)
+                open.UseCharacter(pilot.Id, pilot.Name);
             open.ApplySignature(viewModel.SignatureId, viewModel.SignatureGroup, signature, viewModel.MatchedSites);
         }
 

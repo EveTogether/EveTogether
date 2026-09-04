@@ -4,7 +4,10 @@ using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.Platform;
+using EveUtils.Client.Runs;
+using EveUtils.Client.Dialogs;
 using EveUtils.Client.Views;
+using Avalonia.Controls;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
@@ -299,6 +302,58 @@ public class ActivityWindowWiringTests
         Assert.Equal(StoredRunState.Stopped, left.State);
         Assert.Null(left.DeletedAtUtc);
         window.Close();
+    }
+
+    /// <summary>
+    /// The second of ET-158's two routes, for the character this time: a window already up. The incoming view model
+    /// is dropped by <c>DialogService.ShowActivityWindow</c>, so anything it was given has to travel across by hand —
+    /// <c>StartsOnArrival</c> and the signature already did, the character did not. Ask before opening and fix only
+    /// the closed route, and the open window would go right on asking a second time: that is the shape of failure
+    /// AC-5 is written against, and the one that kept this code path alive through four attempts.
+    ///
+    /// Driven through the real <see cref="DialogService"/> rather than the recording double, because the hand-over
+    /// being tested lives in it and nowhere else.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ACopiedSignature_OnAWindowAlreadyOpen_CarriesTheChosenPilotToIt()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        await harness.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character("Second Pilot", 90000002));
+
+        var dialogs = new DialogService();
+        var owner = new Window();
+        owner.Show();
+        dialogs.SetOwner(owner);
+
+        // Two clients up and nobody asked yet, so this window has settled on no pilot at all — Raymond's case.
+        var open = new ActivityWindowViewModel(ActivityKind.Site, harness.Services);
+        dialogs.ShowActivityWindow(open, RunWindowOpenTrigger.LocalUser);
+        await ActivityWindowHarness.WaitUntil(() => open.IsStartButtonVisible);
+        Assert.Null(open.PickedCharacter);
+
+        // What the clipboard offer now hands over: the copy, and the pilot it already asked about.
+        var incoming = new ActivityWindowViewModel(ActivityKind.Site, harness.Services)
+        {
+            SignatureId = "SUG-270",
+            SignatureGroup = "Combat Site",
+            SignatureName = "Drone Cluster",
+            StartsOnArrival = true
+        };
+        incoming.UseCharacter(90000002, "Second Pilot");
+
+        dialogs.ShowActivityWindow(incoming, RunWindowOpenTrigger.CopiedSignature);
+        await open.LastSignature;
+        await ActivityWindowHarness.WaitUntil(() => open.RunId is not null);
+
+        Assert.Equal((90000002, "Second Pilot"), open.PickedCharacter);
+        Assert.Equal("Drone Cluster", open.SignatureName);
+        Assert.Equal(ActivityRunState.Running, open.RunState);
+        // And the run is filed under that pilot, not under whoever the window would have guessed.
+        Assert.Equal(90000002, (await _RunAsync(harness, open.RunId!.Value)).CharacterId);
+
+        dialogs.ActivityWindow?.Close();
+        owner.Close();
     }
 
     /// <summary>

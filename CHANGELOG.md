@@ -198,6 +198,24 @@ taken from the matching `## vX.Y.Z` section below.
   pending review.
 
 ### Fixed
+- **The LOOT section shows your run's loot again, instead of saying it cannot tell which run you mean.** It used to
+  ask the app which run was going rather than reading the run the window was already on, so every run you had stopped
+  without saving or discarding it went on competing for the answer. With eleven of those left standing, the section
+  said "11 runs are running, so which one's loot to show is ambiguous" and showed nothing at all — for every run from
+  then on. Those runs are harmless now and nothing has to be tidied up for it.
+- **A run left going when the app closes is ended the next time it starts, instead of being handed to the next
+  window.** A run outlives its window on purpose, but it was also outliving the whole app: opening EVE Together could
+  present you with a run that had started the day before, its clock reading over twenty-four hours. Such a run is now
+  brought to rest at startup — not saved and not thrown away, because what becomes of it is yours to say.
+- **Your own run stays yours, even while you are in someone else's fleet.** A solo run of your own could be taken
+  over by a window that then told you only the fleet commander was allowed to stop or discard it, leaving you no way
+  out of it at all. Whether a run is shared has always been a property of the run itself, not of whichever fleet you
+  happen to be in at the time.
+- **With two clients open, EVE Together now asks whose run it is before the run window appears.** Copying a combat
+  site used to open an empty window first — no character, no fit, nothing started — with the question arriving beside
+  it a moment later. The question comes first now, and the window opens on the answer. With one client open nothing
+  is asked, exactly as before. Dismissing the question no longer costs you the scan: the window still comes up on the
+  site you copied, and **START** asks again.
 - **A fleet you set up for later no longer costs your run its fleet.** A fleet you create but never start is a plan,
   not an operation — but a local one was counted as though you were flying it. Two of those standing by was enough
   for the app to be unable to say which fleet a run belonged to, so the run was filed under none of them and shared
