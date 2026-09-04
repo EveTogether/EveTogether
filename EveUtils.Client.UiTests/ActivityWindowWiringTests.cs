@@ -4,13 +4,17 @@ using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.Platform;
+using EveUtils.Client.Runs;
+using EveUtils.Client.Dialogs;
 using EveUtils.Client.Views;
+using Avalonia.Controls;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
@@ -301,6 +305,148 @@ public class ActivityWindowWiringTests
     }
 
     /// <summary>
+    /// The second of ET-158's two routes, for the character this time: a window already up. The incoming view model
+    /// is dropped by <c>DialogService.ShowActivityWindow</c>, so anything it was given has to travel across by hand —
+    /// <c>StartsOnArrival</c> and the signature already did, the character did not. Ask before opening and fix only
+    /// the closed route, and the open window would go right on asking a second time: that is the shape of failure
+    /// AC-5 is written against, and the one that kept this code path alive through four attempts.
+    ///
+    /// Driven through the real <see cref="DialogService"/> rather than the recording double, because the hand-over
+    /// being tested lives in it and nowhere else.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ACopiedSignature_OnAWindowAlreadyOpen_CarriesTheChosenPilotToIt()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        await harness.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character("Second Pilot", 90000002));
+
+        var dialogs = new DialogService();
+        var owner = new Window();
+        owner.Show();
+        dialogs.SetOwner(owner);
+
+        // Two clients up and nobody asked yet, so this window has settled on no pilot at all — Raymond's case.
+        var open = new ActivityWindowViewModel(ActivityKind.Site, harness.Services);
+        dialogs.ShowActivityWindow(open, RunWindowOpenTrigger.LocalUser);
+        // The window loads itself from OnOpened, so wait for that to finish rather than for the first state that
+        // happens to be readable: the LOOT status is set near the end of LoadAsync, and handing the copy over while
+        // the load is still mid-flight leaves it running against a disposed harness once the test returns.
+        await ActivityWindowHarness.WaitUntil(() => open.RunLoot?.RunStatusMessage is not null);
+        Assert.True(open.IsStartButtonVisible);
+        Assert.Null(open.PickedCharacter);
+
+        // What the clipboard offer now hands over: the copy, and the pilot it already asked about.
+        var incoming = new ActivityWindowViewModel(ActivityKind.Site, harness.Services)
+        {
+            SignatureId = "SUG-270",
+            SignatureGroup = "Combat Site",
+            SignatureName = "Drone Cluster",
+            StartsOnArrival = true
+        };
+        incoming.UseCharacter(90000002, "Second Pilot");
+
+        dialogs.ShowActivityWindow(incoming, RunWindowOpenTrigger.CopiedSignature);
+        await open.LastSignature;
+        await ActivityWindowHarness.WaitUntil(() => open.RunId is not null);
+
+        Assert.Equal((90000002, "Second Pilot"), open.PickedCharacter);
+        Assert.Equal("Drone Cluster", open.SignatureName);
+        Assert.Equal(ActivityRunState.Running, open.RunState);
+        // And the run is filed under that pilot, not under whoever the window would have guessed.
+        Assert.Equal(90000002, (await _RunAsync(harness, open.RunId!.Value)).CharacterId);
+
+        dialogs.ActivityWindow?.Close();
+        owner.Close();
+    }
+
+    /// <summary>
+    /// The other half of Raymond's 2026-09-04 report, and the older half: a run outlives its window, but it also
+    /// outlives the whole process. Quit with one going and the row stays Running with nobody left to stop it, so the
+    /// next window adopts it — he opened the app and was handed a run that had started the previous morning.
+    ///
+    /// The counter-proof is the middle of this test rather than a note under it: the window in between takes the run
+    /// over, exactly as his did. Only after the startup sweep has run does a fresh window come up on nothing.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ARunLeftRunningByAPreviousProcess_IsNotAdoptedOnceStartupHasSweptIt()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel first = await harness.OpenAsync();
+        first.SignatureId = "RUS-326";
+        first.SignatureName = "Sansha Hideaway";
+        await first.StartRunCommand.ExecuteAsync(null);
+        Guid open = first.RunId!.Value;
+        first.Dispose();   // the process goes away with the run still on the clock
+
+        // Counter-proof: this is what he got. Without the sweep the next window takes that run over.
+        ActivityWindowViewModel adopting = await harness.OpenAsync();
+        Assert.Equal(open, adopting.RunId);
+        adopting.Dispose();
+
+        // What startup does now, before any window exists.
+        Result<int> stopped = await harness.Services.GetRequiredService<IDispatcher>()
+            .Send(new StopRunsLeftRunningCommand(DateTime.UtcNow), TestContext.Current.CancellationToken);
+        Assert.Equal(1, stopped.Value);
+
+        ActivityWindowViewModel fresh = await harness.OpenAsync();
+        Assert.Null(fresh.RunId);
+        Assert.Equal(ActivityRunState.NotStarted, fresh.RunState);
+
+        // Stopped, never saved and never discarded: what becomes of it stays the pilot's call.
+        Run left = await _RunAsync(harness, open);
+        Assert.Equal(StoredRunState.Stopped, left.State);
+        Assert.Null(left.SavedAtUtc);
+        Assert.Null(left.DeletedAtUtc);
+        fresh.Dispose();
+    }
+
+    /// <summary>
+    /// Raymond, 2026-09-04: his own run, left open since the previous day, came up in a fresh window with the
+    /// controls gone and "Only Jithran, who commands this fleet, can start, stop or discard this run." His run, and
+    /// no way out of it.
+    ///
+    /// The close-out guard asked <c>run.GroupCode is null &amp;&amp; FleetId is null</c>, and that second half is a
+    /// different question about a different thing: <c>FleetId</c> is this window's live membership, while a
+    /// <c>Run</c> row has no fleet id at all. So a solo run stopped being closable the moment its pilot joined
+    /// anybody's fleet. That is the mistake ET-152 already took out of <see cref="RunControlAuthority"/> — see
+    /// <c>HomefrontCommandAuthorityTests.ASoloRun_IsAlwaysTheOwnPilotsToCommand</c>, whose second row is this same
+    /// fleet id — and the guard had quietly put it back.
+    ///
+    /// The fleet id here is what makes this a test rather than a copy of the one above: drop it and this passes
+    /// either way.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ACopiedSiteEndsHisOwnSoloRun_EvenWhileHeIsInSomebodyElsesFleet()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel first = await harness.OpenAsync();
+        first.SignatureId = "RUS-326";
+        first.SignatureName = "Sansha Hideaway";
+        await first.StartRunCommand.ExecuteAsync(null);
+        Guid? open = first.RunId;
+        Assert.Null(first.GroupCode);   // solo: this run fans out to nobody, whatever fleet he is in
+        first.Dispose();
+
+        var reopened = new ActivityWindowViewModel(ActivityKind.Site, harness.Services)
+            { SignatureId = "SUG-270", SignatureName = "Drone Cluster", FleetId = 4242 };
+        var window = new ActivityWindow(reopened);
+        window.Show();
+        await ActivityWindowHarness.WaitUntil(() => reopened.ClockText != "--:--" || reopened.RunId is not null,
+            timeoutMs: 1500);
+
+        Assert.Equal("Drone Cluster", reopened.SignatureName);   // the site he copied, not yesterday's
+        Assert.Null(reopened.RunId);
+        Assert.True(reopened.IsStartButtonVisible);              // and he can act, rather than waiting on an FC
+
+        // Closed out, not deleted: it keeps everything it collected (DiscardRunCommand never removes a row).
+        Run left = await _RunAsync(harness, open!.Value);
+        Assert.Equal(StoredRunState.Stopped, left.State);
+        Assert.Null(left.DeletedAtUtc);
+        window.Close();
+    }
+
+    /// <summary>
     /// The exception, and the reason this is not just "always close the old one": a run that belongs to a group
     /// ends on every other member's machine too, and that is the FC's button. It stays, the copied site waits.
     /// </summary>
@@ -392,7 +538,12 @@ public class ActivityWindowWiringTests
         model.SignatureName = "Sansha Hideaway";
         await model.StartRunCommand.ExecuteAsync(null);
         Guid? shared = model.RunId;
-        model.FleetId = 42;   // shared, so ending it is not this window's call
+        // Shared is the group code, and the fleet id is only where it is filed (ET-152). This used to say FleetId
+        // alone, which asserted the very conflation ET-152 removed — being in a fleet is not what makes a run
+        // somebody else's to end, and Raymond's own solo run was held hostage by exactly that reading (2026-09-04).
+        // The rule this test is about is unchanged: a run that belongs to a GROUP still waits for its commander.
+        model.GroupCode = "HF-7QK2";
+        model.FleetId = 42;
 
         model.StartsOnArrival = true;
         model.ApplySignature("SUG-270", "Combat Site", "Drone Cluster", []);

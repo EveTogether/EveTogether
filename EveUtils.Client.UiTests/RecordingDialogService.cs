@@ -209,6 +209,10 @@ public sealed class RecordingDialogService : IDialogService
     /// <summary>Set by a test that wants the "a window is already up" case; nothing here opens a real one.</summary>
     public bool IsActivityWindowOpen { get; set; }
 
+    /// <summary>Set by a test that wants "a window is up and already knows whose run it is" — the case in which the
+    /// clipboard offer must not put the character question on screen again.</summary>
+    public (int Id, string Name)? ActivityWindowPilot { get; set; }
+
     /// <summary>The activity windows a screen asked to open (ET-100). Recorded rather than shown, same as the fleet
     /// overlay above — a test asserts the toast's Start-run action reached the service without a real window.</summary>
     public List<ActivityWindowViewModel> ShownActivityWindows { get; } = [];

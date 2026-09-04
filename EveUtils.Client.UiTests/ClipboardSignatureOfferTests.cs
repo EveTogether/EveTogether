@@ -5,7 +5,11 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Platform;
 using EveUtils.Client.Runs;
+using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Shared.Identity;
+using Microsoft.Extensions.DependencyInjection;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -119,6 +123,57 @@ public sealed class ClipboardSignatureOfferTests
         Assert.Empty(env.Toasts.ActionToasts);
         Assert.Empty(env.Toasts.Toasts);
         Assert.True(Assert.Single(env.Dialogs.ShownActivityWindows).StartsOnArrival);
+    }
+
+    /// <summary>
+    /// ET-158 AC-4, in the order Raymond asked for on 2026-09-04: the question comes BEFORE the window, not beside
+    /// it. He has two clients up, and what he got was an empty SITE RUN window — "no character yet", "not started",
+    /// "no fit: the run has no character yet" — with "Whose run is this?" appearing next to it a moment later. That
+    /// is what asking at START costs: START only runs once the window is loaded.
+    ///
+    /// The ordering is the assertion, not a side effect of it: the pick records how many windows had been opened at
+    /// the moment it was asked, and that has to be none. Assert only that both happened and this passes on exactly
+    /// the behaviour being replaced.
+    ///
+    /// Three rows, because the rule is "settle the pilot without asking a question that is already answered":
+    /// ask at two clients, do not ask at one, and do not ask again when the window that is up already has a pilot.
+    /// The second and third rows are the halves that must NOT put a modal on screen — that dialog takes the keyboard
+    /// off EVE, which is the one thing ET-158 exists to avoid.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(true, false, 90000002, "Second Pilot")]
+    [InlineData(false, false, 90000001, "First Pilot")]
+    [InlineData(true, true, null, null)]
+    public async Task ThePilotIsSettledBeforeTheWindowIsOpened(
+        bool twoClientsUp, bool windowAlreadyHasPilot, int? expectedId, string? expectedName)
+    {
+        int[] flying = twoClientsUp ? [] : [90000001];   // no ids at all means every character is in game
+        using var env = await Env.StartAsync(services =>
+            services.AddSingleton<ILocalCharacterPresence>(
+                new ActivityWindowHarness.StubPresence(inGame: true, flying)));
+        var registry = env.Services.GetRequiredService<ICharacterRegistry>();
+        await registry.AddOrUpdateAsync(new Character("First Pilot", 90000001));
+        await registry.AddOrUpdateAsync(new Character("Second Pilot", 90000002));
+        if (windowAlreadyHasPilot)
+            env.Dialogs.ActivityWindowPilot = (90000001, "First Pilot");
+
+        var windowsOpenWhenAsked = -1;
+        env.Dialogs.OnPickCharacter = (_, _) =>
+        {
+            windowsOpenWhenAsked = env.Dialogs.ShownActivityWindows.Count;
+            return Task.FromResult<int?>(90000002);
+        };
+
+        env.Copy(MeasuredHomefrontLine);
+        await ActivityWindowHarness.WaitUntil(() => env.Dialogs.ShownActivityWindows.Count > 0);
+
+        var shouldAsk = twoClientsUp && !windowAlreadyHasPilot;
+        Assert.Equal(shouldAsk ? "Whose run is this?" : null, env.Dialogs.LastPrompt);
+        Assert.Equal(shouldAsk ? 0 : -1, windowsOpenWhenAsked);   // asked, and asked with no window open yet
+        ActivityWindowViewModel opened = Assert.Single(env.Dialogs.ShownActivityWindows);
+        // Row three carries no pilot on purpose: the window already up keeps its own, and DialogService leaves it be.
+        Assert.Equal(expectedId is { } id ? (id, expectedName!) : null, opened.PickedCharacter);
+        Assert.True(opened.StartsOnArrival);
     }
 
     [AvaloniaFact]
@@ -290,6 +345,8 @@ public sealed class ClipboardSignatureOfferTests
 
         public RecordingDialogService Dialogs { get; } = new();
 
+        public IServiceProvider Services => _instance.Services;
+
         private Env(TestClientInstance instance, ClipboardWatchService watch, FakeClipboardChangeSource source)
         {
             _instance = instance;
@@ -298,10 +355,10 @@ public sealed class ClipboardSignatureOfferTests
             _offer = new ClipboardSignatureOffer(watch, Toasts, Sde, Dialogs, instance.Services);
         }
 
-        public static async Task<Env> StartAsync()
+        public static async Task<Env> StartAsync(Action<IServiceCollection>? configure = null)
         {
             var source = new FakeClipboardChangeSource();
-            var instance = TestClientInstance.Create();
+            var instance = TestClientInstance.Create(configure);
             var watch = new ClipboardWatchService(new RecordingDialogService(), instance.Services,
                 NullLogger<ClipboardWatchService>.Instance, source);
             var env = new Env(instance, watch, source);

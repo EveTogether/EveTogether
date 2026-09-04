@@ -114,6 +114,15 @@ public sealed class DialogService : IDialogService, ISingletonService
             // The incoming view model is dropped here, so what it was asked to do travels with the signature or an
             // automatic start would only ever happen on the window that did not exist yet (ET-158).
             open.StartsOnArrival = viewModel.StartsOnArrival;
+            // Including whose run it is, and before ApplySignature rather than after: that is what settles the
+            // character, and a caller that already asked would otherwise be asked again by the window that was
+            // already up.
+            //
+            // Only to a window with no run of its own. A run on the clock belongs to the pilot who started it, and
+            // ApplySignature may well keep it — a copy of the site already being flown changes nothing — so writing
+            // a different pilot over it would leave the header, the gamelog filter and the stored row disagreeing.
+            if (open.RunId is null && viewModel.PickedCharacter is { } pilot)
+                open.UseCharacter(pilot.Id, pilot.Name);
             open.ApplySignature(viewModel.SignatureId, viewModel.SignatureGroup, signature, viewModel.MatchedSites);
         }
 
@@ -167,6 +176,9 @@ public sealed class DialogService : IDialogService, ISingletonService
     public Window? ActivityWindow => _activityWindow;
 
     public bool IsActivityWindowOpen => _activityWindow is not null;
+
+    public (int Id, string Name)? ActivityWindowPilot =>
+        (_activityWindow?.DataContext as ActivityWindowViewModel)?.PickedCharacter;
 
     /// <summary>Open pop-out windows independent of the main window: floating modules + DPS overlays + fleet
     /// overlays + info cards. Used by the main window's close handler to decide whether to confirm before quitting.</summary>

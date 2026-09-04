@@ -5,9 +5,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
-/// <summary>The one place that answers "which run is running right now" — shared by whatever attaches loot to it
-/// (<see cref="AddRunLootCaptureCommandHandler"/>) and whatever reads it back (<c>GetRunningRunLootQueryHandler</c>),
-/// so the "exactly one" rule and its filters can't drift apart between the two.</summary>
+/// <summary>The one place that answers "which run is running right now", for the one caller that has no better
+/// question to ask: <see cref="AddRunLootCaptureCommandHandler"/>, because a clipboard copy names no run. Reading
+/// loot back does NOT come through here any more — a window knows the run it is on, and asking this instead meant
+/// eleven runs stopped-and-never-saved made its own loot unreadable (Raymond, 2026-09-04).</summary>
 internal static class RunningRunLookup
 {
     /// <summary><see cref="Run"/> is null when the count isn't exactly one; the caller phrases the failure for its

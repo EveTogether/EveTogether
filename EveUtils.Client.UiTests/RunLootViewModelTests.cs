@@ -27,11 +27,11 @@ public sealed class RunLootViewModelTests
     {
         using var instance = TestClientInstance.Create();
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
-        await _StartRunAsync(dispatcher);
+        Guid runId = await _StartRunAsync(dispatcher);
         await _AddCaptureAsync(dispatcher, "AAA", typeId: 34);
         await _AddCaptureAsync(dispatcher, "BBB", typeId: 35);
 
-        var viewModel = new RunLootViewModel(dispatcher, new _Prices((34, 100), (35, 250)));
+        var viewModel = new RunLootViewModel(dispatcher, new _Prices((34, 100), (35, 250))) { RunId = runId };
         await viewModel.RefreshAsync(Token);
 
         Assert.Equal(2, viewModel.Captures.Count);
@@ -57,10 +57,10 @@ public sealed class RunLootViewModelTests
     {
         using var instance = TestClientInstance.Create();
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
-        await _StartRunAsync(dispatcher);
+        Guid runId = await _StartRunAsync(dispatcher);
         await _AddCaptureAsync(dispatcher, "AAA", typeId: 34);
 
-        var viewModel = new RunLootViewModel(dispatcher, new _Prices());
+        var viewModel = new RunLootViewModel(dispatcher, new _Prices()) { RunId = runId };
         await viewModel.RefreshAsync(Token);
 
         Assert.Null(viewModel.TotalIsk);
@@ -77,10 +77,10 @@ public sealed class RunLootViewModelTests
     {
         using var instance = TestClientInstance.Create();
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
-        await _StartRunAsync(dispatcher);
+        Guid runId = await _StartRunAsync(dispatcher);
         await _AddCaptureAsync(dispatcher, "stack", typeId: 34, quantity: 5);
 
-        var viewModel = new RunLootViewModel(dispatcher, new _Prices((34, 100)));
+        var viewModel = new RunLootViewModel(dispatcher, new _Prices((34, 100))) { RunId = runId };
         await viewModel.RefreshAsync(Token);
 
         Assert.Equal(500m, viewModel.LootIsk);
@@ -92,11 +92,11 @@ public sealed class RunLootViewModelTests
     {
         using var instance = TestClientInstance.Create();
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
-        await _StartRunAsync(dispatcher);
+        Guid runId = await _StartRunAsync(dispatcher);
         await _AddCaptureAsync(dispatcher, "loot", typeId: 34);
         await _AddCaptureAsync(dispatcher, "filaments", typeId: 35, lootKind: LootKind.Lost, quantity: 3);
 
-        var viewModel = new RunLootViewModel(dispatcher, new _Prices((34, 500), (35, 100)));
+        var viewModel = new RunLootViewModel(dispatcher, new _Prices((34, 500), (35, 100))) { RunId = runId };
         await viewModel.RefreshAsync(Token);
 
         Assert.Equal(500m, viewModel.LootIsk);
@@ -113,11 +113,11 @@ public sealed class RunLootViewModelTests
     {
         using var instance = TestClientInstance.Create();
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
-        await _StartRunAsync(dispatcher);
+        Guid runId = await _StartRunAsync(dispatcher);
         await _AddCaptureAsync(dispatcher, "priced", typeId: 34, clipboardPrice: 9_999m);
         await _AddCaptureAsync(dispatcher, "unpriced", typeId: 99, clipboardPrice: 5_000m);
 
-        var viewModel = new RunLootViewModel(dispatcher, new _Prices((34, 100)));
+        var viewModel = new RunLootViewModel(dispatcher, new _Prices((34, 100))) { RunId = runId };
         await viewModel.RefreshAsync(Token);
 
         Assert.Equal(100m, viewModel.LootIsk);
@@ -131,10 +131,10 @@ public sealed class RunLootViewModelTests
     {
         using var instance = TestClientInstance.Create();
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
-        await _StartRunAsync(dispatcher);
+        Guid runId = await _StartRunAsync(dispatcher);
         await _AddCaptureAsync(dispatcher, "AAA", typeId: 34);
 
-        var viewModel = new RunLootViewModel(dispatcher, new _NoPrices());
+        var viewModel = new RunLootViewModel(dispatcher, new _NoPrices()) { RunId = runId };
         await viewModel.RefreshAsync(Token);
 
         Assert.Null(viewModel.TotalIsk);
@@ -154,9 +154,63 @@ public sealed class RunLootViewModelTests
         Assert.DoesNotContain("clipboard", viewModel.TotalIskLabel, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>AC-7: no running run is a state the reader is told about, not an unexplained empty list.</summary>
+    /// <summary>
+    /// Raymond, 2026-09-04: eleven runs stopped and never saved sat in his store, and the LOOT section showed
+    /// "11 runs are running, so which one's loot to show is ambiguous" instead of his run's own loot. It asked the
+    /// store which run was running rather than reading the run it was already on.
+    ///
+    /// Counter-proof, and it is the whole point of this test: the eleven are all left standing here. Route the
+    /// section back through a which-run-is-running lookup and it goes ambiguous again on exactly this fixture;
+    /// reading <see cref="RunLootViewModel.RunId"/> is what makes the eleven irrelevant rather than fatal.
+    /// </summary>
     [AvaloniaFact]
-    public async Task WithoutARunningRun_TheStatusExplainsIt()
+    public async Task WithElevenRunsStoppedAndNeverSaved_TheSectionStillShowsItsOwnRunsLoot()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+
+        // Ten of the pile, exactly as his store held them: stopped, never saved, never discarded — so still "open".
+        for (var i = 0; i < 10; i++)
+        {
+            Guid abandoned = await _StartRunAsync(dispatcher);
+            Assert.True((await dispatcher.Send(new SetRunStoppedCommand(abandoned, StartedAtUtc.AddMinutes(5)), Token))
+                .IsSuccess);
+        }
+
+        // The eleventh is this window's own: loot copied while it ran, then STOP, with the save decision still
+        // pending. That leaves nothing running at all, which is the state his store was actually in — and the one
+        // where a which-run-is-running lookup has eleven equal answers and refuses to pick.
+        Guid runId = await _StartRunAsync(dispatcher);
+        await _AddCaptureAsync(dispatcher, "AAA", typeId: 34);
+        Assert.True((await dispatcher.Send(new SetRunStoppedCommand(runId, StartedAtUtc.AddMinutes(5)), Token))
+            .IsSuccess);
+
+        // The counter-proof, run rather than reasoned: a which-run-is-running lookup over this very fixture IS
+        // ambiguous. AddRunLootCaptureCommand still asks that question — it has no run id to go on — so its refusal
+        // here is the state the LOOT section used to inherit.
+        Result<RunLootCaptureSaveResult> guessed = await dispatcher.Send(new AddRunLootCaptureCommand(
+            new RunLootCaptureInput
+            {
+                CapturedAtUtc = StartedAtUtc, Source = LootCaptureSource.Clipboard, ContentHash = "ZZZ",
+                Entries = [new RunLootEntryInput
+                    { ItemTypeId = 34, Name = "Item 34", Quantity = 1, LootKind = LootKind.Gained }]
+            }), Token);
+        Assert.False(guessed.IsSuccess);
+        Assert.Contains("11 runs are running", guessed.Messages[0].Text); // his sentence, reproduced exactly
+
+        var viewModel = new RunLootViewModel(dispatcher, new _Prices((34, 100))) { RunId = runId };
+        await viewModel.RefreshAsync(Token);
+
+        Assert.Null(viewModel.RunStatusMessage);   // not ambiguous here: the section was never asked to guess
+        Assert.Single(viewModel.Captures);
+        Assert.Equal(100m, viewModel.TotalIsk);
+    }
+
+    /// <summary>AC-7: a window with no run of its own is a state the reader is told about, not an unexplained empty
+    /// list. The section no longer asks the store which run is running, so it no longer inherits that question's
+    /// answer either — it says what it knows about itself.</summary>
+    [AvaloniaFact]
+    public async Task WithoutARunOfItsOwn_TheStatusExplainsIt()
     {
         using var instance = TestClientInstance.Create();
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
@@ -165,7 +219,7 @@ public sealed class RunLootViewModelTests
         await viewModel.RefreshAsync(Token);
 
         Assert.Empty(viewModel.Captures);
-        Assert.Contains("No run is running", viewModel.RunStatusMessage);
+        Assert.Contains("No run yet", viewModel.RunStatusMessage);
     }
 
     /// <summary>AC-7's four states: an anchor present has nothing to explain, the other three each say why —
@@ -192,11 +246,12 @@ public sealed class RunLootViewModelTests
         Assert.NotEqual(restartMessage, viewModel.LocationStatusMessage); // a different reason, not the same shrug
     }
 
-    private static async Task _StartRunAsync(IDispatcher dispatcher)
+    private static async Task<Guid> _StartRunAsync(IDispatcher dispatcher)
     {
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Abyssal, StartedAtUtc,
             1234, "Abyssal Deadspace", 30000142), Token);
         Assert.True(started.IsSuccess);
+        return started.Value;
     }
 
     private static async Task _AddCaptureAsync(IDispatcher dispatcher, string contentHash, int typeId,

@@ -1,13 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Security.Cryptography;
 using System.Text;
 using EveUtils.Client.Dialogs;
+using Microsoft.Extensions.DependencyInjection;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Platform;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.DependencyInjection;
+using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
@@ -83,17 +87,86 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
     // _openFingerprint is deliberately left standing here, unlike the card path: it is what stops a second change
     // notification for the same copy from starting a second run. ponytail: an identical re-copy is therefore ignored
     // until something else is copied — drop the guard on a window-closed signal if that ever bites.
-    private void StartRun(ClipboardSignatureRow row) =>
-        _dialogs.ShowActivityWindow(new ActivityWindowViewModel(ActivityKind.Site, _services)
+    //
+    // The clipboard watch calls this on the UI thread, and the answer is awaited before anything is shown, so the
+    // task is loose rather than fire-and-forget in spirit: everything it can throw is caught inside.
+    private void StartRun(ClipboardSignatureRow row) => _ = _StartRunAsync(row);
+
+    /// <summary>
+    /// Ask whose run this is BEFORE the window opens, then hand the answer over. With two clients up the run window
+    /// used to come up first and empty — "no character yet", "not started", "no fit: the run has no character yet" —
+    /// and the question appeared beside it a moment later (Raymond, 2026-09-04). ET-158 got that question for free
+    /// by leaning on START's own <c>_ResolveCharacterAsync(mayAsk: true)</c>, which can only run once the window is
+    /// loaded; this is the shape the grooming pointed at instead, and the one
+    /// <c>FleetRunWindowPresenter._AcceptAsync</c> has had all along.
+    ///
+    /// Nothing about the window's own order changes: <see cref="ActivityWindowViewModel.UseCharacter"/> only puts
+    /// the answer where <c>_ResolveCharacterAsync</c> already looks first, so <c>LoadAsync</c> and the
+    /// <c>RefreshFleetCommandAsync</c>-before-<c>_StoreRunAsync</c> ordering are untouched — a fleet run is still
+    /// written as a fleet run.
+    /// </summary>
+    private async Task _StartRunAsync(ClipboardSignatureRow row)
+    {
+        try
         {
-            // The scan id travels with the site: two Sansha Refuges scanned an hour apart are two runs, and only
-            // this tells them apart.
-            SignatureId = row.SignatureId,
-            SignatureGroup = row.Group,
-            SignatureName = row.Name,
-            MatchedSites = MatchSites(row.Name!),
-            StartsOnArrival = true
-        }, RunWindowOpenTrigger.CopiedSignature);
+            // The pilots who could be flying this site: the same InGameCharacters rule the run window's own START
+            // question uses. One is not a question. None means we cannot tell, and then START asks later over the
+            // whole list rather than this guessing on its behalf.
+            var registry = _services.GetService<ICharacterRegistry>();
+            List<Character> flying = registry is null
+                ? []
+                : [.. InGameCharacters.Among(await registry.GetAllAsync(), _services.GetService<ILocalCharacterPresence>())];
+
+            Character? pilot = flying is [{ } only] ? only : null;
+            var startsOnArrival = true;
+
+            // A window already up that knows its pilot has been asked this once, and copying a site is not a reason
+            // to ask again: the answer would be the same, and the asking is a modal dialog taking the keyboard off
+            // EVE — the one thing ET-158 exists to avoid (Raymond, 2026-09-04). A window WITHOUT a pilot is still a
+            // fair question, which is why this reads the pilot rather than "is a window open".
+            //
+            // ponytail: this cannot tell "the same pilot carries on" from "he switched clients", because a clipboard
+            // copy carries no sender — Windows does not say which process copied, and the payload holds no pilot
+            // name. A copy made on a second client while the window is for the first is therefore filed under the
+            // first. That was already true before the question moved forward; giving the copy an owner is the open
+            // question from the 2026-09-02 analysis and wants the foreground EVE window, not a guess here.
+            bool answeredAlready = _dialogs.ActivityWindowPilot is not null;
+
+            if (pilot is null && flying.Count > 1 && !answeredAlready)
+            {
+                int? picked = await _dialogs.PickCharacterAsync("Whose run is this?",
+                    [.. flying.Select(character => new CharacterPickOption(
+                        character.EsiCharacterId!.Value, character.Name, "EVE client running", Enabled: true))]);
+                pilot = flying.FirstOrDefault(character => character.EsiCharacterId == picked);
+
+                // Dismissed is not "throw the copy away": the window still comes up on the site he copied, it just
+                // does not start itself. START is the way back to this same question — asking it again is exactly
+                // what _ResolveCharacterAsync(mayAsk: true) does — so a stray Escape costs a click, not the scan.
+                startsOnArrival = pilot is not null;
+            }
+
+            var window = new ActivityWindowViewModel(ActivityKind.Site, _services)
+            {
+                // The scan id travels with the site: two Sansha Refuges scanned an hour apart are two runs, and only
+                // this tells them apart.
+                SignatureId = row.SignatureId,
+                SignatureGroup = row.Group,
+                SignatureName = row.Name,
+                MatchedSites = MatchSites(row.Name!),
+                StartsOnArrival = startsOnArrival
+            };
+            // Before the window is shown, so nothing it loads has to ask again.
+            if (pilot is { EsiCharacterId: { } characterId })
+                window.UseCharacter(characterId, pilot.Name);
+
+            _dialogs.ShowActivityWindow(window, RunWindowOpenTrigger.CopiedSignature);
+        }
+        catch (Exception ex)
+        {
+            // The only caller is a clipboard subscription returning void, so an escape here is an unobserved task.
+            _toasts.Show("Run not started", $"Could not open the run on {row.Name}: {ex.Message}", ToastKind.Error);
+        }
+    }
 
     private void CloseOffer(string fingerprint)
     {

@@ -221,6 +221,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(IsSaveButtonVisible))]
     private Guid? _runId;
 
+    /// <summary>The LOOT section reads the run this window is on, so the id travels here rather than at each of the
+    /// six places that refresh it — one of which would have been forgotten.</summary>
+    partial void OnRunIdChanged(Guid? value)
+    {
+        if (RunLoot is not null)
+            RunLoot.RunId = value;
+    }
+
     /// <summary>The fleet this run belongs to, or null when the window was never told of one.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsFleetShown))]
@@ -850,7 +858,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (SignatureName is { Length: > 0 } copied
             && !_IsSameRun(run.Signature, run.SiteName, SignatureId, copied))
         {
-            if (run.GroupCode is null && FleetId is null)
+            // The run's OWN group code decides this, and nothing else. It used to also require `FleetId is null` —
+            // this window's live fleet membership — which is a different question about a different thing: a Run row
+            // has no fleet id at all, so its group code is the only tie it has to anybody else. Being in a fleet
+            // tonight does not hand yesterday's solo run to whoever commands tonight (ET-152: "the fleet id says
+            // where a run is filed, not who commands it").
+            //
+            // What that cost Raymond on 2026-09-04: a run of his own left open since the previous day was adopted,
+            // refused close-out because he happened to be in Jithran's fleet, and then read as a group run — so the
+            // window told him only Jithran could stop or discard it. His own run, and no way out of it.
+            if (run.GroupCode is null)
             {
                 await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
                     .Send(new DiscardRunCommand(run.Id, DateTime.UtcNow));
@@ -915,6 +932,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _runCharacterId = characterId;
         _runCharacterName = characterName;
     }
+
+    /// <summary>The pilot this window has been given or has settled on, so a hand-over to a window that is already
+    /// up can carry it (<c>DialogService.ShowActivityWindow</c>). Without this the caller could ask before opening
+    /// and still have the open window ask a second time — the half of the two routes that ET-158's AC-5 is about,
+    /// and the half that fixing only one of them left broken four times over.</summary>
+    public (int Id, string Name)? PickedCharacter =>
+        _runCharacterId is { } id && _runCharacterName is { } name ? (id, name) : null;
 
     /// <summary>
     /// Take over the run the fleet commander announced. Joining used to be the group code and the fleet id and
@@ -2287,7 +2311,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         // This pilot's own run: closed out here and now — stopped and unlinked, never deleted — so the window is on
         // the site just copied. A group run is left standing, because ending it reaches every other member.
-        if (RunId is { } runId && GroupCode is null && FleetId is null)
+        //
+        // Shared-ness is GroupCode and nothing else, the same as in _AdoptRunningRunAsync. FleetId used to be in
+        // here too, and it is the other route's half of one bug: being in a fleet tonight does not make this run
+        // somebody else's to end (ET-152). Both routes carry this decision, and fixing one of them is what kept it
+        // alive four times over — so this line and that one change together or not at all.
+        if (RunId is { } runId && GroupCode is null)
         {
             string? closed = SignatureName;   // read before _SetSignature moves it on to the copied site
             using var scope = _services.CreateScope();
