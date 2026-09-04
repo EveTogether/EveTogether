@@ -144,6 +144,7 @@ public class ServerApiHttpTests : IAsyncLifetime
         builder.Services.AddAuthorization(options =>
             options.AddPolicy(ApiKeyAuthentication.Policy, ApiKeyAuthentication.BuildPolicy()));
         builder.Services.AddServerApiDocs();
+        builder.Services.AddSignalR(); // the API maps a hub, so a host that maps the API has to carry SignalR
         ServerApiOptions hardening = builder.AddServerApiHardening();
 
         _app = builder.Build();

@@ -34,6 +34,11 @@ public static class ServerApiEndpoints
 
         api.MapGet("/whoami", (ClaimsPrincipal user) => Results.Ok(ApiWhoAmIResponse.From(user)));
 
+        // Inside the group, so the realtime channel is admitted by the same key policy as every route here rather
+        // than by an authorisation path of its own. A browser cannot put a header on a WebSocket handshake, and
+        // the ratified ?apikey= form (decision 7) already covers that.
+        api.MapHub<ServerApiRealtimeHub>("/realtime");
+
         // [FromServices] rather than inference: the bridge is a plain class, and an unregistered one would
         // otherwise be read as a request body instead of failing to resolve.
         api.MapGet("/fleets", (ClaimsPrincipal user, [FromServices] ServerApiQueries queries, CancellationToken ct) =>

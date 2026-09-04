@@ -219,11 +219,13 @@ public class ApiKeyAuthenticationTests : IDisposable
         List<RouteEndpoint> routes = [.. _MapTheApi()
             .Where(route => route.RoutePattern.RawText!.StartsWith("/api/v1/", StringComparison.Ordinal))];
 
-        // The data routes this milestone adds are in there — an empty or shrunken surface must not pass by default.
+        // Every route the API maps is in there — an empty or shrunken surface must not pass by default. The two
+        // realtime rows are the hub's own: a SignalR connection is admitted over one of them, so the assertions
+        // below are what proves it is gated by the group rather than by an authorisation path of its own.
         Assert.Equal(
             ["/api/v1/characters", "/api/v1/characters/{id:int}", "/api/v1/compositions", "/api/v1/compositions/{id:long}",
              "/api/v1/fits", "/api/v1/fits/{id:int}", "/api/v1/fleets", "/api/v1/fleets/{id:long}",
-             "/api/v1/health", "/api/v1/metrics", "/api/v1/whoami"],
+             "/api/v1/health", "/api/v1/metrics", "/api/v1/realtime", "/api/v1/realtime/negotiate", "/api/v1/whoami"],
             routes.Select(route => route.RoutePattern.RawText).Order(StringComparer.Ordinal));
 
         Assert.All(routes, route =>
@@ -259,6 +261,7 @@ public class ApiKeyAuthenticationTests : IDisposable
     {
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
         builder.Services.AddServerApiDocs();
+        builder.Services.AddSignalR(); // the API maps a hub, so a host that maps the API has to carry SignalR
         WebApplication app = builder.Build();
         app.MapServerApi();
 
