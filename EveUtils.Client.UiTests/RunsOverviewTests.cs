@@ -140,11 +140,11 @@ public sealed class RunsOverviewTests
         Assert.Contains(texts, text => text == "1,240 LP");
     }
 
-    /// <summary>AC-4: an activity with no loot capture says so instead of showing a figure. Counter-proof: format
-    /// the net as <c>LootIskNet ?? 0</c> and this goes red on "0 ISK" — a zero there reads as a valuation that was
-    /// taken and came out at nothing.</summary>
+    /// <summary>AC-4: an activity with nothing to value — no loot capture and no bounty line — says so instead of
+    /// showing a figure. Counter-proof: format the net as <c>LootIskNet ?? 0</c> and this goes red on "0 ISK" — a
+    /// zero there reads as a valuation that was taken and came out at nothing.</summary>
     [AvaloniaFact]
-    public async Task ActivityWithoutALootCapture_SaysSo_AndShowsNoZero()
+    public async Task ActivityWithoutALootCaptureOrBounty_SaysSo_AndShowsNoZero()
     {
         using var instance = TestClientInstance.Create();
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
@@ -154,8 +154,8 @@ public sealed class RunsOverviewTests
         List<string> texts = RenderedText.VisibleTexts(root);
 
         Assert.DoesNotContain(texts, text => text.Contains("0 ISK"));        // the criterion's own point, asserted first
-        Assert.Contains(texts, text => text == "no loot capture recorded");
-        Assert.Contains(texts, text => text.EndsWith("no loot captured"));   // the day band holds the same line
+        Assert.Contains(texts, text => text == "no loot or bounty recorded");
+        Assert.Contains(texts, text => text.EndsWith("nothing recorded to value"));  // the day band holds the same line
     }
 
     /// <summary>AC-5: six saved runs under one group code are one row that names its six pilots, and unfold into
@@ -210,6 +210,41 @@ public sealed class RunsOverviewTests
         Assert.Contains(texts, text => text == "OPEN");
     }
 
+    /// <summary>
+    /// Acceptatie 2026-09-04, bevinding 1: "net" is what the activity brought in, and on a combat site that is
+    /// mostly bounty. Measured on a copy of the operator's own store, the screen read 6.777 ISK where the same
+    /// eleven activities held 1.258.941 ISK of bounty besides, and the day band called a million-ISK evening
+    /// "+6.8k ISK net".
+    ///
+    /// Counter-proof: take <c>BountyIsk</c> back out of <c>ActivityOverviewRowDto</c> and the row falls to the
+    /// loot alone — here no loot was ever captured, so the row reads "no loot or bounty recorded" and the day band
+    /// "nothing recorded to value", both on an activity that paid out 1.258.941 ISK.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Overview_BountyCountsTowardsTheNet_InTheRowAndInTheDayBand()
+    {
+        using var instance = TestClientInstance.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunAsync(_Dispatcher(instance), 90000001, groupCode: null, cancellationToken: cancellationToken,
+            bounties: [
+                new RunBountyEntryInput { OccurredAtUtc = StartedAtUtc.AddMinutes(2), Isk = 1_000_000m },
+                new RunBountyEntryInput { OccurredAtUtc = StartedAtUtc.AddMinutes(9), Isk = 258_941m }
+            ]);
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+        RunsDayViewModel day = Assert.Single(presented.ViewModel.Days);
+        ActivityOverviewRowViewModel row = Assert.Single(day.Rows);
+
+        Assert.True(row.HasNet);
+        Assert.Equal(1_258_941m, row.NetIsk);
+        Assert.Equal("+1.26M ISK", row.NetText);
+        Assert.Contains("+1.26M ISK net", day.SummaryText);
+
+        List<string> texts = RenderedText.VisibleTexts(presented.Root);
+        Assert.Contains(texts, text => text == "+1.26M ISK");
+        Assert.DoesNotContain(texts, text => text == "no loot or bounty recorded");
+    }
+
     private static ICqrsDispatcher _Dispatcher(TestClientInstance instance) =>
         instance.Services.GetRequiredService<ICqrsDispatcher>();
 
@@ -255,12 +290,13 @@ public sealed class RunsOverviewTests
 
     private static async Task _SaveSiteRunAsync(ICqrsDispatcher dispatcher, long characterId, string? groupCode,
         CancellationToken cancellationToken, string siteName = "Homefront",
-        IReadOnlyList<RunParameterInput>? parameters = null)
+        IReadOnlyList<RunParameterInput>? parameters = null,
+        IReadOnlyList<RunBountyEntryInput>? bounties = null)
     {
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site, StartedAtUtc,
             1234, siteName, 30000142, groupCode), cancellationToken);
         await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15),
-            StartedAtUtc.AddMinutes(16), [], [], [], parameters ?? []), cancellationToken);
+            StartedAtUtc.AddMinutes(16), [], bounties ?? [], [], parameters ?? []), cancellationToken);
     }
 
     private static IReadOnlyList<RunParameterInput> _EveryRewardForm() =>

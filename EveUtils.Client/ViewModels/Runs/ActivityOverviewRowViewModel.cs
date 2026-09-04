@@ -42,9 +42,12 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         SiteText = string.IsNullOrWhiteSpace(row.SiteName) ? "Unnamed site" : row.SiteName;
         KindText = _KindText(row.ActivityKind);
         DurationText = Duration.ToString(@"hh\:mm\:ss");
-        NetIsk = row.LootIskNet;
-        HasNet = row.LootIskNet.HasValue;
-        NetText = row.LootIskNet is { } net
+        // "Net" is what the activity brought in, which on a combat site is mostly bounty: leaving it out read a
+        // 1.26M ISK evening as its 6.8k of salvage (acceptatie 2026-09-04). Null only when neither half exists —
+        // a bounty of zero is "no payout came past", which is a figure, so it counts as known.
+        NetIsk = row.LootIskNet is null && row.BountyIsk == 0 ? null : (row.LootIskNet ?? 0) + row.BountyIsk;
+        HasNet = NetIsk.HasValue;
+        NetText = NetIsk is { } net
             ? (net < 0 ? string.Empty : "+") + ActivityRewardChipViewModel.Compact(net) + " ISK"
             : string.Empty;
         CrewText = row.CharacterIds.Count == 0
@@ -52,7 +55,9 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
             : string.Join(" · ", row.CharacterIds.Select(nameOf));
         EnemiesText = row.EnemyTypeCount > 0
             ? $"{row.EnemyTypeCount} enemy types"
-            : "no enemies recorded";
+            // "Counted", not "recorded": only hand-counted enemies are stored, so a zero here is nobody typing a
+            // number, never an activity without a fight.
+            : "no enemies counted";
         Chips = [.. row.Rewards
             .OrderBy(reward => (int)reward.ParameterKey)
             .Select(reward => new ActivityRewardChipViewModel(reward.ParameterKey, reward.Amount))];
@@ -77,9 +82,10 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     public bool HasNet { get; }
     public string NetText { get; }
 
-    /// <summary>What stands where the net would be when nothing was ever captured. Never a "0 ISK": a zero here
-    /// reads as a valuation that was taken and came out at nothing (ET-161 AC-4, ET-65 AC-7).</summary>
-    public string NoNetText => "no loot capture recorded";
+    /// <summary>What stands where the net would be when neither a loot capture nor a bounty line was ever taken.
+    /// Never a "0 ISK": a zero here reads as a valuation that was taken and came out at nothing (ET-161 AC-4,
+    /// ET-65 AC-7).</summary>
+    public string NoNetText => "no loot or bounty recorded";
 
     public ObservableCollection<ActivityRewardChipViewModel> Chips { get; }
 

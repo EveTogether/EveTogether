@@ -75,7 +75,7 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             [.. crew.Distinct().Order()],
             [.. rewards.GroupBy(reward => reward.ParameterKey)
                 .Select(group => new ActivityRewardDto(group.Key, _SumOrNull(group.Select(reward => reward.Amount))))],
-            summary.LootIskNet, summary.EnemyTypeCount,
+            summary.BountyIsk, summary.LootIskNet, summary.EnemyTypeCount,
             rewards.Any(reward => reward.ParameterKey == RunParameterKey.Escalation));
     }
 

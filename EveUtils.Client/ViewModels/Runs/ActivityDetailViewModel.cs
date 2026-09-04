@@ -228,13 +228,17 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         foreach (RunEnemyObservationDto observation in detail.EnemyObservations)
             EnemyRows.Add(new ActivityEnemyRowViewModel(observation));
 
+        // Not "no combat was measured": SaveRunCommandHandler stores only the rows that carry a count, and the count
+        // is typed by hand (ET-106). An empty list therefore means nobody counted, and says nothing at all about
+        // whether there was a fight — which the BOUNTY figure three lines down often disproves outright.
         EnemiesEmptyText = EnemyRows.Count > 0
             ? null
-            : "No combat line came past in the game log for this activity. That is a measurement, not an empty list.";
+            : "Enemies are saved only once you count them, and none were counted here. Whether there was combat is "
+              + "not recorded either way.";
         Enemies.HeaderSummary = EnemyRows.Count > 0
             ? $"{detail.EnemyObservations.Sum(observation => observation.Count)} counted · " +
               $"{detail.EnemyObservations.Select(observation => observation.EnemyTypeId).Distinct().Count()} types"
-            : "no combat measured";
+            : "none counted";
     }
 
     private void _ApplyFleet(ActivityDetailDto detail)
