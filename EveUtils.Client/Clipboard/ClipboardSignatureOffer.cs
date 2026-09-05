@@ -132,6 +132,8 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
             // name. A copy made on a second client while the window is for the first is therefore filed under the
             // first. That was already true before the question moved forward; giving the copy an owner is the open
             // question from the 2026-09-02 analysis and wants the foreground EVE window, not a guess here.
+            // ET-138 built that observation — ClipboardCapture.CopiedByCharacter, read at notification time — but
+            // does not spend it here: whether/how a run resolution should lean on it is still open in ET-130.
             bool answeredAlready = _dialogs.ActivityWindowPilot is not null;
 
             if (pilot is null && candidates.Count > 1 && !answeredAlready)
