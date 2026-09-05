@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using FleetEntity = EveUtils.Shared.Modules.Fleet.Entities.Fleet;
 
-namespace EveUtils.Server;
+namespace EveUtils.Server.Checks;
 
 /// <summary>
 /// Headless proof for auto-squad-on-join (2026-06-04), runnable via <c>--fleet-autoplace-test</c>. A new fleet ships

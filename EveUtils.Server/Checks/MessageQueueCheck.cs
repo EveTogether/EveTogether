@@ -16,7 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 using FleetEntity = EveUtils.Shared.Modules.Fleet.Entities.Fleet;
 using FleetRepo = EveUtils.Shared.Modules.Fleet.Repositories.IFleetRepository;
 
-namespace EveUtils.Server;
+namespace EveUtils.Server.Checks;
 
 /// <summary>
 /// Headless proof for the internal message queue, runnable via <c>--message-test</c>. Drives the real

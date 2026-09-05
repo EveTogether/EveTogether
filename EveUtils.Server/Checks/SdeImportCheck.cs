@@ -4,7 +4,7 @@ using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Sde.Import;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace EveUtils.Server;
+namespace EveUtils.Server.Checks;
 
 /// <summary>
 /// Headless end-to-end proof of the SDE pipeline (<c>--sde-import</c>): runs a real CCP download + JSONL→SQLite
