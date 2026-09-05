@@ -21,11 +21,14 @@
              the module host re-parents this content into a tab. -->
         <DockPanel.Styles>
             <!-- The day band. Not a stored thing — an evening is the rows already on screen added up. -->
-            <Style Selector="Border.dayband">
+            <Style Selector="ToggleButton.dayband">
                 <Setter Property="Background" Value="{StaticResource BgRowBrush}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
                 <Setter Property="BorderThickness" Value="0,0,0,1"/>
                 <Setter Property="Padding" Value="14,7"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             </Style>
             <Style Selector="TextBlock.daytitle">
                 <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
@@ -204,13 +207,15 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="vr:RunsDayViewModel">
                         <StackPanel>
-                            <Border Classes="dayband">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                    <TextBlock Classes="daytitle" Text="{Binding DayText}"/>
-                                    <TextBlock Grid.Column="1" Classes="sectionsummary" Text="{Binding SummaryText}"/>
+                            <ToggleButton Classes="dayband" IsChecked="{Binding IsExpanded, Mode=TwoWay}"
+                                          ToolTip.Tip="Show or hide this day's activities">
+                                <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
+                                    <TextBlock Classes="caret" Classes.expanded="{Binding IsExpanded}" Text="&#x25B6;"/>
+                                    <TextBlock Grid.Column="1" Classes="daytitle" Text="{Binding DayText}"/>
+                                    <TextBlock Grid.Column="2" Classes="sectionsummary" Text="{Binding SummaryText}"/>
                                 </Grid>
-                            </Border>
-                            <ItemsControl ItemsSource="{Binding Rows}">
+                            </ToggleButton>
+                            <ItemsControl ItemsSource="{Binding Rows}" IsVisible="{Binding IsExpanded}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="vr:ActivityOverviewRowViewModel">
                                         <StackPanel>

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
@@ -11,7 +12,7 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// the rows that are already on screen, so nothing here is saved or synchronised — the moment it were an entity it
 /// would need both (ET-131, design question 1).
 /// </summary>
-public sealed class RunsDayViewModel
+public sealed partial class RunsDayViewModel : ObservableObject
 {
     public RunsDayViewModel(DateTime day, IReadOnlyList<ActivityOverviewRowViewModel> rows)
     {
@@ -35,4 +36,6 @@ public sealed class RunsDayViewModel
     public string DayText { get; }
     public string SummaryText { get; }
     public ObservableCollection<ActivityOverviewRowViewModel> Rows { get; }
+
+    [ObservableProperty] private bool _isExpanded = true;
 }
