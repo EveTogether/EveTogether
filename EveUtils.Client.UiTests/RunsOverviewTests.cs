@@ -396,6 +396,52 @@ public sealed class RunsOverviewTests
         return (new RunsWindow(viewModel) { Width = width, Height = 1400 }, viewModel);
     }
 
+    /// <summary>ET-189: a run saved elsewhere while the screen is already open appears without the RUNS entry being
+    /// reopened — the specific case the ticket names, the first run of a day, with no day band on screen yet to
+    /// hold it. Counter-proof: <c>RunsOverviewViewModel</c> without an <c>IEventBus</c> subscription never rebuilds
+    /// its days on its own, so this reads zero rows until something calls <c>RefreshModule</c>/<c>LoadAsync</c>
+    /// again — which this test never does.</summary>
+    [AvaloniaFact]
+    public async Task RunSavedWhileScreenIsOpen_AppearsWithoutReopening()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        (_, RunsOverviewViewModel viewModel) = await _WindowAsync(instance, 758, cancellationToken);
+        Assert.Empty(viewModel.Tabs[0].Days);
+
+        await _SaveSiteRunAsync(dispatcher, 90000001, groupCode: null, cancellationToken: cancellationToken);
+        Dispatcher.UIThread.RunJobs(); // the refresh is posted to the UI thread, not run inline (ET-189 review)
+
+        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(viewModel.Tabs[0].Days).Rows);
+        Assert.Equal("Homefront", row.SiteText);
+    }
+
+    /// <summary>ET-191's per-day expand toggle must survive the live refresh ET-189 adds: a second run landing on a
+    /// day the operator collapsed must not spring it back open, and must still land in that day's own total.
+    /// Counter-proof: refill every day band from scratch without carrying its <c>IsExpanded</c> over (the naive
+    /// version of the fix) and this goes red on the collapsed day snapping back to expanded.</summary>
+    [AvaloniaFact]
+    public async Task DayCollapsedByOperator_StaysCollapsed_AcrossALiveRefresh()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunAsync(dispatcher, 90000001, groupCode: null, cancellationToken: cancellationToken);
+
+        (_, RunsOverviewViewModel viewModel) = await _WindowAsync(instance, 758, cancellationToken);
+        RunsDayViewModel day = Assert.Single(viewModel.Tabs[0].Days);
+        day.IsExpanded = false;
+
+        await _SaveSiteRunAsync(dispatcher, 90000002, groupCode: null, cancellationToken: cancellationToken);
+        Dispatcher.UIThread.RunJobs(); // the refresh is posted to the UI thread, not run inline (ET-189 review)
+
+        RunsDayViewModel refreshedDay = Assert.Single(viewModel.Tabs[0].Days);
+        Assert.False(refreshedDay.IsExpanded);
+        Assert.Equal(2, refreshedDay.Rows.Count);
+    }
+
     private static async Task<Presented> _PresentAsync(
         TestClientInstance instance, double width, CancellationToken cancellationToken,
         IReadOnlyList<Character>? characters = null, RecordingDialogService? dialogs = null)

@@ -16,6 +16,7 @@ public sealed partial class RunsDayViewModel : ObservableObject
 {
     public RunsDayViewModel(DateTime day, IReadOnlyList<ActivityOverviewRowViewModel> rows)
     {
+        Day = day;
         Rows = [.. rows];
         DayText = day.ToString("dddd d MMMM", CultureInfo.InvariantCulture).ToUpperInvariant();
 
@@ -32,6 +33,11 @@ public sealed partial class RunsDayViewModel : ObservableObject
 
         SummaryText = $"{activities} · {flownText} · {netText}";
     }
+
+    /// <summary>The date this band groups by — a stable key across a rebuild (ET-189), unlike an
+    /// <see cref="ActivityOverviewRowViewModel.ActivitySummaryId"/>, which is reassigned every time
+    /// <c>RebuildActivitySummariesCommandHandler</c> runs.</summary>
+    public DateTime Day { get; }
 
     public string DayText { get; }
     public string SummaryText { get; }

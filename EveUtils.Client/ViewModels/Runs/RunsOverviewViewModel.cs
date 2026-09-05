@@ -18,6 +18,7 @@ using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Transport;
@@ -50,6 +51,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private readonly IReadOnlyDictionary<long, string> _namesById;
     private readonly DispatcherTimer? _clock;
     private readonly RunsFleetFilter? _fleetFilter;
+    private readonly IDisposable? _runSavedSubscription;
     private bool _canPublish;
 
     /// <summary>Set once per load when <see cref="_fleetFilter"/> is active and turned up nothing: whether that
@@ -78,6 +80,17 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         LanesEmptyText = Lanes.Count == 0
             ? "No character is linked yet, so there is no lane to run one on."
             : null;
+
+        // A run finished elsewhere while this screen was already open used to sit unseen until the RUNS entry was
+        // reopened, since nothing here ever heard about it (ET-189) — this is the same "screen open, event fired"
+        // gap AddRunLootCaptureCommandHandler's comment already names for loot.
+        //
+        // InProcessEventBus calls a subscriber on whatever thread published — today that is always the UI thread
+        // (both SaveRunCommand call sites are button click handlers), but the bus itself makes no such promise, so
+        // this follows HomeDashboardViewModel's pattern (HomeDashboardViewModel.cs, FleetChangedEvent) rather than
+        // trust that: post the refresh to the UI thread instead of touching an ObservableCollection off it.
+        _runSavedSubscription = services.GetService<IEventBus>()?.Subscribe<RunSavedEvent>(
+            evt => Dispatcher.UIThread.Post(() => _ = _OnRunSavedAsync()));
 
         if (!runClock)
             return;
@@ -139,7 +152,14 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         await _LoadUnfinishedRunsAsync(cancellationToken);
 
         await _RefreshServerTabsAsync(cancellationToken);
+        await _FillTabsAsync(cancellationToken);
+    }
 
+    /// <summary>Reads the overview and refills every tab's day bands from it. Split out of <see cref="LoadAsync"/>
+    /// so a live update (<see cref="_OnRunSavedAsync"/>) can redo just this part — the lanes and unfinished band
+    /// have nothing to do with a run being saved.</summary>
+    private async Task _FillTabsAsync(CancellationToken cancellationToken)
+    {
         Result<IReadOnlyList<ActivityOverviewRowDto>> overview =
             await _dispatcher.Query(new GetActivityOverviewQuery(FleetId: _fleetFilter?.FleetId), cancellationToken);
         foreach (RunsTabViewModel tab in Tabs)
@@ -157,6 +177,28 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             _fleetFilter, cancellationToken);
         foreach (RunsTabViewModel tab in Tabs)
             _FillTab(tab, overview.Value);
+    }
+
+    /// <summary>A run was saved somewhere — this screen's own unfinished-run actions reload through
+    /// <see cref="_AfterFinishingAsync"/> already, so this is for the other source: a run window that finished one
+    /// while this screen sat open (ET-189). Refills the day bands only, and restores each day's expand state (ET-191)
+    /// across the refill rather than resetting it — <see cref="RunsDayViewModel"/> has no way to update its own
+    /// totals in place, so a rebuild is how a new row's day total lands too, first day of the evening included.
+    /// Runs already on the UI thread — posted there by the subscription above — so no cancellation token to hand
+    /// down; there is nothing in flight for a token to cancel.</summary>
+    private async Task _OnRunSavedAsync()
+    {
+        Dictionary<RunsTabViewModel, Dictionary<DateTime, bool>> expandedByTab = Tabs.ToDictionary(
+            tab => tab, tab => tab.Days.ToDictionary(day => day.Day, day => day.IsExpanded));
+        await _FillTabsAsync(CancellationToken.None);
+        foreach (RunsTabViewModel tab in Tabs)
+        {
+            if (!expandedByTab.TryGetValue(tab, out Dictionary<DateTime, bool>? expandedByDay))
+                continue;
+            foreach (RunsDayViewModel day in tab.Days)
+                if (expandedByDay.TryGetValue(day.Day, out bool isExpanded))
+                    day.IsExpanded = isExpanded;
+        }
     }
 
     /// <summary>
@@ -466,6 +508,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     public void Dispose()
     {
+        _runSavedSubscription?.Dispose();
         if (_clock is null)
             return;
 
