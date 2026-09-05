@@ -28,10 +28,13 @@ internal sealed partial class LinkRunToGroupCodeCommandHandler(IDbContextFactory
             return Result.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
                 "A run is already linked to another group code.", "Runs"));
 
-        if (run.GroupCode == command.GroupCode)
-            return Result.Success();
-        run.GroupCode = command.GroupCode;
-        run.Revision++;
+        if (run.GroupCode != command.GroupCode)
+        {
+            run.GroupCode = command.GroupCode;
+            run.Revision++;
+        }
+        if (command.FleetId is { } fleetId)
+            await RunGroupOriginRecorder.RecordAsync(db, command.GroupCode, fleetId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }

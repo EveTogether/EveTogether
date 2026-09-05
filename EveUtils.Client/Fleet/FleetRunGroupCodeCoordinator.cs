@@ -156,7 +156,8 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
                     return;
             }
 
-            Result linked = await _dispatcher.Send(new LinkRunToGroupCodeCommand(run.RunId, groupCode), cancellationToken);
+            Result linked = await _dispatcher.Send(
+                new LinkRunToGroupCodeCommand(run.RunId, groupCode, run.Key.FleetId), cancellationToken);
             if (!linked.IsSuccess)
                 return;
 
