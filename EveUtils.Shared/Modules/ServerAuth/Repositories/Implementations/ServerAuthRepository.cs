@@ -81,6 +81,8 @@ internal sealed class ServerAuthRepository(IDbContextFactory<SharedDbContext> co
         entity.RefreshTokenNonce = refreshToken.Nonce;
         entity.RefreshTokenTag = refreshToken.Tag;
         entity.LastRefreshedAt = DateTimeOffset.UtcNow;
+        entity.LastFailedAt = null;
+        entity.FailureCount = 0;
 
         if (grantedScopes is not null)
             entity.GrantedScopes = grantedScopes;
@@ -93,6 +95,16 @@ internal sealed class ServerAuthRepository(IDbContextFactory<SharedDbContext> co
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
         return await db.Set<SyncedCharacter>().AsNoTracking().OrderBy(c => c.CharacterName).ToListAsync(cancellationToken);
+    }
+
+    public async Task RecordRefreshFailureAsync(int esiCharacterId, DateTimeOffset failedAt, int failureCount, CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        await db.Set<SyncedCharacter>()
+            .Where(character => character.EsiCharacterId == esiCharacterId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(character => character.LastFailedAt, failedAt)
+                .SetProperty(character => character.FailureCount, failureCount), cancellationToken);
     }
 
     public async Task AddSessionAsync(ServerSession session, CancellationToken cancellationToken = default)

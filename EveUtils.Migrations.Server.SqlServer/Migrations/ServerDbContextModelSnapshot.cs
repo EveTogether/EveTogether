@@ -1124,9 +1124,15 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                     b.Property<int>("EsiCharacterId")
                         .HasColumnType("int");
 
+                    b.Property<int>("FailureCount")
+                        .HasColumnType("int");
+
                     b.Property<string>("GrantedScopesJson")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset?>("LastFailedAt")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<DateTimeOffset?>("LastRefreshedAt")
                         .HasColumnType("datetimeoffset");

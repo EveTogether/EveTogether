@@ -1124,9 +1124,15 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.Property<int>("EsiCharacterId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("FailureCount")
+                        .HasColumnType("integer");
+
                     b.Property<string>("GrantedScopesJson")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LastFailedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset?>("LastRefreshedAt")
                         .HasColumnType("timestamp with time zone");
