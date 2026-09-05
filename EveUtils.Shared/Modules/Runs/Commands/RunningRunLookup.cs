@@ -24,7 +24,8 @@ internal static class RunningRunLookup
     /// session (Raymond, 2026-09-04) then makes it one Stopped candidate among several — "N runs are running" on
     /// loot that has an unambiguous owner right there in the open window. This is that answer, not a guess: only one
     /// activity window is ever open at a time (ET-98), so the run it is on is never one of two candidates to choose
-    /// between.</param>
+    /// between — but ET-130 (multiple concurrent runs, one per character) removes that guarantee, and this hint
+    /// becomes ambiguous itself the day it lands.</param>
     public static async Task<(Run? Run, int RunningCount)> FindAsync(
         ClientDbContext db, CancellationToken cancellationToken, bool includeStopped = false, Guid? preferredRunId = null)
     {
