@@ -111,14 +111,15 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         try
         {
             // The pilots who could be flying this site: the same InGameCharacters rule the run window's own START
-            // question uses. One is not a question. None means we cannot tell, and then START asks later over the
-            // whole list rather than this guessing on its behalf.
+            // question uses. One is not a question. Seeing none is not knowing, so the known characters stand in.
             var registry = _services.GetService<ICharacterRegistry>();
-            List<Character> flying = registry is null
+            List<Character> known = registry is null
                 ? []
-                : [.. InGameCharacters.Among(await registry.GetAllAsync(), _services.GetService<ILocalCharacterPresence>())];
+                : (await registry.GetAllAsync()).Where(character => character.EsiCharacterId is not null).ToList();
+            List<Character> flying = InGameCharacters.Among(known, _services.GetService<ILocalCharacterPresence>());
+            List<Character> candidates = flying.Count == 0 ? known : flying;
 
-            Character? pilot = flying is [{ } only] ? only : null;
+            Character? pilot = candidates is [{ } only] ? only : null;
             var startsOnArrival = true;
 
             // A window already up that knows its pilot has been asked this once, and copying a site is not a reason
@@ -133,16 +134,16 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
             // question from the 2026-09-02 analysis and wants the foreground EVE window, not a guess here.
             bool answeredAlready = _dialogs.ActivityWindowPilot is not null;
 
-            if (pilot is null && flying.Count > 1 && !answeredAlready)
+            if (pilot is null && candidates.Count > 1 && !answeredAlready)
             {
                 int? picked = await _dialogs.PickCharacterAsync("Whose run is this?",
-                    [.. flying.Select(character => new CharacterPickOption(
-                        character.EsiCharacterId!.Value, character.Name, "EVE client running", Enabled: true))]);
-                pilot = flying.FirstOrDefault(character => character.EsiCharacterId == picked);
+                    [.. candidates.Select(character => new CharacterPickOption(
+                        character.EsiCharacterId!.Value, character.Name,
+                        flying.Contains(character) ? "EVE client running" : "local character", Enabled: true))]);
+                pilot = candidates.FirstOrDefault(character => character.EsiCharacterId == picked);
 
                 // Dismissed is not "throw the copy away": the window still comes up on the site he copied, it just
-                // does not start itself. START is the way back to this same question — asking it again is exactly
-                // what _ResolveCharacterAsync(mayAsk: true) does — so a stray Escape costs a click, not the scan.
+                // does not start itself. START is the way back to this same question over the same candidate set.
                 startsOnArrival = pilot is not null;
             }
 
