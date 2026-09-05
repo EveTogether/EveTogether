@@ -31,6 +31,11 @@
             <TextBlock Text="{Binding SelectedSite.Name, StringFormat='Selected: {0}'}"
                        IsVisible="{Binding HasSelectedSite}" FontSize="11"
                        Foreground="{DynamicResource TextAccentBrush}"/>
+            <!-- ET-126: what the catalogue agrees on for the typed name, silent about anything it disagrees on and
+                 silent on no match — never a guess. -->
+            <TextBlock Text="{Binding CatalogEnrichmentText}"
+                       IsVisible="{Binding CatalogEnrichmentText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                       Classes="hint" FontSize="11"/>
         </StackPanel>
 
         <StackPanel Spacing="3">
