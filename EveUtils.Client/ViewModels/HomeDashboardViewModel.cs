@@ -15,11 +15,14 @@ using EveUtils.Client.Messaging;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Transport;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fittings.Events;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Events;
+using EveUtils.Shared.Modules.Runs.Events;
+using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Transport;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -40,6 +43,7 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
     private readonly FleetClient? _fleets;
     private readonly ServerFitShareClient? _fitShare;
     private readonly ICharacterRegistry? _registry;
+    private readonly IDispatcher? _dispatcher;
     private readonly EveClientPresenceService? _presence;
     private readonly IRemoteBusConnector? _busConnector;
     private readonly ICharacterPortraitProvider? _portraits;
@@ -67,6 +71,7 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
         _fleets = services.GetService<FleetClient>();
         _fitShare = services.GetService<ServerFitShareClient>();
         _registry = services.GetService<ICharacterRegistry>();
+        _dispatcher = services.GetService<IDispatcher>();
         _presence = services.GetService<EveClientPresenceService>();
         _busConnector = services.GetService<IRemoteBusConnector>();
         _portraits = services.GetService<ICharacterPortraitProvider>();
@@ -98,6 +103,10 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
         {
             bus.Subscribe<FleetChangedEvent>(evt => Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = LoadFleetsAsync()));
             bus.Subscribe<FitSharedEvent>(evt => Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = LoadFitsAsync()));
+            // ET-195: a run saved elsewhere (or from this screen) must move "ISK today" without waiting for the next
+            // manual REFRESH — RebuildRosterAsync already re-fetches the registry and recomputes it, same as the
+            // presence subscription above, so this reuses that path instead of a second ISK-only copy of it.
+            bus.Subscribe<RunSavedEvent>(evt => Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = RebuildRosterAsync()));
         }
 
         // Live location for online characters (even without combat): every parsed gamelog line — including a jump —
@@ -152,8 +161,8 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
     [ObservableProperty] private bool _isServerConnected;
     [ObservableProperty] private string _serverStatusLabel = "Disconnected";
 
-    /// <summary>Your characters' combined session bounty, compact ("894.4k"). Session-only (resets on restart);
-    /// a true calendar-day total is a later refinement.</summary>
+    /// <summary>Your characters' combined bounty ISK for today, compact ("894.4k") — read from saved runs, not a
+    /// live tracker's lifetime running total (ET-195).</summary>
     [ObservableProperty] private string _iskTodayText = "0";
 
     public bool HasCharacters => MyCharacters.Count > 0;
@@ -193,15 +202,15 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
                 MyCharacters.Add(tracker);
 
         OnPropertyChanged(nameof(HasCharacters));
-        UpdateIskToday();
 
         if (_registry is null)
-            return; // no registry (design-time / tests) → live trackers only, no idle merge
+            return; // no registry (design-time / tests) → live trackers only, no idle merge, no ISK-today either
 
         var characters = await _registry.GetAllAsync();
         var evidence = _presence?.Current;
         CharactersTotal = characters.Count;
         CharactersInEve = evidence is null ? 0 : characters.Count(c => evidence.Matches(c.Name, c.EsiCharacterId ?? 0));
+        await UpdateIskTodayAsync(characters);
 
         // Idle = my characters (registry) with no live tracker → a greyed placeholder row.
         var idle = characters.Where(c => c.EsiCharacterId is not null && !activeNames.Contains(c.Name)).ToList();
@@ -228,12 +237,24 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
         ServerStatusLabel = connected ? "Connected" : "Disconnected";
     }
 
-    private void UpdateIskToday()
+    /// <summary>Where "today" starts, in UTC. Local midnight — an open product decision (put to Raymond 2026-09-05:
+    /// local midnight vs. EVE downtime 11:00 UTC vs. UTC midnight, unanswered as of this write). The single place to
+    /// change once the answer comes back; nothing else in this file should know the boundary.</summary>
+    private static DateTime IskTodayBoundaryUtc => DateTime.Now.Date.ToUniversalTime();
+
+    /// <summary>Reads today's bounty from storage (ET-195) instead of summing live trackers: a saved run counts
+    /// whether or not its tracker is still around, and a tracker's own bounty is a lifetime total, not a per-run or
+    /// per-day one, so it is never added here — folding it in without double-counting would need the dashboard to
+    /// know which part of that lifetime figure belongs to a run not yet saved, which nothing here tracks.</summary>
+    private async Task UpdateIskTodayAsync(IReadOnlyList<Character> characters)
     {
-        long total = 0;
-        foreach (var tracker in MyCharacters)
-            total += tracker.Bounty;
-        IskTodayText = CompactIsk(total);
+        if (_dispatcher is null)
+            return;
+
+        List<long> characterIds = [.. characters.Where(c => c.EsiCharacterId is not null).Select(c => (long)c.EsiCharacterId!.Value)];
+        Result<decimal> result = await _dispatcher.Query(new GetIskTodayQuery(IskTodayBoundaryUtc, characterIds));
+        if (result.IsSuccess)
+            IskTodayText = CompactIsk((long)result.Value);
     }
 
     /// <summary>Sets each character row's "in EVE" presence dot and loads its ESI portrait (best-effort, opt-in
