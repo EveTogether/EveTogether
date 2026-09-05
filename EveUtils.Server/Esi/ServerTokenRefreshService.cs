@@ -19,10 +19,12 @@ public sealed class ServerTokenRefreshService(
     IEsiAuthClient authClient,
     IEsiJwtValidator jwtValidator,
     EsiOptions esiOptions,
+    TimeProvider time,
     ILogger<ServerTokenRefreshService> logger) : BackgroundService
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan RefreshAfter = TimeSpan.FromMinutes(15);
+    private const int RevokedFailureCount = int.MaxValue;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -30,7 +32,7 @@ public sealed class ServerTokenRefreshService(
         {
             try
             {
-                await Task.Delay(CheckInterval, stoppingToken);
+                await Task.Delay(CheckInterval, time, stoppingToken);
                 await RefreshAllAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -44,7 +46,7 @@ public sealed class ServerTokenRefreshService(
         }
     }
 
-    private async Task RefreshAllAsync(CancellationToken cancellationToken)
+    internal async Task RefreshAllAsync(CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<IServerAuthRepository>();
@@ -90,14 +92,16 @@ public sealed class ServerTokenRefreshService(
         }
         catch (Exception ex) when (IsRevoked(ex))
         {
+            await RecordFailureAsync(character, repository, RevokedFailureCount, cancellationToken);
             logger.LogError(ex,
-                "Token revoked for synced character {Name} ({Id}). Marking as expired.",
+                "Token revoked for synced character {Name} ({Id}). Refresh stopped until re-paired.",
                 character.CharacterName, character.EsiCharacterId);
         }
         catch (Exception ex)
         {
+            await RecordFailureAsync(character, repository, character.FailureCount + 1, cancellationToken);
             logger.LogError(ex,
-                "Failed to refresh token for synced character {Name} ({Id}).",
+                "Failed to refresh token for synced character {Name} ({Id}). Backing off.",
                 character.CharacterName, character.EsiCharacterId);
         }
     }
@@ -117,8 +121,28 @@ public sealed class ServerTokenRefreshService(
         }
     }
 
-    private static bool ShouldRefresh(SyncedCharacter character) =>
-        character.LastRefreshedAt is null || DateTimeOffset.UtcNow - character.LastRefreshedAt.Value > RefreshAfter;
+    private async Task RecordFailureAsync(SyncedCharacter character, IServerAuthRepository repository, int failureCount, CancellationToken cancellationToken)
+    {
+        var failedAt = time.GetUtcNow();
+        character.LastFailedAt = failedAt;
+        character.FailureCount = failureCount;
+        await repository.RecordRefreshFailureAsync(character.EsiCharacterId, failedAt, failureCount, cancellationToken);
+    }
+
+    private bool ShouldRefresh(SyncedCharacter character)
+    {
+        if (character.FailureCount == RevokedFailureCount) return false;
+        if (character.LastFailedAt is not null && time.GetUtcNow() - character.LastFailedAt.Value < FailureBackoff(character.FailureCount)) return false;
+        return character.LastRefreshedAt is null || time.GetUtcNow() - character.LastRefreshedAt.Value > RefreshAfter;
+    }
+
+    private static TimeSpan FailureBackoff(int failureCount) => failureCount switch
+    {
+        <= 1 => TimeSpan.FromMinutes(5),
+        2 => TimeSpan.FromMinutes(10),
+        3 => TimeSpan.FromMinutes(20),
+        _ => TimeSpan.FromHours(1)
+    };
 
     private static bool IsRevoked(Exception ex) =>
         ex.Message.Contains("401", StringComparison.OrdinalIgnoreCase) ||

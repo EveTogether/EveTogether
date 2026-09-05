@@ -16,6 +16,8 @@ public sealed class SyncedCharacter
     public byte[] RefreshTokenTag { get; set; } = [];
     public DateTimeOffset PairedAt { get; set; }
     public DateTimeOffset? LastRefreshedAt { get; set; }
+    public DateTimeOffset? LastFailedAt { get; set; }
+    public int FailureCount { get; set; }
     public string GrantedScopesJson { get; set; } = "[]";
 
     /// <summary>Convenience accessor over <see cref="GrantedScopesJson"/>. Not mapped to DB.</summary>

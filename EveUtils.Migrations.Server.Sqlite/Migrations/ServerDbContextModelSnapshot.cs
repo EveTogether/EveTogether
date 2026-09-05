@@ -1079,8 +1079,14 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.Property<int>("EsiCharacterId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("FailureCount")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("GrantedScopesJson")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LastFailedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset?>("LastRefreshedAt")
