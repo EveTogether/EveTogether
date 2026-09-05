@@ -25,6 +25,16 @@ public interface ISdeAccessor
 
     SdeType? GetType(int typeId);
 
+    /// <summary>True when the type is a mutated (abyssal) module or drone: metaGroupId 15 in category Module (7)
+    /// or Drone (18). The mutaplasmids themselves also carry metaGroupId 15 but sit in category 17 (Commodity)
+    /// and are excluded by the category filter (ET-146, measured against dynamicItemAttributes.jsonl: 89 types,
+    /// 0 false positives, 0 missed). False when the SDE is unavailable or the type does not exist.</summary>
+    bool IsMutatedType(int typeId);
+
+    /// <summary>A mutaplasmid's per-attribute roll ranges (ET-146 deel D), or empty when the type carries none
+    /// (including when it is not a mutaplasmid at all).</summary>
+    IReadOnlyList<SdeMutaplasmidAttributeRange> GetMutaplasmidAttributeRanges(int mutaplasmidTypeId);
+
     IReadOnlyList<SdeDogmaAttribute> GetDogmaAttributes(int typeId);
 
     /// <summary>Pre-computed slot/hardpoint metadata, or null when the type is not a fittable module.</summary>

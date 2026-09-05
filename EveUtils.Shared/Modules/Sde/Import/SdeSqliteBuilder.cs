@@ -27,7 +27,7 @@ public sealed class SdeSqliteBuilder
         "categories.jsonl", "groups.jsonl", "dogmaAttributes.jsonl", "dogmaEffects.jsonl", "types.jsonl", "typeDogma.jsonl",
         "archetypes.jsonl", "factions.jsonl", "typeLists.jsonl", "dungeons.jsonl",
         "mapSolarSystems.jsonl", "npcStations.jsonl", "agentTypes.jsonl", "npcCharacters.jsonl",
-        "missions.jsonl", "epicArcs.jsonl"
+        "missions.jsonl", "epicArcs.jsonl", "dynamicItemAttributes.jsonl"
     ];
 
     /// <summary>

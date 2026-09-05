@@ -171,9 +171,9 @@ public sealed class SdeSiteCatalogTests : IDisposable
     }
 
     [Fact]
-    public void SchemaVersion_IsSix_AndAnOlderStoreReadsAsUnavailable()
+    public void SchemaVersion_IsSeven_AndAnOlderStoreReadsAsUnavailable()
     {
-        Assert.Equal(6, SdeSchema.SchemaVersion);
+        Assert.Equal(7, SdeSchema.SchemaVersion);
 
         // A store left behind by a v3 build has no Site table. The accessor must refuse it outright so
         // SdeImporter.CheckForUpdateAsync sees a null local version and offers the rebuild.

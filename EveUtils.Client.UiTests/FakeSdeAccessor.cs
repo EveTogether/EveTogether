@@ -16,7 +16,7 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public sealed class FakeSdeAccessor : ISdeAccessor
 {
-    private sealed record Entry(int TypeId, string Name, int GroupId, SdeSlotType Slot, bool IsTurret, double Volume);
+    private sealed record Entry(int TypeId, string Name, int GroupId, SdeSlotType Slot, bool IsTurret, double Volume, bool IsMutated = false);
 
     private readonly Dictionary<int, Entry> _types = new();
     private readonly Dictionary<int, int> _groupCategory = new();
@@ -30,9 +30,9 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     public bool IsAvailable { get; private set; } = true;
     public SdeVersion? Version => new(1, DateTimeOffset.UnixEpoch);
 
-    public FakeSdeAccessor Add(int typeId, string name, int groupId, int categoryId, SdeSlotType slot = SdeSlotType.None, bool isTurret = false, double volume = 0)
+    public FakeSdeAccessor Add(int typeId, string name, int groupId, int categoryId, SdeSlotType slot = SdeSlotType.None, bool isTurret = false, double volume = 0, bool isMutated = false)
     {
-        _types[typeId] = new Entry(typeId, name, groupId, slot, isTurret, volume);
+        _types[typeId] = new Entry(typeId, name, groupId, slot, isTurret, volume, isMutated);
         _groupCategory[groupId] = categoryId;
         _byName[name] = typeId;
         return this;
@@ -82,6 +82,11 @@ public sealed class FakeSdeAccessor : ISdeAccessor
 
     public SdeType? GetType(int typeId) =>
         _types.TryGetValue(typeId, out var e) ? new SdeType(e.TypeId, e.GroupId, e.Name, true, 0, e.Volume, 0, null) : null;
+
+    public bool IsMutatedType(int typeId) => _types.TryGetValue(typeId, out var e) && e.IsMutated;
+
+    // No mutaplasmid fixtures here — nothing under test today reads them through this fake.
+    public IReadOnlyList<SdeMutaplasmidAttributeRange> GetMutaplasmidAttributeRanges(int mutaplasmidTypeId) => [];
 
     public IReadOnlyList<SdeDogmaAttribute> GetDogmaAttributes(int typeId) =>
         _attrs.TryGetValue(typeId, out var list) ? list : [];

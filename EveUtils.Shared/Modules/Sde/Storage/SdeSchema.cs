@@ -19,9 +19,11 @@ public static class SdeSchema
     /// v3 added the <c>TypeNameAlias</c> table for locale-agnostic name import; v4 added the <c>Site</c> table
     /// (the dungeon/site catalogue); v5 added the <c>SiteNameAlias</c> table so a site name copied from a
     /// non-English client resolves too (ET-79 AC-4); v6 added <c>SolarSystem</c>, <c>Agent</c>,
-    /// <c>AgentNameAlias</c>, <c>Mission</c> and <c>EpicArcMission</c> — the mission side of the SDE (ET-173).
+    /// <c>AgentNameAlias</c>, <c>Mission</c> and <c>EpicArcMission</c> — the mission side of the SDE (ET-173);
+    /// v7 added <c>Type.metaGroupId</c> (mutated-type detection, ET-146 deel A) and
+    /// <c>MutaplasmidAttributeRange</c>/<c>MutaplasmidResultingType</c> (dynamicItemAttributes.jsonl, ET-146 deel D).
     /// </summary>
-    public const int SchemaVersion = 6;
+    public const int SchemaVersion = 7;
 
     /// <summary>Schema-creating statements, run before the bulk load.</summary>
     public static readonly string[] CreateTables =
@@ -37,7 +39,8 @@ public static class SdeSchema
             mass          REAL NOT NULL,
             volume        REAL NOT NULL,
             capacity      REAL NOT NULL,
-            marketGroupId INTEGER
+            marketGroupId INTEGER,
+            metaGroupId   INTEGER
         ) WITHOUT ROWID;
         """,
         """
@@ -163,7 +166,18 @@ public static class SdeSchema
         """,
         // missionId -> arcId only (ET-173 AC-6, minimal by design); the nextMissions chain graph is a read
         // concern (ET-131), not an import concern.
-        "CREATE TABLE EpicArcMission (missionId INTEGER PRIMARY KEY, arcId INTEGER NOT NULL) WITHOUT ROWID;"
+        "CREATE TABLE EpicArcMission (missionId INTEGER PRIMARY KEY, arcId INTEGER NOT NULL) WITHOUT ROWID;",
+        // dynamicItemAttributes.jsonl (ET-146 deel D): one row per (mutaplasmid, rollable attribute). The min/max
+        // are multipliers on the source type's base value, not rolled values themselves — see the ticket's
+        // research. No consumer reads this yet (deel B decides how the unknown-state should use it).
+        "CREATE TABLE MutaplasmidAttributeRange (mutaplasmidTypeId INTEGER NOT NULL, attributeId INTEGER NOT NULL, min REAL NOT NULL, max REAL NOT NULL);",
+        // The same dataset's inputOutputMapping: which source types (applicableTypeId) a mutaplasmid can roll,
+        // and which resulting type each produces. Not used by deel A's detection (that runs on metaGroupId
+        // alone) — this is the join deel B needs the other way round: a fit only carries the resulting type
+        // (e.g. 47408), so resultingTypeId -> mutaplasmidTypeId here is the step before
+        // GetMutaplasmidAttributeRanges(mutaplasmidTypeId) can report a range for that module instead of only
+        // "unknown".
+        "CREATE TABLE MutaplasmidResultingType (mutaplasmidTypeId INTEGER NOT NULL, applicableTypeId INTEGER NOT NULL, resultingTypeId INTEGER NOT NULL);"
     ];
 
     /// <summary>Index-creating statements, run after the bulk load.</summary>
