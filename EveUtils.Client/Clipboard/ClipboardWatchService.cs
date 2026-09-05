@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Platform;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Modules.Settings.Commands;
@@ -37,6 +38,7 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
     private static readonly TimeSpan ClipboardReadRetryDelay = TimeSpan.FromMilliseconds(50);
 
     private readonly IClipboardChangeSource _source;
+    private readonly IForegroundEveClientReader _foregroundClient;
     private readonly IDialogService _dialogs;
     private readonly IServiceProvider _services;
     private readonly ILogger<ClipboardWatchService> _logger;
@@ -45,13 +47,17 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
     private readonly List<Subscription> _subscribers = [];
 
     /// <param name="source">Platform change source; production passes nothing and gets the one for this OS.</param>
+    /// <param name="foregroundClient">Who had OS focus at notification time (ET-138); production passes nothing
+    /// and gets the one for this OS.</param>
     public ClipboardWatchService(IDialogService dialogs, IServiceProvider services,
-        ILogger<ClipboardWatchService> logger, IClipboardChangeSource? source = null)
+        ILogger<ClipboardWatchService> logger, IClipboardChangeSource? source = null,
+        IForegroundEveClientReader? foregroundClient = null)
     {
         _dialogs = dialogs;
         _services = services;
         _logger = logger;
         _source = source ?? CreatePlatformSource(logger);
+        _foregroundClient = foregroundClient ?? CreatePlatformForegroundReader();
         _source.Changed += OnClipboardChanged;
         _source.SupportChanged += OnSupportChanged;
     }
@@ -119,6 +125,9 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
         : OperatingSystem.IsLinux() ? new WaylandClipboardChangeSource(logger)
         : new UnsupportedClipboardChangeSource();
 
+    private static IForegroundEveClientReader CreatePlatformForegroundReader() =>
+        OperatingSystem.IsWindows() ? new WindowsEveClientProbe() : new NullForegroundEveClientReader();
+
     private void StartWatching()
     {
         if (!_source.IsSupported || IsWatching)
@@ -152,9 +161,18 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
 
     // The notification arrives on the listener's own thread; the clipboard is read through the toplevel, which is
     // the UI thread's.
-    private void OnClipboardChanged() => Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = InspectAsync());
+    //
+    // Focus is read right here, synchronously on that same thread — before the Dispatcher.Post below and before
+    // InspectAsync's own clipboard-read retries, both of which only widen the gap between the copy and this
+    // answer (ET-138). The result travels along as a plain value rather than a second notification, so nothing
+    // downstream re-reads focus later and gets a different, staler answer.
+    private void OnClipboardChanged()
+    {
+        var copiedBy = _foregroundClient.CharacterAtForegroundWindow();
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = InspectAsync(copiedBy));
+    }
 
-    private async Task InspectAsync()
+    private async Task InspectAsync(string? copiedByCharacter)
     {
         // Stopping the source holds off new notifications but not one already queued here, and "off" has to mean
         // the clipboard is not read — not that it is read one last time.
@@ -190,7 +208,7 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
         if (text is null || shape == ClipboardShape.Unrecognised)
             return; // dropped here: nothing kept, nothing buffered, nothing written down
 
-        var capture = new ClipboardCapture(shape, text);
+        var capture = new ClipboardCapture(shape, text, copiedByCharacter);
         foreach (var subscription in subscribers)
         {
             try
