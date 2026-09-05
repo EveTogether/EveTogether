@@ -49,14 +49,21 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private readonly IServiceProvider _services;
     private readonly IReadOnlyDictionary<long, string> _namesById;
     private readonly DispatcherTimer? _clock;
+    private readonly RunsFleetFilter? _fleetFilter;
     private bool _canPublish;
 
+    /// <summary>Set once per load when <see cref="_fleetFilter"/> is active and turned up nothing: whether that
+    /// empty result is a real zero or an unknowable one (ET-185) — read by <see cref="_FillTab"/> so every tab's
+    /// empty message says the same thing rather than each guessing from its own row count.</summary>
+    private bool _fleetHistoryKnownEmpty;
+
     public RunsOverviewViewModel(CqrsDispatcher dispatcher, IDialogService dialogs, IServiceProvider services,
-        IReadOnlyList<Character> characters, bool runClock = true)
+        IReadOnlyList<Character> characters, bool runClock = true, RunsFleetFilter? fleetFilter = null)
     {
         _dispatcher = dispatcher;
         _dialogs = dialogs;
         _services = services;
+        _fleetFilter = fleetFilter;
         _namesById = characters
             .Where(character => character.EsiCharacterId is > 0)
             .GroupBy(character => (long)character.EsiCharacterId!.Value)
@@ -113,6 +120,11 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// <summary>Why the band is empty, when it is. Null once there is at least one lane.</summary>
     public string? LanesEmptyText { get; }
 
+    /// <summary>"Runs for 'Woensdag Homefronts'" when opened from a fleet's RUNS button (ET-185), null otherwise —
+    /// so the header says what narrowed the list down, rather than the screen quietly showing fewer runs than the
+    /// reader expects from the app's one runs screen.</summary>
+    public string? FleetFilterText => _fleetFilter is { } filter ? $"Runs for '{filter.FleetName}'" : null;
+
     /// <summary>Why nothing is listed — a failed read and an empty history are different things and say so.</summary>
     [ObservableProperty] private string? _statusMessage;
 
@@ -129,7 +141,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         await _RefreshServerTabsAsync(cancellationToken);
 
         Result<IReadOnlyList<ActivityOverviewRowDto>> overview =
-            await _dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken);
+            await _dispatcher.Query(new GetActivityOverviewQuery(FleetId: _fleetFilter?.FleetId), cancellationToken);
         foreach (RunsTabViewModel tab in Tabs)
             tab.Days.Clear();
         if (!overview.IsSuccess || overview.Value is null)
@@ -139,6 +151,10 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         }
 
         StatusMessage = null;
+        // Only worth asking when the fleet filter came up empty — a coverage query a full result already answers by
+        // existing (ET-185: GetFleetRunCoverageQuery is the "why is this empty" question, not the "what is here" one).
+        _fleetHistoryKnownEmpty = overview.Value.Count > 0 || _fleetFilter is null || await _IsFleetHistoryKnownEmptyAsync(
+            _fleetFilter, cancellationToken);
         foreach (RunsTabViewModel tab in Tabs)
             _FillTab(tab, overview.Value);
     }
@@ -164,11 +180,33 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
                      .GroupBy(row => row.StartedAtLocal.Date))
             tab.Days.Add(new RunsDayViewModel(day.Key, [.. day]));
 
-        tab.StatusMessage = tab.Days.Count > 0
-            ? null
-            : tab.IsLocal
+        tab.StatusMessage = tab.Days.Count > 0 ? null : _EmptyMessageFor(tab);
+    }
+
+    /// <summary>Why a tab shows nothing. Unfiltered, that is just "nothing saved" or "nothing published" — but a
+    /// fleet-filtered screen (ET-185) has a third, more important answer to give: whether this fleet is confirmed to
+    /// have flown nothing since ET-182 started recording it, or whether it is simply too old for that record to say
+    /// either way. Reading the second case as the first is exactly the false zero this ticket exists to rule out.</summary>
+    private string _EmptyMessageFor(RunsTabViewModel tab)
+    {
+        if (_fleetFilter is null)
+            return tab.IsLocal
                 ? "No activity has been saved yet. A run shows up here the moment you save it."
                 : "Nothing published to this server yet. Publish an activity from Local to put it here.";
+
+        return _fleetHistoryKnownEmpty
+            ? $"'{_fleetFilter.FleetName}' has no completed runs on record."
+            : $"'{_fleetFilter.FleetName}' may have flown runs before this client tracked which fleet a run belongs "
+              + "to — those can't be shown here, only what it has flown since.";
+    }
+
+    /// <summary>Whether an empty fleet filter is a real zero: true when the fleet is confirmed to predate nothing
+    /// (see <see cref="GetFleetRunCoverageQuery"/>), false when its age makes that unknowable.</summary>
+    private async Task<bool> _IsFleetHistoryKnownEmptyAsync(RunsFleetFilter filter, CancellationToken cancellationToken)
+    {
+        Result<FleetRunCoverageDto> coverage = await _dispatcher.Query(
+            new GetFleetRunCoverageQuery(filter.FleetId, filter.FleetCreatedAtUtc), cancellationToken);
+        return coverage.IsSuccess && coverage.Value is { IsKnown: true };
     }
 
     /// <summary>Adds a tab for a server coupled since this screen was built, never rebuilding the strip: the reader's

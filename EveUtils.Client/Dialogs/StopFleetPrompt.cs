@@ -18,6 +18,10 @@ namespace EveUtils.Client.Dialogs;
 /// <c>"Kaska Vex — Fortress Sansha, 00:11:42"</c> lines; empty when nothing is running.</param>
 /// <param name="LeavableCharacterCount">How many of my characters could leave on their own instead of the whole
 /// fleet stopping. Zero hides that option — the owner's own character is never a candidate.</param>
+/// <param name="CompletedRunCount">How many of this fleet's runs are known to be completed (ET-185, via
+/// <c>GetFleetRunCoverageQuery</c>); null when that is not knowable rather than zero — a fleet older than
+/// <c>RunGroupOrigin</c> (ET-182) can look empty for a reason that has nothing to do with what it flew. The dialog
+/// only ever prints a number here when it is this: never a guess standing in for "unknown".</param>
 public sealed record StopFleetPrompt(
     string FleetName,
     DateTimeOffset? ActivatedAt,
@@ -25,4 +29,5 @@ public sealed record StopFleetPrompt(
     int OtherMemberCount,
     int ExternalMemberCount,
     IReadOnlyList<string> RunsInProgress,
-    int LeavableCharacterCount);
+    int LeavableCharacterCount,
+    int? CompletedRunCount = null);

@@ -92,7 +92,13 @@
         <Border DockPanel.Dock="Top" Padding="14,12" BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource BorderBrush}">
             <StackPanel Spacing="2">
-                <TextBlock Classes="panel-title" FontSize="13" Text="RUNS"/>
+                <Grid ColumnDefinitions="Auto,Auto">
+                    <TextBlock Grid.Column="0" Classes="panel-title" FontSize="13" Text="RUNS"/>
+                    <Border Grid.Column="1" Classes="chip dim" Margin="8,0,0,0"
+                            IsVisible="{Binding FleetFilterText, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <TextBlock Text="{Binding FleetFilterText}"/>
+                    </Border>
+                </Grid>
                 <TextBlock x:Name="OverviewStatus" Classes="hint" Margin="0" TextWrapping="Wrap"
                            IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
                            Text="{Binding StatusMessage}"/>

@@ -21,6 +21,7 @@ using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using Microsoft.Extensions.DependencyInjection;
+using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
 namespace EveUtils.Client.ViewModels;
 
@@ -1512,7 +1513,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         if (!CanStop)
             return;
 
-        switch (await _dialogs.PickFleetExitAsync(BuildStopPrompt()))
+        switch (await _dialogs.PickFleetExitAsync(await BuildStopPromptAsync()))
         {
             case StopFleetChoice.Stop:
                 await StopFleetAsync();
@@ -1526,13 +1527,15 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         }
     }
 
-    private StopFleetPrompt BuildStopPrompt()
+    private async Task<StopFleetPrompt> BuildStopPromptAsync()
     {
         // "Mine" is what this screen already means by it: the characters LEAVE would offer, plus the character I am
         // acting as. Anything left over that is not external is somebody else's pilot.
         HashSet<int> mine = [.. _leavableCharacters.Select(c => c.Id), _actingCharacterId];
         var own = _members.Count(m => !m.IsExternal && mine.Contains(m.CharacterId));
         var external = _members.Count(m => m.IsExternal);
+        int? completedRuns = await FleetCompletedRuns.CountAsync(
+            _services.GetRequiredService<CqrsDispatcher>(), _fleet.Id, _fleet.CreatedAt.UtcDateTime);
 
         return new StopFleetPrompt(
             _fleet.Name,
@@ -1541,7 +1544,8 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
             _members.Count - own - external,
             external,
             DescribeRunsInProgress(),
-            _leavableCharacters.Count);
+            _leavableCharacters.Count,
+            completedRuns);
     }
 
     /// <summary>

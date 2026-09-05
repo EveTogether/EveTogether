@@ -11,11 +11,13 @@ using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels.Fleets;
+using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Settings.Queries;
 using Microsoft.Extensions.DependencyInjection;
+using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
 namespace EveUtils.Client.ViewModels;
 
@@ -730,6 +732,22 @@ public sealed partial class FleetsViewModel
     private Task DeleteRowAsync(FleetViewModel? row) =>
         row is null ? Task.CompletedTask : row.IsLocal ? DisbandLocal(row) : Disband(row);
 
+    /// <summary>RUNS on a finished row (ET-185): opens the one runs screen in the app, scoped to this fleet's own
+    /// activity via <see cref="GetActivityOverviewQuery"/>'s FleetId filter (ET-182). A fresh view-model per open,
+    /// like <c>MainWindowViewModel.OpenRunsAsync</c> — the character roster is read as it stands now rather than as
+    /// it stood when the overview loaded.</summary>
+    [RelayCommand]
+    private async Task OpenRunsRowAsync(FleetViewModel? row)
+    {
+        if (row is null)
+            return;
+
+        IReadOnlyList<Character> characters = await _characters.GetAllAsync();
+        _dialogs.ShowRuns(new RunsOverviewViewModel(
+            _services.GetRequiredService<CqrsDispatcher>(), _dialogs, _services, characters,
+            fleetFilter: new RunsFleetFilter(row.Id, row.Name, row.Info.CreatedAt.UtcDateTime)));
+    }
+
     /// <summary>
     /// START on a standing-by row: the same gate the roster window's START runs — warn when the coupled doctrine's
     /// minima are not met, offer the ESI-invite prompt for externals — and then the fleet is Active. Owner-only, as
@@ -914,6 +932,8 @@ public sealed partial class FleetsViewModel
         var mine = row.Members.Where(m => m.IsMine).ToList();
         var leavable = mine.Where(m => m.CharacterId != row.Info.CreatorCharacterId).ToList();
         int external = row.Members.Count(m => m.IsExternal);
+        int? completedRuns = await FleetCompletedRuns.CountAsync(
+            _services.GetRequiredService<CqrsDispatcher>(), row.Id, row.Info.CreatedAt.UtcDateTime);
         var prompt = new StopFleetPrompt(
             row.Name,
             row.Info.ActivatedAt,
@@ -921,7 +941,8 @@ public sealed partial class FleetsViewModel
             row.Members.Count - mine.Count - external,
             external,
             FleetRunsInProgress.Describe(_services.GetService<FleetRunGroupCodeCoordinator>(), row.Id, NameOf, DateTime.UtcNow),
-            leavable.Count);
+            leavable.Count,
+            completedRuns);
 
         var client = ServerOrLocalClient(row.ServerAddress, row.ActingCharacterId);
         switch (await _dialogs.PickFleetExitAsync(prompt))

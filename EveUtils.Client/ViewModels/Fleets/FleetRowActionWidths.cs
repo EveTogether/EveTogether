@@ -31,6 +31,10 @@ public static class FleetRowActionWidths
     /// is the right verb; there is nothing left to disband about a fleet that is already over (scherm 1: VERWIJDER).</summary>
     public const double Delete = 55;
 
+    /// <summary>RUNS on a finished row (ET-185, scherm 1) — opens the runs overview filtered to this fleet. Unlike
+    /// DELETE it needs no ownership, so it can stand on any finished row this client can see.</summary>
+    public const double Runs = 46;
+
     /// <summary>The "⋯" button. It only stands when something is actually folded — so a row that puts its last
     /// action back on the bar gets these 31 px back, which is sometimes exactly what makes that action fit.</summary>
     public const double Overflow = 31;

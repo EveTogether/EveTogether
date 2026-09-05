@@ -254,6 +254,10 @@ public sealed partial class FleetViewModel : ObservableObject
     /// <summary>A finished fleet has one thing left to do with it.</summary>
     public bool ShowDelete => IsFinished && IsMine;
 
+    /// <summary>RUNS opens the runs overview filtered to this fleet (ET-185) — reading history needs no ownership,
+    /// unlike DELETE, so it stands on every finished row this client can see rather than only its owner's.</summary>
+    public bool ShowRuns => IsFinished;
+
     /// <summary>METRICS stands on the row of a started fleet: that is the fleet that has something to measure right
     /// now. A standing-by fleet keeps it behind "⋯" — scherm 1 gives its READY rows START, MANAGE and SHARE and no
     /// METRICS, which is also what keeps the wide row at the four buttons it draws.</summary>
@@ -499,6 +503,8 @@ public sealed partial class FleetViewModel : ObservableObject
                 width += FleetRowActionWidths.SignOff;
             if (ShowDelete)
                 width += FleetRowActionWidths.Delete;
+            if (ShowRuns)
+                width += FleetRowActionWidths.Runs;
             return width;
         }
     }
