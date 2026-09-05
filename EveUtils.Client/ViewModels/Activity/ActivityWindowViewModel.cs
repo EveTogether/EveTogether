@@ -1935,6 +1935,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                     continue;
                 }
 
+                // Never actually wider than int32: every other table in this schema stores an EVE character id as
+                // int (EsiCharacterId, FleetParticipant, gamelog's CharacterId, ...); Run.CharacterId is long only
+                // because Run predates that convention, not because a real id needs the extra room.
                 int characterId = checked((int)dto.CharacterId);
                 string name = await _NameOfAsync(characterId) ?? $"Char {characterId}";
                 Participants.Add(new RunParticipantViewModel(dto.RunId, characterId, name, dto.IsParticipant, dto.IsPayoutEligible));
