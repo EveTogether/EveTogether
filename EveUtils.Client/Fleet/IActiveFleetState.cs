@@ -3,11 +3,11 @@ using System.Collections.Generic;
 namespace EveUtils.Client.Fleet;
 
 /// <summary>
-/// Client-side mirror of the server's active participation: which fleet this client is currently sharing
-/// its live metrics with, and as which character(s). Set after a successful <c>EnterFleet</c> and cleared on
-/// <c>LeaveFleet</c> (the gRPC round-trip is what the server's <c>ActiveFleetRegistry</c> reroutes on). The
-/// <see cref="Fleet.FleetMetricPublisher"/> reads it each tick to decide whether — and for which characters — to
-/// publish samples.
+/// Client-side mirror of explicit enter/leave state for local characters: which fleet this client has selected,
+/// and as which character(s). This is separate from <see cref="IFleetParticipation"/>, which carries the
+/// membership-driven set that <see cref="FleetMetricPublisher"/> publishes; <see cref="FleetParticipationRefresher"/>
+/// rebuilds that set from actual fleet membership. This state is updated by <see cref="Enter"/> and <see cref="Leave"/>
+/// and remains available to client-side flows.
 ///
 /// One active fleet at a time, but <b>several local characters</b> can be active in it at once: a user
 /// running multiple clients/toons in the same fleet adds each via <see cref="Enter"/>, and the publisher batches
