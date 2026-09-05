@@ -172,7 +172,11 @@ public static class SdeSchema
         // research. No consumer reads this yet (deel B decides how the unknown-state should use it).
         "CREATE TABLE MutaplasmidAttributeRange (mutaplasmidTypeId INTEGER NOT NULL, attributeId INTEGER NOT NULL, min REAL NOT NULL, max REAL NOT NULL);",
         // The same dataset's inputOutputMapping: which source types (applicableTypeId) a mutaplasmid can roll,
-        // and which resulting type each produces. Not used by deel A's detection (that runs on metaGroupId alone).
+        // and which resulting type each produces. Not used by deel A's detection (that runs on metaGroupId
+        // alone) — this is the join deel B needs the other way round: a fit only carries the resulting type
+        // (e.g. 47408), so resultingTypeId -> mutaplasmidTypeId here is the step before
+        // GetMutaplasmidAttributeRanges(mutaplasmidTypeId) can report a range for that module instead of only
+        // "unknown".
         "CREATE TABLE MutaplasmidResultingType (mutaplasmidTypeId INTEGER NOT NULL, applicableTypeId INTEGER NOT NULL, resultingTypeId INTEGER NOT NULL);"
     ];
 
