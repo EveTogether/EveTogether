@@ -78,20 +78,23 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
         try
         {
             var registry = _services.GetService<ICharacterRegistry>();
-            List<Character> flying = registry is null
+            List<Character> known = registry is null
                 ? []
-                : [.. InGameCharacters.Among(await registry.GetAllAsync(), _services.GetService<ILocalCharacterPresence>())];
+                : (await registry.GetAllAsync()).Where(character => character.EsiCharacterId is not null).ToList();
+            List<Character> flying = InGameCharacters.Among(known, _services.GetService<ILocalCharacterPresence>());
+            List<Character> candidates = flying.Count == 0 ? known : flying;
 
-            Character? pilot = flying is [{ } only] ? only : null;
+            Character? pilot = candidates is [{ } only] ? only : null;
             var startsOnArrival = true;
 
             bool answeredAlready = _dialogs.ActivityWindowPilot is not null;
-            if (pilot is null && flying.Count > 1 && !answeredAlready)
+            if (pilot is null && candidates.Count > 1 && !answeredAlready)
             {
                 int? picked = await _dialogs.PickCharacterAsync("Whose run is this?",
-                    [.. flying.Select(character => new CharacterPickOption(
-                        character.EsiCharacterId!.Value, character.Name, "EVE client running", Enabled: true))]);
-                pilot = flying.FirstOrDefault(character => character.EsiCharacterId == picked);
+                    [.. candidates.Select(character => new CharacterPickOption(
+                        character.EsiCharacterId!.Value, character.Name,
+                        flying.Contains(character) ? "EVE client running" : "local character", Enabled: true))]);
+                pilot = candidates.FirstOrDefault(character => character.EsiCharacterId == picked);
                 startsOnArrival = pilot is not null;
             }
 

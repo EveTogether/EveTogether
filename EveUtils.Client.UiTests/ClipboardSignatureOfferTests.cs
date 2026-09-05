@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using EveUtils.Client.Clipboard;
+using EveUtils.Client.Dialogs;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Runs;
@@ -180,6 +181,59 @@ public sealed class ClipboardSignatureOfferTests
         ActivityWindowViewModel opened = Assert.Single(env.Dialogs.ShownActivityWindows);
         // Row three carries no pilot on purpose: the window already up keeps its own, and DialogService leaves it be.
         Assert.Equal(expectedId is { } id ? (id, expectedName!) : null, opened.PickedCharacter);
+        Assert.True(opened.StartsOnArrival);
+    }
+
+    [AvaloniaFact]
+    public async Task NoFlyingCharacter_OffersKnownCharactersBeforeOpeningTheRunWindow()
+    {
+        using var env = await Env.StartAsync(services =>
+            services.AddSingleton<ILocalCharacterPresence>(new ActivityWindowHarness.StubPresence(inGame: false)));
+        var registry = env.Services.GetRequiredService<ICharacterRegistry>();
+        await registry.AddOrUpdateAsync(new Character("First Pilot", 90000001));
+        await registry.AddOrUpdateAsync(new Character("Second Pilot", 90000002));
+        env.Sde.AddSite(Site(1264, "Suspicious Signal: Secure the Intel", archetype: "Homefront Operations", archetypeId: 70));
+
+        var choiceWasShown = false;
+        List<string> optionNames = [];
+        var choice = new TaskCompletionSource<int?>();
+        env.Dialogs.OnPickCharacter = (_, options) =>
+        {
+            choiceWasShown = true;
+            foreach (CharacterPickOption option in options)
+                optionNames.Add(option.Name);
+
+            return choice.Task;
+        };
+
+        env.Copy(MeasuredHomefrontLine);
+        await ActivityWindowHarness.WaitUntil(() => choiceWasShown);
+
+        Assert.Empty(env.Dialogs.ShownActivityWindows);
+        Assert.Equal(["First Pilot", "Second Pilot"], optionNames);
+
+        choice.SetResult(null);
+        await ActivityWindowHarness.WaitUntil(() => env.Dialogs.ShownActivityWindows.Count > 0);
+
+        Assert.False(Assert.Single(env.Dialogs.ShownActivityWindows).StartsOnArrival);
+    }
+
+    [AvaloniaFact]
+    public async Task OneFlyingCharacter_StartsWithoutAsking()
+    {
+        using var env = await Env.StartAsync(services =>
+            services.AddSingleton<ILocalCharacterPresence>(
+                new ActivityWindowHarness.StubPresence(inGame: true, 90000001)));
+        await env.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character("First Pilot", 90000001));
+        env.Sde.AddSite(Site(1264, "Suspicious Signal: Secure the Intel", archetype: "Homefront Operations", archetypeId: 70));
+
+        env.Copy(MeasuredHomefrontLine);
+        await ActivityWindowHarness.WaitUntil(() => env.Dialogs.ShownActivityWindows.Count > 0);
+
+        Assert.Null(env.Dialogs.LastPrompt);
+        ActivityWindowViewModel opened = Assert.Single(env.Dialogs.ShownActivityWindows);
+        Assert.Equal((90000001, "First Pilot"), opened.PickedCharacter);
         Assert.True(opened.StartsOnArrival);
     }
 
