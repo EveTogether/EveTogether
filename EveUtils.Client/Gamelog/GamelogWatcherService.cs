@@ -146,7 +146,7 @@ public sealed class GamelogWatcherService : ISingletonService
                             await _gamelog.AddMiningAsync(item.Character, m);
                             break;
                         case RemoteRepEvent r:
-                            _gamelog.AddRemoteRep(item.Character, r.Outgoing, r.Amount);
+                            _gamelog.AddRemoteRep(item.Character, r.Outgoing, r.Amount, r.Timestamp);
                             break;
                         case NeutEvent nu:
                             _gamelog.AddNeut(item.Character, nu.Outgoing, nu.Amount, nu.Timestamp);

@@ -61,9 +61,11 @@ public sealed class MetricShareSnapshot(IReadOnlyDictionary<string, string> valu
     /// <summary>Whether a kind is a live combat line gated by the one combat-share toggle. <see cref="MetricKind.NeutIn"/>
     /// belongs here for the same reason the rest do — and pointedly so: it is the received half of
     /// <see cref="MetricKind.Neut"/>, so leaving it out would push the very same fact past a toggle the user turned
-    /// off, under a key of its own that defaults to shared.</summary>
+    /// off, under a key of its own that defaults to shared. <see cref="MetricKind.RepIn"/> is live combat data in the
+    /// same sense — reps landing on a member in a fight — even though (unlike neut) there is no combined rep kind
+    /// beside it to have shared a key with by default.</summary>
     public static bool IsCombat(MetricKind kind) =>
-        kind is MetricKind.Dps or MetricKind.DpsIn or MetricKind.Neut or MetricKind.Cap or MetricKind.NeutIn;
+        kind is MetricKind.Dps or MetricKind.DpsIn or MetricKind.Neut or MetricKind.Cap or MetricKind.NeutIn or MetricKind.RepIn;
 
     /// <summary>The global client-setting key for a metric kind. Every combat line shares one key; Location reuses its
     /// existing key for backward compatibility.</summary>

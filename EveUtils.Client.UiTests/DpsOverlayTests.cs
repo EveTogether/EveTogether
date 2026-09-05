@@ -1,8 +1,10 @@
 using System;
+using System.Linq;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.Views;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Dtos;
 using Xunit;
@@ -89,7 +91,7 @@ public class DpsOverlayTests
         var tracker = new DpsViewModel("Jithran", isSelf: true);
         // A local character samples zero rates until its first hit; the graph must still advance each frame (scroll
         // flat) like a fleet meter, not freeze — the regression that left a character-list pop-out completely dead.
-        tracker.UseSampler(() => new CombatRates(0, 0, 0, 0));
+        tracker.UseSampler(() => new CombatRates(0, 0, 0, 0, 0));
 
         var before = tracker.GraphRevision;
         tracker.RenderFrame();
@@ -110,6 +112,24 @@ public class DpsOverlayTests
         tracker.RenderFrame();
 
         Assert.Equal(before, tracker.GraphRevision);
+    }
+
+    /// <summary>
+    /// A fleet member's incoming-rep sample must reach its graph line the same way neut/cap already do — through
+    /// <see cref="DpsViewModel.SetRate"/>'s generic extra-line lookup, with no special case needed. A kind that is
+    /// emitted but never wired to a line here would fail silently: no exception, the figure just never moves.
+    /// </summary>
+    [AvaloniaFact]
+    public void SetRate_RepIn_MovesTheRepInLine()
+    {
+        var tracker = new DpsViewModel("Remote", isSelf: false);
+        tracker.SetRate(MetricKind.RepIn, 250);
+
+        for (var i = 0; i < 20; i++)
+            tracker.RenderFrame();
+
+        var repInLine = tracker.Series[^1];
+        Assert.True(repInLine.Values[^1] > 0);
     }
 
     [AvaloniaFact]
