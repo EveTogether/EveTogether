@@ -35,8 +35,10 @@ public partial class CharacterPickerWindow : ChromedWindow
         this.FindControl<TextBlock>("PromptText")!.Text =
             multiSelect ? $"{prompt}\n(pick one or more)" : prompt;
         var list = this.FindControl<ListBox>("OptionList")!;
+        // Multiple alone only allows more than one selected item — it says nothing about how you select. Toggle is
+        // what makes a plain click add/remove a row instead of replacing the whole selection with it (ET-186).
         if (multiSelect)
-            list.SelectionMode = SelectionMode.Multiple;
+            list.SelectionMode = SelectionMode.Multiple | SelectionMode.Toggle;
         list.SelectionChanged += OnSelectionChanged;
 
         foreach (var o in options)
