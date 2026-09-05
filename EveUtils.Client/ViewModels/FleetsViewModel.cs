@@ -707,11 +707,22 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         if (row is null)
             return;
 
-        var characters = await _characters.GetAllAsync();
-        var options = characters
-            .Where(c => c.EsiCharacterId is not null)
+        var memberIds = row.Members.Select(m => m.CharacterId).ToHashSet();
+        var allLocal = (await _characters.GetAllAsync()).Where(c => c.EsiCharacterId is not null).ToList();
+        var options = allLocal
+            .Where(c => !memberIds.Contains(c.EsiCharacterId!.Value))
             .Select(c => new CharacterPickOption(c.EsiCharacterId!.Value, c.Name, "local character", Enabled: true))
             .ToList();
+        if (options.Count == 0)
+        {
+            var reason = allLocal.Count == 0
+                ? "Add a local character first."
+                : $"Every local character is already in '{row.Name}'.";
+            StatusMessage = reason;
+            _toasts.Show("Can't add character", reason, ToastKind.Information);
+            return;
+        }
+
         var characterIds = await _dialogs.PickCharactersAsync("Add local character(s) to fleet", options);
         if (characterIds is null || characterIds.Count == 0)
             return;

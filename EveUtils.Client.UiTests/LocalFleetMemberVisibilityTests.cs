@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Fleet.Entities;
@@ -37,6 +38,7 @@ public class LocalFleetMemberVisibilityTests
 {
     private const int Owner = 95000001;
     private const int Alt = 95000002;
+    private const int Third = 95000003;
     private const int External = 96000001;
 
     private sealed class FakeDisplay : IModuleHostDisplay
@@ -46,7 +48,7 @@ public class LocalFleetMemberVisibilityTests
         public HostTab? SelectedHostTab { get; set; }
     }
 
-    private static TestClientInstance CreateInstance(RecordingDialogService? dialogs = null) =>
+    private static TestClientInstance CreateInstance(RecordingDialogService? dialogs = null, RecordingToastService? toasts = null) =>
         TestClientInstance.Create(services =>
         {
             services.AddSingleton<IExternalCharacterLookup>(new FakeExternalLookup
@@ -57,6 +59,8 @@ public class LocalFleetMemberVisibilityTests
             });
             if (dialogs is not null)
                 services.AddSingleton<IDialogService>(dialogs);
+            if (toasts is not null)
+                services.AddSingleton<IToastService>(toasts);
         });
 
     private static async Task SeedCharactersAsync(TestClientInstance instance)
@@ -202,6 +206,99 @@ public class LocalFleetMemberVisibilityTests
         Assert.True(await WaitForAsync(() =>
                 vm.LocalFleets[0].Members.Any(m => m.CharacterId == Alt)),
             "ADD TOON did not put the character on the card");
+    }
+
+    /// <summary>
+    /// ADD TOON used to offer every local character, including whoever was already on the roster — clicking one of
+    /// those did nothing useful and, worse, looked like a valid choice. The picker must only ever be handed
+    /// characters that are not already members.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AddLocalCharacter_ExcludesCharactersAlreadyOnTheRoster()
+    {
+        var dialogs = new RecordingDialogService
+        {
+            OnPickCharacters = (_, _) => Task.FromResult<IReadOnlyList<int>?>([Third]),
+        };
+        using var instance = CreateInstance(dialogs);
+        await SeedCharactersAsync(instance);
+        await instance.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character("Third Toon", Third));
+        var fleetId = await SeedLocalFleetAsync(instance);
+        Assert.True((await instance.Services.GetRequiredService<ClientFleetService>()
+            .AddLocalCharacterAsync(fleetId, Alt, Owner)).IsSuccess);
+
+        var vm = await LoadedFleetsAsync(instance);
+        await WaitForAsync(() => vm.LocalFleets[0].Members.Count >= 2);
+        var card = vm.LocalFleets[0];
+
+        await vm.AddLocalCharacterCommand.ExecuteAsync(card);
+
+        Assert.NotNull(dialogs.LastOptions);
+        var offered = dialogs.LastOptions!.Select(o => o.CharacterId).ToList();
+        Assert.DoesNotContain(Owner, offered);   // already a member (the fleet's creator)
+        Assert.DoesNotContain(Alt, offered);     // already a member (added above)
+        Assert.Contains(Third, offered);         // the only one left to add
+    }
+
+    /// <summary>
+    /// When every local character is already on the roster there is nothing left to pick — opening the picker
+    /// empty would leave the operator guessing whether they have no characters at all or whether they are all
+    /// already in. This message is specific to the second case.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AddLocalCharacter_WhenEveryLocalCharacterIsAlreadyInTheFleet_ShowsInfoToast_AndDoesNotOpenPicker()
+    {
+        var dialogs = new RecordingDialogService
+        {
+            OnPickCharacters = (_, _) =>
+                throw new InvalidOperationException("the picker must not show when every local character is already in the fleet"),
+        };
+        var toasts = new RecordingToastService();
+        using var instance = CreateInstance(dialogs, toasts);
+        await SeedCharactersAsync(instance);
+        var fleetId = await SeedLocalFleetAsync(instance);
+        Assert.True((await instance.Services.GetRequiredService<ClientFleetService>()
+            .AddLocalCharacterAsync(fleetId, Alt, Owner)).IsSuccess);
+
+        var vm = await LoadedFleetsAsync(instance);
+        await WaitForAsync(() => vm.LocalFleets[0].Members.Count >= 2);
+        var card = vm.LocalFleets[0];
+
+        await vm.AddLocalCharacterCommand.ExecuteAsync(card);
+
+        var toast = Assert.Single(toasts.Toasts);
+        Assert.Equal("Can't add character", toast.Title);
+        Assert.Equal("Every local character is already in 'Home Fleet'.", toast.Message);
+        Assert.Equal(ToastKind.Information, toast.Kind);
+    }
+
+    /// <summary>
+    /// The other empty case: no local characters at all. Distinct message from the "already in" case above — the
+    /// operator needs to know which of the two it is.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AddLocalCharacter_WhenNoLocalCharactersExist_ShowsInfoToast_AndDoesNotOpenPicker()
+    {
+        var dialogs = new RecordingDialogService
+        {
+            OnPickCharacters = (_, _) =>
+                throw new InvalidOperationException("the picker must not show with no local characters"),
+        };
+        var toasts = new RecordingToastService();
+        using var instance = CreateInstance(dialogs, toasts);
+        // No SeedCharactersAsync: the local character registry is empty even though a fleet row is handed in.
+        var fleet = new FleetInfo(1, "Home Fleet", null, FleetVisibility.InviteOnly, FleetState.Active,
+            Owner, null, null, DateTimeOffset.UnixEpoch, FleetActivation.Forming);
+        var row = new FleetViewModel(fleet, actingCharacterId: Owner, characterName: "Jithran");
+
+        var vm = new FleetsViewModel(instance.Services);
+        await vm.AddLocalCharacterCommand.ExecuteAsync(row);
+
+        var toast = Assert.Single(toasts.Toasts);
+        Assert.Equal("Can't add character", toast.Title);
+        Assert.Equal("Add a local character first.", toast.Message);
+        Assert.Equal(ToastKind.Information, toast.Kind);
     }
 
     /// <summary>
