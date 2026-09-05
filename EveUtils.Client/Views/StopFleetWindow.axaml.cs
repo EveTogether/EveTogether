@@ -43,11 +43,21 @@ public partial class StopFleetWindow : ChromedWindow
         foreach (var run in prompt.RunsInProgress)
             RunsInProgress.Add(run);
 
+        // The completed count only ever shows when it is known (ET-185) — where it is not, this dialog reads exactly
+        // as it did before that ticket: the running count alone, or nothing at all when nothing is running either.
+        // Never a guess or an "unknown" filler standing in for the number.
+        string? runsValueText = prompt.CompletedRunCount is { } completed
+            ? RunsInProgress.Count > 0 ? $"{completed} completed · {RunsInProgress.Count} still running" : $"{completed} completed"
+            : RunsInProgress.Count > 0 ? $"{RunsInProgress.Count} still running" : null;
+        if (runsValueText is not null)
+        {
+            this.FindControl<Grid>("RunsRow")!.IsVisible = true;
+            this.FindControl<TextBlock>("RunsValue")!.Text = runsValueText;
+        }
+
         if (RunsInProgress.Count > 0)
         {
             var noun = RunsInProgress.Count == 1 ? "run" : "runs";
-            this.FindControl<Grid>("RunsRow")!.IsVisible = true;
-            this.FindControl<TextBlock>("RunsValue")!.Text = $"{RunsInProgress.Count} still running";
             this.FindControl<StackPanel>("RunsBlock")!.IsVisible = true;
             this.FindControl<TextBlock>("RunsBlockLabel")!.Text = $"THE {noun.ToUpperInvariant()} STILL GOING";
             this.FindControl<Border>("RunsKeepGoingChip")!.IsVisible = true;

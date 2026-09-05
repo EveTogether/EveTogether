@@ -164,6 +164,7 @@ public class FleetRowActionWidthTests
             Assert.Equal(FleetRowActionWidths.View, Cost(ByLabel(cells, "Theirs public", "VIEW")));
             Assert.Equal(FleetRowActionWidths.Metrics, Cost(ByLabel(cells, "Theirs public", "METRICS")));
             Assert.Equal(FleetRowActionWidths.Leave, Cost(ByLabel(cells, "Theirs public", "LEAVE")));
+            Assert.Equal(FleetRowActionWidths.Runs, Cost(ByLabel(cells, "Mine finished", "RUNS")));
             Assert.Equal(FleetRowActionWidths.Delete, Cost(ByLabel(cells, "Mine finished", "DELETE")));
 
             // The "⋯" carries an icon rather than a label, so it is the one button without content.
@@ -228,6 +229,24 @@ public class FleetRowActionWidthTests
             int rows = buttons.Select(b => Math.Round(((Visual)b).TranslatePoint(new Point(0, 0), window)?.Y ?? 0))
                 .Distinct().Count();
             Assert.True(rows == 1, $"{fleet} laid its actions out over {rows} rows");
+        }
+    }
+
+    /// <summary>ET-185: RUNS needs no ownership — it stands on every finished row this client can see, not only its
+    /// own — and opens the one runs screen scoped to that fleet.</summary>
+    [AvaloniaFact]
+    public async Task RunsButton_OnAFinishedRow_OpensTheRunsOverviewFilteredToThatFleet()
+    {
+        var (instance, vm) = await BuildAsync();
+        using (instance)
+        {
+            var finished = vm.ServerGroups.SelectMany(g => g.Fleets).Single(f => f.Name == "Mine finished");
+            Assert.True(finished.ShowRuns);
+
+            await vm.OpenRunsRowCommand.ExecuteAsync(finished);
+
+            var dialogs = (RecordingDialogService)instance.Services.GetRequiredService<IDialogService>();
+            Assert.Equal("Runs for 'Mine finished'", dialogs.LastRuns?.FleetFilterText);
         }
     }
 

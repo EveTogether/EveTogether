@@ -397,6 +397,59 @@ public class FleetStopTests
         window.Close();
     }
 
+    /// <summary>ET-185: known combines with running exactly as the mockup draws it — "7 completed · 2 still
+    /// running" — because both halves of that line are trusted numbers here.</summary>
+    [AvaloniaFact]
+    public void StopDialog_ShowsCompletedAndRunning_WhenBothAreKnown()
+    {
+        var window = new StopFleetWindow(new StopFleetPrompt(
+            "Wednesday Homefronts", DateTimeOffset.UtcNow.AddMinutes(-86), 3, 0, 2,
+            ["Kaska Vex — Fortress Sansha, 00:11:42", "Torv Kesh — Fortress Sansha, 00:11:38"], 3, CompletedRunCount: 7));
+        window.Show();
+        UiDispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        Assert.Contains(RenderedText.VisibleTexts(window), t => t == "7 completed · 2 still running");
+
+        window.Close();
+    }
+
+    /// <summary>A genuine zero — a fleet young enough that RunGroupOrigin could not have missed a run of its — is
+    /// shown as the real zero it is, not suppressed the way an unknown count is (ET-185).</summary>
+    [AvaloniaFact]
+    public void StopDialog_ShowsACompletedZero_WhenThatZeroIsKnownRatherThanGuessed()
+    {
+        var window = new StopFleetWindow(new StopFleetPrompt(
+            "Brand new fleet", DateTimeOffset.UtcNow.AddMinutes(-5), 1, 0, 0, [], 0, CompletedRunCount: 0));
+        window.Show();
+        UiDispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        Assert.Contains(RenderedText.VisibleTexts(window), t => t == "0 completed");
+
+        window.Close();
+    }
+
+    /// <summary>Where the count is not known (ET-182's coverage gap), this screen reads exactly as it did before
+    /// ET-185: no completed figure at all, just the running count — never a guess and never an "unknown" filler
+    /// standing in for the number.</summary>
+    [AvaloniaFact]
+    public void StopDialog_OmitsCompletedCount_WhenNotKnown()
+    {
+        var window = new StopFleetWindow(new StopFleetPrompt(
+            "Fleet older than tracking", DateTimeOffset.UtcNow.AddMinutes(-30), 1, 0, 0,
+            ["Kaska Vex — Fortress Sansha, 00:11:42"], 0, CompletedRunCount: null));
+        window.Show();
+        UiDispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var texts = RenderedText.VisibleTexts(window);
+        Assert.Contains(texts, t => t == "1 still running");
+        Assert.DoesNotContain(texts, t => t.Contains("completed", StringComparison.Ordinal));
+
+        window.Close();
+    }
+
     private sealed class FakeDisplay : IModuleHostDisplay
     {
         public bool IsFloating { get; set; }
