@@ -183,7 +183,15 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
             return;
         }
 
-        _toasts.Show("Loot copied", $"Recognised {lines.Count} EVE item type(s) from this inventory.{unresolvedSuffix}",
+        if (unresolvedCount == 0)
+        {
+            // Clean captures stay excludable in the run loot list through the same command.
+            CloseOffer(fingerprint);
+            return;
+        }
+
+        _toasts.Show("Loot copied",
+            $"Recognised {lines.Count} EVE item type(s) from this inventory and added them to the current run.{unresolvedSuffix}",
             ToastKind.Information,
             [new ToastAction("Exclude", () => SetExcluded(saved.CaptureId, isExcluded: true)),
                 new ToastAction("Close", () => CloseOffer(fingerprint))],
