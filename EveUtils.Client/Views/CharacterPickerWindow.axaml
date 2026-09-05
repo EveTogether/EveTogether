@@ -3,14 +3,91 @@
         xmlns:dlg="using:EveUtils.Client.Dialogs"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="440" d:DesignHeight="380"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        mc:Ignorable="d" d:DesignWidth="440" d:DesignHeight="420"
         x:Class="EveUtils.Client.Views.CharacterPickerWindow"
         x:Name="Root"
-        Width="440" Height="380"
+        Width="440" Height="420"
         WindowStartupLocation="CenterOwner"
         Title="Choose character">
 
+    <!-- Styles live on the content root, never on the window: ModuleHostService lifts Content out to dock a module
+         and anything left on the window stays behind (ET-42/ET-156). This dialog is modal and never docked, but the
+         rule is cheap to keep. -->
     <DockPanel Margin="16">
+        <DockPanel.Styles>
+            <!-- One row card: resting / selected / disabled. The selected card takes the accent border + soft fill
+                 (not a lighter background alone, ET-184) and the mark on the right fills in step with it, so a
+                 choice reads without comparing rows against each other. -->
+            <Style Selector="Border.pickrow">
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Background" Value="{StaticResource BgRowBrush}"/>
+                <Setter Property="Padding" Value="9,7"/>
+                <Setter Property="Margin" Value="0,0,0,6"/>
+            </Style>
+            <Style Selector="Border.pickrow.selected">
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            </Style>
+
+            <Style Selector="TextBlock.pickname">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="12.5"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="Border.pickrow.disabled TextBlock.pickname">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.pickdetail">
+                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <!-- Why a disabled option can't be picked: same text the row always had (Detail), just called out in
+                 the amber this app already uses for a soft warning (FitPickerWindow's skill-gap badge) instead of
+                 fading the row past reading. -->
+            <Style Selector="TextBlock.pickdetail.why">
+                <Setter Property="Foreground" Value="#E0B341"/>
+            </Style>
+            <Style Selector="Border.pickrow.disabled Panel.pickhex">
+                <Setter Property="Opacity" Value="0.5"/>
+            </Style>
+
+            <!-- The selection mark: a checkbox in multi-select, a radio dot in single — present on every row from
+                 the start (not only once something is picked) so which mode this dialog is in is visible up front,
+                 not discovered by trying (ET-184 AC-3). -->
+            <Style Selector="mi|MaterialIcon.markoff">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            </Style>
+            <Style Selector="mi|MaterialIcon.markon">
+                <Setter Property="IsVisible" Value="False"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+            <Style Selector="Border.pickrow.selected mi|MaterialIcon.markoff">
+                <Setter Property="IsVisible" Value="False"/>
+            </Style>
+            <Style Selector="Border.pickrow.selected mi|MaterialIcon.markon">
+                <Setter Property="IsVisible" Value="True"/>
+            </Style>
+            <Style Selector="Border.pickrow.disabled mi|MaterialIcon.markoff">
+                <Setter Property="Opacity" Value="0.4"/>
+            </Style>
+
+            <!-- A disabled option is still shown (Enabled binds ListBoxItem.IsEnabled below) but cannot be
+                 focused/selected — the padding moves onto Border.pickrow instead, so the card owns its own edge. -->
+            <Style Selector="ListBox.picklist ListBoxItem" x:DataType="dlg:CharacterPickRowViewModel">
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="IsEnabled" Value="{Binding Enabled}"/>
+            </Style>
+            <!-- The theme's own lighter-bar selected look is exactly what ET-184 replaces; the row card above
+                 carries the selected state instead. -->
+            <Style Selector="ListBox.picklist ListBoxItem:selected /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+            </Style>
+        </DockPanel.Styles>
+
         <TextBlock x:Name="PromptText" DockPanel.Dock="Top"
                    FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,12"
                    Foreground="{StaticResource TextBrightBrush}"/>
@@ -22,19 +99,46 @@
         </StackPanel>
 
         <Border Classes="panel">
-            <ListBox x:Name="OptionList" ItemsSource="{Binding Options, ElementName=Root}"
+            <ListBox x:Name="OptionList" Classes="picklist" ItemsSource="{Binding Options, ElementName=Root}"
                      SelectionMode="Single" Margin="6"
                      DoubleTapped="OnConfirm">
                 <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="dlg:CharacterPickOption">
-                        <Grid ColumnDefinitions="*,Auto" Margin="2" IsEnabled="{Binding Enabled}">
-                            <StackPanel Grid.Column="0" Spacing="1">
-                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextBrightBrush}"/>
-                                <TextBlock Text="{Binding Detail}" FontSize="10"
-                                           Foreground="{DynamicResource TextAccentBrush}"/>
-                            </StackPanel>
-                        </Grid>
+                    <DataTemplate x:DataType="dlg:CharacterPickRowViewModel">
+                        <Border Classes="pickrow" Classes.selected="{Binding IsSelected}" Classes.disabled="{Binding !Enabled}">
+                            <Grid ColumnDefinitions="Auto,10,*,10,Auto">
+                                <!-- hex ESI portrait + glyph fallback (MainWindow.axaml:635-644) -->
+                                <Panel Grid.Column="0" Classes="pickhex" Width="46" Height="52" VerticalAlignment="Center">
+                                    <Panel.Clip><PathGeometry Figures="M23,0 L46,13 L46,39 L23,52 L0,39 L0,13 Z"/></Panel.Clip>
+                                    <Border Background="{DynamicResource AccentSoftBrush}" IsVisible="{Binding !HasPortrait}">
+                                        <TextBlock Text="{Binding Initial}" FontSize="18" FontWeight="Bold"
+                                                   Foreground="{DynamicResource AccentBrightBrush}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <Image Source="{Binding Portrait}" Stretch="UniformToFill" IsVisible="{Binding HasPortrait}"/>
+                                </Panel>
+
+                                <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Classes="pickname" Text="{Binding Name}"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="4"
+                                                IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                        <mi:MaterialIcon Classes="icon-sm" Kind="AlertOutline" Foreground="#E0B341"
+                                                          IsVisible="{Binding !Enabled}"/>
+                                        <TextBlock Classes="pickdetail" Classes.why="{Binding !Enabled}" Text="{Binding Detail}"/>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <Panel Grid.Column="4" Width="20" Height="20" VerticalAlignment="Center">
+                                    <Panel IsVisible="{Binding IsMultiSelect, ElementName=Root}">
+                                        <mi:MaterialIcon Classes="icon-lg markoff" Kind="CheckboxBlankOutline"/>
+                                        <mi:MaterialIcon Classes="icon-lg markon" Kind="CheckboxMarked"/>
+                                    </Panel>
+                                    <Panel IsVisible="{Binding !IsMultiSelect, ElementName=Root}">
+                                        <mi:MaterialIcon Classes="icon-lg markoff" Kind="RadioboxBlank"/>
+                                        <mi:MaterialIcon Classes="icon-lg markon" Kind="RadioboxMarked"/>
+                                    </Panel>
+                                </Panel>
+                            </Grid>
+                        </Border>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
