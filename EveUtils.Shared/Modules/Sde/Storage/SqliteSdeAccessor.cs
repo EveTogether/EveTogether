@@ -228,6 +228,37 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
             reader.IsDBNull(7) ? null : reader.GetInt32(7));
     }
 
+    public bool IsMutatedType(int typeId)
+    {
+        using var connection = Open();
+        if (connection is null)
+            return false;
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT 1 FROM Type t JOIN InvGroup g ON g.groupId = t.groupId
+            WHERE t.typeId = $id AND t.metaGroupId = 15 AND g.categoryId IN (7, 18)
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("$id", typeId);
+        return command.ExecuteScalar() is not null;
+    }
+
+    public IReadOnlyList<SdeMutaplasmidAttributeRange> GetMutaplasmidAttributeRanges(int mutaplasmidTypeId)
+    {
+        using var connection = Open();
+        if (connection is null)
+            return [];
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT attributeId, min, max FROM MutaplasmidAttributeRange WHERE mutaplasmidTypeId = $id;";
+        command.Parameters.AddWithValue("$id", mutaplasmidTypeId);
+        var result = new List<SdeMutaplasmidAttributeRange>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+            result.Add(new SdeMutaplasmidAttributeRange(reader.GetInt32(0), reader.GetDouble(1), reader.GetDouble(2)));
+        return result;
+    }
+
     public IReadOnlyList<SdeDogmaAttribute> GetDogmaAttributes(int typeId)
     {
         using var connection = Open();

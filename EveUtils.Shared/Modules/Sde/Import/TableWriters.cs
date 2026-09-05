@@ -34,6 +34,8 @@ internal sealed partial class TableWriters
     private readonly SqliteCommand _agentAlias;
     private readonly SqliteCommand _mission;
     private readonly SqliteCommand _epicArcMission;
+    private readonly SqliteCommand _mutaplasmidRange;
+    private readonly SqliteCommand _mutaplasmidResultingType;
 
     private readonly Dictionary<long, string> _archetypeNames = [];
     private readonly Dictionary<long, string> _factionNames = [];
@@ -58,9 +60,9 @@ internal sealed partial class TableWriters
             "VALUES ($effectId, $name, $effectCategoryId, $published, $modifierInfoJson);",
             "$effectId", "$name", "$effectCategoryId", "$published", "$modifierInfoJson");
         _type = Prepare(connection, transaction,
-            "INSERT INTO Type (typeId, groupId, nameEn, nameKey, published, mass, volume, capacity, marketGroupId) " +
-            "VALUES ($typeId, $groupId, $nameEn, $nameKey, $published, $mass, $volume, $capacity, $marketGroupId);",
-            "$typeId", "$groupId", "$nameEn", "$nameKey", "$published", "$mass", "$volume", "$capacity", "$marketGroupId");
+            "INSERT INTO Type (typeId, groupId, nameEn, nameKey, published, mass, volume, capacity, marketGroupId, metaGroupId) " +
+            "VALUES ($typeId, $groupId, $nameEn, $nameKey, $published, $mass, $volume, $capacity, $marketGroupId, $metaGroupId);",
+            "$typeId", "$groupId", "$nameEn", "$nameKey", "$published", "$mass", "$volume", "$capacity", "$marketGroupId", "$metaGroupId");
         _typeDogmaAttribute = Prepare(connection, transaction,
             "INSERT INTO TypeDogmaAttribute (typeId, attributeId, value) VALUES ($typeId, $attributeId, $value);",
             "$typeId", "$attributeId", "$value");
@@ -100,6 +102,14 @@ internal sealed partial class TableWriters
         _epicArcMission = Prepare(connection, transaction,
             "INSERT INTO EpicArcMission (missionId, arcId) VALUES ($missionId, $arcId);",
             "$missionId", "$arcId");
+        _mutaplasmidRange = Prepare(connection, transaction,
+            "INSERT INTO MutaplasmidAttributeRange (mutaplasmidTypeId, attributeId, min, max) " +
+            "VALUES ($mutaplasmidTypeId, $attributeId, $min, $max);",
+            "$mutaplasmidTypeId", "$attributeId", "$min", "$max");
+        _mutaplasmidResultingType = Prepare(connection, transaction,
+            "INSERT INTO MutaplasmidResultingType (mutaplasmidTypeId, applicableTypeId, resultingTypeId) " +
+            "VALUES ($mutaplasmidTypeId, $applicableTypeId, $resultingTypeId);",
+            "$mutaplasmidTypeId", "$applicableTypeId", "$resultingTypeId");
     }
 
     public void Insert(string dataset, JsonElement element)
@@ -122,6 +132,7 @@ internal sealed partial class TableWriters
             case "npcCharacters.jsonl": InsertAgent(element); break;
             case "missions.jsonl": InsertMission(element); break;
             case "epicArcs.jsonl": InsertEpicArcMissions(element); break;
+            case "dynamicItemAttributes.jsonl": InsertMutaplasmid(element); break;
         }
     }
 
@@ -181,6 +192,10 @@ internal sealed partial class TableWriters
         _type.Parameters["$volume"].Value = Double(e, "volume");
         _type.Parameters["$capacity"].Value = Double(e, "capacity");
         _type.Parameters["$marketGroupId"].Value = NullableInt(e, "marketGroupID");
+        // metaGroupID 15 = Abyssal (ET-146 deel A). Combined with category filtering (module/drone vs. the
+        // mutaplasmid commodities that also carry 15), this is the measured, sluitend mutated-type predicate —
+        // see ISdeAccessor.IsMutatedType.
+        _type.Parameters["$metaGroupId"].Value = NullableInt(e, "metaGroupID");
         _type.ExecuteNonQuery();
         _WriteNameAliases(Key(e), e, name);
     }
@@ -451,6 +466,45 @@ internal sealed partial class TableWriters
             _epicArcMission.Parameters["$missionId"].Value = missionId.GetInt64();
             _epicArcMission.Parameters["$arcId"].Value = arcId;
             _epicArcMission.ExecuteNonQuery();
+        }
+    }
+
+    // ET-146 deel D. attributeIDs is a keyed map in the source YAML (attributeID -> {min, max}), so the JSONL
+    // conversion carries it as an array of {_key, min, max} — the same convention as every other keyed map in
+    // this import (e.g. archetypes.jsonl). inputOutputMapping is already a list in the source, so it keeps its
+    // own field names (applicableTypes, resultingType).
+    private void InsertMutaplasmid(JsonElement e)
+    {
+        var mutaplasmidTypeId = Key(e);
+        if (e.TryGetProperty("attributeIDs", out var ranges) && ranges.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var range in ranges.EnumerateArray())
+            {
+                _mutaplasmidRange.Parameters["$mutaplasmidTypeId"].Value = mutaplasmidTypeId;
+                _mutaplasmidRange.Parameters["$attributeId"].Value = Key(range);
+                _mutaplasmidRange.Parameters["$min"].Value = Double(range, "min");
+                _mutaplasmidRange.Parameters["$max"].Value = Double(range, "max");
+                _mutaplasmidRange.ExecuteNonQuery();
+            }
+        }
+
+        if (!e.TryGetProperty("inputOutputMapping", out var mappings) || mappings.ValueKind != JsonValueKind.Array)
+            return;
+        foreach (var mapping in mappings.EnumerateArray())
+        {
+            if (!mapping.TryGetProperty("resultingType", out var resultingType) || resultingType.ValueKind != JsonValueKind.Number)
+                continue;
+            if (!mapping.TryGetProperty("applicableTypes", out var applicableTypes) || applicableTypes.ValueKind != JsonValueKind.Array)
+                continue;
+            foreach (var applicableType in applicableTypes.EnumerateArray())
+            {
+                if (applicableType.ValueKind != JsonValueKind.Number)
+                    continue;
+                _mutaplasmidResultingType.Parameters["$mutaplasmidTypeId"].Value = mutaplasmidTypeId;
+                _mutaplasmidResultingType.Parameters["$applicableTypeId"].Value = applicableType.GetInt64();
+                _mutaplasmidResultingType.Parameters["$resultingTypeId"].Value = resultingType.GetInt64();
+                _mutaplasmidResultingType.ExecuteNonQuery();
+            }
         }
     }
 
