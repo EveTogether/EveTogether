@@ -32,8 +32,13 @@ public sealed class DogmaFitStatsProvider(IDogmaCalculator calculator, ISdeAcces
     private const int DroneCapacityAttr = 283;       // drone bay m3 (ship)
     private const int DroneBandwidthAttr = 1271;     // drone bandwidth (ship)
 
-    public Task<FitStats?> ComputeAsync(EsiFitting fit, CancellationToken cancellationToken = default) =>
-        ComputeAsync(fit, FitInputMapper.BuildModules(fit, sde, data), cancellationToken: cancellationToken);
+    public Task<FitStats?> ComputeAsync(EsiFitting fit, CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<ModuleInput> modules;
+        try { modules = FitInputMapper.BuildModules(fit, sde, data); }
+        catch { return Task.FromResult<FitStats?>(null); }
+        return ComputeAsync(fit, modules, cancellationToken: cancellationToken);
+    }
 
     public async Task<FitStats?> ComputeAsync(EsiFitting fit, IReadOnlyList<ModuleInput> modules,
         int? tacticalModeTypeId = null, IReadOnlyList<DroneInput>? activeDrones = null,

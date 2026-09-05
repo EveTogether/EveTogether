@@ -384,7 +384,21 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         row.CompositionName = composition?.Composition.Name;
 
         var evaluator = _services.GetService<IMemberFitSkillEvaluator>();
+        var speedEvaluator = _services.GetService<IMemberFitSpeedEvaluator>();
         var portraits = _services.GetService<ICharacterPortraitProvider>();
+
+        // Doctrine fleets fly the same fit on many members; one Dogma run per distinct fit (keyed on its content
+        // hash) instead of one per member keeps a fifty-man doctrine fleet's reload from paying for the same
+        // calculation fifty times over.
+        var speedStatsByFit = new Dictionary<string, Task<MemberFitSpeedStats?>>();
+        Task<MemberFitSpeedStats?> SpeedStatsForAsync(FitReferenceInfo? fit)
+        {
+            if (fit is null || speedEvaluator is null)
+                return Task.FromResult<MemberFitSpeedStats?>(null);
+            if (!speedStatsByFit.TryGetValue(fit.ContentHash, out var task))
+                speedStatsByFit[fit.ContentHash] = task = speedEvaluator.EvaluateAsync(fit);
+            return task;
+        }
 
         // Every member of every fleet, since ET-170: the unfolded row shows the fleet commander and whoever is not
         // linked or shares nothing, and on a server fleet those are rarely my own pilots. A client-only fleet lists
@@ -404,6 +418,9 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             // pilot's OWN client's reported verdict, so a can-fly/skills-missing badge shows for every member, not only mine.
             badge ??= WireSkillBadge(member.FitSkillVerdict);
             var assignedFit = member.AssignedFit;
+            // Every member's fit gets a speed readout (ET-40), not only mine — unlike the skill badge above, this
+            // needs nothing about the pilot, only the fit itself, so an external's fit is just as answerable.
+            var speedStats = await SpeedStatsForAsync(assignedFit);
             // A non-owner character on a server fleet gets a per-leaf LEAVE (multi-box): pull this alt out while the
             // owner — and any other of my characters in the fleet — stays. The owner's own character never leaves.
             var canLeave = isMine && server is not null && member.CharacterId != fleet.CreatorCharacterId;
@@ -433,7 +450,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
                     : null,
                 isMine,
                 isFleetCommander: member.WingId < 0 && member.Role == FleetRole.FleetCommander,
-                member.LastSeenAt, member.Availability, member.AvailabilityNote);
+                member.LastSeenAt, member.Availability, member.AvailabilityNote,
+                speedStats: speedStats);
             row.Members.Add(leaf);
             if (portraits is not null && isMine)
                 _ = leaf.LoadPortraitAsync(portraits);   // B-3 hex portrait, best-effort (opt-in images)

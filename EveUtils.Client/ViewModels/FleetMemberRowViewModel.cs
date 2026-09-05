@@ -26,8 +26,10 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
         IAsyncRelayCommand? openFitCommand = null, IAsyncRelayCommand? leaveCommand = null, bool canLeave = false,
         FleetMemberFacts? menuFacts = null, IRelayCommand? removeCommand = null,
         bool isMine = false, bool isFleetCommander = false, DateTimeOffset? lastSeenAt = null,
-        FleetMemberAvailability availability = FleetMemberAvailability.NotSet, string? availabilityNote = null)
+        FleetMemberAvailability availability = FleetMemberAvailability.NotSet, string? availabilityNote = null,
+        MemberFitSpeedStats? speedStats = null)
     {
+        SpeedStats = speedStats;
         IsMine = isMine;
         IsFleetCommander = isFleetCommander;
         LastSeenAt = lastSeenAt;
@@ -204,6 +206,20 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
 
     /// <summary>SELECT FIT when none is assigned, CHANGE FIT to replace the current one.</summary>
     public string SelectFitButtonLabel => HasAssignedFit ? "CHANGE FIT" : "SELECT FIT";
+
+    /// <summary>The assigned fit's speed figures (ET-40), or null when there is no fit or they could not be
+    /// computed (SDE unavailable, fit JSON unreadable).</summary>
+    public MemberFitSpeedStats? SpeedStats { get; }
+
+    public bool HasSpeedStats => SpeedStats is not null;
+
+    /// <summary>All three figures Raymond's ticket asks for, on the row itself rather than behind a hover — a
+    /// tooltip means hovering every member in turn, which is the opposite of "one overview at a glance". Max
+    /// velocity and warp speed are the actual ask; align time rides along because it comes free from the same
+    /// calculation.</summary>
+    public string SpeedGlanceText => SpeedStats is null
+        ? ""
+        : $"{SpeedStats.MaxVelocity:0} m/s · {SpeedStats.WarpSpeed:0.0} AU/s · {SpeedStats.AlignTime:0.0}s";
 
     /// <summary>can-fly verdict: no badge when there is no fit, the character's skills are not locally
     /// known, or the SDE is unavailable (unknown ≠ "can't fly").</summary>
