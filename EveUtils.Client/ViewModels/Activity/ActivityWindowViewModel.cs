@@ -1472,6 +1472,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _ = RefreshFitAsync();
         _ = _RefreshActingCharacterAsync();
         _RefreshRunCharacters();
+        _ = _RefreshParticipantsAsync();
         _ShareRunLootWithFleet();
     }
 
@@ -1900,6 +1901,57 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         fleetId is { } id
             ? _Participation().FirstOrDefault(participant => participant.FleetId == id).FleetCommanderCharacterId
             : null;
+
+    /// <summary>Guards <see cref="_RefreshParticipantsAsync"/> against overlapping ticks: a slow query outliving one
+    /// second would otherwise let two calls both pass the "not there yet" check on the same row and add it twice.</summary>
+    private bool _isRefreshingParticipants;
+
+    /// <summary>
+    /// Who has a run in this activity, on the definition <c>ActivitySummary.ParticipantCount</c> already uses
+    /// (ET-131): the runs sharing this <see cref="GroupCode"/>, or just this run when it is flown alone. Rows are
+    /// kept and updated rather than rebuilt, the same as <see cref="_SyncFleetMembers"/>, so a payout toggle from
+    /// <see cref="SetPayoutEligibilityAsync"/> is not raced by the next tick's read of the same row.
+    /// </summary>
+    private async Task _RefreshParticipantsAsync()
+    {
+        if (RunId is not { } runId || _services.GetService<CqrsDispatcher>() is null || _isRefreshingParticipants)
+            return;
+
+        _isRefreshingParticipants = true;
+        try
+        {
+            using var scope = _services.CreateScope();
+            Result<IReadOnlyList<RunGroupParticipantDto>> result = await scope.ServiceProvider
+                .GetRequiredService<CqrsDispatcher>().Query(new GetRunGroupParticipantsQuery(GroupCode, runId));
+            if (!result.IsSuccess || result.Value is not { } participants)
+                return;
+
+            foreach (RunGroupParticipantDto dto in participants)
+            {
+                if (Participants.FirstOrDefault(row => row.RunId == dto.RunId) is { } existing)
+                {
+                    existing.IsParticipant = dto.IsParticipant;
+                    existing.IsPayoutEligible = dto.IsPayoutEligible;
+                    continue;
+                }
+
+                int characterId = checked((int)dto.CharacterId);
+                string name = await _NameOfAsync(characterId) ?? $"Char {characterId}";
+                Participants.Add(new RunParticipantViewModel(dto.RunId, characterId, name, dto.IsParticipant, dto.IsPayoutEligible));
+            }
+
+            foreach (RunParticipantViewModel gone in Participants
+                         .Where(row => participants.All(dto => dto.RunId != row.RunId)).ToList())
+                Participants.Remove(gone);
+
+            OnPropertyChanged(nameof(IsFleetShown));
+            RecomputePayout();
+        }
+        finally
+        {
+            _isRefreshingParticipants = false;
+        }
+    }
 
     /// <summary>
     /// Take a character out of the ISK split, or put them back in. Never touches their participation: they flew the
