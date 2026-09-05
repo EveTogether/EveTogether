@@ -608,6 +608,24 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
         return reader.Read() ? ReadAgent(reader) : null;
     }
 
+    public SdeSolarSystem? FindSolarSystemByName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return null;
+        using var connection = Open();
+        if (connection is null)
+            return null;
+        using var command = connection.CreateCommand();
+        // No nameKey/alias table on SolarSystem (unlike Type/Site/Agent) — 8490 rows, plain nameEn match is enough.
+        command.CommandText =
+            "SELECT solarSystemId, nameEn, securityStatus FROM SolarSystem WHERE nameEn = $name COLLATE NOCASE;";
+        command.Parameters.AddWithValue("$name", name.Trim());
+        using var reader = command.ExecuteReader();
+        return reader.Read()
+            ? new SdeSolarSystem(reader.GetInt32(0), reader.GetString(1), reader.GetDouble(2))
+            : null;
+    }
+
     private static SdeAgent ReadAgent(SqliteDataReader reader) =>
         new(
             reader.GetInt32(0),

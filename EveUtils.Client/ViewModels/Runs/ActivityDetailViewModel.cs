@@ -2,8 +2,10 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Esi;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -35,14 +37,19 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     private readonly IMarketPriceRepository? _prices;
     private readonly Guid _activitySummaryId;
     private readonly Func<long, string>? _nameOf;
+    private readonly IEsiClient? _esi;
+    private readonly IEsiLocationClient? _locations;
 
     public ActivityDetailViewModel(CqrsDispatcher dispatcher, Guid activitySummaryId,
-        IMarketPriceRepository? prices = null, Func<long, string>? nameOf = null)
+        IMarketPriceRepository? prices = null, Func<long, string>? nameOf = null,
+        IEsiClient? esi = null, IEsiLocationClient? locations = null)
     {
         _dispatcher = dispatcher;
         _activitySummaryId = activitySummaryId;
         _prices = prices;
         _nameOf = nameOf;
+        _esi = esi;
+        _locations = locations;
     }
 
     public ActivitySection Activity { get; } = new() { Title = "ACTIVITY", IsExpanded = true };
@@ -115,6 +122,8 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     [ObservableProperty] private string? _escalationObservedText;
     [ObservableProperty] private string? _escalationSystemText;
     [ObservableProperty] private string? _escalationExpiresAtText;
+    [ObservableProperty] private string? _escalationJumpsText;
+    [ObservableProperty] private string? _escalationJumpsEmptyText;
 
     public void RefreshModule() => _ = LoadAsync();
 
@@ -130,7 +139,9 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
 
         StatusMessage = null;
         IReadOnlyDictionary<int, decimal> unitPrices = await _UnitPricesAsync(detail.Value, cancellationToken);
-        _Apply(detail.Value, unitPrices);
+        (string? escalationJumpsText, string? escalationJumpsEmptyText) =
+            await _EscalationJumpsAsync(detail.Value, cancellationToken);
+        _Apply(detail.Value, unitPrices, escalationJumpsText, escalationJumpsEmptyText);
     }
 
     /// <summary>
@@ -157,7 +168,8 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         return averages.ToDictionary(price => price.Key, price => (decimal)price.Value);
     }
 
-    private void _Apply(ActivityDetailDto detail, IReadOnlyDictionary<int, decimal> unitPrices)
+    private void _Apply(ActivityDetailDto detail, IReadOnlyDictionary<int, decimal> unitPrices,
+        string? escalationJumpsText, string? escalationJumpsEmptyText)
     {
         _ApplyHeader(detail);
         _ApplyActivity(detail);
@@ -166,7 +178,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         _ApplyFleet(detail);
         _ApplyBounty(detail);
         _ApplyLoot(detail, unitPrices);
-        _ApplyEscalation(detail);
+        _ApplyEscalation(detail, escalationJumpsText, escalationJumpsEmptyText);
         _ApplySectionsPerKind(detail.ActivityKind);
     }
 
@@ -305,7 +317,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
             : "nothing captured";
     }
 
-    private void _ApplyEscalation(ActivityDetailDto detail)
+    private void _ApplyEscalation(ActivityDetailDto detail, string? escalationJumpsText, string? escalationJumpsEmptyText)
     {
         RunParameterDto? escalation = detail.Parameters
             .FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.Escalation);
@@ -325,6 +337,46 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
                 DateTimeStyles.RoundtripKind, out DateTime expiresAtUtc)
             ? $"expires {expiresAtUtc.ToLocalTime():HH:mm} on {expiresAtUtc.ToLocalTime():d MMM}"
             : null;
+        EscalationJumpsText = escalationJumpsText;
+        EscalationJumpsEmptyText = escalationJumpsEmptyText;
+    }
+
+    /// <summary>
+    /// The jump count to the escalation's destination, read fresh at display time and never stored (ET-127) — an
+    /// escalation typed offline stays fully usable; only this one line needs ESI, through the existing
+    /// <see cref="IEsiClient"/> and its own disk-level cache. <see cref="EscalationJumpsEmptyText"/> carries why
+    /// whenever the count itself is null, the same "empty is a state, not silence" rule as
+    /// <see cref="EscalationEmptyText"/> and every other <c>*EmptyText</c> on this screen — a hidden JUMPS row would
+    /// read as "this escalation has no destination", which is a different fact from "the count could not be read".
+    /// The pair returns (null, null) only when there is no destination to count a distance to at all.
+    ///
+    /// Origin is the character's current location rather than the run's own system: ET-124 never established which
+    /// of the two the Agency counts from, and the ticket's own escape hatch for that unknown is to read from
+    /// wherever the pilot actually is right now and label the line accordingly (AC-3).
+    /// </summary>
+    private async Task<(string? Text, string? EmptyText)> _EscalationJumpsAsync(
+        ActivityDetailDto detail, CancellationToken cancellationToken)
+    {
+        if (detail.Parameters.FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.EscalationSolarSystemId)
+                ?.TypedValue is not { } typed
+            || !int.TryParse(typed, CultureInfo.InvariantCulture, out int destinationSystemId))
+            return (null, null);
+
+        if (_esi is null || _locations is null)
+            return (null, "Jump count not available: no ESI connection.");
+
+        if (detail.Runs.FirstOrDefault()?.CharacterId is not { } characterId)
+            return (null, "Jump count not available: no character recorded on this run.");
+
+        var location = await _locations.GetLocationAsync(checked((int)characterId), cancellationToken);
+        if (location is not { IsSuccess: true, Value: { } here })
+            return (null, "Jump count not available: the pilot's current location could not be read.");
+
+        var route = await _esi.GetAsync<int[]>($"/route/{here.SolarSystemId}/{destinationSystemId}/",
+            cancellationToken: cancellationToken, expectedNotFound: true);
+        return route is { IsSuccess: true, Value.Length: > 0 }
+            ? ($"{route.Value.Length - 1} jumps from here", null)
+            : (null, "Jump count not available: no stargate route to this system.");
     }
 
     /// <summary>
@@ -361,8 +413,8 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
 
     private static bool _IsRewardParameter(RunParameterDto parameter) =>
         parameter.ParameterKey is not (RunParameterKey.Escalation or RunParameterKey.EscalationDungeonId
-            or RunParameterKey.EscalationSystem or RunParameterKey.EscalationExpiresAtUtc
-            or RunParameterKey.Smugglers or RunParameterKey.Civilians);
+            or RunParameterKey.EscalationSystem or RunParameterKey.EscalationSolarSystemId
+            or RunParameterKey.EscalationExpiresAtUtc or RunParameterKey.Smugglers or RunParameterKey.Civilians);
 
     /// <summary>"no price" and not "0 ISK": a figure nobody has must not look like a figure that came out at zero
     /// (ET-65 AC-5).</summary>

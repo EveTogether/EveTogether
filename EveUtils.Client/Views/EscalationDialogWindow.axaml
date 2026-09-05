@@ -40,6 +40,10 @@
         <StackPanel Spacing="3">
             <TextBlock Classes="label" Text="DESTINATION SYSTEM"/>
             <TextBox PlaceholderText="Where the escalation is…" Text="{Binding DestinationSystem}"/>
+            <!-- ET-127: id and security resolve off the SDE, offline — silent on no match, never a guess. -->
+            <TextBlock Text="{Binding DestinationSecurityText}"
+                       IsVisible="{Binding DestinationSecurityText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                       Classes="hint" FontSize="11"/>
         </StackPanel>
 
         <StackPanel Spacing="3">

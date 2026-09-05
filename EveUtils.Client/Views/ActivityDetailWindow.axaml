@@ -296,6 +296,14 @@
                                 <TextBlock Text="SYSTEM"/>
                                 <TextBlock Grid.Column="1" Text="{Binding EscalationSystemText}"/>
                             </Grid>
+                            <Grid Classes="kv" ColumnDefinitions="Auto,*"
+                                  IsVisible="{Binding EscalationJumpsText, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                <TextBlock Text="JUMPS"/>
+                                <TextBlock Grid.Column="1" Text="{Binding EscalationJumpsText}"/>
+                            </Grid>
+                            <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0"
+                                       IsVisible="{Binding EscalationJumpsEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                       Text="{Binding EscalationJumpsEmptyText}"/>
                             <TextBlock Classes="hint" Margin="0"
                                        IsVisible="{Binding EscalationExpiresAtText, Converter={x:Static ObjectConverters.IsNotNull}}"
                                        Text="{Binding EscalationExpiresAtText}"/>

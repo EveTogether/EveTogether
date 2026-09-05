@@ -25,6 +25,7 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     private readonly List<SdeSite> _sites = [];
     private readonly Dictionary<int, SdeAgent> _agents = new();
     private readonly Dictionary<string, SdeAgent> _agentsByName = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, SdeSolarSystem> _solarSystemsByName = new(StringComparer.OrdinalIgnoreCase);
 
     public bool IsAvailable { get; private set; } = true;
     public SdeVersion? Version => new(1, DateTimeOffset.UnixEpoch);
@@ -61,6 +62,12 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     {
         _agents[agent.AgentId] = agent;
         _agentsByName[agent.Name] = agent;
+        return this;
+    }
+
+    public FakeSdeAccessor AddSolarSystem(SdeSolarSystem system)
+    {
+        _solarSystemsByName[system.Name] = system;
         return this;
     }
 
@@ -145,6 +152,9 @@ public sealed class FakeSdeAccessor : ISdeAccessor
 
     // No mission fixtures here — nothing under test today reads them through this fake.
     public SdeMission? GetMission(int missionId) => null;
+
+    public SdeSolarSystem? FindSolarSystemByName(string name) =>
+        string.IsNullOrWhiteSpace(name) ? null : _solarSystemsByName.GetValueOrDefault(name.Trim());
 
     public void Close() { }
     public void Reopen() { }

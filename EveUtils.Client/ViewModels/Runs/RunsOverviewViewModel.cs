@@ -8,12 +8,14 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Esi;
 using EveUtils.Client.Messaging;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
@@ -486,7 +488,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     {
         _dialogs.ShowActivityDetail(
             new ActivityDetailViewModel(_dispatcher, row.ActivitySummaryId,
-                _services.GetService<IMarketPriceRepository>(), _NameOf),
+                _services.GetService<IMarketPriceRepository>(), _NameOf,
+                _services.GetService<IEsiClient>(), _services.GetService<IEsiLocationClient>()),
             row.ActivitySummaryId);
         return Task.CompletedTask;
     }
