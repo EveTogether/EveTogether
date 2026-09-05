@@ -474,7 +474,8 @@ public sealed class ClipboardLootCaptureTests
             _instance = instance;
             _watch = watch;
             _source = source;
-            _capture = new ClipboardLootCapture(watch, Toasts, sde, NullLogger<ClipboardLootCapture>.Instance, captureDispatcher);
+            _capture = new ClipboardLootCapture(watch, Toasts, sde, NullLogger<ClipboardLootCapture>.Instance,
+                captureDispatcher, new RecordingDialogService());
         }
 
         private static CancellationToken Token => TestContext.Current.CancellationToken;

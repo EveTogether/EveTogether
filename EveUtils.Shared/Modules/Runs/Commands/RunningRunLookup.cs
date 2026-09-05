@@ -17,14 +17,25 @@ internal static class RunningRunLookup
     /// loot needs, because it is copied out of the wreck after the last rat and belongs to the run that produced it.
     /// A window opening asks WITHOUT it: a stopped run is exactly what it must not adopt, or a pilot who closes his
     /// window gets yesterday's run back with its site, its start and its commander's group code.</param>
+    /// <param name="preferredRunId">The open activity window's own run (<c>IDialogService.ActivityWindowRunId</c>
+    /// on the client), if the caller has one. Answered outright when it is still open, before the run/no-run counting below ever
+    /// runs: a stray second site copied over a running one (ET-190, c69fec1) stops the pilot's own run to wait on
+    /// SAVE/DISCARD/KEEP, sometimes for minutes, and any old Stopped-and-never-saved run left over from an earlier
+    /// session (Raymond, 2026-09-04) then makes it one Stopped candidate among several — "N runs are running" on
+    /// loot that has an unambiguous owner right there in the open window. This is that answer, not a guess: only one
+    /// activity window is ever open at a time (ET-98), so the run it is on is never one of two candidates to choose
+    /// between.</param>
     public static async Task<(Run? Run, int RunningCount)> FindAsync(
-        ClientDbContext db, CancellationToken cancellationToken, bool includeStopped = false)
+        ClientDbContext db, CancellationToken cancellationToken, bool includeStopped = false, Guid? preferredRunId = null)
     {
         List<Run> open = await db.Set<Run>()
             .AsNoTracking()
             .Where(run => !run.DeletedAtUtc.HasValue
                           && (run.State == RunState.Running || (includeStopped && run.State == RunState.Stopped)))
             .ToListAsync(cancellationToken);
+
+        if (preferredRunId is { } preferred && open.FirstOrDefault(run => run.Id == preferred) is { } known)
+            return (known, 1);
 
         // A run on the clock wins over one only stopped: the moment a NEXT run is running, that is the one a copy
         // belongs to — otherwise every run stopped and not yet saved would go on competing for the pilot's loot.
