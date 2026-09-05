@@ -197,7 +197,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         return _fleetHistoryKnownEmpty
             ? $"'{_fleetFilter.FleetName}' has no completed runs on record."
             : $"'{_fleetFilter.FleetName}' may have flown runs before this client tracked which fleet a run belongs "
-              + "to (ET-182) — those can't be shown here, only what it has flown since.";
+              + "to — those can't be shown here, only what it has flown since.";
     }
 
     /// <summary>Whether an empty fleet filter is a real zero: true when the fleet is confirmed to predate nothing
