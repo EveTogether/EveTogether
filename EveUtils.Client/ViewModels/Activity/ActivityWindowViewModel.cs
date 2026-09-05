@@ -456,6 +456,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         {
             ParameterKey = RunParameterKey.EscalationSystem, TypedValue = result.DestinationSystem, ObservedAtUtc = nowUtc
         });
+        if (result.DestinationSolarSystemId is { } destinationSolarSystemId)
+            _escalationParameters.Add(new RunParameterInput
+            {
+                ParameterKey = RunParameterKey.EscalationSolarSystemId,
+                TypedValue = destinationSolarSystemId.ToString(CultureInfo.InvariantCulture),
+                ObservedAtUtc = nowUtc
+            });
         _escalationParameters.Add(new RunParameterInput
         {
             ParameterKey = RunParameterKey.EscalationExpiresAtUtc,

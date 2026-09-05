@@ -95,6 +95,12 @@ public interface ISdeAccessor
     /// unavailable or no mission carries that id.</summary>
     SdeMission? GetMission(int missionId);
 
+    /// <summary>Exact-name solar system lookup (ET-127): the SDE's own <c>SolarSystem</c> table already carries
+    /// name and security for all 8490 systems, so an escalation's typed destination resolves to an id and a
+    /// security status without ever asking ESI. Case-insensitive; trims the input. Null when the SDE is
+    /// unavailable, <paramref name="name"/> is blank, or no system carries that name.</summary>
+    SdeSolarSystem? FindSolarSystemByName(string name);
+
     /// <summary>Release the store file (drop pooled connections + stop serving queries) so the importer can overwrite
     /// it during the atomic swap — on Windows an open/pooled handle blocks <c>File.Move</c>. Pair with <see cref="Reopen"/>.</summary>
     void Close();

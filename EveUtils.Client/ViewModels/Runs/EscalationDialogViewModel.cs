@@ -74,7 +74,20 @@ public sealed partial class EscalationDialogViewModel : ObservableObject
 
     public bool HasSelectedSite => SelectedOption is not null;
 
-    [ObservableProperty] private string _destinationSystem = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DestinationResolvedSystem))]
+    [NotifyPropertyChangedFor(nameof(DestinationSecurityText))]
+    private string _destinationSystem = string.Empty;
+
+    /// <summary>ET-127: what the typed destination resolves to locally, straight off the SDE — no ESI call needed
+    /// for a name that already carries an id and a security status. Null while nothing matches; never a guess.</summary>
+    public SdeSolarSystem? DestinationResolvedSystem =>
+        string.IsNullOrWhiteSpace(DestinationSystem) ? null : _sde.FindSolarSystemByName(DestinationSystem.Trim());
+
+    public string? DestinationSecurityText =>
+        DestinationResolvedSystem is { } system
+            ? $"{system.SecurityStatus.ToString("0.0", CultureInfo.InvariantCulture)} security"
+            : null;
 
     /// <summary>Typed as-is from the Agency window — see the type docstring for why this never starts pre-filled.</summary>
     [ObservableProperty]
@@ -107,6 +120,7 @@ public sealed partial class EscalationDialogViewModel : ObservableObject
             SelectedSite?.Name ?? SiteQuery.Trim(),
             dungeonId,
             DestinationSystem.Trim(),
+            DestinationResolvedSystem?.SolarSystemId,
             DateTime.UtcNow + remaining);
         CloseRequested?.Invoke(true);
     }
@@ -124,5 +138,7 @@ public sealed partial class EscalationDialogViewModel : ObservableObject
 }
 
 /// <summary>What the dialog produced: the name as typed or picked, the catalogue id when a pick made one available
-/// (ET-125 AC-2 — never re-derived from the name), the destination system as typed, and the computed deadline.</summary>
-public sealed record EscalationRegistration(string SiteName, int? DungeonId, string DestinationSystem, DateTime ExpiresAtUtc);
+/// (ET-125 AC-2 — never re-derived from the name), the destination system as typed, its solarSystemId when the SDE
+/// recognises the name (ET-127 — null is not an error, AC-2), and the computed deadline.</summary>
+public sealed record EscalationRegistration(
+    string SiteName, int? DungeonId, string DestinationSystem, int? DestinationSolarSystemId, DateTime ExpiresAtUtc);
