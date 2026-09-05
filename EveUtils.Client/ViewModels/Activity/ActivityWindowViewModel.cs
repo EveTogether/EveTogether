@@ -26,6 +26,8 @@ using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fittings.Entities;
 using EveUtils.Shared.Modules.Fittings.Repositories;
 using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Repositories;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
@@ -45,6 +47,7 @@ using EveUtils.Shared.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
+using FleetEntity = EveUtils.Shared.Modules.Fleet.Entities.Fleet;
 
 namespace EveUtils.Client.ViewModels.Activity;
 
@@ -152,6 +155,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private bool _isDiscarding;
     private int? _runCharacterId;
     private int? _namedCharacterId;
+    private bool _hasCheckedUnstartedFleetMembership;
     private PendingCopy? _pendingCopy;
     private string? _runCharacterName;
     private int? _commanderNameId;
@@ -289,6 +293,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(HasFleetNotice))]
     [NotifyPropertyChangedFor(nameof(FleetNoticeText))]
     private int _fleetsInPlay;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFleetNotice))]
+    [NotifyPropertyChangedFor(nameof(FleetNoticeText))]
+    private string? _unstartedFleetName;
 
     [ObservableProperty] private string? _groupCode;
 
@@ -610,16 +619,17 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// fleets in play <i>and</i> no fleet id came out of it — with a fleet settled there is nothing to report, and
     /// with one fleet there was never a question.
     /// </summary>
-    public bool HasFleetNotice => FleetsInPlay > 1 && FleetId is null;
+    public bool HasFleetNotice => FleetId is null && (FleetsInPlay > 1 || UnstartedFleetName is not null);
 
     /// <summary>Says which way the run went and what would settle it. Not a warning about a fault: two started
     /// fleets is a legitimate state, and the window's job is to make the consequence visible rather than to refuse
     /// it.</summary>
-    public string FleetNoticeText =>
-        $"You are in {FleetsInPlay} started fleets at once, so this run belongs to none of them and is not shared. "
-        // "Stop", not "conclude" (ET-166 follow-up): concluding is one-way, so a pilot who took this advice
-        // literally threw away the recurring fleet it was only asking them to step out of for tonight.
-        + "Stop the ones you are not flying to file it under one.";
+    public string FleetNoticeText => UnstartedFleetName is { } fleetName
+        ? $"'{fleetName}' has not been started, so this run is not shared. Start it to file this run under it."
+        : $"You are in {FleetsInPlay} started fleets at once, so this run belongs to none of them and is not shared. "
+          // "Stop", not "conclude" (ET-166 follow-up): concluding is one-way, so a pilot who took this advice
+          // literally threw away the recurring fleet it was only asking them to step out of for tonight.
+          + "Stop the ones you are not flying to file it under one.";
 
     // ── The character column ────────────────────────────────────────────────────────────────────────
 
@@ -1757,7 +1767,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// never produced one, so its commander was told his own controls were hidden because nobody knew who he was
     /// (ET-152). Nothing is awaited here any more, so the answer is on screen the moment the window opens.
     /// </summary>
-    public Task RefreshFleetCommandAsync(DateTime nowUtc)
+    public async Task RefreshFleetCommandAsync(DateTime nowUtc)
     {
         // A run filed under a group belongs to the fleet whose commander made that group, and a membership sweep
         // that has not answered yet must not take it away again: on a joining member the announcement arrives
@@ -1767,6 +1777,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // Counted off the same list the pick was made on, so the notice and the outcome are one reading of the set
         // rather than two that a sweep in between could have pulled apart.
         FleetsInPlay = inPlay.Count;
+        if (FleetsInPlay > 0)
+        {
+            UnstartedFleetName = null;
+            _hasCheckedUnstartedFleetMembership = false;
+        }
+        else if (!_hasCheckedUnstartedFleetMembership && _runCharacterId is not null)
+        {
+            UnstartedFleetName = await _UnstartedFleetNameAsync();
+            _hasCheckedUnstartedFleetMembership = true;
+        }
         // The same character the rest of the window works from. It used to fall back to IActiveFleetState, which
         // holds whichever character a fleets-window row was last selected as — so a fleet commander flying a
         // different toon than that row's acting one was compared against his own fleet's boss id and told only the
@@ -1774,7 +1794,17 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // of the comparison are now one pilot.
         int? commander = _CommanderOf(fleetId);
         ApplyFleetCommand(fleetId, commander, _ActingCharacterId(), _CommanderNameOf(commander));
-        return Task.CompletedTask;
+    }
+
+    private async Task<string?> _UnstartedFleetNameAsync()
+    {
+        if (_runCharacterId is not { } characterId)
+            return null;
+
+        using IServiceScope scope = _services.CreateScope();
+        IReadOnlyList<FleetEntity> fleets = await scope.ServiceProvider.GetRequiredService<IFleetRepository>()
+            .ListForParticipantAsync(characterId);
+        return fleets.FirstOrDefault(fleet => fleet.Activation == FleetActivation.Forming)?.Name;
     }
 
     /// <summary>

@@ -154,6 +154,50 @@ public class FleetParticipationActivationTests
         Assert.False(window.HasFleetNotice);
     }
 
+    [AvaloniaFact]
+    public async Task WithOnePreparedFleet_TheRunIsNotShared_AndTheWindowSaysWhy()
+    {
+        using var instance = TestClientInstance.Create();
+        await _CreateLocalFleetAsync(instance, FleetActivation.Forming);
+
+        var window = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
+        await window.LoadAsync();
+        window.StartManualRun(DateTime.UtcNow);
+        await window.RefreshFleetCommandAsync(DateTime.UtcNow);
+
+        Assert.Null(window.FleetId);
+        Assert.True(window.HasFleetNotice);
+        Assert.Contains("HF", window.FleetNoticeText, StringComparison.Ordinal);
+        Assert.Contains("not been started", window.FleetNoticeText, StringComparison.OrdinalIgnoreCase);
+
+        var view = new ActivityWindow(window) { Width = 560, Height = 620 };
+        view.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        TextBlock notice = view.FindControl<TextBlock>("FleetNoticeText")
+                           ?? throw new InvalidOperationException("the fleet notice was not rendered");
+        Assert.True(notice.IsVisible);
+        Assert.Equal(window.FleetNoticeText, notice.Text);
+        Assert.NotNull(view.CaptureRenderedFrame());
+        view.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task WithNoFleetMembership_TheRunHasNoFleetNotice()
+    {
+        using var instance = TestClientInstance.Create();
+        await instance.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character("Jithran", Owner));
+
+        var window = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
+        await window.LoadAsync();
+        window.StartManualRun(DateTime.UtcNow);
+        await window.RefreshFleetCommandAsync(DateTime.UtcNow);
+
+        Assert.Null(window.FleetId);
+        Assert.False(window.HasFleetNotice);
+    }
+
     /// <summary>
     /// Creates the fleet the way the client does — <see cref="ClientFleetService.CreateLocalFleetAsync"/>, which
     /// leaves it Forming — and then puts it at the activation under test. Set on the entity rather than through
