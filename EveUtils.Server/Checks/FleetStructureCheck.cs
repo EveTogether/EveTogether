@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using FleetEntity = EveUtils.Shared.Modules.Fleet.Entities.Fleet;
 
-namespace EveUtils.Server;
+namespace EveUtils.Server.Checks;
 
 /// <summary>
 /// Headless proof for the wing/squad structure, runnable via <c>--fleet-structure-test</c>.

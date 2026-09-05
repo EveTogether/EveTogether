@@ -9,7 +9,7 @@ using EveUtils.Shared.Modules.Fleet.Repositories;
 using Grpc.Core;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace EveUtils.Server;
+namespace EveUtils.Server.Checks;
 
 /// <summary>
 /// Headless proof for the persistence + cleanup rule, runnable via <c>--fleet-cleanup-test</c>. Two

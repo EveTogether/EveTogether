@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using FleetEntity = EveUtils.Shared.Modules.Fleet.Entities.Fleet;
 
-namespace EveUtils.Server;
+namespace EveUtils.Server.Checks;
 
 /// <summary>
 /// Headless proof for the "one active fleet per character" rule + the Concluded and Stopped lifecycles

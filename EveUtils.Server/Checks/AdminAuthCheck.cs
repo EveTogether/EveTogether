@@ -5,7 +5,7 @@ using EveUtils.Shared.Modules.AdminAuth.Repositories;
 using EveUtils.Shared.Modules.AdminAuth.Services;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace EveUtils.Server;
+namespace EveUtils.Server.Checks;
 
 /// <summary>
 /// Headless proof for the admin-panel auth foundation, runnable via <c>--admin-auth-test</c>.

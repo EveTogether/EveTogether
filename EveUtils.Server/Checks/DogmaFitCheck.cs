@@ -6,7 +6,7 @@ using EveUtils.Shared.Modules.Sde.Import;
 using EveUtils.Shared.Modules.Fittings.Services.Parsers;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace EveUtils.Server;
+namespace EveUtils.Server.Checks;
 
 /// <summary>
 /// Validates the dogma engine against a real reference fit (--dogma-fit-test): parses the

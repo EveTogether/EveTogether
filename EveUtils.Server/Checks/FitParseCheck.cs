@@ -4,7 +4,7 @@ using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Import;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace EveUtils.Server;
+namespace EveUtils.Server.Checks;
 
 /// <summary>
 /// Headless real-SDE proof of the fit text parsers (<c>--fit-parse-test</c>): ensures the SDE store exists,

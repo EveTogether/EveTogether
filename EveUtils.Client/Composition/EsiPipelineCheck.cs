@@ -12,7 +12,7 @@ using EveUtils.Shared.Runtime;
 using Microsoft.Extensions.Logging.Abstractions;
 using static EveUtils.Client.Esi.Testing.EsiTestResponses;
 
-namespace EveUtils.Client;
+namespace EveUtils.Client.Composition;
 
 /// <summary>
 /// Headless proof that every ESI fallback works (runnable via <c>--esi-test</c>). Drives the real

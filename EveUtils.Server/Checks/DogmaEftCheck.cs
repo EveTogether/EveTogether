@@ -8,7 +8,7 @@ using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fittings.Services.Parsers;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace EveUtils.Server;
+namespace EveUtils.Server.Checks;
 
 /// <summary>
 /// Runs the dogma engine over an arbitrary EFT file and prints the derived stats (--dogma-eft &lt;file&gt;), for the

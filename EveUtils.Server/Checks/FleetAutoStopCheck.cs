@@ -10,7 +10,7 @@ using EveUtils.Shared.Modules.Fleet.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using System.Linq;
 
-namespace EveUtils.Server;
+namespace EveUtils.Server.Checks;
 
 /// <summary>
 /// Headless proof for the automatic stop (ET-167), runnable via <c>--fleet-autostop-test</c> against a real server

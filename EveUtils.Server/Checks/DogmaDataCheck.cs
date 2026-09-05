@@ -5,7 +5,7 @@ using EveUtils.Shared.Modules.Sde.Import;
 using EveUtils.Shared.Modules.Sde.Storage;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace EveUtils.Server;
+namespace EveUtils.Server.Checks;
 
 /// <summary>
 /// Headless real-SDE proof of <see cref="IDogmaDataAccessor"/> (<c>--dogma-data-test</c>):

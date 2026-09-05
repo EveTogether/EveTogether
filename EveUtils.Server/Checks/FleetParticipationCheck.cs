@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using FleetEntity = EveUtils.Shared.Modules.Fleet.Entities.Fleet;
 
-namespace EveUtils.Server;
+namespace EveUtils.Server.Checks;
 
 /// <summary>
 /// Headless proof for the fleet-scoped routing seam, now server-authoritative, runnable via

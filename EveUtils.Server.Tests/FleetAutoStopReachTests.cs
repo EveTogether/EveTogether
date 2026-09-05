@@ -30,7 +30,7 @@ public class FleetAutoStopReachTests
         [Path.Combine("EveUtils.Shared", "Modules", "Fleet", "Commands", "StopFleetCommandHandler.cs")] = "words them",
         [Path.Combine("EveUtils.Server", "Grpc", "FleetAutoStopRunner.cs")] = "the server's sweep",
         [Path.Combine("EveUtils.Client", "Fleet", "LocalFleetAutoStopService.cs")] = "the client's start-up reckoning",
-        [Path.Combine("EveUtils.Server", "FleetAutoStopCheck.cs")] = "the headless proof; asserts, never dispatches",
+        [Path.Combine("EveUtils.Server", "Checks", "FleetAutoStopCheck.cs")] = "the headless proof; asserts, never dispatches",
     };
 
     /// <summary>
