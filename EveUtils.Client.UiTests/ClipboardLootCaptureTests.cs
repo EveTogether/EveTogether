@@ -42,7 +42,8 @@ public sealed class ClipboardLootCaptureTests
 
         RunLootCapture capture = Assert.Single(await env.CapturesAsync());
         Assert.Equal(name, Assert.Single(capture.Entries).Name);
-        Assert.Equal("Loot copied", Assert.Single(env.Toasts.ActionToasts).Title);
+        Assert.Empty(env.Toasts.ActionToasts);
+        Assert.Empty(env.Toasts.Toasts);
     }
 
     [AvaloniaTheory]
@@ -92,7 +93,7 @@ public sealed class ClipboardLootCaptureTests
     }
 
     [AvaloniaFact]
-    public async Task InventoryWithKnownEveTypes_OffersLoot_AndSuppressesAnOpenDuplicate()
+    public async Task InventoryWithKnownEveTypes_OffersTheRepeatedCopy_AndSuppressesItsOpenCard()
     {
         using var env = await Env.StartAsync();
         await env.StartRunAsync();
@@ -100,11 +101,11 @@ public sealed class ClipboardLootCaptureTests
 
         await env.CopyAsync(text);
         await env.CopyAsync(text);
+        await env.CopyAsync(text);
 
         var offer = Assert.Single(env.Toasts.ActionToasts);
-        Assert.Equal("Loot copied", offer.Title);
-        Assert.Contains("2 EVE item type(s)", offer.Message);
-        Assert.Equal(["Exclude", "Close"], Array.ConvertAll(offer.Actions.ToArray(), action => action.Label));
+        Assert.Equal("Loot copy repeated", offer.Title);
+        Assert.Equal(["Include", "Close"], Array.ConvertAll(offer.Actions.ToArray(), action => action.Label));
 
         env.CloseOffer();
         await env.CopyAsync(text);
@@ -128,7 +129,7 @@ public sealed class ClipboardLootCaptureTests
     }
 
     [AvaloniaFact]
-    public async Task InventoryWithOneKnownType_OffersLootAndNamesUnresolvedRows()
+    public async Task InventoryWithOneKnownType_NamesUnresolvedRowsAndTheCurrentRun()
     {
         using var env = await Env.StartAsync();
         await env.StartRunAsync();
@@ -136,7 +137,9 @@ public sealed class ClipboardLootCaptureTests
         await env.CopyAsync("Rifter\t1\r\nBudget rent\t2");
 
         var offer = Assert.Single(env.Toasts.ActionToasts);
+        Assert.Equal("Loot copied", offer.Title);
         Assert.Contains("1 EVE item type(s)", offer.Message);
+        Assert.Contains("added them to the current run", offer.Message);
         Assert.Contains("1 name(s) were not recognised", offer.Message);
     }
 
@@ -224,7 +227,6 @@ public sealed class ClipboardLootCaptureTests
         RunLootCapture detail = Assert.Single(await env.CapturesAsync());
         Assert.Equal(970.65m, detail.Entries.Single(entry => entry.Name == "Metal Scraps").ClipboardPrice);
 
-        env.CloseOffer();
         await env.CopyAsync(_Fixture("mini-icons.txt"));
         RunLootCapture icons = (await env.CapturesAsync())[1];
         Assert.All(icons.Entries, entry => Assert.Null(entry.ClipboardPrice));
@@ -290,7 +292,6 @@ public sealed class ClipboardLootCaptureTests
         await env.StartRunAsync();
 
         await env.CopyAsync(Container);
-        env.CloseOffer();
         await env.CopyAsync(Container);
 
         var repeat = Assert.Single(env.Toasts.ActionToasts, toast => toast.Title == "Loot copy repeated");
@@ -310,21 +311,22 @@ public sealed class ClipboardLootCaptureTests
         Assert.Equal(0.30m, summary.LootVolume);
     }
 
-    /// <summary>The toast's own buttons round-trip through the real dispatcher, not just a local flag: "Exclude" on
-    /// a fresh capture flips its stored flag, and "Include" on a repeat's card flips it back.</summary>
+    /// <summary>The special-status card's buttons round-trip through the real dispatcher, not just a local flag:
+    /// "Exclude" flips its stored flag, and "Include" on a repeat's card flips it back.</summary>
     [AvaloniaFact]
     public async Task ToastActions_ExcludeAndInclude_RoundTripThroughTheCommand()
     {
         using var env = await Env.StartAsync();
         await env.StartRunAsync();
 
-        await env.CopyAsync(Container);
+        const string text = "Rifter\t1\r\nBudget rent\t2";
+        await env.CopyAsync(text);
         var offer = Assert.Single(env.Toasts.ActionToasts);
         await env.RunActionAsync(offer, "Exclude");
         Assert.True(Assert.Single(await env.CapturesAsync()).IsExcluded);
 
         env.CloseOffer();
-        await env.CopyAsync(Container); // same content again → a repeat, stored excluded by default
+        await env.CopyAsync(text); // same content again → a repeat, stored excluded by default
         var repeat = Assert.Single(env.Toasts.ActionToasts, toast => toast.Title == "Loot copy repeated");
         await env.RunActionAsync(repeat, "Include");
 
@@ -333,7 +335,7 @@ public sealed class ClipboardLootCaptureTests
         Assert.False(captures[1].IsExcluded); // the repeat is back in — the first is untouched, still excluded
     }
 
-    /// <summary>The toast's Exclude/Include button is the same "vanishing exception" risk the fase-2 store path had
+    /// <summary>The special-status card's Exclude/Include button is the same "vanishing exception" risk the fase-2 store path had
     /// (review finding on fase 3): a dispatcher failure must surface as a toast, not disappear off the click.</summary>
     [AvaloniaFact]
     public async Task ExcludeAction_WhenTheCommandFails_ShowsAToastInsteadOfVanishing()
@@ -342,7 +344,7 @@ public sealed class ClipboardLootCaptureTests
             command => command is SetRunLootCaptureExclusionCommand));
         await env.StartRunAsync();
 
-        await env.CopyAsync(Container);
+        await env.CopyAsync("Rifter\t1\r\nBudget rent\t2");
         var offer = Assert.Single(env.Toasts.ActionToasts);
         await env.RunActionAsync(offer, "Exclude");
 
@@ -359,7 +361,6 @@ public sealed class ClipboardLootCaptureTests
         await env.StartRunAsync();
 
         await env.CopyAsync(Container);
-        env.CloseOffer();
         await env.CopyAsync(SecondContainer);
 
         IReadOnlyList<RunLootCapture> captures = await env.CapturesAsync();
@@ -419,7 +420,6 @@ public sealed class ClipboardLootCaptureTests
         using var env = await Env.StartAsync();
         await env.StartRunAsync();
         await env.CopyAsync(Container);
-        env.CloseOffer();
         await env.CopyAsync(Container);
 
         Assert.Equal(350.50m, (await env.SaveAndRebuildAsync()).LootIskGained);

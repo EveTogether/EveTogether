@@ -183,7 +183,14 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
             return;
         }
 
-        _toasts.Show("Loot copied", $"Recognised {lines.Count} EVE item type(s) from this inventory.{unresolvedSuffix}",
+        if (unresolvedCount == 0)
+        {
+            CloseOffer(fingerprint);
+            return;
+        }
+
+        _toasts.Show("Loot copied",
+            $"Recognised {lines.Count} EVE item type(s) from this inventory and added them to the current run.{unresolvedSuffix}",
             ToastKind.Information,
             [new ToastAction("Exclude", () => SetExcluded(saved.CaptureId, isExcluded: true)),
                 new ToastAction("Close", () => CloseOffer(fingerprint))],
@@ -192,6 +199,7 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
 
     /// <summary>The toast's own one-click exclude/include — the same flag <see cref="EveUtils.Client.ViewModels.Runs.RunLootViewModel"/>
     /// toggles later, so a card acted on now and a still-open list agree.</summary>
+    // Clean captures stay excludable in the run loot list through the same command.
     private void SetExcluded(Guid captureId, bool isExcluded) => _TrackLastStore(SetExcludedAsync(captureId, isExcluded));
 
     /// <summary>Same treatment as <see cref="StoreAndOfferAsync"/>: a dispatcher exception or a clean refusal is
