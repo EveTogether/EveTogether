@@ -185,6 +185,7 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
 
         if (unresolvedCount == 0)
         {
+            // Clean captures stay excludable in the run loot list through the same command.
             CloseOffer(fingerprint);
             return;
         }
@@ -199,7 +200,6 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
 
     /// <summary>The toast's own one-click exclude/include — the same flag <see cref="EveUtils.Client.ViewModels.Runs.RunLootViewModel"/>
     /// toggles later, so a card acted on now and a still-open list agree.</summary>
-    // Clean captures stay excludable in the run loot list through the same command.
     private void SetExcluded(Guid captureId, bool isExcluded) => _TrackLastStore(SetExcludedAsync(captureId, isExcluded));
 
     /// <summary>Same treatment as <see cref="StoreAndOfferAsync"/>: a dispatcher exception or a clean refusal is
