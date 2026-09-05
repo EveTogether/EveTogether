@@ -605,6 +605,17 @@
                                         HorizontalAlignment="Left"
                                         Command="{Binding ShowShipRestrictionCommand}"/>
                             </Grid>
+                            <!-- ET-125: the pilot's own moment to register, not an automatic detection — ET-124
+                                 measured that neither the SDE, ESI nor the gamelog knows an escalation happened. -->
+                            <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsEscalationRegistrationShown}">
+                                <TextBlock Text=""/>
+                                <Button Grid.Column="1" Classes="link" Content="register escalation"
+                                        HorizontalAlignment="Left"
+                                        Command="{Binding RegisterEscalationCommand}"/>
+                            </Grid>
+                            <TextBlock Text="{Binding EscalationRegisteredText}"
+                                       IsVisible="{Binding EscalationRegisteredText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                       Classes="hint" Margin="0"/>
                         </StackPanel>
 
                         <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsLocationShown}">

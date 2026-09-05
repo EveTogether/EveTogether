@@ -226,6 +226,10 @@ public interface IDialogService
     /// from there the run is the activity window's, the same one the clipboard route lands in.</summary>
     Task ShowManualRunStartAsync(ManualRunStartViewModel viewModel);
 
+    /// <summary>Opens the register-escalation dialog (ET-125): modal, filling in <see cref="EscalationDialogViewModel.Result"/>.
+    /// Returns true when the pilot registered (Result is set), false on Cancel.</summary>
+    Task<bool> ShowEscalationDialogAsync(EscalationDialogViewModel viewModel);
+
     /// <summary>Opens one saved activity's detail as a hosted module (ET-162). Keyed on the activity so two
     /// activities are two tabs rather than one tab that quietly changes subject under the reader.</summary>
     void ShowActivityDetail(ActivityDetailViewModel viewModel, Guid activitySummaryId);

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.ViewModels.Activity;
@@ -112,6 +113,8 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
 
     [ObservableProperty] private string? _escalationText;
     [ObservableProperty] private string? _escalationObservedText;
+    [ObservableProperty] private string? _escalationSystemText;
+    [ObservableProperty] private string? _escalationExpiresAtText;
 
     public void RefreshModule() => _ = LoadAsync();
 
@@ -313,6 +316,15 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
               $"{escalation.ObservedAtUtc.ToLocalTime():d MMM}";
         EscalationEmptyText = escalation is null ? "No escalation has been registered for this activity." : null;
         Escalation.HeaderSummary = escalation?.TypedValue ?? "none registered";
+
+        EscalationSystemText = detail.Parameters
+            .FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.EscalationSystem)?.TypedValue;
+        EscalationExpiresAtText = detail.Parameters
+                .FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.EscalationExpiresAtUtc)?.TypedValue
+            is { } expiresAt && DateTime.TryParse(expiresAt, CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind, out DateTime expiresAtUtc)
+            ? $"expires {expiresAtUtc.ToLocalTime():HH:mm} on {expiresAtUtc.ToLocalTime():d MMM}"
+            : null;
     }
 
     /// <summary>
@@ -348,8 +360,9 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     }
 
     private static bool _IsRewardParameter(RunParameterDto parameter) =>
-        parameter.ParameterKey is not (RunParameterKey.Escalation or RunParameterKey.Smugglers
-            or RunParameterKey.Civilians);
+        parameter.ParameterKey is not (RunParameterKey.Escalation or RunParameterKey.EscalationDungeonId
+            or RunParameterKey.EscalationSystem or RunParameterKey.EscalationExpiresAtUtc
+            or RunParameterKey.Smugglers or RunParameterKey.Civilians);
 
     /// <summary>"no price" and not "0 ISK": a figure nobody has must not look like a figure that came out at zero
     /// (ET-65 AC-5).</summary>

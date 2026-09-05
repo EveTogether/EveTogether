@@ -412,6 +412,59 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     // moment it starts rather than waited for — a mission is not looted the way a site is (ET-174 AC-4).
     public IReadOnlyList<RunParameterInput> PendingParameters { get; set; } = [];
 
+    // What RegisterEscalationAsync collected, carried to SAVE rather than written the moment it is entered: unlike
+    // the mission rewards above, an escalation is entered mid-run, long before there is a stop time to save against
+    // (ET-125). Cleared and rebuilt on every registration — one escalation per run, the last one entered wins.
+    private readonly List<RunParameterInput> _escalationParameters = [];
+
+    /// <summary>Only a site run escalates (ET-124 measured this; an abyssal pocket and a mission do not).</summary>
+    public bool IsEscalationRegistrationShown => Kind == ActivityKind.Site;
+
+    /// <summary>What was last registered this session, or null before the pilot has registered one — shown beside
+    /// the button so pressing it again does not read as the only way to tell whether it worked.</summary>
+    [ObservableProperty] private string? _escalationRegisteredText;
+
+    /// <summary>
+    /// Opens the register-escalation dialog (ET-125) and, on Register, holds the result for SAVE to write. Nothing
+    /// here ever supplies a duration on the pilot's behalf — see <see cref="EscalationDialogViewModel"/>'s own
+    /// docstring for why (AC-3).
+    /// </summary>
+    [RelayCommand]
+    private async Task RegisterEscalationAsync()
+    {
+        if (_services.GetService<IDialogService>() is not { } dialogs || _services.GetService<ISdeAccessor>() is not { } sde)
+            return;
+
+        var dialog = new EscalationDialogViewModel(sde);
+        if (!await dialogs.ShowEscalationDialogAsync(dialog) || dialog.Result is not { } result)
+            return;
+
+        DateTime nowUtc = DateTime.UtcNow;
+        _escalationParameters.Clear();
+        _escalationParameters.Add(new RunParameterInput
+        {
+            ParameterKey = RunParameterKey.Escalation, TypedValue = result.SiteName, ObservedAtUtc = nowUtc
+        });
+        if (result.DungeonId is { } dungeonId)
+            _escalationParameters.Add(new RunParameterInput
+            {
+                ParameterKey = RunParameterKey.EscalationDungeonId,
+                TypedValue = dungeonId.ToString(CultureInfo.InvariantCulture),
+                ObservedAtUtc = nowUtc
+            });
+        _escalationParameters.Add(new RunParameterInput
+        {
+            ParameterKey = RunParameterKey.EscalationSystem, TypedValue = result.DestinationSystem, ObservedAtUtc = nowUtc
+        });
+        _escalationParameters.Add(new RunParameterInput
+        {
+            ParameterKey = RunParameterKey.EscalationExpiresAtUtc,
+            TypedValue = result.ExpiresAtUtc.ToString("o", CultureInfo.InvariantCulture),
+            ObservedAtUtc = nowUtc
+        });
+        EscalationRegisteredText = $"{result.SiteName} · {result.DestinationSystem}";
+    }
+
     // ── The six sections ────────────────────────────────────────────────────────────────────────────
 
     public ActivitySection Activity { get; } = new() { Title = "ACTIVITY", IsExpanded = true };
@@ -1892,7 +1945,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         DateTime nowUtc = DateTime.UtcNow;
         using var scope = _services.CreateScope();
         Result result = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new SaveRunCommand(
-            runId, EffectiveStopUtc ?? nowUtc, nowUtc, [], _bounties, _enemyObservations?.ToInputs() ?? [], [],
+            runId, EffectiveStopUtc ?? nowUtc, nowUtc, [], _bounties, _enemyObservations?.ToInputs() ?? [],
+            _escalationParameters,
             // Null leaves the row's own start alone; only a hand-corrected start travels.
             CorrectedStartUtc,
             IsTimeCorrected ? nowUtc : null,
