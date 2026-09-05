@@ -108,10 +108,12 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
         if (savedRuns == 0)
             return Result.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
                 "A saved run cannot be saved again.", "Runs"));
-        await eventBus.PublishAsync(new RunSavedEvent(command.RunId), EventTarget.Local, cancellationToken);
         // Local-first: a run must show up in the summary the moment it is saved, not only after the next server
-        // sync — RunSynchronizationApplier triggers the same rebuild for the pulled-run path.
+        // sync — RunSynchronizationApplier triggers the same rebuild for the pulled-run path. Rebuilt before the
+        // event fires, not after: PublishAsync awaits every subscriber, so a screen reacting to RunSavedEvent by
+        // reading the overview (ET-189) would otherwise see last rebuild's summaries, missing this run.
         await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
+        await eventBus.PublishAsync(new RunSavedEvent(command.RunId), EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 }
