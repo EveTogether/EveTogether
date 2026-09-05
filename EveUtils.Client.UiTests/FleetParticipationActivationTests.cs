@@ -154,6 +154,70 @@ public class FleetParticipationActivationTests
         Assert.False(window.HasFleetNotice);
     }
 
+    // --- And when none has: zero started fleets is not the same as zero fleets -------------------------------
+
+    /// <summary>
+    /// ET-29. Zero started fleets used to mean silence regardless of why: nothing distinguished a pilot signed up
+    /// to a fleet nobody has pressed START on yet (or that was stopped, or that ET-167 auto-stopped back to
+    /// standing by) from a pilot in no fleet at all. Acceptance 1: the window names the reason.
+    /// </summary>
+    [AvaloniaFact]
+    public void MemberOfAnUnstartedFleet_NoStartedFleetAtAll_TheWindowSaysWhy()
+    {
+        using var instance = TestClientInstance.Create();
+        instance.Services.GetRequiredService<IFleetParticipation>()
+            .SetMemberships([new FleetMembership(Owner, 11, "Homefront", ClientOnly: true)]);
+
+        var window = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
+        window.StartManualRun(DateTime.UtcNow);
+
+        Assert.Null(window.FleetId);
+        Assert.True(window.HasFleetNotice);
+        Assert.Contains("Homefront", window.FleetNoticeText, StringComparison.Ordinal);
+        Assert.Contains("has not been started", window.FleetNoticeText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not shared", window.FleetNoticeText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Acceptance 2, the counter-proof: with no membership at all there is nothing to name, and a notice
+    /// that never turns off would be worse for every solo player than the silence it replaces.</summary>
+    [AvaloniaFact]
+    public void MemberOfNoFleetAtAll_NoNotice()
+    {
+        using var instance = TestClientInstance.Create();
+
+        var window = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
+        window.StartManualRun(DateTime.UtcNow);
+
+        Assert.Null(window.FleetId);
+        Assert.False(window.HasFleetNotice);
+    }
+
+    /// <summary>
+    /// Signing up ahead of time to several standing-by fleets is ordinary (<c>ActiveFleetMembershipGuard</c> only
+    /// blocks a second <i>active</i> membership, never a second <c>Forming</c> one), so naming one of two at random
+    /// would be a specific instruction with no reason behind the choice — the same mistake ET-165 fixed for started
+    /// fleets, one layer over. Neither name may appear; only the count and generic advice may.
+    /// </summary>
+    [AvaloniaFact]
+    public void MemberOfTwoUnstartedFleets_NoStartedFleetAtAll_TheWindowNamesNeither()
+    {
+        using var instance = TestClientInstance.Create();
+        instance.Services.GetRequiredService<IFleetParticipation>().SetMemberships([
+            new FleetMembership(Owner, 11, "Homefront", ClientOnly: true),
+            new FleetMembership(Owner, 22, "Nightwatch", ClientOnly: true),
+        ]);
+
+        var window = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
+        window.StartManualRun(DateTime.UtcNow);
+
+        Assert.Null(window.FleetId);
+        Assert.True(window.HasFleetNotice);
+        Assert.DoesNotContain("Homefront", window.FleetNoticeText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Nightwatch", window.FleetNoticeText, StringComparison.Ordinal);
+        Assert.Contains("2", window.FleetNoticeText, StringComparison.Ordinal);
+        Assert.Contains("not shared", window.FleetNoticeText, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// Creates the fleet the way the client does — <see cref="ClientFleetService.CreateLocalFleetAsync"/>, which
     /// leaves it Forming — and then puts it at the activation under test. Set on the entity rather than through

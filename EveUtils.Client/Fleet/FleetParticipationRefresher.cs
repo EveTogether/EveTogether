@@ -57,16 +57,19 @@ public sealed class FleetParticipationRefresher(
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
         List<FleetParticipant> participants = [];
-        await _AddServerFleetsAsync(participants, cancellationToken);
-        await _AddClientOnlyFleetsAsync(participants, cancellationToken);
+        List<FleetMembership> memberships = [];
+        await _AddServerFleetsAsync(participants, memberships, cancellationToken);
+        await _AddClientOnlyFleetsAsync(participants, memberships, cancellationToken);
         participation.Set(participants);
+        participation.SetMemberships(memberships);
     }
 
     /// <summary>
     /// One entry per (character, fleet) this client holds a session for. A character listing a fleet is what
     /// membership means here, so multi-boxing several toons into one fleet feeds every one of their graphs.
     /// </summary>
-    private async Task _AddServerFleetsAsync(List<FleetParticipant> participants, CancellationToken cancellationToken)
+    private async Task _AddServerFleetsAsync(
+        List<FleetParticipant> participants, List<FleetMembership> memberships, CancellationToken cancellationToken)
     {
         foreach (string server in await sessions.ListServersAsync(cancellationToken))
         {
@@ -82,6 +85,11 @@ public sealed class FleetParticipationRefresher(
                 IReadOnlyList<FleetInfo> fleets;
                 try { fleets = await transport.ListMyFleetsAsync(server, session.CharacterId, cancellationToken: cancellationToken); }
                 catch { participants.AddRange(_LastAnsweredBy(server)); continue; }
+
+                // Every fleet this character is on the books for, started or not — ListMyFleetsAsync already
+                // excludes concluded fleets by default, so nothing further to filter for membership.
+                memberships.AddRange(fleets.Select(fleet =>
+                    new FleetMembership(session.CharacterId, fleet.Id, fleet.Name, ClientOnly: false)));
 
                 List<FleetParticipant> answered = [];
                 foreach (FleetInfo fleet in fleets.Where(fleet => Participates(fleet.State, fleet.Activation)))
@@ -100,7 +108,8 @@ public sealed class FleetParticipationRefresher(
     /// <see cref="Participates"/> rule as a server fleet: living locally says where the fleet is kept, not whether
     /// it has been started.
     /// </summary>
-    private async Task _AddClientOnlyFleetsAsync(List<FleetParticipant> participants, CancellationToken cancellationToken)
+    private async Task _AddClientOnlyFleetsAsync(
+        List<FleetParticipant> participants, List<FleetMembership> memberships, CancellationToken cancellationToken)
     {
         var mine = (await characters.GetAllAsync(cancellationToken))
             .Select(character => character.EsiCharacterId)
@@ -115,7 +124,7 @@ public sealed class FleetParticipationRefresher(
         foreach (int ownerId in mine)
         foreach (FleetEntity fleet in await repository.ListByCreatorAsync(ownerId, cancellationToken))
         {
-            if (!fleet.IsClientOnly || !Participates(fleet.State, fleet.Activation))
+            if (!fleet.IsClientOnly)
                 continue;
 
             IReadOnlyList<FleetMember> roster = await repository.ListMembersAsync(fleet.Id, cancellationToken);
@@ -128,12 +137,24 @@ public sealed class FleetParticipationRefresher(
                 .Where(mine.Contains)
                 .Distinct()
                 .ToList();
+            List<int> mineOnRoster = members.Count > 0 ? members : [ownerId];
+
+            // Same "still open" reading ListForParticipantAsync applies by default elsewhere: concluded is done and
+            // archived is gone, so neither is a fleet a pilot can be told to start. ListByCreatorAsync, unlike the
+            // server call above, has no such filter of its own, so it is applied here for membership.
+            if (fleet.State == FleetState.Active && fleet.Activation != FleetActivation.Concluded)
+                memberships.AddRange(mineOnRoster.Select(characterId =>
+                    new FleetMembership(characterId, fleet.Id, fleet.Name, ClientOnly: true)));
+
+            if (!Participates(fleet.State, fleet.Activation))
+                continue;
+
             // A local roster is always readable, so this is never the "could not say" null that a server fleet can
             // produce — it falls back to the creator, who is the one CreateFleetCommand seats as FC.
             int commander = roster
                 .FirstOrDefault(member => member.Role == FleetRole.FleetCommander)?.CharacterId ?? ownerId;
 
-            participants.AddRange((members.Count > 0 ? members : [ownerId])
+            participants.AddRange(mineOnRoster
                 .Select(characterId => new FleetParticipant(characterId, fleet.Id, ClientOnly: true, commander)));
         }
     }
