@@ -93,7 +93,7 @@ public sealed class EscalationRegistrationTests
             dialog.SiteQuery = collidingName;
             // Only the Escalation archetype survives the dialog's own narrowing — a name-only match would still
             // have both 2251 and 2406 here.
-            dialog.SelectedSite = Assert.Single(dialog.SiteResults);
+            dialog.SelectedOption = Assert.Single(dialog.SiteResults);
             dialog.RemainingTimeText = "10:00:00";
             dialog.RegisterCommand.Execute(null);
             return Task.FromResult(true);
