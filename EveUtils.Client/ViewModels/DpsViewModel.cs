@@ -15,7 +15,7 @@ namespace EveUtils.Client.ViewModels;
 
 /// <summary>
 /// Live combat graph for ONE character (yourself or a fleet member). Beyond the primary DPS out/in lines it carries
-/// extra live cap-warfare lines (neut, cap) — and any future combat metric is one entry in <see cref="_extraLines"/>
+/// extra live lines (neut, cap, reps received) — and any future combat metric is one entry in <see cref="_extraLines"/>
 /// . Every line renders through the same shared path (<see cref="DpsRenderDriver"/> → <see cref="StepEma"/>), so
 /// the own meters and the fleet-member meters stay identical.
 /// </summary>
@@ -35,6 +35,7 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     // Extra live combat lines, registry-style: add a kind + colour here and it renders everywhere (graph + legend).
     private readonly RateLine _neutLine = new(MetricKind.Neut, Color.Parse("#FFB07EE0"), GraphCapacityValue); // purple
     private readonly RateLine _capLine = new(MetricKind.Cap, Color.Parse("#FF4D90FF"), GraphCapacityValue);   // blue (kept clear of the accent green)
+    private readonly RateLine _repInLine = new(MetricKind.RepIn, Color.Parse("#FF62D693"), GraphCapacityValue); // green (reps received)
     private readonly IReadOnlyList<RateLine> _extraLines;
 
     private static IBrush FactionAccentStroke() =>
@@ -284,8 +285,8 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     /// <summary>Design-time constructor (XAML previewer).</summary>
     public DpsViewModel()
     {
-        _extraLines = [_neutLine, _capLine];
-        Series = [_dealtSeries, _receivedSeries, _neutLine.Series, _capLine.Series];
+        _extraLines = [_neutLine, _capLine, _repInLine];
+        Series = [_dealtSeries, _receivedSeries, _neutLine.Series, _capLine.Series, _repInLine.Series];
     }
 
     public DpsViewModel(string character, bool isSelf) : this()
@@ -363,6 +364,7 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
             _targetReceived = sample.Value.Received;
             _neutLine.Target = sample.Value.Neut;
             _capLine.Target = sample.Value.Cap;
+            _repInLine.Target = sample.Value.RepIn;
         }
 
         StepEma();

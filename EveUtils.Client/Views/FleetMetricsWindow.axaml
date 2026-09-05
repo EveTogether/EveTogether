@@ -477,6 +477,10 @@
                 <Border Width="14" Height="3" VerticalAlignment="Center" Background="#FF4D90FF"/>
                 <TextBlock Text="Cap" FontSize="10" Foreground="{StaticResource TextDimBrush}"/>
             </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="5">
+                <Border Width="14" Height="3" VerticalAlignment="Center" Background="#FF62D693"/>
+                <TextBlock Text="Rep in" FontSize="10" Foreground="{StaticResource TextDimBrush}"/>
+            </StackPanel>
         </StackPanel>
 
         <!-- The member list, with the drag layer floating over it. The layer never takes a hit, so a drag still

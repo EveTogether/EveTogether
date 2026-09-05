@@ -556,7 +556,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         {
             // Each live combat line arrives as its own kind; feed the matching series' target and let the shared
             // driver smooth toward it. The driver appends frames — never this method directly (one render path).
-            case MetricKind.Dps or MetricKind.DpsIn or MetricKind.Neut or MetricKind.Cap or MetricKind.NeutIn:
+            case MetricKind.Dps or MetricKind.DpsIn or MetricKind.Neut or MetricKind.Cap or MetricKind.NeutIn or MetricKind.RepIn:
                 Track(sample.CharacterId).SetRate(sample.Kind, sample.Value);
                 break;
             case MetricKind.Location:

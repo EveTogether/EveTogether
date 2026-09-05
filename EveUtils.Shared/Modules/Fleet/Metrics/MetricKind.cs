@@ -64,4 +64,14 @@ public enum MetricKind
     /// apart on a member's row and in the fleet's total, because they are two figures and each has its own switch.
     /// </summary>
     Loot = 10,
+
+    /// <summary>
+    /// Remote repair received per second (armor/shield/hull reps landing on this member) — carried as its own kind
+    /// for the same reason <see cref="NeutIn"/> is: a fleet screen naming a pilot to act on ("who needs help") needs
+    /// the direction, and there is no combined rep figure to read it out of in the first place.
+    ///
+    /// Unlike <see cref="NeutIn"/>, this IS drawn as its own graph line: no combined rep line already occupies a
+    /// slot on any existing screen, so this is the only place the figure is shown at all (ET-193).
+    /// </summary>
+    RepIn = 11,
 }
