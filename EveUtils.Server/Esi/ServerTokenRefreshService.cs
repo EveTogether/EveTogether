@@ -24,6 +24,7 @@ public sealed class ServerTokenRefreshService(
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan RefreshAfter = TimeSpan.FromMinutes(15);
+    // A revoked grant cannot recover without re-pairing, so it bypasses the transient retry schedule.
     private const int RevokedFailureCount = int.MaxValue;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
