@@ -12,6 +12,7 @@ using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Logging;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.Extensions.Logging;
 
@@ -62,15 +63,15 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
     /// "nothing reached this feature at all" — which was the whole difficulty in ET-65: most of those paths were
     /// silent on screen and silent in the log, and looked exactly like a watcher that never ran.
     ///
-    /// <c>Warning</c> deliberately: <c>AppLogger</c> drops anything below it, so an Information line would be
-    /// invisible precisely when it is wanted. It only ever runs on a payload the watch already recognised as one
-    /// of the three EVE shapes, so it is not a line per copy of the day.
+    /// On the Information diagnostic channel (ET-139) deliberately: <c>AppLogger</c> drops plain Information, so
+    /// this needs the marker to stay visible without claiming a refused copy is an error. It only ever runs on a
+    /// payload the watch already recognised as one of the three EVE shapes, so it is not a line per copy of the day.
     ///
     /// <paramref name="reason"/> is derived from the payload, never taken from it: ET-57 promises that clipboard
     /// text is never written down, and that holds for this log too.
     /// </summary>
     private void _Dropped(string reason) =>
-        _logger.LogWarning("Clipboard copy not recorded as run loot: {Reason}.", reason);
+        _logger.LogDiagnostic("Clipboard copy not recorded as run loot: {Reason}.", reason);
 
     private void OnCapture(ClipboardCapture capture)
     {

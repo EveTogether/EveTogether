@@ -8,7 +8,8 @@ public static class LoggingBuilderExtensions
 {
     /// <summary>
     /// Registers <see cref="InMemoryLogStore"/> as <see cref="ILogStore"/> (singleton) and adds
-    /// <see cref="AppLoggerProvider"/> to the logging pipeline so Warning and above entries are captured.
+    /// <see cref="AppLoggerProvider"/> to the logging pipeline so Warning and above entries, plus marked
+    /// diagnostic Information entries (<see cref="DiagnosticLog"/>), are captured.
     /// </summary>
     public static IServiceCollection AddAppLogStore(this IServiceCollection services, string? dataDirectory = null)
     {

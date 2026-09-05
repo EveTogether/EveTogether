@@ -6,8 +6,9 @@ namespace EveUtils.Client.ViewModels;
 
 /// <summary>
 /// One row in the client log window: a captured <see cref="LogEntry"/> formatted for display. The
-/// capture filter keeps Warning and above, so the level is surfaced as text tinted by severity (Warning amber,
-/// Error/Critical red) and the full exception is offered behind an expander when present.
+/// capture filter keeps Warning and above, plus marked diagnostic Information, so the level is surfaced as text
+/// tinted by severity (Warning amber, Error/Critical red, everything else muted) and the full exception is
+/// offered behind an expander when present.
 /// </summary>
 public sealed class ClientLogRowViewModel(LogEntry entry)
 {

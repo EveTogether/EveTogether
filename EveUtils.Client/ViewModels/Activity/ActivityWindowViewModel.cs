@@ -41,6 +41,7 @@ using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Queries;
 using EveUtils.Shared.Modules.Sde;
+using EveUtils.Shared.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
@@ -2579,13 +2580,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// What this window did with a copied signature, and why — the line that says which of the two routes ran,
     /// after this bug survived four attempts because that was invisible.
     ///
-    /// ponytail: temporary instrument, at Warning only because AppLogger drops everything below it and
-    /// app-errors.jsonl is the only file a player can hand over. An ordinary copy has no business writing to an
-    /// error log: take this out once Raymond confirms the site switch behaves, or give AppLogger a level that
-    /// reaches that file without claiming something went wrong.
+    /// ponytail: temporary instrument, kept on the Information diagnostic channel (ET-139) so it still reaches
+    /// app-errors.jsonl without claiming an ordinary copy is an error. Take it out once Raymond confirms the
+    /// site switch behaves — not before.
     /// </summary>
     private void _SignatureDecision(string what, string name) =>
-        _services.GetService<ILoggerFactory>()?.CreateLogger<ActivityWindowViewModel>().LogWarning(
+        _services.GetService<ILoggerFactory>()?.CreateLogger<ActivityWindowViewModel>().LogDiagnostic(
             "Copied signature {Signature}: {What} (run {RunId}, state {State}, group {Group}, fleet {Fleet}).",
             name, what, RunId, RunState, GroupCode, FleetId);
 
