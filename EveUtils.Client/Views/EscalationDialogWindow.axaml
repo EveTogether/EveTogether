@@ -21,7 +21,7 @@
                     IsVisible="{Binding HasSiteResults}">
                 <ListBox ItemsSource="{Binding SiteResults}" SelectedItem="{Binding SelectedOption}">
                     <ListBox.ItemTemplate>
-                        <DataTemplate x:DataType="vm:EscalationSiteOption">
+                        <DataTemplate x:DataType="vm:SdeSitePickerOption">
                             <TextBlock Text="{Binding Label}" FontSize="11"/>
                         </DataTemplate>
                     </ListBox.ItemTemplate>

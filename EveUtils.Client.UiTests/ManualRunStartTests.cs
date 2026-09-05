@@ -34,7 +34,7 @@ public sealed class ManualRunStartTests
             instance.Services.GetRequiredService<ISdeAccessor>(),
             dialogs ?? new RecordingDialogService(),
             kind => new ActivityWindowViewModel(kind, instance.Services),
-            [new Character("Manual Pilot", (int)characterId)]) { SelectedSite = Site };
+            [new Character("Manual Pilot", (int)characterId)]) { SelectedOption = new SdeSitePickerOption(Site, Site.Name) };
 
     /// <summary>
     /// An abyssal pocket is not in the site catalogue, so a required SITE could never be filled and START stayed

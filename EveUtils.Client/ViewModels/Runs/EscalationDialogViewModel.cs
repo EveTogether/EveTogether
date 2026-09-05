@@ -41,19 +41,14 @@ public sealed partial class EscalationDialogViewModel : ObservableObject
     /// Escalation sites matching what is typed so far, narrowed to the Escalation archetype in code — not trusted
     /// to <see cref="ISdeAccessor.SearchSites"/>'s own archetype filter, which a test double is free to ignore.
     ///
-    /// Each option carries its own <see cref="SdeSiteDescription.DescribeOne"/> label rather than the bare name
-    /// (Raymond, 2026-09-05): two rows can share a name — of the 384 Escalation sites, only 64 have a catalogue-wide
-    /// unique one — and <see cref="SdeSiteDescription.DescribeShared"/> is the wrong tool here, because it hides
-    /// exactly the field that tells such rows apart (its whole point is to stay silent about a disagreement, which
-    /// is right once a choice is already made but leaves a picker offering two identical-looking, unpickable rows).
-    /// <see cref="CatalogEnrichmentText"/> below is the other moment, after a choice — there DescribeShared is the
-    /// correct read.
+    /// Built through <see cref="SdeSitePickerOption.From"/> — the one presentation this picker shares with
+    /// <see cref="ManualRunStartViewModel"/>'s, so two rows sharing a name (of the 384 Escalation sites, only 64
+    /// have a catalogue-wide unique one) are never two unpickable, identical-looking duplicates.
     /// </summary>
-    public IReadOnlyList<EscalationSiteOption> SiteResults => string.IsNullOrWhiteSpace(SiteQuery)
+    public IReadOnlyList<SdeSitePickerOption> SiteResults => string.IsNullOrWhiteSpace(SiteQuery)
         ? []
-        : [.. _sde.SearchSites(SiteQuery).Where(site => site.ArchetypeName == EscalationArchetypeName)
-            .Select(site => new EscalationSiteOption(site,
-                SdeSiteDescription.DescribeOne(site) is { Length: > 0 } facts ? $"{site.Name} — {facts}" : site.Name))];
+        : SdeSitePickerOption.From(
+            [.. _sde.SearchSites(SiteQuery).Where(site => site.ArchetypeName == EscalationArchetypeName)]);
 
     public bool HasSiteResults => SiteResults.Count > 0;
 
@@ -71,7 +66,7 @@ public sealed partial class EscalationDialogViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedSite))]
     [NotifyPropertyChangedFor(nameof(HasSelectedSite))]
-    private EscalationSiteOption? _selectedOption;
+    private SdeSitePickerOption? _selectedOption;
 
     /// <summary>The site behind the picked option, or null when nothing was picked — what <see cref="Register"/>
     /// and the rest of this type read; the label in <see cref="SelectedOption"/> is display-only.</summary>
@@ -102,10 +97,12 @@ public sealed partial class EscalationDialogViewModel : ObservableObject
             return;
 
         // The pick from SiteResults wins when there is one (ET-125). Otherwise, a typed name that resolves to
-        // exactly one site by exact match is unambiguous enough to carry (ET-126 AC-1) — but never a guess among
-        // several (ET-126 AC-2): CatalogMatches is left unfiltered by archetype on purpose, so two sites sharing a
-        // name never silently resolve to whichever one came back first.
-        int? dungeonId = SelectedSite?.DungeonId ?? (CatalogMatches is [{ } only] ? only.DungeonId : null);
+        // exactly one site after canonicalising twins (SdeSiteCanonicalization) is unambiguous enough to carry
+        // (ET-126 AC-1) — but never a guess among genuinely different sites (ET-126 AC-2): CatalogMatches is left
+        // unfiltered by archetype on purpose, so a Sansha's Command Relay Outpost never silently resolves to
+        // whichever of its two archetypes came back first.
+        int? dungeonId = SelectedSite?.DungeonId
+            ?? (SdeSiteCanonicalization.Canonicalize(CatalogMatches) is [{ } only] ? only.DungeonId : null);
         Result = new EscalationRegistration(
             SelectedSite?.Name ?? SiteQuery.Trim(),
             dungeonId,
@@ -129,7 +126,3 @@ public sealed partial class EscalationDialogViewModel : ObservableObject
 /// <summary>What the dialog produced: the name as typed or picked, the catalogue id when a pick made one available
 /// (ET-125 AC-2 — never re-derived from the name), the destination system as typed, and the computed deadline.</summary>
 public sealed record EscalationRegistration(string SiteName, int? DungeonId, string DestinationSystem, DateTime ExpiresAtUtc);
-
-/// <summary>One row in <see cref="EscalationDialogViewModel.SiteResults"/>: the site the row picks, and a label that
-/// distinguishes it from any other row sharing its name.</summary>
-public sealed record EscalationSiteOption(SdeSite Site, string Label);
