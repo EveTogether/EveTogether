@@ -193,6 +193,32 @@ public class FleetParticipationActivationTests
     }
 
     /// <summary>
+    /// Signing up ahead of time to several standing-by fleets is ordinary (<c>ActiveFleetMembershipGuard</c> only
+    /// blocks a second <i>active</i> membership, never a second <c>Forming</c> one), so naming one of two at random
+    /// would be a specific instruction with no reason behind the choice — the same mistake ET-165 fixed for started
+    /// fleets, one layer over. Neither name may appear; only the count and generic advice may.
+    /// </summary>
+    [AvaloniaFact]
+    public void MemberOfTwoUnstartedFleets_NoStartedFleetAtAll_TheWindowNamesNeither()
+    {
+        using var instance = TestClientInstance.Create();
+        instance.Services.GetRequiredService<IFleetParticipation>().SetMemberships([
+            new FleetMembership(Owner, 11, "Homefront", ClientOnly: true),
+            new FleetMembership(Owner, 22, "Nightwatch", ClientOnly: true),
+        ]);
+
+        var window = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
+        window.StartManualRun(DateTime.UtcNow);
+
+        Assert.Null(window.FleetId);
+        Assert.True(window.HasFleetNotice);
+        Assert.DoesNotContain("Homefront", window.FleetNoticeText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Nightwatch", window.FleetNoticeText, StringComparison.Ordinal);
+        Assert.Contains("2", window.FleetNoticeText, StringComparison.Ordinal);
+        Assert.Contains("not shared", window.FleetNoticeText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Creates the fleet the way the client does — <see cref="ClientFleetService.CreateLocalFleetAsync"/>, which
     /// leaves it Forming — and then puts it at the activation under test. Set on the entity rather than through
     /// StartFleetCommand so all three values are reachable from one place; the refresher reads the repository, so

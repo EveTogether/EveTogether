@@ -618,14 +618,32 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     /// <summary>Says which way the run went and what would settle it. Not a warning about a fault: two started
     /// fleets, or a fleet nobody has started yet, are both legitimate states, and the window's job is to make the
-    /// consequence visible rather than to refuse it.</summary>
-    public string FleetNoticeText => FleetsInPlay > 1
-        ? $"You are in {FleetsInPlay} started fleets at once, so this run belongs to none of them and is not shared. "
-          // "Stop", not "conclude" (ET-166 follow-up): concluding is one-way, so a pilot who took this advice
-          // literally threw away the recurring fleet it was only asking them to step out of for tonight.
-          + "Stop the ones you are not flying to file it under one."
-        : $"'{_MyMemberships()[0].Name}' has not been started, so this run is not shared. "
-          + "Start it to file this run under it.";
+    /// consequence visible rather than to refuse it.
+    ///
+    /// A single unstarted fleet is named — the advice is then unambiguous. More than one is not: signing up ahead
+    /// of time to several standing-by fleets is an ordinary state (<c>ActiveFleetMembershipGuard</c> only blocks a
+    /// second <i>active</i> membership, never a second <c>Forming</c> one), and naming one of several at random
+    /// would hand the pilot a specific instruction with no reason behind the choice — the same mistake ET-165
+    /// fixed one layer over: a notice that faces more than one candidate names the count, never a guess.</summary>
+    public string FleetNoticeText
+    {
+        get
+        {
+            if (FleetsInPlay > 1)
+                return $"You are in {FleetsInPlay} started fleets at once, so this run belongs to none of them "
+                    + "and is not shared. "
+                    // "Stop", not "conclude" (ET-166 follow-up): concluding is one-way, so a pilot who took this
+                    // advice literally threw away the recurring fleet it was only asking them to step out of for
+                    // tonight.
+                    + "Stop the ones you are not flying to file it under one.";
+
+            List<FleetMembership> unstarted = [.. _MyMemberships().DistinctBy(membership => membership.FleetId)];
+            return unstarted is [{ } only]
+                ? $"'{only.Name}' has not been started, so this run is not shared. Start it to file this run under it."
+                : $"You are a member of {unstarted.Count} fleets that have not been started yet, so this run is "
+                  + "not shared. Start the one you are flying to file it under it.";
+        }
+    }
 
     // ── The character column ────────────────────────────────────────────────────────────────────────
 
