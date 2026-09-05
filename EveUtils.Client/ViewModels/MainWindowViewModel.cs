@@ -1305,7 +1305,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
     /// <summary>
     /// Builds character-picker options for an action that needs the given ESI scope.
-    /// Characters missing the scope are shown but disabled, with the reason in the detail line.
+    /// Characters missing the scope are shown but disabled, with a plain-English reason in the detail line — never
+    /// the raw scope name (ET-184: the picker gives a disabled row's reason real prominence now, so it has to read
+    /// as something a pilot can act on rather than an OAuth scope literal).
     /// </summary>
     private IReadOnlyList<CharacterPickOption> BuildPickOptions(string requiredScope)
     {
@@ -1314,8 +1316,11 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             var has = requiredScope == FittingsScopeCatalog.ReadFittings ? c.HasReadFittings
                     : requiredScope == FittingsScopeCatalog.WriteFittings ? c.HasWriteFittings
                     : true;
-            var local = c.HasEsiToken ? "local token" : "no local token";
-            var detail = has ? local : $"{local} · missing {requiredScope}";
+            var detail = has
+                ? (c.HasEsiToken ? "local token" : "no local token")
+                : requiredScope == FittingsScopeCatalog.WriteFittings
+                    ? "sign in again to allow importing fittings"
+                    : "sign in again to allow reading fittings";
             return new CharacterPickOption(c.CharacterId, c.Name, detail, Enabled: has && c.HasEsiToken);
         }).ToList();
     }
