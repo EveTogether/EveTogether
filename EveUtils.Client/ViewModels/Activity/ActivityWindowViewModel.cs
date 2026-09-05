@@ -83,6 +83,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     /// <summary>Once a second. The readout is a clock, and a clock cannot be read faster than it ticks.</summary>
     public static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan UnstartedFleetNoticeRefreshInterval = TimeSpan.FromSeconds(30);
 
     /// <summary>The seven abyssal tiers, index = the T-number the filament is sold under.</summary>
     public static IReadOnlyList<string> Tiers { get; } =
@@ -155,7 +156,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private bool _isDiscarding;
     private int? _runCharacterId;
     private int? _namedCharacterId;
-    private bool _hasCheckedUnstartedFleetMembership;
+    private DateTime? _unstartedFleetNoticeCheckedAtUtc;
     private PendingCopy? _pendingCopy;
     private string? _runCharacterName;
     private int? _commanderNameId;
@@ -1765,7 +1766,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     ///
     /// It used to ask ESI for the in-game fleet boss, which only answers for a coupled fleet: an ordinary ET fleet
     /// never produced one, so its commander was told his own controls were hidden because nobody knew who he was
-    /// (ET-152). Nothing is awaited here any more, so the answer is on screen the moment the window opens.
+    /// (ET-152). The command answer is applied before the unstarted-fleet lookup, so controls settle when the window opens.
     /// </summary>
     public async Task RefreshFleetCommandAsync(DateTime nowUtc)
     {
@@ -1777,16 +1778,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // Counted off the same list the pick was made on, so the notice and the outcome are one reading of the set
         // rather than two that a sweep in between could have pulled apart.
         FleetsInPlay = inPlay.Count;
-        if (FleetsInPlay > 0)
-        {
-            UnstartedFleetName = null;
-            _hasCheckedUnstartedFleetMembership = false;
-        }
-        else if (!_hasCheckedUnstartedFleetMembership && _runCharacterId is not null)
-        {
-            UnstartedFleetName = await _UnstartedFleetNameAsync();
-            _hasCheckedUnstartedFleetMembership = true;
-        }
         // The same character the rest of the window works from. It used to fall back to IActiveFleetState, which
         // holds whichever character a fleets-window row was last selected as — so a fleet commander flying a
         // different toon than that row's acting one was compared against his own fleet's boss id and told only the
@@ -1794,6 +1785,18 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // of the comparison are now one pilot.
         int? commander = _CommanderOf(fleetId);
         ApplyFleetCommand(fleetId, commander, _ActingCharacterId(), _CommanderNameOf(commander));
+        if (FleetsInPlay > 0)
+        {
+            UnstartedFleetName = null;
+            _unstartedFleetNoticeCheckedAtUtc = null;
+        }
+        // A text hint can wait briefly: checking every clock tick wastes work, but checking only once hides new fleets.
+        else if (_runCharacterId is not null && (_unstartedFleetNoticeCheckedAtUtc is null
+                                                || nowUtc - _unstartedFleetNoticeCheckedAtUtc >= UnstartedFleetNoticeRefreshInterval))
+        {
+            _unstartedFleetNoticeCheckedAtUtc = nowUtc;
+            UnstartedFleetName = await _UnstartedFleetNameAsync();
+        }
     }
 
     private async Task<string?> _UnstartedFleetNameAsync()
