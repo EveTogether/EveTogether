@@ -4,14 +4,16 @@ namespace EveUtils.Shared.Logging;
 
 /// <summary>
 /// Custom <see cref="ILogger"/> that writes Warning and above (Warning/Error/Critical) entries to the
-/// <see cref="ILogStore"/>. Warnings are captured so expected-but-noteworthy conditions — e.g. an ESI 404
-/// "character is not in a fleet" — stay visible in the in-app log window without sitting in the error category.
+/// <see cref="ILogStore"/>, plus Information lines marked with <see cref="DiagnosticLog.Marker"/> — diagnosis
+/// that is not an error but still needs to reach the file a player can hand over. Warnings are captured so
+/// expected-but-noteworthy conditions — e.g. an ESI 404 "character is not in a fleet" — stay visible in the
+/// in-app log window without sitting in the error category.
 /// </summary>
 internal sealed class AppLogger(string category, ILogStore store) : ILogger
 {
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
-    public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
+    public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Information;
 
     public void Log<TState>(
         LogLevel logLevel,
@@ -21,6 +23,7 @@ internal sealed class AppLogger(string category, ILogStore store) : ILogger
         Func<TState, Exception?, string> formatter)
     {
         if (!IsEnabled(logLevel)) return;
+        if (logLevel < LogLevel.Warning && eventId != DiagnosticLog.Marker) return;
 
         var message = formatter(state, exception);
         var exceptionText = exception?.ToString();

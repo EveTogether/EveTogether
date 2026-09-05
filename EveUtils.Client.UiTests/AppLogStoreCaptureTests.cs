@@ -17,8 +17,9 @@ namespace EveUtils.Client.UiTests;
 /// <summary>
 /// The in-app log store's capture policy: it keeps Warning and above so expected-but-noteworthy conditions —
 /// an ESI 404 such as "character is not in a fleet" — stay visible in the log window without sitting in the error
-/// category. Covers the threshold (Warning captured, Information dropped) and that a 404 through the real ESI pivot +
-/// retry chain is captured as Warning, never Error.
+/// category. Also keeps plain Information marked via <see cref="DiagnosticLog"/> (ET-139), a diagnostic channel for
+/// lines that are not errors but still need to reach app-errors.jsonl. Covers the threshold (Warning captured,
+/// Information dropped) and that a 404 through the real ESI pivot + retry chain is captured as Warning, never Error.
 /// </summary>
 public class AppLogStoreCaptureTests
 {
@@ -37,6 +38,21 @@ public class AppLogStoreCaptureTests
         Assert.DoesNotContain(LogLevel.Information, levels);
         Assert.Contains(LogLevel.Warning, levels);
         Assert.Contains(LogLevel.Error, levels);
+    }
+
+    [Fact]
+    public void Store_CapturesMarkedDiagnosticInformation_DropsUnmarkedInformation()
+    {
+        var store = new InMemoryLogStore();
+        using var provider = BuildLogging(store);
+        var logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("EveUtils.Test");
+
+        logger.LogInformation("unmarked — not a diagnostic, must not be captured");
+        logger.LogDiagnostic("marked — a diagnostic, must be captured");
+
+        var entry = Assert.Single(store.GetAll());
+        Assert.Equal(LogLevel.Information, entry.Level);
+        Assert.Contains("marked", entry.Message);
     }
 
     [Fact]

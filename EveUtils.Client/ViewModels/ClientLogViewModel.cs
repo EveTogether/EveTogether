@@ -13,7 +13,8 @@ namespace EveUtils.Client.ViewModels;
 
 /// <summary>
 /// The client log window: the local counterpart of the server's Blazor <c>/logs</c> page. Shows this
-/// client's in-memory <see cref="ILogStore"/> (captured Warning and above entries, newest first), updates live as
+/// client's in-memory <see cref="ILogStore"/> (captured Warning and above, plus marked diagnostic Information,
+/// newest first), updates live as
 /// entries arrive (<see cref="ILogStore.EntryAdded"/>), and offers a Clear. Created once by the main window and
 /// shared with the non-modal window, so it keeps updating while open and is never disposed on close.
 /// </summary>

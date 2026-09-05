@@ -9,7 +9,7 @@
 <PageTitle>App Logs</PageTitle>
 
 <h2>App Log</h2>
-<p class="text-muted">Captures warnings and errors. Refreshes automatically.</p>
+<p class="text-muted">Captures warnings, errors, and marked diagnostic notes. Refreshes automatically.</p>
 
 <div class="mb-2">
     <button class="btn btn-sm btn-outline-secondary" @onclick="Refresh">Refresh</button>
@@ -85,7 +85,8 @@ else
     {
         LogLevel.Critical => "bg-dark",
         LogLevel.Error    => "bg-danger",
-        _                 => "bg-warning text-dark"
+        LogLevel.Warning  => "bg-warning text-dark",
+        _                 => "bg-secondary"
     };
 
     private static string ShortCategory(string cat) =>
