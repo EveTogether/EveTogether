@@ -54,6 +54,8 @@ public static class AbyssalRooms
         var all = observations.OrderBy(observation => observation.FirstObservedAtUtc).ToList();
         var seen = Group(all).Count;
 
+        // Value inequality is reference inequality here: the collector keeps one row per type id and a saved run
+        // cannot be saved again, so one run holds no two alike rows. No schema constraint backs that — then go by index.
         // ponytail: O(n²) bridge test — a run carries a handful of names; index the windows if that ever changes.
         var fenced = Group(all.Where(observation => Group(all.Where(other => other != observation)).Count <= seen));
         if (fenced.Count < RoomsPerRun)
