@@ -299,6 +299,20 @@ public sealed class RecordingDialogService : IDialogService
         return Task.CompletedTask;
     }
 
+    /// <summary>Drives the escalation dialog (ET-125): a test sets the view model's fields and calls Register on it
+    /// (or leaves it cancelled). Default: cancel (returns false).</summary>
+    public Func<EscalationDialogViewModel, Task<bool>> OnShowEscalationDialog { get; set; } =
+        _ => Task.FromResult(false);
+
+    /// <summary>The view model of the last escalation dialog shown, or null.</summary>
+    public EscalationDialogViewModel? LastEscalationDialog { get; private set; }
+
+    public Task<bool> ShowEscalationDialogAsync(EscalationDialogViewModel viewModel)
+    {
+        LastEscalationDialog = viewModel;
+        return OnShowEscalationDialog(viewModel);
+    }
+
     /// <summary>The activity detail the shell was asked to open, or null.</summary>
     public ActivityDetailViewModel? LastActivityDetail { get; private set; }
 

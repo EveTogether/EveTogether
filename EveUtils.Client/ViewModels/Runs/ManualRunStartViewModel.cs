@@ -90,7 +90,7 @@ public partial class ManualRunStartViewModel : ViewModelBase
     partial void OnSelectedActivityKindChanged(ActivityKind value)
     {
         SiteQuery = string.Empty;
-        SelectedSite = null;
+        SelectedOption = null;
     }
 
     [ObservableProperty]
@@ -98,17 +98,25 @@ public partial class ManualRunStartViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(HasSiteResults))]
     private string _siteQuery = string.Empty;
 
-    public IReadOnlyList<SdeSite> SiteResults =>
-        string.IsNullOrWhiteSpace(SiteQuery) ? [] : _sde.SearchSites(SiteQuery);
+    /// <summary>Built through <see cref="SdeSitePickerOption.From"/> — the one presentation this picker shares with
+    /// <see cref="EscalationDialogViewModel"/>'s, so two rows sharing a name are never two unpickable, identical-
+    /// looking duplicates (Raymond, 2026-09-05).</summary>
+    public IReadOnlyList<SdeSitePickerOption> SiteResults =>
+        string.IsNullOrWhiteSpace(SiteQuery) ? [] : SdeSitePickerOption.From(_sde.SearchSites(SiteQuery));
 
     public bool HasSiteResults => SiteResults.Count > 0;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    [NotifyPropertyChangedFor(nameof(SelectedSite))]
     [NotifyPropertyChangedFor(nameof(HasSelectedSite))]
-    private SdeSite? _selectedSite;
+    private SdeSitePickerOption? _selectedOption;
 
-    public bool HasSelectedSite => SelectedSite is not null;
+    /// <summary>The site behind the picked option — what <see cref="StartAsync"/> reads; the label in
+    /// <see cref="SelectedOption"/> is display-only.</summary>
+    public SdeSite? SelectedSite => SelectedOption?.Site;
+
+    public bool HasSelectedSite => SelectedOption is not null;
 
     [ObservableProperty] private bool _isBackdated;
 

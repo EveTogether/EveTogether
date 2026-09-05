@@ -62,7 +62,7 @@ public class ManualRunStartLayoutTests
         // Nothing may fall outside the width it is fixed to, and it still has to grow rather than scroll.
         var vm = (ManualRunStartViewModel)window.DataContext!;
         vm.SiteQuery = "Sansha";
-        vm.SelectedSite = Site;
+        vm.SelectedOption = new SdeSitePickerOption(Site, Site.Name);
         vm.IsBackdated = true;
         Dispatcher.UIThread.RunJobs();
         window.UpdateLayout();

@@ -18,5 +18,13 @@ public enum RunParameterKey
     Loot,
     Standings,
     Filament,
-    Escalation
+    Escalation,
+    /// <summary>The escalation's own <c>dungeonId</c>, alongside <see cref="Escalation"/>'s name — never derived
+    /// from the name again later, since two catalogue sites can share a name across archetypes (ET-125 AC-2).</summary>
+    EscalationDungeonId,
+    /// <summary>The destination system as the pilot typed it — free text, resolved no further than that (ET-127).</summary>
+    EscalationSystem,
+    /// <summary>The computed UTC deadline, never a default duration (ET-125 AC-3): the pilot carries over whatever
+    /// remaining time the Agency showed, and this is that reading turned into a moment.</summary>
+    EscalationExpiresAtUtc
 }

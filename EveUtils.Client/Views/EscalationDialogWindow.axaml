@@ -1,0 +1,56 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels.Runs"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="480"
+        x:Class="EveUtils.Client.Views.EscalationDialogWindow"
+        x:DataType="vm:EscalationDialogViewModel"
+        Width="480" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="REGISTER ESCALATION">
+
+    <!-- ET-125: no field here ever starts pre-filled with a duration — see the view model's own docstring for why
+         a "24 hours" default is exactly what this dialog must never offer. -->
+    <StackPanel Margin="16" Spacing="10">
+
+        <StackPanel Spacing="3">
+            <TextBlock Classes="label" Text="SITE"/>
+            <TextBox PlaceholderText="Escalation site, as the Agency named it…" Text="{Binding SiteQuery}"/>
+            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" MaxHeight="160"
+                    IsVisible="{Binding HasSiteResults}">
+                <ListBox ItemsSource="{Binding SiteResults}" SelectedItem="{Binding SelectedOption}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SdeSitePickerOption">
+                            <TextBlock Text="{Binding Label}" FontSize="11"/>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+            <TextBlock Text="{Binding SelectedSite.Name, StringFormat='Selected: {0}'}"
+                       IsVisible="{Binding HasSelectedSite}" FontSize="11"
+                       Foreground="{DynamicResource TextAccentBrush}"/>
+            <!-- ET-126: what the catalogue agrees on for the typed name, silent about anything it disagrees on and
+                 silent on no match — never a guess. -->
+            <TextBlock Text="{Binding CatalogEnrichmentText}"
+                       IsVisible="{Binding CatalogEnrichmentText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                       Classes="hint" FontSize="11"/>
+        </StackPanel>
+
+        <StackPanel Spacing="3">
+            <TextBlock Classes="label" Text="DESTINATION SYSTEM"/>
+            <TextBox PlaceholderText="Where the escalation is…" Text="{Binding DestinationSystem}"/>
+        </StackPanel>
+
+        <StackPanel Spacing="3">
+            <TextBlock Classes="label" Text="TIME REMAINING"/>
+            <TextBox PlaceholderText="As shown by the Agency, e.g. 23:57:45" Text="{Binding RemainingTimeText}"/>
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,4,0,0">
+            <Button Content="Cancel" Command="{Binding CancelCommand}"/>
+            <Button Content="Register" Classes="accent" Command="{Binding RegisterCommand}"/>
+        </StackPanel>
+
+    </StackPanel>
+</v:ChromedWindow>

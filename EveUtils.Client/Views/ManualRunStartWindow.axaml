@@ -1,7 +1,6 @@
 <v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EveUtils.Client.ViewModels.Runs"
-        xmlns:sde="using:EveUtils.Shared.Modules.Sde.Dtos"
         xmlns:identity="using:EveUtils.Shared.Identity"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -42,10 +41,10 @@
             <TextBox PlaceholderText="Search the site catalogue…" Text="{Binding SiteQuery}"/>
             <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" MaxHeight="160"
                     IsVisible="{Binding HasSiteResults}">
-                <ListBox ItemsSource="{Binding SiteResults}" SelectedItem="{Binding SelectedSite}">
+                <ListBox ItemsSource="{Binding SiteResults}" SelectedItem="{Binding SelectedOption}">
                     <ListBox.ItemTemplate>
-                        <DataTemplate x:DataType="sde:SdeSite">
-                            <TextBlock Text="{Binding Name}" FontSize="11"/>
+                        <DataTemplate x:DataType="vm:SdeSitePickerOption">
+                            <TextBlock Text="{Binding Label}" FontSize="11"/>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>

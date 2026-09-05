@@ -495,6 +495,18 @@ public sealed class DialogService : IDialogService, ISingletonService
         await _Over(new ManualRunStartWindow(viewModel)).ShowDialog(_owner);
     }
 
+    public Task<bool> ShowEscalationDialogAsync(EscalationDialogViewModel viewModel)
+    {
+        if (_owner is null) return Task.FromResult(false);
+
+        var tcs = new TaskCompletionSource<bool>();
+        viewModel.CloseRequested += result => tcs.TrySetResult(result);
+        var window = new EscalationDialogWindow(viewModel);
+        window.Closed += (_, _) => tcs.TrySetResult(false);
+        _Over(window).ShowDialog(_owner);
+        return tcs.Task;
+    }
+
     public void ShowFitBrowser(FitBrowserViewModel viewModel) =>
         // One fit-browser module for the whole app (not per-entity, unlike roster/metrics): re-opening re-selects
         // it and refreshes instead of silently handing back the library as it stood at first open (ET-48, same
