@@ -29,6 +29,11 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
                 run.CharacterId == characterId && run.State == RunState.Saved && !run.DeletedAtUtc.HasValue
                 && ((summary.GroupCode != null && run.GroupCode == summary.GroupCode)
                     || (summary.RunId != null && run.Id == summary.RunId))));
+        if (query.FleetId is { } fleetId)
+            // A fleet has no field of its own on Run or ActivitySummary — only the group code does, and only via
+            // RunGroupOrigin (ET-182). A solo activity's GroupCode is null and never matches.
+            summaries = summaries.Where(summary => summary.GroupCode != null && db.Set<RunGroupOrigin>()
+                .Any(origin => origin.GroupCode == summary.GroupCode && origin.FleetId == fleetId));
 
         List<ActivitySummary> page = await summaries
             .OrderByDescending(summary => summary.StartedAtUtc)

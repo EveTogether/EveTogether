@@ -1012,7 +1012,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         var dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
         if (run.GroupCode is not null)
             await dispatcher.Send(new UnlinkRunFromGroupCodeCommand(run.Id));
-        await dispatcher.Send(new LinkRunToGroupCodeCommand(run.Id, fleetGroupCode));
+        await dispatcher.Send(new LinkRunToGroupCodeCommand(run.Id, fleetGroupCode, FleetId));
     }
 
     /// <summary>Name the pilot before the window loads, for a caller that already asked — the fleet-run offer, when

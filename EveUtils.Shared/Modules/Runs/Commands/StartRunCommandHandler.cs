@@ -62,6 +62,11 @@ internal sealed class StartRunCommandHandler(IDbContextFactory<ClientDbContext> 
                 BonusWindowSeconds = parameter.BonusWindowSeconds,
                 ObservedAtUtc = parameter.ObservedAtUtc
             });
+        // The only moment this handler is sure both facts at once: a code minted here (the FC's own start), or one
+        // already handed to this run by the fleet (a member starting on an offered code). Either way, the group
+        // code's fleet is known now and would not be if this were left to be inferred later (ET-182).
+        if (groupCode is not null && command.FleetId is { } originFleetId)
+            await RunGroupOriginRecorder.RecordAsync(db, groupCode, originFleetId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         await eventBus.PublishAsync(new RunStartedEvent(id, command.CharacterId, command.ActivityKind, command.StartedAtUtc,
             command.FleetId, groupCode, command.IsFleetCommander, command.SolarSystemName, command.SiteName),
