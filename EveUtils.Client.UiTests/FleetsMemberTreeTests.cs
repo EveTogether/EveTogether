@@ -136,6 +136,86 @@ public class FleetsMemberTreeTests
         Assert.Equal("Guardian — Armor", Leaf().AssignedFit!.FitName);
     }
 
+    /// <summary>Fixed figures regardless of the fit passed in, so the test only exercises the wiring (pre-compute on
+    /// reload → row passthrough), not the Dogma engine itself — the same trade <c>FleetRosterSkillBadgeTests</c>
+    /// makes for the skill badge.</summary>
+    private sealed class StubSpeedEvaluator(MemberFitSpeedStats stats) : IMemberFitSpeedEvaluator
+    {
+        public Task<MemberFitSpeedStats?> EvaluateAsync(FitReferenceInfo? assignedFit) =>
+            Task.FromResult<MemberFitSpeedStats?>(assignedFit is null ? null : stats);
+    }
+
+    [AvaloniaFact]
+    public async Task MemberLeaf_ShowsSpeedFigures_FromAssignedFit()
+    {
+        var transport = new RecordingFleetTransportClient();
+        transport.MyFleetsByServer[Server] = [Fleet(11, "Sat-night HF", Me)];
+        var fit = new FitReferenceInfo(11987, "Guardian — Armor", "{}", "h-guardian", null, null);
+        transport.MembersByFleet[11] = [Member(Me, FleetRole.FleetCommander, fit)];
+
+        using var instance = TestClientInstance.Create(s =>
+        {
+            s.AddSingleton<IFleetTransportClient>(transport);
+            s.AddSingleton<IDialogService>(new RecordingDialogService());
+            s.AddSingleton<IMemberFitSpeedEvaluator>(new StubSpeedEvaluator(new MemberFitSpeedStats(1450, 3.2, 4.1)));
+        });
+        var vm = await LoadedVmAsync(instance);
+
+        var leaf = Assert.Single(Assert.Single(Assert.Single(vm.ServerGroups).Fleets).Members);
+        Assert.True(leaf.HasSpeedStats);
+        Assert.Equal("align 4.1s", leaf.AlignGlanceText);
+        Assert.Equal("1450 m/s · 3.2 AU/s · 4.10s align", leaf.SpeedTooltip);
+    }
+
+    [AvaloniaFact]
+    public async Task MemberLeaf_WithNoAssignedFit_HasNoSpeedFigures()
+    {
+        var transport = new RecordingFleetTransportClient();
+        transport.MyFleetsByServer[Server] = [Fleet(11, "Sat-night HF", Me)];
+        transport.MembersByFleet[11] = [Member(Me, FleetRole.SquadMember, null)];
+
+        using var instance = TestClientInstance.Create(s =>
+        {
+            s.AddSingleton<IFleetTransportClient>(transport);
+            s.AddSingleton<IDialogService>(new RecordingDialogService());
+            s.AddSingleton<IMemberFitSpeedEvaluator>(new StubSpeedEvaluator(new MemberFitSpeedStats(1450, 3.2, 4.1)));
+        });
+        var vm = await LoadedVmAsync(instance);
+
+        var leaf = Assert.Single(Assert.Single(Assert.Single(vm.ServerGroups).Fleets).Members);
+        Assert.False(leaf.HasSpeedStats);
+        Assert.Equal("", leaf.AlignGlanceText);
+        Assert.Null(leaf.SpeedTooltip);
+    }
+
+    [AvaloniaFact]
+    public async Task FleetsWindow_WithSpeedFigures_Renders()
+    {
+        var transport = new RecordingFleetTransportClient();
+        transport.MyFleetsByServer[Server] = [Fleet(11, "Sat-night HF", Me)];
+        var fit = new FitReferenceInfo(11987, "Guardian — Armor", "{}", "h-guardian", null, null);
+        transport.MembersByFleet[11] = [Member(Me, FleetRole.FleetCommander, fit)];
+
+        using var instance = TestClientInstance.Create(s =>
+        {
+            s.AddSingleton<IFleetTransportClient>(transport);
+            s.AddSingleton<IDialogService>(new RecordingDialogService());
+            s.AddSingleton<IMemberFitSpeedEvaluator>(new StubSpeedEvaluator(new MemberFitSpeedStats(1450, 3.2, 4.1)));
+        });
+        var vm = await LoadedVmAsync(instance);
+        vm.ServerGroups[0].Fleets[0].IsExpanded = true;   // fold open so the member sub-row (and its FIT column) shows
+
+        // Wide (>= WideBreakpoint) so the FIT column — and the align glance under it — is visible.
+        var window = new FleetsWindow(vm) { Width = 1280, Height = 640 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var frame = window.CaptureRenderedFrame();
+        Assert.NotNull(frame);
+        frame!.Save("/tmp/eveutils-fleets-speed-stats.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        window.Close();
+    }
+
     [AvaloniaFact]
     public async Task FleetsWindow_MyFleetsTab_WithMemberLeaves_Renders()
     {

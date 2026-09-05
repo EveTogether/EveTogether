@@ -548,6 +548,17 @@
             <Style Selector="DockPanel.wide TextBlock.mtext">
                 <Setter Property="FontSize" Value="11"/>
             </Style>
+            <!-- The align-time glance under a member's fit name (ET-40): small enough to sit under the fit name
+                 without growing the doctrine column's fixed 132 px budget, mono so the digits stay steady. Max
+                 velocity and warp speed ride along in the same tooltip rather than a column of their own — this
+                 row's width is already tightly budgeted (ET-170). -->
+            <Style Selector="TextBlock.mtext.align">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="FontSize" Value="8.5"/>
+            </Style>
+            <Style Selector="DockPanel.wide TextBlock.mtext.align">
+                <Setter Property="FontSize" Value="9"/>
+            </Style>
             <Style Selector="TextBlock.num">
                 <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
                 <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
@@ -1064,7 +1075,12 @@
                                                         <TextBlock Classes="mtext" Text="{Binding RoleLabel}"/>
                                                     </Border>
                                                     <Border Grid.Column="5" Classes="cell doctrine">
-                                                        <TextBlock Classes="mtext" Text="{Binding AssignedFitName}"/>
+                                                        <StackPanel>
+                                                            <TextBlock Classes="mtext" Text="{Binding AssignedFitName}"
+                                                                       ToolTip.Tip="{Binding SpeedTooltip}"/>
+                                                            <TextBlock Classes="mtext align" Text="{Binding AlignGlanceText}"
+                                                                       IsVisible="{Binding HasSpeedStats}" ToolTip.Tip="{Binding SpeedTooltip}"/>
+                                                        </StackPanel>
                                                     </Border>
                                                     <Border Grid.Column="6" Classes="cell since">
                                                         <TextBlock Classes="num" Classes.amber="{Binding IsElsewhereActive}" Classes.dim="{Binding IsLinkDim}"

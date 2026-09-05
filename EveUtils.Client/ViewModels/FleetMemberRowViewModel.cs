@@ -26,8 +26,10 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
         IAsyncRelayCommand? openFitCommand = null, IAsyncRelayCommand? leaveCommand = null, bool canLeave = false,
         FleetMemberFacts? menuFacts = null, IRelayCommand? removeCommand = null,
         bool isMine = false, bool isFleetCommander = false, DateTimeOffset? lastSeenAt = null,
-        FleetMemberAvailability availability = FleetMemberAvailability.NotSet, string? availabilityNote = null)
+        FleetMemberAvailability availability = FleetMemberAvailability.NotSet, string? availabilityNote = null,
+        MemberFitSpeedStats? speedStats = null)
     {
+        SpeedStats = speedStats;
         IsMine = isMine;
         IsFleetCommander = isFleetCommander;
         LastSeenAt = lastSeenAt;
@@ -204,6 +206,21 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
 
     /// <summary>SELECT FIT when none is assigned, CHANGE FIT to replace the current one.</summary>
     public string SelectFitButtonLabel => HasAssignedFit ? "CHANGE FIT" : "SELECT FIT";
+
+    /// <summary>The assigned fit's speed figures (ET-40), or null when there is no fit or they could not be
+    /// computed (SDE unavailable, fit JSON unreadable).</summary>
+    public MemberFitSpeedStats? SpeedStats { get; }
+
+    public bool HasSpeedStats => SpeedStats is not null;
+
+    /// <summary>The one figure worth a glance on the row itself: whether the fleet can align and warp together.
+    /// Max velocity and warp speed are the fuller answer, held in <see cref="SpeedTooltip"/> instead — this row is
+    /// already tight on width (ET-170), and align time is the number an FC needs first.</summary>
+    public string AlignGlanceText => SpeedStats is null ? "" : $"align {SpeedStats.AlignTime:0.0}s";
+
+    public string? SpeedTooltip => SpeedStats is null
+        ? null
+        : $"{SpeedStats.MaxVelocity:0} m/s · {SpeedStats.WarpSpeed:0.0} AU/s · {SpeedStats.AlignTime:0.00}s align";
 
     /// <summary>can-fly verdict: no badge when there is no fit, the character's skills are not locally
     /// known, or the SDE is unavailable (unknown ≠ "can't fly").</summary>
