@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -243,6 +244,32 @@ public sealed class RunsOverviewTests
         List<string> texts = RenderedText.VisibleTexts(presented.Root);
         Assert.Contains(texts, text => text == "+1.26M ISK");
         Assert.DoesNotContain(texts, text => text == "no loot or bounty recorded");
+    }
+
+    [AvaloniaFact]
+    public async Task DayToggle_HidesAndRestoresItsActivityRows()
+    {
+        using var instance = TestClientInstance.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunAsync(_Dispatcher(instance), 90000001, groupCode: null, cancellationToken: cancellationToken);
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+        ToggleButton toggle = presented.Root.GetVisualDescendants().OfType<ToggleButton>()
+            .Single(control => control.Classes.Contains("dayband"));
+        Control row = presented.Root.GetVisualDescendants().OfType<Control>()
+            .Single(control => control.Classes.Contains("activityrow"));
+
+        toggle.IsChecked = false;
+        Dispatcher.UIThread.RunJobs();
+        presented.Root.UpdateLayout();
+
+        Assert.False(row.IsEffectivelyVisible);
+
+        toggle.IsChecked = true;
+        Dispatcher.UIThread.RunJobs();
+        presented.Root.UpdateLayout();
+
+        Assert.True(row.IsEffectivelyVisible);
     }
 
     /// <summary>ET-179 AC-1: three runs on <c>Stopped</c> and two on <c>Saved</c> — all five are on screen, and the
