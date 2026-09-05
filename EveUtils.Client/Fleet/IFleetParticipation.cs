@@ -9,8 +9,15 @@ public interface IFleetParticipation
 {
     IReadOnlyList<FleetParticipant> Current { get; }
 
+    /// <summary>Every fleet this client's characters belong to, started or not. See <see cref="FleetMembership"/>
+    /// for why this is a second list rather than a widened <see cref="Current"/>.</summary>
+    IReadOnlyList<FleetMembership> AllMemberships { get; }
+
     /// <summary>Replaces the current participation set (called when the fleet listing reloads).</summary>
     void Set(IReadOnlyList<FleetParticipant> participants);
+
+    /// <summary>Replaces the membership set, from the same sweep as <see cref="Set"/>.</summary>
+    void SetMemberships(IReadOnlyList<FleetMembership> memberships);
 
     /// <summary>
     /// Drops one pilot from one fleet, right now, rather than at the mercy of the next sweep. Removal is news that

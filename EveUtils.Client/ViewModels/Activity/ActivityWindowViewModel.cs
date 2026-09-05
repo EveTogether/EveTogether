@@ -606,20 +606,26 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public string CommandStatusText => Authority.StatusText;
 
     /// <summary>
-    /// Why this run has no fleet while the pilot plainly has several. Only when both halves are true: several
-    /// fleets in play <i>and</i> no fleet id came out of it — with a fleet settled there is nothing to report, and
-    /// with one fleet there was never a question.
+    /// Why this run has no fleet while the pilot plainly has one to answer for. Two disjoint reasons, both only
+    /// while <see cref="FleetId"/> is null (with a fleet settled there is nothing to report): several started
+    /// fleets at once (ET-165 — a real choice with no default), or none started at all while still a member of
+    /// one (ET-29 — the run went solo because nobody pressed START, or because the fleet was stopped or auto-
+    /// stopped back to standing by, not because there was nothing to be in). A pilot who is a member of no fleet
+    /// at all gets neither: there is nothing to name, and a permanently-shown notice for every solo player would
+    /// be worse than the silence it replaces.
     /// </summary>
-    public bool HasFleetNotice => FleetsInPlay > 1 && FleetId is null;
+    public bool HasFleetNotice => FleetId is null && (FleetsInPlay > 1 || _MyMemberships().Count > 0);
 
     /// <summary>Says which way the run went and what would settle it. Not a warning about a fault: two started
-    /// fleets is a legitimate state, and the window's job is to make the consequence visible rather than to refuse
-    /// it.</summary>
-    public string FleetNoticeText =>
-        $"You are in {FleetsInPlay} started fleets at once, so this run belongs to none of them and is not shared. "
-        // "Stop", not "conclude" (ET-166 follow-up): concluding is one-way, so a pilot who took this advice
-        // literally threw away the recurring fleet it was only asking them to step out of for tonight.
-        + "Stop the ones you are not flying to file it under one.";
+    /// fleets, or a fleet nobody has started yet, are both legitimate states, and the window's job is to make the
+    /// consequence visible rather than to refuse it.</summary>
+    public string FleetNoticeText => FleetsInPlay > 1
+        ? $"You are in {FleetsInPlay} started fleets at once, so this run belongs to none of them and is not shared. "
+          // "Stop", not "conclude" (ET-166 follow-up): concluding is one-way, so a pilot who took this advice
+          // literally threw away the recurring fleet it was only asking them to step out of for tonight.
+          + "Stop the ones you are not flying to file it under one."
+        : $"'{_MyMemberships()[0].Name}' has not been started, so this run is not shared. "
+          + "Start it to file this run under it.";
 
     // ── The character column ────────────────────────────────────────────────────────────────────────
 
@@ -1180,6 +1186,19 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     private IReadOnlyList<FleetParticipant> _Participation() =>
         _services.GetService<IFleetParticipation>()?.Current ?? [];
+
+    /// <summary>
+    /// Every fleet this window's pilot belongs to, started or not — <see cref="FleetMembership"/>, not
+    /// <see cref="FleetParticipant"/>. <see cref="HasFleetNotice"/> only reaches this once there is no started
+    /// fleet to fall back on, so it is never read on the common path.
+    /// </summary>
+    private List<FleetMembership> _MyMemberships()
+    {
+        IEnumerable<FleetMembership> mine = _services.GetService<IFleetParticipation>()?.AllMemberships ?? [];
+        if (_runCharacterId is { } characterId)
+            mine = mine.Where(membership => membership.CharacterId == characterId);
+        return mine.ToList();
+    }
 
     /// <summary>
     /// Put a name to <see cref="_ActingCharacterId"/> for the header. Clock-driven like everything else here, but it

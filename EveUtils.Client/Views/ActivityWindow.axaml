@@ -552,8 +552,8 @@
                      silence — the same rule as ET-65 AC-7. -->
                 <TextBlock x:Name="CommandStatusText" Classes="hint" Margin="0"
                            IsVisible="{Binding IsCommandStatusShown}" Text="{Binding CommandStatusText}"/>
-                <!-- Why this run has no fleet while the pilot has several. Going solo used to be silent, and that
-                     silence is the whole of ET-165. -->
+                <!-- Why this run has no fleet: several started at once (ET-165), or none started yet while still
+                     a member of one (ET-29). Going solo used to be silent either way. -->
                 <TextBlock x:Name="FleetNoticeText" Classes="hint" Margin="0" TextWrapping="Wrap"
                            IsVisible="{Binding HasFleetNotice}" Text="{Binding FleetNoticeText}"/>
             </StackPanel>
