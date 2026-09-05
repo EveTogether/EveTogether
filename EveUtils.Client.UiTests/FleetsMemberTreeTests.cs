@@ -1,9 +1,11 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Shared.Modules.Fleet.Enums;
@@ -163,8 +165,7 @@ public class FleetsMemberTreeTests
 
         var leaf = Assert.Single(Assert.Single(Assert.Single(vm.ServerGroups).Fleets).Members);
         Assert.True(leaf.HasSpeedStats);
-        Assert.Equal("align 4.1s", leaf.AlignGlanceText);
-        Assert.Equal("1450 m/s · 3.2 AU/s · 4.10s align", leaf.SpeedTooltip);
+        Assert.Equal("1450 m/s · 3.2 AU/s · 4.1s", leaf.SpeedGlanceText);
     }
 
     [AvaloniaFact]
@@ -184,8 +185,26 @@ public class FleetsMemberTreeTests
 
         var leaf = Assert.Single(Assert.Single(Assert.Single(vm.ServerGroups).Fleets).Members);
         Assert.False(leaf.HasSpeedStats);
-        Assert.Equal("", leaf.AlignGlanceText);
-        Assert.Null(leaf.SpeedTooltip);
+        Assert.Equal("", leaf.SpeedGlanceText);
+    }
+
+    /// <summary>
+    /// ET-40, after review: all three figures belong on the row, not behind a hover — a tooltip means hovering every
+    /// member in turn, which is the opposite of "one overview at a glance". This measures the compact line's own
+    /// rendered width against the doctrine column's fixed 132 px budget (ET-170) with the widest plausible values —
+    /// a five-digit overheated-MWD velocity, a heavily-rigged warp speed and a capital-scale align time — rather
+    /// than guessing that the font is small enough.
+    /// </summary>
+    [AvaloniaFact]
+    public void SpeedGlanceText_FitsTheDoctrineColumnWidth()
+    {
+        const string widest = "13500 m/s · 9.9 AU/s · 42.0s";
+        var typeface = new Typeface(new FontFamily("Consolas, Cascadia Mono, monospace"));
+        var formatted = new FormattedText(widest, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, 8, Brushes.White);
+
+        const double doctrineColumnWidth = 132;   // Border.cell.doctrine, FleetsWindow.axaml
+        Assert.True(formatted.Width <= doctrineColumnWidth,
+            $"Speed glance text measures {formatted.Width:0.0}px wide against a {doctrineColumnWidth}px column");
     }
 
     [AvaloniaFact]

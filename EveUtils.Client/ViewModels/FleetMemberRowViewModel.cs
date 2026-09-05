@@ -213,14 +213,13 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
 
     public bool HasSpeedStats => SpeedStats is not null;
 
-    /// <summary>The one figure worth a glance on the row itself: whether the fleet can align and warp together.
-    /// Max velocity and warp speed are the fuller answer, held in <see cref="SpeedTooltip"/> instead — this row is
-    /// already tight on width (ET-170), and align time is the number an FC needs first.</summary>
-    public string AlignGlanceText => SpeedStats is null ? "" : $"align {SpeedStats.AlignTime:0.0}s";
-
-    public string? SpeedTooltip => SpeedStats is null
-        ? null
-        : $"{SpeedStats.MaxVelocity:0} m/s · {SpeedStats.WarpSpeed:0.0} AU/s · {SpeedStats.AlignTime:0.00}s align";
+    /// <summary>All three figures Raymond's ticket asks for, on the row itself rather than behind a hover — a
+    /// tooltip means hovering every member in turn, which is the opposite of "one overview at a glance". Max
+    /// velocity and warp speed are the actual ask; align time rides along because it comes free from the same
+    /// calculation.</summary>
+    public string SpeedGlanceText => SpeedStats is null
+        ? ""
+        : $"{SpeedStats.MaxVelocity:0} m/s · {SpeedStats.WarpSpeed:0.0} AU/s · {SpeedStats.AlignTime:0.0}s";
 
     /// <summary>can-fly verdict: no badge when there is no fit, the character's skills are not locally
     /// known, or the SDE is unavailable (unknown ≠ "can't fly").</summary>
