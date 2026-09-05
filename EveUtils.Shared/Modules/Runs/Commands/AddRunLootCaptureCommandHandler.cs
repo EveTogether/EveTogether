@@ -19,7 +19,8 @@ internal sealed class AddRunLootCaptureCommandHandler(IDbContextFactory<ClientDb
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
         // Nothing names the run a clipboard copy belongs to, so one running run is the only unambiguous answer;
         // guessing between two would file loot under the wrong one.
-        (Run? run, int runningCount) = await RunningRunLookup.FindAsync(db, cancellationToken, includeStopped: true);
+        (Run? run, int runningCount) = await RunningRunLookup.FindAsync(db, cancellationToken, includeStopped: true,
+            command.Capture.PreferredRunId);
         if (run is null)
             return Result<RunLootCaptureSaveResult>.Failure(runningCount == 0
                 ? new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound,

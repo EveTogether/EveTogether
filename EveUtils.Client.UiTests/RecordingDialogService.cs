@@ -222,6 +222,10 @@ public sealed class RecordingDialogService : IDialogService
     /// clipboard offer must not put the character question on screen again.</summary>
     public (int Id, string Name)? ActivityWindowPilot { get; set; }
 
+    /// <summary>Set by a test that wants "a window is up and on this run" — the case ET-190's loot-capture hint
+    /// reads instead of falling back to a store-wide guess.</summary>
+    public Guid? ActivityWindowRunId { get; set; }
+
     /// <summary>The activity windows a screen asked to open (ET-100). Recorded rather than shown, same as the fleet
     /// overlay above — a test asserts the toast's Start-run action reached the service without a real window.</summary>
     public List<ActivityWindowViewModel> ShownActivityWindows { get; } = [];

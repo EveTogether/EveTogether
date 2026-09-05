@@ -225,6 +225,8 @@ public sealed class DialogService : IDialogService, ISingletonService
     public (int Id, string Name)? ActivityWindowPilot =>
         (_activityWindow?.DataContext as ActivityWindowViewModel)?.PickedCharacter;
 
+    public Guid? ActivityWindowRunId => (_activityWindow?.DataContext as ActivityWindowViewModel)?.RunId;
+
     /// <summary>Open pop-out windows independent of the main window: floating modules + DPS overlays + fleet
     /// overlays + info cards. Used by the main window's close handler to decide whether to confirm before quitting.</summary>
     public int OpenPopoutCount =>

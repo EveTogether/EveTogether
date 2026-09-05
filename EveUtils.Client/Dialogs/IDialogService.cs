@@ -164,6 +164,12 @@ public interface IDialogService
     /// without one is a fair question, which is why this is the pilot and not merely "is a window open".</summary>
     (int Id, string Name)? ActivityWindowPilot { get; }
 
+    /// <summary>The run the open activity window is on, or null when none is up or nothing has started yet. A
+    /// clipboard copy names no run of its own (<see cref="EveUtils.Client.Clipboard.ClipboardLootCapture"/>), and
+    /// this is the one place that can name it without guessing: the window this app has open is the pilot's own run,
+    /// whatever its store state — Running, or Stopped and waiting on a decision it has not answered yet.</summary>
+    Guid? ActivityWindowRunId { get; }
+
     /// <summary>
     /// Opens the settings module: a docked tab in docked mode, a floating window otherwise — non-modal so it
     /// matches the rest of the module shell. <paramref name="currentDirectory"/> is the saved gamelog path (empty if

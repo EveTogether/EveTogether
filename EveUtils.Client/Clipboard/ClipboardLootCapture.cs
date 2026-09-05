@@ -4,6 +4,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using EveUtils.Client.Dialogs;
 using EveUtils.Client.Notifications;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.DependencyInjection;
@@ -27,6 +28,7 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
     private readonly IToastService _toasts;
     private readonly ISdeAccessor _sde;
     private readonly IDispatcher _dispatcher;
+    private readonly IDialogService _dialogs;
     private readonly ILogger<ClipboardLootCapture> _logger;
     private readonly Lock _gate = new();
     private readonly IDisposable _subscription;
@@ -35,11 +37,12 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
 
     public ClipboardLootCapture(ClipboardWatchService clipboardWatch, IToastService toasts, ISdeAccessor sde,
         ILogger<ClipboardLootCapture> logger,
-        IDispatcher dispatcher)
+        IDispatcher dispatcher, IDialogService dialogs)
     {
         _toasts = toasts;
         _sde = sde;
         _dispatcher = dispatcher;
+        _dialogs = dialogs;
         _logger = logger;
         _subscription = clipboardWatch.Subscribe(FeatureName, OnCapture);
     }
@@ -131,6 +134,11 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
                 CapturedAtUtc = DateTime.UtcNow,
                 Source = LootCaptureSource.Clipboard,
                 ContentHash = fingerprint,
+                // The open activity window's own run, if this app has one up — not a guess: ET-190 measured loot
+                // refused as ambiguous once a stray copied site (c69fec1) left the pilot's run Stopped-and-waiting
+                // beside an old Stopped-and-never-saved one from an earlier session. The window already knows which
+                // one is his.
+                PreferredRunId = _dialogs.ActivityWindowRunId,
                 Entries =
                 [
                     .. lines.Select(resolved => new RunLootEntryInput
