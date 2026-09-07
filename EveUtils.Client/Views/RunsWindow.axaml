@@ -103,6 +103,30 @@
                 <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
+            <!-- What is being tracked, once something is: the dim sub-line brightens on a running card so the site
+                 name reads as the thing to notice rather than a caption (ET-200). -->
+            <Style Selector="TextBlock.rowsub.active">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+
+            <!-- Per-character card (ET-200): a bordered card per lane instead of a bare row, so the character row
+                 above the finished-activity list reads as "this is your roster" rather than "this is a button".
+                 Resting and running are two distinct, both already-audited looks rather than a new pair to check:
+                 resting keeps the same near-transparent row background the rest of the screen uses, running switches
+                 to BgRowSelectedBrush plus an accent border — the exact brush the day band already proved readable
+                 against TextBrightBrush/TextDimBrush (ET-198) — so a live lane reads as live without inventing a
+                 second contrast case. -->
+            <Style Selector="Border.lanecard">
+                <Setter Property="Background" Value="{StaticResource BgRowBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="4"/>
+                <Setter Property="Padding" Value="10,8"/>
+            </Style>
+            <Style Selector="Border.lanecard.running">
+                <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            </Style>
         </DockPanel.Styles>
 
         <!-- ══ Header ══ -->
@@ -155,17 +179,36 @@
                 <ItemsControl x:Name="LaneList" ItemsSource="{Binding Lanes}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vr:RunningLaneViewModel">
-                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" Margin="0,3">
-                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding CharacterText}" FontSize="11.5"
-                                               TextTrimming="CharacterEllipsis"
-                                               Foreground="{StaticResource TextBrightBrush}"/>
-                                    <TextBlock Classes="rowsub" Text="{Binding StateText}"/>
-                                </StackPanel>
-                                <TextBlock Grid.Column="1" Classes="rowfigure" Text="{Binding ClockText}"/>
-                                <Button Grid.Column="2" Classes="rowaction" MinWidth="62"
-                                        Content="{Binding ActionText}" Command="{Binding ActCommand}"/>
-                            </Grid>
+                            <Border Classes="lanecard" Classes.running="{Binding IsRunning}" Margin="0,3">
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+                                    <!-- Hex ESI portrait + glyph fallback: same shape and the same 64px cache key as
+                                         the fleet roster leaf and the character picker (ET-184) — reusing the
+                                         existing portrait route rather than standing up a new one. -->
+                                    <Panel Grid.Column="0" Width="34" Height="39" VerticalAlignment="Center">
+                                        <Panel.Clip>
+                                            <PathGeometry Figures="M17,0 L34,9.75 L34,29.25 L17,39 L0,29.25 L0,9.75 Z"/>
+                                        </Panel.Clip>
+                                        <Border Background="{DynamicResource AccentSoftBrush}"
+                                                IsVisible="{Binding !HasPortrait}">
+                                            <TextBlock Text="{Binding Initial}" FontSize="14" FontWeight="Bold"
+                                                       Foreground="{DynamicResource AccentBrightBrush}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <Image Source="{Binding Portrait}" Stretch="UniformToFill"
+                                               IsVisible="{Binding HasPortrait}"/>
+                                    </Panel>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding CharacterText}" FontSize="11.5"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{StaticResource TextBrightBrush}"/>
+                                        <TextBlock Classes="rowsub" Classes.active="{Binding IsRunning}"
+                                                   Text="{Binding StateText}"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Classes="rowfigure" Text="{Binding ClockText}"/>
+                                    <Button Grid.Column="3" Classes="rowaction" MinWidth="62"
+                                            Content="{Binding ActionText}" Command="{Binding ActCommand}"/>
+                                </Grid>
+                            </Border>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
