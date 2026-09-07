@@ -43,5 +43,8 @@ public sealed partial class RunsDayViewModel : ObservableObject
     public string SummaryText { get; }
     public ObservableCollection<ActivityOverviewRowViewModel> Rows { get; }
 
-    [ObservableProperty] private bool _isExpanded = true;
+    /// <summary>Folded by default (ET-199) — <see cref="RunsOverviewViewModel"/> opens only the most recent day
+    /// once it knows which one that is, since a fresh <see cref="RunsDayViewModel"/> has no way to tell where it
+    /// falls among the others being built alongside it.</summary>
+    [ObservableProperty] private bool _isExpanded;
 }

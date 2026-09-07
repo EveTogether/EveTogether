@@ -30,6 +30,20 @@
                 <Setter Property="HorizontalAlignment" Value="Stretch"/>
                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             </Style>
+            <!-- State ink goes on the presenter: the stock Fluent theme fills :pointerover and :checked with its own
+                 accent there, and a rule one level up (Background on the ToggleButton itself, above) loses to it.
+                 Without this, an expanded day band turned solid accent blue and the dim date/summary text — tuned
+                 for the near-transparent BgRowBrush — nearly disappeared into it (ET-198). Same brushes and the same
+                 "hover on an active row stays active" rule as Button.fleetrow.open in FleetsWindow.axaml. -->
+            <Style Selector="ToggleButton.dayband:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            </Style>
+            <Style Selector="ToggleButton.dayband:checked /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+            </Style>
+            <Style Selector="ToggleButton.dayband:checked:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+            </Style>
             <Style Selector="TextBlock.daytitle">
                 <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
                 <Setter Property="FontSize" Value="10"/>
