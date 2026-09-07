@@ -442,6 +442,28 @@ public sealed class RunsOverviewTests
         Assert.Equal(2, refreshedDay.Rows.Count);
     }
 
+    /// <summary>ET-199: the overview must not make him scroll through weeks of history to reach today. Counter-proof:
+    /// default every fresh <c>RunsDayViewModel</c> to expanded (the behaviour before this ticket) and the three-day-
+    /// old evening comes up open beside the current one.</summary>
+    [AvaloniaFact]
+    public async Task Overview_OpensWithOnlyTheMostRecentDayExpanded()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunAsync(dispatcher, 90000001, groupCode: null, cancellationToken: cancellationToken,
+            startedAtUtc: StartedAtUtc.AddDays(-3));
+        await _SaveSiteRunAsync(dispatcher, 90000002, groupCode: null, cancellationToken: cancellationToken);
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+
+        Assert.Equal(2, presented.ViewModel.Tabs[0].Days.Count);
+        RunsDayViewModel mostRecent = presented.ViewModel.Tabs[0].Days.MaxBy(day => day.Day)!;
+        RunsDayViewModel older = presented.ViewModel.Tabs[0].Days.Single(day => day.Day != mostRecent.Day);
+        Assert.True(mostRecent.IsExpanded);
+        Assert.False(older.IsExpanded);
+    }
+
     private static async Task<Presented> _PresentAsync(
         TestClientInstance instance, double width, CancellationToken cancellationToken,
         IReadOnlyList<Character>? characters = null, RecordingDialogService? dialogs = null)
@@ -466,12 +488,13 @@ public sealed class RunsOverviewTests
     private static async Task _SaveSiteRunAsync(ICqrsDispatcher dispatcher, long characterId, string? groupCode,
         CancellationToken cancellationToken, string siteName = "Homefront",
         IReadOnlyList<RunParameterInput>? parameters = null,
-        IReadOnlyList<RunBountyEntryInput>? bounties = null)
+        IReadOnlyList<RunBountyEntryInput>? bounties = null, DateTime? startedAtUtc = null)
     {
-        Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site, StartedAtUtc,
+        DateTime startedAt = startedAtUtc ?? StartedAtUtc;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site, startedAt,
             1234, siteName, 30000142, groupCode), cancellationToken);
-        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15),
-            StartedAtUtc.AddMinutes(16), [], bounties ?? [], [], parameters ?? []), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, startedAt.AddMinutes(15),
+            startedAt.AddMinutes(16), [], bounties ?? [], [], parameters ?? []), cancellationToken);
     }
 
     /// <summary>A run stopped and left there — the shape ET-179 is about: <c>Stopped</c>, never saved, never thrown

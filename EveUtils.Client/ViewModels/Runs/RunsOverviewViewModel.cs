@@ -224,6 +224,13 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
                      .GroupBy(row => row.StartedAtLocal.Date))
             tab.Days.Add(new RunsDayViewModel(day.Key, [.. day]));
 
+        // Opens on the most recent day only (ET-199), so he never has to scroll through weeks of history to reach
+        // today; every older evening still says its piece collapsed, via RunsWindow's sectionsummary in the band
+        // itself. _OnRunSavedAsync (ET-189) restores whatever the session already set for a day that survives its
+        // rebuild — this default only ever reaches a day this tab is showing for the first time.
+        if (tab.Days.Count > 0)
+            tab.Days.MaxBy(day => day.Day)!.IsExpanded = true;
+
         tab.StatusMessage = tab.Days.Count > 0 ? null : _EmptyMessageFor(tab);
     }
 
