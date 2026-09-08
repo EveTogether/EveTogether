@@ -4,12 +4,13 @@ using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Events;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
-internal sealed class SetRunStoppedCommandHandler(IDbContextFactory<ClientDbContext> contextFactory)
+internal sealed class SetRunStoppedCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus)
     : ICommandHandler<SetRunStoppedCommand, Result>
 {
     public async Task<Result> Handle(SetRunStoppedCommand command, CancellationToken cancellationToken = default)
@@ -33,6 +34,9 @@ internal sealed class SetRunStoppedCommandHandler(IDbContextFactory<ClientDbCont
             run.SyncState = RunSyncState.Pending;
         run.Revision++;
         await db.SaveChangesAsync(cancellationToken);
+        // The RUNNING band (ET-203) has no other way to hear that this character's lane just changed: nothing else
+        // in the app subscribes to a stop or a resume today.
+        await eventBus.PublishAsync(new RunRunningStateChangedEvent(command.RunId), EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 }

@@ -55,6 +55,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private readonly DispatcherTimer? _clock;
     private readonly RunsFleetFilter? _fleetFilter;
     private readonly IDisposable? _runSavedSubscription;
+    private readonly IDisposable? _runStartedSubscription;
+    private readonly IDisposable? _runRunningStateChangedSubscription;
     private bool _canPublish;
 
     /// <summary>Set once per load when <see cref="_fleetFilter"/> is active and turned up nothing: whether that
@@ -75,8 +77,10 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             .ToDictionary(group => group.Key, group => group.First().Name);
         SelectedTab = LocalTab;
 
-        // A lane per local character, running or not — the roster is the band, and today it happens to hold at most
-        // one running run because RunningRunLookup answers only when there is exactly one (ET-130 is what lifts that).
+        // A lane per local character, running or not — the roster is the band. Each lane asks GetRunningRunsQuery
+        // (ET-203) which run is running for ITS character, so two characters running at once already show two live
+        // lanes here; that query has no "exactly one" rule to hit, unlike the single-run GetRunningRunQuery a run
+        // window uses to reopen (ET-130 is only about lifting the one-app-wide limit that query's callers still have).
         Lanes = [.. characters
             .Where(character => character.EsiCharacterId is > 0)
             .Select(character => new RunningLaneViewModel(character, _ActOnLaneAsync))];
@@ -99,8 +103,17 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         // (both SaveRunCommand call sites are button click handlers), but the bus itself makes no such promise, so
         // this follows HomeDashboardViewModel's pattern (HomeDashboardViewModel.cs, FleetChangedEvent) rather than
         // trust that: post the refresh to the UI thread instead of touching an ObservableCollection off it.
-        _runSavedSubscription = services.GetService<IEventBus>()?.Subscribe<RunSavedEvent>(
+        IEventBus? eventBus = services.GetService<IEventBus>();
+        _runSavedSubscription = eventBus?.Subscribe<RunSavedEvent>(
             evt => Dispatcher.UIThread.Post(() => _ = _OnRunSavedAsync()));
+
+        // A run starting, stopping or resuming elsewhere while this screen sits open used to leave its lane exactly
+        // where it stood, START button included, until the RUNS entry was reopened — the same gap ET-189 named for
+        // the day bands, now measured against the band above them too (ET-203).
+        _runStartedSubscription = eventBus?.Subscribe<RunStartedEvent>(
+            evt => Dispatcher.UIThread.Post(() => _ = _LoadLanesAsync(CancellationToken.None)));
+        _runRunningStateChangedSubscription = eventBus?.Subscribe<RunRunningStateChangedEvent>(
+            evt => Dispatcher.UIThread.Post(() => _ = _LoadLanesAsync(CancellationToken.None)));
 
         if (!runClock)
             return;
@@ -293,11 +306,11 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     private async Task _LoadLanesAsync(CancellationToken cancellationToken)
     {
-        Result<RunningRunDto> running = await _dispatcher.Query(new GetRunningRunQuery(), cancellationToken);
-        RunningRunDto? run = running.IsSuccess ? running.Value : null;
+        Result<IReadOnlyList<RunningRunDto>> running = await _dispatcher.Query(new GetRunningRunsQuery(), cancellationToken);
+        IReadOnlyList<RunningRunDto> runs = running.IsSuccess ? running.Value ?? [] : [];
         DateTime nowUtc = DateTime.UtcNow;
         foreach (RunningLaneViewModel lane in Lanes)
-            lane.Attach(run is not null && (long?)lane.Character.EsiCharacterId == run.CharacterId ? run : null, nowUtc);
+            lane.Attach(runs.FirstOrDefault(run => (long?)lane.Character.EsiCharacterId == run.CharacterId), nowUtc);
     }
 
     private async Task _LoadUnfinishedRunsAsync(CancellationToken cancellationToken)
@@ -527,6 +540,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     public void Dispose()
     {
         _runSavedSubscription?.Dispose();
+        _runStartedSubscription?.Dispose();
+        _runRunningStateChangedSubscription?.Dispose();
         if (_clock is null)
             return;
 

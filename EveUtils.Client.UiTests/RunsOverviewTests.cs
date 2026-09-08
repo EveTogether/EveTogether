@@ -196,8 +196,6 @@ public sealed class RunsOverviewTests
     {
         using var instance = TestClientInstance.Create();
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        // Started and left running: the one lane that carries a run today, since RunningRunLookup answers only when
-        // there is exactly one open run app-wide (ET-130 is what lifts that).
         await _Dispatcher(instance).Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
             1234, "Homefront", 30000142), cancellationToken);
 
@@ -209,6 +207,113 @@ public sealed class RunsOverviewTests
         Assert.Contains(texts, text => text == "START");
         Assert.Contains(texts, text => text == "Homefront");   // and the busy lane still reads as busy
         Assert.Contains(texts, text => text == "OPEN");
+    }
+
+    /// <summary>ET-203, AC-2/ET-130: two characters running at once each get their own lane rather than the band
+    /// answering for the app as a whole. Counter-proof: read the running run through <c>GetRunningRunQuery</c>
+    /// (single, "exactly one or nothing") instead of per character, and this goes red with both lanes reading
+    /// "nothing running" — two open runs is exactly the case that query answers null on.</summary>
+    [AvaloniaFact]
+    public async Task TwoCharactersRunningAtOnce_EachShowTheirOwnLane()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142), cancellationToken);
+        await dispatcher.Send(new StartRunCommand(90000002, ActivityKind.Site, StartedAtUtc,
+            5678, "Sanctum", 30000143), cancellationToken);
+
+        (_, RunsOverviewViewModel viewModel) = await _WindowAsync(
+            instance, 758, cancellationToken, characters: [Crew[0], Crew[1]]);
+
+        RunningLaneViewModel first = viewModel.Lanes.Single(lane => lane.Character.EsiCharacterId == 90000001);
+        RunningLaneViewModel second = viewModel.Lanes.Single(lane => lane.Character.EsiCharacterId == 90000002);
+        Assert.True(first.IsRunning);
+        Assert.Equal("Homefront", first.StateText);
+        Assert.True(second.IsRunning);
+        Assert.Equal("Sanctum", second.StateText);
+    }
+
+    /// <summary>ET-203's root cause, reproduced directly. Measured against the code rather than assumed: a run
+    /// <em>stopped</em> and never saved is filtered out of <c>RunningRunLookup</c> before this screen's old query
+    /// ever saw it (<c>GetRunningRunQueryHandler</c> asks without <c>includeStopped</c>), so that shape alone was
+    /// never this bug. What does reproduce it is a second row still on <c>Running</c> that nothing local ever shows
+    /// a lane for — orphaned by a crash before <c>SetRunStoppedCommand</c> could run, say — sitting beside a
+    /// character who is plainly, actually running right now. The old single-run query counts both, finds two
+    /// candidates, and answers null for the whole app; the lane that is genuinely running reads "nothing running"
+    /// right along with everyone else's. Counter-proof: keep reading the band through that single-run query and
+    /// this goes red on the real lane.</summary>
+    [AvaloniaFact]
+    public async Task AStaleRunningRowForAnUnlistedCharacter_DoesNotBlockARealRunningLaneFromShowing()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        // Left running on purpose, and for a character this screen's own roster never includes below — this is the
+        // orphaned row, not a second lane under test.
+        await dispatcher.Send(new StartRunCommand(90000003, ActivityKind.Site, StartedAtUtc,
+            9999, "Abandoned Site", 30000144), cancellationToken);
+        await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            5678, "Sanctum", 30000143), cancellationToken);
+
+        (_, RunsOverviewViewModel viewModel) = await _WindowAsync(
+            instance, 758, cancellationToken, characters: [Crew[0]]);
+
+        RunningLaneViewModel running = Assert.Single(viewModel.Lanes);
+        Assert.True(running.IsRunning);
+        Assert.Equal("Sanctum", running.StateText);
+        Assert.Equal("OPEN", running.ActionText);
+    }
+
+    /// <summary>ET-203's second track: a run starting elsewhere while the overview is already open must reach the
+    /// band without the RUNS entry being reopened — the same "screen open, event fired" gap ET-189 closed for the
+    /// day bands. Counter-proof: a view model with no <c>RunStartedEvent</c> subscription never revisits its lanes,
+    /// so this reads START forever.</summary>
+    [AvaloniaFact]
+    public async Task RunStartedWhileScreenIsOpen_TakesOverItsLaneWithoutReopening()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        (_, RunsOverviewViewModel viewModel) = await _WindowAsync(
+            instance, 758, cancellationToken, characters: [Crew[0]]);
+        RunningLaneViewModel lane = Assert.Single(viewModel.Lanes);
+        Assert.False(lane.IsRunning);
+
+        await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142), cancellationToken);
+        Dispatcher.UIThread.RunJobs(); // the refresh is posted to the UI thread, not run inline
+
+        Assert.True(lane.IsRunning);
+        Assert.Equal("Homefront", lane.StateText);
+        Assert.Equal("OPEN", lane.ActionText);
+    }
+
+    /// <summary>ET-203's second track, the other direction: stopping a run while the overview sits open must drop
+    /// its lane back to idle without a reopen — the clock keeps ticking via <c>_OnClockTick</c> alone otherwise,
+    /// since that only advances a lane already attached rather than noticing the run underneath it stopped.</summary>
+    [AvaloniaFact]
+    public async Task RunStoppedWhileScreenIsOpen_FallsBackToIdleWithoutReopening()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142), cancellationToken);
+
+        (_, RunsOverviewViewModel viewModel) = await _WindowAsync(
+            instance, 758, cancellationToken, characters: [Crew[0]]);
+        RunningLaneViewModel lane = Assert.Single(viewModel.Lanes);
+        Assert.True(lane.IsRunning);
+
+        await dispatcher.Send(new SetRunStoppedCommand(started.Value, DateTime.UtcNow), cancellationToken);
+        Dispatcher.UIThread.RunJobs(); // the refresh is posted to the UI thread, not run inline
+
+        Assert.False(lane.IsRunning);
+        Assert.Equal("nothing running", lane.StateText);
+        Assert.Equal("START", lane.ActionText);
     }
 
     /// <summary>
