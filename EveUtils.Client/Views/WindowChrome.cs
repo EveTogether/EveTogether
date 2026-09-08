@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
@@ -48,6 +49,16 @@ internal static class WindowChrome
             if (e.Property == Window.WindowStateProperty)
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => window.Padding = window.OffScreenMargin);
         };
+    }
+
+    /// <summary>True if the point still lands on a connected monitor — used before restoring a remembered window
+    /// position, so a spot left behind on a monitor that has since been unplugged falls back to the window's
+    /// default placement instead of stranding it off-screen (MainWindow's own placement restore uses the same
+    /// check, inlined there before this became a second caller).</summary>
+    public static bool IsPositionOnScreen(Window window, PixelPoint point)
+    {
+        var screens = window.Screens?.All;
+        return screens is { Count: > 0 } && screens.Any(screen => screen.Bounds.Contains(point));
     }
 
     public static void ApplySquareCorners(Window window)

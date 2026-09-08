@@ -135,6 +135,19 @@ public class CharacterPickerToggleTests
         window.Close();
     }
 
+    // ET-207: this dialog fires from a ctrl+c on a combat site while EVE is fullscreen and no activity window is
+    // open yet, so DialogService's own "raise it over the run overlay" rule never applies to this case — the window
+    // has to own always-on-top itself instead of depending on it.
+    [AvaloniaFact]
+    public void AlwaysOpensTopmost_EvenWithNoActivityWindowUp()
+    {
+        var (window, _) = ShowPicker(multiSelect: false);
+
+        Assert.True(window.Topmost);
+
+        window.Close();
+    }
+
     [AvaloniaFact]
     public void FleetInviteWindow_FixedSingleSelectPath_IsUnaffected()
     {
