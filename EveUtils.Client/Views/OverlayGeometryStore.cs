@@ -43,6 +43,11 @@ internal static class OverlayGeometryStore
     /// outlives tonight's run.</summary>
     public static string ForActivity() => "ui.activity-window";
 
+    /// <summary>The character-picker dialog's key. One dialog shape reused for every "which character" prompt
+    /// across the app (ctrl+c on a site, joining a fleet, leaving one, ...), so it remembers one place regardless
+    /// of which action opened it — the same place is where the pilot keeps dragging it back to anyway.</summary>
+    public static string ForCharacterPicker() => "ui.character-picker";
+
     public static async Task<OverlayGeometry?> LoadAsync(string key)
     {
         if (string.IsNullOrWhiteSpace(key)) return null;
