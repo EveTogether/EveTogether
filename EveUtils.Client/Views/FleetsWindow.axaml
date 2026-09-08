@@ -22,11 +22,6 @@
          host lifts the content out of the window to dock it (ET-42). -->
     <DockPanel x:Name="OverviewRoot" Classes.wide="{Binding IsWide}">
 
-        <DockPanel.Resources>
-            <!-- The theme has no warn brush of its own; this is the ink Border.chip.warn uses, so the two agree. -->
-            <SolidColorBrush x:Key="WarnBrush" Color="#FFE0B341"/>
-        </DockPanel.Resources>
-
         <DockPanel.Styles>
             <!-- ── Pills that older tests and screens still probe: kept exactly as they were. ── -->
             <Style Selector="Border.statepill">
@@ -162,82 +157,17 @@
                 <Setter Property="FontSize" Value="11"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
-            <Style Selector="Border.lane">
-                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
-                <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="Background" Value="#06FFFFFF"/>
-                <Setter Property="Padding" Value="8,7"/>
-            </Style>
-            <Style Selector="DockPanel.wide Border.lane">
+            <!-- Border.statuscard and its edge/name/what/where/clock classes are the app-level style
+                 (Themes/EveUtils.axaml, ET-200) — shared with Runs' running-band cards. Only the width-dependent
+                 padding overrides below are Fleets' own: they key on this window's own `DockPanel.wide` class, which
+                 nothing outside this window ever sets. -->
+            <Style Selector="DockPanel.wide Border.statuscard">
                 <Setter Property="Padding" Value="11,9"/>
             </Style>
-            <!-- The 2 px edge is a second border inside the lane, so its colour is a class and not the border's. -->
-            <Style Selector="Border.laneedge">
-                <Setter Property="Width" Value="2"/>
-                <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-                <Setter Property="HorizontalAlignment" Value="Left"/>
-                <Setter Property="VerticalAlignment" Value="Stretch"/>
-                <!-- Pulled out to the lane's own edge: the negative margin undoes the lane padding of its state. -->
-                <Setter Property="Margin" Value="-8,-7,6,-7"/>
-            </Style>
-            <Style Selector="DockPanel.wide Border.laneedge">
+            <Style Selector="DockPanel.wide Border.statuscardedge">
                 <Setter Property="Margin" Value="-11,-9,9,-9"/>
             </Style>
-            <Style Selector="Border.laneedge.idle">
-                <Setter Property="Background" Value="{StaticResource TextDimBrush}"/>
-            </Style>
-            <Style Selector="Border.laneedge.warn">
-                <Setter Property="Background" Value="{StaticResource WarnBrush}"/>
-            </Style>
-            <Style Selector="Border.lane.idle">
-                <Setter Property="Opacity" Value="0.74"/>
-            </Style>
-            <Style Selector="TextBlock.lanename">
-                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
-                <Setter Property="FontSize" Value="11.5"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="VerticalAlignment" Value="Center"/>
-                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-            </Style>
-            <Style Selector="TextBlock.lanewhat">
-                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-                <Setter Property="FontSize" Value="11"/>
-                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-            </Style>
-            <Style Selector="TextBlock.lanewhere">
-                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
-                <Setter Property="FontSize" Value="9.5"/>
-                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                <Setter Property="Margin" Value="0,1,0,7"/>
-            </Style>
-            <Style Selector="TextBlock.laneclock">
-                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-                <Setter Property="FontSize" Value="19"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
-                <Setter Property="VerticalAlignment" Value="Bottom"/>
-            </Style>
-            <!-- A lane without room for its buttons drops to the mockup's 758 px lane: no third line, a 15 px clock. -->
-            <Style Selector="Border.lane.slim TextBlock.laneclock">
-                <Setter Property="FontSize" Value="15"/>
-                <Setter Property="Margin" Value="0,4,0,0"/>
-            </Style>
-            <Style Selector="Border.lane.slim TextBlock.lanewhere">
-                <Setter Property="IsVisible" Value="False"/>
-            </Style>
-            <Style Selector="Border.lane.slim TextBlock.lanewhat">
-                <Setter Property="FontSize" Value="10"/>
-            </Style>
-            <Style Selector="Border.lane.slim TextBlock.lanename">
-                <Setter Property="FontSize" Value="11"/>
-            </Style>
-            <Style Selector="Border.lane.warn TextBlock.laneclock">
-                <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
-            </Style>
-            <Style Selector="Border.lane.idle TextBlock.laneclock">
-                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
-            </Style>
-            <Style Selector="Border.lane Button.pick">
+            <Style Selector="Border.statuscard Button.pick">
                 <Setter Property="Padding" Value="7,3"/>
                 <Setter Property="FontSize" Value="9.5"/>
                 <Setter Property="Margin" Value="4,0,0,0"/>
@@ -797,7 +727,9 @@
                                Text="One lane per character — a character counts for at most one active fleet. A pilot in none keeps their lane."/>
                 </Grid>
 
-                <!-- Lanes: cards, as many per row as fit at 236 px, filling the width (ET-108's grid). -->
+                <!-- Lanes: cards, as many per row as fit at 236 px, filling the width (ET-108's grid). The card
+                     itself (Border.statuscard and friends) is the app-level style shared with Runs' running band —
+                     see Themes/EveUtils.axaml (ET-200). -->
                 <ItemsControl x:Name="LaneList" ItemsSource="{Binding Lanes}" IsVisible="{Binding IsLaneBand}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -806,29 +738,29 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vf:FleetLaneViewModel">
-                            <Border Classes="lane" Classes.idle="{Binding IsIdle}" Classes.warn="{Binding IsElsewhereActive}"
+                            <Border Classes="statuscard" Classes.idle="{Binding IsIdle}" Classes.warn="{Binding IsElsewhereActive}"
                                     Classes.slim="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).LaneIsSlim}">
                                 <Border.ContextMenu>
                                     <ContextMenu ItemsSource="{Binding MenuItems}"
                                                  ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>
                                 </Border.ContextMenu>
                                 <Grid ColumnDefinitions="Auto,*">
-                                    <Border Grid.Column="0" Classes="laneedge" Classes.idle="{Binding IsIdle}"
+                                    <Border Grid.Column="0" Classes="statuscardedge" Classes.idle="{Binding IsIdle}"
                                             Classes.warn="{Binding IsElsewhereActive}"/>
                                     <StackPanel Grid.Column="1">
                                         <StackPanel Orientation="Horizontal" Spacing="7">
-                                            <TextBlock Classes="lanename" Text="{Binding CharacterName}"/>
+                                            <TextBlock Classes="statuscardname" Text="{Binding CharacterName}"/>
                                             <Border Classes="chip" Classes.ok="{Binding IsRoleOk}" Classes.warn="{Binding IsRoleWarn}"
                                                     Classes.dim="{Binding IsRoleDim}" IsVisible="{Binding ShowRoleChip}">
                                                 <TextBlock Text="{Binding RoleChipText}"/>
                                             </Border>
                                         </StackPanel>
-                                        <TextBlock Classes="lanewhat" Margin="0,2,0,0">
+                                        <TextBlock Classes="statuscardwhat" Margin="0,2,0,0">
                                             <Run Text="{Binding FleetText}"/><Run Text="{Binding FleetOriginText}" Foreground="{StaticResource TextDimBrush}"/>
                                         </TextBlock>
-                                        <TextBlock Classes="lanewhere" Text="{Binding WhereText}"/>
+                                        <TextBlock Classes="statuscardwhere" Text="{Binding WhereText}"/>
                                         <Grid ColumnDefinitions="*,Auto">
-                                            <TextBlock Grid.Column="0" Classes="laneclock" Text="{Binding ClockText}"/>
+                                            <TextBlock Grid.Column="0" Classes="statuscardclock" Text="{Binding ClockText}"/>
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom"
                                                         IsVisible="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).ShowLaneButtons}">
                                                 <Button Classes="pick" Classes.accent="{Binding PrimaryIsAccent}"

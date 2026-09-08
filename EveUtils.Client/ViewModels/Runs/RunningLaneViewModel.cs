@@ -1,7 +1,10 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Imaging;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Runs.Dtos;
 
@@ -39,6 +42,27 @@ public sealed partial class RunningLaneViewModel(Character character, Func<Runni
     [ObservableProperty] private string _clockText = "--:--:--";
 
     [ObservableProperty] private string _actionText = "START";
+
+    /// <summary>The pilot's ESI portrait for the card's hex — same source and pattern as the fleet roster leaf and
+    /// the character picker (ET-184): reuse the existing portrait route rather than a new one. Null until loaded or
+    /// when images are off/offline, so the hex falls back to the initial glyph below.</summary>
+    [ObservableProperty] private Bitmap? _portrait;
+
+    public bool HasPortrait => Portrait is not null;
+    partial void OnPortraitChanged(Bitmap? value) => OnPropertyChanged(nameof(HasPortrait));
+
+    /// <summary>First letter of the name, shown in the hex when no portrait render is available — the same fallback
+    /// as every other hex in the app, so "no ESI link", "images off" and "still loading" all read the same way
+    /// instead of one of them looking like a broken image.</summary>
+    public string Initial => string.IsNullOrEmpty(CharacterText) ? "?" : CharacterText[..1].ToUpperInvariant();
+
+    /// <summary>Loads the ESI portrait best-effort (opt-in image setting); a failure leaves the glyph fallback.</summary>
+    public async Task LoadPortraitAsync(ICharacterPortraitProvider portraits, CancellationToken cancellationToken = default)
+    {
+        if (Character.EsiCharacterId is not > 0)
+            return;
+        Portrait = await portraits.GetPortraitAsync(Character.EsiCharacterId.Value, 64, cancellationToken);
+    }
 
     public void Attach(RunningRunDto? run, DateTime nowUtc)
     {

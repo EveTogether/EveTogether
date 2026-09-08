@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
+using EveUtils.Client.Imaging;
 using EveUtils.Client.Messaging;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Runs;
@@ -82,6 +83,13 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         LanesEmptyText = Lanes.Count == 0
             ? "No character is linked yet, so there is no lane to run one on."
             : null;
+
+        // Best-effort, fire-and-forget per lane — same pattern as a fleet roster leaf (FleetsViewModel) and the
+        // character picker (ET-184): the hex shows the glyph fallback until the render lands, rather than the whole
+        // screen waiting on a network call for a portrait that ET-200 only asks to reuse, not to gate on.
+        if (services.GetService<ICharacterPortraitProvider>() is { } portraits)
+            foreach (RunningLaneViewModel lane in Lanes)
+                _ = lane.LoadPortraitAsync(portraits);
 
         // A run finished elsewhere while this screen was already open used to sit unseen until the RUNS entry was
         // reopened, since nothing here ever heard about it (ET-189) — this is the same "screen open, event fired"
