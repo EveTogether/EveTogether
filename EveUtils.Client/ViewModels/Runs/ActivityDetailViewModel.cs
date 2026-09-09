@@ -63,6 +63,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     public ObservableCollection<ActivityRewardRowViewModel> RewardRows { get; } = [];
     public ObservableCollection<ActivityEnemyRowViewModel> EnemyRows { get; } = [];
     public ObservableCollection<ActivityRunRowViewModel> RunRows { get; } = [];
+    public ObservableCollection<ActivityBountyRowViewModel> BountyRows { get; } = [];
     public ObservableCollection<ActivityLootCaptureRowViewModel> LootCaptureRows { get; } = [];
 
     [ObservableProperty] private string _siteText = string.Empty;
@@ -70,6 +71,17 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     [ObservableProperty] private string _durationText = string.Empty;
     [ObservableProperty] private string _startText = string.Empty;
     [ObservableProperty] private string _endText = string.Empty;
+
+    /// <summary>Everything this activity earned, as prominent as <see cref="DurationText"/> (ET-210 review finding,
+    /// 2026-09-09: the total was there, split over three sections, and never once shown as one figure). What it
+    /// adds: <see cref="ActivityDetailDto.BountyIsk"/> (actual gamelog payouts), <see cref="ActivityDetailDto.LootIskNet"/>
+    /// when there is a priced figure to add, and every ISK-denominated reward form (<c>Isk</c>, <c>BonusIsk</c>,
+    /// <c>FixedPayout</c>, <c>Escrow</c>) — deliberately NOT <c>RunParameterKey.Bounty</c>, a mission's own stated
+    /// reward line, so a mission that also logged gamelog kills never counts the same ISK twice under two names.
+    /// LP and Evermarks have no ISK rate to convert against and are left out, the same rule the REWARDS section
+    /// already applies to them.</summary>
+    [ObservableProperty] private bool _hasTotalIsk;
+    [ObservableProperty] private string _totalIskText = string.Empty;
 
     /// <summary>Whether the duration above it was measured or typed. The corrected moments overwrite the start and
     /// stop, so the figure itself can no longer say which of the two it is (ET-98).</summary>
@@ -180,6 +192,8 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         _ApplyLoot(detail, unitPrices);
         _ApplyEscalation(detail, escalationJumpsText, escalationJumpsEmptyText);
         _ApplySectionsPerKind(detail.ActivityKind);
+        // After Bounty, Loot and Rewards: the total is built from what each of them just settled.
+        _ApplyTotalIsk(detail);
     }
 
     private void _ApplyHeader(ActivityDetailDto detail)
@@ -282,6 +296,31 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         Bounty.HeaderSummary = HasBountyFigures
             ? $"{BountyText} · {detail.BountyEntries.Count} payouts"
             : "nothing measured";
+
+        // One row per character, the same breakdown the FLEET section already gives for participation (ET-210
+        // review finding, 2026-09-09) — largest share first, so the reader sees who brought in the most without
+        // having to scan every row.
+        BountyRows.Clear();
+        Dictionary<Guid, long> characterByRun = detail.Runs.ToDictionary(run => run.RunId, run => run.CharacterId);
+        foreach (IGrouping<long, RunBountyEntryDto> group in detail.BountyEntries
+                     .Where(entry => characterByRun.ContainsKey(entry.RunId))
+                     .GroupBy(entry => characterByRun[entry.RunId])
+                     .OrderByDescending(group => group.Sum(entry => entry.Isk)))
+            BountyRows.Add(new ActivityBountyRowViewModel(group.Key, group.Sum(entry => entry.Isk), _nameOf));
+    }
+
+    private void _ApplyTotalIsk(ActivityDetailDto detail)
+    {
+        decimal rewardIsk = detail.Parameters
+            .Where(parameter => parameter.ParameterKey is RunParameterKey.Isk or RunParameterKey.BonusIsk
+                or RunParameterKey.FixedPayout or RunParameterKey.Escrow)
+            .Sum(parameter => parameter.Amount.GetValueOrDefault());
+        decimal total = detail.BountyIsk + detail.LootIskNet.GetValueOrDefault() + rewardIsk;
+
+        // Never a zero for a figure nobody offered: an activity with no bounty, no priced loot and no ISK-form
+        // reward has nothing to show here, same rule every other figure on this screen follows.
+        HasTotalIsk = detail.BountyIsk > 0 || detail.LootIskNet is not null || rewardIsk > 0;
+        TotalIskText = $"{total:N2} ISK";
     }
 
     private void _ApplyLoot(ActivityDetailDto detail, IReadOnlyDictionary<int, decimal> unitPrices)

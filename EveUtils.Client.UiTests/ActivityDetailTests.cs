@@ -394,4 +394,82 @@ public sealed class ActivityDetailTests
         Assert.True(result.IsSuccess, result.IsSuccess ? "" : result.Messages[0].Text);
         return result.Value!;
     }
+
+    // ── The bounty breakdown and the total ISK figure (ET-210 review, 2026-09-09) ─────────────────────
+
+    /// <summary>
+    /// Counter-proof: Jithran saved a five-character activity and its BOUNTY section showed one combined figure
+    /// with no way to tell who brought in what — even though <c>RunBountyEntry</c> always carried a run id, and one
+    /// run is one character. Red against the pre-fix code, where <c>BountyRows</c> did not exist at all.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task BountyRows_OneRowPerCharacter_WithTheGroupsTotal()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunWithBountyAsync(dispatcher, 90000001, "HF-7QK2", 675_000m, cancellationToken);
+        await _SaveSiteRunWithBountyAsync(dispatcher, 90000002, "HF-7QK2", 675_000m, cancellationToken);
+        await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(
+            await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
+
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IMarketPriceRepository>(),
+            nameOf: id => id == 90000001 ? "Jithran" : "Second Pilot");
+        await viewModel.LoadAsync(cancellationToken);
+
+        Assert.Equal(2, viewModel.BountyRows.Count);
+        Assert.Contains(viewModel.BountyRows, r => r.CharacterText == "Jithran" && r.IskText == $"{675_000m:N2} ISK");
+        Assert.Contains(viewModel.BountyRows, r => r.CharacterText == "Second Pilot" && r.IskText == $"{675_000m:N2} ISK");
+        // The total is set apart from the rows, not folded into one of them, but it still has to equal their sum.
+        Assert.Equal($"{1_350_000m:N2} ISK", viewModel.BountyText);
+    }
+
+    /// <summary>
+    /// Counter-proof: the total ISK figure must add bounty, priced loot net and ISK-form rewards together, but
+    /// never a mission's own stated "Bounty" reward line on top of the real gamelog bounty it already counted —
+    /// summing both would be the same ISK counted twice under two different names. Red against a naive
+    /// <c>Parameters.Sum(p => p.Amount)</c> that does not carve that key back out.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TotalIsk_AddsBountyAndIskRewards_ButNeverTheMissionsOwnBountyLineTwice()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+            [], [new RunBountyEntryInput { OccurredAtUtc = StartedAtUtc.AddMinutes(3), Isk = 1_000_000m }], [],
+            [
+                new RunParameterInput { ParameterKey = RunParameterKey.BonusIsk, TypedValue = "500000", Amount = 500_000m, ObservedAtUtc = StartedAtUtc },
+                // A mission's own stated reward line, same key name as the real bounty above but a different thing
+                // entirely — must not be added into the total a second time.
+                new RunParameterInput { ParameterKey = RunParameterKey.Bounty, TypedValue = "1000000", Amount = 1_000_000m, ObservedAtUtc = StartedAtUtc },
+                // Not ISK at all — must not be added in as if it were.
+                new RunParameterInput { ParameterKey = RunParameterKey.LoyaltyPoints, TypedValue = "1,240", Amount = 1_240m, ObservedAtUtc = StartedAtUtc }
+            ]), cancellationToken);
+        await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(
+            await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
+
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IMarketPriceRepository>());
+        await viewModel.LoadAsync(cancellationToken);
+
+        Assert.True(viewModel.HasTotalIsk);
+        // 1,000,000 bounty + 500,000 BonusIsk — not the 1,000,000 "mission Bounty" line, not the 1,240 LP.
+        Assert.Equal($"{1_500_000m:N2} ISK", viewModel.TotalIskText);
+    }
+
+    private static async Task _SaveSiteRunWithBountyAsync(ICqrsDispatcher dispatcher, long characterId,
+        string? groupCode, decimal bountyIsk, CancellationToken cancellationToken)
+    {
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142, groupCode), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+            [], [new RunBountyEntryInput { OccurredAtUtc = StartedAtUtc.AddMinutes(3), Isk = bountyIsk }], [], []),
+            cancellationToken);
+    }
 }

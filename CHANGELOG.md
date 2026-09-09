@@ -30,6 +30,13 @@ taken from the matching `## vX.Y.Z` section below.
   when more than one of your characters has a run going at the same time — each is tracked and shown
   on its own. A character's own bounty meter (shown live on the FLEET panel, and saved with the run)
   now starts fresh with each new run instead of carrying over an earlier one's payout.
+- A saved activity's **LOCATION and FIT are no longer lost** — both were visible on the run window
+  while it was going, and now actually make it into the saved record instead of reading "not recorded"
+  and "not recognised" afterwards.
+- A saved activity's **BOUNTY** now shows who brought in what, one line per character, with a clearly
+  set-apart total underneath — instead of one combined figure with no breakdown. The activity detail
+  screen also shows a prominent **total ISK** figure right beside the duration, adding up bounty,
+  priced loot and any ISK-form reward the run earned.
 - **A crash that used to vanish without a trace is now written to the log the moment it happens.** A
   fault on a background thread, or a task nobody was still awaiting, escaped every other net EVE
   Together already had and left nothing behind — there was no way to tell what went wrong, or that

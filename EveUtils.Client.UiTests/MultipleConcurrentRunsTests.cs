@@ -1,19 +1,25 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.Platform;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fittings.Entities;
+using EveUtils.Shared.Modules.Fittings.Repositories;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
+using EveUtils.Shared.Modules.Sde;
+using EveUtils.Shared.Modules.Sde.Dtos;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using IDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
@@ -215,5 +221,108 @@ public class MultipleConcurrentRunsTests
         ActivityOverviewRowDto row = Assert.Single(overview.Value!);
         Assert.Equal(2, row.ParticipantCount); // this harness runs two characters; Jithran's own report had five
         Assert.Equal(1_350_000m, row.BountyIsk);
+    }
+
+    // ── The saved activity carries everyone's location and fit, not just the acting character's (ET-210 review, 2026-09-09) ──
+
+    private const int SecondCharacterId = 90000002;
+
+    /// <summary>
+    /// Counter-proof, red against the pre-fix code: Jithran's saved five-character activity showed LOCATION "not
+    /// recorded" and FIT "not recognised", even though the live window showed both for every toon during the run.
+    /// Measured, not assumed to be the same shape as the bounty bug: <c>Run.SolarSystemId</c> was never set for a
+    /// SITE run AT ALL (Mission is the only kind <c>StartRunCommand</c> ever resolved a system id for) — this is not
+    /// a "siblings get nothing" gap, it is nobody ever asking the question. Fit, by contrast, genuinely is the same
+    /// shape as the bounty bug: <see cref="IShipFitDetectionService.GetReading"/> already answers per character, but
+    /// nothing ever called it for anyone.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task SavedActivity_CarriesLocationAndFitForEveryParticipant()
+    {
+        List<LocalFitting> fittings =
+        [
+            new() { Id = 101, Name = "Hall of Sacrifice 2x", ShipTypeId = 17715 },
+            new() { Id = 102, Name = "Hall of Sacrifice 2x (alt)", ShipTypeId = 17715 }
+        ];
+        Dictionary<int, ShipFitDetectionReading> readings = new()
+        {
+            [ActivityWindowHarness.CharacterId] = _Observed(new ShipFitCandidate(101, fittings[0].Name, 17715)),
+            [SecondCharacterId] = _Observed(new ShipFitCandidate(102, fittings[1].Name, 17715))
+        };
+
+        using var harness = await ActivityWindowHarness.CreateAsync(configure: services =>
+        {
+            services.AddSingleton<ILocalCharacterPresence>(new ActivityWindowHarness.StubPresence(
+                inGame: true, ActivityWindowHarness.CharacterId, SecondCharacterId));
+            services.AddSingleton<ISdeAccessor>(new FakeSdeAccessor().AddSolarSystem(new SdeSolarSystem(30004552, "Mabnen", 0.4)));
+            services.AddSingleton<IShipFitDetectionService>(new FakePerCharacterFitDetection(readings));
+            services.AddSingleton<IFittingRepository>(new FakeFittingRepository(fittings));
+        });
+        await harness.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character("Second Pilot", SecondCharacterId));
+
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        // What the LOCATION section already had live, from the gamelog — the same source _ResolveSolarSystemId
+        // reads (ActivityWindowViewModel.SolarSystem). Set through the gamelog service itself, not directly on the
+        // window: a plain property assignment is wiped by the very first Refresh() tick, same as it is live.
+        harness.Services.GetRequiredService<GamelogClientService>()
+            .SetLocation(ActivityWindowHarness.CharacterName, "Mabnen", DateTime.UtcNow);
+        harness.Dialogs.OnPickCharacters = (_, options) =>
+            Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId)]);
+        await model.StartRunCommand.ExecuteAsync(null);
+        await ActivityWindowHarness.WaitUntil(() => model.Participants.Count == 2);
+
+        model.StopRun(DateTime.UtcNow);
+        await ActivityWindowHarness.WaitUntil(() => model.RunState == ActivityRunState.Stopped);
+        await model.SaveRunCommand.ExecuteAsync(null);
+
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Result<IReadOnlyList<ActivityOverviewRowDto>> overview = await dispatcher.Query(new GetActivityOverviewQuery());
+        ActivityOverviewRowDto row = Assert.Single(overview.Value!);
+        Assert.Equal(30004552, row.SolarSystemId);
+
+        Result<ActivityDetailDto> detail = await dispatcher.Query(new GetActivityDetailQuery(row.ActivitySummaryId));
+        Assert.True(detail.IsSuccess);
+        Assert.Equal(30004552, detail.Value!.SolarSystemId);
+        Assert.Equal(2, detail.Value.Runs.Count);
+        Assert.All(detail.Value.Runs, run => Assert.NotNull(run.FitNameSnapshot));
+        // Each toon's OWN fit, not one name copied onto both rows.
+        Assert.Equal(["Hall of Sacrifice 2x", "Hall of Sacrifice 2x (alt)"],
+            detail.Value.Runs.Select(run => run.FitNameSnapshot).OrderBy(name => name));
+    }
+
+    private static ShipFitDetectionReading _Observed(ShipFitCandidate selected) =>
+        new(ShipFitDetectionState.Observed, DateTimeOffset.UtcNow, selected.ShipTypeId, 1, "Ship",
+            selected, ShipFitMatchReason.Manual, [selected]);
+
+    private sealed class FakePerCharacterFitDetection(IReadOnlyDictionary<int, ShipFitDetectionReading> readings)
+        : IShipFitDetectionService
+    {
+        public ShipFitDetectionReading GetReading(int characterId) =>
+            readings.TryGetValue(characterId, out ShipFitDetectionReading? reading) ? reading : ShipFitDetectionReading.Unobserved;
+
+        public Task<Result> SetManualFitAsync(int characterId, int? fittingId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Result.Success());
+
+        public Task<Result> DetachFitAsync(int characterId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Result.Success());
+    }
+
+    private sealed class FakeFittingRepository(IReadOnlyList<LocalFitting> fittings) : IFittingRepository
+    {
+        public Task UpsertAsync(LocalFitting fitting, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<LocalFitting>> ListAllAsync(CancellationToken cancellationToken = default) => Task.FromResult(fittings);
+        public Task<IReadOnlyList<LocalFitting>> ListByOwnerAsync(string ownerId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<LocalFitting>>([.. fittings.Where(fitting => fitting.OwnerId == ownerId)]);
+        public Task<LocalFitting?> FindByIdAsync(int id, CancellationToken cancellationToken = default) =>
+            Task.FromResult(fittings.FirstOrDefault(fitting => fitting.Id == id));
+        public Task<LocalFitting?> FindByEsiIdAsync(string ownerId, int esiFittingId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(fittings.FirstOrDefault(fitting => fitting.OwnerId == ownerId && fitting.EsiFittingId == esiFittingId));
+        public Task<LocalFitting?> FindByContentHashAsync(string contentHash, CancellationToken cancellationToken = default) =>
+            Task.FromResult(fittings.FirstOrDefault(fitting => fitting.ContentHash == contentHash));
+        public Task BackfillContentHashesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task UpdateMetadataAsync(int id, string name, string? description, string? tags, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task RemoveByEsiIdAsync(string ownerId, int esiFittingId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task RemoveByIdAsync(int id, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

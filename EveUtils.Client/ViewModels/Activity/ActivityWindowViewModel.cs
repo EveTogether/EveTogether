@@ -577,8 +577,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             await dispatcher.Send(new LinkRunToGroupCodeCommand(runId, GroupCode, FleetId));
         }
 
+        int? solarSystemId = _ResolveSolarSystemId();
         foreach (Character character in candidates.Where(candidate => picked.Contains(candidate.EsiCharacterId!.Value)))
-            await _SendAdditionalStartRunCommandAsync(dispatcher, character.EsiCharacterId!.Value, AnchorUtc ?? DateTime.UtcNow);
+            await _SendAdditionalStartRunCommandAsync(
+                dispatcher, character.EsiCharacterId!.Value, AnchorUtc ?? DateTime.UtcNow, solarSystemId);
 
         await _RefreshParticipantsAsync();
     }
@@ -1852,13 +1854,17 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         using var scope = _services.CreateScope();
         CqrsDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
+        // The whole group is on the one site, so its system is resolved once here rather than per character — a
+        // sibling started in the same breath has no fleet-metric location sample of its own yet to resolve from.
+        int? solarSystemId = _ResolveSolarSystemId();
+        (string? fitContentHash, string? fitNameSnapshot) = await _ResolveFitAsync(characterId);
         Result<Guid> started = await dispatcher.Send(
             new StartRunCommand(characterId, Kind, startedAtUtc,
                 // No type id: a signature names a dungeon, and the catalogue's DungeonId is not the type id this
                 // column holds. The name travels instead.
                 SiteTypeId: 0,
                 SiteName: SignatureName,
-                SolarSystemId: Kind == ActivityKind.Mission ? MissionSolarSystemId : null,
+                SolarSystemId: solarSystemId,
                 GroupCode: GroupCode,
                 Signature: SignatureId,
                 FleetId: FleetId,
@@ -1866,6 +1872,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 // own run may control it without commanding anybody, and answering "am I the boss" is the
                 // authority's own job rather than something reassembled here (ET-147, ET-152).
                 IsFleetCommander: Authority.IsFleetCommander,
+                FitContentHash: fitContentHash,
+                FitNameSnapshot: fitNameSnapshot,
                 SolarSystemName: SolarSystem,
                 // This window's own start button is the clipboard/signature path — the site comes from what the
                 // pilot pasted, not from a catalogue pick (ET-163).
@@ -1905,7 +1913,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (_additionalCharacters.Count > 0)
         {
             foreach ((int Id, string Name) extra in _additionalCharacters)
-                await _SendAdditionalStartRunCommandAsync(dispatcher, extra.Id, startedAtUtc);
+                await _SendAdditionalStartRunCommandAsync(dispatcher, extra.Id, startedAtUtc, solarSystemId);
             _additionalCharacters = [];
         }
 
@@ -1917,16 +1925,24 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <summary>Start a run for a character riding along on this window's own start (ET-210) — same site, same
     /// group code, never the fleet commander (only the acting character ever is). Best-effort: one extra character
     /// failing to register is reported and does not undo the run this window itself already has.</summary>
-    private async Task _SendAdditionalStartRunCommandAsync(CqrsDispatcher dispatcher, long characterId, DateTime startedAtUtc)
+    private async Task _SendAdditionalStartRunCommandAsync(
+        CqrsDispatcher dispatcher, long characterId, DateTime startedAtUtc, int? solarSystemId)
     {
+        // Fit is genuinely per pilot — each toon flies its own ship — so unlike the site's system this is read
+        // fresh for this specific character, not carried over from the one that started the group (ET-210 review
+        // finding, 2026-09-25: a sibling's saved activity showed "fit not recognised" even though every toon's own
+        // fit was visible and shared live, because nothing here ever asked for it).
+        (string? fitContentHash, string? fitNameSnapshot) = await _ResolveFitAsync(checked((int)characterId));
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, Kind, startedAtUtc,
             SiteTypeId: 0,
             SiteName: SignatureName,
-            SolarSystemId: Kind == ActivityKind.Mission ? MissionSolarSystemId : null,
+            SolarSystemId: solarSystemId,
             GroupCode: GroupCode,
             Signature: SignatureId,
             FleetId: FleetId,
             IsFleetCommander: false,
+            FitContentHash: fitContentHash,
+            FitNameSnapshot: fitNameSnapshot,
             SolarSystemName: SolarSystem,
             Origin: EveUtils.Shared.Modules.Runs.Enums.RunOrigin.Clipboard,
             SiteTypeSource: Kind switch
@@ -1943,6 +1959,33 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             _services.GetService<IToastService>()?.Show("A character was not added to this run",
                 started.Messages.FirstOrDefault()?.Text ?? "Could not start this run for one of the picked characters.",
                 ToastKind.Error);
+    }
+
+    /// <summary>The site's own solar system, resolved once for the whole group starting on it (ET-210 review
+    /// finding, 2026-09-25): a mission already carries its system id from the SDE agent lookup, but a site or an
+    /// abyssal run only ever had the LOCATION section's own live name (<see cref="SolarSystem"/>) — never turned
+    /// into the numeric id <c>Run.SolarSystemId</c> actually stores, so a saved activity's LOCATION always read
+    /// "not recorded" regardless of how many characters it held. Null when the SDE has no exact match, same as an
+    /// unmatched site name reads elsewhere in this window (ET-178).</summary>
+    private int? _ResolveSolarSystemId() => Kind == ActivityKind.Mission
+        ? MissionSolarSystemId
+        : SolarSystem is { Length: > 0 } name
+            ? _services.GetService<ISdeAccessor>()?.FindSolarSystemByName(name)?.SolarSystemId
+            : null;
+
+    /// <summary>What ET-101's own detection already knows for this specific character, turned into what
+    /// <c>StartRunCommand</c> stores — <see cref="IShipFitDetectionService"/> answers per character, not only for
+    /// the acting one, so a sibling's own fit is exactly as reachable as the acting character's always was; nothing
+    /// here previously asked it the question at all.</summary>
+    private async Task<(string? ContentHash, string? NameSnapshot)> _ResolveFitAsync(int characterId)
+    {
+        if (_services.GetService<IShipFitDetectionService>()?.GetReading(characterId).SelectedFit is not { } selected)
+            return (null, null);
+
+        string? contentHash = _services.GetService<IFittingRepository>() is { } fittings
+            ? (await fittings.FindByIdAsync(selected.Id))?.ContentHash
+            : null;
+        return (contentHash, selected.Name);
     }
 
     /// <summary>Stop the clock. The stored run stays open until SAVE or DISCARD: loot is copied out of the wreck
