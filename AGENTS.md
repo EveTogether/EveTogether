@@ -253,7 +253,27 @@ If a project has no tests, flag it and record the decision in the project — do
 
 ---
 
-## 10. Commits
+## 10. Changelog
+
+`CHANGELOG.md`'s `## [Unreleased]` section is release notes, not a commit log — it feeds the GitHub
+Release page verbatim (`.github/workflows/release.yml` cuts the matching `## vX.Y.Z` section out and
+publishes it as-is). Whoever merges a **user-visible** change adds a line to `[Unreleased]`, in the
+same voice as what's already there: written for a player, explaining what changed and why it matters
+to them — not a rephrased commit message, no class/file names, no ticket numbers in the prose.
+
+**Add an entry for:** anything a user of the desktop client or the self-hosted server can see, click,
+notice behaving differently, or newly do — a new feature, a changed workflow, a fixed bug, a new setting.
+
+**Skip the entry for:** internal refactors, tests, dependency bumps, CI/build changes, documentation,
+and anything else that leaves no observable difference for a user. When in doubt, ask: would a player
+notice this without reading the diff? No → no entry.
+
+A PR check may warn when it changes code without touching `CHANGELOG.md` — it is advisory only and
+never blocks; the call on whether an entry is warranted stays with whoever merges.
+
+---
+
+## 11. Commits
 
 - **Entirely English** — both the type and the description.
 - **No summary line at the top.** The body is `- {type}: {description}` bullets; each touched part gets its
@@ -272,7 +292,7 @@ Example:
 
 ---
 
-## 11. Build & test
+## 12. Build & test
 
 ```
 make build      # dotnet build the solution
@@ -289,7 +309,7 @@ scripts in `scripts/`); each migration change must build cleanly across all stac
 
 ---
 
-## 12. Licence & attribution
+## 13. Licence & attribution
 
 - The project is licensed under **GNU AGPL-3.0** (`LICENSE`). The network clause means anyone who offers a
   modified server over a network must share the modified source.

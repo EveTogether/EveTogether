@@ -1,0 +1,30 @@
+name: Changelog reminder
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  changelog-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # Advisory only, per AGENTS.md §10 — CHANGELOG.md's [Unreleased] section is release notes,
+      # not a commit log, and only a human can tell a user-visible change from an internal one. This
+      # can't make that call, so it only ever warns and always exits 0: a PR that skips the changelog
+      # on purpose (a refactor, a test, a dependency bump) is never blocked on saying so.
+      - name: Warn if code changed without a CHANGELOG entry
+        run: |
+          CHANGED=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}")
+
+          if echo "$CHANGED" | grep -q '^CHANGELOG\.md$'; then
+            exit 0
+          fi
+
+          if echo "$CHANGED" | grep -Ev '(\.Tests?/|\.UiTests/|\.md$|^\.github/|^scripts/)' | grep -Eq '\.(cs|axaml)$'; then
+            echo "::warning::This PR changes code but not CHANGELOG.md. If the change is user-visible, add a line to [Unreleased] (see AGENTS.md §10). Internal cleanup, tests and dependency bumps don't need one."
+          fi
