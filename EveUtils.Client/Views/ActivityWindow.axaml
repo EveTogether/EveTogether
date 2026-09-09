@@ -428,9 +428,14 @@
             </Grid>
         </Border>
 
-        <!-- ══ The character column ══ (ET-164) which of my toons this window is on. Docked before the clock so it
-             runs the full height beside it, and every row is the same template: the pilot without an ESI link is
-             one of the six and not a branch around them. -->
+        <!-- ══ The character column ══ (ET-164) which of my toons this window is on, and — since ET-210 — the
+             switcher between several of them that all have a run going at once: clicking a toon with its own run
+             re-points the whole window (loot, bounty, everything) at that run (ET-130 deel 3 review finding,
+             2026-09-09). The chip in the header above is the OTHER control on the same data and does a different
+             job: it manages who is IN the group, before or during a run, while this column switches which of the
+             group's own runs is currently on screen. Docked before the clock so it runs the full height beside it,
+             and every row is the same template: the pilot without an ESI link is one of the six and not a branch
+             around them. -->
         <Border DockPanel.Dock="Left" Classes="charcolumn" IsVisible="{Binding HasRunCharacters}">
             <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                 <ItemsControl x:Name="RunCharacterColumn" ItemsSource="{Binding RunCharacters}">
@@ -525,8 +530,13 @@
                          off. The hint under the clock says what KEEP drops, which four letters cannot. -->
                     <Button x:Name="KeepRunButton" Grid.Column="0" Classes="pick run" Content="KEEP"
                             IsVisible="{Binding IsKeepRunButtonVisible}" Command="{Binding KeepRunCommand}"/>
-                    <Button x:Name="SaveRunButton" Grid.Column="2" Classes="pick run" Content="SAVE"
-                            IsVisible="{Binding IsSaveButtonVisible}" Command="{Binding SaveRunCommand}"/>
+                    <!-- SAVING… (ET-210 review finding, 2026-09-09): a group save can run several SaveRunCommands
+                         in a row, and pressing this and seeing nothing happen for seconds is worse than a plain
+                         wait — the button disables itself and says so, like SettingsBackupsViewModel.IsBusy does
+                         for its own long copy. -->
+                    <Button x:Name="SaveRunButton" Grid.Column="2" Classes="pick run" Content="{Binding SaveButtonText}"
+                            IsVisible="{Binding IsSaveButtonVisible}" IsEnabled="{Binding !IsSaving}"
+                            Command="{Binding SaveRunCommand}"/>
                     <!-- Discarding ends the run on every member's machine, so it confirms first (see the command). -->
                     <Button x:Name="DiscardRunButton" Grid.Column="3" Classes="pick run danger" Content="DISCARD"
                             IsVisible="{Binding IsDiscardButtonVisible}" Command="{Binding DiscardRunCommand}"/>

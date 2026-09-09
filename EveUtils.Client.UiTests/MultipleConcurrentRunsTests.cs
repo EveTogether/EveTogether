@@ -3,10 +3,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Fleet;
+using EveUtils.Client.Gamelog;
 using EveUtils.Client.Platform;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -165,5 +168,52 @@ public class MultipleConcurrentRunsTests
             "the acting character's run was left Running");
         Assert.False((await dispatcher.Query(new GetRunningRunQuery(90000002))).IsSuccess,
             "the second character's run was left Running");
+    }
+
+    // ── The saved activity carries everyone's bounty, not just the acting character's (ET-210 review, 2026-09-09) ──
+
+    /// <summary>
+    /// Counter-proof, red against the pre-fix code: Jithran saved a five-character activity and its detail screen
+    /// showed one 286,875 ISK bounty line where five were flown — the other four participants' bounty was simply
+    /// missing, and the runs-overview row and the day total (which sum <c>ActivitySummary.BountyIsk</c>, itself
+    /// correctly summed over every run in the group) both showed that same undercounted figure. The window only
+    /// ever watches the ACTING character's gamelog directly; a sibling's own bounty has to come from
+    /// <c>GamelogClientService.GetFleetRunBounty</c> or SAVE has nothing to write for them at all.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task SavedActivity_CarriesBountyForEveryParticipant_NotJustTheActingCharacter()
+    {
+        const long fleetId = 900;
+        using var harness = await _TwoCharacters();
+        harness.Services.GetRequiredService<IFleetParticipation>().Set(
+        [
+            new FleetParticipant(ActivityWindowHarness.CharacterId, fleetId, ClientOnly: true),
+            new FleetParticipant(90000002, fleetId, ClientOnly: true)
+        ]);
+        var gamelog = harness.Services.GetRequiredService<GamelogClientService>();
+        gamelog.MapCharacter(90000002, "Second Pilot");
+
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        harness.Dialogs.OnPickCharacters = (_, options) =>
+            Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId)]);
+        await model.StartRunCommand.ExecuteAsync(null);
+        await ActivityWindowHarness.WaitUntil(() => model.Participants.Count == 2 && model.FleetId == fleetId);
+
+        // The acting character's own kill — captured the way it always was, through this window's gamelog watch.
+        await gamelog.AddBountyAsync(ActivityWindowHarness.CharacterName, new BountyEvent(DateTime.UtcNow, 675_000));
+        // The second character's own kill — this window never watches their gamelog directly; only
+        // GamelogClientService's own per-run tally (GetFleetRunBounty) knows about it.
+        await gamelog.AddBountyAsync("Second Pilot", new BountyEvent(DateTime.UtcNow, 675_000));
+
+        model.StopRun(DateTime.UtcNow);
+        await ActivityWindowHarness.WaitUntil(() => model.RunState == ActivityRunState.Stopped);
+        await model.SaveRunCommand.ExecuteAsync(null);
+
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Result<IReadOnlyList<ActivityOverviewRowDto>> overview = await dispatcher.Query(new GetActivityOverviewQuery());
+        Assert.True(overview.IsSuccess);
+        ActivityOverviewRowDto row = Assert.Single(overview.Value!);
+        Assert.Equal(2, row.ParticipantCount); // this harness runs two characters; Jithran's own report had five
+        Assert.Equal(1_350_000m, row.BountyIsk);
     }
 }

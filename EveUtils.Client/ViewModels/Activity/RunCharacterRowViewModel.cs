@@ -68,8 +68,10 @@ public sealed partial class RunCharacterRowViewModel : ObservableObject
     /// one: a light portrait eats a coloured ring, and a 7px dot on its own is not findable across the screen.</summary>
     public bool HasAttentionDot => Attention is not RunCharacterAttention.None;
 
-    /// <summary>This character has a run on the clock. A character without one stays in the column and dims —
-    /// ring and portrait together, so it reads as resting and not as a state of its own.</summary>
+    /// <summary>This character has a run on the clock — its own row in the store, found fresh every tick
+    /// (<c>GetRunningRunsQuery</c>), not just whichever one is currently acting (ET-130/ET-210: several of a
+    /// pilot's own toons can each have a run going at once). A character without one stays in the column and
+    /// dims — ring and portrait together, so it reads as resting and not as a state of its own.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsResting))]
     [NotifyPropertyChangedFor(nameof(Tooltip))]
@@ -77,14 +79,19 @@ public sealed partial class RunCharacterRowViewModel : ObservableObject
 
     public bool IsResting => !HasRunningRun;
 
+    /// <summary>The run this character has on the clock, if any — what clicking this row switches the window to.
+    /// Null exactly when <see cref="HasRunningRun"/> is false.</summary>
+    [ObservableProperty] private Guid? _runId;
+
     /// <summary>The run this window is showing.</summary>
     [ObservableProperty] private bool _isSelected;
 
-    public string Tooltip => (IsEsiLinked, HasRunningRun) switch
+    public string Tooltip => (IsEsiLinked, HasRunningRun, IsSelected) switch
     {
-        (false, _) => $"{Name} — not linked to ESI, so there is no portrait for this pilot",
-        (true, false) => $"{Name} — no run on the clock; START files one under this character",
-        (true, true) => Name
+        (false, _, _) => $"{Name} — not linked to ESI, so there is no portrait for this pilot",
+        (true, false, _) => $"{Name} — no run on the clock; START files one under this character",
+        (true, true, true) => Name,
+        (true, true, false) => $"{Name} — click to switch this window to their run"
     };
 
     /// <summary>Fetches the ESI render best-effort. An unlinked character is skipped outright: it has no id to ask

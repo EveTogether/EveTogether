@@ -17,13 +17,19 @@ taken from the matching `## vX.Y.Z` section below.
 - **Starting a run now lets you register it for more than one of your own characters at once.** If
   several of your EVE clients are open, the "whose run is this?" question at START now lets you tick
   more than one — useful when multiboxing the same site on several toons. Each ticked character gets
-  its own run, and the activity window's character chip is now clickable: it shows every character a
-  run covers, and clicking it lets you change who a not-yet-started run is filed under, or bring
-  another of your flying characters into one that is already going. STOP and SAVE apply to the whole
-  group of characters together, so one click ends the run for all of them at once.
+  its own run, sharing one group. The activity window's character column now switches between the
+  group's own runs — click a toon to bring up their loot, bounty and everything else, so you can
+  register loot against the right character instead of only ever the one you started with. The header
+  chip does the other half: it shows every character the run covers, and clicking it lets you change
+  who a not-yet-started run is filed under, or bring another flying character into one that is already
+  going. STOP and SAVE apply to the whole group of characters together, so one click ends the run — and
+  saves everyone's own bounty, not just the character you started it on — for all of them at once.
+  Saving a multi-character run is also markedly faster than it was, and the SAVE button now shows when
+  it is working instead of appearing to do nothing.
 - Reopening the activity window, or a clipboard copy naming a running site, no longer gets confused
   when more than one of your characters has a run going at the same time — each is tracked and shown
-  on its own.
+  on its own. A character's own bounty meter (shown live on the FLEET panel, and saved with the run)
+  now starts fresh with each new run instead of carrying over an earlier one's payout.
 - **A crash that used to vanish without a trace is now written to the log the moment it happens.** A
   fault on a background thread, or a task nobody was still awaiting, escaped every other net EVE
   Together already had and left nothing behind — there was no way to tell what went wrong, or that

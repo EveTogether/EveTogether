@@ -25,4 +25,10 @@ public sealed record SaveRunCommand(
     DateTime? AutoSavedAtUtc = null,
     /// <summary>How the run was looted. Normally already on the row — the chip writes it the moment it is pressed —
     /// and set here for the one case that never had a row to write to: a strategy chosen before START.</summary>
-    RunLootStrategy? LootStrategy = null) : ICommand<Result>;
+    RunLootStrategy? LootStrategy = null,
+    /// <summary>Rebuild <c>ActivitySummary</c> after this save — a full scan of every saved run, priced against the
+    /// market cache (ET-210 review finding, 2026-09-09: saving a five-character group ran that scan five times in a
+    /// row, once per row saved, and took five to six seconds for it). False lets a caller saving several runs in one
+    /// group run the scan once, after the last one, instead of once per row — the caller's job, since only it knows
+    /// when the group is done.</summary>
+    bool RebuildSummaries = true) : ICommand<Result>;
