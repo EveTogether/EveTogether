@@ -300,6 +300,17 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(FleetNoticeText))]
     private string? _unstartedFleetName;
 
+    /// <summary>
+    /// How many forming fleets <see cref="_UnstartedFleetNameAsync"/> found when it was more than one. Set instead of
+    /// <see cref="UnstartedFleetName"/>, never beside it: naming one of several would be a guess dressed up as an
+    /// answer — the mistake ET-201 exists to undo (PR #223, withdrawn) — so the notice states the count and nobody's
+    /// name.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFleetNotice))]
+    [NotifyPropertyChangedFor(nameof(FleetNoticeText))]
+    private int _formingFleetCount;
+
     [ObservableProperty] private string? _groupCode;
 
     // The group code is what makes a run shared, so the verdict has to be redone when it arrives. It arrives after
@@ -680,17 +691,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// fleets in play <i>and</i> no fleet id came out of it — with a fleet settled there is nothing to report, and
     /// with one fleet there was never a question.
     /// </summary>
-    public bool HasFleetNotice => FleetId is null && (FleetsInPlay > 1 || UnstartedFleetName is not null);
+    public bool HasFleetNotice =>
+        FleetId is null && (FleetsInPlay > 1 || UnstartedFleetName is not null || FormingFleetCount > 1);
 
     /// <summary>Says which way the run went and what would settle it. Not a warning about a fault: two started
     /// fleets is a legitimate state, and the window's job is to make the consequence visible rather than to refuse
     /// it.</summary>
     public string FleetNoticeText => UnstartedFleetName is { } fleetName
         ? $"'{fleetName}' has not been started, so this run is not shared. Start it to file this run under it."
-        : $"You are in {FleetsInPlay} started fleets at once, so this run belongs to none of them and is not shared. "
-          // "Stop", not "conclude" (ET-166 follow-up): concluding is one-way, so a pilot who took this advice
-          // literally threw away the recurring fleet it was only asking them to step out of for tonight.
-          + "Stop the ones you are not flying to file it under one.";
+        : FormingFleetCount > 1
+            ? $"{FormingFleetCount} fleets are forming and none has started yet, so this run is not shared."
+            : $"You are in {FleetsInPlay} started fleets at once, so this run belongs to none of them and is not shared. "
+              // "Stop", not "conclude" (ET-166 follow-up): concluding is one-way, so a pilot who took this advice
+              // literally threw away the recurring fleet it was only asking them to step out of for tonight.
+              + "Stop the ones you are not flying to file it under one.";
 
     // ── The character column ────────────────────────────────────────────────────────────────────────
 
@@ -1849,6 +1863,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (FleetsInPlay > 0)
         {
             UnstartedFleetName = null;
+            FormingFleetCount = 0;
             _unstartedFleetNoticeCheckedAtUtc = null;
         }
         // A text hint can wait briefly: checking every clock tick wastes work, but checking only once hides new fleets.
@@ -1856,19 +1871,31 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                                                 || nowUtc - _unstartedFleetNoticeCheckedAtUtc >= UnstartedFleetNoticeRefreshInterval))
         {
             _unstartedFleetNoticeCheckedAtUtc = nowUtc;
-            UnstartedFleetName = await _UnstartedFleetNameAsync();
+            (UnstartedFleetName, FormingFleetCount) = await _UnstartedFleetNameAsync();
         }
     }
 
-    private async Task<string?> _UnstartedFleetNameAsync()
+    /// <summary>
+    /// The forming fleets for this run's character, from the same repository call this sweep already made — no
+    /// second call, just a different read of what came back (ET-201 AC-5). One forming fleet is
+    /// named; more than one is only ever counted, never narrowed to "the most likely one" by recency or headcount —
+    /// that guess is what PR #223 tried to ban and ET-201 exists to finish (AC-1/AC-2).
+    /// </summary>
+    private async Task<(string? Name, int FormingCount)> _UnstartedFleetNameAsync()
     {
         if (_runCharacterId is not { } characterId)
-            return null;
+            return (null, 0);
 
         using IServiceScope scope = _services.CreateScope();
         IReadOnlyList<FleetEntity> fleets = await scope.ServiceProvider.GetRequiredService<IFleetRepository>()
             .ListForParticipantAsync(characterId);
-        return fleets.FirstOrDefault(fleet => fleet.Activation == FleetActivation.Forming)?.Name;
+        List<FleetEntity> forming = fleets.Where(fleet => fleet.Activation == FleetActivation.Forming).ToList();
+        return forming switch
+        {
+            [{ } only] => (only.Name, 1),
+            { Count: > 1 } several => (null, several.Count),
+            _ => (null, 0)
+        };
     }
 
     /// <summary>
