@@ -14,6 +14,52 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- **A crash that used to vanish without a trace is now written to the log the moment it happens.** A
+  fault on a background thread, or a task nobody was still awaiting, escaped every other net EVE
+  Together already had and left nothing behind — there was no way to tell what went wrong, or that
+  anything had gone wrong at all. Such a fault is now caught at the last possible point and written to
+  the same `app-errors.jsonl` the app already keeps, with the exception's type, message and stack trace
+  — never clipboard content or other player data. A line is also written on an ordinary, clean
+  shutdown, so a crash can be told apart from the app simply being closed.
+- **The runs overview's currently-running section now shows a proper card per character, not a bare
+  line of text.** Each card carries the character's portrait, name and state, a live elapsed-time
+  clock, and a START or OPEN button, laid out in the same fill-width card grid Fleets and Fits already
+  use — so several people running at once are shown side by side rather than stacked as text, and the
+  grid reflows to fewer columns as the window narrows.
+- **An abyssal run now recognises which room you're in.** Room detection reads the same enemy
+  observations the abyssal countdown already watches, so the app can tell rooms apart within one run
+  instead of treating the whole pocket as a single undivided space.
+- A fleet member's assigned fit now shows its **max velocity, warp speed and align time**, instead of
+  one figure on the row and the rest hidden behind a tooltip — all three sit on the row where you can
+  see them at a glance.
+- **A site escalation can now be registered and recognised.** Typing an escalation's name into the
+  activity window registers it against the SDE's site catalogue, and two escalations that share a name
+  are told apart in the picker instead of looking like duplicates of each other.
+- Days in the runs overview can now be **collapsed**, and a collapsed day keeps its summary visible —
+  so a long history no longer forces you to scroll past everything you've already looked at.
+- A fleet's HUD now has a **RepIn** metric, showing the incoming reps a member receives, alongside the
+  existing outgoing figures.
+- **A finished fleet's row now carries a RUNS button, and the stop dialog says how many runs the fleet
+  completed.** A fleet's runs are now found through the group code recorded against it, so a fleet
+  that has already stood down is no longer the one place its own history disappears from.
+- **A standing-by fleet can now be signed off without leaving the roster.** Signing off used to mean
+  leaving, which threw away your place on a fleet you only meant to step back from for a moment.
+- **Loot can now also be captured as the difference between two cargo-hold snapshots, alongside the
+  existing clipboard method.** Take a snapshot before you loot and another after, and EVE Together
+  works out what changed — useful wherever copying the cargo window to the clipboard isn't practical.
+- **An abyssal run can be registered by hand again.** There is no site and no running clock until you
+  actually go in, and coming back out stops it, so starting one no longer depends on a signature you
+  happened to copy first.
+- **The loot strategy is now stored on the run itself, so a site you cherry-picked stays
+  distinguishable from one you cleared out completely**, instead of that distinction being lost the
+  moment the run was saved.
+- **The runs screen now has a tab per source — Local, plus one for each server you're coupled to — and
+  an activity can be published to one.** An activity is shown under the server it was published to,
+  the same tab layout the fit browser already uses; with no server coupled there is no strip of tabs
+  at all.
+- **A run you stopped but never finished now shows up in its own band on the runs screen and can be
+  finished from there**, instead of disappearing the moment its window closed with no record of it
+  left anywhere in the app.
 - **A fleet can now be stopped instead of only being finished.** Stopping puts a fleet back to standing by with its
   roster, its doctrine and its name intact, so the op you fly every Wednesday is started again next week rather than
   recreated from scratch. Its members are released the moment it stops and can fly in another fleet straight away.
@@ -150,6 +196,36 @@ taken from the matching `## vX.Y.Z` section below.
   `docker-compose.yml` already references instead of building it from source.
 
 ### Changed
+- **The runs overview now opens with only the most recent day expanded**, all earlier days collapsed
+  but still showing their summary — it used to open with every day expanded, which meant scrolling
+  past your entire history to see today. This applies per tab, so Local and every coupled server keep
+  their own most recent day open.
+- Copying a clean loot capture — nothing worth noting in it — no longer raises a toast. Only a capture
+  with something to say about it interrupts you now.
+- **An escalation's destination system now resolves instantly from EVE Together's own SDE, with its
+  jump count filled in from ESI only once the activity window is actually open**, instead of the whole
+  thing waiting on an ESI round-trip before it could show anything at all.
+- **The character picker is redesigned with hexagonal portraits and a visible selection mark**,
+  matching the character portraits used elsewhere, and grows to fit its content instead of being
+  cropped. A character you can't select shows a plain-English reason instead of just sitting there
+  disabled, and the fleet invite window picks up the same portraits.
+- The ESI-invite hint text is clearer about what it's telling you, and its checkbox no longer sits
+  there disabled and inert for a state that never did anything.
+- **When two things try to start the same run at once, the fleet commander is asked and the member
+  switches over themselves**, instead of one silently overwriting the other.
+- The LOOT section has been restyled, and its in/out toggle button is now the text itself rather than
+  a separate button beside it.
+- **The fleet overview has been reworked: fleets are grouped, and a finished fleet is shown for the
+  first time** instead of disappearing the moment it's concluded — with a Delete action in its place,
+  since there's nothing left to disband. The member list and the running-fleet band both scale with
+  the window's width, from a full card down to a single-line row, and your own active fleet now sorts
+  first. A roster past a handful of members collapses behind a "show all N", keeping only the fleet
+  commander, you, and anyone needing attention visible by default; a member who shares nothing with
+  you now says why instead of looking simply offline. Per-row actions — Join, Request, Leave, Manage
+  and the rest — sit directly on the row when there's room, and move into an overflow menu when there
+  isn't, never both and never neither.
+- **A wormhole is no longer mistaken for a site, and copying a signature over a run that's already
+  going now asks first** instead of quietly replacing it.
 - **What kind of activity a run is is now carried from where it started, instead of being worked out from "is this
   an abyssal run".** Everything that was not an abyssal run was filed as a combat site, so a mission was stored as a
   site and came back as one — and there was no way to record any other kind at all. Each kind now stands on its own
@@ -220,6 +296,46 @@ taken from the matching `## vX.Y.Z` section below.
   pending review.
 
 ### Fixed
+- **The character picker now always opens on top of the EVE client, and remembers where you last moved
+  it**, reopening in the same spot instead of re-centering every time — falling back to centered only
+  if that spot is no longer on a connected monitor.
+- **The runs overview's running-runs cards no longer go blank and claim "nothing running" while a run
+  is actively logging.** A leftover run stuck in a running state — after an earlier crash, say — or
+  two people running at once, used to make the whole display give up; now each character's card is
+  looked up on its own, and the cards update the instant a run starts or stops instead of only when
+  the screen is reopened.
+- **An expanded day in the runs overview is readable again.** Its heading fell through to the Fluent
+  theme's default accent-blue highlight, which put dim, barely-visible text on a bright blue
+  background; it now keeps EVE Together's own colours.
+- **Today's ISK total on the dashboard now counts every saved run, not only the ones still being
+  tracked live.** A run you'd already saved and closed used to drop out of the day's total.
+- A clipboard copy is now attributed to whichever of your characters actually has the EVE window in
+  focus, so multiboxing several clients no longer risks crediting a copy to the wrong one.
+- The runs overview now refreshes live the moment a run is saved anywhere else in the app, instead of
+  only showing it after the screen is reopened.
+- The fleet edit dialog is now sized to its content, so its date pickers can no longer overlap its
+  action buttons.
+- **The activity window's list of who was on a run, and the ISK payout split between them, actually
+  work now.** Both were silently reading from a list that was never filled in, so every run looked
+  like it had nobody on it and the payout split divided across nobody at all.
+- **Copying an ambiguous scan no longer risks opening a run for the wrong character, or none at all.**
+  It's asked with the same candidate list RUN START already uses, before anything opens.
+- **Loot capture now prefers the run belonging to the activity window you actually have open**, instead
+  of guessing at a store-wide "current run" that could point at a different one entirely.
+- A run that stays solo because your pilot is in a fleet that hasn't started yet now says so, instead
+  of quietly going solo with no explanation.
+- The notice that a fleet hasn't started yet no longer holds up its command controls — the two now
+  refresh independently, so the controls are usable the moment they're ready.
+- **A server that keeps refusing to refresh a token is no longer hammered with retries.** Failures are
+  now recorded, and a token EVE itself has revoked stops being retried at all, while the backoff for
+  an ordinary transient ESI fault continues as before.
+- ADD TOON's character picker no longer offers a character who is already in the fleet.
+- A click in the multi-select character picker now adds or removes just that row, instead of replacing
+  your whole selection with it.
+- The under-strength warning no longer falls below the fold — it sits in front of the dialog again,
+  where you actually see it.
+- Every fleet screen now has a way out, and three tabs open on the same fleet can be told apart instead
+  of looking identical in the taskbar.
 - **The LOOT section shows your run's loot again, instead of saying it cannot tell which run you mean.** It used to
   ask the app which run was going rather than reading the run the window was already on, so every run you had stopped
   without saving or discarding it went on competing for the answer. With eleven of those left standing, the section
