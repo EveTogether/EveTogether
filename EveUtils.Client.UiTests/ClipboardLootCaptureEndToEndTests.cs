@@ -221,6 +221,71 @@ public sealed class ClipboardLootCaptureEndToEndTests
         owner.Close();
     }
 
+    /// <summary>
+    /// ET-196: the app vanished without a trace right after loot was copied out of a site while a run was going.
+    /// The suspect named in that ticket is <see cref="ClipboardLootCapture.LastStore"/> — copies chain their store
+    /// tasks onto whatever is still pending instead of replacing it, so a copy landing while an earlier one is still
+    /// being saved shares that field. This fires many distinct copies back to back, never waiting for one save to
+    /// finish before the next lands, to find out whether that chaining drops a capture, throws, or corrupts state.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task RapidBackToBackCopies_WhileAnEarlierStoreIsStillPending_AllLandWithoutLossOrException()
+    {
+        var source = new FakeClipboardChangeSource();
+        using var instance = TestClientInstance.Create(services =>
+        {
+            services.AddSingleton<ISdeAccessor>(FakeSdeAccessor.WithSampleFit());
+            services.AddSingleton<IToastService>(new RecordingToastService());
+            services.AddSingleton<IClipboardChangeSource>(source);
+            services.AddSingleton<ILocalCharacterPresence>(new ActivityWindowHarness.StubPresence(inGame: true, CharacterId));
+        });
+        await instance.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character(CharacterName, CharacterId));
+
+        var dialogs = instance.Services.GetRequiredService<DialogService>();
+        var owner = new Window();
+        owner.Show();
+        dialogs.SetOwner(owner);
+
+        _ = instance.Services.GetRequiredService<ClipboardFitImportOffer>();
+        _ = instance.Services.GetRequiredService<ClipboardSignatureOffer>();
+        var lootCapture = instance.Services.GetRequiredService<ClipboardLootCapture>();
+        _ = instance.Services.GetRequiredService<ClipboardMissionOffer>();
+        var watch = instance.Services.GetRequiredService<ClipboardWatchService>();
+        await watch.SetEnabledAsync(true);
+
+        Copy(source, "AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU");
+        await ActivityWindowHarness.WaitUntil(() => dialogs.ActivityWindow?.DataContext is
+            EveUtils.Client.ViewModels.Activity.ActivityWindowViewModel { RunId: not null });
+        Guid runId = ((EveUtils.Client.ViewModels.Activity.ActivityWindowViewModel)dialogs.ActivityWindow!.DataContext!).RunId!.Value;
+
+        // Twenty distinct copies (varying quantity keeps every fingerprint unique), fired with no wait in between —
+        // each one's OnCapture runs while the previous StoreAndOfferAsync is still awaiting its DB round trip.
+        const int copies = 20;
+        for (var i = 1; i <= copies; i++)
+            Copy(source, $"Rifter\t{i}\r\nDamage Control II\t{i}");
+
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline && !lootCapture.LastStore.IsCompleted)
+        {
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(25);
+        }
+
+        // Throws if the chained task ever faulted — the direct check for "an exception escaped the store path".
+        await lootCapture.LastStore;
+
+        await using ClientDbContext db = await instance.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        RunLootCapture[] captures = await db.Set<RunLootCapture>().Where(c => c.RunId == runId).ToArrayAsync();
+        Assert.Equal(copies, captures.Length);
+
+        var toasts = (RecordingToastService)instance.Services.GetRequiredService<IToastService>();
+        Assert.DoesNotContain(toasts.Toasts, toast => toast.Title == "Loot not recorded");
+
+        owner.Close();
+    }
+
     private static async Task<RunState> _RunStateAsync(TestClientInstance instance, Guid runId)
     {
         await using ClientDbContext db = await instance.Services
