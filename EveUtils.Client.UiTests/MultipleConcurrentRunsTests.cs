@@ -9,6 +9,7 @@ using EveUtils.Client.Fleet;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.Platform;
 using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fittings.Entities;
@@ -272,7 +273,15 @@ public class MultipleConcurrentRunsTests
         // because it tracks every character's own tally independently of which one this window is looking at.
         await gamelog.AddBountyAsync(ActivityWindowHarness.CharacterName, new BountyEvent(DateTime.UtcNow, 337_500));
 
-        // Switch back to the starter, and let the second character log their own kill too.
+        // The second character makes their own kill, on their own gamelog, while their own run is what the column
+        // shows — Jithran's chosen design (round 4): each character's own combat counts towards their own total,
+        // not one shared tally.
+        await gamelog.AddHitAsync("Second Pilot", DamageDirection.Outgoing, 500, "Centii Servant",
+            HitQuality.Hits, DateTime.UtcNow);
+        await ActivityWindowHarness.WaitUntil(() => model.EnemyObservations.Count == 1);
+        model.EnemyObservations[0].Count = 2;
+
+        // Switch back to the starter.
         RunCharacterRowViewModel first = model.RunCharacters.Single(row => row.CharacterId == ActivityWindowHarness.CharacterId);
         model.SelectRunCharacterCommand.Execute(first);
         await ActivityWindowHarness.WaitUntil(() => model.RunId == first.RunId);
@@ -288,10 +297,15 @@ public class MultipleConcurrentRunsTests
         Assert.Equal(2, row.ParticipantCount);
         Assert.Equal(1_350_000m, row.BountyIsk); // not 675,000: the starter's own share must not be missing
 
-        Result<ActivityDetailDto> detail = await dispatcher.Query(new GetActivityDetailQuery(row.ActivitySummaryId));
-        Assert.True(detail.IsSuccess);
-        Assert.Contains(detail.Value!.EnemyObservations,
-            observation => observation.EnemyName == "Centii Servant" && observation.Count == 4);
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            nameOf: id => id == ActivityWindowHarness.CharacterId ? "Starter" : "Second Pilot");
+        await viewModel.LoadAsync();
+
+        // Each character's own hand-typed count, kept over the switch and broken out per character with a total.
+        Assert.Equal(2, viewModel.EnemyCharacterRows.Count);
+        Assert.Contains(viewModel.EnemyCharacterRows, r => r.CharacterText == "Starter" && r.CountText == "4 enemies");
+        Assert.Contains(viewModel.EnemyCharacterRows, r => r.CharacterText == "Second Pilot" && r.CountText == "2 enemies");
+        Assert.Equal("6 enemies", viewModel.EnemyTotalCountText);
     }
 
     // ── The saved activity carries everyone's location and fit, not just the acting character's (ET-210 review, 2026-09-09) ──

@@ -62,6 +62,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
 
     public ObservableCollection<ActivityRewardRowViewModel> RewardRows { get; } = [];
     public ObservableCollection<ActivityEnemyRowViewModel> EnemyRows { get; } = [];
+    public ObservableCollection<ActivityEnemyCharacterRowViewModel> EnemyCharacterRows { get; } = [];
     public ObservableCollection<ActivityRunRowViewModel> RunRows { get; } = [];
     public ObservableCollection<ActivityBountyRowViewModel> BountyRows { get; } = [];
     public ObservableCollection<ActivityLootCaptureRowViewModel> LootCaptureRows { get; } = [];
@@ -111,6 +112,13 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
 
     [ObservableProperty] private string? _rewardsEmptyText;
     [ObservableProperty] private string? _enemiesEmptyText;
+
+    /// <summary>Whether any character logged a counted sighting at all — the same "no figure for nobody" rule
+    /// <see cref="HasBountyFigures"/> follows, so the per-character breakdown and its total do not show a false
+    /// zero (ET-210 review finding, 2026-09-09, round 4).</summary>
+    [ObservableProperty] private bool _hasEnemyFigures;
+    [ObservableProperty] private string _enemyTotalCountText = string.Empty;
+
     [ObservableProperty] private string? _bountyEmptyText;
     [ObservableProperty] private string? _lootEmptyText;
     [ObservableProperty] private string? _escalationEmptyText;
@@ -268,6 +276,22 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
             ? $"{detail.EnemyObservations.Sum(observation => observation.Count)} counted · " +
               $"{detail.EnemyObservations.Select(observation => observation.EnemyTypeId).Distinct().Count()} types"
             : "none counted";
+
+        // One row per character, summed across every type they logged — the same breakdown BOUNTY already gives
+        // (ET-210 review finding, 2026-09-09, round 4: Jithran chose per-character tracking with a group total,
+        // not one shared tally). Largest contribution first, same ordering rule as the bounty breakdown.
+        EnemyCharacterRows.Clear();
+        Dictionary<Guid, long> characterByRun = detail.Runs.ToDictionary(run => run.RunId, run => run.CharacterId);
+        foreach (IGrouping<long, RunEnemyObservationDto> group in detail.EnemyObservations
+                     .Where(observation => characterByRun.ContainsKey(observation.RunId))
+                     .GroupBy(observation => characterByRun[observation.RunId])
+                     .OrderByDescending(group => group.Sum(observation => observation.Count)))
+            EnemyCharacterRows.Add(new ActivityEnemyCharacterRowViewModel(
+                group.Key, group.Sum(observation => observation.Count), _nameOf));
+
+        HasEnemyFigures = EnemyCharacterRows.Count > 0;
+        int total = detail.EnemyObservations.Sum(observation => observation.Count);
+        EnemyTotalCountText = total == 1 ? "1 enemy" : $"{total} enemies";
     }
 
     private void _ApplyFleet(ActivityDetailDto detail)

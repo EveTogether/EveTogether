@@ -427,6 +427,45 @@ public sealed class ActivityDetailTests
     }
 
     /// <summary>
+    /// Counter-proof: Jithran chose per-character enemy tracking with a group total (ET-210 review, round 4) over
+    /// one shared tally. A group where different characters each counted a different enemy must show each
+    /// character's own total, summed across every type they saw, with a group total equal to their sum — the same
+    /// shape as <see cref="BountyRows_OneRowPerCharacter_WithTheGroupsTotal"/>. Red against the pre-fix code, where
+    /// <c>EnemyCharacterRows</c> did not exist at all.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task EnemyCharacterRows_OneRowPerCharacter_WithTheGroupsTotal()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> first = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142, "HF-7QK2"), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(first.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+            [], [], [new RunEnemyObservationInput { Count = 4, EnemyTypeId = 111, EnemyName = "Offertory Sigil", FirstObservedAtUtc = StartedAtUtc, LastObservedAtUtc = StartedAtUtc.AddMinutes(1) }],
+            []), cancellationToken);
+        Result<Guid> second = await dispatcher.Send(new StartRunCommand(90000002, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142, "HF-7QK2"), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(second.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+            [], [], [new RunEnemyObservationInput { Count = 2, EnemyTypeId = 112, EnemyName = "Centii Servant", FirstObservedAtUtc = StartedAtUtc, LastObservedAtUtc = StartedAtUtc.AddMinutes(1) }],
+            []), cancellationToken);
+        await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(
+            await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
+
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IMarketPriceRepository>(),
+            nameOf: id => id == 90000001 ? "Jithran" : "Second Pilot");
+        await viewModel.LoadAsync(cancellationToken);
+
+        Assert.Equal(2, viewModel.EnemyCharacterRows.Count);
+        Assert.Contains(viewModel.EnemyCharacterRows, r => r.CharacterText == "Jithran" && r.CountText == "4 enemies");
+        Assert.Contains(viewModel.EnemyCharacterRows, r => r.CharacterText == "Second Pilot" && r.CountText == "2 enemies");
+        // The by-type list keeps both species; the group total is set apart, not one more row of either list.
+        Assert.Equal("6 enemies", viewModel.EnemyTotalCountText);
+    }
+
+    /// <summary>
     /// Counter-proof: the total ISK figure must add bounty, priced loot net and ISK-form rewards together, but
     /// never a mission's own stated "Bounty" reward line on top of the real gamelog bounty it already counted —
     /// summing both would be the same ISK counted twice under two different names. Red against a naive

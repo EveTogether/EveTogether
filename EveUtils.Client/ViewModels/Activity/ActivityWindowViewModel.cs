@@ -163,7 +163,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private int? _commanderNameId;
     private string? _commanderName;
     private ShipFitDetectionReading? _fitReading;
-    private RunEnemyObservationCollector? _enemyObservations;
+
+    /// <summary>One collector per character in the group, each fed only by that character's own gamelog (ET-210
+    /// review finding, 2026-09-09, round 4: Jithran chose per-character tracking with a group total over one
+    /// shared tally). Keyed on characterId rather than on which run this window is currently showing, so switching
+    /// the column (deel 3) never touches a character's own count — the exact loss round 3 fixed for the single
+    /// collector this replaces, now guaranteed by construction: nothing here is ever reassigned or cleared for one
+    /// character because another one was clicked.</summary>
+    private readonly Dictionary<int, RunEnemyObservationCollector> _enemyObservationsByCharacter = [];
 
     public ActivityWindowViewModel(ActivityKind kind, IServiceProvider services)
     {
@@ -222,7 +229,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// another kind halfway through.</summary>
     public ActivityKind Kind { get; }
 
-    public IReadOnlyList<RunEnemyObservationViewModel> EnemyObservations => _enemyObservations?.Observations ?? [];
+    /// <summary>The acting character's own sightings — whichever run the column is currently showing. Every other
+    /// group member's own collector keeps counting in the background regardless (ET-210 round 4).</summary>
+    public IReadOnlyList<RunEnemyObservationViewModel> EnemyObservations =>
+        _runCharacterId is { } id && _enemyObservationsByCharacter.TryGetValue(id, out RunEnemyObservationCollector? collector)
+            ? collector.Observations
+            : [];
 
     public RunLootViewModel? RunLoot { get; }
 
@@ -1955,9 +1967,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             Parameters: PendingParameters));
 
         if (!started.IsSuccess)
+        {
             _services.GetService<IToastService>()?.Show("A character was not added to this run",
                 started.Messages.FirstOrDefault()?.Text ?? "Could not start this run for one of the picked characters.",
                 ToastKind.Error);
+            return;
+        }
+
+        // Watched from the same instant its own run exists (ET-210 review, round 4) — this character's own gamelog
+        // counts towards the group's enemies from here on, exactly like its bounty and loot already do.
+        _EnsureEnemyObservations(checked((int)characterId));
     }
 
     /// <summary>The site's own solar system, resolved once for the whole group starting on it (ET-210 review
@@ -2366,7 +2385,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             // finding): it scans every saved run in the store and prices its loot, and running that scan once per
             // row — five times for a five-character group — was the whole of the five-to-six-second stall.
             Result result = await dispatcher.Send(new SaveRunCommand(
-                runId, EffectiveStopUtc ?? nowUtc, nowUtc, [], actingBounty, _enemyObservations?.ToInputs() ?? [],
+                runId, EffectiveStopUtc ?? nowUtc, nowUtc, [], actingBounty,
+                _runCharacterId is { } actingId ? _EnemyInputsFor(actingId) : [],
                 _escalationParameters,
                 // Null leaves the row's own start alone; only a hand-corrected start travels.
                 CorrectedStartUtc,
@@ -2392,7 +2412,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                     ? _FleetBountyEntry(gamelog, fleetId, sibling.CharacterId, nowUtc)
                     : [];
                 Result siblingResult = await dispatcher.Send(new SaveRunCommand(
-                    sibling.RunId, EffectiveStopUtc ?? nowUtc, nowUtc, [], siblingBounty, [], [],
+                    sibling.RunId, EffectiveStopUtc ?? nowUtc, nowUtc, [], siblingBounty,
+                    _EnemyInputsFor(sibling.CharacterId), [],
                     LootStrategy: LootStrategy, RebuildSummaries: false));
                 if (!siblingResult.IsSuccess)
                     _services.GetService<IToastService>()?.Show("A run in this group was not saved",
@@ -2908,42 +2929,68 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     // The event fires for damage either way — "250 to Centii Scavenger" and "1 from Centii Servant" alike — and both
     // are the same kind of enemy, so the direction is dropped here rather than carried into the list (ET-115).
+    // Routed straight to that character's OWN collector — each already refuses everyone else's id internally, so
+    // this only ever widens a row's own observed window, never another character's.
     private void _OnCombatObserved(int characterId, string target, DateTime observedAtUtc, DamageDirection direction)
     {
         if (RunState != ActivityRunState.Running)
             return;
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            _enemyObservations?.Record(characterId, target, observedAtUtc));
+            _enemyObservationsByCharacter.GetValueOrDefault(characterId)?.Record(characterId, target, observedAtUtc));
     }
 
+    /// <summary>Give the ACTING character its own tally, if it does not have one yet. Kept as the no-arg entry
+    /// point every existing call site already uses (window start, resume, join, fleet anchor) — each of those is
+    /// about the character this window is acting as, never about a sibling.</summary>
     private void _StartEnemyObservations()
     {
-        if (_enemyObservations is not null)
+        if (_runCharacterId is { } id)
+            _EnsureEnemyObservations(id);
+
+        OnPropertyChanged(nameof(EnemyObservations));
+        _RefreshSummaries();
+    }
+
+    /// <summary>Give ANY character in the group its own tally (ET-210 review finding, 2026-09-09, round 4) — called
+    /// for a sibling the moment its own <c>StartRunCommand</c> is sent, so its gamelog is being watched for enemies
+    /// from the same instant its bounty and loot start counting. A no-op past the first call for a character, same
+    /// as the single collector this replaces was for the acting one.</summary>
+    private void _EnsureEnemyObservations(int characterId)
+    {
+        if (_enemyObservationsByCharacter.ContainsKey(characterId)
+            || _services.GetService<ISdeAccessor>() is not { } sde)
             return;
 
-        ISdeAccessor? sde = _services.GetService<ISdeAccessor>();
-        _enemyObservations = sde is null || _runCharacterId is null ? null
-            : new RunEnemyObservationCollector(_runCharacterId.Value,
-                name => sde.TryGetTypeId(name, out int typeId) ? typeId : null);
-        if (_enemyObservations is not null)
-            // Only the summary: re-announcing the list itself while a count is being typed would rebind the editor
-            // under the cursor. The rows are an ObservableCollection — the list keeps itself up to date.
-            _enemyObservations.Changed += _RefreshSummaries;
-        OnPropertyChanged(nameof(EnemyObservations));
-        _RefreshSummaries();
+        var collector = new RunEnemyObservationCollector(characterId,
+            name => sde.TryGetTypeId(name, out int typeId) ? typeId : null);
+        // Only the summary: re-announcing the list itself while a count is being typed would rebind the editor
+        // under the cursor. The rows are an ObservableCollection — the list keeps itself up to date. Wired for
+        // every character, not just the acting one, so a background sibling's count still moves the group total.
+        collector.Changed += _RefreshSummaries;
+        _enemyObservationsByCharacter[characterId] = collector;
     }
 
-    /// <summary>Let go of the list, once the run it belongs to is committed or thrown away.</summary>
+    /// <summary>Let go of every character's list, once the run it belongs to is committed or thrown away — the
+    /// whole group's, not just the acting character's, since STOP/SAVE/DISCARD already act on the whole group
+    /// (ET-210).</summary>
     private void _EndEnemyObservations()
     {
-        if (_enemyObservations is not null)
-            _enemyObservations.Changed -= _RefreshSummaries;
+        foreach (RunEnemyObservationCollector collector in _enemyObservationsByCharacter.Values)
+            collector.Changed -= _RefreshSummaries;
 
-        _enemyObservations = null;
+        _enemyObservationsByCharacter.Clear();
         OnPropertyChanged(nameof(EnemyObservations));
         _RefreshSummaries();
     }
+
+    /// <summary>What <see cref="SaveRunCommand"/> stores for one character — empty when nobody ever typed a count
+    /// for them, the same "seen, not counted, never stored" rule <see cref="RunEnemyObservationViewModel.IsCounted"/>
+    /// already applies live.</summary>
+    private IReadOnlyList<RunEnemyObservationInput> _EnemyInputsFor(int characterId) =>
+        _enemyObservationsByCharacter.TryGetValue(characterId, out RunEnemyObservationCollector? collector)
+            ? collector.ToInputs()
+            : [];
 
     // ── Internals ───────────────────────────────────────────────────────────────────────────────────
 
