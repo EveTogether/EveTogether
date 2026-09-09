@@ -116,8 +116,7 @@ public static partial class ClipboardMissionParser
 
     private static string LastTabField(string line)
     {
-        var fields = line.Split('\t');
-        return fields[^1].Trim();
+        return line.Split('\t', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)[^1];
     }
 
     private enum RewardBlock { None, Rewards, BonusRewards }

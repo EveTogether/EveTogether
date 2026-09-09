@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,22 +32,11 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public sealed class ClipboardMissionOfferTests
 {
-    /// <summary>Raymond's own clipboard, byte for byte (ET-129/ET-175's only real capture). Only Isk and BonusIsk
-    /// appear in it — there is no second real capture to draw a Loyalty Points or Item reward line from.</summary>
-    private const string MeasuredMissionBlock =
-        "Aralin Jick Objectives\r\n" +
-        "The following objectives must be completed to finish the mission:\r\n" +
-        "\r\n" +
-        "Report to Aralin Jick\r\n" +
-        " \tAgent Location\t0,6 Nishah VII - Moon 5 - Kor-Azor Family Treasury\r\n" +
-        "\r\n" +
-        "Rewards\r\n" +
-        "The following rewards will be yours if you complete this mission:\r\n" +
-        " \t1.000.000 ISK\r\n" +
-        "\r\n" +
-        "Bonus Rewards\r\n" +
-        "The following rewards will be awarded to you as a bonus if you complete the mission within 6 hours:\r\n" +
-        " \t1.610.000 ISK";
+    /// <summary>Raymond's clipboard capture, byte for byte.</summary>
+    private static string MeasuredMissionBlock => _Fixture("mission-aralin-jick.txt");
+
+    public static TheoryData<string> MeasuredMissionWhitespaceVariants => new(MeasuredMissionBlock,
+        MeasuredMissionBlock.Replace("\t", "  ").Replace("  \n", "\n").TrimEnd());
 
     // ET-172 sub 4 AC-1..AC-5, AC-7: the SDE facts measured against build 3492266 in the epic's own grooming —
     // Aralin Jick is agent 3019407, level 4, an EpicArcAgent, at Nishah (system 30005040).
@@ -120,6 +111,33 @@ public sealed class ClipboardMissionOfferTests
         Assert.Contains(parameters, p => p.ParameterKey == RunParameterKey.Item && p.Amount == 3m && p.ItemTypeId == 34);
     }
 
+    [AvaloniaTheory]
+    [MemberData(nameof(MeasuredMissionWhitespaceVariants))]
+    public async Task AMissionCapture_WithWhitespaceVariants_WritesMeasuredRewards(string text)
+    {
+        using var env = await Env.StartAsync();
+        env.Sde.AddAgent(AralinJick);
+        await env.AddCharacterAsync();
+
+        env.Copy(text);
+        Run run = await WaitForRunningMissionAsync(env);
+        await using ClientDbContext db = await env.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        List<RunParameter> parameters = await db.Set<RunParameter>().Where(parameter => parameter.RunId == run.Id).ToListAsync();
+
+        Assert.Collection(parameters.OrderBy(parameter => parameter.ParameterKey),
+            parameter =>
+            {
+                Assert.Equal(RunParameterKey.Isk, parameter.ParameterKey);
+                Assert.Equal(1_000_000m, parameter.Amount);
+            },
+            parameter =>
+            {
+                Assert.Equal(RunParameterKey.BonusIsk, parameter.ParameterKey);
+                Assert.Equal(1_610_000m, parameter.Amount);
+                Assert.Equal(21600, parameter.BonusWindowSeconds);
+            });
+    }
+
     // AC-8 tegenproef: a made-up agent name — the SDE import is a snapshot, and CCP adds agents. A miss must not
     // block the run.
     [AvaloniaFact]
@@ -152,6 +170,17 @@ public sealed class ClipboardMissionOfferTests
         }
 
         throw new Xunit.Sdk.XunitException("no mission run started within the timeout");
+    }
+
+    private static string _Fixture(string name)
+    {
+        DirectoryInfo? directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "EVE-Together.slnx")))
+            directory = directory.Parent;
+
+        return File.ReadAllText(Path.Combine(
+            directory?.FullName ?? throw new InvalidOperationException("the solution root is not above the test binary"),
+            "EveUtils.Client.UiTests", "Fixtures", name));
     }
 
     private sealed class Env : IDisposable
