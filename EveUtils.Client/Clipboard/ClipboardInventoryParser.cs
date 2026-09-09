@@ -216,6 +216,8 @@ public static class ClipboardInventoryParser
         if (value.Length == 0)
             return false;
 
+        value = value.Replace(' ', '.').Replace('\u00A0', '.').Replace('\u202F', '.');
+
         try
         {
             var separator = '\0';
@@ -270,6 +272,11 @@ public static class ClipboardInventoryParser
         if (value.Length == 0)
             return false;
 
+        var hasSpaceGroupSeparator = value.IndexOf(' ') >= 0
+            || value.IndexOf('\u00A0') >= 0
+            || value.IndexOf('\u202F') >= 0;
+        value = value.Replace(' ', '.').Replace('\u00A0', '.').Replace('\u202F', '.');
+
         var comma = value.LastIndexOf(',');
         var dot = value.LastIndexOf('.');
         var decimalIndex = -1;
@@ -296,7 +303,9 @@ public static class ClipboardInventoryParser
                 if (!HasValidGroups(value, decimalIndex))
                     return false;
             }
-            else if (separators > 1 && digitsAfterSeparator == 3 && HasValidGroups(value, value.Length))
+            else if (digitsAfterSeparator == 3
+                && HasValidGroups(value, value.Length)
+                && (separators > 1 || hasSpaceGroupSeparator))
             {
                 decimalIndex = -1;
             }

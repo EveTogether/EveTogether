@@ -35,8 +35,19 @@ public sealed class ClipboardMissionOfferTests
     /// <summary>Raymond's clipboard capture, byte for byte.</summary>
     private static string MeasuredMissionBlock => _Fixture("mission-aralin-jick.txt");
 
-    public static TheoryData<string> MeasuredMissionWhitespaceVariants => new(MeasuredMissionBlock,
-        MeasuredMissionBlock.Replace("\t", "  ").Replace("  \n", "\n").TrimEnd());
+    private static string SpaceSeparatedMissionBlock => MeasuredMissionBlock.Replace("\t", "  ").Replace("  \n", "\n").TrimEnd();
+
+    // Raymond reported the number forms; no clipboard capture of them is retained.
+    public static TheoryData<string, decimal> MeasuredMissionWhitespaceVariants => new()
+    {
+        { MeasuredMissionBlock, 1_000_000m },
+        { SpaceSeparatedMissionBlock, 1_000_000m },
+        { SpaceSeparatedMissionBlock.Replace("1.000.000", "1,000,000"), 1_000_000m },
+        { SpaceSeparatedMissionBlock.Replace("1.000.000", "1 000 000"), 1_000_000m },
+        { SpaceSeparatedMissionBlock.Replace("1.000.000", "1\u00A0000\u00A0000"), 1_000_000m },
+        { SpaceSeparatedMissionBlock.Replace("1.000.000", "1\u202F000\u202F000"), 1_000_000m },
+        { SpaceSeparatedMissionBlock.Replace("1.000.000", "5 000"), 5_000m }
+    };
 
     // ET-172 sub 4 AC-1..AC-5, AC-7: the SDE facts measured against build 3492266 in the epic's own grooming —
     // Aralin Jick is agent 3019407, level 4, an EpicArcAgent, at Nishah (system 30005040).
@@ -113,7 +124,7 @@ public sealed class ClipboardMissionOfferTests
 
     [AvaloniaTheory]
     [MemberData(nameof(MeasuredMissionWhitespaceVariants))]
-    public async Task AMissionCapture_WithWhitespaceVariants_WritesMeasuredRewards(string text)
+    public async Task AMissionCapture_WithWhitespaceVariants_WritesMeasuredRewards(string text, decimal expectedIsk)
     {
         using var env = await Env.StartAsync();
         env.Sde.AddAgent(AralinJick);
@@ -128,7 +139,7 @@ public sealed class ClipboardMissionOfferTests
             parameter =>
             {
                 Assert.Equal(RunParameterKey.Isk, parameter.ParameterKey);
-                Assert.Equal(1_000_000m, parameter.Amount);
+                Assert.Equal(expectedIsk, parameter.Amount);
             },
             parameter =>
             {
