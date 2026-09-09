@@ -182,6 +182,41 @@ public class FleetParticipationActivationTests
         view.Close();
     }
 
+    /// <summary>
+    /// ET-201. Two forming fleets for the same pilot must not pick one and name it — that is the same guess as
+    /// choosing "most likely" by recency or headcount, only silent about which rule it used. The notice states the
+    /// count and nobody's name.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task WithTwoPreparedFleets_TheRunIsNotShared_AndNoNameIsGuessed()
+    {
+        using var instance = TestClientInstance.Create();
+        await _CreateLocalFleetAsync(instance, FleetActivation.Forming);
+        await _CreateLocalFleetAsync(instance, FleetActivation.Forming);
+
+        var window = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
+        await window.LoadAsync();
+        window.StartManualRun(DateTime.UtcNow);
+        await window.RefreshFleetCommandAsync(DateTime.UtcNow);
+
+        Assert.Null(window.FleetId);
+        Assert.True(window.HasFleetNotice);
+        Assert.DoesNotContain("HF", window.FleetNoticeText, StringComparison.Ordinal);
+        Assert.Contains("2", window.FleetNoticeText, StringComparison.Ordinal);
+        Assert.Contains("not shared", window.FleetNoticeText, StringComparison.OrdinalIgnoreCase);
+
+        var view = new ActivityWindow(window) { Width = 560, Height = 620 };
+        view.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        TextBlock notice = view.FindControl<TextBlock>("FleetNoticeText")
+                           ?? throw new InvalidOperationException("the fleet notice was not rendered");
+        Assert.True(notice.IsVisible);
+        Assert.Equal(window.FleetNoticeText, notice.Text);
+        Assert.NotNull(view.CaptureRenderedFrame());
+        view.Close();
+    }
+
     [AvaloniaFact]
     public async Task WithNoFleetMembership_TheRunHasNoFleetNotice()
     {

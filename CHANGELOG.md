@@ -324,6 +324,10 @@ taken from the matching `## vX.Y.Z` section below.
   of guessing at a store-wide "current run" that could point at a different one entirely.
 - A run that stays solo because your pilot is in a fleet that hasn't started yet now says so, instead
   of quietly going solo with no explanation.
+- **The solo notice no longer guesses which of your fleets a run belongs to.** When more than one of
+  your fleets is still forming, it used to name whichever one happened to come back first — possibly
+  the wrong one. It now says how many fleets are forming and names none of them, and still names the
+  fleet when there's only one.
 - The notice that a fleet hasn't started yet no longer holds up its command controls — the two now
   refresh independently, so the controls are usable the moment they're ready.
 - **A server that keeps refusing to refresh a token is no longer hammered with retries.** Failures are
