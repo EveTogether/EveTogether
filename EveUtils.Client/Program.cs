@@ -14,6 +14,7 @@ using EveUtils.Shared.Data;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Esi.Status;
+using EveUtils.Shared.Logging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Velopack;
@@ -32,6 +33,10 @@ sealed class Program
         // arguments Velopack handles here and then exits on. Anything above it runs the EF migration and the
         // background services against the user's data during an installation step.
         VelopackApp.Build().Run();
+
+        // Last-chance net (ET-197): armed as early as possible so a fault anywhere further in startup still
+        // leaves a trace. Writes straight to app-errors.jsonl, bypassing ILogger/DI — see CrashLog for why.
+        CrashLog.Install(ClientServices.DataDirectory());
 
         // The UI is English-only (§2) and the client's formatting helpers already pass InvariantCulture, so pin
         // the process instead of letting numbers follow the OS locale — that is the one element that would
@@ -101,6 +106,34 @@ sealed class Program
                 Console.WriteLine($"CHECK THREW: {ex.GetType().Name}: {ex.Message}");
                 if (ex.InnerException is { } inner)
                     Console.WriteLine($"  inner: {inner.GetType().Name}: {inner.Message}");
+            }
+            return;
+        }
+
+        // Deliberately triggers one of the last-chance crash-log paths (ET-197), to measure what CrashLog
+        // actually writes to app-errors.jsonl rather than just trust that it does. Not part of the GUI path.
+        if (args.FirstOrDefault(a => a.StartsWith("--crash-test=", StringComparison.Ordinal)) is { } crashArg)
+        {
+            switch (crashArg["--crash-test=".Length..])
+            {
+                case "appdomain":
+                    // A bare Thread has nothing else to catch this — it can only ever reach AppDomain.UnhandledException.
+                    new Thread(() => throw new InvalidOperationException("ET-197 deliberate crash-test: appdomain")).Start();
+                    Thread.Sleep(Timeout.Infinite); // the runtime terminates the process once the handler returns
+                    break;
+                case "task":
+                    RunAndDropFaultingTask();
+                    // A Debug-build JIT frame (this one: Main) reports its locals conservatively for its whole
+                    // body, so the dropped Task above would still be considered reachable here — confined to its
+                    // own non-inlined method instead, so its frame (and the only reference) is gone once it returns.
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect();
+                    Console.WriteLine("crash-test=task: done, check app-errors.jsonl");
+                    break;
+                default:
+                    Console.WriteLine($"unknown --crash-test mode: {crashArg}");
+                    break;
             }
             return;
         }
@@ -231,6 +264,21 @@ sealed class Program
         }
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+
+        // Reaching this line means the desktop lifetime ended on its own rather than the process being cut out
+        // from under it — a missing line here after a session is the tell that it wasn't (ET-197 acceptance #4).
+        CrashLog.WriteShutdownMarker("desktop lifetime exited");
+    }
+
+    /// <summary>Runs a task that always faults and waits for it to finish without observing the exception, so a
+    /// caller can force a collection afterwards and prove <see cref="CrashLog"/> catches it via
+    /// <see cref="TaskScheduler.UnobservedTaskException"/> (ET-197). Its own method so the frame — and the only
+    /// reference to the task — is gone once it returns, instead of lingering in Main's until the process exits.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    static void RunAndDropFaultingTask()
+    {
+        var faulting = Task.Run(() => throw new InvalidOperationException("ET-197 deliberate crash-test: task"));
+        while (!faulting.IsCompleted) Thread.Sleep(10);
     }
 
     /// <summary>
