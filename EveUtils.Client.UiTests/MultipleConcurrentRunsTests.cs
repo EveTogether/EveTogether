@@ -308,6 +308,55 @@ public class MultipleConcurrentRunsTests
         Assert.Equal("6 enemies", viewModel.EnemyTotalCountText);
     }
 
+    // ── The live window's own running total covers the group, not just the viewed character (ET-210 review, round 4 follow-up) ──
+
+    /// <summary>
+    /// Counter-proof, red against the pre-fix code (no such property existed at all, so the live window had nothing
+    /// beside ELAPSED but the acting character's own "135,000 ISK — own character" bounty figure — wrong for a
+    /// group, and Jithran's own screenshot showed exactly that during a five-character run). Must include a
+    /// character this window never watches directly (the second pilot's bounty only lives in
+    /// <c>GamelogClientService.GetFleetRunBounty</c>), and must not move when the character column is switched —
+    /// the same kind of confusion the round 3 bounty/enemies fix already cleaned up for the saved screen.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task LiveGroupTotalIsk_CoversTheWholeGroup_AndDoesNotChangeWhenTheColumnIsSwitched()
+    {
+        const long fleetId = 902;
+        using var harness = await _TwoCharacters();
+        harness.Services.GetRequiredService<IFleetParticipation>().Set(
+        [
+            new FleetParticipant(ActivityWindowHarness.CharacterId, fleetId, ClientOnly: true),
+            new FleetParticipant(90000002, fleetId, ClientOnly: true)
+        ]);
+        var gamelog = harness.Services.GetRequiredService<GamelogClientService>();
+        gamelog.MapCharacter(90000002, "Second Pilot");
+
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        harness.Dialogs.OnPickCharacters = (_, options) =>
+            Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId)]);
+        await model.StartRunCommand.ExecuteAsync(null);
+        await ActivityWindowHarness.WaitUntil(() => model.Participants.Count == 2 && model.FleetId == fleetId);
+
+        // The starter's own bounty, watched directly through this window's own gamelog filter.
+        await gamelog.AddBountyAsync(ActivityWindowHarness.CharacterName, new BountyEvent(DateTime.UtcNow, 337_500));
+        await ActivityWindowHarness.WaitUntil(() => model.HasGroupTotalIsk);
+        Assert.Equal("337,500.00 ISK", model.GroupTotalIskText);
+
+        // The second character's own bounty — this window never watches their gamelog directly; only
+        // GamelogClientService's own per-run tally knows about it, and the group total must count it in anyway.
+        await gamelog.AddBountyAsync("Second Pilot", new BountyEvent(DateTime.UtcNow, 675_000));
+        model.Refresh(DateTime.UtcNow); // the tick the live clock runs on every second
+        Assert.Equal("1,012,500.00 ISK", model.GroupTotalIskText);
+
+        // Switching the column to the second character's own run must not move the figure: it is the group's
+        // total, not whichever character the column happens to be showing.
+        RunCharacterRowViewModel second = model.RunCharacters.Single(row => row.CharacterId == 90000002);
+        model.SelectRunCharacterCommand.Execute(second);
+        await ActivityWindowHarness.WaitUntil(() => model.RunId == second.RunId);
+        model.Refresh(DateTime.UtcNow);
+        Assert.Equal("1,012,500.00 ISK", model.GroupTotalIskText);
+    }
+
     // ── The saved activity carries everyone's location and fit, not just the acting character's (ET-210 review, 2026-09-09) ──
 
     private const int SecondCharacterId = 90000002;

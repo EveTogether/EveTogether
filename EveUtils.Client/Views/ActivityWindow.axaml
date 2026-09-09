@@ -499,7 +499,7 @@
         <Border DockPanel.Dock="Top" Padding="14,13,14,15" BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource BorderBrush}">
             <StackPanel Spacing="12">
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="24">
                     <StackPanel Grid.Column="0" Spacing="4">
                         <TextBlock Classes="label" Text="{Binding ClockLabel}"/>
                         <TextBlock x:Name="ClockFigure" Classes="clockfigure"
@@ -507,7 +507,14 @@
                                    Classes.crit="{Binding IsClockCritical}"
                                    Text="{Binding ClockText}"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Bottom">
+                    <!-- The running total for the whole group, the same figure the saved detail screen calls
+                         TOTAL ISK once the run is over (ET-210 review) — never just the character the column
+                         happens to be showing, and unmoved by switching it (see _RefreshGroupTotalIsk). -->
+                    <StackPanel Grid.Column="1" Spacing="4" IsVisible="{Binding HasGroupTotalIsk}">
+                        <TextBlock Classes="label" Text="TOTAL ISK"/>
+                        <TextBlock x:Name="GroupTotalIskFigure" Classes="clockfigure" Text="{Binding GroupTotalIskText}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" VerticalAlignment="Bottom" HorizontalAlignment="Right">
                         <TextBlock Classes="clockmeta">
                             <Run Text="START "/><Run Classes="figure" Text="{Binding StartText}"/>
                         </TextBlock>

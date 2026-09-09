@@ -142,6 +142,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     // RunBountyEntry rows, and what the section adds up meanwhile.
     private readonly List<RunBountyEntryInput> _bounties = [];
 
+    // The group's captured loot, latched rather than re-read off RunLoot every tick: RunLoot follows whichever RunId
+    // the character column currently shows (deel 3), and deel 4 — attributing a capture to the alt that actually
+    // looted it — is still open, so today only one run in the group ever has captures at all. Latching the last
+    // non-null figure means switching the column to a sibling with nothing captured cannot make the group total
+    // drop or blank out; it can only ever grow, same as the real pile of loot in the cargo hold does.
+    private decimal? _groupLootIskSticky;
+
     // The fleet's latest location sample per member, so the envelope is re-taken over the whole fleet on every
     // sample rather than over whichever one happened to arrive last.
     private readonly Dictionary<int, MetricSample> _fleetLocations = [];
@@ -665,6 +672,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [ObservableProperty] private string _startText = string.Empty;
 
     [ObservableProperty] private string _endText = string.Empty;
+
+    /// <summary>The running total beside the clock (ET-210 review: "the same way TOTAL ISK already stands next to
+    /// DURATION on the saved screen, only this one during rather than after"). Covers the WHOLE group, not whichever
+    /// character the column happens to show — Jithran's stated preference, and the only reading that cannot flip the
+    /// figure by switching a column, which is exactly the confusion round 3 of this same review cleaned up for
+    /// bounty and enemies. See <see cref="_RefreshGroupTotalIsk"/> for what is and is not summed into it.</summary>
+    [ObservableProperty] private bool _hasGroupTotalIsk;
+
+    [ObservableProperty] private string _groupTotalIskText = string.Empty;
 
     // ── Correcting the clock after the fact ─────────────────────────────────────────────────────────
     // Manual start and stop are the only source a site run has — there is no site-entry or site-exit line in the
@@ -1684,6 +1700,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         _RefreshLocation(nowUtc);
         _RefreshClock(nowUtc);
+        _RefreshGroupTotalIsk();
         _RefreshSummaries();
         _ = RefreshFleetCommandAsync(nowUtc);
         _ = RefreshFitAsync();
@@ -3033,6 +3050,40 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         ClockText = remaining is { } left ? _Elapsed(left) : NoClock;
         IsClockCritical = remaining is null || remaining <= CriticalAt;
         IsClockWarning = remaining > CriticalAt && remaining <= WarningAt;
+    }
+
+    /// <summary>
+    /// The group's running total, clock-driven exactly like <see cref="_RefreshClock"/> — nothing here does a
+    /// database or network round trip, so ticking every second costs no more than formatting a string does.
+    ///
+    /// Sums the same three things the saved detail screen's TOTAL ISK does (<c>ActivityDetailViewModel._ApplyTotalIsk</c>):
+    /// bounty, captured loot net of what was lost, and ISK-form mission rewards (Isk, BonusIsk, FixedPayout,
+    /// Escrow) — never the mission's own separate <see cref="RunParameterKey.Bounty"/> line, which is a stated
+    /// reward figure rather than an observed payout and would double-count against the gamelog's own bounty.
+    ///
+    /// Bounty is summed per participant through <see cref="GamelogClientService.GetFleetRunBounty"/> — the same
+    /// switch-independent source SAVE already uses for a group — rather than the acting character's own
+    /// <see cref="BountyIsk"/>, which only ever holds whichever character the column was showing while it came in.
+    /// A solo run (nothing to switch away from) keeps using <see cref="BountyIsk"/>, since there is no group to sum.
+    /// </summary>
+    private void _RefreshGroupTotalIsk()
+    {
+        bool isGroup = Participants.Count > 1;
+        long bountyIsk = isGroup && FleetId is { } fleetId && _gamelog is not null
+            ? Participants.Sum(participant => _gamelog.GetFleetRunBounty(fleetId, participant.CharacterId))
+            : BountyIsk;
+
+        if (RunLoot?.NetIsk is { } capturedLootIsk)
+            _groupLootIskSticky = capturedLootIsk;
+
+        decimal rewardIsk = PendingParameters
+            .Where(parameter => parameter.ParameterKey is RunParameterKey.Isk or RunParameterKey.BonusIsk
+                or RunParameterKey.FixedPayout or RunParameterKey.Escrow)
+            .Sum(parameter => parameter.Amount.GetValueOrDefault());
+
+        decimal total = bountyIsk + _groupLootIskSticky.GetValueOrDefault() + rewardIsk;
+        HasGroupTotalIsk = bountyIsk > 0 || _groupLootIskSticky is not null || rewardIsk > 0;
+        GroupTotalIskText = $"{total:N2} ISK";
     }
 
     // The signature arrives after construction, from the object initialiser the toast opens the window with — so the

@@ -37,6 +37,13 @@ taken from the matching `## vX.Y.Z` section below.
   set-apart total underneath — instead of one combined figure with no breakdown. The activity detail
   screen also shows a prominent **total ISK** figure right beside the duration, adding up bounty,
   priced loot and any ISK-form reward the run earned.
+- A saved activity's **ENEMIES** now also breaks down per character, with a group total underneath —
+  each toon keeps its own kill count from its own gamelog, and a hand-typed count survives switching
+  the run window's character column instead of being silently lost.
+- **The run window now shows a running total ISK beside the elapsed-time clock while a run is still
+  going**, the same figure the saved activity's total ISK shows once it's over. For a run covering
+  several of your own characters, this is the whole group's total, not just whichever character the
+  window's character column happens to be showing — and it does not change value when you switch it.
 - **A crash that used to vanish without a trace is now written to the log the moment it happens.** A
   fault on a background thread, or a task nobody was still awaiting, escaped every other net EVE
   Together already had and left nothing behind — there was no way to tell what went wrong, or that
