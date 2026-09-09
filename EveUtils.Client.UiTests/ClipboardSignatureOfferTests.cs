@@ -166,10 +166,10 @@ public sealed class ClipboardSignatureOfferTests
             env.Dialogs.ActivityWindowPilot = (90000001, "First Pilot");
 
         var windowsOpenWhenAsked = -1;
-        env.Dialogs.OnPickCharacter = (_, _) =>
+        env.Dialogs.OnPickCharacters = (_, _) =>
         {
             windowsOpenWhenAsked = env.Dialogs.ShownActivityWindows.Count;
-            return Task.FromResult<int?>(90000002);
+            return Task.FromResult<IReadOnlyList<int>?>([90000002]);
         };
 
         env.Copy(MeasuredHomefrontLine);
@@ -196,8 +196,8 @@ public sealed class ClipboardSignatureOfferTests
 
         var choiceWasShown = false;
         List<string> optionNames = [];
-        var choice = new TaskCompletionSource<int?>();
-        env.Dialogs.OnPickCharacter = (_, options) =>
+        var choice = new TaskCompletionSource<IReadOnlyList<int>?>();
+        env.Dialogs.OnPickCharacters = (_, options) =>
         {
             choiceWasShown = true;
             foreach (CharacterPickOption option in options)

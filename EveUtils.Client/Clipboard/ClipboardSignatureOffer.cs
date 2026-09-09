@@ -120,6 +120,7 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
             List<Character> candidates = flying.Count == 0 ? known : flying;
 
             Character? pilot = candidates is [{ } only] ? only : null;
+            List<Character> additional = [];
             var startsOnArrival = true;
 
             // A window already up that knows its pilot has been asked this once, and copying a site is not a reason
@@ -133,16 +134,26 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
             // first. That was already true before the question moved forward; giving the copy an owner is the open
             // question from the 2026-09-02 analysis and wants the foreground EVE window, not a guess here.
             // ET-138 built that observation — ClipboardCapture.CopiedByCharacter, read at notification time — but
-            // does not spend it here: whether/how a run resolution should lean on it is still open in ET-130.
+            // does not spend it here: whether/how a run resolution should lean on it is still open in ET-130 deel 4.
             bool answeredAlready = _dialogs.ActivityWindowPilot is not null;
 
             if (pilot is null && candidates.Count > 1 && !answeredAlready)
             {
-                int? picked = await _dialogs.PickCharacterAsync("Whose run is this?",
+                // Multi-select (ET-210): flying this site on several of these candidates at once is as real a case
+                // as flying it on one. The first ticked box is the pilot the window is for; the rest ride along as
+                // their own run under the same group code once the window has one to share.
+                IReadOnlyList<int>? picked = await _dialogs.PickCharactersAsync("Whose run is this?",
                     [.. candidates.Select(character => new CharacterPickOption(
                         character.EsiCharacterId!.Value, character.Name,
                         flying.Contains(character) ? "EVE client running" : "local character", Enabled: true))]);
-                pilot = candidates.FirstOrDefault(character => character.EsiCharacterId == picked);
+                pilot = picked is { Count: > 0 }
+                    ? candidates.FirstOrDefault(character => character.EsiCharacterId == picked[0])
+                    : null;
+                if (picked is { Count: > 1 })
+                    additional = [.. picked.Skip(1)
+                        .Select(id => candidates.FirstOrDefault(character => character.EsiCharacterId == id))
+                        .Where(character => character is not null)
+                        .Select(character => character!)];
 
                 // Dismissed is not "throw the copy away": the window still comes up on the site he copied, it just
                 // does not start itself. START is the way back to this same question over the same candidate set.
@@ -162,6 +173,9 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
             // Before the window is shown, so nothing it loads has to ask again.
             if (pilot is { EsiCharacterId: { } characterId })
                 window.UseCharacter(characterId, pilot.Name);
+            if (additional.Count > 0)
+                window.UseAdditionalCharacters(
+                    [.. additional.Select(character => (character.EsiCharacterId!.Value, character.Name))]);
 
             _dialogs.ShowActivityWindow(window, RunWindowOpenTrigger.CopiedFromClipboard);
         }

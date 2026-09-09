@@ -221,7 +221,10 @@ public class ActivityWindowWiringTests
     {
         using var harness = await _ThreeCharacters(inGame: [ActivityWindowHarness.CharacterId, 90000002]);
         ActivityWindowViewModel model = await harness.OpenAsync();
-        harness.Dialogs.OnPickCharacter = (_, options) => Task.FromResult<int?>(options[1].CharacterId);
+        // Multi-select (ET-210): ticking only the second candidate is the single-picked case of that picker, and
+        // must behave exactly like the old single-select answer (AC-3).
+        harness.Dialogs.OnPickCharacters = (_, options) =>
+            Task.FromResult<IReadOnlyList<int>?>([options[1].CharacterId]);
 
         await model.StartRunCommand.ExecuteAsync(null);
 
@@ -239,7 +242,8 @@ public class ActivityWindowWiringTests
     {
         using var harness = await _ThreeCharacters(inGame: []);
         ActivityWindowViewModel model = await harness.OpenAsync();
-        harness.Dialogs.OnPickCharacter = (_, options) => Task.FromResult<int?>(options[0].CharacterId);
+        harness.Dialogs.OnPickCharacters = (_, options) =>
+            Task.FromResult<IReadOnlyList<int>?>([options[0].CharacterId]);
 
         await model.StartRunCommand.ExecuteAsync(null);
 

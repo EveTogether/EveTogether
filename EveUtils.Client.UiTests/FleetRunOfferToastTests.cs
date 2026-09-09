@@ -153,8 +153,8 @@ public sealed class FleetRunOfferToastTests
             await _SeedCharactersAsync(instance);
             // Answers the fleet-run question only. START has a picker of its own ("Whose run is this?") and it must
             // never be reached: the answer given here has to carry into the window, not be asked for a second time.
-            dialogs.OnPickCharacter = (prompt, _) => prompt == "Who is registering this run?"
-                ? Task.FromResult<int?>(Maricadie)
+            dialogs.OnPickCharacters = (prompt, _) => prompt == "Who is registering this run?"
+                ? Task.FromResult<IReadOnlyList<int>?>([Maricadie])
                 : throw new InvalidOperationException($"the window asked again: '{prompt}'");
 
             await _CommanderStartsAsync(bus);
@@ -181,7 +181,7 @@ public sealed class FleetRunOfferToastTests
         using (presenter)
         {
             await _SeedCharactersAsync(instance);
-            dialogs.OnPickCharacter = (_, _) => Task.FromResult<int?>(null);
+            dialogs.OnPickCharacters = (_, _) => Task.FromResult<IReadOnlyList<int>?>(null);
 
             await _CommanderStartsAsync(bus);
             _Accept(toasts);

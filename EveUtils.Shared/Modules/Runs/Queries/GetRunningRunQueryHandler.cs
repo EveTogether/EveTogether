@@ -16,12 +16,15 @@ internal sealed class GetRunningRunQueryHandler(IDbContextFactory<ClientDbContex
     public async Task<Result<RunningRunDto>> Handle(GetRunningRunQuery query, CancellationToken cancellationToken = default)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        (Run? run, int runningCount) = await RunningRunLookup.FindAsync(db, cancellationToken);
+        (Run? run, int runningCount) = await RunningRunLookup.FindAsync(db, cancellationToken,
+            characterId: query.CharacterId);
         if (run is null)
             return Result<RunningRunDto>.Failure(runningCount == 0
                 ? new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound, "No run is running.", "Runs")
-                : new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
-                    $"{runningCount} runs are running, so which one this window is showing is ambiguous.", "Runs"));
+                : new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed, query.CharacterId is null
+                    ? $"{runningCount} runs are running, so which one this window is showing is ambiguous."
+                    : $"{runningCount} runs are running for this character, so which one this window is showing is ambiguous.",
+                    "Runs"));
 
         return Result<RunningRunDto>.Success(new RunningRunDto(
             run.Id, run.CharacterId, run.ActivityKind, run.StartedAtUtc, run.GroupCode, run.SiteName, run.Signature));

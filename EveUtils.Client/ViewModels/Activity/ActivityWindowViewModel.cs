@@ -36,6 +36,7 @@ using EveUtils.Shared.Modules.Runs.Control;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Events;
+using EveUtils.Shared.Modules.Runs.Grouping;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
@@ -513,7 +514,74 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public bool HasActingCharacter => ActingCharacterName is not null;
 
-    public string ActingCharacterText => ActingCharacterName ?? "no character yet";
+    /// <summary>One name, or the group's — as many toons of this pilot can be filed under one run since ET-210, and
+    /// the chip that used to promise "the character this run is filed under" was lying the moment a second row
+    /// joined it (ET-130 deel 3).</summary>
+    public string ActingCharacterText => Participants.Count > 1
+        ? string.Join(" · ", Participants.Select(participant => participant.CharacterName))
+        : ActingCharacterName ?? "no character yet";
+
+    /// <summary>The header chip's click: before START, reopen the same "whose run is this" question the window
+    /// would otherwise only ask once — the multi-select answer (ET-130 deel 3, ET-210) replaces whatever was picked
+    /// before rather than adding to it, since nothing is running yet to add a character TO. Once a run is on the
+    /// clock, clicking it instead offers to bring another of this pilot's flying characters into the group.</summary>
+    [RelayCommand]
+    private async Task PickCharacterAsync()
+    {
+        if (RunId is not null)
+        {
+            await _AddCharacterToRunningGroupAsync();
+            return;
+        }
+
+        _runCharacterId = null;
+        _runCharacterName = null;
+        _namedCharacterId = null;
+        await _ResolveCharacterAsync(mayAsk: true);
+        await _RefreshActingCharacterAsync();
+        _RefreshRunCharacters();
+    }
+
+    /// <summary>Add a flying character nobody has picked yet to this window's already-running group (ET-210), under
+    /// the same GroupCode this run already has or, for a run that was solo until now, one minted for the occasion.
+    /// </summary>
+    private async Task _AddCharacterToRunningGroupAsync()
+    {
+        if (_services.GetService<ICharacterRegistry>() is not { } registry
+            || _services.GetService<IDialogService>() is not { } dialogs
+            || _services.GetService<CqrsDispatcher>() is null)
+            return;
+
+        List<Character> known = (await registry.GetAllAsync())
+            .Where(character => character.EsiCharacterId is not null
+                                 && Participants.All(participant => participant.CharacterId != character.EsiCharacterId))
+            .ToList();
+        List<Character> candidates = InGameCharacters.Among(known, _services.GetService<ILocalCharacterPresence>());
+        if (candidates.Count == 0)
+            return;
+
+        IReadOnlyList<int>? picked = await dialogs.PickCharactersAsync("Add which character(s) to this run?",
+            [.. candidates.Select(character => new CharacterPickOption(
+                character.EsiCharacterId!.Value, character.Name, "EVE client running", Enabled: true))]);
+        if (picked is not { Count: > 0 } || RunId is not { } runId)
+            return;
+
+        using var scope = _services.CreateScope();
+        var dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
+        if (GroupCode is null)
+        {
+            // This run was solo until now, so nothing ties it to the new characters yet — mint a code and relink
+            // this window's OWN row to it first, or the row picking these characters up would drop out of its own
+            // group: GetRunGroupParticipantsQuery matches on GroupCode, not on "started this".
+            GroupCode = RunGroupCode.Create();
+            await dispatcher.Send(new LinkRunToGroupCodeCommand(runId, GroupCode, FleetId));
+        }
+
+        foreach (Character character in candidates.Where(candidate => picked.Contains(candidate.EsiCharacterId!.Value)))
+            await _SendAdditionalStartRunCommandAsync(dispatcher, character.EsiCharacterId!.Value, AnchorUtc ?? DateTime.UtcNow);
+
+        await _RefreshParticipantsAsync();
+    }
 
     /// <summary>The run's one fit (ET-107) — filled from ET-101's detection, or the reason it could not be. Never a
     /// proposal standing beside a choice: a manual pick comes back through the same reading as its own match reason.</summary>
@@ -985,10 +1053,21 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (chosen is null && mayAsk && candidates.Count > 1
             && _services.GetService<IDialogService>() is { } dialogs)
         {
-            int? picked = await dialogs.PickCharacterAsync("Whose run is this?",
+            // Multi-select (ET-210): multiboxing several of these candidates on the same site is exactly as real a
+            // case as flying one, so the same question offers the same answer's plural. One ticked box behaves
+            // exactly like the single picker used to (AC-3) — the rest, if any, ride along as UseAdditionalCharacters
+            // and get their own run under this one's group code once _StoreRunAsync has a row to share it from.
+            IReadOnlyList<int>? picked = await dialogs.PickCharactersAsync("Whose run is this?",
                 [.. candidates.Select(character => new CharacterPickOption(
                     character.EsiCharacterId!.Value, character.Name, "local character", Enabled: true))]);
-            chosen = candidates.FirstOrDefault(character => character.EsiCharacterId == picked);
+            if (picked is { Count: > 0 })
+            {
+                chosen = candidates.FirstOrDefault(character => character.EsiCharacterId == picked[0]);
+                UseAdditionalCharacters([.. picked.Skip(1)
+                    .Select(id => candidates.FirstOrDefault(character => character.EsiCharacterId == id))
+                    .Where(character => character is not null)
+                    .Select(character => (character!.EsiCharacterId!.Value, character.Name))]);
+            }
         }
 
         if (chosen is null)
@@ -998,6 +1077,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _runCharacterName = chosen.Name;
         return true;
     }
+
+    // Characters picked alongside the acting one (ET-210): each gets its own Run row, sharing this window's
+    // GroupCode, once _StoreRunAsync knows one. The window itself still shows one acting pilot — the chip in the
+    // header is what says the run also covers these.
+    private IReadOnlyList<(int Id, string Name)> _additionalCharacters = [];
+
+    /// <summary>Remember characters to also start a run for, alongside the acting one <see cref="UseCharacter"/>
+    /// settles. Set before the window's own run is stored — <see cref="_StoreRunAsync"/> is the only reader.</summary>
+    public void UseAdditionalCharacters(IReadOnlyList<(int Id, string Name)> characters) =>
+        _additionalCharacters = characters;
 
     /// <summary>
     /// Attach to the run the store already has open, rather than opening a second one beside it. Reopening the
@@ -1010,8 +1099,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return false;
 
         using var scope = _services.CreateScope();
+        // Scoped to this pilot's own run once one is settled (ET-130 deel 2) — six toons on six sites are six
+        // independent counts of one, not one count of six. A window that does not know its pilot yet (a fleet-run
+        // offer accepted with no picker shown, because too few clients were up to ask) still falls back to the old
+        // app-wide count: with only one run anywhere, that one is unambiguous regardless of whose it is, and
+        // _AdoptCharacterAsync below learns the pilot FROM the row it adopts.
         Result<RunningRunDto> running = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
-            .Query(new GetRunningRunQuery());
+            .Query(new GetRunningRunQuery(_runCharacterId));
         if (!running.IsSuccess || running.Value is not { } run || run.ActivityKind != Kind)
             return false;
 
@@ -1599,6 +1693,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
         }
 
+        // Tried both before and after resolving a pilot: with one already settled this is the only call that ever
+        // runs, and it is not asked twice. With none settled yet, asking first and then trying again catches a run
+        // this now-known pilot already has open — without it, START would blindly file a second row under the
+        // character just picked, right beside the one they left running (ET-130 deel 2).
         if (await _AdoptRunningRunAsync())
         {
             if (RunLoot is not null)
@@ -1611,6 +1709,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         {
             _services.GetService<IToastService>()?.Show("Run not started",
                 "No local character to file this run under. Add one first.", ToastKind.Error);
+            return;
+        }
+
+        if (await _AdoptRunningRunAsync())
+        {
+            if (RunLoot is not null)
+                await RunLoot.RefreshAsync();
+            Refresh(nowUtc);
             return;
         }
 
@@ -1649,8 +1755,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // than left to whichever tick last landed (ET-147).
         await RefreshFleetCommandAsync(DateTime.UtcNow);
 
+        // Characters picked alongside this one (ET-210) need something to share, and StartRunCommandHandler only
+        // mints one on its own for a fleet's commander — a manual multi-pick outside that case would otherwise
+        // start N unrelated solo runs instead of one group of N.
+        if (_additionalCharacters.Count > 0)
+            GroupCode ??= RunGroupCode.Create();
+
         using var scope = _services.CreateScope();
-        Result<Guid> started = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(
+        CqrsDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
+        Result<Guid> started = await dispatcher.Send(
             new StartRunCommand(characterId, Kind, startedAtUtc,
                 // No type id: a signature names a dungeon, and the catalogue's DungeonId is not the type id this
                 // column holds. The name travels instead.
@@ -1692,14 +1805,55 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // The handler mints the group code when the window had none, and the command only ever gave the run id back
         // — so a commander's own window did not know the code of the run it had just started. With no code it fell
         // through RunControlAuthority's solo branch, and DISCARD, which only announces itself when it has one, never
-        // reached a single other member (Raymond, 2026-09-03).
+        // reached a single other member (Raymond, 2026-09-03). Scoped to this pilot's own run (ET-130 deel 2): an
+        // unscoped read here would trip over any OTHER character's run already going on a different site.
         if (GroupCode is null)
-            GroupCode = (await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
-                .Query(new GetRunningRunQuery())).Value?.GroupCode;
+            GroupCode = (await dispatcher.Query(new GetRunningRunQuery(characterId))).Value?.GroupCode;
+
+        // Every other character picked alongside this one (ET-210) gets its own row under the same GroupCode, filed
+        // as though it started on its own — FleetRunGroupCodeCoordinator already treats N members starting on one
+        // group code as ordinary, whether those members are on N machines or, as here, all local to this one.
+        if (_additionalCharacters.Count > 0)
+        {
+            foreach ((int Id, string Name) extra in _additionalCharacters)
+                await _SendAdditionalStartRunCommandAsync(dispatcher, extra.Id, startedAtUtc);
+            _additionalCharacters = [];
+        }
 
         if (RunLoot is not null)
             await RunLoot.RefreshAsync();
         Refresh(DateTime.UtcNow);
+    }
+
+    /// <summary>Start a run for a character riding along on this window's own start (ET-210) — same site, same
+    /// group code, never the fleet commander (only the acting character ever is). Best-effort: one extra character
+    /// failing to register is reported and does not undo the run this window itself already has.</summary>
+    private async Task _SendAdditionalStartRunCommandAsync(CqrsDispatcher dispatcher, long characterId, DateTime startedAtUtc)
+    {
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, Kind, startedAtUtc,
+            SiteTypeId: 0,
+            SiteName: SignatureName,
+            SolarSystemId: Kind == ActivityKind.Mission ? MissionSolarSystemId : null,
+            GroupCode: GroupCode,
+            Signature: SignatureId,
+            FleetId: FleetId,
+            IsFleetCommander: false,
+            SolarSystemName: SolarSystem,
+            Origin: EveUtils.Shared.Modules.Runs.Enums.RunOrigin.Clipboard,
+            SiteTypeSource: Kind switch
+            {
+                ActivityKind.Mission => SiteTypeSource.Mission,
+                ActivityKind.Site when SignatureName is not null && MatchedSites.Count == 0 => SiteTypeSource.Uncatalogued,
+                _ => SiteTypeSource.Site
+            },
+            AgentId: MissionAgentId,
+            MissionLevel: MissionLevel,
+            Parameters: PendingParameters));
+
+        if (!started.IsSuccess)
+            _services.GetService<IToastService>()?.Show("A character was not added to this run",
+                started.Messages.FirstOrDefault()?.Text ?? "Could not start this run for one of the picked characters.",
+                ToastKind.Error);
     }
 
     /// <summary>Stop the clock. The stored run stays open until SAVE or DISCARD: loot is copied out of the wreck
@@ -1738,7 +1892,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
 
         using var scope = _services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new SetRunStoppedCommand(runId, stoppedAtUtc));
+        var dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
+        await dispatcher.Send(new SetRunStoppedCommand(runId, stoppedAtUtc));
+        // A shared GroupCode here is always this pilot's own other toons (ET-210), never a remote fleet member's —
+        // their row lives in a database this client cannot reach — so the clock this window's pilot controls is the
+        // group's, and stopping every participant alongside this window's own run is never somebody else's to touch.
+        // Unlike ET-105, where each member's clock is their own and only THAT member's STOP moves it.
+        foreach (RunParticipantViewModel sibling in Participants.Where(participant => participant.RunId != runId))
+            await dispatcher.Send(new SetRunStoppedCommand(sibling.RunId, stoppedAtUtc));
     }
 
     /// <summary>
@@ -1982,6 +2143,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 Participants.Remove(gone);
 
             OnPropertyChanged(nameof(IsFleetShown));
+            // A group with more than one participant is what turns the header chip from one name into the group's
+            // (ET-130 deel 3) — this is the only place Participants changes outside the constructor, so it is the
+            // only place that has to say so.
+            OnPropertyChanged(nameof(ActingCharacterText));
             RecomputePayout();
         }
         finally
@@ -2049,6 +2214,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         RunNoticeText = null;
         RunState = ActivityRunState.Saved;
+        // Toons of the same pilot save together (ET-210): STOP and SAVE apply to the whole group, unlike ET-105
+        // where each fleet member commits their own part on their own machine — Participants here is always this
+        // pilot's own other local runs (a remote member's row is never in this database), never somebody else's to
+        // commit. A sibling has no bounty, enemy or loot record of its own: this window only ever watched the
+        // acting character's gamelog, so it closes out with an empty record rather than a guessed one.
+        foreach (RunParticipantViewModel sibling in Participants.Where(participant => participant.RunId != runId))
+        {
+            Result siblingResult = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new SaveRunCommand(
+                sibling.RunId, EffectiveStopUtc ?? nowUtc, nowUtc, [], [], [], [], LootStrategy: LootStrategy));
+            if (!siblingResult.IsSuccess)
+                _services.GetService<IToastService>()?.Show("A run in this group was not saved",
+                    siblingResult.Messages.FirstOrDefault()?.Text ?? "Could not save one of the other characters' runs.",
+                    ToastKind.Error);
+        }
         _EndEnemyObservations();
         if (RunLoot is not null)
             await RunLoot.RefreshAsync();
@@ -2101,7 +2280,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         DateTime nowUtc = DateTime.UtcNow;
         using var scope = _services.CreateScope();
         var dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
-        Result discarded = await dispatcher.Send(new DiscardRunCommand(runId, nowUtc));
+        // A fleet's own group code is discarded whole already, below: FleetRunDiscardedEvent (EventTarget.Both)
+        // reaches FleetRunGroupCodeCoordinator on THIS client too, and it already runs DiscardRunsInGroupCommand for
+        // every local row sharing the code — a second one here would be redundant, not wrong, but there is no reason
+        // to race it. Outside a fleet (ET-210's manual multi-pick, which mints its own group code with no fleet to
+        // announce to) nothing else ever discards the siblings, so this is the only place it happens.
+        Result discarded = GroupCode is { } soloGroupCode && FleetId is null
+            ? await dispatcher.Send(new DiscardRunsInGroupCommand(soloGroupCode, nowUtc))
+            : await dispatcher.Send(new DiscardRunCommand(runId, nowUtc));
         if (!discarded.IsSuccess)
         {
             _services.GetService<IToastService>()?.Show("Run not discarded",
@@ -2401,7 +2587,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// pilot copied, and setting it first made adopt read the member's own run as a different site and park it.</param>
     private async Task _BeginEstimatedRunAsync(DateTime anchorUtc, string? siteName = null)
     {
-        if (await _AdoptRunningRunAsync() || !await _ResolveCharacterAsync(mayAsk: false))
+        if (await _AdoptRunningRunAsync())
+            return;
+
+        // Same two-step as StartRunAsync: a pilot resolved just now by the line above still deserves the adopt this
+        // call opened with, or a fleet anchor would start a second row under a character who already has one open.
+        if (!await _ResolveCharacterAsync(mayAsk: false) || await _AdoptRunningRunAsync())
             return;
 
         SignatureName ??= siteName;

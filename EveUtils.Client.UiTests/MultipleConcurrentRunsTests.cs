@@ -1,0 +1,169 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia.Headless.XUnit;
+using EveUtils.Client.Dialogs;
+using EveUtils.Client.Platform;
+using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Shared.Identity;
+using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Runs.Commands;
+using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Queries;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+using IDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
+
+namespace EveUtils.Client.UiTests;
+
+/// <summary>
+/// ET-130 deel 2 (<c>RunningRunLookup</c>/<c>GetRunningRunQuery</c> scoped per character) and ET-210 (starting a run
+/// for several toons at once, sharing a group code) together — the second is what actually produces the state the
+/// first has to read: N runs under one group code, one per character.
+/// </summary>
+public class MultipleConcurrentRunsTests
+{
+    private const int CharacterA = 90000010;
+    private const int CharacterB = 90000011;
+
+    // ── ET-130 deel 2: RunningRunLookup / GetRunningRunQuery per character ─────────────────────────
+
+    /// <summary>
+    /// Counter-proof from the grooming (2026-09-05): two different characters each running their own site must give
+    /// two different answers. Against the pre-fix lookup (an app-wide <c>Count == 1</c>) this is RED — asking for
+    /// A's run while B is also running makes the count 2 and the answer null, not A's row. A test with only one
+    /// running run would stay green either way and prove nothing.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TwoCharactersEachRunning_GetRunningRunQuery_AnswersPerCharacter()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid runA = await _StartAsync(dispatcher, CharacterA, "Sansha Refuge");
+        Guid runB = await _StartAsync(dispatcher, CharacterB, "Blood Raider Burrow");
+
+        Result<RunningRunDto> forA = await dispatcher.Query(new GetRunningRunQuery(CharacterA));
+        Result<RunningRunDto> forB = await dispatcher.Query(new GetRunningRunQuery(CharacterB));
+
+        Assert.True(forA.IsSuccess, "character A's own run should not be ambiguous just because B is also running");
+        Assert.Equal(runA, forA.Value!.Id);
+        Assert.True(forB.IsSuccess, "character B's own run should not be ambiguous just because A is also running");
+        Assert.Equal(runB, forB.Value!.Id);
+    }
+
+    /// <summary>
+    /// Counter-proof from the grooming (2026-09-05): a character with nothing running gets nothing, even while
+    /// another character has a run going. "Just hand back the one candidate there is" would be green here by
+    /// accident; the app-wide count before this fix would call it unambiguous (count 1) and hand A's run to B.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task OneCharacterRunning_TheOtherCharactersOwnLookup_IsEmpty()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        await _StartAsync(dispatcher, CharacterA, "Sansha Refuge");
+
+        Result<RunningRunDto> forB = await dispatcher.Query(new GetRunningRunQuery(CharacterB));
+
+        Assert.False(forB.IsSuccess, "character B has nothing running, and A's run must not be handed to it");
+    }
+
+    private static async Task<Guid> _StartAsync(IDispatcher dispatcher, long characterId, string siteName)
+    {
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(
+            characterId, ActivityKind.Site, DateTime.UtcNow, SiteTypeId: 0, SiteName: siteName, SolarSystemId: null));
+        Assert.True(started.IsSuccess);
+        return started.Value;
+    }
+
+    // ── ET-210: starting a run for several toons at once ───────────────────────────────────────────
+
+    /// <summary>AC-1/AC-2: two clients flying, both ticked at START — each gets its own stored run, and the two
+    /// share one group code.</summary>
+    [AvaloniaFact]
+    public async Task StartWithTwoCharactersFlying_TickingBoth_RegistersARunForEach()
+    {
+        using var harness = await _TwoCharacters();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        harness.Dialogs.OnPickCharacters = (_, options) =>
+            Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId)]);
+
+        await model.StartRunCommand.ExecuteAsync(null);
+
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Result<RunningRunDto> runA = await dispatcher.Query(new GetRunningRunQuery(ActivityWindowHarness.CharacterId));
+        Result<RunningRunDto> runB = await dispatcher.Query(new GetRunningRunQuery(90000002));
+        Assert.True(runA.IsSuccess, "the acting character's own run was not stored");
+        Assert.True(runB.IsSuccess, "the second ticked character got no run of its own");
+        Assert.NotNull(runA.Value!.GroupCode);
+        Assert.Equal(runA.Value.GroupCode, runB.Value!.GroupCode);
+    }
+
+    /// <summary>AC-3: ticking only one of the offered characters is exactly today's behaviour — one run, and
+    /// (unlike the two-ticked case above) no group code minted for it.</summary>
+    [AvaloniaFact]
+    public async Task StartWithTwoCharactersFlying_TickingOnlyOne_BehavesLikeASingleStart()
+    {
+        using var harness = await _TwoCharacters();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        harness.Dialogs.OnPickCharacters = (_, options) =>
+            Task.FromResult<IReadOnlyList<int>?>([options[0].CharacterId]);
+
+        await model.StartRunCommand.ExecuteAsync(null);
+
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Result<RunningRunDto> runA = await dispatcher.Query(new GetRunningRunQuery(ActivityWindowHarness.CharacterId));
+        Result<RunningRunDto> runB = await dispatcher.Query(new GetRunningRunQuery(90000002));
+        Assert.True(runA.IsSuccess);
+        Assert.False(runB.IsSuccess, "only one character was ticked; the other must get no run");
+        Assert.Null(runA.Value!.GroupCode);
+    }
+
+    /// <summary>AC-5: one running client asks nothing extra — the picker is never even shown.</summary>
+    [AvaloniaFact]
+    public async Task StartWithOneCharacterFlying_AsksNothing()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+
+        await model.StartRunCommand.ExecuteAsync(null);
+
+        Assert.Null(harness.Dialogs.LastPrompt);
+    }
+
+    private static async Task<ActivityWindowHarness> _TwoCharacters()
+    {
+        var harness = await ActivityWindowHarness.CreateAsync(
+            configure: services => services.AddSingleton<ILocalCharacterPresence>(
+                new ActivityWindowHarness.StubPresence(inGame: true, ActivityWindowHarness.CharacterId, 90000002)));
+        await harness.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character("Second Pilot", 90000002));
+        return harness;
+    }
+
+    // ── STOP and SAVE apply to the whole group (ET-210) ────────────────────────────────────────────
+
+    /// <summary>AC-6: STOP followed by SAVE leaves no run of the group Running — unlike ET-105, where each member
+    /// only ever answers for their own row, here one pilot's STOP/SAVE settles every toon in the group.</summary>
+    [AvaloniaFact]
+    public async Task StopThenSave_OnAGroupRun_LeavesNoRunOfTheGroupRunning()
+    {
+        using var harness = await _TwoCharacters();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        harness.Dialogs.OnPickCharacters = (_, options) =>
+            Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId)]);
+        await model.StartRunCommand.ExecuteAsync(null);
+        await ActivityWindowHarness.WaitUntil(() => model.Participants.Count == 2);
+
+        model.StopRun(DateTime.UtcNow);
+        await ActivityWindowHarness.WaitUntil(() => model.RunState == ActivityRunState.Stopped);
+        await model.SaveRunCommand.ExecuteAsync(null);
+
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Assert.False((await dispatcher.Query(new GetRunningRunQuery(ActivityWindowHarness.CharacterId))).IsSuccess,
+            "the acting character's run was left Running");
+        Assert.False((await dispatcher.Query(new GetRunningRunQuery(90000002))).IsSuccess,
+            "the second character's run was left Running");
+    }
+}

@@ -134,13 +134,21 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
             return;
         }
 
-        int? picked = await _dialogs.PickCharacterAsync("Who is registering this run?",
+        // Multi-select (ET-210): multiboxing several of these toons onto the commander's own site is exactly as
+        // real as one, and the window they all land on files each answer under its own run, sharing the commander's
+        // group code — FleetRunGroupCodeCoordinator already treats N members starting on one code as ordinary.
+        IReadOnlyList<int>? picked = await _dialogs.PickCharactersAsync("Who is registering this run?",
             [.. flying.Select(character => new CharacterPickOption(
                 character.EsiCharacterId!.Value, character.Name, "EVE client running", Enabled: true))]);
 
         // Dismissed is declined, exactly like dismissing the offer itself: nothing opens and nothing is created.
-        if (picked is { } characterId)
-            _Open(start, flying.First(character => character.EsiCharacterId == characterId));
+        if (picked is not { Count: > 0 })
+            return;
+
+        Character pilot = flying.First(character => character.EsiCharacterId == picked[0]);
+        IReadOnlyList<Character> additional =
+            [.. flying.Where(character => character.EsiCharacterId is { } id && picked.Skip(1).Contains(id))];
+        _Open(start, pilot, additional);
     }
 
     /// <summary>
@@ -154,7 +162,7 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
             ? []
             : InGameCharacters.Among(await registry.GetAllAsync(), _services.GetService<ILocalCharacterPresence>());
 
-    private void _Open(RunGroupCodeStart start, Character? pilot = null)
+    private void _Open(RunGroupCodeStart start, Character? pilot = null, IReadOnlyList<Character>? additional = null)
     {
         Dispatcher.UIThread.Post(() =>
         {
@@ -165,6 +173,11 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
             // window is for.
             if (pilot is { EsiCharacterId: { } characterId })
                 window.UseCharacter(characterId, pilot.Name);
+            // Every other toon picked alongside the pilot (ET-210) joins on the same group code, each with its own
+            // row — the window still shows one, but the store gets one per character.
+            if (additional is { Count: > 0 })
+                window.UseAdditionalCharacters(
+                    [.. additional.Select(character => (character.EsiCharacterId!.Value, character.Name))]);
             window.JoinFleetRun(start);
             _dialogs.ShowActivityWindow(window, RunWindowOpenTrigger.RemoteFleetCommander);
         });

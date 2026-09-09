@@ -391,12 +391,18 @@
                 <WrapPanel Grid.Column="1" VerticalAlignment="Center" ItemSpacing="5" LineSpacing="4">
                     <!-- Whose run this is, first in the row and before anything about the site: with several toons
                          running their own sites at once this is the only thing telling two windows apart, and even
-                         with one it was the question the window never answered (Raymond, 2026-09-02). -->
-                    <Border Classes="chip" Classes.ok="{Binding HasActingCharacter}"
-                            Classes.warn="{Binding !HasActingCharacter}"
-                            ToolTip.Tip="The character this run is filed under">
-                        <TextBlock Text="{Binding ActingCharacterText}"/>
-                    </Border>
+                         with one it was the question the window never answered (Raymond, 2026-09-02). Clickable
+                         (ET-130 deel 3): before START it reopens the character choice, and once a run is going it
+                         offers to bring another of this pilot's flying toons into the group (ET-210) — and shows
+                         every name the group already covers rather than just the one that started it. -->
+                    <Button Command="{Binding PickCharacterCommand}"
+                            Background="Transparent" BorderThickness="0" Padding="0" Cursor="Hand"
+                            ToolTip.Tip="Click to choose who this run is filed under">
+                        <Border Classes="chip" Classes.ok="{Binding HasActingCharacter}"
+                                Classes.warn="{Binding !HasActingCharacter}">
+                            <TextBlock Text="{Binding ActingCharacterText}"/>
+                        </Border>
+                    </Button>
                     <Border Classes="chip ok" IsVisible="{Binding HasWeatherAndTier}">
                         <TextBlock Text="{Binding TierText}"/>
                     </Border>
