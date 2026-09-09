@@ -223,6 +223,77 @@ public class MultipleConcurrentRunsTests
         Assert.Equal(1_350_000m, row.BountyIsk);
     }
 
+    // ── Switching the character column mid-run must not lose the starter's own data (ET-210 review, 2026-09-09, round 3) ──
+
+    /// <summary>
+    /// Counter-proof, red against the pre-fix code: Jithran ran a site on five characters, switched the character
+    /// column (deel 3) to check on his alts' loot, and switched back — and the SAVED activity was then missing his
+    /// own bounty (4 of 5 participants shown) and every enemy he had hand-typed a count for. His own hypothesis,
+    /// confirmed here: <c>_SwitchToRunAsync</c> cleared <c>_bounties</c> and rebuilt <c>_enemyObservations</c> on
+    /// every switch, discarding whatever the character switched AWAY FROM had accumulated — including the starter's
+    /// own data the moment he switched off himself and back.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task SwitchingTheColumnAwayAndBack_DoesNotLoseTheStartersBountyOrEnemies()
+    {
+        const long fleetId = 901;
+        using var harness = await _TwoCharacters();
+        harness.Services.GetRequiredService<IFleetParticipation>().Set(
+        [
+            new FleetParticipant(ActivityWindowHarness.CharacterId, fleetId, ClientOnly: true),
+            new FleetParticipant(90000002, fleetId, ClientOnly: true)
+        ]);
+        var gamelog = harness.Services.GetRequiredService<GamelogClientService>();
+        gamelog.MapCharacter(90000002, "Second Pilot");
+
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        harness.Dialogs.OnPickCharacters = (_, options) =>
+            Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId)]);
+        await model.StartRunCommand.ExecuteAsync(null);
+        await ActivityWindowHarness.WaitUntil(() => model.Participants.Count == 2 && model.FleetId == fleetId);
+
+        // The starter's own bounty and a hand-typed enemy count, entered BEFORE switching away — exactly Jithran's
+        // own sequence ("bij jithran enemies ingevoerd... [toen] de site runde").
+        await gamelog.AddBountyAsync(ActivityWindowHarness.CharacterName, new BountyEvent(DateTime.UtcNow, 337_500));
+        await gamelog.AddHitAsync(ActivityWindowHarness.CharacterName, DamageDirection.Outgoing, 500,
+            "Centii Servant", HitQuality.Hits, DateTime.UtcNow);
+        await ActivityWindowHarness.WaitUntil(() => model.EnemyObservations.Count == 1);
+        model.EnemyObservations[0].Count = 4;
+
+        // Switch the column to the second character — exactly what deel 3's character column lets a pilot do
+        // mid-run, and exactly what threw the starter's own data away before this fix.
+        RunCharacterRowViewModel second = model.RunCharacters.Single(row => row.CharacterId == 90000002);
+        model.SelectRunCharacterCommand.Execute(second);
+        await ActivityWindowHarness.WaitUntil(() => model.RunId == second.RunId);
+
+        // The starter's SECOND kill, landing on his own gamelog WHILE the window is showing someone else — the
+        // half of the bug _bounties alone (filtered on whichever name is "acting" right now) can never fix, no
+        // matter whether it is cleared on switch: GamelogClientService.GetFleetRunBounty is what still has this,
+        // because it tracks every character's own tally independently of which one this window is looking at.
+        await gamelog.AddBountyAsync(ActivityWindowHarness.CharacterName, new BountyEvent(DateTime.UtcNow, 337_500));
+
+        // Switch back to the starter, and let the second character log their own kill too.
+        RunCharacterRowViewModel first = model.RunCharacters.Single(row => row.CharacterId == ActivityWindowHarness.CharacterId);
+        model.SelectRunCharacterCommand.Execute(first);
+        await ActivityWindowHarness.WaitUntil(() => model.RunId == first.RunId);
+        await gamelog.AddBountyAsync("Second Pilot", new BountyEvent(DateTime.UtcNow, 675_000));
+
+        model.StopRun(DateTime.UtcNow);
+        await ActivityWindowHarness.WaitUntil(() => model.RunState == ActivityRunState.Stopped);
+        await model.SaveRunCommand.ExecuteAsync(null);
+
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Result<IReadOnlyList<ActivityOverviewRowDto>> overview = await dispatcher.Query(new GetActivityOverviewQuery());
+        ActivityOverviewRowDto row = Assert.Single(overview.Value!);
+        Assert.Equal(2, row.ParticipantCount);
+        Assert.Equal(1_350_000m, row.BountyIsk); // not 675,000: the starter's own share must not be missing
+
+        Result<ActivityDetailDto> detail = await dispatcher.Query(new GetActivityDetailQuery(row.ActivitySummaryId));
+        Assert.True(detail.IsSuccess);
+        Assert.Contains(detail.Value!.EnemyObservations,
+            observation => observation.EnemyName == "Centii Servant" && observation.Count == 4);
+    }
+
     // ── The saved activity carries everyone's location and fit, not just the acting character's (ET-210 review, 2026-09-09) ──
 
     private const int SecondCharacterId = 90000002;
