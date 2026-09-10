@@ -77,7 +77,7 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         var recognised = rows.Where(row => row.Name is not null && !IsWormhole(row.Name)).ToList();
         if (recognised is [{ } row])
         {
-            StartRun(row);
+            StartRun(row, capture.CopiedByCharacter);
             return; // no card at all: the run coming up on the copied site is the confirmation
         }
 
@@ -91,7 +91,7 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
     //
     // The clipboard watch calls this on the UI thread, and the answer is awaited before anything is shown, so the
     // task is loose rather than fire-and-forget in spirit: everything it can throw is caught inside.
-    private void StartRun(ClipboardSignatureRow row) => _ = _StartRunAsync(row);
+    private void StartRun(ClipboardSignatureRow row, string? copiedByCharacter) => _ = _StartRunAsync(row, copiedByCharacter);
 
     /// <summary>
     /// Ask whose run this is BEFORE the window opens, then hand the answer over. With two clients up the run window
@@ -106,7 +106,7 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
     /// <c>RefreshFleetCommandAsync</c>-before-<c>_StoreRunAsync</c> ordering are untouched — a fleet run is still
     /// written as a fleet run.
     /// </summary>
-    private async Task _StartRunAsync(ClipboardSignatureRow row)
+    private async Task _StartRunAsync(ClipboardSignatureRow row, string? copiedByCharacter)
     {
         try
         {
@@ -128,24 +128,31 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
             // EVE — the one thing ET-158 exists to avoid (Raymond, 2026-09-04). A window WITHOUT a pilot is still a
             // fair question, which is why this reads the pilot rather than "is a window open".
             //
-            // ponytail: this cannot tell "the same pilot carries on" from "he switched clients", because a clipboard
-            // copy carries no sender — Windows does not say which process copied, and the payload holds no pilot
-            // name. A copy made on a second client while the window is for the first is therefore filed under the
-            // first. That was already true before the question moved forward; giving the copy an owner is the open
-            // question from the 2026-09-02 analysis and wants the foreground EVE window, not a guess here.
-            // ET-138 built that observation — ClipboardCapture.CopiedByCharacter, read at notification time — but
-            // does not spend it here: whether/how a run resolution should lean on it is still open in ET-130 deel 4.
+            // ponytail: this cannot tell "the same pilot carries on" from "he switched clients", because a copy on a
+            // second client while the window is for the first is filed under the first (the window already has an
+            // answer, so the question below is skipped outright). ET-138 built the observation this leans on instead
+            // — ClipboardCapture.CopiedByCharacter, read at notification time — and ET-211 measured it reliable
+            // fourteen of fourteen times against a live client, which is what makes ET-216's preselection below safe.
             bool answeredAlready = _dialogs.ActivityWindowPilot is not null;
 
             if (pilot is null && candidates.Count > 1 && !answeredAlready)
             {
+                // ET-216: the character whose own copy this was starts ticked in the question below — a starting
+                // point, not a guess spent outright: an unmatched name (unknown sender, or a sender not among these
+                // candidates) simply leaves nothing preselected, same as before this ticket.
+                int? preselectedCharacterId = copiedByCharacter is null
+                    ? null
+                    : candidates.FirstOrDefault(character =>
+                        string.Equals(character.Name, copiedByCharacter, StringComparison.OrdinalIgnoreCase))?.EsiCharacterId;
+
                 // Multi-select (ET-210): flying this site on several of these candidates at once is as real a case
                 // as flying it on one. The first ticked box is the pilot the window is for; the rest ride along as
                 // their own run under the same group code once the window has one to share.
                 IReadOnlyList<int>? picked = await _dialogs.PickCharactersAsync("Whose run is this?",
                     [.. candidates.Select(character => new CharacterPickOption(
                         character.EsiCharacterId!.Value, character.Name,
-                        flying.Contains(character) ? "EVE client running" : "local character", Enabled: true))]);
+                        flying.Contains(character) ? "EVE client running" : "local character", Enabled: true))],
+                    preselectedCharacterId);
                 pilot = picked is { Count: > 0 }
                     ? candidates.FirstOrDefault(character => character.EsiCharacterId == picked[0])
                     : null;

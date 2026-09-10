@@ -218,6 +218,26 @@ public sealed class ClipboardSignatureOfferTests
         Assert.False(Assert.Single(env.Dialogs.ShownActivityWindows).StartsOnArrival);
     }
 
+    // ET-216: the character whose own clipboard copy raised the question starts ticked in the picker — a
+    // starting point the pilot can still change, never an automatic choice. Tegenproef for the ticket: red
+    // against the code before this change, which passed no preselection through at all.
+    [AvaloniaFact]
+    public async Task ACopyFromAKnownCharacter_PreselectsThatCharacterInThePicker()
+    {
+        using var env = await Env.StartAsync(
+            services => services.AddSingleton<ILocalCharacterPresence>(new ActivityWindowHarness.StubPresence(inGame: true)),
+            copiedByCharacter: "Second Pilot");
+        var registry = env.Services.GetRequiredService<ICharacterRegistry>();
+        await registry.AddOrUpdateAsync(new Character("First Pilot", 90000001));
+        await registry.AddOrUpdateAsync(new Character("Second Pilot", 90000002));
+        env.Sde.AddSite(Site(1264, "Suspicious Signal: Secure the Intel", archetype: "Homefront Operations", archetypeId: 70));
+
+        env.Copy(MeasuredHomefrontLine);
+        await ActivityWindowHarness.WaitUntil(() => env.Dialogs.LastPrompt is not null);
+
+        Assert.Equal(90000002, env.Dialogs.LastPreselectedCharacterId);
+    }
+
     [AvaloniaFact]
     public async Task OneFlyingCharacter_StartsWithoutAsking()
     {
@@ -457,12 +477,13 @@ public sealed class ClipboardSignatureOfferTests
             _offer = new ClipboardSignatureOffer(watch, Toasts, Sde, Dialogs, instance.Services);
         }
 
-        public static async Task<Env> StartAsync(Action<IServiceCollection>? configure = null)
+        public static async Task<Env> StartAsync(Action<IServiceCollection>? configure = null,
+            string? copiedByCharacter = null)
         {
             var source = new FakeClipboardChangeSource();
             var instance = TestClientInstance.Create(configure);
             var watch = new ClipboardWatchService(new RecordingDialogService(), instance.Services,
-                NullLogger<ClipboardWatchService>.Instance, source);
+                NullLogger<ClipboardWatchService>.Instance, source, new FakeForegroundReader(copiedByCharacter));
             var env = new Env(instance, watch, source);
             await watch.SetEnabledAsync(true);
             return env;
@@ -512,5 +533,14 @@ public sealed class ClipboardSignatureOfferTests
         public Task<string?> ReadTextAsync() => Task.FromResult(ClipboardText);
 
         public void RaiseChanged() => Changed?.Invoke();
+    }
+
+    // ET-216: stands in for the real foreground reader (ET-138) so a test can name who "copied" without a live
+    // EVE client — the test process itself never satisfies that reader, same as production off a real machine.
+    private sealed class FakeForegroundReader(string? character) : IForegroundEveClientReader
+    {
+        public string? CharacterAtForegroundWindow() => character;
+
+        public ForegroundWindowSnapshot DescribeForegroundWindow() => ForegroundWindowSnapshot.Unknown;
     }
 }

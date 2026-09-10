@@ -9,6 +9,7 @@ using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Market.Services;
+using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
@@ -37,23 +38,38 @@ namespace EveUtils.Client.ViewModels.Runs;
 public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshableModule
 {
     private readonly CqrsDispatcher _dispatcher;
-    private readonly Guid _activitySummaryId;
+    /// <summary>Not readonly: a full delete removes the <c>ActivitySummary</c> row outright, so undoing it builds a
+    /// brand new one with a new id (<c>RebuildActivitySummariesCommandHandler</c> only reuses an id across a
+    /// rebuild that still has a row to reuse) — <see cref="UndoDeleteAsync"/> looks the fresh one up and moves this
+    /// screen onto it rather than going on asking the query for an id that no longer exists (ET-214).</summary>
+    private Guid _activitySummaryId;
     private readonly Func<long, string>? _nameOf;
     private readonly IEsiClient? _esi;
     private readonly IEsiLocationClient? _locations;
     private readonly ISdeAccessor? _sde;
     private readonly IReadOnlySet<long>? _ownCharacterIds;
     private readonly Func<Task>? _republish;
+    private readonly IDialogService? _dialogs;
+
+    /// <summary>The activity as it was last read — kept for <see cref="DeleteAsync"/>, which needs the group code,
+    /// which of its runs are this machine's own, and the figures the confirmation names, without a second read.</summary>
+    private ActivityDetailDto? _lastDetail;
+
+    /// <summary>What <see cref="UndoDeleteAsync"/> targets — set only once <see cref="IsDeleted"/> is true.</summary>
+    private string? _deletedGroupCode;
+    private Guid? _deletedRunId;
 
     /// <param name="ownCharacterIds">This machine's own characters. A run of anyone else came in from a server and is
     /// shown read-only (ET-215); null treats every run as this machine's own.</param>
     /// <param name="republish">Publishes this activity again — the runs screen's own PUBLISH, handed down so a
     /// correction that left the server's copy behind can be answered right where it was made.</param>
+    /// <param name="dialogs">Confirms the delete (ET-214). Null makes the delete control a no-op rather than skip
+    /// confirmation — the same "no service, no action" rule every other optional dependency here already follows.</param>
     public ActivityDetailViewModel(CqrsDispatcher dispatcher, Guid activitySummaryId,
         IAppraisalProvider? appraisal = null, Func<long, string>? nameOf = null,
         IEsiClient? esi = null, IEsiLocationClient? locations = null, ISdeAccessor? sde = null,
         ICharacterPortraitProvider? portraits = null, ITypeImageProvider? images = null,
-        IReadOnlySet<long>? ownCharacterIds = null, Func<Task>? republish = null)
+        IReadOnlySet<long>? ownCharacterIds = null, Func<Task>? republish = null, IDialogService? dialogs = null)
     {
         _dispatcher = dispatcher;
         _activitySummaryId = activitySummaryId;
@@ -63,6 +79,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         _sde = sde;
         _ownCharacterIds = ownCharacterIds;
         _republish = republish;
+        _dialogs = dialogs;
         LootOverview = new ActivityLootViewModel(() => new RunLootViewModel(dispatcher, appraisal, sde, images), portraits);
         LootOverview.LootCorrected += () => _ = _ReloadAfterCorrectionAsync();
     }
@@ -161,6 +178,34 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
 
     public string RepublishText => IsRepublishing ? "PUBLISHING…" : "PUBLISH AGAIN";
 
+    /// <summary>Understated on purpose (ET-214, Jithran's own review of the first round): the weight of the decision
+    /// sits in the confirmation, not in how loud the control reading it is. True whenever at least one of this
+    /// activity's runs is this machine's own — a fully foreign activity (every run read-only, ET-215) has nothing
+    /// here to delete.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DeleteCommand))]
+    private bool _canDelete;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DeleteText))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteCommand))]
+    private bool _isDeleting;
+
+    public string DeleteText => IsDeleting ? "Deleting…" : "Delete this activity";
+
+    /// <summary>Set once the delete leaves nothing behind at all — the whole group was this machine's own, or it was
+    /// a lone run. A mixed group with a fleetmate's run still in it never reaches this: <see cref="DeleteAsync"/>
+    /// re-reads the activity afterwards and, finding it still there, reloads in place instead (ET-214).</summary>
+    [ObservableProperty] private bool _isDeleted;
+
+    public string DeletedMessage => "This activity has been deleted.";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UndoDeleteText))]
+    private bool _isUndoingDelete;
+
+    public string UndoDeleteText => IsUndoingDelete ? "Restoring…" : "Undo";
+
     [ObservableProperty] private string _participantCountText = string.Empty;
     [ObservableProperty] private string _fleetBasisText = string.Empty;
 
@@ -184,6 +229,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         }
 
         StatusMessage = null;
+        _lastDetail = detail.Value;
         (string? escalationJumpsText, string? escalationJumpsEmptyText) =
             await _EscalationJumpsAsync(detail.Value, cancellationToken);
         _Apply(detail.Value, escalationJumpsText, escalationJumpsEmptyText);
@@ -205,6 +251,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
             return;
         }
 
+        _lastDetail = detail.Value;
         _ApplyHeader(detail.Value);
         _ApplyLoot(detail.Value);
         _ApplyTotalIsk(detail.Value);
@@ -230,6 +277,136 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
 
     private bool CanStartRepublish() => !IsRepublishing;
 
+    /// <summary>
+    /// Delete the whole activity (ET-214): every one of this machine's own runs in the group, or the lone run when
+    /// it was never grouped. A fleetmate's run pulled from a server (ET-215) is read-only on this very screen for
+    /// the same reason it is never touched here — a local soft delete flips <c>SyncState</c> to <c>Pending</c>, and
+    /// a run under someone else's character id sitting Pending would be this machine offering to push a change to a
+    /// run it does not own. <see cref="DeleteRunsInGroupCommand.OnlyRunIds"/> exists for exactly this: it restricts
+    /// the bulk delete to this machine's own runs, leaving a fleetmate's row in the group untouched.
+    ///
+    /// What happens next depends on what is left. Nothing at all — the summary the delete's own rebuild just
+    /// produced is gone, and <see cref="IsDeleted"/> says so. Still someone else's run there — the same summary id
+    /// survives a rebuild (ET-215), so re-reading it finds the smaller activity and the screen reloads in place,
+    /// <see cref="CanDelete"/> now false because nothing local is left to remove.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanStartDelete))]
+    private async Task DeleteAsync()
+    {
+        if (_dialogs is null || _lastDetail is not { } detail)
+            return;
+
+        List<Guid> ownRunIds = _OwnRunIds(detail);
+        if (ownRunIds.Count == 0)
+            return;
+
+        if (!await _dialogs.ConfirmAsync("Delete this activity?", _WhatDeletingRemoves(detail, ownRunIds)))
+            return;
+
+        IsDeleting = true;
+        try
+        {
+            DateTime deletedAtUtc = DateTime.UtcNow;
+            Result outcome = detail.GroupCode is { } groupCode
+                ? await _dispatcher.Send(new DeleteRunsInGroupCommand(groupCode, deletedAtUtc, ownRunIds))
+                : await _dispatcher.Send(new DeleteRunCommand(ownRunIds[0], deletedAtUtc));
+            if (!outcome.IsSuccess)
+            {
+                StatusMessage = outcome.Messages.Count > 0 ? outcome.Messages[0].Text : "The activity could not be deleted.";
+                return;
+            }
+
+            _deletedGroupCode = detail.GroupCode;
+            _deletedRunId = detail.GroupCode is null ? ownRunIds[0] : null;
+
+            Result<ActivityDetailDto> stillThere = await _dispatcher.Query(new GetActivityDetailQuery(_activitySummaryId));
+            if (stillThere is { IsSuccess: true, Value: { } remaining })
+            {
+                _lastDetail = remaining;
+                (string? escalationJumpsText, string? escalationJumpsEmptyText) =
+                    await _EscalationJumpsAsync(remaining, CancellationToken.None);
+                _Apply(remaining, escalationJumpsText, escalationJumpsEmptyText);
+                await _ApplyLootBlocksAsync(remaining, CancellationToken.None);
+            }
+            else
+            {
+                IsDeleted = true;
+                CanDelete = false;
+            }
+        }
+        finally
+        {
+            IsDeleting = false;
+        }
+    }
+
+    private bool CanStartDelete() => CanDelete && !IsDeleting;
+
+    /// <summary>Puts a deleted activity straight back — the soft delete's whole point (ET-214). Same either/or as
+    /// the delete itself: a group code restores every run deleted with it, a lone run restores by its own id.</summary>
+    [RelayCommand]
+    private async Task UndoDeleteAsync()
+    {
+        if (!IsDeleted)
+            return;
+
+        IsUndoingDelete = true;
+        try
+        {
+            Result outcome = _deletedGroupCode is { } groupCode
+                ? await _dispatcher.Send(new RestoreRunsInGroupCommand(groupCode))
+                : await _dispatcher.Send(new RestoreRunCommand(_deletedRunId!.Value));
+            if (!outcome.IsSuccess)
+            {
+                StatusMessage = outcome.Messages.Count > 0 ? outcome.Messages[0].Text : "The activity could not be restored.";
+                return;
+            }
+
+            // The delete's own rebuild removed the ActivitySummary row outright, so restoring it built a new one
+            // with a new id — nothing reuses the old id here, unlike a rebuild that still had a row to update in
+            // place. Find the fresh one before asking for it by the id that no longer exists.
+            Result<IReadOnlyList<ActivityOverviewRowDto>> overview = await _dispatcher.Query(new GetActivityOverviewQuery());
+            if (overview is { IsSuccess: true, Value: { } rows } && (_deletedGroupCode is { } code
+                    ? rows.FirstOrDefault(row => row.GroupCode == code)
+                    : rows.FirstOrDefault(row => row.RunId == _deletedRunId)) is { } restored)
+                _activitySummaryId = restored.ActivitySummaryId;
+
+            IsDeleted = false;
+            await LoadAsync();
+        }
+        finally
+        {
+            IsUndoingDelete = false;
+        }
+    }
+
+    private List<Guid> _OwnRunIds(ActivityDetailDto detail) =>
+        [.. detail.Runs.Where(run => _ownCharacterIds is null || _ownCharacterIds.Contains(run.CharacterId))
+            .Select(run => run.RunId)];
+
+    /// <summary>Named the way the screen already reads it: which site, how many of your own runs, how much ISK —
+    /// exactly what ET-214 asks the confirmation to say, built entirely from what is already loaded rather than a
+    /// second read. Names a fleetmate's run that stays behind rather than quietly saying nothing about it, and says
+    /// what a delete does to a copy already on, or queued for, a server.</summary>
+    private string _WhatDeletingRemoves(ActivityDetailDto detail, IReadOnlyCollection<Guid> ownRunIds)
+    {
+        int foreignCount = detail.Runs.Count - ownRunIds.Count;
+        string participants = ownRunIds.Count == 1 ? "1 of your own runs" : $"{ownRunIds.Count} of your own runs";
+        string reward = HasTotalIsk ? TotalIskText : "no ISK recorded";
+        string foreign = foreignCount switch
+        {
+            0 => string.Empty,
+            1 => " One run from another pilot stays, since it is not yours to remove.",
+            _ => $" {foreignCount} runs from other pilots stay, since they are not yours to remove."
+        };
+        string server = detail.Runs.Any(run => run.SyncState is RunSyncState.Synced or RunSyncState.Outdated)
+            ? " It already reached a coupled server — this only removes your own local copy, never the server's."
+            : detail.Runs.Any(run => run.SyncState is RunSyncState.Pending)
+                ? " It is still queued for a server and has not arrived yet — deleting it here cancels that push."
+                : string.Empty;
+        return $"{SiteText} goes, with {participants} and {reward}.{foreign}{server}";
+    }
+
     private void _Apply(ActivityDetailDto detail, string? escalationJumpsText, string? escalationJumpsEmptyText)
     {
         _ApplyHeader(detail);
@@ -243,6 +420,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         _ApplySectionsPerKind(detail);
         // After Bounty, Loot and Rewards: the total is built from what each of them just settled.
         _ApplyTotalIsk(detail);
+        CanDelete = _OwnRunIds(detail).Count > 0;
     }
 
     private void _ApplyHeader(ActivityDetailDto detail)

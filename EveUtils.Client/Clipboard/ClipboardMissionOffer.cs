@@ -68,12 +68,13 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
         }
 
         if (ClipboardMissionParser.Parse(capture.Text) is { } mission)
-            StartRun(mission);
+            StartRun(mission, capture.CopiedByCharacter);
     }
 
-    private void StartRun(ClipboardMissionCapture mission) => _ = _StartRunAsync(mission);
+    private void StartRun(ClipboardMissionCapture mission, string? copiedByCharacter) =>
+        _ = _StartRunAsync(mission, copiedByCharacter);
 
-    private async Task _StartRunAsync(ClipboardMissionCapture mission)
+    private async Task _StartRunAsync(ClipboardMissionCapture mission, string? copiedByCharacter)
     {
         try
         {
@@ -91,11 +92,19 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
             bool answeredAlready = _dialogs.ActivityWindowPilot is not null;
             if (pilot is null && candidates.Count > 1 && !answeredAlready)
             {
+                // ET-216: see ClipboardSignatureOffer's own copy of this question for why the copier's own name
+                // starts ticked, and why an unmatched one just leaves nothing preselected.
+                int? preselectedCharacterId = copiedByCharacter is null
+                    ? null
+                    : candidates.FirstOrDefault(character =>
+                        string.Equals(character.Name, copiedByCharacter, StringComparison.OrdinalIgnoreCase))?.EsiCharacterId;
+
                 // Multi-select (ET-210): see ClipboardSignatureOffer's own copy of this question for why.
                 IReadOnlyList<int>? picked = await _dialogs.PickCharactersAsync("Whose run is this?",
                     [.. candidates.Select(character => new CharacterPickOption(
                         character.EsiCharacterId!.Value, character.Name,
-                        flying.Contains(character) ? "EVE client running" : "local character", Enabled: true))]);
+                        flying.Contains(character) ? "EVE client running" : "local character", Enabled: true))],
+                    preselectedCharacterId);
                 pilot = picked is { Count: > 0 }
                     ? candidates.FirstOrDefault(character => character.EsiCharacterId == picked[0])
                     : null;
