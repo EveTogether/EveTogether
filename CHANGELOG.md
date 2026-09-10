@@ -14,6 +14,9 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- **Copying a combat site or mission while several of your characters are flying now starts the "whose
+  run is this?" question with the character who actually copied it already ticked.** You can still tick
+  on other toons, clear the tick, or leave it as is — nothing starts until you confirm.
 - **Starting a run now lets you register it for more than one of your own characters at once.** If
   several of your EVE clients are open, the "whose run is this?" question at START now lets you tick
   more than one — useful when multiboxing the same site on several toons. Each ticked character gets

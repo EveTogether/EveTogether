@@ -148,6 +148,59 @@ public class CharacterPickerToggleTests
         window.Close();
     }
 
+    // ET-216: the character whose own clipboard copy raised the question starts ticked — a starting point the
+    // pilot can still add to or clear, never an automatic choice.
+    [AvaloniaFact]
+    public void PreselectedCharacterId_TicksThatRowInTheMultiSelectList()
+    {
+        var window = new CharacterPickerWindow("Pick", ThreeCharacters, multiSelect: true, preselectedCharacterId: 2);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        var list = window.FindControl<ListBox>("OptionList")!;
+
+        var selectedNames = list.SelectedItems!.Cast<CharacterPickRowViewModel>().Select(r => r.Name).ToArray();
+        Assert.Equal(new[] { "Bravo" }, selectedNames);
+        Assert.True(window.Options.Single(o => o.Name == "Bravo").IsSelected);
+        Assert.False(window.Options.Single(o => o.Name == "Alpha").IsSelected);
+
+        window.Close();
+    }
+
+    // ET-216 AC-4: the sender's own option can be disabled (no longer among the connected characters) — no
+    // preselection, and no error, same as before this ticket.
+    [AvaloniaFact]
+    public void PreselectedCharacterId_DisabledRow_IsIgnored()
+    {
+        IReadOnlyList<CharacterPickOption> options =
+        [
+            new(1, "Alpha", "", Enabled: true),
+            new(2, "Bravo", "needs re-auth", Enabled: false),
+        ];
+        var window = new CharacterPickerWindow("Pick", options, multiSelect: true, preselectedCharacterId: 2);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        var list = window.FindControl<ListBox>("OptionList")!;
+
+        Assert.Empty(list.SelectedItems!.Cast<object>());
+
+        window.Close();
+    }
+
+    // ET-216 AC-4: the sender is not among the candidates shown at all — same "nothing to preselect" outcome.
+    [AvaloniaFact]
+    public void PreselectedCharacterId_NotAmongOptions_IsIgnored()
+    {
+        IReadOnlyList<CharacterPickOption> options = [new(1, "Alpha", "", Enabled: true)];
+        var window = new CharacterPickerWindow("Pick", options, multiSelect: true, preselectedCharacterId: 999);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        var list = window.FindControl<ListBox>("OptionList")!;
+
+        Assert.Empty(list.SelectedItems!.Cast<object>());
+
+        window.Close();
+    }
+
     [AvaloniaFact]
     public void FleetInviteWindow_FixedSingleSelectPath_IsUnaffected()
     {
