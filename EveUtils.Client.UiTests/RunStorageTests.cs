@@ -489,7 +489,8 @@ public sealed class RunStorageTests
             });
             await db.SaveChangesAsync(cancellationToken);
         }
-        var synchronization = new RunSynchronizationService(contextFactory, client, applier);
+        var synchronization = new RunSynchronizationService(contextFactory, client, applier,
+            instance.Services.GetRequiredService<IEventBus>());
 
         var synchronized = await synchronization.SynchronizeAsync(ServerAddress, 90000001, cancellationToken);
 

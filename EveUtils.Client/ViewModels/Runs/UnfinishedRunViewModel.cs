@@ -20,6 +20,8 @@ public sealed partial class UnfinishedRunViewModel(
     Func<UnfinishedRunViewModel, Task> save,
     Func<UnfinishedRunViewModel, Task> delete) : ViewModelBase
 {
+    private readonly UnfinishedRunDto _source = run;
+
     public Guid RunId { get; } = run.RunId;
 
     public DateTime? StoppedAtUtc { get; } = run.StoppedAtUtc;
@@ -55,6 +57,10 @@ public sealed partial class UnfinishedRunViewModel(
     /// <summary>Whether <see cref="TotalIskText"/> is that unanswerable case — read by the view so the two never
     /// look alike: a real amount is a figure worth noticing, a shrug is not.</summary>
     public bool TotalIskUnknown { get; } = run.TotalIskUnknown;
+
+    /// <summary>Whether this row already says everything <paramref name="shown"/> would, so a refresh can keep this
+    /// instance — and the SAVE or DELETE the pointer is resting on — where it is (ET-222).</summary>
+    public bool IsShowing(UnfinishedRunDto shown) => shown == _source;
 
     [RelayCommand]
     private Task SaveAsync() => save(this);

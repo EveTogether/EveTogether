@@ -4,12 +4,13 @@ using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Entities;
+using EveUtils.Shared.Modules.Runs.Events;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
-internal sealed partial class LinkRunToGroupCodeCommandHandler(IDbContextFactory<ClientDbContext> contextFactory)
+internal sealed partial class LinkRunToGroupCodeCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus)
     : ICommandHandler<LinkRunToGroupCodeCommand, Result>
 {
     public async Task<Result> Handle(LinkRunToGroupCodeCommand command, CancellationToken cancellationToken = default)
@@ -36,6 +37,7 @@ internal sealed partial class LinkRunToGroupCodeCommandHandler(IDbContextFactory
         if (command.FleetId is { } fleetId)
             await RunGroupOriginRecorder.RecordAsync(db, command.GroupCode, fleetId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
+        await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 

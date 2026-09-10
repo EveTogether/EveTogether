@@ -65,6 +65,7 @@ internal sealed class AddRunLootCaptureCommandHandler(IDbContextFactory<ClientDb
         // player it was stored were two different things, and an activity window that was already open did neither:
         // the toast said "Loot copied" while the LOOT section under it went on reading "no loot captured".
         await eventBus.PublishAsync(new RunLootCapturedEvent(run.Id), EventTarget.Local, cancellationToken);
+        await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         return Result<RunLootCaptureSaveResult>.Success(new RunLootCaptureSaveResult(entity.Id, repeatOf));
     }
 }

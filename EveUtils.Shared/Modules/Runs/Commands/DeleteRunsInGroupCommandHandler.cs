@@ -46,6 +46,7 @@ internal sealed class DeleteRunsInGroupCommandHandler(
         // RunDeletedEvent by re-reading the overview must never see the summary as it stood before this delete.
         await dispatcher.Send(new RebuildActivitySummariesCommand(representativeRunId), cancellationToken);
         await eventBus.PublishAsync(new RunDeletedEvent(representativeRunId), EventTarget.Local, cancellationToken);
+        await eventBus.PublishAsync(new RunsChangedEvent(representativeRunId, command.GroupCode), EventTarget.Local, cancellationToken);
         return Result<int>.Success(changed);
     }
 }

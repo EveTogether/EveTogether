@@ -2,9 +2,11 @@ using EveUtils.Client.Transport;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Events;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Client.Runs;
@@ -12,7 +14,8 @@ namespace EveUtils.Client.Runs;
 public sealed class RunSynchronizationService(
     IDbContextFactory<ClientDbContext> contextFactory,
     IServerRunSyncClient client,
-    RunSynchronizationApplier applier) : IScopedService
+    RunSynchronizationApplier applier,
+    IEventBus eventBus) : IScopedService
 {
     public async Task<(bool Accepted, string Message)> SynchronizeAsync(string serverAddress, long characterId,
         CancellationToken cancellationToken = default)
@@ -35,6 +38,8 @@ public sealed class RunSynchronizationService(
             if (!push.Accepted)
                 return (false, push.Message);
             await _MarkSyncedAsync(run.Id, serverAddress, push.LastPushedAtUtc, cancellationToken);
+            // "queued" turning into "published" on the row is this write, not the pull below.
+            await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
             pushedRunIds.Add(run.Id);
         }
 

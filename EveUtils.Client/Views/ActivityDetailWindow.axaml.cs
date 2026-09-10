@@ -9,11 +9,16 @@ namespace EveUtils.Client.Views;
 /// it is given rather than off the window.
 ///
 /// Not an <c>IHostableModuleWindow</c>: the screen carries no close button of its own, so a docked tab is closed by
-/// its own X and a floating one by the chrome's, and there is nothing left for that seam to do here.
+/// its own X and a floating one by the chrome's, and there is nothing left for that seam to do here. The view-model is
+/// disposed on close because it listens for run changes (ET-222), and a closed screen has nobody to show them to.
 /// </summary>
 public partial class ActivityDetailWindow : ChromedWindow
 {
     public ActivityDetailWindow() => AvaloniaXamlLoader.Load(this);
 
-    public ActivityDetailWindow(ActivityDetailViewModel viewModel) : this() => DataContext = viewModel;
+    public ActivityDetailWindow(ActivityDetailViewModel viewModel) : this()
+    {
+        DataContext = viewModel;
+        Closed += (_, _) => viewModel.Dispose();
+    }
 }

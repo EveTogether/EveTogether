@@ -1,8 +1,11 @@
 using EveUtils.Client.Composition;
+using EveUtils.Client.Runs;
 using EveUtils.Shared.Data;
+using EveUtils.Shared.Messaging;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace EveUtils.Client.UiTests;
 
@@ -46,7 +49,15 @@ public sealed class TestClientInstance : IDisposable
         var name = instanceName ?? "uitest-" + Guid.NewGuid().ToString("N");
         Environment.SetEnvironmentVariable("EVEUTILS_INSTANCE", name);
 
-        var services = ClientServices.Build(configure);
+        var services = ClientServices.Build(collection =>
+        {
+            // A screen hears about a run change one RunChangeFeed window later; zero posts it straight to the UI thread,
+            // so a test sees the refresh at its next RunJobs() rather than having to sleep through the window.
+            // RunChangeFeedTests covers the window itself.
+            collection.AddSingleton(provider => new RunChangeFeed(provider.GetRequiredService<IEventBus>(),
+                provider.GetRequiredService<ILogger<RunChangeFeed>>(), TimeSpan.Zero));
+            configure?.Invoke(collection);
+        });
 
         // ClientServices.Build() does not migrate (Program.Main does); apply the client migration stack here.
         using (var scope = services.CreateScope())

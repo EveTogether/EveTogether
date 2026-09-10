@@ -374,6 +374,18 @@ taken from the matching `## vX.Y.Z` section below.
   pending review.
 
 ### Fixed
+- **The runs screen, the home dashboard and an open activity now keep up with everything that happens to a
+  run, without being reopened.** Until now each of them only followed a handful of actions, and every other
+  change sat unseen until you opened the screen again: a run stopped from its own window never showed up in
+  UNFINISHED, a run saved from its window stayed in UNFINISHED as well, a payout landing after STOP didn't
+  move that run's TOTAL ISK, publishing to a server didn't say "queued", an activity a server synced in
+  didn't appear at all, deleting or restoring a saved activity didn't move **ISK today**, and an open
+  activity's detail screen never changed unless you changed it right there. All of that now shows up on its
+  own — a detail screen whose activity is deleted somewhere else says so and offers Undo, and one that is
+  restored comes back. It stays calm while you fly: a burst of payouts is picked up a few times a second,
+  not once per line, and nothing jumps while the screen catches up — an evening you folded stays folded,
+  an activity you opened stays open, the list stays scrolled where you left it, and a loot list you are
+  writing out by hand waits until you save or cancel it.
 - **DISCARD on your own run now actually throws it away.** The runs overview used to keep counting up
   a discarded run's timer until the screen was reopened, and the run itself still turned up in
   UNFINISHED afterwards even though you'd already thrown it away — both are fixed. A toast right after

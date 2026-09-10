@@ -35,6 +35,7 @@ internal sealed class SetRunLootCaptureRoleCommandHandler(IDbContextFactory<Clie
         // The run window shows this run twice since ET-215 — the starting-hold picker and the run's own block in the
         // per-character loot — and the block has to follow a new starting hold as much as a new capture.
         await eventBus.PublishAsync(new RunLootCapturedEvent(capture.RunId), EventTarget.Local, cancellationToken);
+        await eventBus.PublishAsync(new RunsChangedEvent(capture.RunId), EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 }

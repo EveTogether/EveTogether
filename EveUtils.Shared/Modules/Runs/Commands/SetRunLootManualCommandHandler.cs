@@ -75,6 +75,7 @@ internal sealed class SetRunLootManualCommandHandler(
         await eventBus.PublishAsync(new RunLootCapturedEvent(command.RunId), EventTarget.Local, cancellationToken);
         if (isSaved)
             await eventBus.PublishAsync(new RunLootCorrectedEvent(command.RunId), EventTarget.Local, cancellationToken);
+        await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         return Result<Guid>.Success(manual.Id);
     }
 }

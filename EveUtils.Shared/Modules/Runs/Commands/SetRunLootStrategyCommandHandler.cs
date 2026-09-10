@@ -3,13 +3,14 @@ using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Entities;
+using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
-internal sealed class SetRunLootStrategyCommandHandler(IDbContextFactory<ClientDbContext> contextFactory)
+internal sealed class SetRunLootStrategyCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus)
     : ICommandHandler<SetRunLootStrategyCommand, Result>
 {
     public async Task<Result> Handle(SetRunLootStrategyCommand command, CancellationToken cancellationToken = default)
@@ -27,6 +28,7 @@ internal sealed class SetRunLootStrategyCommandHandler(IDbContextFactory<ClientD
             run.SyncState = RunSyncState.Pending;
         run.Revision++;
         await db.SaveChangesAsync(cancellationToken);
+        await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 }

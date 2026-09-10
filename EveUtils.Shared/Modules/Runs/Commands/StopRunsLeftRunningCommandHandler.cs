@@ -3,13 +3,14 @@ using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Entities;
+using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
-internal sealed class StopRunsLeftRunningCommandHandler(IDbContextFactory<ClientDbContext> contextFactory)
+internal sealed class StopRunsLeftRunningCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus)
     : ICommandHandler<StopRunsLeftRunningCommand, Result<int>>
 {
     public async Task<Result<int>> Handle(StopRunsLeftRunningCommand command, CancellationToken cancellationToken = default)
@@ -34,6 +35,8 @@ internal sealed class StopRunsLeftRunningCommandHandler(IDbContextFactory<Client
         }
 
         await db.SaveChangesAsync(cancellationToken);
+        foreach (Run run in running)
+            await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         return Result<int>.Success(running.Count);
     }
 }

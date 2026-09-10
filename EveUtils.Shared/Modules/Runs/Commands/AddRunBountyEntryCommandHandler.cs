@@ -3,12 +3,13 @@ using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Entities;
+using EveUtils.Shared.Modules.Runs.Events;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
-internal sealed class AddRunBountyEntryCommandHandler(IDbContextFactory<ClientDbContext> contextFactory)
+internal sealed class AddRunBountyEntryCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus)
     : ICommandHandler<AddRunBountyEntryCommand, Result>
 {
     public async Task<Result> Handle(AddRunBountyEntryCommand command, CancellationToken cancellationToken = default)
@@ -35,6 +36,7 @@ internal sealed class AddRunBountyEntryCommandHandler(IDbContextFactory<ClientDb
             Isk = command.Isk
         });
         await db.SaveChangesAsync(cancellationToken);
+        await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 }
