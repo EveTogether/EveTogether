@@ -111,6 +111,12 @@ public interface ISdeAccessor
     /// unavailable, <paramref name="name"/> is blank, or no system carries that name.</summary>
     SdeSolarSystem? FindSolarSystemByName(string name);
 
+    /// <summary>By-id solar system lookup (ET-213): a saved activity carries only <c>Run.SolarSystemId</c>, never
+    /// the name it was resolved from at START, so the detail screen needs the id-keyed direction
+    /// <see cref="FindSolarSystemByName"/> does not offer. Null when the SDE is unavailable or no system carries
+    /// that id — a stale or out-of-range id from an older build, not treated as an error.</summary>
+    SdeSolarSystem? GetSolarSystem(int solarSystemId);
+
     /// <summary>Release the store file (drop pooled connections + stop serving queries) so the importer can overwrite
     /// it during the atomic swap — on Windows an open/pooled handle blocks <c>File.Move</c>. Pair with <see cref="Reopen"/>.</summary>
     void Close();

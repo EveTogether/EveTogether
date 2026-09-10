@@ -161,6 +161,9 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     public SdeSolarSystem? FindSolarSystemByName(string name) =>
         string.IsNullOrWhiteSpace(name) ? null : _solarSystemsByName.GetValueOrDefault(name.Trim());
 
+    public SdeSolarSystem? GetSolarSystem(int solarSystemId) =>
+        _solarSystemsByName.Values.FirstOrDefault(system => system.SolarSystemId == solarSystemId);
+
     public void Close() { }
     public void Reopen() { }
 

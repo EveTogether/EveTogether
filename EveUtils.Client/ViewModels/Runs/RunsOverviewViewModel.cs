@@ -517,7 +517,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         _dialogs.ShowActivityDetail(
             new ActivityDetailViewModel(_dispatcher, row.ActivitySummaryId,
                 _services.GetService<IMarketPriceRepository>(), _NameOf,
-                _services.GetService<IEsiClient>(), _services.GetService<IEsiLocationClient>()),
+                _services.GetService<IEsiClient>(), _services.GetService<IEsiLocationClient>(),
+                _services.GetService<ISdeAccessor>()),
             row.ActivitySummaryId);
         return Task.CompletedTask;
     }

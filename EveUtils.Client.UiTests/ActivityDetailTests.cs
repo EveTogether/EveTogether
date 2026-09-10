@@ -14,6 +14,7 @@ using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
+using EveUtils.Shared.Modules.Sde.Dtos;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ICqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
@@ -56,6 +57,55 @@ public sealed class ActivityDetailTests
         await viewModel.LoadAsync(cancellationToken);
 
         Assert.Equal("RaymondKrah", Assert.Single(viewModel.RunRows).CharacterText);
+    }
+
+    // ── LOCATION shows a name, not a bare id (ET-213) ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Counter-proof: Jithran, 2026-09-10 — LOCATION and the ACTIVITY header both read "system 30000142" for a
+    /// saved site run, even though the SDE carries a name for that id. Red against the pre-fix code
+    /// (<c>ActivityDetailViewModel.cs:230</c>), which printed <c>Run.SolarSystemId</c> straight into the text with
+    /// no lookup at all.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task LocationText_NamesTheSolarSystemFromTheSde_InBothLocationAndTheActivityHeader()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunAsync(dispatcher, 90000001, null, cancellationToken);
+        Result<IReadOnlyList<ActivityOverviewRowDto>> overview =
+            await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(overview));
+
+        // 30000142, matching the fixed solar system id every _SaveSiteRunAsync run in this file is started on.
+        var sde = new FakeSdeAccessor().AddSolarSystem(new SdeSolarSystem(30000142, "Cistuvaert", 0.8));
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IMarketPriceRepository>(), sde: sde);
+        await viewModel.LoadAsync(cancellationToken);
+
+        Assert.Equal("Cistuvaert", viewModel.LocationText);
+        Assert.Equal("Combat Site · Cistuvaert", viewModel.Activity.HeaderSummary);
+    }
+
+    /// <summary>AC-4: a stored id the SDE does not carry — no SDE at all here, the widest version of that case —
+    /// falls back to something readable rather than a blank LOCATION row or a thrown exception.</summary>
+    [AvaloniaFact]
+    public async Task LocationText_FallsBackToTheBareId_WhenTheSdeHasNoMatch()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunAsync(dispatcher, 90000001, null, cancellationToken);
+        Result<IReadOnlyList<ActivityOverviewRowDto>> overview =
+            await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(overview));
+
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IMarketPriceRepository>(), sde: new FakeSdeAccessor());
+        await viewModel.LoadAsync(cancellationToken);
+
+        Assert.Equal("system 30000142", viewModel.LocationText);
     }
 
     /// <summary>AC-1, mission half: a mission names its agent and its level and shows REWARDS, and carries no

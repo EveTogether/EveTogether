@@ -657,6 +657,21 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
             : null;
     }
 
+    public SdeSolarSystem? GetSolarSystem(int solarSystemId)
+    {
+        using var connection = Open();
+        if (connection is null)
+            return null;
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT solarSystemId, nameEn, securityStatus FROM SolarSystem WHERE solarSystemId = $id;";
+        command.Parameters.AddWithValue("$id", solarSystemId);
+        using var reader = command.ExecuteReader();
+        return reader.Read()
+            ? new SdeSolarSystem(reader.GetInt32(0), reader.GetString(1), reader.GetDouble(2))
+            : null;
+    }
+
     private static SdeAgent ReadAgent(SqliteDataReader reader) =>
         new(
             reader.GetInt32(0),

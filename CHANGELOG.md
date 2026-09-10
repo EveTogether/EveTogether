@@ -333,6 +333,9 @@ taken from the matching `## vX.Y.Z` section below.
   pending review.
 
 ### Fixed
+- **A saved activity's LOCATION, and the ACTIVITY panel's own heading, now show the solar system's
+  name instead of its bare id** ("system 30004097"). Old activities with a recorded system now show a
+  name immediately too.
 - **The character picker now always opens on top of the EVE client, and remembers where you last moved
   it**, reopening in the same spot instead of re-centering every time — falling back to centered only
   if that spot is no longer on a connected monitor.

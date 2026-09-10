@@ -11,6 +11,7 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Runs.Tally;
+using EveUtils.Shared.Modules.Sde;
 using ActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
@@ -40,10 +41,11 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     private readonly Func<long, string>? _nameOf;
     private readonly IEsiClient? _esi;
     private readonly IEsiLocationClient? _locations;
+    private readonly ISdeAccessor? _sde;
 
     public ActivityDetailViewModel(CqrsDispatcher dispatcher, Guid activitySummaryId,
         IMarketPriceRepository? prices = null, Func<long, string>? nameOf = null,
-        IEsiClient? esi = null, IEsiLocationClient? locations = null)
+        IEsiClient? esi = null, IEsiLocationClient? locations = null, ISdeAccessor? sde = null)
     {
         _dispatcher = dispatcher;
         _activitySummaryId = activitySummaryId;
@@ -51,6 +53,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         _nameOf = nameOf;
         _esi = esi;
         _locations = locations;
+        _sde = sde;
     }
 
     public ActivitySection Activity { get; } = new() { Title = "ACTIVITY", IsExpanded = true };
@@ -234,7 +237,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         ActivityRunDetailDto? withAgent = detail.Runs.FirstOrDefault(run => run.AgentId is not null);
         AgentText = withAgent?.AgentId is { } agentId ? $"agent {agentId}" : "not recorded";
         MissionLevelText = withAgent?.MissionLevel is { } level ? $"level {level}" : "not recorded";
-        LocationText = detail.SolarSystemId is { } solarSystemId ? $"system {solarSystemId}" : "not recorded";
+        LocationText = _LocationText(detail.SolarSystemId);
         SignatureText = source?.Signature ?? string.Empty;
         IsSignatureShown = !string.IsNullOrWhiteSpace(source?.Signature);
         FitText = source?.FitNameSnapshot ?? "not recognised";
@@ -251,6 +254,18 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
             ? $"{AgentText} · {MissionLevelText}"
             : $"{KindText} · {LocationText}";
     }
+
+    /// <summary>The system a run was on, named through the local SDE (ET-213) — never ESI, and never the bare id
+    /// the store carries (a regression from ET-210/ET-130: <c>Run.SolarSystemId</c> only started being recorded for
+    /// a site run then, and this screen never learned to turn it into a name). The same reading the run window
+    /// already gives live, <c>ActivityWindowViewModel.LocationText</c>: a plain name, no security status, because
+    /// the window itself does not show one either. A stored id the SDE does not carry — an older build, a boundary
+    /// case — falls back to the id itself rather than a blank line or an error: still a readable place, just not a
+    /// name anyone typed.</summary>
+    private string _LocationText(int? solarSystemId) =>
+        solarSystemId is not { } id
+            ? "not recorded"
+            : _sde?.GetSolarSystem(id)?.Name ?? $"system {id}";
 
     private void _ApplyRewards(ActivityDetailDto detail)
     {
