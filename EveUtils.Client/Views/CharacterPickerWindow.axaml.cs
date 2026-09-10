@@ -38,7 +38,8 @@ public partial class CharacterPickerWindow : ChromedWindow
         PositionChanged += (_, e) => _lastPosition = e.Point;
     }
 
-    public CharacterPickerWindow(string prompt, IReadOnlyList<CharacterPickOption> options, bool multiSelect = false) : this()
+    public CharacterPickerWindow(string prompt, IReadOnlyList<CharacterPickOption> options, bool multiSelect = false,
+        int? preselectedCharacterId = null) : this()
     {
         _multiSelect = multiSelect;
         // Set in code-behind: an ElementName binding to a plain property reads "" at load time (assigned after).
@@ -53,6 +54,19 @@ public partial class CharacterPickerWindow : ChromedWindow
 
         foreach (var o in options)
             Options.Add(new CharacterPickRowViewModel(o));
+
+        // ET-216: whoever's own clipboard copy raised this question starts ticked — a starting point the pilot can
+        // add to or clear, never an automatic start. Left alone (no selection at all, same as before this ticket)
+        // when the id names nobody shown here or a row that cannot be picked at all — an unknown sender, a sender
+        // who isn't among these candidates, or a disabled option are all the same "nothing to preselect" case.
+        if (preselectedCharacterId is { } id
+            && Options.FirstOrDefault(o => o.CharacterId == id && o.Enabled) is { } preselected)
+        {
+            if (_multiSelect)
+                list.SelectedItems?.Add(preselected);
+            else
+                list.SelectedItem = preselected;
+        }
 
         // Program.Services is only wired in the real app (Program.Main), not in headless tests that new up this
         // window directly. One fire-and-forget load per row (not awaited in sequence), same as the fleet roster's
