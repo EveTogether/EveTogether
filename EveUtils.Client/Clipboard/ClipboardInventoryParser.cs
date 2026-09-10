@@ -216,8 +216,6 @@ public static class ClipboardInventoryParser
         if (value.Length == 0)
             return false;
 
-        value = value.Replace(' ', '.').Replace('\u00A0', '.').Replace('\u202F', '.');
-
         try
         {
             var separator = '\0';

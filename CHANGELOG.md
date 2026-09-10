@@ -336,7 +336,7 @@ taken from the matching `## vX.Y.Z` section below.
 - **A saved activity's LOCATION, and the ACTIVITY panel's own heading, now show the solar system's
   name instead of its bare id** ("system 30004097"). Old activities with a recorded system now show a
   name immediately too.
-- **Large ISK, Loyalty Points, quantities and prices copied with space-separated digits now keep their full value.**
+- **Large ISK, Loyalty Points and prices copied with space-separated digits now keep their full value.**
   EVE's normal, non-breaking and narrow non-breaking spaces are all read as the same thousands separator.
 - **Mission rewards copied from EVE no longer disappear from a run when their clipboard line has trailing
   whitespace.**

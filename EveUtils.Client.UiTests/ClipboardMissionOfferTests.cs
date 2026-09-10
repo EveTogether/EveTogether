@@ -55,7 +55,7 @@ public sealed class ClipboardMissionOfferTests
         AgentTypeName: "EpicArcAgent", DivisionId: 1, IsLocator: false, CorporationId: 1000089,
         LocationId: 60008689, SolarSystemId: 30005040, SolarSystemName: "Nishah");
 
-    // AC-1 tegenproef: the same block, closed window and already-open window, both land a running run — ET-158
+    // AC-1 countercheck: the same block, closed window and already-open window, both land a running run — ET-158
     // showed that repairing only one of the two routes leaves the other silently broken.
     [AvaloniaTheory]
     [InlineData(false)]
@@ -83,7 +83,7 @@ public sealed class ClipboardMissionOfferTests
         Assert.Equal("EpicArcAgent", agent?.AgentTypeName);
     }
 
-    // AC-6 tegenproef: one test over the full reward block, all four RunParameterKey shapes it can produce. No real
+    // AC-6 countercheck: one test over the full reward block, all four RunParameterKey shapes it can produce. No real
     // capture carries a Loyalty Points or Item line, so this block is built rather than measured — its only job is
     // to prove the four reward shapes each land on the row ET-137 already defined for them.
     [AvaloniaFact]
@@ -149,7 +149,7 @@ public sealed class ClipboardMissionOfferTests
             });
     }
 
-    // AC-8 tegenproef: a made-up agent name — the SDE import is a snapshot, and CCP adds agents. A miss must not
+    // AC-8 countercheck: a made-up agent name — the SDE import is a snapshot, and CCP adds agents. A miss must not
     // block the run.
     [AvaloniaFact]
     public async Task AMissionForAnAgentTheSdeDoesNotKnow_StillStartsARun_WithoutALevel_AndWithANotice()
