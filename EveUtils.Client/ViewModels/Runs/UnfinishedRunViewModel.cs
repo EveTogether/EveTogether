@@ -45,8 +45,16 @@ public sealed partial class UnfinishedRunViewModel(
 
     /// <summary>What this run earned so far, out of the same sum the run window's own TOTAL ISK and a saved
     /// activity's TOTAL ISK are made of (<see cref="UnfinishedRunDto.TotalIsk"/>) — shown honestly rather than left
-    /// blank when there is nothing yet, the same "— ISK" a saved figure without a value already reads.</summary>
-    public string TotalIskText { get; } = IskFormat.Exact((double)run.TotalIsk);
+    /// blank when there is nothing yet. A real, known zero reads "0 ISK" (<see cref="IskFormat.ExactOrZero"/>); an
+    /// unanswerable one — captured loot with no known price, and nothing else to go on — says so in words instead of
+    /// pretending to be a zero it might not be (<see cref="UnfinishedRunDto.TotalIskUnknown"/>, ET-217 review).
+    /// </summary>
+    public string TotalIskText { get; } =
+        run.TotalIskUnknown ? "not priced yet" : IskFormat.ExactOrZero((double)run.TotalIsk);
+
+    /// <summary>Whether <see cref="TotalIskText"/> is that unanswerable case — read by the view so the two never
+    /// look alike: a real amount is a figure worth noticing, a shrug is not.</summary>
+    public bool TotalIskUnknown { get; } = run.TotalIskUnknown;
 
     [RelayCommand]
     private Task SaveAsync() => save(this);

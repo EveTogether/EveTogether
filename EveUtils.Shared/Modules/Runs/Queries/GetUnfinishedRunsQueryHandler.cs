@@ -46,9 +46,13 @@ internal sealed class GetUnfinishedRunsQueryHandler(
             ? new Dictionary<int, double>()
             : await marketPrices.GetAveragePricesAsync(lootTypeIds, cancellationToken);
 
-        List<UnfinishedRunDto> dtos = [.. runs.Select(run => new UnfinishedRunDto(
-            run.Id, run.CharacterId, run.ActivityKind, run.SiteName, run.StartedAtUtc, run.StoppedAtUtc,
-            _TotalIsk(run, prices)))];
+        List<UnfinishedRunDto> dtos = [.. runs.Select(run =>
+        {
+            (decimal total, bool unknown) = _TotalIsk(run, prices);
+            return new UnfinishedRunDto(
+                run.Id, run.CharacterId, run.ActivityKind, run.SiteName, run.StartedAtUtc, run.StoppedAtUtc,
+                total, unknown);
+        })];
         return Result<IReadOnlyList<UnfinishedRunDto>>.Success(dtos);
     }
 
@@ -56,7 +60,7 @@ internal sealed class GetUnfinishedRunsQueryHandler(
     // show one row per Run, singular site and character text) — so a run that belongs to an ET-210 multi-toon group
     // shows what THAT run itself captured, not the group's combined total: SAVE and DELETE act on this one row alone,
     // and a merged figure would not match what either button actually commits or discards.
-    private static decimal _TotalIsk(Run run, IReadOnlyDictionary<int, double> prices)
+    private static (decimal Total, bool Unknown) _TotalIsk(Run run, IReadOnlyDictionary<int, double> prices)
     {
         IReadOnlyList<LootTallyLine> loot = LootTally.Count(
             [.. run.LootCaptures
@@ -64,9 +68,18 @@ internal sealed class GetUnfinishedRunsQueryHandler(
                 .Select(capture => new LootTallyCapture(capture.Role, capture.IsExcluded,
                     [.. capture.Entries.Select(entry =>
                         new LootTallyLine(entry.ItemTypeId, entry.Quantity, entry.Volume, entry.LootKind))]))]);
+        decimal? lootIskNet = _NetIsk(loot, prices);
         decimal bountyIsk = run.BountyEntries.Sum(entry => entry.Isk);
-        return TotalIskCalculator.Total(bountyIsk, _NetIsk(loot, prices),
-            run.Parameters.Select(parameter => (parameter.ParameterKey, parameter.Amount)));
+        IReadOnlyList<(RunParameterKey Key, decimal? Amount)> parameters =
+            [.. run.Parameters.Select(parameter => (parameter.ParameterKey, parameter.Amount))];
+        decimal total = TotalIskCalculator.Total(bountyIsk, lootIskNet, parameters);
+
+        // Unknown only when loot is the sole reason nothing can be said: bounty and rewards are both read straight
+        // off storage, never priced, so either one being nonzero already makes the total a real (if possibly
+        // loot-incomplete) figure rather than a guess.
+        bool unknown = bountyIsk == 0m && TotalIskCalculator.RewardIsk(parameters) == 0m
+            && loot.Count > 0 && lootIskNet is null;
+        return (total, unknown);
     }
 
     // Same rule as RebuildActivitySummariesCommandHandler._KnownLootValue: a missing price counts as zero pieces,
