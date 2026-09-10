@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Client.Formatting;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
@@ -29,7 +30,7 @@ public sealed partial class RunsDayViewModel : ObservableObject
         decimal[] known = [.. rows.Where(row => row.NetIsk.HasValue).Select(row => row.NetIsk!.Value)];
         string netText = known.Length == 0
             ? "nothing recorded to value"
-            : (known.Sum() < 0 ? string.Empty : "+") + ActivityRewardChipViewModel.Compact(known.Sum()) + " ISK net";
+            : (known.Sum() < 0 ? string.Empty : "+") + IskFormat.Compact(known.Sum()) + " ISK net";
 
         SummaryText = $"{activities} · {flownText} · {netText}";
     }

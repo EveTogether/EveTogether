@@ -375,13 +375,13 @@ public class MultipleConcurrentRunsTests
         // The starter's own bounty, watched directly through this window's own gamelog filter.
         await gamelog.AddBountyAsync(ActivityWindowHarness.CharacterName, new BountyEvent(DateTime.UtcNow, 337_500));
         await ActivityWindowHarness.WaitUntil(() => model.HasGroupTotalIsk);
-        Assert.Equal("337,500.00 ISK", model.GroupTotalIskText);
+        Assert.Equal("337,500 ISK", model.GroupTotalIskText);
 
         // The second character's own bounty — this window never watches their gamelog directly; only
         // GamelogClientService's own per-run tally knows about it, and the group total must count it in anyway.
         await gamelog.AddBountyAsync("Second Pilot", new BountyEvent(DateTime.UtcNow, 675_000));
         model.Refresh(DateTime.UtcNow); // the tick the live clock runs on every second
-        Assert.Equal("1,012,500.00 ISK", model.GroupTotalIskText);
+        Assert.Equal("1,012,500 ISK", model.GroupTotalIskText);
 
         // Switching the column to the second character's own run must not move the figure: it is the group's
         // total, not whichever character the column happens to be showing.
@@ -389,7 +389,7 @@ public class MultipleConcurrentRunsTests
         model.SelectRunCharacterCommand.Execute(second);
         await ActivityWindowHarness.WaitUntil(() => model.RunId == second.RunId);
         model.Refresh(DateTime.UtcNow);
-        Assert.Equal("1,012,500.00 ISK", model.GroupTotalIskText);
+        Assert.Equal("1,012,500 ISK", model.GroupTotalIskText);
     }
 
     /// <summary>
@@ -428,9 +428,9 @@ public class MultipleConcurrentRunsTests
         await ActivityWindowHarness.WaitUntil(() =>
         {
             model.Refresh(DateTime.UtcNow);
-            return model.GroupTotalIskText == "300.00 ISK";
+            return model.GroupTotalIskText == "300 ISK";
         });
-        Assert.Equal("300.00 ISK", model.GroupTotalIskText);
+        Assert.Equal("300 ISK", model.GroupTotalIskText);
 
         // The second character's own capture — this window's LOOT section never shows it (RunLoot follows whichever
         // run the column displays), yet the group total must count it in anyway.
@@ -442,7 +442,7 @@ public class MultipleConcurrentRunsTests
         await ActivityWindowHarness.WaitUntil(() =>
         {
             model.Refresh(DateTime.UtcNow);
-            return model.GroupTotalIskText == "500.00 ISK";
+            return model.GroupTotalIskText == "500 ISK";
         });
 
         // Switching the column to the second character's own run must not move the figure.
@@ -450,7 +450,7 @@ public class MultipleConcurrentRunsTests
         model.SelectRunCharacterCommand.Execute(second);
         await ActivityWindowHarness.WaitUntil(() => model.RunId == second.RunId);
         model.Refresh(DateTime.UtcNow);
-        Assert.Equal("500.00 ISK", model.GroupTotalIskText);
+        Assert.Equal("500 ISK", model.GroupTotalIskText);
     }
 
     /// <summary>
@@ -481,21 +481,21 @@ public class MultipleConcurrentRunsTests
                 CapturedAtUtc = DateTime.UtcNow, Source = LootCaptureSource.Clipboard, PreferredRunId = runId,
                 Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = quantity, LootKind = LootKind.Gained }]
             }));
-        await ActivityWindowHarness.WaitUntil(() => loot.NetIskDisplay == "500.00 ISK");
+        await ActivityWindowHarness.WaitUntil(() => loot.NetIskDisplay == "500 ISK");
 
         Assert.Equal(2, loot.Characters.Count);
         ActivityLootCharacterViewModel secondBlock = loot.Characters.Single(block => block.CharacterId == 90000002);
-        Assert.Equal("200.00 ISK", secondBlock.SubtotalText);
-        Assert.Equal("300.00 ISK", loot.Characters.Single(block => block.CharacterId == 90000001).SubtotalText);
+        Assert.Equal("200 ISK", secondBlock.SubtotalText);
+        Assert.Equal("300 ISK", loot.Characters.Single(block => block.CharacterId == 90000001).SubtotalText);
 
         Assert.True(await secondBlock.Loot.ToggleExcludedAsync(secondBlock.Loot.Captures[0]));
         await ActivityWindowHarness.WaitUntil(() =>
         {
             model.Refresh(DateTime.UtcNow);
-            return model.GroupTotalIskText == "300.00 ISK";
+            return model.GroupTotalIskText == "300 ISK";
         });
-        Assert.Equal("300.00 ISK", model.GroupTotalIskText);
-        Assert.Equal("300.00 ISK", loot.NetIskDisplay);
+        Assert.Equal("300 ISK", model.GroupTotalIskText);
+        Assert.Equal("300 ISK", loot.NetIskDisplay);
 
         // The column moving to the second character changes which run the holds belong to, not the list.
         model.SelectRunCharacterCommand.Execute(model.RunCharacters.Single(row => row.CharacterId == 90000002));

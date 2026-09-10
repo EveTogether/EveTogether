@@ -478,6 +478,10 @@ taken from the matching `## vX.Y.Z` section below.
   out of the fit's original import data — so the old name kept coming back. Both now show the name you gave it, and
   fall back to the imported one when you never renamed it. Renaming still leaves the fit's contents untouched: a
   renamed fit is the same fit, which is why the name is kept apart from them in the first place.
+- **ISK figures across the app now show as whole numbers, the way EVE itself displays them** — no more
+  `965.32 ISK` or `11,510,569.11 ISK` with cents nobody uses. A total is rounded once, from the exact sum of
+  what makes it up, so it always matches what the rows underneath it add up to. Typing or pasting an ISK
+  amount still accepts decimals; only the on-screen figure is rounded.
 
 ## v0.2.0-beta — 2026-07-06
 

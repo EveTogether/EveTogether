@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Client.Formatting;
 using EveUtils.Client.Imaging;
 
 namespace EveUtils.Client.ViewModels.Runs;
@@ -168,5 +169,5 @@ public sealed partial class ActivityLootViewModel : ObservableObject
         return known.Length == 0 ? null : known.Sum();
     }
 
-    private static string _Display(decimal? value) => value is { } isk ? $"{isk:N2} ISK" : "no price";
+    private static string _Display(decimal? value) => IskFormat.WholeOrNoPrice(value);
 }

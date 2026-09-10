@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using Avalonia;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Controls;
 using EveUtils.Client.Esi;
+using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
@@ -276,11 +276,7 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     /// <summary>Whether to show the bounty line (a member shares bounty and has earned some).</summary>
     public bool HasBounty => Bounty > 0;
 
-    internal static string CompactIsk(long isk) =>
-        isk >= 1_000_000_000 ? (isk / 1e9).ToString("0.##", CultureInfo.InvariantCulture) + "B ISK"
-        : isk >= 1_000_000 ? (isk / 1e6).ToString("0.##", CultureInfo.InvariantCulture) + "M ISK"
-        : isk >= 1_000 ? (isk / 1e3).ToString("0.#", CultureInfo.InvariantCulture) + "k ISK"
-        : isk + " ISK";
+    internal static string CompactIsk(long isk) => IskFormat.Compact(isk) + " ISK";
 
     /// <summary>Design-time constructor (XAML previewer).</summary>
     public DpsViewModel()

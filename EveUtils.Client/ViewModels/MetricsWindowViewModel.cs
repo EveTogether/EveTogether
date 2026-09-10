@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Esi;
+using EveUtils.Client.Formatting;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.Platform;
 using Microsoft.Extensions.DependencyInjection;
@@ -147,7 +148,7 @@ public partial class MetricsWindowViewModel : ViewModelBase, IDisposable
             bounty += row.BountyValue;
             mined += row.MinedValue;
         }
-        BountyTotal = $"{bounty:N0} ISK";
+        BountyTotal = IskFormat.Whole(bounty);
         MinedTotal = mined == 0 ? "" : $"{mined:N0} units mined";
     }
 

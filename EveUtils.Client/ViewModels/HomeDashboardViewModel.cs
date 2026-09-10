@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Formatting;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Messaging;
@@ -387,13 +387,7 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
     }
 
     /// <summary>Compact ISK formatting for the dashboard summary chip ("894.4k", "1.2M", "3.4B").</summary>
-    private static string CompactIsk(long isk) => isk switch
-    {
-        >= 1_000_000_000 => (isk / 1_000_000_000d).ToString("0.0", CultureInfo.InvariantCulture) + "B",
-        >= 1_000_000 => (isk / 1_000_000d).ToString("0.0", CultureInfo.InvariantCulture) + "M",
-        >= 1_000 => (isk / 1_000d).ToString("0.0", CultureInfo.InvariantCulture) + "k",
-        _ => isk.ToString(CultureInfo.InvariantCulture)
-    };
+    private static string CompactIsk(long isk) => IskFormat.CompactStable(isk);
 }
 
 /// <summary>One of your fleets on the dashboard — name, its in-game phase (Forming/Active) and a member/server line

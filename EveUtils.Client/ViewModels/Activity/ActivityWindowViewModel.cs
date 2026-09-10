@@ -12,6 +12,7 @@ using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Formatting;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Notifications;
@@ -932,7 +933,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public string BountyText => IsInsideAbyssal
         ? "— no bounty in abyssal space"
-        : BountyIsk > 0 ? $"{BountyIsk:N0} ISK — own character" : "no payouts yet — own character";
+        : BountyIsk > 0 ? $"{IskFormat.Whole(BountyIsk)} — own character" : "no payouts yet — own character";
 
     /// <summary>Whether there is a copied signature behind this run at all. A run started by hand has none, and a
     /// row that can only ever read "not known yet" is worse than no row.</summary>
@@ -3106,7 +3107,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         decimal total = bountyIsk + lootIsk.GetValueOrDefault() + rewardIsk;
         HasGroupTotalIsk = bountyIsk > 0 || lootIsk is not null || rewardIsk > 0;
-        GroupTotalIskText = $"{total:N2} ISK";
+        GroupTotalIskText = IskFormat.Whole(total);
     }
 
     // The signature arrives after construction, from the object initialiser the toast opens the window with — so the
