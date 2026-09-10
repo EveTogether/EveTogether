@@ -16,12 +16,30 @@ public interface IForegroundEveClientReader
     /// different app, a mirror window, or a platform this hasn't been built for. Null means "unknown", never a
     /// guess: the caller decides what unknown means for it, this only reports what was actually seen.</summary>
     string? CharacterAtForegroundWindow();
+
+    /// <summary>Diagnostic detail on the current foreground window (ET-211) — enough to judge whether
+    /// <see cref="CharacterAtForegroundWindow"/> is answering correctly, without ever carrying another
+    /// program's window title. Meant to be read after the time-critical moment, for logging only.</summary>
+    ForegroundWindowSnapshot DescribeForegroundWindow();
 }
 
 /// <summary>No platform support: focus is always unknown here, same contract as <see cref="NullEveClientProbe"/>.</summary>
 public sealed class NullForegroundEveClientReader : IForegroundEveClientReader
 {
     public string? CharacterAtForegroundWindow() => null;
+
+    public ForegroundWindowSnapshot DescribeForegroundWindow() => ForegroundWindowSnapshot.Unknown;
+}
+
+/// <summary>
+/// What the foreground window looked like, for the ET-211 diagnostic log rather than for any decision the app
+/// makes. <see cref="WindowTitle"/> is populated only when <see cref="IsClientProcess"/> is true: any other
+/// program's title can carry exactly the kind of text — a browser tab, a chat window — that has no business in
+/// a log file, so it is simply never captured for those.
+/// </summary>
+public sealed record ForegroundWindowSnapshot(int? ProcessId, string? ProcessName, bool IsClientProcess, string? WindowTitle)
+{
+    public static readonly ForegroundWindowSnapshot Unknown = new(null, null, false, null);
 }
 
 /// <summary>
@@ -129,6 +147,31 @@ public sealed class WindowsEveClientProbe : IEveClientProbe, IForegroundEveClien
         }
     }
 
+    /// <summary>Diagnostic detail on the current foreground window (ET-211). Not called from
+    /// <see cref="CharacterAtForegroundWindow"/> or its hot path — this is for logging, read afterward, so it
+    /// never stretches the time-critical jump ET-138 measures focus on.</summary>
+    public ForegroundWindowSnapshot DescribeForegroundWindow()
+    {
+        try
+        {
+            var handle = _foreground.GetForegroundWindow();
+            if (handle == IntPtr.Zero)
+                return ForegroundWindowSnapshot.Unknown;
+
+            if (_foreground.Describe(handle) is not { } window)
+                return ForegroundWindowSnapshot.Unknown;
+
+            var isClientProcess = _foreground.IsClientProcess(window.ProcessId);
+            var processName = _foreground.ProcessName(window.ProcessId);
+            return new ForegroundWindowSnapshot((int)window.ProcessId, processName, isClientProcess,
+                isClientProcess ? window.Title : null);
+        }
+        catch
+        {
+            return ForegroundWindowSnapshot.Unknown;
+        }
+    }
+
     // Enumerate the visible top-level windows owned by an EVE client process, yielding (handle, character name).
     private static IEnumerable<(IntPtr Handle, string Name)> EnumerateClientWindows()
     {
@@ -204,6 +247,7 @@ public sealed class WindowsEveClientProbe : IEveClientProbe, IForegroundEveClien
         IntPtr GetForegroundWindow();
         (uint ProcessId, string Title)? Describe(IntPtr handle);
         bool IsClientProcess(uint processId);
+        string? ProcessName(uint processId);
     }
 
     private sealed class Win32ForegroundWindowSource : IForegroundWindowSource
@@ -233,6 +277,20 @@ public sealed class WindowsEveClientProbe : IEveClientProbe, IForegroundEveClien
                 }
             }
             return false;
+        }
+
+        public string? ProcessName(uint processId)
+        {
+            try
+            {
+                using var process = Process.GetProcessById((int)processId);
+                return process.ProcessName;
+            }
+            catch
+            {
+                // Gone by the time it's asked about, or not ours to query — reads as "unknown", not an error.
+                return null;
+            }
         }
     }
 }

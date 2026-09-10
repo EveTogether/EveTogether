@@ -49,8 +49,57 @@ public class WindowsEveClientProbeTests
         Assert.Null(probe.CharacterAtForegroundWindow());
     }
 
+    /// <summary>ET-211: the diagnostic snapshot carries the game window's title, since that title is the game's own.</summary>
+    [Fact]
+    public void DescribeForegroundWindow_OnTheClient_ReportsTheTitleToo()
+    {
+        var jithranWindow = new IntPtr(1);
+        var source = new FakeWindowSource(foreground: jithranWindow,
+            windows: new() { [jithranWindow] = (ProcessId: 100u, Title: "EVE - Jithran") },
+            clientPids: [100u], processNames: new() { [100u] = "exefile" });
+
+        var probe = new WindowsEveClientProbe(source);
+        var snapshot = probe.DescribeForegroundWindow();
+
+        Assert.Equal(100, snapshot.ProcessId);
+        Assert.Equal("exefile", snapshot.ProcessName);
+        Assert.True(snapshot.IsClientProcess);
+        Assert.Equal("EVE - Jithran", snapshot.WindowTitle);
+    }
+
+    /// <summary>ET-211: for anything that isn't the game, the process name is reported but the title is withheld —
+    /// a browser tab or a chat window's title can carry exactly the kind of text that has no business in a log.</summary>
+    [Fact]
+    public void DescribeForegroundWindow_OnAnotherProgram_WithholdsTheTitle()
+    {
+        var browserWindow = new IntPtr(4);
+        var source = new FakeWindowSource(foreground: browserWindow,
+            windows: new() { [browserWindow] = (ProcessId: 400u, Title: "Something private — Browser") },
+            clientPids: [100u], processNames: new() { [400u] = "chrome" });
+
+        var probe = new WindowsEveClientProbe(source);
+        var snapshot = probe.DescribeForegroundWindow();
+
+        Assert.Equal(400, snapshot.ProcessId);
+        Assert.Equal("chrome", snapshot.ProcessName);
+        Assert.False(snapshot.IsClientProcess);
+        Assert.Null(snapshot.WindowTitle);
+    }
+
+    /// <summary>ET-211: nothing focused, or nothing readable about it, reads as unknown rather than a guess.</summary>
+    [Fact]
+    public void DescribeForegroundWindow_WithNoForegroundWindow_ReadsAsUnknown()
+    {
+        var source = new FakeWindowSource(foreground: IntPtr.Zero, windows: new(), clientPids: []);
+
+        var probe = new WindowsEveClientProbe(source);
+
+        Assert.Equal(ForegroundWindowSnapshot.Unknown, probe.DescribeForegroundWindow());
+    }
+
     private sealed class FakeWindowSource(IntPtr foreground,
-        Dictionary<IntPtr, (uint ProcessId, string Title)> windows, HashSet<uint> clientPids)
+        Dictionary<IntPtr, (uint ProcessId, string Title)> windows, HashSet<uint> clientPids,
+        Dictionary<uint, string>? processNames = null)
         : WindowsEveClientProbe.IForegroundWindowSource
     {
         public IntPtr GetForegroundWindow() => foreground;
@@ -59,5 +108,8 @@ public class WindowsEveClientProbeTests
             windows.TryGetValue(handle, out var window) ? window : null;
 
         public bool IsClientProcess(uint processId) => clientPids.Contains(processId);
+
+        public string? ProcessName(uint processId) =>
+            processNames is not null && processNames.TryGetValue(processId, out var name) ? name : null;
     }
 }

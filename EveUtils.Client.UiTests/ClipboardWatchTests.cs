@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using EveUtils.Client.Clipboard;
+using EveUtils.Client.Platform;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Logging;
 using Microsoft.Extensions.DependencyInjection;
@@ -280,6 +281,81 @@ public class ClipboardWatchTests
         var entry = Assert.Single(store.GetAll());
         Assert.Equal(LogLevel.Error, entry.Level);
         Assert.Equal("Could not read the clipboard after a change notification.", entry.Message);
+    }
+
+    /// <summary>ET-211: the one diagnostic line a recognised copy gets carries the shape, the derived character
+    /// (or that none could be), and the client-owned foreground window's own detail — including its title, since
+    /// that title belongs to the game.</summary>
+    [AvaloniaFact]
+    public async Task ClipboardWatch_OnARecognisedCopy_LogsForegroundDiagnostics()
+    {
+        var store = new InMemoryLogStore();
+        using var provider = BuildLogging(store);
+        var dialogs = new RecordingDialogService { ClipboardText = "[Rifter, Solo]" };
+        var source = new FakeClipboardChangeSource();
+        var foreground = new FakeForegroundReader
+        {
+            Character = "Jithran",
+            Window = new ForegroundWindowSnapshot(100, "exefile", true, "EVE - Jithran"),
+        };
+        using var instance = TestClientInstance.Create();
+        using var watch = new ClipboardWatchService(dialogs, instance.Services,
+            provider.GetRequiredService<ILogger<ClipboardWatchService>>(), source, foreground);
+        await watch.SetEnabledAsync(true);
+
+        using var subscription = watch.Subscribe("Test", _ => { });
+        Copy(source);
+
+        var entry = Assert.Single(store.GetAll());
+        Assert.Equal(LogLevel.Information, entry.Level);
+        Assert.Contains("shape=Fit", entry.Message);
+        Assert.Contains("character=Jithran", entry.Message);
+        Assert.Contains("foregroundPid=100", entry.Message);
+        Assert.Contains("isClientProcess=True", entry.Message);
+        Assert.Contains("foregroundProcess=exefile", entry.Message);
+        Assert.Contains("foregroundTitle=EVE - Jithran", entry.Message);
+    }
+
+    /// <summary>ET-211, and the privacy rule the ticket is explicit about: when the foreground window belongs to
+    /// some other program, its process name is worth logging but its title is not — a browser tab or a chat
+    /// window can carry exactly the kind of text a log file has no business holding.</summary>
+    [AvaloniaFact]
+    public async Task ClipboardWatch_WhenForegroundIsAnotherProgram_WithholdsItsTitle()
+    {
+        var store = new InMemoryLogStore();
+        using var provider = BuildLogging(store);
+        var dialogs = new RecordingDialogService { ClipboardText = "[Rifter, Solo]" };
+        var source = new FakeClipboardChangeSource();
+        var foreground = new FakeForegroundReader
+        {
+            Character = null,
+            Window = new ForegroundWindowSnapshot(400, "chrome", false, "Something private — Browser"),
+        };
+        using var instance = TestClientInstance.Create();
+        using var watch = new ClipboardWatchService(dialogs, instance.Services,
+            provider.GetRequiredService<ILogger<ClipboardWatchService>>(), source, foreground);
+        await watch.SetEnabledAsync(true);
+
+        using var subscription = watch.Subscribe("Test", _ => { });
+        Copy(source);
+
+        var entry = Assert.Single(store.GetAll());
+        Assert.Contains("character=null", entry.Message);
+        Assert.Contains("foregroundProcess=chrome", entry.Message);
+        Assert.Contains("isClientProcess=False", entry.Message);
+        Assert.Contains("foregroundTitle=(not the game process)", entry.Message);
+        Assert.DoesNotContain("private", entry.Message);
+    }
+
+    private sealed class FakeForegroundReader : IForegroundEveClientReader
+    {
+        public string? Character { get; init; }
+
+        public ForegroundWindowSnapshot Window { get; init; } = ForegroundWindowSnapshot.Unknown;
+
+        public string? CharacterAtForegroundWindow() => Character;
+
+        public ForegroundWindowSnapshot DescribeForegroundWindow() => Window;
     }
 
     private static ServiceProvider BuildLogging(ILogStore store) =>

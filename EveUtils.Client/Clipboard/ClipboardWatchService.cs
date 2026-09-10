@@ -8,6 +8,7 @@ using EveUtils.Client.Dialogs;
 using EveUtils.Client.Platform;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.DependencyInjection;
+using EveUtils.Shared.Logging;
 using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Dtos;
 using EveUtils.Shared.Modules.Settings.Queries;
@@ -27,6 +28,11 @@ namespace EveUtils.Client.Clipboard;
 /// report — and no raw clipboard text ever leaves the process, not to a log file and not to the local API.
 /// <see cref="Consumers"/> names the features currently listening, so the disclosure shown to the user is the
 /// live truth rather than a maintained list.
+///
+/// A recognised copy does get one diagnostic line (ET-211): its shape, the character it was attributed to (or
+/// that none could be), and the foreground window at the time — process id, whether that process is the game,
+/// and the process name. That window's title is written down too, but only when it is the game's own, since
+/// any other program's title can carry exactly the kind of text this class exists to keep out of the log.
 /// </summary>
 public sealed class ClipboardWatchService : ISingletonService, IDisposable
 {
@@ -168,11 +174,14 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
     // downstream re-reads focus later and gets a different, staler answer.
     private void OnClipboardChanged()
     {
+        // The clock read is as cheap as the focus read next to it, so it rides along on the same synchronous
+        // jump — the notification time this measures is only meaningful taken right here (ET-211).
+        var notifiedAt = DateTimeOffset.Now;
         var copiedBy = _foregroundClient.CharacterAtForegroundWindow();
-        Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = InspectAsync(copiedBy));
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = InspectAsync(notifiedAt, copiedBy));
     }
 
-    private async Task InspectAsync(string? copiedByCharacter)
+    private async Task InspectAsync(DateTimeOffset notifiedAt, string? copiedByCharacter)
     {
         // Stopping the source holds off new notifications but not one already queued here, and "off" has to mean
         // the clipboard is not read — not that it is read one last time.
@@ -209,6 +218,8 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
             return; // dropped here: nothing kept, nothing buffered, nothing written down
 
         var capture = new ClipboardCapture(shape, text, copiedByCharacter);
+        _LogCaptureDiagnostics(notifiedAt, shape, copiedByCharacter);
+
         foreach (var subscription in subscribers)
         {
             try
@@ -222,6 +233,25 @@ public sealed class ClipboardWatchService : ISingletonService, IDisposable
                     subscription.FeatureName, shape);
             }
         }
+    }
+
+    /// <summary>
+    /// One diagnostic line per recognised copy (ET-211): does the app still have EVE focused when a clipboard
+    /// notification lands, and did it get the character right? Gathered here rather than in
+    /// <see cref="OnClipboardChanged"/> — it is written after the time-critical focus read, never inside it, so
+    /// the foreground window it describes may already have moved on from the one <paramref name="copiedByCharacter"/>
+    /// was read from. Never uses <paramref name="copiedByCharacter"/> for anything but writing it down: assigning
+    /// loot from it is still deliberately unimplemented (ET-130).
+    /// </summary>
+    private void _LogCaptureDiagnostics(DateTimeOffset notifiedAt, ClipboardShape shape, string? copiedByCharacter)
+    {
+        var window = _foregroundClient.DescribeForegroundWindow();
+        _logger.LogDiagnostic(
+            "Clipboard copy at {NotifiedAt:o}: shape={Shape}, character={Character}, foregroundPid={Pid}, " +
+            "isClientProcess={IsClientProcess}, foregroundProcess={ProcessName}, foregroundTitle={Title}",
+            notifiedAt, shape, copiedByCharacter ?? "null",
+            window.ProcessId?.ToString() ?? "null", window.IsClientProcess, window.ProcessName ?? "null",
+            window.IsClientProcess ? window.WindowTitle : "(not the game process)");
     }
 
     private async Task<string?> _ReadClipboardTextAsync()
