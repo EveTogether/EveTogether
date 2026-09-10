@@ -87,6 +87,39 @@ public sealed class RunDeleteTests
         Assert.Null(stillRunning.DeletedAtUtc);
     }
 
+    /// <summary>ET-214, review round 2: since ET-215 a group can hold a fleetmate's own run, pulled from a server
+    /// and shown read-only because a correction to it could never be published back. The same reasoning applies to
+    /// delete — soft-deleting it would flip its <c>SyncState</c> to <c>Pending</c>, offering to push a change to a
+    /// run this machine does not own. <c>OnlyRunIds</c> is how the detail screen restricts a group delete to its
+    /// own characters' runs. Counter-proof: drop the <c>OnlyRunIds</c> filter from the handler and this goes red
+    /// with the "fleetmate" run deleted too.</summary>
+    [AvaloniaFact]
+    public async Task DeleteRunsInGroupCommand_WithOnlyRunIds_LeavesTheOtherGroupMembersRunsUntouched()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        Guid ownRun = await _SaveAsync(dispatcher, 90000001, GroupCode, cancellationToken);
+        Guid fleetmateRun = await _SaveAsync(dispatcher, 90000002, GroupCode, cancellationToken);
+        DateTime deletedAtUtc = StartedAtUtc.AddHours(1);
+
+        Result<int> deleted = await dispatcher.Send(
+            new DeleteRunsInGroupCommand(GroupCode, deletedAtUtc, OnlyRunIds: [ownRun]), cancellationToken);
+
+        Assert.True(deleted.IsSuccess);
+        Assert.Equal(1, deleted.Value);
+
+        await using ClientDbContext db = await instance.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        Run deletedRun = await db.Set<Run>().SingleAsync(candidate => candidate.Id == ownRun, cancellationToken);
+        Assert.Equal(deletedAtUtc, deletedRun.DeletedAtUtc);
+
+        Run untouched = await db.Set<Run>().SingleAsync(candidate => candidate.Id == fleetmateRun, cancellationToken);
+        Assert.Null(untouched.DeletedAtUtc);
+        Assert.Equal(RunSyncState.Local, untouched.SyncState);
+    }
+
     /// <summary>Soft delete's whole point: a group deleted by mistake goes straight back.</summary>
     [AvaloniaFact]
     public async Task RestoreRunsInGroupCommand_UndoesTheDelete()

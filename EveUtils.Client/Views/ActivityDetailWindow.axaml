@@ -91,11 +91,33 @@
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
             </Style>
+            <!-- Understated by design (ET-214, Jithran's review of the first round): a quiet text link at rest, the
+                 same restraint Button.trash already gives the inbox's icon-only delete, rather than a button that
+                 competes for attention with PUBLISH ever did in the overview. TextDimBrush at rest is the same
+                 contrast the .label class already reads at throughout this very screen, not a fainter one invented
+                 for this control — red only ever shows up once the pointer is actually over it. -->
+            <Style Selector="Button.deletelink">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="HorizontalAlignment" Value="Left"/>
+            </Style>
+            <Style Selector="Button.deletelink:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+            </Style>
+            <Style Selector="Button.deletelink:disabled /template/ ContentPresenter">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="Opacity" Value="0.5"/>
+            </Style>
         </DockPanel.Styles>
 
-        <!-- ══ Header ══ what this activity was, and how long it took. -->
+        <!-- ══ Header ══ what this activity was, and how long it took. Hidden once deleted (ET-214): the deleted
+             panel below is the whole story then, not one more place still naming a site that is gone. -->
         <Border DockPanel.Dock="Top" Padding="14,12,14,14" BorderThickness="0,0,0,1"
-                BorderBrush="{DynamicResource BorderBrush}">
+                BorderBrush="{DynamicResource BorderBrush}" IsVisible="{Binding !IsDeleted}">
             <StackPanel Spacing="10">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                     <StackPanel Grid.Column="0" Spacing="2">
@@ -147,7 +169,7 @@
             </StackPanel>
         </Border>
 
-        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding !IsDeleted}">
             <StackPanel>
 
                 <ToggleButton Classes="section" Content="{Binding Activity}"
@@ -379,7 +401,29 @@
                                Text="{Binding AbsentSectionsText}"/>
                 </Border>
 
+                <!-- ══ Delete ══ bottom of the screen, understated (ET-214, Jithran: "he doesn't need to be pushed
+                     so far to the front"). Hidden entirely for an activity with nothing of this machine's own in it
+                     — a fully foreign, read-only activity (ET-215) has nothing here to delete. The weight of the
+                     decision sits in the confirmation this opens, not in how the control itself looks. -->
+                <Border Padding="14,16" IsVisible="{Binding CanDelete}">
+                    <Button x:Name="DeleteButton" Classes="deletelink" Content="{Binding DeleteText}"
+                            Command="{Binding DeleteCommand}"
+                            ToolTip.Tip="Delete this activity — every run of it that is yours"/>
+                </Border>
+
             </StackPanel>
         </ScrollViewer>
+
+        <!-- ══ Deleted ══ replaces the whole screen once nothing of this activity is left to show (ET-214). A
+             fleetmate's run kept alive under the same id reloads in place instead of ever reaching here — see
+             ActivityDetailViewModel.DeleteAsync. -->
+        <Border IsVisible="{Binding IsDeleted}">
+            <StackPanel Spacing="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Classes="panel-title" FontSize="13" Foreground="{StaticResource TextBrightBrush}"
+                           Text="{Binding DeletedMessage}"/>
+                <Button x:Name="UndoDeleteButton" Classes="republish" HorizontalAlignment="Center"
+                        Content="{Binding UndoDeleteText}" Command="{Binding UndoDeleteCommand}"/>
+            </StackPanel>
+        </Border>
     </DockPanel>
 </v:ChromedWindow>
