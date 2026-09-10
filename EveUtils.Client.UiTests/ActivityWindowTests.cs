@@ -727,14 +727,28 @@ public class ActivityWindowTests
         Assert.False(set.NeedsWeatherAndTier);
     }
 
-    [Theory]
-    [InlineData(ActivityKind.Mission, false)]
-    [InlineData(ActivityKind.Abyssal, true)]
-    public void HeaderWeatherAndTierChips_AppearOnlyForAbyssalRuns(ActivityKind kind, bool expected)
+    [AvaloniaTheory]
+    [InlineData(ActivityKind.Mission)]
+    [InlineData(ActivityKind.Abyssal)]
+    public void HeaderChips_ShowTheMissionLevelOrAbyssalWeatherAndTier(ActivityKind kind)
     {
-        var model = new ActivityWindowViewModel(kind, _Unused()) { WeatherIndex = 0, TierIndex = 0 };
+        var model = new ActivityWindowViewModel(kind, _Unused()) { MissionLevel = 4, WeatherIndex = 0, TierIndex = 0 };
+        ActivityWindow window = _Open(model, expanded: false);
 
-        Assert.Equal(expected, model.HasWeatherAndTier);
+        Border level = window.FindControl<Border>("MissionLevelChip")
+            ?? throw new Xunit.Sdk.XunitException("the mission level chip was not rendered");
+        Border tier = window.FindControl<Border>("TierChip")
+            ?? throw new Xunit.Sdk.XunitException("the tier chip was not rendered");
+        Border weather = window.FindControl<Border>("WeatherChip")
+            ?? throw new Xunit.Sdk.XunitException("the weather chip was not rendered");
+
+        Assert.Equal(kind == ActivityKind.Mission, level.IsVisible);
+        Assert.Equal(kind == ActivityKind.Abyssal, tier.IsVisible);
+        Assert.Equal(kind == ActivityKind.Abyssal, weather.IsVisible);
+        if (kind == ActivityKind.Mission)
+            Assert.Equal("Level 4", Assert.Single(level.GetVisualDescendants().OfType<TextBlock>()).Text);
+
+        window.Close();
     }
 
     [Fact]

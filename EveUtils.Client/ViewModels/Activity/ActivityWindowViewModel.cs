@@ -439,6 +439,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public int? MissionLevel { get; set; }
     public int? MissionSolarSystemId { get; set; }
 
+    public bool IsMissionLevelShown => Kind == ActivityKind.Mission && MissionLevel is not null;
+
+    public string MissionLevelText => MissionLevel is { } level ? $"Level {level}" : string.Empty;
+
     // The reward lines a mission's clipboard capture already carried at accept time, written onto the run the
     // moment it starts rather than waited for — a mission is not looted the way a site is (ET-174 AC-4).
     public IReadOnlyList<RunParameterInput> PendingParameters { get; set; } = [];

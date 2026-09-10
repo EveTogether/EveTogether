@@ -403,10 +403,13 @@
                             <TextBlock Text="{Binding ActingCharacterText}"/>
                         </Border>
                     </Button>
-                    <Border Classes="chip ok" IsVisible="{Binding HasWeatherAndTier}">
+                    <Border x:Name="MissionLevelChip" Classes="chip ok" IsVisible="{Binding IsMissionLevelShown}">
+                        <TextBlock Text="{Binding MissionLevelText}"/>
+                    </Border>
+                    <Border x:Name="TierChip" Classes="chip ok" IsVisible="{Binding HasWeatherAndTier}">
                         <TextBlock Text="{Binding TierText}"/>
                     </Border>
-                    <Border Classes="chip ok" IsVisible="{Binding HasWeatherAndTier}">
+                    <Border x:Name="WeatherChip" Classes="chip ok" IsVisible="{Binding HasWeatherAndTier}">
                         <TextBlock Text="{Binding Weather.Name}"/>
                     </Border>
                     <!-- Not set is a state the header owns, not a blank: the clock does not wait on it, so the only
