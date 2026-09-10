@@ -14,6 +14,7 @@ using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
+using EveUtils.Shared.Modules.Sde.Dtos;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ICqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
@@ -56,6 +57,55 @@ public sealed class ActivityDetailTests
         await viewModel.LoadAsync(cancellationToken);
 
         Assert.Equal("RaymondKrah", Assert.Single(viewModel.RunRows).CharacterText);
+    }
+
+    // ── LOCATION shows a name, not a bare id (ET-213) ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Counter-proof: Jithran, 2026-09-10 — LOCATION and the ACTIVITY header both read "system 30000142" for a
+    /// saved site run, even though the SDE carries a name for that id. Red against the pre-fix code
+    /// (<c>ActivityDetailViewModel.cs:230</c>), which printed <c>Run.SolarSystemId</c> straight into the text with
+    /// no lookup at all.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task LocationText_NamesTheSolarSystemFromTheSde_InBothLocationAndTheActivityHeader()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunAsync(dispatcher, 90000001, null, cancellationToken);
+        Result<IReadOnlyList<ActivityOverviewRowDto>> overview =
+            await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(overview));
+
+        // 30000142, matching the fixed solar system id every _SaveSiteRunAsync run in this file is started on.
+        var sde = new FakeSdeAccessor().AddSolarSystem(new SdeSolarSystem(30000142, "Cistuvaert", 0.8));
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IMarketPriceRepository>(), sde: sde);
+        await viewModel.LoadAsync(cancellationToken);
+
+        Assert.Equal("Cistuvaert", viewModel.LocationText);
+        Assert.Equal("Combat Site · Cistuvaert", viewModel.Activity.HeaderSummary);
+    }
+
+    /// <summary>AC-4: a stored id the SDE does not carry — no SDE at all here, the widest version of that case —
+    /// falls back to something readable rather than a blank LOCATION row or a thrown exception.</summary>
+    [AvaloniaFact]
+    public async Task LocationText_FallsBackToTheBareId_WhenTheSdeHasNoMatch()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunAsync(dispatcher, 90000001, null, cancellationToken);
+        Result<IReadOnlyList<ActivityOverviewRowDto>> overview =
+            await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(overview));
+
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IMarketPriceRepository>(), sde: new FakeSdeAccessor());
+        await viewModel.LoadAsync(cancellationToken);
+
+        Assert.Equal("system 30000142", viewModel.LocationText);
     }
 
     /// <summary>AC-1, mission half: a mission names its agent and its level and shows REWARDS, and carries no
@@ -424,6 +474,53 @@ public sealed class ActivityDetailTests
         Assert.Contains(viewModel.BountyRows, r => r.CharacterText == "Second Pilot" && r.IskText == $"{675_000m:N2} ISK");
         // The total is set apart from the rows, not folded into one of them, but it still has to equal their sum.
         Assert.Equal($"{1_350_000m:N2} ISK", viewModel.BountyText);
+    }
+
+    /// <summary>
+    /// Counter-proof 4 from the ET-211 grooming: two characters, each with their own priced loot capture on their
+    /// own run within the same group, must show as one row per character with a group total equal to their sum —
+    /// the same shape <see cref="BountyRows_OneRowPerCharacter_WithTheGroupsTotal"/> already gives bounty. Red
+    /// against the pre-fix code, where <c>LootCharacterRows</c> did not exist at all and the LOOT section only ever
+    /// showed one combined figure.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task LootCharacterRows_OneRowPerCharacter_WithTheGroupsTotal()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
+            [new LocalMarketPrice { TypeId = 34, AveragePrice = 100, AdjustedPrice = 100, UpdatedAt = DateTimeOffset.UtcNow }],
+            cancellationToken);
+        await _SaveSiteRunWithLootAsync(dispatcher, 90000001, "HF-7QK2", quantity: 3, cancellationToken);
+        await _SaveSiteRunWithLootAsync(dispatcher, 90000002, "HF-7QK2", quantity: 4, cancellationToken);
+        await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(
+            await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
+
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IMarketPriceRepository>(),
+            nameOf: id => id == 90000001 ? "Jithran" : "Second Pilot");
+        await viewModel.LoadAsync(cancellationToken);
+
+        Assert.Equal(2, viewModel.LootCharacterRows.Count);
+        Assert.Contains(viewModel.LootCharacterRows, r => r.CharacterText == "Jithran" && r.IskText == $"{300m:N2} ISK");
+        Assert.Contains(viewModel.LootCharacterRows, r => r.CharacterText == "Second Pilot" && r.IskText == $"{400m:N2} ISK");
+        // The per-character rows are set apart from the group's own NET figure, but they still have to sum to it.
+        Assert.Equal($"{700m:N2} ISK", viewModel.NetIskText);
+    }
+
+    private static async Task _SaveSiteRunWithLootAsync(ICqrsDispatcher dispatcher, long characterId,
+        string? groupCode, long quantity, CancellationToken cancellationToken)
+    {
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142, groupCode), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+            [new RunLootCaptureInput
+            {
+                CapturedAtUtc = StartedAtUtc.AddMinutes(10), Source = LootCaptureSource.Clipboard,
+                Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = quantity, LootKind = LootKind.Gained }]
+            }], [], [], []), cancellationToken);
     }
 
     /// <summary>

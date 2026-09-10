@@ -15,6 +15,8 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fittings.Entities;
 using EveUtils.Shared.Modules.Fittings.Repositories;
 using EveUtils.Shared.Modules.Gamelog.Models;
+using EveUtils.Shared.Modules.Market.Entities;
+using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -85,6 +87,39 @@ public class MultipleConcurrentRunsTests
             characterId, ActivityKind.Site, DateTime.UtcNow, SiteTypeId: 0, SiteName: siteName, SolarSystemId: null));
         Assert.True(started.IsSuccess);
         return started.Value;
+    }
+
+    // ── ET-211: a clipboard copy with a known sender lands on that character's own run ─────────────
+
+    /// <summary>
+    /// Counter-proof 1 from the ET-211 grooming: two characters each running their own site, a copy whose
+    /// <c>CharacterId</c> (resolved from the clipboard's own <c>CopiedByCharacter</c>) is B lands on B's run, not
+    /// A's — even with <c>PreferredRunId</c> pointing at A's own run, the way an open activity window for A would
+    /// set it. A known copier scopes <c>RunningRunLookup</c> to their own run; it does not defer to whichever window
+    /// happens to be open for somebody else. Red against the pre-fix handler, which never read the character at all.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task LootWithAKnownCopier_LandsOnThatCharactersOwnRun_EvenWithAnotherRunPreferred()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid runA = await _StartAsync(dispatcher, CharacterA, "Sansha Refuge");
+        Guid runB = await _StartAsync(dispatcher, CharacterB, "Blood Raider Burrow");
+
+        Result<RunLootCaptureSaveResult> result = await dispatcher.Send(new AddRunLootCaptureCommand(new RunLootCaptureInput
+        {
+            CapturedAtUtc = DateTime.UtcNow,
+            Source = LootCaptureSource.Clipboard,
+            CharacterId = CharacterB,
+            PreferredRunId = runA,
+            Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = 1, LootKind = LootKind.Gained }]
+        }));
+
+        Assert.True(result.IsSuccess);
+        Result<RunLootOverview> lootB = await dispatcher.Query(new GetRunLootQuery(runB));
+        Assert.Single(lootB.Value!.Captures);
+        Result<RunLootOverview> lootA = await dispatcher.Query(new GetRunLootQuery(runA));
+        Assert.Empty(lootA.Value!.Captures);
     }
 
     // ── ET-210: starting a run for several toons at once ───────────────────────────────────────────
@@ -355,6 +390,67 @@ public class MultipleConcurrentRunsTests
         await ActivityWindowHarness.WaitUntil(() => model.RunId == second.RunId);
         model.Refresh(DateTime.UtcNow);
         Assert.Equal("1,012,500.00 ISK", model.GroupTotalIskText);
+    }
+
+    /// <summary>
+    /// ET-211 follow-up to the counter-proof above: loot revisits the same "held sticky, never summed per
+    /// character" decision bounty made under ET-210 (deliberately, because this ticket was still open) — now that a
+    /// capture is attributed to whichever character's client actually copied it, the group total must add both
+    /// participants' own runs together, and switching the column away and back must not move it either.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task LiveGroupTotalIsk_CoversLootPerCharacter_AndDoesNotChangeWhenTheColumnIsSwitched()
+    {
+        using var harness = await _TwoCharacters();
+        await harness.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
+        [
+            new LocalMarketPrice { TypeId = 34, AveragePrice = 100, AdjustedPrice = 100, UpdatedAt = DateTimeOffset.UtcNow }
+        ]);
+
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        harness.Dialogs.OnPickCharacters = (_, options) =>
+            Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId)]);
+        await model.StartRunCommand.ExecuteAsync(null);
+        await ActivityWindowHarness.WaitUntil(() => model.Participants.Count == 2);
+
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid ownRunId = model.RunId!.Value;
+        Guid secondRunId = model.Participants.Single(participant => participant.CharacterId == 90000002).RunId;
+
+        // The starter's own capture, watched directly the way RunLoot already did before this ticket. The per-run
+        // loot cache fills in asynchronously off the RunLootCapturedEvent, so the wait re-triggers the clock tick's
+        // own recompute on every poll rather than the tick itself, which nothing here is driving during the test.
+        await dispatcher.Send(new AddRunLootCaptureCommand(new RunLootCaptureInput
+        {
+            CapturedAtUtc = DateTime.UtcNow, Source = LootCaptureSource.Clipboard, PreferredRunId = ownRunId,
+            Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = 3, LootKind = LootKind.Gained }]
+        }));
+        await ActivityWindowHarness.WaitUntil(() =>
+        {
+            model.Refresh(DateTime.UtcNow);
+            return model.GroupTotalIskText == "300.00 ISK";
+        });
+        Assert.Equal("300.00 ISK", model.GroupTotalIskText);
+
+        // The second character's own capture — this window's LOOT section never shows it (RunLoot follows whichever
+        // run the column displays), yet the group total must count it in anyway.
+        await dispatcher.Send(new AddRunLootCaptureCommand(new RunLootCaptureInput
+        {
+            CapturedAtUtc = DateTime.UtcNow, Source = LootCaptureSource.Clipboard, PreferredRunId = secondRunId,
+            Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = 2, LootKind = LootKind.Gained }]
+        }));
+        await ActivityWindowHarness.WaitUntil(() =>
+        {
+            model.Refresh(DateTime.UtcNow);
+            return model.GroupTotalIskText == "500.00 ISK";
+        });
+
+        // Switching the column to the second character's own run must not move the figure.
+        RunCharacterRowViewModel second = model.RunCharacters.Single(row => row.CharacterId == 90000002);
+        model.SelectRunCharacterCommand.Execute(second);
+        await ActivityWindowHarness.WaitUntil(() => model.RunId == second.RunId);
+        model.Refresh(DateTime.UtcNow);
+        Assert.Equal("500.00 ISK", model.GroupTotalIskText);
     }
 
     // ── The saved activity carries everyone's location and fit, not just the acting character's (ET-210 review, 2026-09-09) ──

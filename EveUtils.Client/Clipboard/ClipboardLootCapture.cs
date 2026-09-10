@@ -8,11 +8,13 @@ using EveUtils.Client.Dialogs;
 using EveUtils.Client.Notifications;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.DependencyInjection;
+using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Logging;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.Extensions.Logging;
@@ -29,6 +31,7 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
     private readonly ISdeAccessor _sde;
     private readonly IDispatcher _dispatcher;
     private readonly IDialogService _dialogs;
+    private readonly ICharacterRegistry _characters;
     private readonly ILogger<ClipboardLootCapture> _logger;
     private readonly Lock _gate = new();
     private readonly IDisposable _subscription;
@@ -37,12 +40,13 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
 
     public ClipboardLootCapture(ClipboardWatchService clipboardWatch, IToastService toasts, ISdeAccessor sde,
         ILogger<ClipboardLootCapture> logger,
-        IDispatcher dispatcher, IDialogService dialogs)
+        IDispatcher dispatcher, IDialogService dialogs, ICharacterRegistry characters)
     {
         _toasts = toasts;
         _sde = sde;
         _dispatcher = dispatcher;
         _dialogs = dialogs;
+        _characters = characters;
         _logger = logger;
         _subscription = clipboardWatch.Subscribe(FeatureName, OnCapture);
     }
@@ -117,28 +121,76 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
             _openFingerprint = fingerprint;
         }
 
-        _TrackLastStore(StoreAndOfferAsync(fingerprint, reading.Lines, reading.UnresolvedCount));
+        _TrackLastStore(StoreAndOfferAsync(fingerprint, reading.Lines, reading.UnresolvedCount, capture.CopiedByCharacter));
+    }
+
+    /// <summary>
+    /// Turns "who had OS focus at notification time" (ET-138) into a character id, or asks when it cannot say
+    /// (ET-211, the product decision of 2026-09-10): a name match wins outright — the 2026-09-10 measurement found
+    /// it right on 14 of 14 clipboard loot copies against two live clients — and only when there is no match AND
+    /// more than one run is actually running does silence become a modal question. One running run has nothing to
+    /// choose between; several running, unnamed, could belong to any of them, and guessing was the whole problem
+    /// this ticket exists to fix.
+    /// </summary>
+    private async Task<(long? CharacterId, Guid? PreferredRunId)> _ResolveOwnerAsync(string? copiedByCharacter)
+    {
+        // The open activity window's own run, if this app has one up — not a guess: ET-190 measured loot refused as
+        // ambiguous once a stray copied site (c69fec1) left the pilot's run Stopped-and-waiting beside an old
+        // Stopped-and-never-saved one from an earlier session. Handed to the lookup alongside the character id below
+        // (RunningRunLookup already takes both): a match on this window's own character wins as before, and a match
+        // on a DIFFERENT character's copy is scoped away from it instead of silently landing here.
+        Guid? preferredRunId = _dialogs.ActivityWindowRunId;
+
+        if (copiedByCharacter is not null)
+        {
+            IReadOnlyList<Character> known = await _characters.GetAllAsync();
+            if (known.FirstOrDefault(character =>
+                    string.Equals(character.Name, copiedByCharacter, StringComparison.OrdinalIgnoreCase))
+                is { EsiCharacterId: { } characterId })
+                return (characterId, preferredRunId);
+        }
+
+        Result<IReadOnlyList<RunningRunDto>> running = await _dispatcher.Query(new GetRunningRunsQuery());
+        List<long> runningCharacters = [.. (running.IsSuccess ? running.Value! : [])
+            .Select(run => run.CharacterId).Distinct()];
+        if (runningCharacters.Count <= 1)
+            return (null, preferredRunId);
+
+        IReadOnlyList<Character> registry = await _characters.GetAllAsync();
+        List<CharacterPickOption> options =
+        [
+            .. runningCharacters.Select(characterId => new CharacterPickOption(
+                checked((int)characterId),
+                registry.FirstOrDefault(character => character.EsiCharacterId == characterId)?.Name
+                    ?? $"character {characterId}",
+                "running", Enabled: true))
+        ];
+        int? picked = await _dialogs.PickCharacterAsync("Whose loot is this?", options);
+
+        // A decline is not a third answer dressed up as one of the other two: falling back to whichever run the
+        // window happens to be showing would be exactly the silent assignment the product decision ruled out, so a
+        // declined question gets the same honest "ambiguous, not recorded" outcome the app always gave here.
+        return picked is { } chosenCharacterId ? ((long?)chosenCharacterId, preferredRunId) : (null, null);
     }
 
     /// <summary>Stores the capture and only then tells the player what actually happened — recorded, refused with a
     /// reason, or kept as an excluded repeat — instead of announcing "recognised" before the save is known to have
     /// worked (ET-65 AC-5/AC-7 review finding).</summary>
     private async Task StoreAndOfferAsync(string fingerprint,
-        IReadOnlyList<(AppraisalLine Line, ClipboardInventoryItem Item)> lines, int unresolvedCount)
+        IReadOnlyList<(AppraisalLine Line, ClipboardInventoryItem Item)> lines, int unresolvedCount,
+        string? copiedByCharacter)
     {
         Result<RunLootCaptureSaveResult> result;
         try
         {
+            (long? characterId, Guid? preferredRunId) = await _ResolveOwnerAsync(copiedByCharacter);
             result = await _dispatcher.Send(new AddRunLootCaptureCommand(new RunLootCaptureInput
             {
                 CapturedAtUtc = DateTime.UtcNow,
                 Source = LootCaptureSource.Clipboard,
                 ContentHash = fingerprint,
-                // The open activity window's own run, if this app has one up — not a guess: ET-190 measured loot
-                // refused as ambiguous once a stray copied site (c69fec1) left the pilot's run Stopped-and-waiting
-                // beside an old Stopped-and-never-saved one from an earlier session. The window already knows which
-                // one is his.
-                PreferredRunId = _dialogs.ActivityWindowRunId,
+                PreferredRunId = preferredRunId,
+                CharacterId = characterId,
                 Entries =
                 [
                     .. lines.Select(resolved => new RunLootEntryInput

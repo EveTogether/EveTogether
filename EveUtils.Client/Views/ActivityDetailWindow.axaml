@@ -296,6 +296,21 @@
                                   IsChecked="{Binding Loot.IsExpanded, Mode=TwoWay}"/>
                     <Border Classes="sectionbody" IsVisible="{Binding Loot.IsExpanded}">
                         <StackPanel>
+                            <!-- One row per character — the same breakdown BOUNTY and ENEMIES already give
+                                 (ET-211): loot copied from a character's own client lands on that character's own
+                                 run, so it can finally be broken out here too. No totals strip of its own: the
+                                 LOOT/CONSUMED/NET figures right below already are the group's total. -->
+                            <ItemsControl x:Name="LootCharacterList" ItemsSource="{Binding LootCharacterRows}"
+                                          IsVisible="{Binding HasLootCharacterFigures}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vr:ActivityLootCharacterRowViewModel">
+                                        <Grid Classes="kv" ColumnDefinitions="*,Auto">
+                                            <TextBlock Text="{Binding CharacterText}"/>
+                                            <TextBlock Grid.Column="1" Classes="money" Text="{Binding IskText}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                             <!-- The three figures are only drawn when something was captured: a zero here would
                                  read as a valuation that came out at nothing. -->
                             <StackPanel IsVisible="{Binding HasLootFigures}">
