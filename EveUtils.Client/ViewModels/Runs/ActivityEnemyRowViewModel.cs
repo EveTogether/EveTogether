@@ -11,7 +11,7 @@ public sealed class ActivityEnemyRowViewModel(RunEnemyObservationDto observation
 {
     public string EnemyName { get; } = observation.EnemyName;
 
-    public string CountText { get; } = observation.Count.ToString();
+    public string CountText { get; } = observation.Count > 0 ? observation.Count.ToString() : "not counted";
 
     /// <summary>The row's own window, which is the reason it is a row of its own.</summary>
     public string WindowText { get; } =

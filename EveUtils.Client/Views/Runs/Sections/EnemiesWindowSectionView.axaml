@@ -11,8 +11,7 @@
             <DataTemplate DataType="va:RunEnemyObservationViewModel">
                 <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                     <TextBlock Text="{Binding EnemyName}" VerticalAlignment="Center"/>
-                    <!-- Seen is not counted, and only a counted row is saved (ET-106) — the row has
-                         to say which of the two it is. -->
+                    <!-- Seen is not counted, so the row says which of the two it is. -->
                     <TextBlock Grid.Column="1" Classes="hint" Margin="0" VerticalAlignment="Center"
                                Text="{Binding CountStateText}"/>
                     <NumericUpDown Grid.Column="2" Classes="count" Width="72" Minimum="0" Maximum="999" Increment="1"
