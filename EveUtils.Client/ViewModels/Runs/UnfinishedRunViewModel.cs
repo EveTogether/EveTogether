@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Runs.Dtos;
 
 namespace EveUtils.Client.ViewModels.Runs;
@@ -41,6 +42,19 @@ public sealed partial class UnfinishedRunViewModel(
     /// <summary>Counted in whole hours rather than <c>hh:mm:ss</c>: a run left standing for a day and a half is
     /// exactly what lands here, and a wrapped clock would read it back as an hour and a half.</summary>
     public string DurationText { get; } = _Elapsed((run.StoppedAtUtc ?? run.StartedAtUtc) - run.StartedAtUtc);
+
+    /// <summary>What this run earned so far, out of the same sum the run window's own TOTAL ISK and a saved
+    /// activity's TOTAL ISK are made of (<see cref="UnfinishedRunDto.TotalIsk"/>) — shown honestly rather than left
+    /// blank when there is nothing yet. A real, known zero reads "0 ISK" (<see cref="IskFormat.ExactOrZero"/>); an
+    /// unanswerable one — captured loot with no known price, and nothing else to go on — says so in words instead of
+    /// pretending to be a zero it might not be (<see cref="UnfinishedRunDto.TotalIskUnknown"/>, ET-217 review).
+    /// </summary>
+    public string TotalIskText { get; } =
+        run.TotalIskUnknown ? "not priced yet" : IskFormat.ExactOrZero((double)run.TotalIsk);
+
+    /// <summary>Whether <see cref="TotalIskText"/> is that unanswerable case — read by the view so the two never
+    /// look alike: a real amount is a figure worth noticing, a shrug is not.</summary>
+    public bool TotalIskUnknown { get; } = run.TotalIskUnknown;
 
     [RelayCommand]
     private Task SaveAsync() => save(this);

@@ -14,6 +14,19 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- The **UNFINISHED** band on the runs screen now shows each stopped-but-not-saved run's own **TOTAL ISK** so
+  far, right beside its duration — bounty, priced loot and ISK-shaped rewards added up the same way a saved
+  activity's or the run window's own TOTAL ISK is, so you can tell what you'd be keeping or throwing away
+  before you decide. A run that truly earned nothing reads "0 ISK" outright; a run whose loot has no known
+  price yet says so in words instead of guessing a number. Bounty isn't counted here until a run is saved,
+  which the band's own hint text now says.
+- **An activity can now be deleted, from an understated button at the bottom of its detail screen.** It
+  asks you to confirm first, naming the site, how many of your own runs go and how much ISK — and, if it was
+  already published to a server, says that deleting it here only removes your own local copy, never
+  the server's. Deleting a multi-character activity removes every character's run that is yours; a
+  fellow pilot's own run, pulled in from a server and shown read-only, is left in place, and the
+  activity keeps showing whatever of it is still there. The runs overview updates immediately, and the
+  screen offers to undo the delete right after.
 - **Copying a combat site or mission while several of your characters are flying now starts the "whose
   run is this?" question with the character who actually copied it already ticked.** You can still tick
   on other toons, clear the tick, or leave it as is — nothing starts until you confirm.

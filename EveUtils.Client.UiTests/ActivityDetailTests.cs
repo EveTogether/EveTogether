@@ -7,15 +7,18 @@ using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Views;
+using EveUtils.Shared.Data;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde.Dtos;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ICqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
@@ -418,6 +421,195 @@ public sealed class ActivityDetailTests
         Assert.DoesNotContain(texts, text => text.Contains("That is a measurement, not an empty list"));
         Assert.Contains(texts, text => text == "none counted");
         Assert.Contains(texts, text => text.StartsWith("Enemies are saved only once you count them"));
+    }
+
+    // ── Delete, understated, from the bottom of the screen (ET-214 round 2) ────────────────────────────
+
+    /// <summary>The ticket's own counter-proof, run from the detail screen this time: a group of three saved runs,
+    /// all this machine's own, deleted as one activity, leaves the screen showing nothing is left. Counter-proof:
+    /// send only a single-run <c>DeleteRunCommand</c> for the group's first run instead of
+    /// <c>DeleteRunsInGroupCommand</c> and this goes red with two of the three runs still undeleted underneath —
+    /// the DB assertion catches what <c>IsDeleted</c> alone would not.</summary>
+    [AvaloniaFact]
+    public async Task DeleteActivity_Group_RemovesEveryOwnRun_AndShowsDeleted()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Guid[] runIds =
+        [
+            await _StartAsync(dispatcher, 90000001, "HF-DEL1", cancellationToken),
+            await _StartAsync(dispatcher, 90000002, "HF-DEL1", cancellationToken),
+            await _StartAsync(dispatcher, 90000003, "HF-DEL1", cancellationToken)
+        ];
+        foreach (Guid runId in runIds)
+            await dispatcher.Send(new SaveRunCommand(runId, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+                [], [], [], []), cancellationToken);
+        var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(true) };
+        ActivityDetailViewModel viewModel = await _ViewModelAsync(instance, dispatcher, cancellationToken,
+            ownCharacterIds: [90000001, 90000002, 90000003], dialogs: dialogs);
+
+        await viewModel.DeleteCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.IsDeleted);
+        Assert.False(viewModel.CanDelete);
+
+        await using ClientDbContext db = await instance.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        foreach (Guid runId in runIds)
+            Assert.NotNull((await db.Set<Run>().SingleAsync(run => run.Id == runId, cancellationToken)).DeletedAtUtc);
+    }
+
+    /// <summary>ET-214 round 2, Jithran: "think about whether deleting is allowed there [a fleetmate's read-only
+    /// run] or not, and say what you choose." Chosen: only this machine's own runs are deleted; the fleetmate's own
+    /// run — read-only since ET-215 because a correction to it could never be published back — is left alone, and
+    /// the activity, still real for that one run, reloads in place rather than reading as gone.</summary>
+    [AvaloniaFact]
+    public async Task DeleteActivity_MixedGroup_LeavesTheForeignRun_AndReloadsInPlace()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Guid ownRunId = await _StartAsync(dispatcher, 90000001, "HF-DEL2", cancellationToken);
+        Guid foreignRunId = await _StartAsync(dispatcher, 90000002, "HF-DEL2", cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(ownRunId, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+            [], [], [], []), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(foreignRunId, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+            [], [], [], []), cancellationToken);
+        var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(true) };
+        ActivityDetailViewModel viewModel = await _ViewModelAsync(instance, dispatcher, cancellationToken,
+            ownCharacterIds: [90000001], dialogs: dialogs);
+        Assert.Equal("2 participants", viewModel.ParticipantCountText);
+
+        await viewModel.DeleteCommand.ExecuteAsync(null);
+
+        Assert.False(viewModel.IsDeleted);
+        Assert.False(viewModel.CanDelete);
+        Assert.Equal("1 participants", viewModel.ParticipantCountText);
+
+        await using ClientDbContext db = await instance.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        Assert.NotNull((await db.Set<Run>().SingleAsync(run => run.Id == ownRunId, cancellationToken)).DeletedAtUtc);
+        Run foreign = await db.Set<Run>().SingleAsync(run => run.Id == foreignRunId, cancellationToken);
+        Assert.Null(foreign.DeletedAtUtc);
+        Assert.Equal(RunSyncState.Local, foreign.SyncState);
+    }
+
+    /// <summary>A fully foreign activity — every run someone else's — has nothing here that is this machine's to
+    /// delete, so the control is unavailable rather than offered and then refused.</summary>
+    [AvaloniaFact]
+    public async Task DeleteActivity_FullyForeign_CannotBeDeleted()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunAsync(dispatcher, 90000002, groupCode: null, cancellationToken);
+        ActivityDetailViewModel viewModel = await _ViewModelAsync(instance, dispatcher, cancellationToken,
+            ownCharacterIds: [90000001]);
+
+        Assert.False(viewModel.CanDelete);
+    }
+
+    /// <summary>What the confirmation says, read straight off what the screen already shows: the site, how many of
+    /// the pilot's own runs go, the ISK, and — the mixed-group case — that a fleetmate's run stays behind.</summary>
+    [AvaloniaFact]
+    public async Task DeleteActivity_ConfirmationNamesSiteOwnRunsIskAndTheForeignRun()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Guid ownRunId = await _StartAsync(dispatcher, 90000001, "HF-DEL3", cancellationToken);
+        Guid foreignRunId = await _StartAsync(dispatcher, 90000002, "HF-DEL3", cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(ownRunId, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+            [], [new RunBountyEntryInput { OccurredAtUtc = StartedAtUtc.AddMinutes(3), Isk = 1_500_000m }], [], []),
+            cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(foreignRunId, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+            [], [], [], []), cancellationToken);
+        var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(false) };
+        ActivityDetailViewModel viewModel = await _ViewModelAsync(instance, dispatcher, cancellationToken,
+            ownCharacterIds: [90000001], dialogs: dialogs);
+
+        await viewModel.DeleteCommand.ExecuteAsync(null);
+
+        Assert.Contains("Homefront", dialogs.LastConfirmMessage);
+        Assert.Contains("1 of your own runs", dialogs.LastConfirmMessage);
+        Assert.Contains($"{1_500_000m:N2} ISK", dialogs.LastConfirmMessage);
+        Assert.Contains("One run from another pilot stays", dialogs.LastConfirmMessage);
+    }
+
+    /// <summary>Declining the confirmation changes nothing — no run touched, the screen exactly as it was.</summary>
+    [AvaloniaFact]
+    public async Task DeleteActivity_Cancelled_ChangesNothing()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Guid runId = await _StartAsync(dispatcher, 90000001, groupCode: null, cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(runId, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+            [], [], [], []), cancellationToken);
+        var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(false) };
+        ActivityDetailViewModel viewModel = await _ViewModelAsync(instance, dispatcher, cancellationToken,
+            ownCharacterIds: [90000001], dialogs: dialogs);
+
+        await viewModel.DeleteCommand.ExecuteAsync(null);
+
+        Assert.False(viewModel.IsDeleted);
+        Assert.True(viewModel.CanDelete);
+        await using ClientDbContext db = await instance.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        Assert.Null((await db.Set<Run>().SingleAsync(run => run.Id == runId, cancellationToken)).DeletedAtUtc);
+    }
+
+    /// <summary>Soft delete's whole point (ET-214): a delete undone from right where it happened puts the run back,
+    /// and the screen reads as it did before.</summary>
+    [AvaloniaFact]
+    public async Task UndoDelete_RestoresTheActivity()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Guid runId = await _StartAsync(dispatcher, 90000001, groupCode: null, cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(runId, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+            [], [], [], []), cancellationToken);
+        var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(true) };
+        ActivityDetailViewModel viewModel = await _ViewModelAsync(instance, dispatcher, cancellationToken,
+            ownCharacterIds: [90000001], dialogs: dialogs);
+        await viewModel.DeleteCommand.ExecuteAsync(null);
+        Assert.True(viewModel.IsDeleted);
+
+        await viewModel.UndoDeleteCommand.ExecuteAsync(null);
+
+        Assert.False(viewModel.IsDeleted);
+        Assert.True(viewModel.CanDelete);
+        Assert.Equal("Homefront", viewModel.SiteText);
+        await using ClientDbContext db = await instance.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        Assert.Null((await db.Set<Run>().SingleAsync(run => run.Id == runId, cancellationToken)).DeletedAtUtc);
+    }
+
+    private static async Task<Guid> _StartAsync(ICqrsDispatcher dispatcher, long characterId, string? groupCode,
+        CancellationToken cancellationToken)
+    {
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142, groupCode), cancellationToken);
+        Assert.True(started.IsSuccess);
+        return started.Value;
+    }
+
+    private static async Task<ActivityDetailViewModel> _ViewModelAsync(TestClientInstance instance,
+        ICqrsDispatcher dispatcher, CancellationToken cancellationToken, IReadOnlyList<long>? ownCharacterIds = null,
+        RecordingDialogService? dialogs = null)
+    {
+        await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(
+            await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
+
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IAppraisalProvider>(),
+            ownCharacterIds: ownCharacterIds is null ? null : new HashSet<long>(ownCharacterIds),
+            dialogs: dialogs);
+        await viewModel.LoadAsync(cancellationToken);
+        return viewModel;
     }
 
     private static async Task<ActivityDetailWindow> _WindowAsync(

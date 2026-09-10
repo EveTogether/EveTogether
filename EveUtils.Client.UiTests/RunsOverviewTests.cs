@@ -6,6 +6,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Formatting;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Identity;
@@ -429,6 +430,90 @@ public sealed class RunsOverviewTests
         Assert.Equal("Homefront", row.SiteText);
     }
 
+    /// <summary>ET-217 AC-1/AC-2: an unfinished row shows what its run earned so far, added up the exact same way
+    /// TotalIskCalculator adds up the run window's own TOTAL ISK and a saved activity's — an ISK-shaped mission
+    /// reward parameter here, formatted through the same IskFormat the rest of the app uses. Counter-proof: read
+    /// TotalIskText off a row built without wiring UnfinishedRunDto.TotalIsk through (the shape of this ticket before
+    /// the fix) and this goes red on "0 ISK" instead of the reward's own amount.</summary>
+    [AvaloniaFact]
+    public async Task UnfinishedRun_WithAKnownReward_ShowsItsTotalIsk()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        DateTime stoppedAtUtc = DateTime.UtcNow.AddHours(-1);
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Mission,
+            stoppedAtUtc.AddMinutes(-15), 1234, "Homefront", 30000142,
+            Parameters:
+            [
+                new RunParameterInput
+                {
+                    ParameterKey = RunParameterKey.Isk, TypedValue = "1", Amount = 12_345_678m,
+                    ObservedAtUtc = stoppedAtUtc
+                }
+            ]), cancellationToken);
+        await dispatcher.Send(new SetRunStoppedCommand(started.Value, stoppedAtUtc), cancellationToken);
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+        UnfinishedRunViewModel run = Assert.Single(presented.ViewModel.UnfinishedRuns);
+
+        Assert.Equal(IskFormat.ExactOrZero(12_345_678d), run.TotalIskText);
+        Assert.False(run.TotalIskUnknown);
+    }
+
+    /// <summary>ET-217 AC-4, reopened 2026-09-10: Jithran read a bare "ISK" on a run with nothing to show, which is
+    /// what IskFormat.Exact's "— ISK" looked like to him — indistinguishable from a rendering glitch, not a plain
+    /// zero. A run with no loot and no bounty is a real, known zero, so it must say "0 ISK" outright. Counter-proof:
+    /// this goes red against the pre-fix reading of "— ISK" (verified by reverting UnfinishedRunViewModel.TotalIskText
+    /// to IskFormat.Exact and rerunning before restoring it).</summary>
+    [AvaloniaFact]
+    public async Task UnfinishedRun_WithNoLootAndNoBounty_ShowsZeroIsk()
+    {
+        using var instance = TestClientInstance.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _StopSiteRunAsync(_Dispatcher(instance), 90000001, cancellationToken);
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+        UnfinishedRunViewModel run = Assert.Single(presented.ViewModel.UnfinishedRuns);
+
+        Assert.Equal("0 ISK", run.TotalIskText);
+        Assert.False(run.TotalIskUnknown);
+    }
+
+    /// <summary>ET-217 review: a run that captured loot nobody has priced yet is a different thing from a run that
+    /// earned nothing — showing "0 ISK" there would claim an answer nobody has. Counter-proof: the row reads a
+    /// dedicated unknown state instead of a number, and TotalIskUnknown says so for the view to style differently.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task UnfinishedRun_WithUnpricedLootAndNoOtherEarnings_ShowsUnknown()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        DateTime stoppedAtUtc = DateTime.UtcNow.AddHours(-1);
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site,
+            stoppedAtUtc.AddMinutes(-15), 1234, "Homefront", 30000142), cancellationToken);
+        // Type id 999999999 is deliberately not in any price fixture, so this loot has no known value.
+        await dispatcher.Send(new AddRunLootCaptureCommand(new RunLootCaptureInput
+        {
+            CapturedAtUtc = stoppedAtUtc, Source = LootCaptureSource.Clipboard, Role = LootCaptureRole.Snapshot,
+            Entries =
+            [
+                new RunLootEntryInput
+                {
+                    ItemTypeId = 999999999, Name = "Unpriced Widget", Quantity = 1, LootKind = LootKind.Gained
+                }
+            ]
+        }), cancellationToken);
+        await dispatcher.Send(new SetRunStoppedCommand(started.Value, stoppedAtUtc), cancellationToken);
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+        UnfinishedRunViewModel run = Assert.Single(presented.ViewModel.UnfinishedRuns);
+
+        Assert.Equal("not priced yet", run.TotalIskText);
+        Assert.True(run.TotalIskUnknown);
+    }
+
     /// <summary>ET-179 AC-3: the runs that were saved are shown as they always were. An evening is what was
     /// committed to it, so three stopped runs beside it change neither its count nor its total. Counter-proof: add
     /// the unfinished runs to the same list and the band reads five activities.</summary>
@@ -521,6 +606,33 @@ public sealed class RunsOverviewTests
 
         ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(viewModel.Tabs[0].Days).Rows);
         Assert.Equal("Homefront", row.SiteText);
+    }
+
+    /// <summary>ET-214 round 2: deleting an activity from its own detail screen must not leave this screen's row and
+    /// day total stale if it happens to be open at the same time — the same "screen open, event fired" gap ET-189
+    /// closed for saves, now measured for <c>RunDeletedEvent</c>. Counter-proof: without that subscription this
+    /// reads the deleted row forever, since nothing else here ever asks the overview to reload.</summary>
+    [AvaloniaFact]
+    public async Task RunDeletedFromItsDetailScreenWhileOverviewIsOpen_RemovesTheRowWithoutReopening()
+    {
+        using var instance = TestClientInstance.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunAsync(_Dispatcher(instance), 90000001, groupCode: null, cancellationToken: cancellationToken);
+        var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(true) };
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken, dialogs: dialogs);
+        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(presented.ViewModel.Tabs[0].Days).Rows);
+
+        // The exact path a real click takes: the row opens the detail through the very IDialogService the overview
+        // itself was built with, so the confirm below answers the same dialogs field either screen would ask.
+        await row.OpenDetailCommand.ExecuteAsync(null);
+        ActivityDetailViewModel detail = dialogs.LastActivityDetail!;
+        await detail.LoadAsync(cancellationToken);
+
+        await detail.DeleteCommand.ExecuteAsync(null);
+        Dispatcher.UIThread.RunJobs(); // the refresh is posted to the UI thread, not run inline (ET-189 review)
+
+        Assert.Empty(presented.ViewModel.Tabs[0].Days);
     }
 
     /// <summary>ET-191's per-day expand toggle must survive the live refresh ET-189 adds: a second run landing on a
