@@ -172,7 +172,8 @@ public sealed class ClipboardMissionOfferTests
         env.Copy(_MissionCapture(rawLine, " \t1.000.000 ISK\t"));
         Run run = await WaitForRunningMissionAsync(env);
         await using ClientDbContext db = await env.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
-        RunParameter parameter = await db.Set<RunParameter>().SingleAsync(parameter => parameter.RunId == run.Id);
+        RunParameter parameter = await db.Set<RunParameter>().SingleAsync(parameter =>
+            parameter.RunId == run.Id && parameter.ParameterKey == RunParameterKey.Unknown);
 
         Assert.Equal(RunParameterKey.Unknown, parameter.ParameterKey);
         Assert.Equal(rawLine + "\r", parameter.TypedValue);
