@@ -18,8 +18,12 @@ taken from the matching `## vX.Y.Z` section below.
   far, right beside its duration — bounty, priced loot and ISK-shaped rewards added up the same way a saved
   activity's or the run window's own TOTAL ISK is, so you can tell what you'd be keeping or throwing away
   before you decide. A run that truly earned nothing reads "0 ISK" outright; a run whose loot has no known
-  price yet says so in words instead of guessing a number. Bounty isn't counted here until a run is saved,
-  which the band's own hint text now says.
+  price yet says so in words instead of guessing a number.
+- **Bounty is now kept the moment it's earned, not only once you press SAVE.** A payout used to live only in
+  memory until a run was saved, so a crash, closing the app, a run's window disappearing, or the day-later
+  auto-save of a run you never got back to all threw its bounty away for good — loot never had this problem,
+  and now bounty doesn't either. The UNFINISHED band's TOTAL ISK picks this up automatically. Bounty already
+  lost this way before this fix cannot be recovered.
 - **An activity can now be deleted, from an understated button at the bottom of its detail screen.** It
   asks you to confirm first, naming the site, how many of your own runs go and how much ISK — and, if it was
   already published to a server, says that deleting it here only removes your own local copy, never
