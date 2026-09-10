@@ -36,9 +36,10 @@ public static partial class ClipboardMissionParser
         var block = RewardBlock.None;
         var isFirstLine = true;
 
-        foreach (var rawLine in text.Split('\n'))
+        foreach (var clipboardLine in text.Split('\n'))
         {
-            var line = rawLine.TrimEnd('\r');
+            string rawLine = clipboardLine.EndsWith('\r') ? clipboardLine[..^1] : clipboardLine;
+            string line = rawLine;
 
             if (isFirstLine)
             {

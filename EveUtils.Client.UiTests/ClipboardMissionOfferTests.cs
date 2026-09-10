@@ -49,6 +49,13 @@ public sealed class ClipboardMissionOfferTests
         { SpaceSeparatedMissionBlock.Replace("1.000.000", "5 000"), 5_000m }
     };
 
+    public static TheoryData<string[], bool, string?> MissionRewardVariants => new()
+    {
+        { [" \t1.000.000 ISK\t", " \tMysterious reward\t"], true, null },
+        { [" \t1.000.000 ISK\t", " \t1.610.000 ISK\t"], false, null },
+        { [" \tMysterious reward\t ", " \t1.000.000 ISK\t"], true, " \tMysterious reward\t " }
+    };
+
     // ET-172 sub 4 AC-1..AC-5, AC-7: the SDE facts measured against build 3492266 in the epic's own grooming —
     // Aralin Jick is agent 3019407, level 4, an EpicArcAgent, at Nishah (system 30005040).
     private static SdeAgent AralinJick => new(3019407, "Aralin Jick", Level: 4, AgentTypeId: 10,
@@ -130,53 +137,25 @@ public sealed class ClipboardMissionOfferTests
         Assert.Contains(parameters, p => p.ParameterKey == RunParameterKey.Item && p.Amount == 3m && p.ItemTypeId == 34);
     }
 
-    [AvaloniaFact]
-    public async Task AMissionCapture_WithAnUnrecognisedReward_KeepsItAlongsideKnownRewards()
+    [AvaloniaTheory]
+    [MemberData(nameof(MissionRewardVariants))]
+    public async Task AMissionCapture_WithKnownAndUnknownRewardVariants_PreservesTheExpectedParameters(
+        string[] rewards, bool expectsUnknown, string? expectedRawLine)
     {
         using var env = await Env.StartAsync();
         env.Sde.AddAgent(AralinJick);
         await env.AddCharacterAsync();
 
-        env.Copy(_MissionCapture(" \t1.000.000 ISK\t", " \tMysterious reward\t"));
+        env.Copy(_MissionCapture(rewards));
         Run run = await WaitForRunningMissionAsync(env);
         await using ClientDbContext db = await env.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
         List<RunParameter> parameters = await db.Set<RunParameter>().Where(parameter => parameter.RunId == run.Id).ToListAsync();
 
         Assert.Contains(parameters, parameter => parameter.ParameterKey == RunParameterKey.Isk && parameter.Amount == 1_000_000m);
-        Assert.Contains(parameters, parameter => parameter.ParameterKey == RunParameterKey.Unknown);
-    }
-
-    [AvaloniaFact]
-    public async Task AMissionCapture_WithOnlyKnownRewards_DoesNotCreateAnUnknownParameter()
-    {
-        using var env = await Env.StartAsync();
-        env.Sde.AddAgent(AralinJick);
-        await env.AddCharacterAsync();
-
-        env.Copy(_MissionCapture(" \t1.000.000 ISK\t", " \t1.610.000 ISK\t"));
-        Run run = await WaitForRunningMissionAsync(env);
-        await using ClientDbContext db = await env.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
-        List<RunParameter> parameters = await db.Set<RunParameter>().Where(parameter => parameter.RunId == run.Id).ToListAsync();
-
-        Assert.DoesNotContain(parameters, parameter => parameter.ParameterKey == RunParameterKey.Unknown);
-    }
-
-    [AvaloniaFact]
-    public async Task AMissionCapture_WithAnUnrecognisedReward_PreservesItsRawClipboardLine()
-    {
-        using var env = await Env.StartAsync();
-        env.Sde.AddAgent(AralinJick);
-        await env.AddCharacterAsync();
-
-        const string rawLine = " \tMysterious reward\t ";
-        env.Copy(_MissionCapture(rawLine, " \t1.000.000 ISK\t"));
-        Run run = await WaitForRunningMissionAsync(env);
-        await using ClientDbContext db = await env.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
-        RunParameter parameter = await db.Set<RunParameter>().SingleAsync(parameter =>
-            parameter.RunId == run.Id && parameter.ParameterKey == RunParameterKey.Unknown);
-
-        Assert.Equal(RunParameterKey.Unknown, parameter.ParameterKey);
-        Assert.Equal(rawLine + "\r", parameter.TypedValue);
+        RunParameter? unknown = parameters.SingleOrDefault(parameter => parameter.ParameterKey == RunParameterKey.Unknown);
+        Assert.Equal(expectsUnknown, unknown is not null);
+        if (expectedRawLine is not null)
+            Assert.Equal(expectedRawLine, unknown?.TypedValue);
     }
 
     [AvaloniaTheory]

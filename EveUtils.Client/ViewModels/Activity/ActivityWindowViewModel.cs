@@ -652,6 +652,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public AbyssalWeather? Weather => WeatherIndex is { } index ? AbyssalWeather.All[index] : null;
 
+    // The kind guard states the invariant; production missions already leave both indexes null.
     public bool HasWeatherAndTier => IsAbyssal && WeatherIndex is not null && TierIndex is not null;
 
     /// <summary>Drives the one chip in the header that asks for something. Only ever true for an abyssal run — a
