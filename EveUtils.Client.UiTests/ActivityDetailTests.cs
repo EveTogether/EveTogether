@@ -10,6 +10,7 @@ using EveUtils.Client.Views;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
+using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -52,7 +53,7 @@ public sealed class ActivityDetailTests
         ActivityOverviewRowDto row = Assert.Single(_Value(overview));
 
         var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
-            instance.Services.GetRequiredService<IMarketPriceRepository>(),
+            instance.Services.GetRequiredService<IAppraisalProvider>(),
             nameOf: id => id == 90000001 ? "RaymondKrah" : $"character {id}");
         await viewModel.LoadAsync(cancellationToken);
 
@@ -81,7 +82,7 @@ public sealed class ActivityDetailTests
         // 30000142, matching the fixed solar system id every _SaveSiteRunAsync run in this file is started on.
         var sde = new FakeSdeAccessor().AddSolarSystem(new SdeSolarSystem(30000142, "Cistuvaert", 0.8));
         var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
-            instance.Services.GetRequiredService<IMarketPriceRepository>(), sde: sde);
+            instance.Services.GetRequiredService<IAppraisalProvider>(), sde: sde);
         await viewModel.LoadAsync(cancellationToken);
 
         Assert.Equal("Cistuvaert", viewModel.LocationText);
@@ -102,7 +103,7 @@ public sealed class ActivityDetailTests
         ActivityOverviewRowDto row = Assert.Single(_Value(overview));
 
         var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
-            instance.Services.GetRequiredService<IMarketPriceRepository>(), sde: new FakeSdeAccessor());
+            instance.Services.GetRequiredService<IAppraisalProvider>(), sde: new FakeSdeAccessor());
         await viewModel.LoadAsync(cancellationToken);
 
         Assert.Equal("system 30000142", viewModel.LocationText);
@@ -208,7 +209,8 @@ public sealed class ActivityDetailTests
 
     /// <summary>AC-4: an excluded capture keeps its row and counts towards nothing. Counter-proof: filter excluded
     /// captures out of the list — the total still adds up, and this goes red because the capture is gone. Leaving
-    /// out is not the same as not counting.</summary>
+    /// out is not the same as not counting. Since ET-215 the item table is one row per kind: the counted Tritanium, and
+    /// under it a struck-through row for the excluded copy; the captures behind them are opened to be read too.</summary>
     [AvaloniaFact]
     public async Task ExcludedCapture_StaysOnScreen_AndDoesNotCount()
     {
@@ -231,11 +233,18 @@ public sealed class ActivityDetailTests
         RunLootCaptureDto repeat = _Value(loot).Captures.OrderBy(capture => capture.CapturedAtUtc).Last();
         await dispatcher.Send(new SetRunLootCaptureExclusionCommand(repeat.CaptureId, IsExcluded: true), cancellationToken);
 
-        List<string> texts = await _RenderAsync(instance, cancellationToken);
+        (ActivityDetailWindow window, Window root) = await _PresentAsync(instance, 758, cancellationToken);
+        ActivityDetailViewModel viewModel = Assert.IsType<ActivityDetailViewModel>(window.DataContext);
+        Assert.Single(viewModel.LootOverview.Characters).IsCapturesShown = true;
+        Dispatcher.UIThread.RunJobs();
+        root.UpdateLayout();
+        List<string> texts = RenderedText.VisibleTexts(root);
 
         Assert.Contains(texts, text => text == $"{300m:N2} ISK");            // 100 x 3 once, not twice
-        Assert.Contains(texts, text => text.StartsWith("excluded"));
-        Assert.Equal(2, texts.Count(text => text == "Tritanium"));           // both captures still listed
+        Assert.Contains(texts, text => text == "EXCLUDED");
+        Assert.Contains(texts, text => text == "excluded — repeat of #1");
+        Assert.Equal(2, texts.Count(text => text == "Tritanium"));           // counted, and left out — both still listed
+        Assert.Equal(2, texts.Count(text => text == "Tritanium ×3"));        // and both captures under them
     }
 
     /// <summary>AC-5: two runs in one activity that each sighted the same enemy type stay two rows, each with its
@@ -421,7 +430,7 @@ public sealed class ActivityDetailTests
         ActivityOverviewRowDto row = Assert.Single(_Value(overview));
 
         var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
-            instance.Services.GetRequiredService<IMarketPriceRepository>());
+            instance.Services.GetRequiredService<IAppraisalProvider>());
         await viewModel.LoadAsync(cancellationToken);
         return new ActivityDetailWindow(viewModel) { Width = width, Height = 1400 };
     }
@@ -465,7 +474,7 @@ public sealed class ActivityDetailTests
             await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
 
         var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
-            instance.Services.GetRequiredService<IMarketPriceRepository>(),
+            instance.Services.GetRequiredService<IAppraisalProvider>(),
             nameOf: id => id == 90000001 ? "Jithran" : "Second Pilot");
         await viewModel.LoadAsync(cancellationToken);
 
@@ -477,14 +486,14 @@ public sealed class ActivityDetailTests
     }
 
     /// <summary>
-    /// Counter-proof 4 from the ET-211 grooming: two characters, each with their own priced loot capture on their
-    /// own run within the same group, must show as one row per character with a group total equal to their sum —
-    /// the same shape <see cref="BountyRows_OneRowPerCharacter_WithTheGroupsTotal"/> already gives bounty. Red
-    /// against the pre-fix code, where <c>LootCharacterRows</c> did not exist at all and the LOOT section only ever
-    /// showed one combined figure.
+    /// Counter-proof 4 from the ET-211 grooming, carried into ET-215's per-character blocks: two characters, each with
+    /// their own priced loot capture on their own run within the same group, must show as one block per character
+    /// with a group total equal to their sum — the same shape
+    /// <see cref="BountyRows_OneRowPerCharacter_WithTheGroupsTotal"/> already gives bounty. Red against the pre-ET-211
+    /// code, where the LOOT section only ever showed one combined figure.
     /// </summary>
     [AvaloniaFact]
-    public async Task LootCharacterRows_OneRowPerCharacter_WithTheGroupsTotal()
+    public async Task LootBlocks_OneBlockPerCharacter_WithTheGroupsTotal()
     {
         using var instance = TestClientInstance.Create();
         ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
@@ -499,15 +508,15 @@ public sealed class ActivityDetailTests
             await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
 
         var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
-            instance.Services.GetRequiredService<IMarketPriceRepository>(),
+            instance.Services.GetRequiredService<IAppraisalProvider>(),
             nameOf: id => id == 90000001 ? "Jithran" : "Second Pilot");
         await viewModel.LoadAsync(cancellationToken);
 
-        Assert.Equal(2, viewModel.LootCharacterRows.Count);
-        Assert.Contains(viewModel.LootCharacterRows, r => r.CharacterText == "Jithran" && r.IskText == $"{300m:N2} ISK");
-        Assert.Contains(viewModel.LootCharacterRows, r => r.CharacterText == "Second Pilot" && r.IskText == $"{400m:N2} ISK");
-        // The per-character rows are set apart from the group's own NET figure, but they still have to sum to it.
-        Assert.Equal($"{700m:N2} ISK", viewModel.NetIskText);
+        Assert.Equal(2, viewModel.LootOverview.Characters.Count);
+        Assert.Contains(viewModel.LootOverview.Characters, r => r.CharacterText == "Jithran" && r.SubtotalText == $"{300m:N2} ISK");
+        Assert.Contains(viewModel.LootOverview.Characters, r => r.CharacterText == "Second Pilot" && r.SubtotalText == $"{400m:N2} ISK");
+        // The per-character blocks are set apart from the group's own total, but they still have to sum to it.
+        Assert.Equal($"{700m:N2} ISK", viewModel.LootOverview.NetIskDisplay);
     }
 
     private static async Task _SaveSiteRunWithLootAsync(ICqrsDispatcher dispatcher, long characterId,
@@ -551,7 +560,7 @@ public sealed class ActivityDetailTests
             await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
 
         var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
-            instance.Services.GetRequiredService<IMarketPriceRepository>(),
+            instance.Services.GetRequiredService<IAppraisalProvider>(),
             nameOf: id => id == 90000001 ? "Jithran" : "Second Pilot");
         await viewModel.LoadAsync(cancellationToken);
 
@@ -591,7 +600,7 @@ public sealed class ActivityDetailTests
             await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
 
         var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
-            instance.Services.GetRequiredService<IMarketPriceRepository>());
+            instance.Services.GetRequiredService<IAppraisalProvider>());
         await viewModel.LoadAsync(cancellationToken);
 
         Assert.True(viewModel.HasTotalIsk);

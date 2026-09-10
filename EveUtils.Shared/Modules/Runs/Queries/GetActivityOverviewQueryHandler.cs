@@ -75,7 +75,8 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
                 : [])
             .GroupBy(entry => (entry.Activity, entry.Address))
             .Select(group => (group.Key.Activity, Sync: new ActivityServerSyncDto(
-                group.Key.Address, group.Any(entry => entry.SyncState == RunSyncState.Pending))))
+                group.Key.Address, group.Any(entry => entry.SyncState == RunSyncState.Pending),
+                group.Any(entry => entry.SyncState == RunSyncState.Outdated))))
             .ToLookup(entry => entry.Activity, entry => entry.Sync);
 
         return Result<IReadOnlyList<ActivityOverviewRowDto>>.Success(

@@ -107,6 +107,8 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
             // manual REFRESH — RebuildRosterAsync already re-fetches the registry and recomputes it, same as the
             // presence subscription above, so this reuses that path instead of a second ISK-only copy of it.
             bus.Subscribe<RunSavedEvent>(evt => Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = RebuildRosterAsync()));
+            // A saved run's loot corrected afterwards (ET-215) moves "ISK today" the same way.
+            bus.Subscribe<RunLootCorrectedEvent>(evt => Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = RebuildRosterAsync()));
         }
 
         // Live location for online characters (even without combat): every parsed gamelog line — including a jump —

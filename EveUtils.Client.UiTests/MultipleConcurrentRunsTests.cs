@@ -453,6 +453,57 @@ public class MultipleConcurrentRunsTests
         Assert.Equal("500.00 ISK", model.GroupTotalIskText);
     }
 
+    /// <summary>
+    /// ET-215: the run window's LOOT list is the per-character component the saved detail screen shows — a block per
+    /// character with their own run's subtotal, whichever character the column shows, and a correction made in one
+    /// block moves the group total at the top. Counter-proof: bind the list to the column's own run again and the
+    /// second character's block is not there to correct.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task LiveLootSection_ShowsABlockPerCharacter_AndACorrectionInOneMovesTheGroupTotal()
+    {
+        using var harness = await _TwoCharacters();
+        await harness.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
+        [
+            new LocalMarketPrice { TypeId = 34, AveragePrice = 100, AdjustedPrice = 100, UpdatedAt = DateTimeOffset.UtcNow }
+        ]);
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        harness.Dialogs.OnPickCharacters = (_, options) =>
+            Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId)]);
+        await model.StartRunCommand.ExecuteAsync(null);
+        await ActivityWindowHarness.WaitUntil(() => model.Participants.Count == 2);
+        ActivityLootViewModel loot = Assert.IsType<ActivityLootViewModel>(model.LootOverview);
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        foreach ((Guid runId, long quantity) in model.Participants.Select(participant =>
+                     (participant.RunId, participant.CharacterId == 90000002 ? 2L : 3L)))
+            await dispatcher.Send(new AddRunLootCaptureCommand(new RunLootCaptureInput
+            {
+                CapturedAtUtc = DateTime.UtcNow, Source = LootCaptureSource.Clipboard, PreferredRunId = runId,
+                Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = quantity, LootKind = LootKind.Gained }]
+            }));
+        await ActivityWindowHarness.WaitUntil(() => loot.NetIskDisplay == "500.00 ISK");
+
+        Assert.Equal(2, loot.Characters.Count);
+        ActivityLootCharacterViewModel secondBlock = loot.Characters.Single(block => block.CharacterId == 90000002);
+        Assert.Equal("200.00 ISK", secondBlock.SubtotalText);
+        Assert.Equal("300.00 ISK", loot.Characters.Single(block => block.CharacterId == 90000001).SubtotalText);
+
+        Assert.True(await secondBlock.Loot.ToggleExcludedAsync(secondBlock.Loot.Captures[0]));
+        await ActivityWindowHarness.WaitUntil(() =>
+        {
+            model.Refresh(DateTime.UtcNow);
+            return model.GroupTotalIskText == "300.00 ISK";
+        });
+        Assert.Equal("300.00 ISK", model.GroupTotalIskText);
+        Assert.Equal("300.00 ISK", loot.NetIskDisplay);
+
+        // The column moving to the second character changes which run the holds belong to, not the list.
+        model.SelectRunCharacterCommand.Execute(model.RunCharacters.Single(row => row.CharacterId == 90000002));
+        await ActivityWindowHarness.WaitUntil(() => model.RunId == secondBlock.RunId);
+        Assert.Equal(2, loot.Characters.Count);
+        Assert.Same(secondBlock, loot.Characters.Single(block => block.CharacterId == 90000002));
+    }
+
     // ── The saved activity carries everyone's location and fit, not just the acting character's (ET-210 review, 2026-09-09) ──
 
     private const int SecondCharacterId = 90000002;

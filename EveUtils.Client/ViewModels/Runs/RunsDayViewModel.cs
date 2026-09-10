@@ -34,9 +34,7 @@ public sealed partial class RunsDayViewModel : ObservableObject
         SummaryText = $"{activities} · {flownText} · {netText}";
     }
 
-    /// <summary>The date this band groups by — a stable key across a rebuild (ET-189), unlike an
-    /// <see cref="ActivityOverviewRowViewModel.ActivitySummaryId"/>, which is reassigned every time
-    /// <c>RebuildActivitySummariesCommandHandler</c> runs.</summary>
+    /// <summary>The date this band groups by — the key its expand state is carried across a refill on (ET-189).</summary>
     public DateTime Day { get; }
 
     public string DayText { get; }

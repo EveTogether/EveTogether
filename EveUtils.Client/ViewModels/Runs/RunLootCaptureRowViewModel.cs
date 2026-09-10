@@ -36,7 +36,12 @@ public sealed partial class RunLootCaptureRowViewModel : ObservableObject
 
     public string LineCountText => Entries.Count == 1 ? "1 row" : $"{Entries.Count} rows";
 
-    public string? RepeatOfDisplay => RepeatOfNumber is { } number ? $"not added · identical to #{number}" : null;
+    /// <summary>The badge a repeat carries in the strip, counted or not: it names the copy it repeats.</summary>
+    public string? RepeatBadgeText => RepeatOfNumber is { } number ? $"IDENTICAL TO #{number}" : null;
+
+    /// <summary>EXCLUDED is said by the badge for an exclusion the pilot made; a repeat's own badge already says why it
+    /// is out, and two badges for one reason is one too many.</summary>
+    public bool IsExcludedBadgeShown => IsExcluded && RepeatOfNumber is null;
 
     /// <summary>A repeat is the one exclusion a pilot may want to argue with — he really did loot the same thing
     /// twice — so it is the one that carries a way back in. Every other exclusion is his own edit, and the way to
@@ -61,19 +66,38 @@ public sealed partial class RunLootCaptureRowViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanReinclude))]
+    [NotifyPropertyChangedFor(nameof(StateText))]
+    [NotifyPropertyChangedFor(nameof(ReincludeText))]
+    [NotifyPropertyChangedFor(nameof(IsExcludedBadgeShown))]
     private bool _isExcluded;
+
+    public string CapturedAtText => CapturedAtUtc.ToLocalTime().ToString("HH:mm:ss");
+
+    /// <summary>What the switch beside it stands at, in words — the colour of a switch alone is not a reason.</summary>
+    public string StateText => !IsExcluded
+        ? "counted"
+        : RepeatOfNumber is { } number
+            ? $"excluded — repeat of #{number}"
+            : "excluded — a deliberate edit";
+
+    /// <summary>The named way back in an excluded capture carries beside its switch (ET-215 mockup). A repeat's says
+    /// what it is, because that is the one exclusion a pilot is expected to argue with.</summary>
+    public string ReincludeText => RepeatOfNumber is null ? "re-include" : "re-include this repeat";
 
     /// <summary>What this capture came to on its own, whether or not it counts — the weight of the block, readable
     /// without opening it. Set by the section, which is where the prices are.</summary>
     [ObservableProperty] private string? _subtotalDisplay;
 
+    /// <summary><see cref="SubtotalDisplay"/> without its unit, for the strip's money column.</summary>
+    [ObservableProperty] private string? _subtotalAmountText;
+
+    /// <summary>Its rows as they came in, each valued — set by the section, which holds the prices.</summary>
+    [ObservableProperty] private IReadOnlyList<ActivityLootLineViewModel> _lines = [];
+
     /// <summary>It came in after the pilot's last edit, so its rows are under his list rather than in it. Derived
     /// from the order and never stored: it means "later than the hand-written capture", which the list already
     /// says.</summary>
     [ObservableProperty] private bool _isAddedAfterEdit;
-
-    /// <summary>Its rows, as it came in, read-only. Shut by default — the strip is there to be scanned.</summary>
-    [ObservableProperty] private bool _isExpanded;
 
     /// <summary>How the starting-hold picker names it, which is how the strip names it too.</summary>
     public string PickerText => $"{NumberDisplay} · {SourceText} · {LineCountText}";

@@ -142,13 +142,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     // RunBountyEntry rows, and what the section adds up meanwhile.
     private readonly List<RunBountyEntryInput> _bounties = [];
 
-    // Each participant's own net loot ISK, keyed by their RunId rather than read off RunLoot — RunLoot follows
-    // whichever RunId the character column currently shows (deel 3), and ET-211 means a sibling's own run can now
-    // genuinely hold captures nobody is looking at. Updated only when a RunLootCapturedEvent names one of these
-    // runs (own or sibling), never on the clock tick that sums it, so a group total costs nothing beyond formatting
-    // a string on every second the way _RefreshClock already does.
-    private readonly Dictionary<Guid, decimal> _lootIskByRunId = [];
-
     // The fleet's latest location sample per member, so the envelope is re-taken over the whole fleet on every
     // sample rather than over whichever one happened to arrive last.
     private readonly Dictionary<int, MetricSample> _fleetLocations = [];
@@ -205,6 +198,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             : null;
         if (RunLoot is not null)
             RunLoot.PropertyChanged += (_, _) => _RefreshSummaries();
+        LootOverview = services.GetService<CqrsDispatcher>() is { } overviewDispatcher
+            ? new ActivityLootViewModel(() => new RunLootViewModel(overviewDispatcher,
+                    services.GetService<IAppraisalProvider>(), services.GetService<ISdeAccessor>(),
+                    services.GetService<ITypeImageProvider>()),
+                services.GetService<ICharacterPortraitProvider>())
+            : null;
+        if (LootOverview is not null)
+            LootOverview.PropertyChanged += (_, _) => _RefreshSummaries();
 
         WeatherChoices = AbyssalWeather.All
             .Select((weather, index) => new ActivityChoice
@@ -243,7 +244,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             ? collector.Observations
             : [];
 
+    /// <summary>The run on screen, for what belongs to one run only: the registration way, the two paste boxes and
+    /// the starting-hold picker. Follows the character column.</summary>
     public RunLootViewModel? RunLoot { get; }
+
+    /// <summary>The LOOT list itself, one block per run in the group (ET-215) — the same component the saved
+    /// activity's detail screen shows. Each participant's block is their own run's loot, whichever character the
+    /// column happens to show, which is also what the live TOTAL ISK sums for a group (ET-211).</summary>
+    public ActivityLootViewModel? LootOverview { get; }
 
     /// <summary>Only for what is genuinely the abyss's own: the 20-minute deadline, the tier and weather, the
     /// per-member anchors. Never for "and everything else is a site" — that is what this window used to do.</summary>
@@ -293,6 +301,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         if (RunLoot is not null)
             RunLoot.RunId = value;
+        // A group's blocks follow its participants, not the column; only a run the store has not named any
+        // participants for yet takes its block from here.
+        if (Participants.Count == 0)
+            _SyncLootOverview();
     }
 
     /// <summary>The fleet this run belongs to, or null when the window was never told of one.</summary>
@@ -2303,16 +2315,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 int characterId = checked((int)dto.CharacterId);
                 string name = await _NameOfAsync(characterId) ?? $"Char {characterId}";
                 Participants.Add(new RunParticipantViewModel(dto.RunId, characterId, name, dto.IsParticipant, dto.IsPayoutEligible));
-                // Seeds the group total's per-run loot cache (ET-211) for a participant discovered after their own
-                // captures already happened — reopening a running group, or a member joining mid-run — so their
-                // loot counts from the moment they are seen rather than waiting on their next capture event. Own run
-                // included: RunLoot may not have finished loading yet at this point, so this is not a redundant read.
-                _ = _RefreshParticipantLootIskAsync(dto.RunId);
             }
 
             foreach (RunParticipantViewModel gone in Participants
                          .Where(row => participants.All(dto => dto.RunId != row.RunId)).ToList())
                 Participants.Remove(gone);
+            _SyncLootOverview();
 
             OnPropertyChanged(nameof(IsFleetShown));
             // A group with more than one participant is what turns the header chip from one name into the group's
@@ -2646,6 +2654,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         BountyIsk = 0;
         TotalLootIsk = null;
         Participants.Clear();
+        _SyncLootOverview();
         // ET-101 reads the ship again for the new run rather than leaving the last one's fit on screen; the reading
         // itself lives in the detection service, so this only drops what this window cached of it.
         _fitReading = null;
@@ -2666,38 +2675,40 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private void _OnRunLootCaptured(RunLootCapturedEvent integrationEvent)
     {
         Guid capturedRunId = integrationEvent.Data;
-        bool isOwnRun = RunLoot is not null && capturedRunId == RunId;
-        if (isOwnRun)
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = RunLoot!.RefreshAsync());
+        if (RunLoot is not null && capturedRunId == RunId)
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = RunLoot.RefreshAsync());
 
-        if (isOwnRun || Participants.Any(participant => participant.RunId == capturedRunId))
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = _RefreshParticipantLootIskAsync(capturedRunId));
+        if (LootOverview is not null)
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = LootOverview.RefreshRunAsync(capturedRunId));
     }
 
     /// <summary>
-    /// Reads one participant's own net loot ISK off the store and latches it into <see cref="_lootIskByRunId"/> —
-    /// the same <see cref="RunLootViewModel"/>/<see cref="LootTally"/> valuation the LOOT section itself uses,
-    /// spun up for a run that is not necessarily the one this window is showing right now. Event-driven only
-    /// (ET-211): a participant whose loot was already captured before this window session started watching is not
-    /// swept up until their next capture, the same trade-off <see cref="GamelogClientService.GetFleetRunBounty"/>
-    /// does not have to make because bounty is read live rather than cached — a live DB read on every clock tick for
-    /// every participant was the alternative, and <see cref="_RefreshGroupTotalIsk"/> deliberately does none.
+    /// One block per run in the group, the character column's own choice aside (ET-215): the participants once the
+    /// store has named them, and until then this window's own run on its own. A block is read from the store once,
+    /// when it first appears — reopening a running group, or a member joining mid-run — and after that only when a
+    /// <see cref="RunLootCapturedEvent"/> names its run, so <see cref="_RefreshGroupTotalIsk"/> can sum the blocks on
+    /// every clock tick without a single database read of its own (ET-211).
     /// </summary>
-    private async Task _RefreshParticipantLootIskAsync(Guid runId)
+    private void _SyncLootOverview()
     {
-        if (_services.GetService<CqrsDispatcher>() is not { } dispatcher)
+        if (LootOverview is null)
             return;
 
-        var sibling = new RunLootViewModel(
-            dispatcher, _services.GetService<IAppraisalProvider>(), _services.GetService<ISdeAccessor>())
+        List<(Guid RunId, long CharacterId, string Name)> runs = Participants.Count > 0
+            ? [.. Participants.Select(participant => (participant.RunId, (long)participant.CharacterId, participant.CharacterName))]
+            : RunId is { } ownRunId && _runCharacterId is { } ownCharacterId
+                ? [(ownRunId, ownCharacterId, _runCharacterName ?? $"Char {ownCharacterId}")]
+                : [];
+        foreach ((Guid runId, long characterId, string name) in runs)
         {
-            RunId = runId
-        };
-        await sibling.RefreshAsync();
-        if (sibling.NetIsk is { } net)
-            _lootIskByRunId[runId] = net;
-        else
-            _lootIskByRunId.Remove(runId);
+            bool isNew = LootOverview.Characters.All(block => block.RunId != runId);
+            ActivityLootCharacterViewModel block = LootOverview.Show(runId, characterId, name);
+            block.Loot.IsLocked = RunState is ActivityRunState.Saved;
+            if (isNew)
+                _ = block.Loot.RefreshAsync();
+        }
+
+        LootOverview.Keep([.. runs.Select(run => run.RunId)]);
     }
 
     /// <summary>
@@ -3103,10 +3114,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <see cref="BountyIsk"/>, which only ever holds whichever character the column was showing while it came in.
     /// A solo run (nothing to switch away from) keeps using <see cref="BountyIsk"/>, since there is no group to sum.
     ///
-    /// Loot is summed the same way, per participant, through <see cref="_lootIskByRunId"/> (ET-211) — now that a
-    /// capture is attributed to the character whose client actually copied it, a group's total is the sum of every
-    /// participant's own run, not whichever one <see cref="RunLoot"/> happens to be showing. A solo run has nothing
-    /// to sum but its own <see cref="RunLoot"/>.
+    /// Loot is summed the same way, per participant, through <see cref="LootOverview"/>'s blocks (ET-211, ET-215) —
+    /// now that a capture is attributed to the character whose client actually copied it, a group's total is the sum
+    /// of every participant's own run, not whichever one <see cref="RunLoot"/> happens to be showing. A solo run has
+    /// nothing to sum but its own <see cref="RunLoot"/>.
     /// </summary>
     private void _RefreshGroupTotalIsk()
     {
@@ -3115,9 +3126,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             ? Participants.Sum(participant => _gamelog.GetFleetRunBounty(fleetId, participant.CharacterId))
             : BountyIsk;
 
-        decimal? lootIsk = isGroup
-            ? (_lootIskByRunId.Count == 0 ? null : _lootIskByRunId.Values.Sum())
-            : RunLoot?.NetIsk;
+        decimal? lootIsk = isGroup ? LootOverview?.NetIsk : RunLoot?.NetIsk;
 
         decimal rewardIsk = PendingParameters
             .Where(parameter => parameter.ParameterKey is RunParameterKey.Isk or RunParameterKey.BonusIsk
@@ -3145,9 +3154,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         Fleet.HeaderSummary = FleetMemberCount > 1 ? FleetStatusText : "no fleet has reported in";
         Bounty.HeaderSummary = BountyText;
         // What was collected first, the value as an aside. A shut section that only reported "no price" read as a
-        // fault while two items sat in it (Raymond, 2026-09-02).
-        Loot.HeaderSummary = RunLoot?.Captures.Count > 0
-            ? $"{_LootItemCount()} · {RunLoot.NetIskDisplay}"
+        // fault while two items sat in it (Raymond, 2026-09-02). The whole group's, since the section under it is.
+        Loot.HeaderSummary = LootOverview is { HasCaptures: true } overview
+            ? $"{_LootItemCount()} · {overview.NetIskDisplay}"
             : RunLoot?.RunStatusMessage ?? "no loot captured";
     }
 
@@ -3287,7 +3296,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     private string _LootItemCount()
     {
-        int items = RunLoot?.Captures.Where(capture => !capture.IsExcluded).Sum(capture => capture.Entries.Count) ?? 0;
+        int items = LootOverview?.Characters.Sum(block => block.Loot.Captures
+            .Where(capture => !capture.IsExcluded).Sum(capture => capture.Entries.Count)) ?? 0;
         return items == 1 ? "1 item" : $"{items} items";
     }
 
@@ -3409,6 +3419,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         if (RunLoot is not null)
             RunLoot.IsLocked = value is ActivityRunState.Saved;
+        foreach (ActivityLootCharacterViewModel block in LootOverview?.Characters ?? [])
+            block.Loot.IsLocked = value is ActivityRunState.Saved;
     }
 
     private async Task _PersistAsync(string key, string value)

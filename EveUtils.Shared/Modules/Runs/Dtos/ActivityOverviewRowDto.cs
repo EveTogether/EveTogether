@@ -8,8 +8,9 @@ namespace EveUtils.Shared.Modules.Runs.Dtos;
 public sealed record ActivityRewardDto(RunParameterKey ParameterKey, decimal? Amount);
 
 /// <summary>Where one activity stands towards one server. <see cref="IsPending"/> is true while any of its runs is
-/// still queued for that server — a published activity that was edited afterwards re-queues itself.</summary>
-public sealed record ActivityServerSyncDto(string ServerAddress, bool IsPending);
+/// still queued for that server. <see cref="IsOutdated"/> is true when one of its runs had its loot corrected after
+/// it was published (ET-215) — that does NOT re-queue it: the server copy waits for the pilot to publish again.</summary>
+public sealed record ActivityServerSyncDto(string ServerAddress, bool IsPending, bool IsOutdated = false);
 
 /// <summary>One row of the activity overview — <c>ActivitySummary</c> read back as-is, since it already groups on
 /// <c>GroupCode ?? RunId</c> ("one row per activity"). A solo run and a six-pilot fleet both land here through the

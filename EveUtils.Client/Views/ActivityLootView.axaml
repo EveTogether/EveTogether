@@ -1,0 +1,559 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="680" d:DesignHeight="600"
+             x:Class="EveUtils.Client.Views.ActivityLootView"
+             x:DataType="vr:ActivityLootViewModel">
+
+    <!-- ET-215, variant 3 of design/loot-overview/v2, built to its measurements: the totals as three plain key/value
+         lines, then per character a header, a striped item table, the captures behind it under a dashed disclosure,
+         and the group total in its tinted strip. Every colour is a theme brush — the mockup's own palette is this
+         app's (ValueBrush, BgRowAltBrush, MagentaBrush, RedBrush) — so all four faction themes carry it. Where the
+         mockup dims by opacity, this keeps the ink bright and marks the state another way: the run window can be set
+         see-through, and dimmed text on whatever shows through it is the first thing to go unreadable. -->
+    <UserControl.Resources>
+        <!-- The mockup's quiet ink, one step brighter than TextDimBrush: the run window can be set see-through, and
+             at its default fill over a bright backdrop TextDim falls to 3.8:1 where this holds 5.5:1. Faction-free,
+             like the dim ink it stands in for. -->
+        <SolidColorBrush x:Key="LootMetaBrush" Color="#FFA89C88"/>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.money">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.money.net">
+            <Setter Property="Foreground" Value="{StaticResource ValueBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+        <Style Selector="TextBlock.kvlabel">
+            <Setter Property="Foreground" Value="{StaticResource LootMetaBrush}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.note">
+            <Setter Property="Foreground" Value="{StaticResource LootMetaBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontStyle" Value="Italic"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+
+        <!-- ── Per character ── -->
+        <Style Selector="TextBlock.charname">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="TextBlock.subtotal">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- ── The item table ── striped, a hairline under every row, the heaviest line tinted. -->
+        <Style Selector="Border.itemrow">
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="BorderBrush" Value="#08FFFFFF"/>
+        </Style>
+        <Style Selector="Border.itemrow.alt">
+            <Setter Property="Background" Value="{StaticResource BgRowAltBrush}"/>
+        </Style>
+        <Style Selector="Border.itemrow.top">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        </Style>
+        <Style Selector="Border.itemrow TextBlock.itemname">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="Border.itemrow TextBlock.money">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        </Style>
+        <Style Selector="Border.itemrow.top TextBlock.money">
+            <Setter Property="Foreground" Value="{StaticResource ValueBrush}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+        <Style Selector="Border.itemrow.excluded TextBlock.money">
+            <Setter Property="TextDecorations" Value="Strikethrough"/>
+        </Style>
+        <Style Selector="Border.icontile">
+            <Setter Property="Width" Value="20"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="ClipToBounds" Value="True"/>
+            <Setter Property="Background" Value="{StaticResource BgRowAltBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.meta">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource LootMetaBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- ── Badges ── small bordered pills in the mockup's four inks. -->
+        <Style Selector="Border.badge">
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="Padding" Value="5,0,5,1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.badge > TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="LetterSpacing" Value="0.4"/>
+            <Setter Property="Foreground" Value="{StaticResource LootMetaBrush}"/>
+        </Style>
+        <Style Selector="Border.badge.role">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        </Style>
+        <Style Selector="Border.badge.role > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="Border.badge.excluded">
+            <Setter Property="Background" Value="#14EF5A5A"/>
+            <Setter Property="BorderBrush" Value="#66EF5A5A"/>
+        </Style>
+        <Style Selector="Border.badge.excluded > TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+        </Style>
+        <Style Selector="Border.badge.repeat">
+            <Setter Property="Background" Value="#14C084FC"/>
+            <Setter Property="BorderBrush" Value="#66C084FC"/>
+        </Style>
+        <Style Selector="Border.badge.repeat > TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource MagentaBrush}"/>
+        </Style>
+
+        <!-- ── The disclosure ── a dashed outline, the verb and count in the accent and the excluded count quieter
+             beside it. The stock checked plate is taken off: an open list is not a pressed setting. -->
+        <Style Selector="ToggleButton.disclosure">
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0,4,0,4"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="ToggleButton.disclosure /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.disclosure:checked /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.disclosure:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.disclosure Rectangle">
+            <Setter Property="Stroke" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="StrokeThickness" Value="1"/>
+            <Setter Property="StrokeDashArray" Value="4,3"/>
+            <Setter Property="RadiusX" Value="3"/>
+            <Setter Property="RadiusY" Value="3"/>
+            <Setter Property="Fill" Value="#04FFFFFF"/>
+        </Style>
+        <Style Selector="ToggleButton.disclosure:pointerover Rectangle">
+            <Setter Property="Stroke" Value="{DynamicResource BorderStrongBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton.disclosure TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton.disclosure:pointerover TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+
+        <!-- ── A capture ── -->
+        <Style Selector="Border.capturestrip">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="2,0,0,0"/>
+            <Setter Property="Padding" Value="10,0,0,0"/>
+            <Setter Property="Margin" Value="4,0,0,6"/>
+        </Style>
+        <Style Selector="Border.capture">
+            <Setter Property="Background" Value="#05FFFFFF"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="9,6"/>
+            <Setter Property="Margin" Value="0,0,0,5"/>
+        </Style>
+        <Style Selector="Border.capture TextBlock.capnum">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.capture TextBlock.capsub">
+            <Setter Property="Foreground" Value="{StaticResource ValueBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Border.capture TextBlock.capline">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="Border.capture TextBlock.capvalue">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource LootMetaBrush}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+        </Style>
+        <Style Selector="Border.capture.excluded TextBlock.capsub">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="TextDecorations" Value="Strikethrough"/>
+        </Style>
+
+        <!-- ── The counted / excluded switch ── the capture's own state, and the control that changes it. -->
+        <Style Selector="Button.switch">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="Button.switch /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.switch:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.switch:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.switch Border.track">
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="Height" Value="13"/>
+            <Setter Property="CornerRadius" Value="7"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="#2EEF5A5A"/>
+            <Setter Property="BorderBrush" Value="#66EF5A5A"/>
+        </Style>
+        <Style Selector="Button.switch Ellipse">
+            <Setter Property="Width" Value="9"/>
+            <Setter Property="Height" Value="9"/>
+            <Setter Property="Margin" Value="1,0"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Fill" Value="{StaticResource RedBrush}"/>
+        </Style>
+        <Style Selector="Button.switch.on Border.track">
+            <Setter Property="Background" Value="#404ADE80"/>
+            <Setter Property="BorderBrush" Value="#804ADE80"/>
+        </Style>
+        <Style Selector="Button.switch.on Ellipse">
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="Fill" Value="{StaticResource GreenBrush}"/>
+        </Style>
+        <Style Selector="Button.switch TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- ── Buttons ── the mockup's small accent button for the way back in, and the one control Jithran asked to
+             be found without looking: rewrite by hand, plated and bordered in the accent on every character's own
+             header rather than a ghost at the foot of the list (ET-215 feedback). -->
+        <Style Selector="Button.small">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="FontSize" Value="10"/>
+        </Style>
+        <Style Selector="Button.small:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.small.ghost">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        </Style>
+        <Style Selector="Button.small:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        </Style>
+        <Style Selector="Button.rewrite">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="LetterSpacing" Value="1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.rewrite:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.rewrite:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        </Style>
+
+        <Style Selector="Border.grouptotal">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Margin" Value="0,6,0,0"/>
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel>
+        <!-- ── The group's three figures ── as plain key/value lines, NET in the value amber. -->
+        <StackPanel IsVisible="{Binding HasCaptures}">
+            <Grid ColumnDefinitions="Auto,*" Margin="0,2">
+                <TextBlock Classes="kvlabel" Text="LOOT"/>
+                <TextBlock Grid.Column="1" Classes="money" Text="{Binding LootIskDisplay}"/>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*" Margin="0,2">
+                <TextBlock Classes="kvlabel" Text="CONSUMED"/>
+                <TextBlock Grid.Column="1" Classes="money" Text="{Binding ConsumedIskDisplay}"/>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*" Margin="0,2">
+                <TextBlock Classes="kvlabel" Text="NET"/>
+                <TextBlock Grid.Column="1" Classes="money net" Text="{Binding NetIskDisplay}"/>
+            </Grid>
+            <TextBlock Classes="note" Margin="0,4,0,0" Text="{Binding PricingText}"/>
+            <TextBlock Classes="note" Margin="0,2,0,0" FontStyle="Normal" Foreground="{StaticResource WarnBrush}"
+                       IsVisible="{Binding PricingProblemText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                       Text="{Binding PricingProblemText}"/>
+            <TextBlock Classes="note" Margin="0,2,0,0"
+                       IsVisible="{Binding LinesWithoutPriceText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                       Text="{Binding LinesWithoutPriceText}"/>
+            <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="0,0,0,6" Margin="0,10,0,8">
+                <TextBlock Foreground="{StaticResource LootMetaBrush}" FontSize="11" LetterSpacing="0.5"
+                           Text="{Binding SummaryText}"/>
+            </Border>
+        </StackPanel>
+
+        <ItemsControl ItemsSource="{Binding Characters}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:ActivityLootCharacterViewModel">
+                    <StackPanel Margin="0,0,0,12">
+                        <!-- ── Who, what it came to, and the way to correct it, all on one line ── -->
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8" Margin="2,4">
+                            <Panel Width="20" Height="23" VerticalAlignment="Center">
+                                <Panel.Clip>
+                                    <PathGeometry Figures="M10,0 L20,5.75 L20,17.25 L10,23 L0,17.25 L0,5.75 Z"/>
+                                </Panel.Clip>
+                                <Border Background="{DynamicResource AccentSoftBrush}" IsVisible="{Binding !HasPortrait}">
+                                    <TextBlock Text="{Binding Initial}" FontSize="10" FontWeight="Bold"
+                                               Foreground="{DynamicResource AccentBrightBrush}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <Image Source="{Binding Portrait}" Stretch="UniformToFill" IsVisible="{Binding HasPortrait}"/>
+                            </Panel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <TextBlock Classes="charname" Text="{Binding CharacterText}"/>
+                                <Border Classes="chip dim" IsVisible="{Binding Loot.IsReadOnly}"
+                                        ToolTip.Tip="This run came in from a server; only its own pilot can correct it.">
+                                    <TextBlock Text="read-only"/>
+                                </Border>
+                            </StackPanel>
+                            <Button Grid.Column="2" Classes="rewrite" Content="✎  REWRITE LOOT BY HAND"
+                                    IsVisible="{Binding Loot.CanOfferLootEdit}"
+                                    IsEnabled="{Binding Loot.CanEditLoot}"
+                                    Command="{Binding Loot.BeginLootEditCommand}"
+                                    ToolTip.Tip="Replace this character's loot with a list you type or paste. The captures it replaces stay below, excluded."/>
+                            <TextBlock Grid.Column="3" Classes="subtotal" Text="{Binding SubtotalText}"/>
+                        </Grid>
+
+                        <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,4" IsVisible="{Binding !Loot.HasCaptures}"
+                                   Text="{Binding EmptyText}"/>
+
+                        <!-- ── Rewrite by hand ── opens where it was asked for, in place of the table it replaces:
+                             what is in the box is what this character's loot becomes. -->
+                        <StackPanel Spacing="4" Margin="0,2,0,6" IsVisible="{Binding Loot.IsEditingLoot}">
+                            <TextBox AcceptsReturn="True" MinHeight="90" TextWrapping="NoWrap"
+                                     FontFamily="{StaticResource MonoFont}"
+                                     PlaceholderText="Name, tab, quantity — one row per line."
+                                     Text="{Binding Loot.LootText, Mode=TwoWay}"/>
+                            <TextBlock Classes="note" FontStyle="Normal" Text="{Binding Loot.LootTextRefusal}"
+                                       IsVisible="{Binding Loot.LootTextRefusal, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Classes="rewrite" Content="{Binding Loot.FinishLootEditText}"
+                                        IsEnabled="{Binding Loot.CanFinishLootEdit}"
+                                        Command="{Binding Loot.FinishLootEditCommand}"/>
+                                <Button Classes="small ghost" Content="cancel" VerticalAlignment="Center"
+                                        IsEnabled="{Binding !Loot.IsBusy}"
+                                        Command="{Binding Loot.CancelLootEditCommand}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- ── The items it is made of ── one row per kind, most valuable first; what was left out
+                             follows on rows of its own, struck through and badged, never folded into a row that
+                             counts. -->
+                        <ItemsControl ItemsSource="{Binding Loot.ItemRows}" IsVisible="{Binding !Loot.IsEditingLoot}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:ActivityLootLineViewModel">
+                                    <Border Classes="itemrow" Classes.alt="{Binding IsAlternate}"
+                                            Classes.top="{Binding IsTopValue}" Classes.excluded="{Binding IsExcluded}">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
+                                            <Border Classes="icontile">
+                                                <Panel>
+                                                    <TextBlock Text="{Binding Initial}" FontSize="10" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource AccentBrightBrush}"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                               IsVisible="{Binding !HasIcon}"/>
+                                                    <Image Source="{Binding Icon}" IsVisible="{Binding HasIcon}"/>
+                                                </Panel>
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                                        VerticalAlignment="Center" ClipToBounds="True">
+                                                <TextBlock Classes="itemname" Text="{Binding Name}"/>
+                                                <TextBlock Classes="meta" Text="{Binding CaptureCountText}"
+                                                           IsVisible="{Binding CaptureCountText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                                <Border Classes="badge excluded" IsVisible="{Binding IsExcluded}">
+                                                    <TextBlock Text="EXCLUDED"/>
+                                                </Border>
+                                                <Border Classes="badge" IsVisible="{Binding IsLost}">
+                                                    <TextBlock Text="SPENT"/>
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" Classes="money" MinWidth="44" Text="{Binding QuantityText}"/>
+                                            <TextBlock Grid.Column="3" Classes="money" MinWidth="104" Text="{Binding AmountText}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- ── Every capture behind the subtotal ── folded until asked for. -->
+                        <ToggleButton Classes="disclosure" IsVisible="{Binding Loot.HasCaptures}"
+                                      IsChecked="{Binding IsCapturesShown, Mode=TwoWay}">
+                            <Panel>
+                                <Rectangle/>
+                                <TextBlock Margin="6,5">
+                                    <Run FontSize="9" Text="{Binding DisclosureChevron}"/>
+                                    <Run Text=" "/>
+                                    <Run Text="{Binding DisclosureText}"/>
+                                    <Run Text=" "/>
+                                    <Run Foreground="{StaticResource LootMetaBrush}" Text="{Binding DisclosureExcludedText}"/>
+                                </TextBlock>
+                            </Panel>
+                        </ToggleButton>
+                        <Border Classes="capturestrip" IsVisible="{Binding IsCapturesShown}">
+                            <ItemsControl ItemsSource="{Binding Loot.Captures}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vr:RunLootCaptureRowViewModel">
+                                        <Border Classes="capture" Classes.excluded="{Binding IsExcluded}">
+                                            <StackPanel Spacing="2">
+                                                <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6" Margin="0,0,0,2">
+                                                    <TextBlock Classes="capnum" Text="{Binding NumberDisplay}"/>
+                                                    <TextBlock Grid.Column="1" Classes="meta" Text="{Binding CapturedAtText}"/>
+                                                    <WrapPanel Grid.Column="2" VerticalAlignment="Center">
+                                                        <Border Classes="badge" Margin="0,0,6,0">
+                                                            <TextBlock Text="{Binding SourceText}"/>
+                                                        </Border>
+                                                        <Border Classes="badge role" Margin="0,0,6,0">
+                                                            <TextBlock Text="{Binding RoleText}"/>
+                                                        </Border>
+                                                        <Border Classes="badge excluded" Margin="0,0,6,0"
+                                                                IsVisible="{Binding IsExcludedBadgeShown}">
+                                                            <TextBlock Text="EXCLUDED"/>
+                                                        </Border>
+                                                        <Border Classes="badge repeat" Margin="0,0,6,0"
+                                                                IsVisible="{Binding RepeatBadgeText, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                                            <TextBlock Text="{Binding RepeatBadgeText}"/>
+                                                        </Border>
+                                                    </WrapPanel>
+                                                    <TextBlock Grid.Column="3" Classes="money capsub" Text="{Binding SubtotalAmountText}"/>
+                                                </Grid>
+                                                <ItemsControl ItemsSource="{Binding Lines}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate DataType="vr:ActivityLootLineViewModel">
+                                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,1">
+                                                                <TextBlock Classes="capline" Text="{Binding NameWithQuantityText}"/>
+                                                                <TextBlock Grid.Column="1" Classes="capvalue" Text="{Binding AmountText}"/>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                                <TextBlock Classes="note" FontStyle="Normal" Text="ADDED BELOW THE LIST"
+                                                           IsVisible="{Binding IsAddedAfterEdit}"/>
+                                                <!-- Its state in words beside the switch that changes it, and for a capture
+                                                     that is out, the named way back in. -->
+                                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                                    <Button Classes="switch" Classes.on="{Binding !IsExcluded}"
+                                                            IsEnabled="{Binding $parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.CanCorrect}"
+                                                            Command="{Binding $parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.ToggleCaptureExcludedCommand}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip.Tip="Count this capture, or leave it out of every total.">
+                                                        <StackPanel Orientation="Horizontal" Spacing="5">
+                                                            <Border Classes="track">
+                                                                <Ellipse/>
+                                                            </Border>
+                                                            <TextBlock Text="{Binding StateText}"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Button Classes="small" Content="{Binding ReincludeText}"
+                                                            IsVisible="{Binding IsExcluded}"
+                                                            IsEnabled="{Binding $parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.CanCorrect}"
+                                                            Command="{Binding $parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.ReincludeCaptureCommand}"
+                                                            CommandParameter="{Binding}"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+
+                        <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,0" Text="{Binding Loot.ManualListCaption}"
+                                   IsVisible="{Binding Loot.ManualListCaption, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                        <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,0" Text="{Binding Loot.AddedAfterEditNote}"
+                                   IsVisible="{Binding Loot.AddedAfterEditNote, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                        <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,0" Text="{Binding Loot.RunStatusMessage}"
+                                   IsVisible="{Binding Loot.RunStatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                        <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,0" IsVisible="{Binding Loot.IsBusy}"
+                                   Text="Saving the change and counting the totals again…"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Under everything: what the whole group brought in. -->
+        <Border Classes="grouptotal" IsVisible="{Binding HasCaptures}">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Foreground="{DynamicResource TextAccentBrush}" FontSize="12" LetterSpacing="0.5"
+                           VerticalAlignment="Center" Text="GROUP TOTAL"/>
+                <TextBlock Grid.Column="1" Foreground="{StaticResource TextBrush}" FontSize="16"
+                           VerticalAlignment="Center" Text="{Binding NetIskDisplay}"/>
+            </Grid>
+        </Border>
+    </StackPanel>
+</UserControl>

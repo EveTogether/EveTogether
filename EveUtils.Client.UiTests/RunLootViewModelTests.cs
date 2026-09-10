@@ -226,10 +226,10 @@ public sealed class RunLootViewModelTests
 
         Assert.Equal(copies, viewModel.Captures.Count);
         Assert.Equal("#1", viewModel.Captures[0].NumberDisplay);
-        Assert.Null(viewModel.Captures[0].RepeatOfDisplay);
+        Assert.Null(viewModel.Captures[0].RepeatBadgeText);
         foreach (RunLootCaptureRowViewModel repeat in viewModel.Captures.Skip(1))
         {
-            Assert.Equal("not added · identical to #1", repeat.RepeatOfDisplay);
+            Assert.Equal("IDENTICAL TO #1", repeat.RepeatBadgeText);
             Assert.True(repeat.IsExcluded);
             Assert.True(repeat.CanReinclude);   // the one exclusion with a way back: it may really have been looted twice
         }
@@ -276,6 +276,53 @@ public sealed class RunLootViewModelTests
         viewModel.ApplyLocationState(abyssalAnchor: StartedAtUtc, locationUnavailableReason: null, clipboardWatching: false);
         Assert.False(string.IsNullOrWhiteSpace(viewModel.LocationStatusMessage));
         Assert.NotEqual(restartMessage, viewModel.LocationStatusMessage); // a different reason, not the same shrug
+    }
+
+    /// <summary>
+    /// ET-215 review, Jithran 2026-09-10: "hier staan 3x scraps wat 1 regel had kunnen zijn". Three Metal Scraps over
+    /// two captures — one of them holding two loose rows, the way EVE puts a stack on the clipboard — are one row of
+    /// three, valued as three and saying it came in over two captures. Leaving the first capture out then splits it
+    /// honestly: two that count on the row, and the third on a struck-through row of its own under them, never a quiet
+    /// "2×" that hides it. Counter-proof: one row per copied line again, and this reads three rows of "1×".
+    /// </summary>
+    [AvaloniaFact]
+    public async Task EqualItemsOverSeveralCaptures_ReadAsOneRow_AndAnExcludedCopyKeepsARowOfItsOwn()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        Guid runId = await _StartRunAsync(dispatcher);
+        await _AddCaptureAsync(dispatcher, "FIRST", typeId: 15331);
+        Result<RunLootCaptureSaveResult> second = await dispatcher.Send(new AddRunLootCaptureCommand(new RunLootCaptureInput
+        {
+            CapturedAtUtc = StartedAtUtc.AddMinutes(1), Source = LootCaptureSource.Clipboard, ContentHash = "SECOND",
+            Entries =
+            [
+                new RunLootEntryInput { ItemTypeId = 15331, Name = "Item 15331", Quantity = 1, LootKind = LootKind.Gained },
+                new RunLootEntryInput { ItemTypeId = 15331, Name = "Item 15331", Quantity = 1, LootKind = LootKind.Gained },
+                new RunLootEntryInput { ItemTypeId = 34, Name = "Item 34", Quantity = 5, LootKind = LootKind.Gained }
+            ]
+        }), Token);
+        Assert.True(second.IsSuccess);
+
+        var viewModel = new RunLootViewModel(dispatcher, new _Prices((15331, 965.32), (34, 4))) { RunId = runId };
+        await viewModel.RefreshAsync(Token);
+
+        Assert.Equal(2, viewModel.ItemRows.Count);
+        ActivityLootLineViewModel scraps = Assert.Single(viewModel.ItemRows, row => row.ItemTypeId == 15331);
+        Assert.Equal("3×", scraps.QuantityText);
+        Assert.Equal($"{3 * 965.32m:N2}", scraps.AmountText);
+        Assert.Equal("(2 captures)", scraps.CaptureCountText);
+        Assert.False(scraps.IsExcluded);
+        Assert.Equal(3 * 965.32m + 20m, viewModel.NetIsk);
+
+        Assert.True(await viewModel.ToggleExcludedAsync(viewModel.Captures[0], Token));
+
+        ActivityLootLineViewModel counted = Assert.Single(viewModel.ItemRows, row => row.ItemTypeId == 15331 && !row.IsExcluded);
+        ActivityLootLineViewModel leftOut = Assert.Single(viewModel.ItemRows, row => row.ItemTypeId == 15331 && row.IsExcluded);
+        Assert.Equal("2×", counted.QuantityText);
+        Assert.Equal("1×", leftOut.QuantityText);
+        Assert.Same(leftOut, viewModel.ItemRows[^1]);   // under what counts, not among it
+        Assert.Equal(2 * 965.32m + 20m, viewModel.NetIsk);
     }
 
     private static async Task<Guid> _StartRunAsync(IDispatcher dispatcher)
