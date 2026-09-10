@@ -6,7 +6,6 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
-using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Identity;
@@ -568,104 +567,6 @@ public sealed class RunsOverviewTests
         RunsDayViewModel older = presented.ViewModel.Tabs[0].Days.Single(day => day.Day != mostRecent.Day);
         Assert.True(mostRecent.IsExpanded);
         Assert.False(older.IsExpanded);
-    }
-
-    /// <summary>ET-214 AC-2/AC-4: deleting a grouped activity takes every run in the group with it, not one run out
-    /// of it, and the day band's own total updates from that in one pass — no leftover row, no stale count.
-    /// Counter-proof: delete only the row's own <c>ActivitySummary</c> without sending
-    /// <c>DeleteRunsInGroupCommand</c> for the rest of the group and this goes red on the group's runs still
-    /// counted in the day total (the same shape <c>SixRunsInOneGroup_AreOneRowThatUnfoldsIntoSix</c> proves for
-    /// display, reduced to three and read back after a delete instead of an unfold).</summary>
-    [AvaloniaFact]
-    public async Task DeleteActivity_Group_RemovesEveryRunAndUpdatesTheDayTotal()
-    {
-        using var instance = TestClientInstance.Create();
-        ICqrsDispatcher dispatcher = _Dispatcher(instance);
-        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        foreach (Character character in Crew.Take(3))
-            await _SaveSiteRunAsync(dispatcher, character.EsiCharacterId!.Value, "HF-DEL1", cancellationToken,
-                bounties: [new RunBountyEntryInput { OccurredAtUtc = StartedAtUtc.AddMinutes(2), Isk = 500_000m }]);
-        await _SaveSiteRunAsync(dispatcher, Crew[3].EsiCharacterId!.Value, groupCode: null, cancellationToken,
-            siteName: "Other site",
-            bounties: [new RunBountyEntryInput { OccurredAtUtc = StartedAtUtc.AddMinutes(2), Isk = 300_000m }]);
-        var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(true) };
-
-        Presented presented = await _PresentAsync(instance, 758, cancellationToken, dialogs: dialogs);
-        RunsDayViewModel day = Assert.Single(presented.ViewModel.Tabs[0].Days);
-        Assert.Equal(2, day.Rows.Count);
-        ActivityOverviewRowViewModel groupRow = day.Rows.Single(row => row.SiteText == "Homefront");
-
-        await groupRow.DeleteCommand.ExecuteAsync(null);
-
-        RunsDayViewModel refreshedDay = Assert.Single(presented.ViewModel.Tabs[0].Days);
-        ActivityOverviewRowViewModel remaining = Assert.Single(refreshedDay.Rows);
-        Assert.Equal("Other site", remaining.SiteText);
-        Assert.StartsWith("1 activity", refreshedDay.SummaryText);
-    }
-
-    /// <summary>ET-214 AC-3: the confirmation names which site, how many participants and how much ISK go — read
-    /// straight off what the row already computed rather than a second figure the reader has to reconcile with
-    /// the row above it.</summary>
-    [AvaloniaFact]
-    public async Task DeleteActivity_ConfirmationNamesTheSiteParticipantsAndIsk()
-    {
-        using var instance = TestClientInstance.Create();
-        ICqrsDispatcher dispatcher = _Dispatcher(instance);
-        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        foreach (Character character in Crew.Take(3))
-            await _SaveSiteRunAsync(dispatcher, character.EsiCharacterId!.Value, "HF-DEL2", cancellationToken,
-                bounties: [new RunBountyEntryInput { OccurredAtUtc = StartedAtUtc.AddMinutes(2), Isk = 500_000m }]);
-        var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(false) };
-
-        Presented presented = await _PresentAsync(instance, 758, cancellationToken, dialogs: dialogs);
-        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(presented.ViewModel.Tabs[0].Days).Rows);
-
-        await row.DeleteCommand.ExecuteAsync(null);
-
-        Assert.Contains("Homefront", dialogs.LastConfirmMessage);
-        Assert.Contains("3 participants", dialogs.LastConfirmMessage);
-        Assert.Contains("1.5M ISK", dialogs.LastConfirmMessage);
-    }
-
-    /// <summary>ET-214 AC-3, the other half: declining the confirmation changes nothing — no run touched, the row
-    /// and the day total exactly as they were.</summary>
-    [AvaloniaFact]
-    public async Task DeleteActivity_Cancelled_ChangesNothing()
-    {
-        using var instance = TestClientInstance.Create();
-        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        await _SaveSiteRunAsync(_Dispatcher(instance), 90000001, groupCode: null, cancellationToken: cancellationToken);
-        var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(false) };
-
-        Presented presented = await _PresentAsync(instance, 758, cancellationToken, dialogs: dialogs);
-        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(presented.ViewModel.Tabs[0].Days).Rows);
-
-        await row.DeleteCommand.ExecuteAsync(null);
-
-        row = Assert.Single(Assert.Single(presented.ViewModel.Tabs[0].Days).Rows);
-        Assert.Equal("Homefront", row.SiteText);
-    }
-
-    /// <summary>ET-214: soft delete's own point is that it can be undone — a successful delete offers exactly that,
-    /// rather than only a confirmation on the way in.</summary>
-    [AvaloniaFact]
-    public async Task DeleteActivity_Succeeded_OffersAnUndoToast()
-    {
-        var toasts = new RecordingToastService();
-        using var instance = TestClientInstance.Create(services => services.AddSingleton<IToastService>(toasts));
-        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        await _SaveSiteRunAsync(_Dispatcher(instance), 90000001, groupCode: null, cancellationToken: cancellationToken);
-        var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(true) };
-
-        Presented presented = await _PresentAsync(instance, 758, cancellationToken, dialogs: dialogs);
-        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(presented.ViewModel.Tabs[0].Days).Rows);
-
-        await row.DeleteCommand.ExecuteAsync(null);
-
-        (string Title, string? Message, ToastKind Kind, IReadOnlyList<ToastAction> Actions, string? ReplacementKey) toast =
-            Assert.Single(toasts.ActionToasts);
-        Assert.Equal("Activity deleted", toast.Title);
-        Assert.Equal("Undo", Assert.Single(toast.Actions).Label);
     }
 
     private static async Task<Presented> _PresentAsync(

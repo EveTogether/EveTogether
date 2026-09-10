@@ -25,7 +25,6 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 {
     private readonly Func<ActivityOverviewRowViewModel, Task> _loadSubRuns;
     private readonly Func<ActivityOverviewRowViewModel, Task> _openDetail;
-    private readonly Func<ActivityOverviewRowViewModel, Task> _delete;
     private readonly Func<ActivityOverviewRowViewModel, Task>? _publish;
     private bool _subRunsLoaded;
 
@@ -34,19 +33,12 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         Func<long, string> nameOf,
         Func<ActivityOverviewRowViewModel, Task> loadSubRuns,
         Func<ActivityOverviewRowViewModel, Task> openDetail,
-        Func<ActivityOverviewRowViewModel, Task> delete,
         Func<ActivityOverviewRowViewModel, Task>? publish = null)
     {
         _loadSubRuns = loadSubRuns;
         _openDetail = openDetail;
-        _delete = delete;
         _publish = publish;
         ActivitySummaryId = row.ActivitySummaryId;
-        // Which command a delete goes through (ET-214): a group's worth of runs share GroupCode and RunId is null,
-        // a lone run has no group and carries its own id — the same either/or ActivitySummary itself groups on.
-        GroupCode = row.GroupCode;
-        RunId = row.RunId;
-        ParticipantCount = row.ParticipantCount;
         StartedAtLocal = row.StartedAtUtc.ToLocalTime();
         Duration = TimeSpan.FromSeconds(row.DurationSeconds);
         TimeText = StartedAtLocal.ToString("HH:mm");
@@ -81,14 +73,6 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     }
 
     public Guid ActivitySummaryId { get; }
-
-    /// <summary>Null for a lone, ungrouped run — the same either/or <see cref="RunId"/> carries the other way.</summary>
-    public string? GroupCode { get; }
-
-    /// <summary>Only set when <see cref="GroupCode"/> is null: the one run this row stands for.</summary>
-    public Guid? RunId { get; }
-
-    public int ParticipantCount { get; }
 
     /// <summary>The activity's own day, in the reader's zone — the day band groups on this, not on UTC.</summary>
     public DateTime StartedAtLocal { get; }
@@ -137,10 +121,6 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         if (_publish is not null)
             await _publish(this);
     }
-
-    /// <summary>Always available, unlike publish: an activity does not need a coupled server to be deletable.</summary>
-    [RelayCommand]
-    private Task DeleteAsync() => _delete(this);
 
     /// <summary>What stands where the net would be when neither a loot capture nor a bounty line was ever taken.
     /// Never a "0 ISK": a zero here reads as a valuation that was taken and came out at nothing (ET-161 AC-4,

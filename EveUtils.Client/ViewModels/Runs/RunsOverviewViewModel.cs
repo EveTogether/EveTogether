@@ -246,7 +246,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
         foreach (IGrouping<DateTime, ActivityOverviewRowViewModel> day in rows
                      .Select(row => new ActivityOverviewRowViewModel(row, _NameOf, _LoadSubRunsAsync, _OpenDetailAsync,
-                         _DeleteActivityAsync, _canPublish ? _PublishAsync : null))
+                         _canPublish ? _PublishAsync : null))
                      .GroupBy(row => row.StartedAtLocal.Date))
             tab.Days.Add(new RunsDayViewModel(day.Key, [.. day]));
 
@@ -361,73 +361,6 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         }
 
         await LoadAsync();
-    }
-
-    /// <summary>Delete a whole activity (ET-214): every run under its group code, or the lone run when it was never
-    /// grouped — never one run out of a group, which would leave the activity with a gap instead of gone. A running
-    /// or stopped-unfinished run never reaches this path; the handler only ever touches <c>Saved</c> rows, and
-    /// DISCARD is the way out for the rest. Soft delete, so <see cref="_UndoDeleteAsync"/> can put it straight back
-    /// without a second read.</summary>
-    private async Task _DeleteActivityAsync(ActivityOverviewRowViewModel row)
-    {
-        if (!await _dialogs.ConfirmAsync("Delete this activity?", _WhatDeletingRemoves(row), "Delete"))
-            return;
-
-        DateTime deletedAtUtc = DateTime.UtcNow;
-        Result outcome = row.GroupCode is { } groupCode
-            ? await _dispatcher.Send(new DeleteRunsInGroupCommand(groupCode, deletedAtUtc))
-            : await _dispatcher.Send(new DeleteRunCommand(row.RunId!.Value, deletedAtUtc));
-        if (!outcome.IsSuccess)
-        {
-            StatusMessage = outcome.Messages.Count > 0 ? outcome.Messages[0].Text : "The activity could not be deleted.";
-            return;
-        }
-
-        // One rebuild for the whole activity, not one per run in its group — a per-run rebuild measured 5-6 seconds
-        // for a five-toon group at ET-210 (SaveRunCommand's own RebuildSummaries flag exists for the same reason).
-        StatusMessage = "Deleting…";
-        await _dispatcher.Send(new RebuildActivitySummariesCommand());
-        await LoadAsync();
-
-        string? groupCodeForUndo = row.GroupCode;
-        Guid? runIdForUndo = row.RunId;
-        _services.GetService<IToastService>()?.Show("Activity deleted", $"{row.SiteText} is gone from the overview.",
-            ToastKind.Success, [new ToastAction("Undo", () => _ = _UndoDeleteAsync(groupCodeForUndo, runIdForUndo))]);
-    }
-
-    /// <summary>Named the way the row already reads it: which site, how many pilots, how much ISK — exactly what
-    /// ET-214 asks the confirmation to say, built entirely from what the row already computed. Says what a delete
-    /// does to a copy already on, or queued for, a server, so nobody wipes something a crewmate relies on without
-    /// being told.</summary>
-    private static string _WhatDeletingRemoves(ActivityOverviewRowViewModel row)
-    {
-        string reward = row.HasNet ? row.NetText : "no ISK recorded";
-        string participants = row.ParticipantCount == 1 ? "1 participant" : $"{row.ParticipantCount} participants";
-        string server = row.IsOnServer
-            ? " It already reached a coupled server — this only removes your own local copy, never the server's."
-            : row.IsQueuedForServer
-                ? " It is still queued for a server and has not arrived yet — deleting it here cancels that push."
-                : string.Empty;
-        return $"{row.SiteText} goes, with {participants} ({row.CrewText}) and {reward}.{server}";
-    }
-
-    /// <summary>Puts a deleted activity straight back — the soft delete's whole point (ET-214). Same either/or as
-    /// the delete itself: a group code restores every run deleted with it, a lone run restores by its own id.</summary>
-    private async Task _UndoDeleteAsync(string? groupCode, Guid? runId)
-    {
-        Result outcome = groupCode is { } code
-            ? await _dispatcher.Send(new RestoreRunsInGroupCommand(code))
-            : await _dispatcher.Send(new RestoreRunCommand(runId!.Value));
-        if (!outcome.IsSuccess)
-        {
-            _services.GetService<IToastService>()?.Show("Undo failed",
-                outcome.Messages.Count > 0 ? outcome.Messages[0].Text : "The activity could not be restored.", ToastKind.Error);
-            return;
-        }
-
-        await _dispatcher.Send(new RebuildActivitySummariesCommand());
-        await LoadAsync();
-        _services.GetService<IToastService>()?.Show("Activity restored", null, ToastKind.Success);
     }
 
     /// <summary>Publish one activity: pick the target as the fit browser does (one coupled server goes without
