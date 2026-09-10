@@ -547,7 +547,7 @@ public sealed class ActivityDetailTests
 
         Assert.Contains(texts, text => text == $"{214_188m:N0} ISK");        // the bounty is on screen
         Assert.Contains(texts, text => text == expectedSummary);
-        Assert.Equal(2, texts.Count(text => text == "not counted"));
+        Assert.Equal(allAreUncounted ? 3 : 2, texts.Count(text => text == "not counted"));
         Assert.DoesNotContain(texts, text => text == "0");
     }
 
