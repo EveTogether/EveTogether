@@ -20,6 +20,8 @@ using EveUtils.Shared.Modules.Gamelog.Dtos;
 using EveUtils.Shared.Modules.Gamelog.Events;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Gamelog.Repositories;
+using EveUtils.Shared.Modules.Runs.Commands;
+using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Events;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -497,7 +499,10 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     }
 
     /// <summary>Record a bounty payout (one kill); persisted across restarts. If the character is
-    /// participating in a fleet right now, the payout is also added to that fleet's per-run bounty (fleet meter).</summary>
+    /// participating in a fleet right now, the payout is also added to that fleet's per-run bounty (fleet meter).
+    /// Also hangs a <see cref="RunBountyEntry"/> straight on whichever run is running now for this character
+    /// (ET-219) — until this, a run's bounty lived only in <see cref="_fleetRunBounty"/> and the caller's own
+    /// SAVE, so a crash, a closed window, or the 24h auto-save of an unfinished run lost it outright.</summary>
     public async Task AddBountyAsync(string characterName, BountyEvent bounty)
     {
         var name = Resolve(characterName);
@@ -507,6 +512,13 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         BountyObserved?.Invoke(name, bounty);
         MetricsChanged?.Invoke();
         await PersistAsync(name);
+
+        long? characterId = _idByName.TryGetValue(name, out var id) ? id : null;
+        using (var scope = _services.CreateScope())
+        {
+            var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
+            await dispatcher.Send(new AddRunBountyEntryCommand(characterId, bounty.Timestamp, bounty.Isk));
+        }
     }
 
     /// <summary>This character's own bounty for the run currently going in this fleet — the same figure

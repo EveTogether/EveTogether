@@ -7,10 +7,12 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Gamelog;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -458,6 +460,34 @@ public sealed class RunsOverviewTests
         UnfinishedRunViewModel run = Assert.Single(presented.ViewModel.UnfinishedRuns);
 
         Assert.Equal(IskFormat.ExactOrZero(12_345_678d), run.TotalIskText);
+        Assert.False(run.TotalIskUnknown);
+    }
+
+    /// <summary>ET-219, making good on the promise ET-217 left open: <c>GetUnfinishedRunsQueryHandler</c> already
+    /// reads <c>run.BountyEntries.Sum(...)</c>, not a hardcoded zero, on the understanding that "the moment a future
+    /// session persists bounty before SAVE, it counts here without any change." Counter-proof: a run stopped after
+    /// earning bounty live through <see cref="GamelogClientService"/> — no SAVE, no <c>RunParameterInput</c> reward
+    /// — still shows that bounty as its TOTAL ISK.</summary>
+    [AvaloniaFact]
+    public async Task UnfinishedRun_WithLiveBounty_IncludesItInTotalIsk()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        DateTime stoppedAtUtc = DateTime.UtcNow.AddHours(-1);
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site,
+            stoppedAtUtc.AddMinutes(-15), 1234, "Homefront", 30000142), cancellationToken);
+
+        var gamelog = instance.Services.GetRequiredService<GamelogClientService>();
+        gamelog.MapCharacter(90000001, "Ra Vinter");
+        await gamelog.AddBountyAsync("Ra Vinter", new BountyEvent(stoppedAtUtc.AddMinutes(-5), 4_500_000));
+
+        await dispatcher.Send(new SetRunStoppedCommand(started.Value, stoppedAtUtc), cancellationToken);
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+        UnfinishedRunViewModel run = Assert.Single(presented.ViewModel.UnfinishedRuns);
+
+        Assert.Equal(IskFormat.ExactOrZero(4_500_000d), run.TotalIskText);
         Assert.False(run.TotalIskUnknown);
     }
 
