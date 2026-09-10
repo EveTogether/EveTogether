@@ -122,6 +122,54 @@ public sealed class ClipboardMissionOfferTests
         Assert.Contains(parameters, p => p.ParameterKey == RunParameterKey.Item && p.Amount == 3m && p.ItemTypeId == 34);
     }
 
+    [AvaloniaFact]
+    public async Task AMissionCapture_WithAnUnrecognisedReward_KeepsItAlongsideKnownRewards()
+    {
+        using var env = await Env.StartAsync();
+        env.Sde.AddAgent(AralinJick);
+        await env.AddCharacterAsync();
+
+        env.Copy(_MissionCapture(" \t1.000.000 ISK\t", " \tMysterious reward\t"));
+        Run run = await WaitForRunningMissionAsync(env);
+        await using ClientDbContext db = await env.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        List<RunParameter> parameters = await db.Set<RunParameter>().Where(parameter => parameter.RunId == run.Id).ToListAsync();
+
+        Assert.Contains(parameters, parameter => parameter.ParameterKey == RunParameterKey.Isk && parameter.Amount == 1_000_000m);
+        Assert.Contains(parameters, parameter => parameter.ParameterKey == RunParameterKey.Unknown);
+    }
+
+    [AvaloniaFact]
+    public async Task AMissionCapture_WithOnlyKnownRewards_DoesNotCreateAnUnknownParameter()
+    {
+        using var env = await Env.StartAsync();
+        env.Sde.AddAgent(AralinJick);
+        await env.AddCharacterAsync();
+
+        env.Copy(_MissionCapture(" \t1.000.000 ISK\t", " \t1.610.000 ISK\t"));
+        Run run = await WaitForRunningMissionAsync(env);
+        await using ClientDbContext db = await env.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        List<RunParameter> parameters = await db.Set<RunParameter>().Where(parameter => parameter.RunId == run.Id).ToListAsync();
+
+        Assert.DoesNotContain(parameters, parameter => parameter.ParameterKey == RunParameterKey.Unknown);
+    }
+
+    [AvaloniaFact]
+    public async Task AMissionCapture_WithAnUnrecognisedReward_PreservesItsRawClipboardLine()
+    {
+        using var env = await Env.StartAsync();
+        env.Sde.AddAgent(AralinJick);
+        await env.AddCharacterAsync();
+
+        const string rawLine = " \tMysterious reward\t ";
+        env.Copy(_MissionCapture(rawLine));
+        Run run = await WaitForRunningMissionAsync(env);
+        await using ClientDbContext db = await env.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        RunParameter parameter = await db.Set<RunParameter>().SingleAsync(parameter => parameter.RunId == run.Id);
+
+        Assert.Equal(RunParameterKey.Unknown, parameter.ParameterKey);
+        Assert.Equal(rawLine, parameter.TypedValue);
+    }
+
     [AvaloniaTheory]
     [MemberData(nameof(MeasuredMissionWhitespaceVariants))]
     public async Task AMissionCapture_WithWhitespaceVariants_WritesMeasuredRewards(string text, decimal expectedIsk)
@@ -193,6 +241,17 @@ public sealed class ClipboardMissionOfferTests
             directory?.FullName ?? throw new InvalidOperationException("the solution root is not above the test binary"),
             "EveUtils.Client.UiTests", "Fixtures", name));
     }
+
+    private static string _MissionCapture(params string[] rewards) =>
+        "Aralin Jick Objectives\r\n" +
+        "The following objectives must be completed to finish the mission:\r\n" +
+        "\r\n" +
+        "Report to Aralin Jick\r\n" +
+        " \tAgent Location\t0,6 Nishah VII - Moon 5 - Kor-Azor Family Treasury\r\n" +
+        "\r\n" +
+        "Rewards\r\n" +
+        "The following rewards will be yours if you complete this mission:\r\n" +
+        string.Join("\r\n", rewards);
 
     private sealed class Env : IDisposable
     {

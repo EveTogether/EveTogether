@@ -148,9 +148,7 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
         var parameters = new List<RunParameterInput>();
         foreach (ClipboardMissionReward reward in mission.Rewards)
         {
-            if (reward.ParameterKey is not { } key)
-                continue;
-
+            RunParameterKey key = reward.ParameterKey ?? RunParameterKey.Unknown;
             bool isItem = reward.ItemName is not null;
             string unit = key == RunParameterKey.LoyaltyPoints ? "LP" : "ISK";
             parameters.Add(new RunParameterInput
@@ -158,9 +156,11 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
                 ParameterKey = key,
                 // Invariant: this is stored data read back later, not UI text — the machine's own culture must not
                 // decide whether the decimal separator is a dot or a comma.
-                TypedValue = isItem
-                    ? FormattableString.Invariant($"{reward.ItemQuantity} x {reward.ItemName}")
-                    : FormattableString.Invariant($"{reward.Amount} {unit}"),
+                TypedValue = reward.ParameterKey is null
+                    ? reward.RawLine
+                    : isItem
+                        ? FormattableString.Invariant($"{reward.ItemQuantity} x {reward.ItemName}")
+                        : FormattableString.Invariant($"{reward.Amount} {unit}"),
                 Amount = isItem ? (decimal?)reward.ItemQuantity : reward.Amount,
                 ItemTypeId = reward.ItemName is { } name && _sde.TryGetTypeId(name, out var typeId) ? typeId : null,
                 BonusWindowSeconds = key == RunParameterKey.BonusIsk ? mission.BonusWindowSeconds : null,

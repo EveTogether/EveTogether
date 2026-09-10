@@ -6,7 +6,8 @@ using EveUtils.Shared.Modules.Runs.Enums;
 namespace EveUtils.Client.Clipboard;
 
 /// <summary>An unrecognised reward line still gets an entry, with <see cref="ParameterKey"/> null, so it is never silently dropped.</summary>
-public sealed record ClipboardMissionReward(RunParameterKey? ParameterKey, decimal? Amount, string? ItemName, long? ItemQuantity);
+public sealed record ClipboardMissionReward(RunParameterKey? ParameterKey, decimal? Amount, string? ItemName,
+    long? ItemQuantity, string RawLine);
 
 /// <summary><see cref="ObjectivesHeaderName"/> is the header line's own name, not the mission's — this capture never states one.</summary>
 public sealed record ClipboardMissionCapture(string? ObjectivesHeaderName, string? AgentName, int? BonusWindowSeconds,
@@ -75,7 +76,7 @@ public static partial class ClipboardMissionParser
             // the location row lives in the Objectives block where this branch never runs (block == None there).
             if (block != RewardBlock.None && line.Length > 0 && char.IsWhiteSpace(line[0]))
             {
-                rewards.Add(ParseReward(LastTabField(line), block == RewardBlock.Rewards ? RunParameterKey.Isk : RunParameterKey.BonusIsk));
+                rewards.Add(ParseReward(line, LastTabField(line), block == RewardBlock.Rewards ? RunParameterKey.Isk : RunParameterKey.BonusIsk));
                 continue;
             }
 
@@ -92,26 +93,26 @@ public static partial class ClipboardMissionParser
             : new ClipboardMissionCapture(objectivesHeaderName, agentName, bonusWindowSeconds, rewards);
     }
 
-    private static ClipboardMissionReward ParseReward(string value, RunParameterKey iskKind)
+    private static ClipboardMissionReward ParseReward(string rawLine, string value, RunParameterKey iskKind)
     {
         var trimmed = value.Trim();
 
         if (trimmed.EndsWith(" ISK", StringComparison.Ordinal)
             && ClipboardInventoryParser.TryParseLocalNumber(trimmed[..^" ISK".Length].TrimEnd(), out var amount))
-            return new ClipboardMissionReward(iskKind, amount, null, null);
+            return new ClipboardMissionReward(iskKind, amount, null, null, rawLine);
 
         // No real capture has ever shown a loyalty-point reward line; "<n> Loyalty Points" follows the ISK line's own
         // shape (a localized number plus a literal suffix) since that is the only reward text this project has ever
         // measured — treat this as an assumption, not a second measured form.
         if (trimmed.EndsWith(" Loyalty Points", StringComparison.Ordinal)
             && ClipboardInventoryParser.TryParseLocalNumber(trimmed[..^" Loyalty Points".Length].TrimEnd(), out var loyaltyPoints))
-            return new ClipboardMissionReward(RunParameterKey.LoyaltyPoints, loyaltyPoints, null, null);
+            return new ClipboardMissionReward(RunParameterKey.LoyaltyPoints, loyaltyPoints, null, null, rawLine);
 
         var itemMatch = ItemRewardPattern().Match(trimmed);
         if (itemMatch.Success && ClipboardInventoryParser.TryParseWholeNumber(itemMatch.Groups["qty"].Value, out var quantity))
-            return new ClipboardMissionReward(RunParameterKey.Item, null, itemMatch.Groups["name"].Value.Trim(), quantity);
+            return new ClipboardMissionReward(RunParameterKey.Item, null, itemMatch.Groups["name"].Value.Trim(), quantity, rawLine);
 
-        return new ClipboardMissionReward(null, null, null, null);
+        return new ClipboardMissionReward(null, null, null, null, rawLine);
     }
 
     private static string LastTabField(string line)

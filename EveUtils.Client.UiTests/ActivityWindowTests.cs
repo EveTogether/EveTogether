@@ -727,6 +727,16 @@ public class ActivityWindowTests
         Assert.False(set.NeedsWeatherAndTier);
     }
 
+    [Theory]
+    [InlineData(ActivityKind.Mission, false)]
+    [InlineData(ActivityKind.Abyssal, true)]
+    public void HeaderWeatherAndTierChips_AppearOnlyForAbyssalRuns(ActivityKind kind, bool expected)
+    {
+        var model = new ActivityWindowViewModel(kind, _Unused()) { WeatherIndex = 0, TierIndex = 0 };
+
+        Assert.Equal(expected, model.HasWeatherAndTier);
+    }
+
     [Fact]
     public void ThePickerFoldsAwayOnceAnswered_AndReopensOnRequest()
     {

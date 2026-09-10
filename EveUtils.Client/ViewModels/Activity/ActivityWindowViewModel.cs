@@ -645,7 +645,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public AbyssalWeather? Weather => WeatherIndex is { } index ? AbyssalWeather.All[index] : null;
 
-    public bool HasWeatherAndTier => WeatherIndex is not null && TierIndex is not null;
+    public bool HasWeatherAndTier => IsAbyssal && WeatherIndex is not null && TierIndex is not null;
 
     /// <summary>Drives the one chip in the header that asks for something. Only ever true for an abyssal run — a
     /// site has neither.</summary>

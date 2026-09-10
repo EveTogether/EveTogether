@@ -13,6 +13,9 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- Mission reward lines EVE Together cannot yet recognise are now kept untouched with the run, so they can be classified later instead of disappearing.
+- Mission runs no longer show abyssal weather and tier badges.
+
 ### Added
 - **Starting a run now lets you register it for more than one of your own characters at once.** If
   several of your EVE clients are open, the "whose run is this?" question at START now lets you tick
