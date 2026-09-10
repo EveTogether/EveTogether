@@ -19,6 +19,10 @@ public sealed record StartRunCommand(
     bool IsPayoutEligible = true,
     string? FitContentHash = null,
     string? FitNameSnapshot = null,
+    // The pilot's name as their own client knows it right now (ET-212) — stored once here rather than looked up
+    // again whenever the run is shown, so a saved activity still names a character that later logs out. Null when
+    // the caller has none to give, same as every other snapshot on this command.
+    string? CharacterNameSnapshot = null,
     long? FleetId = null,
     bool IsFleetCommander = false,
     // Announced to the fleet, not stored: the run row keeps SolarSystemId, and the pilot's window knows the system

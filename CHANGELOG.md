@@ -374,6 +374,12 @@ taken from the matching `## vX.Y.Z` section below.
   pending review.
 
 ### Fixed
+- **A saved activity now remembers each participant's name, instead of only guessing it from whoever
+  happens to still be logged in.** A pilot's name is written down the moment their run starts, so it
+  keeps showing correctly on a saved activity even after that character has logged out or been removed
+  from the machine — and the same goes for a fellow pilot's run pulled in from a server. The note
+  explaining that names weren't recorded yet is gone from any activity where they now are; an activity
+  saved before this fix still reads exactly as it did.
 - **A saved activity's LOCATION, and the ACTIVITY panel's own heading, now show the solar system's
   name instead of its bare id** ("system 30004097"). Old activities with a recorded system now show a
   name immediately too.

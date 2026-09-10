@@ -46,6 +46,7 @@ internal sealed class StartRunCommandHandler(IDbContextFactory<ClientDbContext> 
             IsPayoutEligible = command.IsPayoutEligible,
             FitContentHash = command.FitContentHash,
             FitNameSnapshot = command.FitNameSnapshot,
+            CharacterNameSnapshot = command.CharacterNameSnapshot,
             Origin = command.Origin,
             SyncState = RunSyncState.Local,
             Revision = 1

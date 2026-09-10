@@ -311,6 +311,29 @@ public sealed class ActivityDetailTests
         Assert.Contains(texts, text => text.StartsWith("Participant names are not recorded yet"));
     }
 
+    /// <summary>ET-212 counter-proof: a saved activity must still name a participant once that character is no
+    /// longer logged in anywhere on this machine — <c>nameOf</c> is never passed to the window here, the same
+    /// "nobody left to ask" case <see cref="FleetSection_ReportsTheRealHeadcount_AndSaysTheNamesAreMissing"/> already
+    /// relies on for its own bare-id assertion. What is different is that this run's name was recorded when it
+    /// started. Red before ET-212: the row read "character 90000007" and the caveat sentence still stood even though
+    /// this activity's one name was in fact recorded.</summary>
+    [AvaloniaFact]
+    public async Task RunRow_ShowsTheRecordedName_EvenWhenTheCharacterIsNoLongerLoggedIn()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000007, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142, CharacterNameSnapshot: "Abnoba Auscent"), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15),
+            StartedAtUtc.AddMinutes(16), [], [], [], []), cancellationToken);
+
+        List<string> texts = await _RenderAsync(instance, cancellationToken);
+
+        Assert.Contains(texts, text => text == "Abnoba Auscent");
+        Assert.DoesNotContain(texts, text => text.StartsWith("Participant names are not recorded yet"));
+    }
+
     /// <summary>AC-8, first half: nothing falls outside the module host's own 758px docked width, and the same
     /// layout still holds at a wide floating width. Counter-proof: the wide render must pass — a check that goes
     /// green at both widths without the layout being fluid is not measuring the layout.</summary>

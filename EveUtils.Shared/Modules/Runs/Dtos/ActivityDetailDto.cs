@@ -25,7 +25,11 @@ public sealed record ActivityRunDetailDto(
     DateTime StartedAtUtc, DateTime? StoppedAtUtc, DateTime? TimesCorrectedAtUtc,
     int? AgentId, int? MissionLevel, string? Signature, string? FitNameSnapshot,
     IReadOnlyList<RunLootCaptureDto> LootCaptures,
-    RunSyncState SyncState = RunSyncState.Local);
+    RunSyncState SyncState = RunSyncState.Local,
+    // The pilot's own name, recorded when the run started (ET-212) — null on a run saved before this column
+    // existed, or one synced from a fleetmate's older client. The screen falls back to a live lookup, then to the
+    // bare id, exactly as it always did when this is null.
+    string? CharacterNameSnapshot = null);
 
 /// <summary>One activity, fully expanded. The totals (<see cref="LootIskGained"/> etc.) are
 /// <c>ActivitySummary</c>'s own — already computed excluding excluded loot captures — rather than recomputed here,

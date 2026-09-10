@@ -39,6 +39,10 @@ public sealed class RunWireData
     public required bool IsPayoutEligible { get; init; }
     public string? FitContentHash { get; init; }
     public string? FitNameSnapshot { get; init; }
+
+    /// <summary>Travels for the same reason as <see cref="FitNameSnapshot"/> (ET-212): a fleetmate's run must still
+    /// name its pilot after a sync even if that pilot is not logged in anywhere the receiving client can ask.</summary>
+    public string? CharacterNameSnapshot { get; init; }
     public DateTime? LastPushedAtUtc { get; init; }
     public required int Revision { get; init; }
     public required IReadOnlyList<RunLootCaptureWireData> LootCaptures { get; init; }
@@ -73,6 +77,7 @@ public sealed class RunWireData
         IsPayoutEligible = run.IsPayoutEligible,
         FitContentHash = run.FitContentHash,
         FitNameSnapshot = run.FitNameSnapshot,
+        CharacterNameSnapshot = run.CharacterNameSnapshot,
         LastPushedAtUtc = run.LastPushedAtUtc,
         Revision = run.Revision,
         LootCaptures = run.LootCaptures.Select(capture => new RunLootCaptureWireData
@@ -141,6 +146,7 @@ public sealed class RunWireData
             IsPayoutEligible = IsPayoutEligible,
             FitContentHash = FitContentHash,
             FitNameSnapshot = FitNameSnapshot,
+            CharacterNameSnapshot = CharacterNameSnapshot,
             LastPushedAtUtc = LastPushedAtUtc,
             Revision = Revision
         };

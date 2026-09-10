@@ -208,7 +208,11 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     public string UndoDeleteText => IsUndoingDelete ? "Restoring…" : "Undo";
 
     [ObservableProperty] private string _participantCountText = string.Empty;
-    [ObservableProperty] private string _fleetBasisText = string.Empty;
+
+    /// <summary>Null once every run in this activity carries a recorded <see cref="ActivityRunDetailDto.CharacterNameSnapshot"/>
+    /// (ET-212 AC-2) — an activity saved entirely after that column existed needs no caveat, because the names on
+    /// screen are then read from storage rather than reconstructed from whoever happens to still be logged in.</summary>
+    [ObservableProperty] private string? _fleetBasisText;
 
     [ObservableProperty] private string? _escalationText;
     [ObservableProperty] private string? _escalationObservedText;
@@ -519,7 +523,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
                      .GroupBy(observation => characterByRun[observation.RunId])
                      .OrderByDescending(group => group.Sum(observation => observation.Count)))
             EnemyCharacterRows.Add(new ActivityEnemyCharacterRowViewModel(
-                group.Key, group.Sum(observation => observation.Count), _nameOf));
+                group.Key, group.Sum(observation => observation.Count), id => _ResolveName(detail, id)));
 
         HasEnemyFigures = EnemyCharacterRows.Count > 0;
         int total = detail.EnemyObservations.Sum(observation => observation.Count);
@@ -532,11 +536,15 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         foreach (ActivityRunDetailDto run in detail.Runs)
             RunRows.Add(new ActivityRunRowViewModel(run, _nameOf));
 
-        // The count is the summary's, over distinct characters — that figure is real. Only the names are missing,
-        // and saying so beats a blank block that leaves the reader guessing which of the two it is looking at.
         ParticipantCountText = $"{detail.ParticipantCount} participants";
-        FleetBasisText = "Participant names are not recorded yet, so these are the runs behind this activity by " +
-                         "character id. The count above is real: it comes from the activity's own distinct characters.";
+        // Only once every run here is missing its own recorded name (ET-212) does the caveat still apply — an
+        // activity saved entirely after CharacterNameSnapshot existed has nothing left to explain away. A mixed
+        // activity (an old run beside a new one, or one synced from a fleetmate's older client) still gets the
+        // caveat: some of the names on screen below are still a live lookup or a bare id, not a stored fact.
+        FleetBasisText = detail.Runs.Count > 0 && detail.Runs.All(run => !string.IsNullOrEmpty(run.CharacterNameSnapshot))
+            ? null
+            : "Participant names are not recorded yet, so these are the runs behind this activity by " +
+              "character id. The count above is real: it comes from the activity's own distinct characters.";
         Fleet.HeaderSummary = $"{ParticipantCountText} · {detail.PayoutEligibleCount} sharing";
     }
 
@@ -562,8 +570,20 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
                      .Where(entry => characterByRun.ContainsKey(entry.RunId))
                      .GroupBy(entry => characterByRun[entry.RunId])
                      .OrderByDescending(group => group.Sum(entry => entry.Isk)))
-            BountyRows.Add(new ActivityBountyRowViewModel(group.Key, group.Sum(entry => entry.Isk), _nameOf));
+            BountyRows.Add(new ActivityBountyRowViewModel(group.Key, group.Sum(entry => entry.Isk),
+                id => _ResolveName(detail, id)));
     }
+
+    /// <summary>One character's name for this activity (ET-212): whichever of their own runs recorded one at start
+    /// time wins, since every run of the same character in one activity carries the same pilot. Falls back to the
+    /// live roster lookup the constructor was handed, then to the bare id — the exact chain this screen always used
+    /// before a name could be stored at all, so an activity saved before this column existed reads unchanged.</summary>
+    private string _ResolveName(ActivityDetailDto detail, long characterId) =>
+        detail.Runs.Where(run => run.CharacterId == characterId)
+            .Select(run => run.CharacterNameSnapshot)
+            .FirstOrDefault(name => !string.IsNullOrEmpty(name))
+        ?? _nameOf?.Invoke(characterId)
+        ?? $"character {characterId}";
 
     private void _ApplyTotalIsk(ActivityDetailDto detail)
     {
@@ -606,7 +626,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         foreach (ActivityRunDetailDto run in detail.Runs)
         {
             ActivityLootCharacterViewModel block = LootOverview.Show(run.RunId, run.CharacterId,
-                _nameOf?.Invoke(run.CharacterId) ?? $"character {run.CharacterId}");
+                _ResolveName(detail, run.CharacterId));
             block.Loot.IsLocked = true;
             block.Loot.IsReadOnly = _ownCharacterIds is { } own && !own.Contains(run.CharacterId);
             await block.Loot.LoadAsync(run.LootCaptures, cancellationToken);

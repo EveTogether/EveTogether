@@ -167,7 +167,8 @@ public partial class ManualRunStartViewModel : ViewModelBase
             site.Name,
             SolarSystemId: null,
             SiteTypeSource: SiteTypeSource.Site,
-            Origin: RunOrigin.Manual), cancellationToken);
+            Origin: RunOrigin.Manual,
+            CharacterNameSnapshot: characterName), cancellationToken);
 
         if (!result.IsSuccess)
         {

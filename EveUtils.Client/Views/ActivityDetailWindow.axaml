@@ -313,7 +313,8 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                        <TextBlock x:Name="FleetBasis" Classes="hint" TextWrapping="Wrap" Text="{Binding FleetBasisText}"/>
+                        <TextBlock x:Name="FleetBasis" Classes="hint" TextWrapping="Wrap" Text="{Binding FleetBasisText}"
+                                   IsVisible="{Binding FleetBasisText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                     </StackPanel>
                 </Border>
 
