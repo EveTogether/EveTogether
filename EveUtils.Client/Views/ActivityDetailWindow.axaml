@@ -91,26 +91,34 @@
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
             </Style>
-            <!-- Understated by design (ET-214, Jithran's review of the first round): a quiet text link at rest, the
-                 same restraint Button.trash already gives the inbox's icon-only delete, rather than a button that
-                 competes for attention with PUBLISH ever did in the overview. TextDimBrush at rest is the same
-                 contrast the .label class already reads at throughout this very screen, not a fainter one invented
-                 for this control — red only ever shows up once the pointer is actually over it. -->
-            <Style Selector="Button.deletelink">
-                <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="BorderThickness" Value="0"/>
-                <Setter Property="Padding" Value="0"/>
-                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <!-- Understated by design (ET-214, Jithran's review of the first round) but recognisably a button
+                 (his review of the second): the same shape as Button.republish above and ActivityLootView's own
+                 Button.rewrite — AccentSoftBrush fill, TextBrightBrush text, a real border — so it reads as
+                 clickable and belongs beside PUBLISH AGAIN and REWRITE LOOT BY HAND rather than standing out from
+                 them. What sets it apart from those is only ever the hover: red border and fill instead of the
+                 accent ones, the same tint Button.danger already uses. Never red at rest — the weight of the
+                 decision sits in the confirmation, not in how the control looks before it is touched. -->
+            <Style Selector="Button.deletebutton">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="3"/>
+                <Setter Property="Padding" Value="10,4"/>
+                <Setter Property="MinHeight" Value="0"/>
                 <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="LetterSpacing" Value="1"/>
                 <Setter Property="HorizontalAlignment" Value="Left"/>
             </Style>
-            <Style Selector="Button.deletelink:pointerover /template/ ContentPresenter">
-                <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+            <Style Selector="Button.deletebutton:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="#22EF5A5A"/>
+                <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
             </Style>
-            <Style Selector="Button.deletelink:disabled /template/ ContentPresenter">
+            <Style Selector="Button.deletebutton:disabled /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
-                <Setter Property="Opacity" Value="0.5"/>
             </Style>
         </DockPanel.Styles>
 
@@ -401,12 +409,13 @@
                                Text="{Binding AbsentSectionsText}"/>
                 </Border>
 
-                <!-- ══ Delete ══ bottom of the screen, understated (ET-214, Jithran: "he doesn't need to be pushed
-                     so far to the front"). Hidden entirely for an activity with nothing of this machine's own in it
-                     — a fully foreign, read-only activity (ET-215) has nothing here to delete. The weight of the
-                     decision sits in the confirmation this opens, not in how the control itself looks. -->
+                <!-- ══ Delete ══ bottom of the screen, understated but a real button (ET-214, Jithran's two reviews:
+                     "he doesn't need to be pushed so far to the front", then "make it clear this is clickable") —
+                     hidden entirely for an activity with nothing of this machine's own in it, since a fully
+                     foreign, read-only activity (ET-215) has nothing here to delete. The weight of the decision
+                     sits in the confirmation this opens, not in how the control itself looks. -->
                 <Border Padding="14,16" IsVisible="{Binding CanDelete}">
-                    <Button x:Name="DeleteButton" Classes="deletelink" Content="{Binding DeleteText}"
+                    <Button x:Name="DeleteButton" Classes="deletebutton" Content="{Binding DeleteText}"
                             Command="{Binding DeleteCommand}"
                             ToolTip.Tip="Delete this activity — every run of it that is yours"/>
                 </Border>
