@@ -153,7 +153,7 @@ public class CharacterPickerToggleTests
     [AvaloniaFact]
     public void PreselectedCharacterId_TicksThatRowInTheMultiSelectList()
     {
-        var window = new CharacterPickerWindow("Pick", ThreeCharacters, multiSelect: true, preselectedCharacterId: 2);
+        var window = new CharacterPickerWindow("Pick", ThreeCharacters, multiSelect: true, preselectedCharacterIds: [2]);
         window.Show();
         Dispatcher.UIThread.RunJobs();
         var list = window.FindControl<ListBox>("OptionList")!;
@@ -162,6 +162,26 @@ public class CharacterPickerToggleTests
         Assert.Equal(new[] { "Bravo" }, selectedNames);
         Assert.True(window.Options.Single(o => o.Name == "Bravo").IsSelected);
         Assert.False(window.Options.Single(o => o.Name == "Alpha").IsSelected);
+
+        window.Close();
+    }
+
+    // ET-221 follow-up: reopening the manual run-start picker after choosing several characters must not throw the
+    // earlier picks away — every id in the list ticks its own row, not only the first (Jithran, 2026-09-10).
+    [AvaloniaFact]
+    public void PreselectedCharacterIds_TicksEveryNamedRowInTheMultiSelectList()
+    {
+        var window = new CharacterPickerWindow("Pick", ThreeCharacters, multiSelect: true, preselectedCharacterIds: [1, 3]);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        var list = window.FindControl<ListBox>("OptionList")!;
+
+        var selectedNames = list.SelectedItems!.Cast<CharacterPickRowViewModel>().Select(r => r.Name)
+            .OrderBy(name => name).ToArray();
+        Assert.Equal(new[] { "Alpha", "Charlie" }, selectedNames);
+        Assert.True(window.Options.Single(o => o.Name == "Alpha").IsSelected);
+        Assert.False(window.Options.Single(o => o.Name == "Bravo").IsSelected);
+        Assert.True(window.Options.Single(o => o.Name == "Charlie").IsSelected);
 
         window.Close();
     }
@@ -176,7 +196,7 @@ public class CharacterPickerToggleTests
             new(1, "Alpha", "", Enabled: true),
             new(2, "Bravo", "needs re-auth", Enabled: false),
         ];
-        var window = new CharacterPickerWindow("Pick", options, multiSelect: true, preselectedCharacterId: 2);
+        var window = new CharacterPickerWindow("Pick", options, multiSelect: true, preselectedCharacterIds: [2]);
         window.Show();
         Dispatcher.UIThread.RunJobs();
         var list = window.FindControl<ListBox>("OptionList")!;
@@ -186,12 +206,28 @@ public class CharacterPickerToggleTests
         window.Close();
     }
 
+    // ET-216 AC-4, widened: one id among several names nobody shown here — that one is skipped, but a valid id
+    // alongside it still ticks, rather than the whole preselection giving up.
+    [AvaloniaFact]
+    public void PreselectedCharacterIds_OneInvalidAmongValidOnes_TicksOnlyTheValidRows()
+    {
+        var window = new CharacterPickerWindow("Pick", ThreeCharacters, multiSelect: true, preselectedCharacterIds: [1, 999]);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        var list = window.FindControl<ListBox>("OptionList")!;
+
+        var selectedNames = list.SelectedItems!.Cast<CharacterPickRowViewModel>().Select(r => r.Name).ToArray();
+        Assert.Equal(new[] { "Alpha" }, selectedNames);
+
+        window.Close();
+    }
+
     // ET-216 AC-4: the sender is not among the candidates shown at all — same "nothing to preselect" outcome.
     [AvaloniaFact]
     public void PreselectedCharacterId_NotAmongOptions_IsIgnored()
     {
         IReadOnlyList<CharacterPickOption> options = [new(1, "Alpha", "", Enabled: true)];
-        var window = new CharacterPickerWindow("Pick", options, multiSelect: true, preselectedCharacterId: 999);
+        var window = new CharacterPickerWindow("Pick", options, multiSelect: true, preselectedCharacterIds: [999]);
         window.Show();
         Dispatcher.UIThread.RunJobs();
         var list = window.FindControl<ListBox>("OptionList")!;

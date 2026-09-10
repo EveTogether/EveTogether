@@ -550,10 +550,16 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             _dialogs.ShowActivityWindow(new ActivityWindowViewModel(run.ActivityKind, _services));
         }
         else if (_services.GetService<ISdeAccessor>() is { } sde)
-            // Handed only this pilot, so the dialog opens on the lane the operator pressed rather than on whoever
-            // happens to sort first.
+        {
+            // Every registered character is offered (ET-221), same as Tools → Start run — but this lane's own
+            // character starts ticked, so the dialog opens on the card the operator pressed rather than on
+            // whoever happens to sort first, and others can still be added alongside it.
+            IReadOnlyList<Character> characters =
+                await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
             await _dialogs.ShowManualRunStartAsync(new ManualRunStartViewModel(_dispatcher, sde, _dialogs,
-                kind => new ActivityWindowViewModel(kind, _services), [lane.Character]));
+                kind => new ActivityWindowViewModel(kind, _services), characters,
+                preselectedCharacter: lane.Character, toasts: _services.GetService<IToastService>()));
+        }
     }
 
     public void Dispose()

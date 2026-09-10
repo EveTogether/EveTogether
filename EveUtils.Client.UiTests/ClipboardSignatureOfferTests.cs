@@ -235,7 +235,7 @@ public sealed class ClipboardSignatureOfferTests
         env.Copy(MeasuredHomefrontLine);
         await ActivityWindowHarness.WaitUntil(() => env.Dialogs.LastPrompt is not null);
 
-        Assert.Equal(90000002, env.Dialogs.LastPreselectedCharacterId);
+        Assert.Equal([90000002], env.Dialogs.LastPreselectedCharacterIds);
     }
 
     [AvaloniaFact]

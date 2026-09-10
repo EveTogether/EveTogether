@@ -46,6 +46,16 @@ taken from the matching `## vX.Y.Z` section below.
   saves everyone's own bounty, not just the character you started it on — for all of them at once.
   Saving a multi-character run is also markedly faster than it was, and the SAVE button now shows when
   it is working instead of appearing to do nothing.
+- **Starting a run by hand — the START button on a character card, or Tools → Start run — can now
+  register it for more than one of your own characters too**, the same way copying a site into the
+  clipboard already could. Pick who it's for before pressing START (or PREPARE RUN for an abyssal
+  standing by); starting from a character's own card still starts with that character ticked, and you
+  can add others alongside it. Every character offered here still needs to be one of your registered
+  characters — every one of them, whether or not its client happens to be running right now, same as
+  before. Each ticked character gets its own run, sharing one group, exactly like every other way of
+  starting a run for several toons at once. Reopening the "who is this for?" picker no longer clears
+  everyone you had already ticked back to just the one it started with — it now remembers your picks
+  for as long as the dialog stays open.
 - Reopening the activity window, or a clipboard copy naming a running site, no longer gets confused
   when more than one of your characters has a run going at the same time — each is tracked and shown
   on its own. A character's own bounty meter (shown live on the FLEET panel, and saved with the run)

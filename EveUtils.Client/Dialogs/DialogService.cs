@@ -280,10 +280,10 @@ public sealed class DialogService : IDialogService, ISingletonService
     }
 
     public async Task<IReadOnlyList<int>?> PickCharactersAsync(string prompt, IReadOnlyList<CharacterPickOption> options,
-        int? preselectedCharacterId = null)
+        IReadOnlyList<int>? preselectedCharacterIds = null)
     {
         if (_owner is null) return null;
-        var dialog = new CharacterPickerWindow(prompt, options, multiSelect: true, preselectedCharacterId);
+        var dialog = new CharacterPickerWindow(prompt, options, multiSelect: true, preselectedCharacterIds);
         return await _Over(dialog).ShowDialog<IReadOnlyList<int>?>(_owner);
     }
 
