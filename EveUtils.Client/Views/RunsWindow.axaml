@@ -238,7 +238,7 @@
             <StackPanel Spacing="5">
                 <TextBlock Classes="label" Text="UNFINISHED"/>
                 <TextBlock Classes="hint" Margin="0" TextWrapping="Wrap"
-                           Text="Stopped, but never saved or thrown away. A day after it stopped, a run here is saved as it stands. TOTAL ISK here doesn't count bounty yet — that's only added once a run is saved."/>
+                           Text="Stopped, but never saved or thrown away. A day after it stopped, a run here is saved as it stands."/>
                 <ScrollViewer MaxHeight="180" HorizontalScrollBarVisibility="Disabled">
                     <ItemsControl x:Name="UnfinishedList" ItemsSource="{Binding UnfinishedRuns}">
                         <ItemsControl.ItemTemplate>
