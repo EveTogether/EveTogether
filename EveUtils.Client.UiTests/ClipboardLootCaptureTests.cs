@@ -7,9 +7,11 @@ using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using EveUtils.Client.Clipboard;
+using EveUtils.Client.Dialogs;
 using EveUtils.Client.Notifications;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
+using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
@@ -445,6 +447,73 @@ public sealed class ClipboardLootCaptureTests
         Assert.Contains("No run is running", rejection.Message);
     }
 
+    // ── ET-211: which character a clipboard copy with an unknown sender is asked against ────────────
+
+    /// <summary>
+    /// Counter-proof 3 from the ET-211 grooming: with only one run actually running, an unknown sender (the headless
+    /// test process is never the EVE client, so <c>CopiedByCharacter</c> is always null here — the same as it was in
+    /// every test above) must not put a question on screen. There is nothing to choose between, and the product
+    /// decision (2026-09-10) is explicit that the question is a vanishingly rare vet, not one more click on the
+    /// ordinary path.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task UnknownSender_WithOnlyOneRunRunning_AsksNothing_AndFilesTheLootOnIt()
+    {
+        using var env = await Env.StartAsync();
+        await env.StartRunAsync();
+
+        await env.CopyAsync(Container);
+
+        Assert.Null(env.Dialogs.LastPrompt);
+        Assert.Single(await env.CapturesAsync());
+    }
+
+    /// <summary>
+    /// Counter-proof 2 from the ET-211 grooming: two characters each running their own site and an unknown sender
+    /// must put the question on screen — never a silent assignment to whichever run happens to be "preferred", and
+    /// never the old "N runs are running, so this loot was not recorded" that shipped before this ticket. Answering
+    /// files the loot on the chosen character's own run.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task UnknownSender_WithTwoRunsRunning_AsksWhichCharacter_AndFilesTheAnswerOnTheirRun()
+    {
+        using var env = await Env.StartAsync();
+        await env.StartRunAsync();
+        Guid secondRun = await env.StartSecondRunAsync(90000002);
+        env.Dialogs.OnPickCharacter = (_, options) =>
+            Task.FromResult<int?>(Assert.Single(options, option => option.CharacterId == 90000002).CharacterId);
+
+        await env.CopyAsync(Container);
+
+        Assert.Equal("Whose loot is this?", env.Dialogs.LastPrompt);
+        Assert.Equal([90000001, 90000002], env.Dialogs.LastOptions!.Select(option => option.CharacterId).Order());
+        RunLootCapture capture = Assert.Single(await env.CapturesAsync());
+        Assert.Equal(secondRun, capture.RunId);
+        Assert.DoesNotContain(env.Toasts.Toasts, toast => toast.Title == "Loot not recorded");
+    }
+
+    /// <summary>
+    /// A declined question is not a third answer dressed up as one of the other two (the product decision,
+    /// 2026-09-10, ruled out both "guess" and "silently drop"): cancelling the picker must give the same honest
+    /// "ambiguous, not recorded" outcome the app always gave for two running runs, not a silent fallback onto
+    /// whichever run this window happens to have open.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task UnknownSender_WithTwoRunsRunning_DecliningTheQuestion_LeavesTheLootUnrecorded()
+    {
+        using var env = await Env.StartAsync();
+        await env.StartRunAsync();
+        await env.StartSecondRunAsync(90000002);
+        env.Dialogs.OnPickCharacter = (_, _) => Task.FromResult<int?>(null);
+
+        await env.CopyAsync(Container);
+
+        Assert.Empty(await env.CapturesAsync());
+        var rejection = Assert.Single(env.Toasts.Toasts);
+        Assert.Equal("Loot not recorded", rejection.Title);
+        Assert.Contains("runs are running", rejection.Message);
+    }
+
     private sealed class Env : IDisposable
     {
         private static readonly DateTime StartedAtUtc = new(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
@@ -468,6 +537,11 @@ public sealed class ClipboardLootCaptureTests
 
         public RecordingToastService Toasts { get; } = new();
 
+        /// <summary>The dialog service <see cref="ClipboardLootCapture"/> itself was built with — separate from the
+        /// one <see cref="ClipboardWatchService"/> uses, so a test can drive/inspect the ET-211 "whose loot is this?"
+        /// picker without also having to stub every other dialog the watch might touch.</summary>
+        public RecordingDialogService Dialogs { get; } = new();
+
         private Env(TestClientInstance instance, ClipboardWatchService watch, FakeClipboardChangeSource source,
             CqrsDispatcher captureDispatcher, FakeSdeAccessor sde)
         {
@@ -475,7 +549,7 @@ public sealed class ClipboardLootCaptureTests
             _watch = watch;
             _source = source;
             _capture = new ClipboardLootCapture(watch, Toasts, sde, NullLogger<ClipboardLootCapture>.Instance,
-                captureDispatcher, new RecordingDialogService());
+                captureDispatcher, Dialogs, instance.Services.GetRequiredService<ICharacterRegistry>());
         }
 
         private static CancellationToken Token => TestContext.Current.CancellationToken;
@@ -532,6 +606,16 @@ public sealed class ClipboardLootCaptureTests
                 1234, "Abyssal Deadspace", 30000142));
             Assert.True(started.IsSuccess);
             _runId = started.Value;
+        }
+
+        /// <summary>A second character's own run, running alongside the first — the ET-211 scenario where an
+        /// unknown-sender copy has more than one running run to choose between.</summary>
+        public async Task<Guid> StartSecondRunAsync(long characterId)
+        {
+            Result<Guid> started = await Send(new StartRunCommand(characterId, ActivityKind.Site, StartedAtUtc,
+                1234, "Second Character's Site", 30000142));
+            Assert.True(started.IsSuccess);
+            return started.Value;
         }
 
         public async Task<IReadOnlyList<RunLootCapture>> CapturesAsync()

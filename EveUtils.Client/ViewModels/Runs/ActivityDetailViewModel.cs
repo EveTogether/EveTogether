@@ -10,6 +10,7 @@ using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
+using EveUtils.Shared.Modules.Runs.Tally;
 using ActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
@@ -66,6 +67,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     public ObservableCollection<ActivityRunRowViewModel> RunRows { get; } = [];
     public ObservableCollection<ActivityBountyRowViewModel> BountyRows { get; } = [];
     public ObservableCollection<ActivityLootCaptureRowViewModel> LootCaptureRows { get; } = [];
+    public ObservableCollection<ActivityLootCharacterRowViewModel> LootCharacterRows { get; } = [];
 
     [ObservableProperty] private string _siteText = string.Empty;
     [ObservableProperty] private string _kindText = string.Empty;
@@ -127,6 +129,11 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     [ObservableProperty] private string _bountyText = string.Empty;
 
     [ObservableProperty] private bool _hasLootFigures;
+
+    /// <summary>Whether any participant's own run has a priced capture — the same "no figure for nobody" rule
+    /// <see cref="HasEnemyFigures"/> follows, so the per-character breakdown does not show a false zero for a
+    /// character whose captures had nothing priced yet (ET-211).</summary>
+    [ObservableProperty] private bool _hasLootCharacterFigures;
     [ObservableProperty] private string _lootIskText = string.Empty;
     [ObservableProperty] private string _consumedIskText = string.Empty;
     [ObservableProperty] private string _netIskText = string.Empty;
@@ -378,6 +385,50 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         Loot.HeaderSummary = HasLootFigures
             ? $"{NetIskText} · {LootCaptureRows.Count} captures · {LootCaptureRows.Count(row => row.IsExcluded)} excluded"
             : "nothing captured";
+
+        // One row per character, the same breakdown BOUNTY and ENEMIES already give (ET-211): each participant's
+        // own run now carries only its own copier's captures (ET-130 deel 4), so the same per-run LootTally the
+        // overall figures above are built from can be summed per character instead of over the whole activity.
+        // Largest contribution first, same ordering rule as the bounty breakdown.
+        LootCharacterRows.Clear();
+        foreach ((long characterId, decimal netIsk) in detail.Runs
+                     .GroupBy(run => run.CharacterId)
+                     .Select(group => (group.Key, NetIsk: _CharacterLootNetIsk(group, unitPrices)))
+                     .Where(entry => entry.NetIsk is not null)
+                     .OrderByDescending(entry => entry.NetIsk)
+                     .Select(entry => (entry.Key, NetIsk: entry.NetIsk!.Value)))
+            LootCharacterRows.Add(new ActivityLootCharacterRowViewModel(characterId, netIsk, _nameOf));
+
+        HasLootCharacterFigures = LootCharacterRows.Count > 0;
+    }
+
+    /// <summary>One character's net loot across every run they hold in this activity — the same per-run
+    /// <see cref="LootTally"/> difference <c>RebuildActivitySummariesCommandHandler</c> uses for the activity-wide
+    /// figure, just grouped by character before it is summed, so the rows and the total above them can never
+    /// disagree.</summary>
+    private static decimal? _CharacterLootNetIsk(
+        IEnumerable<ActivityRunDetailDto> runs, IReadOnlyDictionary<int, decimal> unitPrices)
+    {
+        List<LootTallyLine> lines = [.. runs.SelectMany(run => LootTally.Count(_TallyCaptures(run)))];
+        decimal? gained = _CharacterLootValue(lines, LootKind.Gained, unitPrices);
+        decimal? lost = _CharacterLootValue(lines, LootKind.Lost, unitPrices);
+        return gained is null && lost is null ? null : gained.GetValueOrDefault() - lost.GetValueOrDefault();
+    }
+
+    private static IReadOnlyList<LootTallyCapture> _TallyCaptures(ActivityRunDetailDto run) =>
+        [.. run.LootCaptures
+            .OrderBy(capture => capture.CapturedAtUtc)
+            .Select(capture => new LootTallyCapture(capture.Role, capture.IsExcluded,
+                [.. capture.Entries.Select(entry =>
+                    new LootTallyLine(entry.ItemTypeId, entry.Quantity, Volume: null, entry.LootKind))]))];
+
+    private static decimal? _CharacterLootValue(
+        IEnumerable<LootTallyLine> lines, LootKind kind, IReadOnlyDictionary<int, decimal> unitPrices)
+    {
+        decimal[] values = [.. lines
+            .Where(line => line.LootKind == kind && unitPrices.ContainsKey(line.ItemTypeId))
+            .Select(line => unitPrices[line.ItemTypeId] * line.Quantity.GetValueOrDefault())];
+        return values.Length == 0 ? null : values.Sum();
     }
 
     private void _ApplyEscalation(ActivityDetailDto detail, string? escalationJumpsText, string? escalationJumpsEmptyText)

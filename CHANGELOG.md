@@ -44,6 +44,13 @@ taken from the matching `## vX.Y.Z` section below.
   going**, the same figure the saved activity's total ISK shows once it's over. For a run covering
   several of your own characters, this is the whole group's total, not just whichever character the
   window's character column happens to be showing — and it does not change value when you switch it.
+- **Loot copied while running a site on several of your own characters now lands on the character who
+  actually copied it**, instead of all being filed under a single run. A saved activity's **LOOT** now
+  breaks down per character, with a group total underneath, the same shape BOUNTY and ENEMIES already
+  had — and the running total ISK beside the elapsed-time clock now counts everyone's loot in, not just
+  whichever character the window's character column happens to be showing. On the rare copy the app
+  cannot tell whose client it came from, and more than one of your characters has a run going at once,
+  it now asks whose loot it is instead of guessing or filing it under the wrong run.
 - **A crash that used to vanish without a trace is now written to the log the moment it happens.** A
   fault on a background thread, or a task nobody was still awaiting, escaped every other net EVE
   Together already had and left nothing behind — there was no way to tell what went wrong, or that

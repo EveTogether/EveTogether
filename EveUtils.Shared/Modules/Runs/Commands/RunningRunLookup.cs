@@ -5,11 +5,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
-/// <summary>The one place that answers "which run is running right now". With no <c>characterId</c> this is the
-/// question <see cref="AddRunLootCaptureCommandHandler"/> asks, because a clipboard copy names no run and no pilot
-/// (ET-130 deel 4 is still open on that). Reading loot back does NOT come through here any more — a window knows
-/// the run it is on, and asking this instead meant eleven runs stopped-and-never-saved made its own loot unreadable
-/// (Raymond, 2026-09-04).</summary>
+/// <summary>The one place that answers "which run is running right now". <see cref="AddRunLootCaptureCommandHandler"/>
+/// asks with a <c>characterId</c> once the clipboard copy has one (ET-138/ET-211) — a copy names no run of its own,
+/// but a known copier names a pilot, and that is enough. Unknown still asks with none, the original question from
+/// when a clipboard copy could never be told apart at all. Reading loot back does NOT come through here any more —
+/// a window knows the run it is on, and asking this instead meant eleven runs stopped-and-never-saved made its own
+/// loot unreadable (Raymond, 2026-09-04).</summary>
 internal static class RunningRunLookup
 {
     /// <summary><see cref="Run"/> is null when the count isn't exactly one; the caller phrases the failure for its

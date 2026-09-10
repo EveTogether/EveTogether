@@ -427,6 +427,53 @@ public sealed class ActivityDetailTests
     }
 
     /// <summary>
+    /// Counter-proof 4 from the ET-211 grooming: two characters, each with their own priced loot capture on their
+    /// own run within the same group, must show as one row per character with a group total equal to their sum —
+    /// the same shape <see cref="BountyRows_OneRowPerCharacter_WithTheGroupsTotal"/> already gives bounty. Red
+    /// against the pre-fix code, where <c>LootCharacterRows</c> did not exist at all and the LOOT section only ever
+    /// showed one combined figure.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task LootCharacterRows_OneRowPerCharacter_WithTheGroupsTotal()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
+            [new LocalMarketPrice { TypeId = 34, AveragePrice = 100, AdjustedPrice = 100, UpdatedAt = DateTimeOffset.UtcNow }],
+            cancellationToken);
+        await _SaveSiteRunWithLootAsync(dispatcher, 90000001, "HF-7QK2", quantity: 3, cancellationToken);
+        await _SaveSiteRunWithLootAsync(dispatcher, 90000002, "HF-7QK2", quantity: 4, cancellationToken);
+        await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(
+            await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
+
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IMarketPriceRepository>(),
+            nameOf: id => id == 90000001 ? "Jithran" : "Second Pilot");
+        await viewModel.LoadAsync(cancellationToken);
+
+        Assert.Equal(2, viewModel.LootCharacterRows.Count);
+        Assert.Contains(viewModel.LootCharacterRows, r => r.CharacterText == "Jithran" && r.IskText == $"{300m:N2} ISK");
+        Assert.Contains(viewModel.LootCharacterRows, r => r.CharacterText == "Second Pilot" && r.IskText == $"{400m:N2} ISK");
+        // The per-character rows are set apart from the group's own NET figure, but they still have to sum to it.
+        Assert.Equal($"{700m:N2} ISK", viewModel.NetIskText);
+    }
+
+    private static async Task _SaveSiteRunWithLootAsync(ICqrsDispatcher dispatcher, long characterId,
+        string? groupCode, long quantity, CancellationToken cancellationToken)
+    {
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142, groupCode), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+            [new RunLootCaptureInput
+            {
+                CapturedAtUtc = StartedAtUtc.AddMinutes(10), Source = LootCaptureSource.Clipboard,
+                Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = quantity, LootKind = LootKind.Gained }]
+            }], [], [], []), cancellationToken);
+    }
+
+    /// <summary>
     /// Counter-proof: Jithran chose per-character enemy tracking with a group total (ET-210 review, round 4) over
     /// one shared tally. A group where different characters each counted a different enemy must show each
     /// character's own total, summed across every type they saw, with a group total equal to their sum — the same

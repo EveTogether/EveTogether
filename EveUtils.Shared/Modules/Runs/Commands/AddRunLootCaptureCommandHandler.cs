@@ -17,10 +17,12 @@ internal sealed class AddRunLootCaptureCommandHandler(IDbContextFactory<ClientDb
     public async Task<Result<RunLootCaptureSaveResult>> Handle(AddRunLootCaptureCommand command, CancellationToken cancellationToken = default)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        // Nothing names the run a clipboard copy belongs to, so one running run is the only unambiguous answer;
-        // guessing between two would file loot under the wrong one.
+        // A known copier (ET-138/ET-211) scopes the answer to their own run, so a second toon running its own site
+        // is no longer "N runs are running" for loot that plainly has an owner. An unknown copier still needs one
+        // unambiguous running run system-wide — ClipboardLootCapture is what asks before it gets here, when there is
+        // more than one to choose between (the product decision, 2026-09-10).
         (Run? run, int runningCount) = await RunningRunLookup.FindAsync(db, cancellationToken, includeStopped: true,
-            command.Capture.PreferredRunId);
+            command.Capture.PreferredRunId, command.Capture.CharacterId);
         if (run is null)
             return Result<RunLootCaptureSaveResult>.Failure(runningCount == 0
                 ? new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound,
