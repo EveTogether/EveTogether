@@ -214,4 +214,98 @@ public sealed class ManualRunStartTests
         Assert.Equal(Site.DungeonId, run.SiteTypeId);
         Assert.Equal(SiteTypeSource.Site, run.SiteTypeSource);
     }
+
+    // ET-221 AC-1 and AC-3's counterproof, both directions in one test: two characters picked in the dialog land as
+    // two Run rows sharing one group code — the same shape ET-210 chose for the other three start paths — while one
+    // character picked (the CreateViewModel default, no picker interaction) still lands the plain, code-less run
+    // this dialog always made. Red against the code before ET-221: the dialog only ever knew one SelectedCharacter,
+    // so a second pick could not even be expressed.
+    [AvaloniaFact]
+    public async Task TwoCharactersPicked_StartTwoRunsSharingOneGroupCode_OneCharacterPicked_StartsNoGroupCode()
+    {
+        using var instance = CreateInstance();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var dialogs = new RecordingDialogService
+        {
+            OnPickCharacters = (_, options) =>
+                Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId)])
+        };
+        var vm = new ManualRunStartViewModel(
+            instance.Services.GetRequiredService<IDispatcher>(),
+            instance.Services.GetRequiredService<ISdeAccessor>(),
+            dialogs,
+            kind => new ActivityWindowViewModel(kind, instance.Services),
+            [new Character("Manual Pilot", 90000002), new Character("Manual Alt", 90000003)])
+        { SelectedOption = new SdeSitePickerOption(Site, Site.Name) };
+
+        await vm.PickCharactersCommand.ExecuteAsync(null);
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.True(vm.Completed);
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(cancellationToken);
+        List<Run> runs = await db.Set<Run>().ToListAsync(cancellationToken);
+        Assert.Equal(2, runs.Count);
+        Assert.All(runs, run => Assert.Equal(RunOrigin.Manual, run.Origin));
+        Assert.Equal([90000002L, 90000003L], runs.Select(run => run.CharacterId).OrderBy(id => id));
+        string? groupCode = Assert.Single(runs.Select(run => run.GroupCode).Distinct());
+        Assert.NotNull(groupCode);
+
+        ActivityWindowViewModel opened = Assert.Single(dialogs.ShownActivityWindows);
+        // Named before the window loads, rather than left for it to guess from "the one run running anywhere" —
+        // that guess would now be ambiguous with two runs just started.
+        Assert.Equal((90000002, "Manual Pilot"), opened.PickedCharacter);
+
+        // The other direction, same test: exactly one character picked (CreateViewModel's own default — the
+        // picker never opened) must still land today's plain run.
+        var soloVm = CreateViewModel(instance, characterId: 90000004);
+        await soloVm.StartCommand.ExecuteAsync(null);
+
+        await using ClientDbContext soloDb = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(cancellationToken);
+        Run soloRun = await soloDb.Set<Run>().SingleAsync(run => run.CharacterId == 90000004, cancellationToken);
+        Assert.Null(soloRun.GroupCode);
+    }
+
+    // The abyssal path is ET-221's own named pitfall: a run standing by for two characters has to reach both once it
+    // actually fires, through the same UseAdditionalCharacters/_StoreRunAsync mechanism ActivityWindowViewModel
+    // already uses for a fleet-run offer accepted with several clients up — not a silent "only the first character".
+    [AvaloniaFact]
+    public async Task AnAbyssal_WithASecondCharacterPicked_StartsARunForBothOnceItFires()
+    {
+        using var instance = CreateInstance();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var dialogs = new RecordingDialogService
+        {
+            OnPickCharacters = (_, options) =>
+                Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId)])
+        };
+        var vm = new ManualRunStartViewModel(
+            instance.Services.GetRequiredService<IDispatcher>(),
+            instance.Services.GetRequiredService<ISdeAccessor>(),
+            dialogs,
+            kind => new ActivityWindowViewModel(kind, instance.Services),
+            [new Character("Manual Pilot", 90000002), new Character("Manual Alt", 90000003)]);
+        vm.SelectedActivityKind = ActivityKind.Abyssal;
+
+        await vm.PickCharactersCommand.ExecuteAsync(null);
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.True(vm.Completed);
+        ActivityWindowViewModel opened = Assert.Single(dialogs.ShownActivityWindows);
+        await using (ClientDbContext before = await instance.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken))
+            Assert.Empty(await before.Set<Run>().ToListAsync(cancellationToken));
+
+        // START or the location watch fires the abyssal later — simulated here by the window's own command, the
+        // same one production code runs.
+        await opened.StartRunCommand.ExecuteAsync(null);
+
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(cancellationToken);
+        List<Run> runs = await db.Set<Run>().ToListAsync(cancellationToken);
+        Assert.Equal(2, runs.Count);
+        string? groupCode = Assert.Single(runs.Select(run => run.GroupCode).Distinct());
+        Assert.NotNull(groupCode);
+    }
 }

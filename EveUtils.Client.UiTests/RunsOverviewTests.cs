@@ -319,6 +319,32 @@ public sealed class RunsOverviewTests
         Assert.Equal("START", lane.ActionText);
     }
 
+    /// <summary>ET-221 AC-2's counterproof: pressing START on an idle character card opens the manual-start dialog
+    /// with every registered character offered — not just the one card's own character, which is all the dialog
+    /// could ever take before ET-221 — and that card's own character ticked, so hitting START without touching the
+    /// picker still starts exactly that one character's run.</summary>
+    [AvaloniaFact]
+    public async Task StartOnALane_OffersEveryCharacter_WithThatLanesCharacterPreselected()
+    {
+        using var instance = TestClientInstance.Create();
+        ICharacterRegistry registry = instance.Services.GetRequiredService<ICharacterRegistry>();
+        foreach (Character character in Crew.Take(2))
+            await registry.AddOrUpdateAsync(character, TestContext.Current.CancellationToken);
+        var dialogs = new RecordingDialogService();
+
+        (_, RunsOverviewViewModel viewModel) = await _WindowAsync(
+            instance, 758, TestContext.Current.CancellationToken, characters: Crew.Take(2).ToList(), dialogs: dialogs);
+        RunningLaneViewModel lane = viewModel.Lanes.Single(l => l.Character.EsiCharacterId == Crew[1].EsiCharacterId);
+
+        await lane.ActCommand.ExecuteAsync(null);
+
+        ManualRunStartViewModel opened = dialogs.LastManualRunStart!;
+        Assert.NotNull(opened);
+        Assert.Equal(2, opened.Characters.Count);
+        Character selected = Assert.Single(opened.SelectedCharacters);
+        Assert.Equal(Crew[1].EsiCharacterId, selected.EsiCharacterId);
+    }
+
     /// <summary>ET-220: DISCARD stops a running lane exactly like STOP does, but nothing told this screen so — the
     /// lane kept ticking until the RUNS entry was reopened, which is what the pilot reported. Counter-proof: a
     /// <c>DiscardRunCommandHandler</c> that never publishes <c>RunRunningStateChangedEvent</c> (the shape before

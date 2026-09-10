@@ -1,7 +1,6 @@
 <v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EveUtils.Client.ViewModels.Runs"
-        xmlns:identity="using:EveUtils.Shared.Identity"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="520"
@@ -17,15 +16,13 @@
     <StackPanel Margin="16" Spacing="10">
 
         <StackPanel Spacing="3">
-            <TextBlock Classes="label" Text="CHARACTER"/>
-            <ComboBox ItemsSource="{Binding Characters}" SelectedItem="{Binding SelectedCharacter}"
-                      HorizontalAlignment="Stretch">
-                <ComboBox.ItemTemplate>
-                    <DataTemplate x:DataType="identity:Character">
-                        <TextBlock Text="{Binding Name}"/>
-                    </DataTemplate>
-                </ComboBox.ItemTemplate>
-            </ComboBox>
+            <TextBlock Classes="label" Text="CHARACTER(S)"/>
+            <!-- Multi-select (ET-221): opens the same character picker every other multi-toon start path in the
+                 app uses, rather than a second selection widget invented here. -->
+            <Button Command="{Binding PickCharactersCommand}" HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Left">
+                <TextBlock Text="{Binding CharacterSummaryText}"/>
+            </Button>
         </StackPanel>
 
         <StackPanel Spacing="3">
