@@ -85,16 +85,25 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
             List<Character> candidates = flying.Count == 0 ? known : flying;
 
             Character? pilot = candidates is [{ } only] ? only : null;
+            List<Character> additional = [];
             var startsOnArrival = true;
 
             bool answeredAlready = _dialogs.ActivityWindowPilot is not null;
             if (pilot is null && candidates.Count > 1 && !answeredAlready)
             {
-                int? picked = await _dialogs.PickCharacterAsync("Whose run is this?",
+                // Multi-select (ET-210): see ClipboardSignatureOffer's own copy of this question for why.
+                IReadOnlyList<int>? picked = await _dialogs.PickCharactersAsync("Whose run is this?",
                     [.. candidates.Select(character => new CharacterPickOption(
                         character.EsiCharacterId!.Value, character.Name,
                         flying.Contains(character) ? "EVE client running" : "local character", Enabled: true))]);
-                pilot = candidates.FirstOrDefault(character => character.EsiCharacterId == picked);
+                pilot = picked is { Count: > 0 }
+                    ? candidates.FirstOrDefault(character => character.EsiCharacterId == picked[0])
+                    : null;
+                if (picked is { Count: > 1 })
+                    additional = [.. picked.Skip(1)
+                        .Select(id => candidates.FirstOrDefault(character => character.EsiCharacterId == id))
+                        .Where(character => character is not null)
+                        .Select(character => character!)];
                 startsOnArrival = pilot is not null;
             }
 
@@ -119,6 +128,9 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
             };
             if (pilot is { EsiCharacterId: { } characterId })
                 window.UseCharacter(characterId, pilot.Name);
+            if (additional.Count > 0)
+                window.UseAdditionalCharacters(
+                    [.. additional.Select(character => (character.EsiCharacterId!.Value, character.Name))]);
 
             _dialogs.ShowActivityWindow(window, RunWindowOpenTrigger.CopiedFromClipboard);
         }

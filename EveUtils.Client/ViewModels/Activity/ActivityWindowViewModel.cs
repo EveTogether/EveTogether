@@ -36,6 +36,7 @@ using EveUtils.Shared.Modules.Runs.Control;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Events;
+using EveUtils.Shared.Modules.Runs.Grouping;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
@@ -141,6 +142,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     // RunBountyEntry rows, and what the section adds up meanwhile.
     private readonly List<RunBountyEntryInput> _bounties = [];
 
+    // The group's captured loot, latched rather than re-read off RunLoot every tick: RunLoot follows whichever RunId
+    // the character column currently shows (deel 3), and deel 4 — attributing a capture to the alt that actually
+    // looted it — is still open, so today only one run in the group ever has captures at all. Latching the last
+    // non-null figure means switching the column to a sibling with nothing captured cannot make the group total
+    // drop or blank out; it can only ever grow, same as the real pile of loot in the cargo hold does.
+    private decimal? _groupLootIskSticky;
+
     // The fleet's latest location sample per member, so the envelope is re-taken over the whole fleet on every
     // sample rather than over whichever one happened to arrive last.
     private readonly Dictionary<int, MetricSample> _fleetLocations = [];
@@ -162,7 +170,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private int? _commanderNameId;
     private string? _commanderName;
     private ShipFitDetectionReading? _fitReading;
-    private RunEnemyObservationCollector? _enemyObservations;
+
+    /// <summary>One collector per character in the group, each fed only by that character's own gamelog (ET-210
+    /// review finding, 2026-09-09, round 4: Jithran chose per-character tracking with a group total over one
+    /// shared tally). Keyed on characterId rather than on which run this window is currently showing, so switching
+    /// the column (deel 3) never touches a character's own count — the exact loss round 3 fixed for the single
+    /// collector this replaces, now guaranteed by construction: nothing here is ever reassigned or cleared for one
+    /// character because another one was clicked.</summary>
+    private readonly Dictionary<int, RunEnemyObservationCollector> _enemyObservationsByCharacter = [];
 
     public ActivityWindowViewModel(ActivityKind kind, IServiceProvider services)
     {
@@ -221,7 +236,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// another kind halfway through.</summary>
     public ActivityKind Kind { get; }
 
-    public IReadOnlyList<RunEnemyObservationViewModel> EnemyObservations => _enemyObservations?.Observations ?? [];
+    /// <summary>The acting character's own sightings — whichever run the column is currently showing. Every other
+    /// group member's own collector keeps counting in the background regardless (ET-210 round 4).</summary>
+    public IReadOnlyList<RunEnemyObservationViewModel> EnemyObservations =>
+        _runCharacterId is { } id && _enemyObservationsByCharacter.TryGetValue(id, out RunEnemyObservationCollector? collector)
+            ? collector.Observations
+            : [];
 
     public RunLootViewModel? RunLoot { get; }
 
@@ -513,7 +533,76 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public bool HasActingCharacter => ActingCharacterName is not null;
 
-    public string ActingCharacterText => ActingCharacterName ?? "no character yet";
+    /// <summary>One name, or the group's — as many toons of this pilot can be filed under one run since ET-210, and
+    /// the chip that used to promise "the character this run is filed under" was lying the moment a second row
+    /// joined it (ET-130 deel 3).</summary>
+    public string ActingCharacterText => Participants.Count > 1
+        ? string.Join(" · ", Participants.Select(participant => participant.CharacterName))
+        : ActingCharacterName ?? "no character yet";
+
+    /// <summary>The header chip's click: before START, reopen the same "whose run is this" question the window
+    /// would otherwise only ask once — the multi-select answer (ET-130 deel 3, ET-210) replaces whatever was picked
+    /// before rather than adding to it, since nothing is running yet to add a character TO. Once a run is on the
+    /// clock, clicking it instead offers to bring another of this pilot's flying characters into the group.</summary>
+    [RelayCommand]
+    private async Task PickCharacterAsync()
+    {
+        if (RunId is not null)
+        {
+            await _AddCharacterToRunningGroupAsync();
+            return;
+        }
+
+        _runCharacterId = null;
+        _runCharacterName = null;
+        _namedCharacterId = null;
+        await _ResolveCharacterAsync(mayAsk: true);
+        await _RefreshActingCharacterAsync();
+        _RefreshRunCharacters();
+    }
+
+    /// <summary>Add a flying character nobody has picked yet to this window's already-running group (ET-210), under
+    /// the same GroupCode this run already has or, for a run that was solo until now, one minted for the occasion.
+    /// </summary>
+    private async Task _AddCharacterToRunningGroupAsync()
+    {
+        if (_services.GetService<ICharacterRegistry>() is not { } registry
+            || _services.GetService<IDialogService>() is not { } dialogs
+            || _services.GetService<CqrsDispatcher>() is null)
+            return;
+
+        List<Character> known = (await registry.GetAllAsync())
+            .Where(character => character.EsiCharacterId is not null
+                                 && Participants.All(participant => participant.CharacterId != character.EsiCharacterId))
+            .ToList();
+        List<Character> candidates = InGameCharacters.Among(known, _services.GetService<ILocalCharacterPresence>());
+        if (candidates.Count == 0)
+            return;
+
+        IReadOnlyList<int>? picked = await dialogs.PickCharactersAsync("Add which character(s) to this run?",
+            [.. candidates.Select(character => new CharacterPickOption(
+                character.EsiCharacterId!.Value, character.Name, "EVE client running", Enabled: true))]);
+        if (picked is not { Count: > 0 } || RunId is not { } runId)
+            return;
+
+        using var scope = _services.CreateScope();
+        var dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
+        if (GroupCode is null)
+        {
+            // This run was solo until now, so nothing ties it to the new characters yet — mint a code and relink
+            // this window's OWN row to it first, or the row picking these characters up would drop out of its own
+            // group: GetRunGroupParticipantsQuery matches on GroupCode, not on "started this".
+            GroupCode = RunGroupCode.Create();
+            await dispatcher.Send(new LinkRunToGroupCodeCommand(runId, GroupCode, FleetId));
+        }
+
+        int? solarSystemId = _ResolveSolarSystemId();
+        foreach (Character character in candidates.Where(candidate => picked.Contains(candidate.EsiCharacterId!.Value)))
+            await _SendAdditionalStartRunCommandAsync(
+                dispatcher, character.EsiCharacterId!.Value, AnchorUtc ?? DateTime.UtcNow, solarSystemId);
+
+        await _RefreshParticipantsAsync();
+    }
 
     /// <summary>The run's one fit (ET-107) — filled from ET-101's detection, or the reason it could not be. Never a
     /// proposal standing beside a choice: a manual pick comes back through the same reading as its own match reason.</summary>
@@ -583,6 +672,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [ObservableProperty] private string _startText = string.Empty;
 
     [ObservableProperty] private string _endText = string.Empty;
+
+    /// <summary>The running total beside the clock (ET-210 review: "the same way TOTAL ISK already stands next to
+    /// DURATION on the saved screen, only this one during rather than after"). Covers the WHOLE group, not whichever
+    /// character the column happens to show — Jithran's stated preference, and the only reading that cannot flip the
+    /// figure by switching a column, which is exactly the confusion round 3 of this same review cleaned up for
+    /// bounty and enemies. See <see cref="_RefreshGroupTotalIsk"/> for what is and is not summed into it.</summary>
+    [ObservableProperty] private bool _hasGroupTotalIsk;
+
+    [ObservableProperty] private string _groupTotalIskText = string.Empty;
 
     // ── Correcting the clock after the fact ─────────────────────────────────────────────────────────
     // Manual start and stop are the only source a site run has — there is no site-entry or site-exit line in the
@@ -985,10 +1083,21 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (chosen is null && mayAsk && candidates.Count > 1
             && _services.GetService<IDialogService>() is { } dialogs)
         {
-            int? picked = await dialogs.PickCharacterAsync("Whose run is this?",
+            // Multi-select (ET-210): multiboxing several of these candidates on the same site is exactly as real a
+            // case as flying one, so the same question offers the same answer's plural. One ticked box behaves
+            // exactly like the single picker used to (AC-3) — the rest, if any, ride along as UseAdditionalCharacters
+            // and get their own run under this one's group code once _StoreRunAsync has a row to share it from.
+            IReadOnlyList<int>? picked = await dialogs.PickCharactersAsync("Whose run is this?",
                 [.. candidates.Select(character => new CharacterPickOption(
                     character.EsiCharacterId!.Value, character.Name, "local character", Enabled: true))]);
-            chosen = candidates.FirstOrDefault(character => character.EsiCharacterId == picked);
+            if (picked is { Count: > 0 })
+            {
+                chosen = candidates.FirstOrDefault(character => character.EsiCharacterId == picked[0]);
+                UseAdditionalCharacters([.. picked.Skip(1)
+                    .Select(id => candidates.FirstOrDefault(character => character.EsiCharacterId == id))
+                    .Where(character => character is not null)
+                    .Select(character => (character!.EsiCharacterId!.Value, character.Name))]);
+            }
         }
 
         if (chosen is null)
@@ -998,6 +1107,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _runCharacterName = chosen.Name;
         return true;
     }
+
+    // Characters picked alongside the acting one (ET-210): each gets its own Run row, sharing this window's
+    // GroupCode, once _StoreRunAsync knows one. The window itself still shows one acting pilot — the chip in the
+    // header is what says the run also covers these.
+    private IReadOnlyList<(int Id, string Name)> _additionalCharacters = [];
+
+    /// <summary>Remember characters to also start a run for, alongside the acting one <see cref="UseCharacter"/>
+    /// settles. Set before the window's own run is stored — <see cref="_StoreRunAsync"/> is the only reader.</summary>
+    public void UseAdditionalCharacters(IReadOnlyList<(int Id, string Name)> characters) =>
+        _additionalCharacters = characters;
 
     /// <summary>
     /// Attach to the run the store already has open, rather than opening a second one beside it. Reopening the
@@ -1010,8 +1129,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return false;
 
         using var scope = _services.CreateScope();
+        // Scoped to this pilot's own run once one is settled (ET-130 deel 2) — six toons on six sites are six
+        // independent counts of one, not one count of six. A window that does not know its pilot yet (a fleet-run
+        // offer accepted with no picker shown, because too few clients were up to ask) still falls back to the old
+        // app-wide count: with only one run anywhere, that one is unambiguous regardless of whose it is, and
+        // _AdoptCharacterAsync below learns the pilot FROM the row it adopts.
         Result<RunningRunDto> running = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
-            .Query(new GetRunningRunQuery());
+            .Query(new GetRunningRunQuery(_runCharacterId));
         if (!running.IsSuccess || running.Value is not { } run || run.ActivityKind != Kind)
             return false;
 
@@ -1318,7 +1442,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 RunCharacters.Add(new RunCharacterRowViewModel(new Character(name)));
 
         OnPropertyChanged(nameof(HasRunCharacters));
-        _RefreshRunCharacters();
+        await _RefreshRunCharactersAsync();
 
         if (_services.GetService<ICharacterPortraitProvider>() is not { } portraits)
             return;
@@ -1327,22 +1451,48 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             await row.LoadPortraitAsync(portraits);
     }
 
+    /// <summary>Guards <see cref="_RefreshRunCharactersAsync"/> the same way <see cref="_isRefreshingParticipants"/>
+    /// guards its participants counterpart: a slow query outliving one tick must not race the next tick's own read.</summary>
+    private bool _isRefreshingRunCharacters;
+
     /// <summary>
-    /// Put this window's state onto the column. Only the acting character can be restless: this window holds the
-    /// one run there is until ET-130 lets a second exist, so red and amber are its own clock rather than something
-    /// each row could work out for itself.
+    /// Put this window's state onto the column — which of my toons this window is showing (<see cref="IsSelected"/>),
+    /// and, since ET-210, which ones actually have a run going right now regardless of which one is acting
+    /// (<see cref="RunCharacterRowViewModel.HasRunningRun"/>). The second half needs the store: <c>GetRunningRunsQuery</c>
+    /// reads every running run once a tick, one per character, the same source the RUNNING band in the runs
+    /// overview already trusts for this (ET-203).
     /// </summary>
-    private void _RefreshRunCharacters()
+    private async Task _RefreshRunCharactersAsync()
     {
         if (RunCharacters.Count == 0)
             return;
+
+        Dictionary<int, Guid> running = [];
+        if (!_isRefreshingRunCharacters && _services.GetService<CqrsDispatcher>() is { } dispatcher)
+        {
+            _isRefreshingRunCharacters = true;
+            try
+            {
+                using var scope = _services.CreateScope();
+                Result<IReadOnlyList<RunningRunDto>> result = await scope.ServiceProvider
+                    .GetRequiredService<CqrsDispatcher>().Query(new GetRunningRunsQuery());
+                if (result.IsSuccess)
+                    foreach (RunningRunDto run in result.Value!)
+                        running[checked((int)run.CharacterId)] = run.Id;
+            }
+            finally
+            {
+                _isRefreshingRunCharacters = false;
+            }
+        }
 
         int? acting = _ActingCharacterId();
         foreach (RunCharacterRowViewModel row in RunCharacters)
         {
             row.IsSelected = row.IsEsiLinked && row.CharacterId == acting;
-            row.HasRunningRun = row.IsSelected && RunState is ActivityRunState.Running;
-            row.Attention = (row.HasRunningRun, IsClockCritical, IsClockWarning) switch
+            row.RunId = row.IsEsiLinked && running.TryGetValue(row.CharacterId, out Guid runId) ? runId : null;
+            row.HasRunningRun = row.RunId is not null;
+            row.Attention = (row.IsSelected && row.HasRunningRun, IsClockCritical, IsClockWarning) switch
             {
                 (true, true, _) => RunCharacterAttention.Critical,
                 (true, _, true) => RunCharacterAttention.Warning,
@@ -1350,18 +1500,35 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             };
         }
 
-        // The refusal changes with the run's state, and the clock is the only thing that moves that state here.
+        // The refusal changes with the run's state and now with every row's own, so both drive it.
         SelectRunCharacterCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>The immediate half of <see cref="_RefreshRunCharactersAsync"/> — <see cref="RunCharacterRowViewModel.IsSelected"/>
+    /// only, which needs no query. Called right after this window's own acting character changes, so the column
+    /// does not wait a whole tick to agree with the header.</summary>
+    private void _RefreshRunCharacters()
+    {
+        int? acting = _ActingCharacterId();
+        foreach (RunCharacterRowViewModel row in RunCharacters)
+            row.IsSelected = row.IsEsiLinked && row.CharacterId == acting;
+    }
+
     /// <summary>
-    /// Switch the window to this character. Refused while a run is on the clock — moving the window off a running
-    /// run would leave it filed under a pilot who is no longer looking at it — and refused for an unlinked
-    /// character, who has no id to file anything under.
+    /// Switch the window to this character's own run — loot, bounty and every other section follow (ET-130 deel 3
+    /// review finding, 2026-09-09: the column looked clickable and did nothing, so a run started for five toons at
+    /// once had no way to register loot against any but the first). Refused for an unlinked character, and for one
+    /// with no run of their own while this window's own run is going — there is nothing to switch it TO.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanSelectRunCharacter))]
     private void SelectRunCharacter(RunCharacterRowViewModel row)
     {
+        if (row.RunId is { } runId)
+        {
+            _ = _SwitchToRunAsync(row.CharacterId, row.Name, runId);
+            return;
+        }
+
         _runCharacterId = row.CharacterId;
         _runCharacterName = row.Name;
         _namedCharacterId = null;
@@ -1370,7 +1537,52 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     }
 
     private bool CanSelectRunCharacter(RunCharacterRowViewModel? row) =>
-        row is { IsEsiLinked: true } && RunState is not ActivityRunState.Running;
+        row is { IsEsiLinked: true } && !row.IsSelected && (row.HasRunningRun || RunState is not ActivityRunState.Running);
+
+    /// <summary>
+    /// Re-point every character-specific section at a DIFFERENT run this pilot's own group already has going —
+    /// GroupCode, FleetId and Participants stay put, because switching who the window shows is not leaving the
+    /// group. Re-read from the store rather than trusted off the row: the run may have stopped or been saved in
+    /// the moment between the click and this running, and a stale <see cref="RunCharacterRowViewModel.RunId"/> must
+    /// not be adopted as if it still were live.
+    /// </summary>
+    private async Task _SwitchToRunAsync(int characterId, string name, Guid runId)
+    {
+        if (runId == RunId || _services.GetService<CqrsDispatcher>() is null)
+            return;
+
+        using var scope = _services.CreateScope();
+        Result<RunningRunDto> result = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+            .Query(new GetRunningRunQuery(characterId));
+        if (!result.IsSuccess || result.Value is not { } run || run.Id != runId || run.ActivityKind != Kind)
+            return;
+
+        _runCharacterId = characterId;
+        _runCharacterName = name;
+        _namedCharacterId = null;
+        RunId = run.Id;
+        AnchorUtc = run.StartedAtUtc;
+        StoppedAtUtc = null;
+        RunState = ActivityRunState.Running;
+        _isManualRun = true;
+        SignatureId = run.Signature;
+        SignatureName = run.SiteName;
+        MatchedSites = [];
+        // _bounties and _enemyObservations are deliberately left standing (ET-210 review finding, 2026-09-09, third
+        // round): clearing them here used to be the bug, not the fix. Both used to be reset on every switch, on the
+        // reasoning that they were "per character" — but _enemyObservations is a hand-typed count with nowhere else
+        // to live, and switching away from the character it was started for and back again threw it out for good;
+        // Jithran's own enemies vanished exactly that way. SaveRunAsync no longer even reads _bounties for a group
+        // (GamelogClientService.GetFleetRunBounty does, switch-independently) — only a solo run still uses it, and a
+        // solo run is never switched away from. Loot needs no reset either — it lives under the run's own id in the
+        // store, and RunLoot re-reads it the moment RunId changes (OnRunIdChanged).
+        await _AdoptCharacterAsync(characterId);
+        await _RefreshActingCharacterAsync();
+        _RefreshRunCharacters();
+        if (RunLoot is not null)
+            await RunLoot.RefreshAsync();
+        Refresh(DateTime.UtcNow);
+    }
 
     /// <summary>Fill the run's fit from ET-101's reading. Clock-driven like the fleet command is, so starting a run
     /// fills it without the player confirming anything. An unlinked fit comes back through the same reading, so it
@@ -1488,11 +1700,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         _RefreshLocation(nowUtc);
         _RefreshClock(nowUtc);
+        _RefreshGroupTotalIsk();
         _RefreshSummaries();
         _ = RefreshFleetCommandAsync(nowUtc);
         _ = RefreshFitAsync();
         _ = _RefreshActingCharacterAsync();
-        _RefreshRunCharacters();
+        _ = _RefreshRunCharactersAsync();
         _ = _RefreshParticipantsAsync();
         _ShareRunLootWithFleet();
     }
@@ -1599,6 +1812,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
         }
 
+        // Tried both before and after resolving a pilot: with one already settled this is the only call that ever
+        // runs, and it is not asked twice. With none settled yet, asking first and then trying again catches a run
+        // this now-known pilot already has open — without it, START would blindly file a second row under the
+        // character just picked, right beside the one they left running (ET-130 deel 2).
         if (await _AdoptRunningRunAsync())
         {
             if (RunLoot is not null)
@@ -1611,6 +1828,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         {
             _services.GetService<IToastService>()?.Show("Run not started",
                 "No local character to file this run under. Add one first.", ToastKind.Error);
+            return;
+        }
+
+        if (await _AdoptRunningRunAsync())
+        {
+            if (RunLoot is not null)
+                await RunLoot.RefreshAsync();
+            Refresh(nowUtc);
             return;
         }
 
@@ -1649,14 +1874,25 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // than left to whichever tick last landed (ET-147).
         await RefreshFleetCommandAsync(DateTime.UtcNow);
 
+        // Characters picked alongside this one (ET-210) need something to share, and StartRunCommandHandler only
+        // mints one on its own for a fleet's commander — a manual multi-pick outside that case would otherwise
+        // start N unrelated solo runs instead of one group of N.
+        if (_additionalCharacters.Count > 0)
+            GroupCode ??= RunGroupCode.Create();
+
         using var scope = _services.CreateScope();
-        Result<Guid> started = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(
+        CqrsDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
+        // The whole group is on the one site, so its system is resolved once here rather than per character — a
+        // sibling started in the same breath has no fleet-metric location sample of its own yet to resolve from.
+        int? solarSystemId = _ResolveSolarSystemId();
+        (string? fitContentHash, string? fitNameSnapshot) = await _ResolveFitAsync(characterId);
+        Result<Guid> started = await dispatcher.Send(
             new StartRunCommand(characterId, Kind, startedAtUtc,
                 // No type id: a signature names a dungeon, and the catalogue's DungeonId is not the type id this
                 // column holds. The name travels instead.
                 SiteTypeId: 0,
                 SiteName: SignatureName,
-                SolarSystemId: Kind == ActivityKind.Mission ? MissionSolarSystemId : null,
+                SolarSystemId: solarSystemId,
                 GroupCode: GroupCode,
                 Signature: SignatureId,
                 FleetId: FleetId,
@@ -1664,6 +1900,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 // own run may control it without commanding anybody, and answering "am I the boss" is the
                 // authority's own job rather than something reassembled here (ET-147, ET-152).
                 IsFleetCommander: Authority.IsFleetCommander,
+                FitContentHash: fitContentHash,
+                FitNameSnapshot: fitNameSnapshot,
                 SolarSystemName: SolarSystem,
                 // This window's own start button is the clipboard/signature path — the site comes from what the
                 // pilot pasted, not from a catalogue pick (ET-163).
@@ -1692,14 +1930,97 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // The handler mints the group code when the window had none, and the command only ever gave the run id back
         // — so a commander's own window did not know the code of the run it had just started. With no code it fell
         // through RunControlAuthority's solo branch, and DISCARD, which only announces itself when it has one, never
-        // reached a single other member (Raymond, 2026-09-03).
+        // reached a single other member (Raymond, 2026-09-03). Scoped to this pilot's own run (ET-130 deel 2): an
+        // unscoped read here would trip over any OTHER character's run already going on a different site.
         if (GroupCode is null)
-            GroupCode = (await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
-                .Query(new GetRunningRunQuery())).Value?.GroupCode;
+            GroupCode = (await dispatcher.Query(new GetRunningRunQuery(characterId))).Value?.GroupCode;
+
+        // Every other character picked alongside this one (ET-210) gets its own row under the same GroupCode, filed
+        // as though it started on its own — FleetRunGroupCodeCoordinator already treats N members starting on one
+        // group code as ordinary, whether those members are on N machines or, as here, all local to this one.
+        if (_additionalCharacters.Count > 0)
+        {
+            foreach ((int Id, string Name) extra in _additionalCharacters)
+                await _SendAdditionalStartRunCommandAsync(dispatcher, extra.Id, startedAtUtc, solarSystemId);
+            _additionalCharacters = [];
+        }
 
         if (RunLoot is not null)
             await RunLoot.RefreshAsync();
         Refresh(DateTime.UtcNow);
+    }
+
+    /// <summary>Start a run for a character riding along on this window's own start (ET-210) — same site, same
+    /// group code, never the fleet commander (only the acting character ever is). Best-effort: one extra character
+    /// failing to register is reported and does not undo the run this window itself already has.</summary>
+    private async Task _SendAdditionalStartRunCommandAsync(
+        CqrsDispatcher dispatcher, long characterId, DateTime startedAtUtc, int? solarSystemId)
+    {
+        // Fit is genuinely per pilot — each toon flies its own ship — so unlike the site's system this is read
+        // fresh for this specific character, not carried over from the one that started the group (ET-210 review
+        // finding, 2026-09-25: a sibling's saved activity showed "fit not recognised" even though every toon's own
+        // fit was visible and shared live, because nothing here ever asked for it).
+        (string? fitContentHash, string? fitNameSnapshot) = await _ResolveFitAsync(checked((int)characterId));
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, Kind, startedAtUtc,
+            SiteTypeId: 0,
+            SiteName: SignatureName,
+            SolarSystemId: solarSystemId,
+            GroupCode: GroupCode,
+            Signature: SignatureId,
+            FleetId: FleetId,
+            IsFleetCommander: false,
+            FitContentHash: fitContentHash,
+            FitNameSnapshot: fitNameSnapshot,
+            SolarSystemName: SolarSystem,
+            Origin: EveUtils.Shared.Modules.Runs.Enums.RunOrigin.Clipboard,
+            SiteTypeSource: Kind switch
+            {
+                ActivityKind.Mission => SiteTypeSource.Mission,
+                ActivityKind.Site when SignatureName is not null && MatchedSites.Count == 0 => SiteTypeSource.Uncatalogued,
+                _ => SiteTypeSource.Site
+            },
+            AgentId: MissionAgentId,
+            MissionLevel: MissionLevel,
+            Parameters: PendingParameters));
+
+        if (!started.IsSuccess)
+        {
+            _services.GetService<IToastService>()?.Show("A character was not added to this run",
+                started.Messages.FirstOrDefault()?.Text ?? "Could not start this run for one of the picked characters.",
+                ToastKind.Error);
+            return;
+        }
+
+        // Watched from the same instant its own run exists (ET-210 review, round 4) — this character's own gamelog
+        // counts towards the group's enemies from here on, exactly like its bounty and loot already do.
+        _EnsureEnemyObservations(checked((int)characterId));
+    }
+
+    /// <summary>The site's own solar system, resolved once for the whole group starting on it (ET-210 review
+    /// finding, 2026-09-25): a mission already carries its system id from the SDE agent lookup, but a site or an
+    /// abyssal run only ever had the LOCATION section's own live name (<see cref="SolarSystem"/>) — never turned
+    /// into the numeric id <c>Run.SolarSystemId</c> actually stores, so a saved activity's LOCATION always read
+    /// "not recorded" regardless of how many characters it held. Null when the SDE has no exact match, same as an
+    /// unmatched site name reads elsewhere in this window (ET-178).</summary>
+    private int? _ResolveSolarSystemId() => Kind == ActivityKind.Mission
+        ? MissionSolarSystemId
+        : SolarSystem is { Length: > 0 } name
+            ? _services.GetService<ISdeAccessor>()?.FindSolarSystemByName(name)?.SolarSystemId
+            : null;
+
+    /// <summary>What ET-101's own detection already knows for this specific character, turned into what
+    /// <c>StartRunCommand</c> stores — <see cref="IShipFitDetectionService"/> answers per character, not only for
+    /// the acting one, so a sibling's own fit is exactly as reachable as the acting character's always was; nothing
+    /// here previously asked it the question at all.</summary>
+    private async Task<(string? ContentHash, string? NameSnapshot)> _ResolveFitAsync(int characterId)
+    {
+        if (_services.GetService<IShipFitDetectionService>()?.GetReading(characterId).SelectedFit is not { } selected)
+            return (null, null);
+
+        string? contentHash = _services.GetService<IFittingRepository>() is { } fittings
+            ? (await fittings.FindByIdAsync(selected.Id))?.ContentHash
+            : null;
+        return (contentHash, selected.Name);
     }
 
     /// <summary>Stop the clock. The stored run stays open until SAVE or DISCARD: loot is copied out of the wreck
@@ -1738,7 +2059,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
 
         using var scope = _services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new SetRunStoppedCommand(runId, stoppedAtUtc));
+        var dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
+        await dispatcher.Send(new SetRunStoppedCommand(runId, stoppedAtUtc));
+        // A shared GroupCode here is always this pilot's own other toons (ET-210), never a remote fleet member's —
+        // their row lives in a database this client cannot reach — so the clock this window's pilot controls is the
+        // group's, and stopping every participant alongside this window's own run is never somebody else's to touch.
+        // Unlike ET-105, where each member's clock is their own and only THAT member's STOP moves it.
+        foreach (RunParticipantViewModel sibling in Participants.Where(participant => participant.RunId != runId))
+            await dispatcher.Send(new SetRunStoppedCommand(sibling.RunId, stoppedAtUtc));
     }
 
     /// <summary>
@@ -1982,6 +2310,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 Participants.Remove(gone);
 
             OnPropertyChanged(nameof(IsFleetShown));
+            // A group with more than one participant is what turns the header chip from one name into the group's
+            // (ET-130 deel 3) — this is the only place Participants changes outside the constructor, so it is the
+            // only place that has to say so.
+            OnPropertyChanged(nameof(ActingCharacterText));
             RecomputePayout();
         }
         finally
@@ -2016,6 +2348,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     partial void OnTotalLootIskChanged(decimal? value) => RecomputePayout();
 
+    /// <summary>Set for the whole of <see cref="SaveRunAsync"/> — saving a group of five runs used to look like
+    /// nothing was happening for five to six seconds (ET-210 review finding, 2026-09-09), because each of the five
+    /// SAVEs ran its own full activity-summary rebuild in sequence. Bound to disable SAVE and say so, the same
+    /// pattern <c>SettingsBackupsViewModel.IsBusy</c> already uses for a copy that takes long enough to look stuck.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SaveButtonText))]
+    private bool _isSaving;
+
+    public string SaveButtonText => IsSaving ? "SAVING…" : "SAVE";
+
     /// <summary>
     /// This member commits their own part of the run — every member's own button, never the FC's (ET-105). The
     /// enemy observations are converted here: ET-106 left that seam open so the run would have one lifecycle
@@ -2031,36 +2373,99 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
         }
 
-        DateTime nowUtc = DateTime.UtcNow;
-        using var scope = _services.CreateScope();
-        Result result = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new SaveRunCommand(
-            runId, EffectiveStopUtc ?? nowUtc, nowUtc, [], _bounties, _enemyObservations?.ToInputs() ?? [],
-            _escalationParameters,
-            // Null leaves the row's own start alone; only a hand-corrected start travels.
-            CorrectedStartUtc,
-            IsTimeCorrected ? nowUtc : null,
-            LootStrategy: LootStrategy));
-        if (!result.IsSuccess)
+        IsSaving = true;
+        try
         {
-            RunNoticeText = result.Messages.FirstOrDefault()?.Text ?? "Could not save this run.";
-            _services.GetService<IToastService>()?.Show("Run not saved", RunNoticeText, ToastKind.Error);
-            return;
-        }
+            DateTime nowUtc = DateTime.UtcNow;
+            using var scope = _services.CreateScope();
+            CqrsDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
 
-        RunNoticeText = null;
-        RunState = ActivityRunState.Saved;
-        _EndEnemyObservations();
-        if (RunLoot is not null)
-            await RunLoot.RefreshAsync();
-        Refresh(nowUtc);
-        // Only here, and only for this window: the run is committed and there is nothing left to do to it. A failed
-        // save falls out above with the reason still on screen, and a group's other members keep their own windows —
-        // saving is each member's own, and only the FC's DISCARD reaches anybody else (ET-105).
-        // Saving is one of the two answers to a waiting copy, so it hands it on the same way DISCARD does; until
-        // 2026-09-04 the copy simply went with the window.
-        _SendPendingCopyToANewWindow();
-        CloseRequested?.Invoke();
+            // A group's own bounty (ET-210 review finding, 2026-09-09, third round) comes from GamelogClientService's
+            // per-run tally for EVERY character in it, including the acting one — not from _bounties. _bounties only
+            // ever holds what THIS window watched while the character it is now showing was the one on screen, and
+            // switching which character the column shows (deel 3) leaves a gap in it for whichever stretch a
+            // DIFFERENT character was on screen: Jithran's own bounty and hand-typed enemies went missing from a
+            // five-character save exactly because he had switched the column away from himself and back. A solo run
+            // (Participants.Count == 1, nothing to switch away from) keeps the older, more detailed _bounties list,
+            // with its individually-timestamped payout lines — that path was never broken and loses nothing by
+            // staying as it was.
+            bool isGroup = Participants.Count > 1;
+            GamelogClientService? gamelog = isGroup && FleetId is not null
+                ? _services.GetService<GamelogClientService>()
+                : null;
+            IReadOnlyList<RunBountyEntryInput> actingBounty = gamelog is not null && FleetId is { } actingFleetId
+                && _runCharacterId is { } actingCharacterId
+                ? _FleetBountyEntry(gamelog, actingFleetId, actingCharacterId, nowUtc)
+                : _bounties;
+
+            // The summary rebuild is deferred to one call after every row in the group is saved (ET-210 review
+            // finding): it scans every saved run in the store and prices its loot, and running that scan once per
+            // row — five times for a five-character group — was the whole of the five-to-six-second stall.
+            Result result = await dispatcher.Send(new SaveRunCommand(
+                runId, EffectiveStopUtc ?? nowUtc, nowUtc, [], actingBounty,
+                _runCharacterId is { } actingId ? _EnemyInputsFor(actingId) : [],
+                _escalationParameters,
+                // Null leaves the row's own start alone; only a hand-corrected start travels.
+                CorrectedStartUtc,
+                IsTimeCorrected ? nowUtc : null,
+                LootStrategy: LootStrategy,
+                RebuildSummaries: false));
+            if (!result.IsSuccess)
+            {
+                RunNoticeText = result.Messages.FirstOrDefault()?.Text ?? "Could not save this run.";
+                _services.GetService<IToastService>()?.Show("Run not saved", RunNoticeText, ToastKind.Error);
+                return;
+            }
+
+            RunNoticeText = null;
+            RunState = ActivityRunState.Saved;
+            // Toons of the same pilot save together (ET-210): STOP and SAVE apply to the whole group, unlike ET-105
+            // where each fleet member commits their own part on their own machine — Participants here is always this
+            // pilot's own other local runs (a remote member's row is never in this database), never somebody else's
+            // to commit.
+            foreach (RunParticipantViewModel sibling in Participants.Where(participant => participant.RunId != runId))
+            {
+                IReadOnlyList<RunBountyEntryInput> siblingBounty = gamelog is not null && FleetId is { } fleetId
+                    ? _FleetBountyEntry(gamelog, fleetId, sibling.CharacterId, nowUtc)
+                    : [];
+                Result siblingResult = await dispatcher.Send(new SaveRunCommand(
+                    sibling.RunId, EffectiveStopUtc ?? nowUtc, nowUtc, [], siblingBounty,
+                    _EnemyInputsFor(sibling.CharacterId), [],
+                    LootStrategy: LootStrategy, RebuildSummaries: false));
+                if (!siblingResult.IsSuccess)
+                    _services.GetService<IToastService>()?.Show("A run in this group was not saved",
+                        siblingResult.Messages.FirstOrDefault()?.Text ?? "Could not save one of the other characters' runs.",
+                        ToastKind.Error);
+            }
+
+            // The one rebuild the whole group's saves needed, run once now that every row is in.
+            await dispatcher.Send(new RebuildActivitySummariesCommand());
+            _EndEnemyObservations();
+            if (RunLoot is not null)
+                await RunLoot.RefreshAsync();
+            Refresh(nowUtc);
+            // Only here, and only for this window: the run is committed and there is nothing left to do to it. A
+            // failed save falls out above with the reason still on screen, and a group's other members keep their
+            // own windows — saving is each member's own, and only the FC's DISCARD reaches anybody else (ET-105).
+            // Saving is one of the two answers to a waiting copy, so it hands it on the same way DISCARD does; until
+            // 2026-09-04 the copy simply went with the window.
+            _SendPendingCopyToANewWindow();
+            CloseRequested?.Invoke();
+        }
+        finally
+        {
+            IsSaving = false;
+        }
     }
+
+    /// <summary>One synthetic line carrying a character's whole per-run bounty total, or none when they earned
+    /// nothing — the shape <c>SaveRunCommand.BountyEntries</c> wants, built from a figure that has no per-line
+    /// history of its own (<see cref="GamelogClientService.GetFleetRunBounty"/>).</summary>
+    private static IReadOnlyList<RunBountyEntryInput> _FleetBountyEntry(
+        GamelogClientService gamelog, long fleetId, int characterId, DateTime nowUtc) =>
+        gamelog.GetFleetRunBounty(fleetId, characterId) is { } isk and > 0
+            ? [new RunBountyEntryInput { OccurredAtUtc = nowUtc, Isk = isk }]
+            : [];
 
     /// <summary>Raised when this window is done with its run and should go away: a save that landed, or a discard by
     /// the pilot who commands the run (ET-155). The window closes on it; nothing else listens, and nothing crosses to
@@ -2101,7 +2506,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         DateTime nowUtc = DateTime.UtcNow;
         using var scope = _services.CreateScope();
         var dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
-        Result discarded = await dispatcher.Send(new DiscardRunCommand(runId, nowUtc));
+        // A fleet's own group code is discarded whole already, below: FleetRunDiscardedEvent (EventTarget.Both)
+        // reaches FleetRunGroupCodeCoordinator on THIS client too, and it already runs DiscardRunsInGroupCommand for
+        // every local row sharing the code — a second one here would be redundant, not wrong, but there is no reason
+        // to race it. Outside a fleet (ET-210's manual multi-pick, which mints its own group code with no fleet to
+        // announce to) nothing else ever discards the siblings, so this is the only place it happens.
+        Result discarded = GroupCode is { } soloGroupCode && FleetId is null
+            ? await dispatcher.Send(new DiscardRunsInGroupCommand(soloGroupCode, nowUtc))
+            : await dispatcher.Send(new DiscardRunCommand(runId, nowUtc));
         if (!discarded.IsSuccess)
         {
             _services.GetService<IToastService>()?.Show("Run not discarded",
@@ -2401,7 +2813,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// pilot copied, and setting it first made adopt read the member's own run as a different site and park it.</param>
     private async Task _BeginEstimatedRunAsync(DateTime anchorUtc, string? siteName = null)
     {
-        if (await _AdoptRunningRunAsync() || !await _ResolveCharacterAsync(mayAsk: false))
+        if (await _AdoptRunningRunAsync())
+            return;
+
+        // Same two-step as StartRunAsync: a pilot resolved just now by the line above still deserves the adopt this
+        // call opened with, or a fleet anchor would start a second row under a character who already has one open.
+        if (!await _ResolveCharacterAsync(mayAsk: false) || await _AdoptRunningRunAsync())
             return;
 
         SignatureName ??= siteName;
@@ -2529,42 +2946,68 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     // The event fires for damage either way — "250 to Centii Scavenger" and "1 from Centii Servant" alike — and both
     // are the same kind of enemy, so the direction is dropped here rather than carried into the list (ET-115).
+    // Routed straight to that character's OWN collector — each already refuses everyone else's id internally, so
+    // this only ever widens a row's own observed window, never another character's.
     private void _OnCombatObserved(int characterId, string target, DateTime observedAtUtc, DamageDirection direction)
     {
         if (RunState != ActivityRunState.Running)
             return;
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            _enemyObservations?.Record(characterId, target, observedAtUtc));
+            _enemyObservationsByCharacter.GetValueOrDefault(characterId)?.Record(characterId, target, observedAtUtc));
     }
 
+    /// <summary>Give the ACTING character its own tally, if it does not have one yet. Kept as the no-arg entry
+    /// point every existing call site already uses (window start, resume, join, fleet anchor) — each of those is
+    /// about the character this window is acting as, never about a sibling.</summary>
     private void _StartEnemyObservations()
     {
-        if (_enemyObservations is not null)
+        if (_runCharacterId is { } id)
+            _EnsureEnemyObservations(id);
+
+        OnPropertyChanged(nameof(EnemyObservations));
+        _RefreshSummaries();
+    }
+
+    /// <summary>Give ANY character in the group its own tally (ET-210 review finding, 2026-09-09, round 4) — called
+    /// for a sibling the moment its own <c>StartRunCommand</c> is sent, so its gamelog is being watched for enemies
+    /// from the same instant its bounty and loot start counting. A no-op past the first call for a character, same
+    /// as the single collector this replaces was for the acting one.</summary>
+    private void _EnsureEnemyObservations(int characterId)
+    {
+        if (_enemyObservationsByCharacter.ContainsKey(characterId)
+            || _services.GetService<ISdeAccessor>() is not { } sde)
             return;
 
-        ISdeAccessor? sde = _services.GetService<ISdeAccessor>();
-        _enemyObservations = sde is null || _runCharacterId is null ? null
-            : new RunEnemyObservationCollector(_runCharacterId.Value,
-                name => sde.TryGetTypeId(name, out int typeId) ? typeId : null);
-        if (_enemyObservations is not null)
-            // Only the summary: re-announcing the list itself while a count is being typed would rebind the editor
-            // under the cursor. The rows are an ObservableCollection — the list keeps itself up to date.
-            _enemyObservations.Changed += _RefreshSummaries;
-        OnPropertyChanged(nameof(EnemyObservations));
-        _RefreshSummaries();
+        var collector = new RunEnemyObservationCollector(characterId,
+            name => sde.TryGetTypeId(name, out int typeId) ? typeId : null);
+        // Only the summary: re-announcing the list itself while a count is being typed would rebind the editor
+        // under the cursor. The rows are an ObservableCollection — the list keeps itself up to date. Wired for
+        // every character, not just the acting one, so a background sibling's count still moves the group total.
+        collector.Changed += _RefreshSummaries;
+        _enemyObservationsByCharacter[characterId] = collector;
     }
 
-    /// <summary>Let go of the list, once the run it belongs to is committed or thrown away.</summary>
+    /// <summary>Let go of every character's list, once the run it belongs to is committed or thrown away — the
+    /// whole group's, not just the acting character's, since STOP/SAVE/DISCARD already act on the whole group
+    /// (ET-210).</summary>
     private void _EndEnemyObservations()
     {
-        if (_enemyObservations is not null)
-            _enemyObservations.Changed -= _RefreshSummaries;
+        foreach (RunEnemyObservationCollector collector in _enemyObservationsByCharacter.Values)
+            collector.Changed -= _RefreshSummaries;
 
-        _enemyObservations = null;
+        _enemyObservationsByCharacter.Clear();
         OnPropertyChanged(nameof(EnemyObservations));
         _RefreshSummaries();
     }
+
+    /// <summary>What <see cref="SaveRunCommand"/> stores for one character — empty when nobody ever typed a count
+    /// for them, the same "seen, not counted, never stored" rule <see cref="RunEnemyObservationViewModel.IsCounted"/>
+    /// already applies live.</summary>
+    private IReadOnlyList<RunEnemyObservationInput> _EnemyInputsFor(int characterId) =>
+        _enemyObservationsByCharacter.TryGetValue(characterId, out RunEnemyObservationCollector? collector)
+            ? collector.ToInputs()
+            : [];
 
     // ── Internals ───────────────────────────────────────────────────────────────────────────────────
 
@@ -2607,6 +3050,40 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         ClockText = remaining is { } left ? _Elapsed(left) : NoClock;
         IsClockCritical = remaining is null || remaining <= CriticalAt;
         IsClockWarning = remaining > CriticalAt && remaining <= WarningAt;
+    }
+
+    /// <summary>
+    /// The group's running total, clock-driven exactly like <see cref="_RefreshClock"/> — nothing here does a
+    /// database or network round trip, so ticking every second costs no more than formatting a string does.
+    ///
+    /// Sums the same three things the saved detail screen's TOTAL ISK does (<c>ActivityDetailViewModel._ApplyTotalIsk</c>):
+    /// bounty, captured loot net of what was lost, and ISK-form mission rewards (Isk, BonusIsk, FixedPayout,
+    /// Escrow) — never the mission's own separate <see cref="RunParameterKey.Bounty"/> line, which is a stated
+    /// reward figure rather than an observed payout and would double-count against the gamelog's own bounty.
+    ///
+    /// Bounty is summed per participant through <see cref="GamelogClientService.GetFleetRunBounty"/> — the same
+    /// switch-independent source SAVE already uses for a group — rather than the acting character's own
+    /// <see cref="BountyIsk"/>, which only ever holds whichever character the column was showing while it came in.
+    /// A solo run (nothing to switch away from) keeps using <see cref="BountyIsk"/>, since there is no group to sum.
+    /// </summary>
+    private void _RefreshGroupTotalIsk()
+    {
+        bool isGroup = Participants.Count > 1;
+        long bountyIsk = isGroup && FleetId is { } fleetId && _gamelog is not null
+            ? Participants.Sum(participant => _gamelog.GetFleetRunBounty(fleetId, participant.CharacterId))
+            : BountyIsk;
+
+        if (RunLoot?.NetIsk is { } capturedLootIsk)
+            _groupLootIskSticky = capturedLootIsk;
+
+        decimal rewardIsk = PendingParameters
+            .Where(parameter => parameter.ParameterKey is RunParameterKey.Isk or RunParameterKey.BonusIsk
+                or RunParameterKey.FixedPayout or RunParameterKey.Escrow)
+            .Sum(parameter => parameter.Amount.GetValueOrDefault());
+
+        decimal total = bountyIsk + _groupLootIskSticky.GetValueOrDefault() + rewardIsk;
+        HasGroupTotalIsk = bountyIsk > 0 || _groupLootIskSticky is not null || rewardIsk > 0;
+        GroupTotalIskText = $"{total:N2} ISK";
     }
 
     // The signature arrives after construction, from the object initialiser the toast opens the window with — so the

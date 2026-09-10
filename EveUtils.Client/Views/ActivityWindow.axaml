@@ -391,12 +391,18 @@
                 <WrapPanel Grid.Column="1" VerticalAlignment="Center" ItemSpacing="5" LineSpacing="4">
                     <!-- Whose run this is, first in the row and before anything about the site: with several toons
                          running their own sites at once this is the only thing telling two windows apart, and even
-                         with one it was the question the window never answered (Raymond, 2026-09-02). -->
-                    <Border Classes="chip" Classes.ok="{Binding HasActingCharacter}"
-                            Classes.warn="{Binding !HasActingCharacter}"
-                            ToolTip.Tip="The character this run is filed under">
-                        <TextBlock Text="{Binding ActingCharacterText}"/>
-                    </Border>
+                         with one it was the question the window never answered (Raymond, 2026-09-02). Clickable
+                         (ET-130 deel 3): before START it reopens the character choice, and once a run is going it
+                         offers to bring another of this pilot's flying toons into the group (ET-210) — and shows
+                         every name the group already covers rather than just the one that started it. -->
+                    <Button Command="{Binding PickCharacterCommand}"
+                            Background="Transparent" BorderThickness="0" Padding="0" Cursor="Hand"
+                            ToolTip.Tip="Click to choose who this run is filed under">
+                        <Border Classes="chip" Classes.ok="{Binding HasActingCharacter}"
+                                Classes.warn="{Binding !HasActingCharacter}">
+                            <TextBlock Text="{Binding ActingCharacterText}"/>
+                        </Border>
+                    </Button>
                     <Border Classes="chip ok" IsVisible="{Binding HasWeatherAndTier}">
                         <TextBlock Text="{Binding TierText}"/>
                     </Border>
@@ -422,9 +428,14 @@
             </Grid>
         </Border>
 
-        <!-- ══ The character column ══ (ET-164) which of my toons this window is on. Docked before the clock so it
-             runs the full height beside it, and every row is the same template: the pilot without an ESI link is
-             one of the six and not a branch around them. -->
+        <!-- ══ The character column ══ (ET-164) which of my toons this window is on, and — since ET-210 — the
+             switcher between several of them that all have a run going at once: clicking a toon with its own run
+             re-points the whole window (loot, bounty, everything) at that run (ET-130 deel 3 review finding,
+             2026-09-09). The chip in the header above is the OTHER control on the same data and does a different
+             job: it manages who is IN the group, before or during a run, while this column switches which of the
+             group's own runs is currently on screen. Docked before the clock so it runs the full height beside it,
+             and every row is the same template: the pilot without an ESI link is one of the six and not a branch
+             around them. -->
         <Border DockPanel.Dock="Left" Classes="charcolumn" IsVisible="{Binding HasRunCharacters}">
             <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                 <ItemsControl x:Name="RunCharacterColumn" ItemsSource="{Binding RunCharacters}">
@@ -488,7 +499,7 @@
         <Border DockPanel.Dock="Top" Padding="14,13,14,15" BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource BorderBrush}">
             <StackPanel Spacing="12">
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="24">
                     <StackPanel Grid.Column="0" Spacing="4">
                         <TextBlock Classes="label" Text="{Binding ClockLabel}"/>
                         <TextBlock x:Name="ClockFigure" Classes="clockfigure"
@@ -496,7 +507,14 @@
                                    Classes.crit="{Binding IsClockCritical}"
                                    Text="{Binding ClockText}"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Bottom">
+                    <!-- The running total for the whole group, the same figure the saved detail screen calls
+                         TOTAL ISK once the run is over (ET-210 review) — never just the character the column
+                         happens to be showing, and unmoved by switching it (see _RefreshGroupTotalIsk). -->
+                    <StackPanel Grid.Column="1" Spacing="4" IsVisible="{Binding HasGroupTotalIsk}">
+                        <TextBlock Classes="label" Text="TOTAL ISK"/>
+                        <TextBlock x:Name="GroupTotalIskFigure" Classes="clockfigure" Text="{Binding GroupTotalIskText}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" VerticalAlignment="Bottom" HorizontalAlignment="Right">
                         <TextBlock Classes="clockmeta">
                             <Run Text="START "/><Run Classes="figure" Text="{Binding StartText}"/>
                         </TextBlock>
@@ -519,8 +537,13 @@
                          off. The hint under the clock says what KEEP drops, which four letters cannot. -->
                     <Button x:Name="KeepRunButton" Grid.Column="0" Classes="pick run" Content="KEEP"
                             IsVisible="{Binding IsKeepRunButtonVisible}" Command="{Binding KeepRunCommand}"/>
-                    <Button x:Name="SaveRunButton" Grid.Column="2" Classes="pick run" Content="SAVE"
-                            IsVisible="{Binding IsSaveButtonVisible}" Command="{Binding SaveRunCommand}"/>
+                    <!-- SAVING… (ET-210 review finding, 2026-09-09): a group save can run several SaveRunCommands
+                         in a row, and pressing this and seeing nothing happen for seconds is worse than a plain
+                         wait — the button disables itself and says so, like SettingsBackupsViewModel.IsBusy does
+                         for its own long copy. -->
+                    <Button x:Name="SaveRunButton" Grid.Column="2" Classes="pick run" Content="{Binding SaveButtonText}"
+                            IsVisible="{Binding IsSaveButtonVisible}" IsEnabled="{Binding !IsSaving}"
+                            Command="{Binding SaveRunCommand}"/>
                     <!-- Discarding ends the run on every member's machine, so it confirms first (see the command). -->
                     <Button x:Name="DiscardRunButton" Grid.Column="3" Classes="pick run danger" Content="DISCARD"
                             IsVisible="{Binding IsDiscardButtonVisible}" Command="{Binding DiscardRunCommand}"/>

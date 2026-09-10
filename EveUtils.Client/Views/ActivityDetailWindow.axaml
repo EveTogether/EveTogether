@@ -49,6 +49,29 @@
             <Style Selector="TextBlock.clockmeta.figure">
                 <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             </Style>
+            <!-- ── The money column ── one width and one font for every ISK figure in the BOUNTY section, the same
+                 treatment ActivityWindow's own LOOT totals get — a row's value and the total below it land on the
+                 same characters, and the total reads as a total rather than one more row of the list (ET-210 review
+                 finding, 2026-09-09). -->
+            <Style Selector="TextBlock.money">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.money.total">
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="FontSize" Value="13"/>
+            </Style>
+            <Style Selector="Border.totals">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="8,6"/>
+                <Setter Property="Margin" Value="0,2,0,4"/>
+            </Style>
         </DockPanel.Styles>
 
         <!-- ══ Header ══ what this activity was, and how long it took. -->
@@ -70,14 +93,21 @@
                         </TextBlock>
                     </StackPanel>
                 </Grid>
-                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="24">
                     <StackPanel Grid.Column="0" Spacing="2">
                         <TextBlock Classes="label" Text="DURATION"/>
                         <TextBlock x:Name="DurationFigure" Classes="durationfigure" Text="{Binding DurationText}"/>
                     </StackPanel>
+                    <!-- Same prominence as DURATION beside it (ET-210 review finding, 2026-09-09): bounty, priced
+                         loot and every ISK-form reward, added together — see HasTotalIsk/TotalIskText for exactly
+                         what that is and, as much, what it deliberately is not. -->
+                    <StackPanel Grid.Column="1" Spacing="2" IsVisible="{Binding HasTotalIsk}">
+                        <TextBlock Classes="label" Text="TOTAL ISK"/>
+                        <TextBlock x:Name="TotalIskFigure" Classes="durationfigure" Text="{Binding TotalIskText}"/>
+                    </StackPanel>
                     <!-- The stamp is the only thing telling a typed duration from a measured one; the figure beside
                          it cannot, because a correction overwrites the moments themselves. -->
-                    <Border Grid.Column="1" Classes="chip dim" HorizontalAlignment="Left" VerticalAlignment="Bottom">
+                    <Border Grid.Column="2" Classes="chip dim" HorizontalAlignment="Left" VerticalAlignment="Bottom">
                         <TextBlock x:Name="TimeSourceChip" Text="{Binding TimeSourceText}"/>
                     </Border>
                 </Grid>
@@ -157,6 +187,28 @@
                               IsChecked="{Binding Enemies.IsExpanded, Mode=TwoWay}"/>
                 <Border Classes="sectionbody" IsVisible="{Binding Enemies.IsExpanded}">
                     <StackPanel>
+                        <!-- One row per character, the same breakdown BOUNTY gives (ET-210 review finding,
+                             2026-09-09, round 4): each toon's own gamelog counts towards its own total, summed
+                             across every type it saw — which species is still in the by-type list below. -->
+                        <ItemsControl x:Name="EnemyCharacterList" ItemsSource="{Binding EnemyCharacterRows}"
+                                      IsVisible="{Binding HasEnemyFigures}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:ActivityEnemyCharacterRowViewModel">
+                                    <Grid Classes="kv" ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="{Binding CharacterText}"/>
+                                        <TextBlock Grid.Column="1" Classes="money" Text="{Binding CountText}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <!-- Set apart in its own strip rather than one more row of the list above, so the total
+                             reads as a total — the same treatment BOUNTY's total gets. -->
+                        <Border Classes="totals" IsVisible="{Binding HasEnemyFigures}">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Classes="label" Text="TOTAL" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Classes="money total" Text="{Binding EnemyTotalCountText}"/>
+                            </Grid>
+                        </Border>
                         <!-- Not folded together on type: two runs that each saw the same enemy keep their own row
                              and their own first/last window. -->
                         <ItemsControl x:Name="EnemyList" ItemsSource="{Binding EnemyRows}">
@@ -210,10 +262,28 @@
                                   IsChecked="{Binding Bounty.IsExpanded, Mode=TwoWay}"/>
                     <Border Classes="sectionbody" IsVisible="{Binding Bounty.IsExpanded}">
                         <StackPanel>
-                            <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasBountyFigures}">
-                                <TextBlock Text="BOUNTY"/>
-                                <TextBlock Grid.Column="1" Text="{Binding BountyText}"/>
-                            </Grid>
+                            <!-- One row per character — the same breakdown FLEET already gives for participation
+                                 (ET-210 review finding, 2026-09-09: a multi-character activity showed one combined
+                                 figure and no way to tell who brought in what). -->
+                            <ItemsControl x:Name="BountyList" ItemsSource="{Binding BountyRows}"
+                                          IsVisible="{Binding HasBountyFigures}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vr:ActivityBountyRowViewModel">
+                                        <Grid Classes="kv" ColumnDefinitions="*,Auto">
+                                            <TextBlock Text="{Binding CharacterText}"/>
+                                            <TextBlock Grid.Column="1" Classes="money" Text="{Binding IskText}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <!-- Set apart in its own strip rather than one more row of the list above, so the total
+                                 reads as a total. -->
+                            <Border Classes="totals" IsVisible="{Binding HasBountyFigures}">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Classes="label" Text="TOTAL" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Classes="money total" Text="{Binding BountyText}"/>
+                                </Grid>
+                            </Border>
                             <TextBlock x:Name="BountyEmpty" Classes="hint" TextWrapping="Wrap"
                                        IsVisible="{Binding BountyEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
                                        Text="{Binding BountyEmptyText}"/>

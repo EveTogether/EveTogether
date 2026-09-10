@@ -20,6 +20,7 @@ using EveUtils.Shared.Modules.Gamelog.Dtos;
 using EveUtils.Shared.Modules.Gamelog.Events;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Gamelog.Repositories;
+using EveUtils.Shared.Modules.Runs.Events;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using EveUtils.Shared.DependencyInjection;
@@ -128,6 +129,17 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         // the other gap: TokenRefreshedEvent only fires on a real status transition, never on the 60 s loop
         // re-confirming a healthy token, so this cannot turn into a rebuild storm of its own.
         _eventBus.Subscribe<TokenRefreshedEvent>(evt => _ = MapRegisteredCharacterAsync(evt.Data.CharacterId));
+
+        // A run's own bounty meter is meant to count only what THIS run earned — the doc on Sample() below has
+        // always said so — but _fleetRunBounty was never reset anywhere, so it kept accumulating for as long as a
+        // character stayed in the fleet. A second run in the same fleet inherited the first run's bounty on top of
+        // its own (found 2026-09-09 testing ET-210: one pilot who had been in the fleet since an earlier run showed
+        // several million ISK more than four alts who had only just joined it). Reset per run, not per membership.
+        _eventBus.Subscribe<RunStartedEvent>(evt =>
+        {
+            if (evt.Data.FleetId is { } fleetId)
+                _fleetRunBounty[(fleetId, checked((int)evt.Data.CharacterId))] = 0;
+        });
 
         _ = Task.Run(() => RemotePublishLoopAsync(CancellationToken.None)); // steady remote sample stream
     }
@@ -446,8 +458,8 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
             }
         }
 
-        // Bounty is per fleet RUN: only ISK earned since this character started participating in this fleet (the
-        // persisted lifetime total stays out of the fleet meter).
+        // Bounty is per fleet RUN: only ISK earned since THIS run started (reset on RunStartedEvent, in the
+        // constructor) — the persisted lifetime total stays out of the fleet meter, and so does an earlier run's.
         var bounty = (double)_fleetRunBounty.GetValueOrDefault((fleetId, characterId));
 
         // Every combat rate every tick — including zero — so each live graph line decays back to zero when it stops.
@@ -496,6 +508,15 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         MetricsChanged?.Invoke();
         await PersistAsync(name);
     }
+
+    /// <summary>This character's own bounty for the run currently going in this fleet — the same figure
+    /// <see cref="Sample"/> publishes, read directly. What a run's SAVE uses to give a character who is not the
+    /// acting one in an activity window their own bounty line (ET-210 review finding, 2026-09-09): that window never
+    /// watches a sibling's gamelog, so without this a saved group activity carried only the acting character's
+    /// bounty and the other participants' showed none at all — one payout total rather than the detail an observed
+    /// line gives, but the group's sum is what SAVE, and the activity summary that sums every run in the group, need
+    /// to be right.</summary>
+    public long GetFleetRunBounty(long fleetId, int characterId) => _fleetRunBounty.GetValueOrDefault((fleetId, characterId));
 
     // Attribute a kill's bounty to every fleet this character is participating in right now, so the fleet meter counts
     // only ISK earned during the run — a kill landed before joining (not participating) is never added.

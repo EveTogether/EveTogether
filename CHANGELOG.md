@@ -14,6 +14,36 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- **Starting a run now lets you register it for more than one of your own characters at once.** If
+  several of your EVE clients are open, the "whose run is this?" question at START now lets you tick
+  more than one — useful when multiboxing the same site on several toons. Each ticked character gets
+  its own run, sharing one group. The activity window's character column now switches between the
+  group's own runs — click a toon to bring up their loot, bounty and everything else, so you can
+  register loot against the right character instead of only ever the one you started with. The header
+  chip does the other half: it shows every character the run covers, and clicking it lets you change
+  who a not-yet-started run is filed under, or bring another flying character into one that is already
+  going. STOP and SAVE apply to the whole group of characters together, so one click ends the run — and
+  saves everyone's own bounty, not just the character you started it on — for all of them at once.
+  Saving a multi-character run is also markedly faster than it was, and the SAVE button now shows when
+  it is working instead of appearing to do nothing.
+- Reopening the activity window, or a clipboard copy naming a running site, no longer gets confused
+  when more than one of your characters has a run going at the same time — each is tracked and shown
+  on its own. A character's own bounty meter (shown live on the FLEET panel, and saved with the run)
+  now starts fresh with each new run instead of carrying over an earlier one's payout.
+- A saved activity's **LOCATION and FIT are no longer lost** — both were visible on the run window
+  while it was going, and now actually make it into the saved record instead of reading "not recorded"
+  and "not recognised" afterwards.
+- A saved activity's **BOUNTY** now shows who brought in what, one line per character, with a clearly
+  set-apart total underneath — instead of one combined figure with no breakdown. The activity detail
+  screen also shows a prominent **total ISK** figure right beside the duration, adding up bounty,
+  priced loot and any ISK-form reward the run earned.
+- A saved activity's **ENEMIES** now also breaks down per character, with a group total underneath —
+  each toon keeps its own kill count from its own gamelog, and a hand-typed count survives switching
+  the run window's character column instead of being silently lost.
+- **The run window now shows a running total ISK beside the elapsed-time clock while a run is still
+  going**, the same figure the saved activity's total ISK shows once it's over. For a run covering
+  several of your own characters, this is the whole group's total, not just whichever character the
+  window's character column happens to be showing — and it does not change value when you switch it.
 - **A crash that used to vanish without a trace is now written to the log the moment it happens.** A
   fault on a background thread, or a task nobody was still awaiting, escaped every other net EVE
   Together already had and left nothing behind — there was no way to tell what went wrong, or that
