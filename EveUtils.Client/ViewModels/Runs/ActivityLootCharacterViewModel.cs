@@ -58,10 +58,12 @@ public sealed partial class ActivityLootCharacterViewModel : ObservableObject
         get
         {
             int count = Loot.Captures.Count;
-            string noun = count == 1 ? "capture" : "captures";
-            return $"{(IsCapturesShown ? "Showing" : "Show")} {count} {noun} ({Loot.ExcludedCount} excluded)";
+            return $"{(IsCapturesShown ? "Showing" : "Show")} {count} {(count == 1 ? "capture" : "captures")}";
         }
     }
+
+    /// <summary>The quieter half of the disclosure, in dimmer ink beside it (ET-215 mockup).</summary>
+    public string DisclosureExcludedText => $"({Loot.ExcludedCount} excluded)";
 
     public string DisclosureChevron => IsCapturesShown ? "▾" : "▸";
 
@@ -85,7 +87,7 @@ public sealed partial class ActivityLootCharacterViewModel : ObservableObject
         if (e.PropertyName is nameof(RunLootViewModel.NetIsk))
             OnPropertyChanged(nameof(SubtotalText));
         else if (e.PropertyName is nameof(RunLootViewModel.ExcludedCount))
-            OnPropertyChanged(nameof(DisclosureText));
+            OnPropertyChanged(nameof(DisclosureExcludedText));
         else if (e.PropertyName is nameof(RunLootViewModel.IsReadOnly))
             OnPropertyChanged(nameof(EmptyText));
     }

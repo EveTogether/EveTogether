@@ -51,10 +51,11 @@ public sealed partial class RunLootViewModel : ViewModelBase
     public ObservableCollection<RunLootCaptureRowViewModel> Captures { get; } = [];
 
     /// <summary>The loot as it counts right now, whichever way it was registered: the captures added up, or the
-    /// difference between two cargo holds. One list rather than a stack per capture, and the same
-    /// <see cref="LootTally"/> answer the totals are made of — so a row a pilot can see is a row that counts.
+    /// difference between two cargo holds — one row per kind of item, the same <see cref="LootTally"/> answer the
+    /// totals are made of. Under those, marked <see cref="ActivityLootLineViewModel.IsExcluded"/>, what was copied
+    /// and left out, so every row above the line is a row that counts and nothing left out is out of sight.
     /// </summary>
-    public ObservableCollection<ActivityLootLineViewModel> CountedLines { get; } = [];
+    public ObservableCollection<ActivityLootLineViewModel> ItemRows { get; } = [];
 
     /// <summary>The run whose loot this section shows — set by the window that owns it, which has known the id all
     /// along. This used to ask "which run is running" instead, so the section read the store's guess rather than
@@ -187,6 +188,10 @@ public sealed partial class RunLootViewModel : ViewModelBase
     /// price cache has nothing in it yet and the honest answer is why there are no figures.</summary>
     public string TotalIskLabel => _pricingBasis ?? "Valued at the cached ESI average price per item.";
 
+    /// <summary>Why nothing could be priced at all — the price cache still empty — and only that; the ordinary basis
+    /// of a valuation that worked is not a problem to report.</summary>
+    [ObservableProperty] private string? _pricingProblemText;
+
     public string EntriesWithoutPriceLabel => "Rows without a price";
 
     public string TotalIskDisplay => TotalIsk is { } value ? $"{value:N2} ISK" : "no price";
@@ -201,7 +206,10 @@ public sealed partial class RunLootViewModel : ViewModelBase
 
     /// <summary>The list is open for editing. While it is, the box is the list: what is in it is what "done" will
     /// make the loot.</summary>
-    [ObservableProperty] private bool _isEditingLoot;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanOfferLootEdit))]
+    [NotifyPropertyChangedFor(nameof(CanEditLoot))]
+    private bool _isEditingLoot;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanFinishLootEdit))]
@@ -220,8 +228,10 @@ public sealed partial class RunLootViewModel : ViewModelBase
 
     /// <summary>Correcting the list by hand belongs to the way that has no starting hold. With one, the list is the
     /// difference between two cargo holds — so the thing to correct is those two, in the boxes above, and a
-    /// hand-written list would only be a third answer to a question that already has one.</summary>
-    public bool CanOfferLootEdit => !IsReadOnly && _sde is not null && LootTally.Ends(_TallyCaptures()).Before < 0;
+    /// hand-written list would only be a third answer to a question that already has one. Not while the box is
+    /// already open, either: asking again would throw away what is being typed in it.</summary>
+    public bool CanOfferLootEdit =>
+        !IsReadOnly && !IsEditingLoot && _sde is not null && LootTally.Ends(_TallyCaptures()).Before < 0;
 
     /// <summary><see cref="CanOfferLootEdit"/>, and not while a correction is still being written.</summary>
     public bool CanEditLoot => CanOfferLootEdit && CanCorrect;
@@ -429,10 +439,12 @@ public sealed partial class RunLootViewModel : ViewModelBase
     private Task FinishLootEditAsync() => ReplaceLootWithTextAsync();
 
     /// <summary>The list in the form EVE itself copies — name, tab, quantity — so what comes out of the box can go
-    /// straight back into it, and a row can be pasted in from the game beside the ones already there.</summary>
-    private string _AsPasteText() => string.Join(Environment.NewLine, _counted.Select(line =>
-        $"{_names.GetValueOrDefault(line.ItemTypeId, line.ItemTypeId.ToString(CultureInfo.InvariantCulture))}\t"
-        + (line.Quantity ?? 1).ToString(CultureInfo.InvariantCulture)));
+    /// straight back into it, and a row can be pasted in from the game beside the ones already there. One row per
+    /// kind, the way the table shows it.</summary>
+    private string _AsPasteText() => string.Join(Environment.NewLine, ItemRows
+        .Where(line => !line.IsExcluded)
+        .Select(line => $"{_names.GetValueOrDefault(line.ItemTypeId, line.ItemTypeId.ToString(CultureInfo.InvariantCulture))}\t"
+                        + (line.Quantity ?? 1).ToString(CultureInfo.InvariantCulture)));
 
     partial void OnCargoBeforeTextChanged(string? value) =>
         _TrackCargoWrite(PasteCargoAsync(LootCaptureRole.CargoBefore, value));
@@ -545,6 +557,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
     {
         _unitPrices.Clear();
         _pricingBasis = null;
+        PricingProblemText = null;
         if (_appraisal is null)
             return;
 
@@ -560,6 +573,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
         if (!valued.IsSuccess)
         {
             _pricingBasis = valued.Messages.Count > 0 ? valued.Messages[0].Text : null;
+            PricingProblemText = _pricingBasis;
             return;
         }
 
@@ -592,26 +606,43 @@ public sealed partial class RunLootViewModel : ViewModelBase
         ConsumedIsk = _Sum(_counted.Where(line => line.LootKind == LootKind.Lost));
         NetIsk = LootIsk is null && ConsumedIsk is null ? null : (LootIsk ?? 0m) - (ConsumedIsk ?? 0m);
 
-        // Most valuable first, unpriced last: the one line worth more than the rest together is what a pilot scans
-        // for, and it should not sit wherever the copy happened to put it (ET-215).
-        CountedLines.Clear();
-        foreach (ActivityLootLineViewModel line in _counted
-                     .Select(line => new ActivityLootLineViewModel(line.ItemTypeId,
-                         _names.GetValueOrDefault(line.ItemTypeId, $"type {line.ItemTypeId}"),
-                         line.Quantity, _UnitPrice(line.ItemTypeId), line.LootKind))
-                     .OrderByDescending(line => line.Value.HasValue)
-                     .ThenByDescending(line => line.Value))
-            CountedLines.Add(line);
-        if (CountedLines.Count > 1 && CountedLines[0] is { Value: > 0 } top)
+        // One row per kind of item across every capture (ET-215): EVE puts a stack on the clipboard as loose rows and a
+        // pilot copies the same can more than once, and three rows of Metal Scraps are one fact. Most valuable first,
+        // unpriced last. What was copied and left out follows on rows of its own, so a merge never hides an exclusion
+        // inside a row that still counts.
+        bool everyCaptureCounts = LootTally.Ends(_TallyCaptures()).Before < 0;
+        ActivityLootLineViewModel[] counted = [.. _counted
+            .GroupBy(line => (line.ItemTypeId, line.LootKind))
+            .Select(group => _Row(group.Key.ItemTypeId, group.Key.LootKind, group.Sum(line => line.Quantity ?? 1),
+                isExcluded: false, everyCaptureCounts ? _CapturesHolding(group.Key.ItemTypeId, group.Key.LootKind, isExcluded: false) : 1))
+            .OrderByDescending(row => row.Value.HasValue)
+            .ThenByDescending(row => row.Value)];
+        ActivityLootLineViewModel[] excluded = [.. Captures
+            .Where(capture => capture.IsExcluded)
+            .SelectMany(capture => capture.Entries)
+            .GroupBy(entry => (entry.ItemTypeId, entry.LootKind))
+            .Select(group => _Row(group.Key.ItemTypeId, group.Key.LootKind, group.Sum(entry => entry.Quantity ?? 1),
+                isExcluded: true, _CapturesHolding(group.Key.ItemTypeId, group.Key.LootKind, isExcluded: true)))
+            .OrderByDescending(row => row.Value.HasValue)
+            .ThenByDescending(row => row.Value)];
+        ItemRows.Clear();
+        foreach (ActivityLootLineViewModel row in counted.Concat(excluded))
+        {
+            row.IsAlternate = ItemRows.Count % 2 == 1;
+            ItemRows.Add(row);
+        }
+        if (counted.Length > 1 && counted[0] is { Value: > 0 } top)
             top.IsTopValue = true;
         if (_images is not null)
-            foreach (ActivityLootLineViewModel line in CountedLines)
+            foreach (ActivityLootLineViewModel line in ItemRows)
                 _ = line.LoadIconAsync(_images);
 
         foreach (RunLootCaptureRowViewModel capture in Captures)
         {
-            capture.SubtotalDisplay = _Display(_Sum(
-                capture.Entries.Select(entry => new LootTallyLine(entry.ItemTypeId, entry.Quantity, Volume: null, entry.LootKind))));
+            decimal? subtotal = _Sum(
+                capture.Entries.Select(entry => new LootTallyLine(entry.ItemTypeId, entry.Quantity, Volume: null, entry.LootKind)));
+            capture.SubtotalDisplay = _Display(subtotal);
+            capture.SubtotalAmountText = subtotal is { } amount ? $"{amount:N2}" : "no price";
             capture.Lines = [.. capture.Entries.Select(entry => new ActivityLootLineViewModel(
                 entry.ItemTypeId, entry.Name, entry.Quantity, _UnitPrice(entry.ItemTypeId), entry.LootKind))];
         }
@@ -633,6 +664,14 @@ public sealed partial class RunLootViewModel : ViewModelBase
             [.. capture.Entries.Select(entry => new LootTallyLine(entry.ItemTypeId, entry.Quantity, Volume: null, entry.LootKind))]))];
 
     private decimal? _UnitPrice(int itemTypeId) => _unitPrices.TryGetValue(itemTypeId, out decimal price) ? price : null;
+
+    private ActivityLootLineViewModel _Row(int itemTypeId, LootKind lootKind, long quantity, bool isExcluded, int captureCount) =>
+        new(itemTypeId, _names.GetValueOrDefault(itemTypeId, $"type {itemTypeId}"), quantity, _UnitPrice(itemTypeId),
+            lootKind, isExcluded, captureCount);
+
+    private int _CapturesHolding(int itemTypeId, LootKind lootKind, bool isExcluded) =>
+        Captures.Count(capture => capture.IsExcluded == isExcluded
+                                  && capture.Entries.Any(entry => entry.ItemTypeId == itemTypeId && entry.LootKind == lootKind));
 
     /// <summary>A market price is per unit, so the quantity is what turns it into a line value. No quantity column
     /// means one of it — the same reading <c>SdeInventoryResolver</c> takes.</summary>

@@ -209,8 +209,8 @@ public sealed class ActivityDetailTests
 
     /// <summary>AC-4: an excluded capture keeps its row and counts towards nothing. Counter-proof: filter excluded
     /// captures out of the list — the total still adds up, and this goes red because the capture is gone. Leaving
-    /// out is not the same as not counting. Since ET-215 the captures sit behind their character's disclosure, so it
-    /// is opened first; Tritanium then reads three times — once in the counted list, once on each capture.</summary>
+    /// out is not the same as not counting. Since ET-215 the item table is one row per kind: the counted Tritanium, and
+    /// under it a struck-through row for the excluded copy; the captures behind them are opened to be read too.</summary>
     [AvaloniaFact]
     public async Task ExcludedCapture_StaysOnScreen_AndDoesNotCount()
     {
@@ -242,8 +242,9 @@ public sealed class ActivityDetailTests
 
         Assert.Contains(texts, text => text == $"{300m:N2} ISK");            // 100 x 3 once, not twice
         Assert.Contains(texts, text => text == "EXCLUDED");
-        Assert.Contains(texts, text => text == "not added · identical to #1");
-        Assert.Equal(3, texts.Count(text => text == "Tritanium"));           // the list, and both captures under it
+        Assert.Contains(texts, text => text == "excluded — repeat of #1");
+        Assert.Equal(2, texts.Count(text => text == "Tritanium"));           // counted, and left out — both still listed
+        Assert.Equal(2, texts.Count(text => text == "Tritanium ×3"));        // and both captures under them
     }
 
     /// <summary>AC-5: two runs in one activity that each sighted the same enemy type stay two rows, each with its

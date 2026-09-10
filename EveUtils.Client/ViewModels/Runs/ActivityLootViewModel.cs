@@ -51,25 +51,28 @@ public sealed partial class ActivityLootViewModel : ObservableObject
 
     public string NetIskDisplay => _Display(NetIsk);
 
-    /// <summary>"2 characters · 9 items · 11 captures · 2 excluded" — what the section holds before any of it is
-    /// opened.</summary>
+    /// <summary>"2 CHARACTERS · 9 ITEMS · 11 CAPTURES · 2 EXCLUDED" — what the section holds before any of it is
+    /// opened, in the mockup's capitals. An item is a kind of item that counts, however many copies it came in.</summary>
     public string SummaryText
     {
         get
         {
             int characters = Characters.Count;
-            int items = Characters.Sum(block => block.Loot.CountedLines.Count);
+            int items = Characters.Sum(block => block.Loot.ItemRows.Count(row => !row.IsExcluded));
             int captures = Characters.Sum(block => block.Loot.Captures.Count);
             int excluded = Characters.Sum(block => block.Loot.ExcludedCount);
-            return $"{characters} {(characters == 1 ? "character" : "characters")} · {items} {(items == 1 ? "item" : "items")} · "
-                   + $"{captures} {(captures == 1 ? "capture" : "captures")} · {excluded} excluded";
+            return $"{characters} {(characters == 1 ? "CHARACTER" : "CHARACTERS")} · {items} {(items == 1 ? "ITEM" : "ITEMS")} · "
+                   + $"{captures} {(captures == 1 ? "CAPTURE" : "CAPTURES")} · {excluded} EXCLUDED";
         }
     }
 
-    /// <summary>What the figures are, in the words of whoever priced them — the same line the run window always
-    /// showed, including the reason when the price cache is still empty.</summary>
-    public string PricingText => Characters.FirstOrDefault()?.Loot.TotalIskLabel
-                                 ?? "Valued at the cached ESI average price per item.";
+    /// <summary>What the figures are, in the mockup's own words under the totals.</summary>
+    public string PricingText => "Valued per type id from the cached ESI average price, never from the copied ISK column.";
+
+    /// <summary>Why there are no figures, when the price cache has nothing in it yet — said, not left to three
+    /// "no price" lines.</summary>
+    public string? PricingProblemText => Characters.Select(block => block.Loot.PricingProblemText)
+        .FirstOrDefault(problem => problem is not null);
 
     /// <summary>Counted, not hidden: a row the lookup has no price for is not worth nothing, it is worth something
     /// nobody has told us (ET-159 AC-2).</summary>
@@ -137,7 +140,7 @@ public sealed partial class ActivityLootViewModel : ObservableObject
         if (e.PropertyName is nameof(RunLootViewModel.NetIsk) or nameof(RunLootViewModel.LootIsk)
             or nameof(RunLootViewModel.ConsumedIsk) or nameof(RunLootViewModel.EntriesWithoutPrice)
             or nameof(RunLootViewModel.ExcludedCount) or nameof(RunLootViewModel.HasCaptures)
-            or nameof(RunLootViewModel.TotalIskLabel))
+            or nameof(RunLootViewModel.PricingProblemText))
             _RefreshFigures();
     }
 
@@ -153,7 +156,7 @@ public sealed partial class ActivityLootViewModel : ObservableObject
         OnPropertyChanged(nameof(ConsumedIskDisplay));
         OnPropertyChanged(nameof(NetIskDisplay));
         OnPropertyChanged(nameof(SummaryText));
-        OnPropertyChanged(nameof(PricingText));
+        OnPropertyChanged(nameof(PricingProblemText));
         OnPropertyChanged(nameof(LinesWithoutPriceText));
         OnPropertyChanged(nameof(HasCharacters));
         OnPropertyChanged(nameof(HasCaptures));

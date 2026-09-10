@@ -53,19 +53,21 @@ taken from the matching `## vX.Y.Z` section below.
   it now asks whose loot it is instead of guessing or filing it under the wrong run.
 - **The LOOT section is now grouped by character, on both the run window and a saved activity.** Each
   character gets a header with their portrait, name and what their loot came to, then the items it is
-  made of — most valuable first, with the one item carrying most of the haul marked out — and, folded
-  away until you open it, every copy behind that subtotal with what it was worth on its own. The
-  group's total sits underneath everything. An activity saved before loot was filed per character
-  still reads fine: its loot shows under the character whose run it was recorded on, with nothing
-  shared out afterwards that was never recorded that way.
+  made of — one line per kind of item however many copies it came in (three Metal Scraps read as one
+  line of three), most valuable first, with the one item carrying most of the haul marked out. A copy
+  you left out stays listed on its own struck-through line underneath, so it is never hidden inside a
+  line that still counts. Folded away until you open it is every copy behind that subtotal, with a
+  switch to count or leave out each one. The group's total sits underneath everything. An activity
+  saved before loot was filed per character still reads fine: its loot shows under the character whose
+  run it was recorded on, with nothing shared out afterwards that was never recorded that way.
 - **You can now correct the loot of an activity you already saved.** On the saved activity's screen,
   leave out a copy that should not have counted, count one again, or rewrite a character's whole loot
   list by hand — the same corrections the run window always offered, now available after the fact for
   when you only spot the mistake once the totals are in. Every figure made of it moves at once: the
   character's subtotal, the group total, the total ISK at the top and the day's total on the runs
   screen. Only your own characters' runs can be corrected; a fleetmate's run that came in from a
-  server is shown read-only. **Rewrite loot by hand** is now a clear button on each character instead
-  of a small link that was easy to miss.
+  server is shown read-only. **Rewrite loot by hand** is now a clear button right beside each
+  character's name, instead of a small link that was easy to miss.
 - **Correcting an activity you already published says so, and never changes the server's copy on its
   own.** The saved activity's screen and its row on the runs screen both tell you the server still has
   the old figures, and the screen offers **Publish again** right there — nothing is sent until you
