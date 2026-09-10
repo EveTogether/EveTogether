@@ -61,4 +61,20 @@ public static class IskFormat
             _ => sign + size.ToString("N0", CultureInfo.InvariantCulture)
         };
     }
+
+    /// <summary>Signed short form with a k/M/B tier, always one decimal at every tier ("894.4k", "4.2M", "1.0B") —
+    /// a fixed width for a dashboard summary chip, unlike <see cref="Compact"/>'s trimmed decimals which read
+    /// "1k" instead of "1.0k". Unit-free; the caller supplies "ISK" itself.</summary>
+    public static string CompactStable(decimal value)
+    {
+        string sign = value < 0 ? "-" : string.Empty;
+        decimal size = Math.Abs(value);
+        return size switch
+        {
+            >= 1_000_000_000m => sign + (size / 1_000_000_000m).ToString("0.0", CultureInfo.InvariantCulture) + "B",
+            >= 1_000_000m => sign + (size / 1_000_000m).ToString("0.0", CultureInfo.InvariantCulture) + "M",
+            >= 1_000m => sign + (size / 1_000m).ToString("0.0", CultureInfo.InvariantCulture) + "k",
+            _ => sign + Number(size)
+        };
+    }
 }

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Dtos;
 
@@ -90,7 +91,7 @@ public partial class CharacterMetricsRowViewModel : ViewModelBase
     public void Refresh(CharacterMetricsSnapshot s)
     {
         BountyValue = s.BountyTotal;
-        Bounty = $"{s.BountyTotal:N0} ISK";
+        Bounty = IskFormat.Whole(s.BountyTotal);
         Kills = s.Kills.ToString();
         // Straight onto the shared readout. Null stays null — "we have no system for them", which is a different
         // thing from the "—" this window prints, and only the display layer may turn one into the other.
@@ -98,7 +99,7 @@ public partial class CharacterMetricsRowViewModel : ViewModelBase
         Dps.AbyssalAnchorUtc = s.AbyssalAnchor;
         Dps.LocationUnavailableReason = s.LocationUnavailableReason;
         OnPropertyChanged(nameof(LocationDisplay)); // 1 Hz path: the countdown moves even when nothing else does
-        IskPerHour = s.Duration.TotalMinutes < 1 ? "—" : $"{s.IskPerHour:N0} ISK/h";
+        IskPerHour = s.Duration.TotalMinutes < 1 ? "—" : $"{IskFormat.Number((decimal)s.IskPerHour)} ISK/h";
         HitRate = s.Shots == 0 ? "—" : $"{s.HitRate * 100:0}%  ({s.Hits}/{s.Shots})";
         Damage = $"dealt {s.TotalDealt:N0} · received {s.TotalReceived:N0}";
         PeakDps = $"{s.PeakDealtDps:0} dps peak";

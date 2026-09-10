@@ -933,7 +933,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public string BountyText => IsInsideAbyssal
         ? "— no bounty in abyssal space"
-        : BountyIsk > 0 ? $"{BountyIsk:N0} ISK — own character" : "no payouts yet — own character";
+        : BountyIsk > 0 ? $"{IskFormat.Whole(BountyIsk)} — own character" : "no payouts yet — own character";
 
     /// <summary>Whether there is a copied signature behind this run at all. A run started by hand has none, and a
     /// row that can only ever read "not known yet" is worse than no row.</summary>
