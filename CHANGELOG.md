@@ -14,6 +14,11 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- **An activity can now be deleted from the runs overview.** A DELETE button on each row asks you to
+  confirm first, naming the site, how many pilots flew it and how much ISK it earned — and, if it was
+  already published to a server, says that deleting it here only removes your own local copy, never
+  the server's. Deleting a multi-character activity removes every character's run, not just one, and
+  the day's totals update immediately. A toast confirms the delete and offers an **Undo** right after.
 - **Starting a run now lets you register it for more than one of your own characters at once.** If
   several of your EVE clients are open, the "whose run is this?" question at START now lets you tick
   more than one — useful when multiboxing the same site on several toons. Each ticked character gets
