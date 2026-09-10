@@ -76,7 +76,7 @@ public static partial class ClipboardMissionParser
             // the location row lives in the Objectives block where this branch never runs (block == None there).
             if (block != RewardBlock.None && line.Length > 0 && char.IsWhiteSpace(line[0]))
             {
-                rewards.Add(ParseReward(line, LastTabField(line), block == RewardBlock.Rewards ? RunParameterKey.Isk : RunParameterKey.BonusIsk));
+                rewards.Add(ParseReward(rawLine, LastTabField(line), block == RewardBlock.Rewards ? RunParameterKey.Isk : RunParameterKey.BonusIsk));
                 continue;
             }
 

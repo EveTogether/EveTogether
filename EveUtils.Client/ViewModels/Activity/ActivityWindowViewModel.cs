@@ -436,7 +436,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     // every kind but Mission, same as Run.AgentId/MissionLevel themselves. The system comes from the agent's own
     // station, never from the clipboard text (ET-172 sub 4 AC-4) — there is no location text to parse anyway.
     public int? MissionAgentId { get; set; }
-    public int? MissionLevel { get; set; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsMissionLevelShown))]
+    [NotifyPropertyChangedFor(nameof(MissionLevelText))]
+    private int? _missionLevel;
     public int? MissionSolarSystemId { get; set; }
 
     public bool IsMissionLevelShown => Kind == ActivityKind.Mission && MissionLevel is not null;

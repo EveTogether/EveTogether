@@ -728,12 +728,22 @@ public class ActivityWindowTests
     }
 
     [AvaloniaTheory]
-    [InlineData(ActivityKind.Mission)]
-    [InlineData(ActivityKind.Abyssal)]
-    public void HeaderChips_ShowTheMissionLevelOrAbyssalWeatherAndTier(ActivityKind kind)
+    [InlineData(ActivityKind.Mission, false)]
+    [InlineData(ActivityKind.Mission, true)]
+    [InlineData(ActivityKind.Abyssal, false)]
+    public void HeaderChips_ShowTheMissionLevelOrAbyssalWeatherAndTier(ActivityKind kind, bool levelArrivesAfterOpening)
     {
-        var model = new ActivityWindowViewModel(kind, _Unused()) { MissionLevel = 4, WeatherIndex = 0, TierIndex = 0 };
+        var model = new ActivityWindowViewModel(kind, _Unused()) { WeatherIndex = 0, TierIndex = 0 };
+        if (!levelArrivesAfterOpening)
+            model.MissionLevel = 4;
+
         ActivityWindow window = _Open(model, expanded: false);
+
+        if (levelArrivesAfterOpening)
+        {
+            model.MissionLevel = 4;
+            Dispatcher.UIThread.RunJobs();
+        }
 
         Border level = window.FindControl<Border>("MissionLevelChip")
             ?? throw new Xunit.Sdk.XunitException("the mission level chip was not rendered");

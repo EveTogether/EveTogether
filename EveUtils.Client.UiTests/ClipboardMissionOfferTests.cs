@@ -66,9 +66,12 @@ public sealed class ClipboardMissionOfferTests
         env.Sde.AddAgent(AralinJick);
         await env.AddCharacterAsync();
 
+        ActivityWindowViewModel? open = null;
         if (windowAlreadyOpen)
-            env.Dialogs.ShowActivityWindow(new ActivityWindowViewModel(ActivityKind.Mission, env.Services),
-                RunWindowOpenTrigger.LocalUser);
+        {
+            open = new ActivityWindowViewModel(ActivityKind.Mission, env.Services);
+            env.Dialogs.ShowActivityWindow(open, RunWindowOpenTrigger.LocalUser);
+        }
 
         env.Copy(MeasuredMissionBlock);
         Run run = await WaitForRunningMissionAsync(env);
@@ -77,6 +80,11 @@ public sealed class ClipboardMissionOfferTests
         Assert.Equal(4, run.MissionLevel);                                    // AC-3
         Assert.Equal(30005040, run.SolarSystemId);                            // AC-4 — not the "0,6" in the text
         Assert.Equal(SiteTypeSource.Mission, run.SiteTypeSource);             // AC-5
+        if (open is not null)
+        {
+            await open.LastMission;
+            Assert.Equal("Level 4", open.MissionLevelText);
+        }
 
         // AC-7: the arc-ness is not stored redundantly — it is read back through the very agent id the run carries.
         SdeAgent? agent = env.Sde.GetAgent(run.AgentId!.Value);
@@ -161,13 +169,13 @@ public sealed class ClipboardMissionOfferTests
         await env.AddCharacterAsync();
 
         const string rawLine = " \tMysterious reward\t ";
-        env.Copy(_MissionCapture(rawLine));
+        env.Copy(_MissionCapture(rawLine, " \t1.000.000 ISK\t"));
         Run run = await WaitForRunningMissionAsync(env);
         await using ClientDbContext db = await env.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
         RunParameter parameter = await db.Set<RunParameter>().SingleAsync(parameter => parameter.RunId == run.Id);
 
         Assert.Equal(RunParameterKey.Unknown, parameter.ParameterKey);
-        Assert.Equal(rawLine, parameter.TypedValue);
+        Assert.Equal(rawLine + "\r", parameter.TypedValue);
     }
 
     [AvaloniaTheory]
