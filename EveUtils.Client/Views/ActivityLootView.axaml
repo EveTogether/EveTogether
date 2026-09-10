@@ -1,0 +1,402 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="680" d:DesignHeight="600"
+             x:Class="EveUtils.Client.Views.ActivityLootView"
+             x:DataType="vr:ActivityLootViewModel">
+
+    <!-- ET-215, variant 3 of the loot mockups: per character a header with portrait, name and subtotal, the items it is
+         made of, the captures behind it folded away, and the group's total under everything. Every colour is a theme
+         brush, so all four faction themes carry it; dimmed ink is only ever put on the plain row background, never on
+         the accent-tinted strips, where it would fall under 4.5:1. -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.money">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.money.total">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+        <Style Selector="TextBlock.item">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="TextBlock.charname">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="TextBlock.badge">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="LetterSpacing" Value="1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.badge.warn">
+            <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+        </Style>
+
+        <Style Selector="Border.totals">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="Margin" Value="0,2,0,4"/>
+        </Style>
+        <Style Selector="Border.grouptotal">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Margin" Value="0,6,0,0"/>
+        </Style>
+        <Style Selector="Border.charblock">
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="0,8,0,10"/>
+        </Style>
+        <!-- The line that carries most of a character's loot. Bright ink only on this tint. -->
+        <Style Selector="Grid.lootline.top">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        </Style>
+        <Style Selector="Grid.lootline.top TextBlock.money">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <!-- ── A capture ── still there and still readable when it does not count: dimmed ink on the plain row
+             background, its subtotal struck through, and the reason written out beside it. Declared after .money so
+             it wins. -->
+        <Style Selector="Border.capture">
+            <Setter Property="Background" Value="{StaticResource BgRowBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="9,6"/>
+            <Setter Property="Margin" Value="0,0,0,5"/>
+        </Style>
+        <Style Selector="Border.capture TextBlock.capnum">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Border.capture TextBlock.capline">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+        </Style>
+        <Style Selector="Border.capture.excluded TextBlock.capnum">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        </Style>
+        <Style Selector="Border.capture.excluded TextBlock.capline">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        </Style>
+        <Style Selector="Border.capture.excluded TextBlock.badge">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        </Style>
+        <Style Selector="Border.capture.excluded TextBlock.money">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="TextDecorations" Value="Strikethrough"/>
+        </Style>
+        <Style Selector="Border.capture.excluded TextBlock.badge.warn">
+            <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+        </Style>
+        <Style Selector="Border.capturestrip">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="2,0,0,0"/>
+            <Setter Property="Padding" Value="10,0,0,0"/>
+            <Setter Property="Margin" Value="4,0,0,4"/>
+        </Style>
+
+        <!-- ── The disclosure ── says what clicking it does next. The stock theme paints an accent plate on a checked
+             ToggleButton; that plate is taken off here, since an open list is not a pressed setting. -->
+        <Style Selector="ToggleButton.disclosure">
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="Margin" Value="0,4,0,4"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="ToggleButton.disclosure /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton.disclosure:checked /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton.disclosure:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+
+        <!-- ── Row actions ── quiet, bordered, and always the same ink: they sit on every capture and must not
+             outshout the figures. -->
+        <Style Selector="Button.rowaction">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="FontSize" Value="10"/>
+        </Style>
+        <Style Selector="Button.rowaction:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.rowaction.reinclude">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        </Style>
+        <Style Selector="Button.rowaction:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        </Style>
+
+        <!-- ── Rewrite by hand ── the one control Jithran asked to be found without looking (ET-215): full-size,
+             plated and bordered in the accent, with its own label rather than a pencil on its own. -->
+        <Style Selector="Button.rewrite">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="LetterSpacing" Value="1.2"/>
+        </Style>
+        <Style Selector="Button.rewrite:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.rewrite:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel>
+        <!-- The group's three figures, as the run window has always shown them: what came in, what was spent, and
+             the net the activity is judged on. -->
+        <Border Classes="totals" IsVisible="{Binding HasCaptures}">
+            <StackPanel Spacing="3">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="label" Text="LOOT" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Classes="money" Text="{Binding LootIskDisplay}"/>
+                </Grid>
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="label" Text="CONSUMED" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Classes="money" Text="{Binding ConsumedIskDisplay}"/>
+                </Grid>
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="label" Text="NET" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Classes="money total" Text="{Binding NetIskDisplay}"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+        <TextBlock Classes="hint" Margin="0" IsVisible="{Binding HasCaptures}" Text="{Binding PricingText}"/>
+        <TextBlock Classes="hint" Margin="0"
+                   IsVisible="{Binding LinesWithoutPriceText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding LinesWithoutPriceText}"/>
+        <TextBlock Classes="label" Margin="0,8,0,0" IsVisible="{Binding HasCaptures}" Text="{Binding SummaryText}"/>
+
+        <ItemsControl ItemsSource="{Binding Characters}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:ActivityLootCharacterViewModel">
+                    <Border Classes="charblock">
+                        <StackPanel>
+                            <!-- ── Who, and what it came to ── -->
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                <Panel Width="20" Height="23" VerticalAlignment="Center">
+                                    <Panel.Clip>
+                                        <PathGeometry Figures="M10,0 L20,5.75 L20,17.25 L10,23 L0,17.25 L0,5.75 Z"/>
+                                    </Panel.Clip>
+                                    <Border Background="{DynamicResource AccentSoftBrush}" IsVisible="{Binding !HasPortrait}">
+                                        <TextBlock Text="{Binding Initial}" FontSize="10" FontWeight="Bold"
+                                                   Foreground="{DynamicResource AccentBrightBrush}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <Image Source="{Binding Portrait}" Stretch="UniformToFill" IsVisible="{Binding HasPortrait}"/>
+                                </Panel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <TextBlock Classes="charname" Text="{Binding CharacterText}"/>
+                                    <Border Classes="chip dim" IsVisible="{Binding Loot.IsReadOnly}"
+                                            ToolTip.Tip="This run came in from a server; only its own pilot can correct it.">
+                                        <TextBlock Text="read-only"/>
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Classes="money total" Text="{Binding SubtotalText}"/>
+                            </Grid>
+
+                            <TextBlock Classes="hint" IsVisible="{Binding !Loot.HasCaptures}" Text="{Binding EmptyText}"/>
+
+                            <!-- ── The items it is made of ── as they count, most valuable first. -->
+                            <ItemsControl ItemsSource="{Binding Loot.CountedLines}" Margin="0,6,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vr:ActivityLootLineViewModel">
+                                        <Grid Classes="lootline" Classes.top="{Binding IsTopValue}"
+                                              ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
+                                            <Panel Width="16" Height="16" Margin="4,2,0,2" VerticalAlignment="Center">
+                                                <Border Background="{DynamicResource AccentSoftBrush}" IsVisible="{Binding !HasIcon}">
+                                                    <TextBlock Text="{Binding Initial}" FontSize="9" FontWeight="Bold"
+                                                               Foreground="{DynamicResource AccentBrightBrush}"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <Image Source="{Binding Icon}" IsVisible="{Binding HasIcon}"/>
+                                            </Panel>
+                                            <TextBlock Grid.Column="1" Classes="item" Text="{Binding Name}"/>
+                                            <TextBlock Grid.Column="2" Classes="label" VerticalAlignment="Center"
+                                                       Text="SPENT" IsVisible="{Binding IsLost}"/>
+                                            <TextBlock Grid.Column="3" Classes="money" MinWidth="44" Text="{Binding QuantityText}"/>
+                                            <TextBlock Grid.Column="4" Classes="money" MinWidth="118" Margin="0,0,4,0"
+                                                       Text="{Binding ValueText}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- ── Every capture behind the subtotal ── folded until asked for. -->
+                            <ToggleButton Classes="disclosure" IsVisible="{Binding Loot.HasCaptures}"
+                                          IsChecked="{Binding IsCapturesShown, Mode=TwoWay}">
+                                <TextBlock>
+                                    <Run Text="{Binding DisclosureChevron}"/>
+                                    <Run Text=" "/>
+                                    <Run Text="{Binding DisclosureText}"/>
+                                </TextBlock>
+                            </ToggleButton>
+                            <Border Classes="capturestrip" IsVisible="{Binding IsCapturesShown}">
+                                <ItemsControl ItemsSource="{Binding Loot.Captures}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="vr:RunLootCaptureRowViewModel">
+                                            <Border Classes="capture" Classes.excluded="{Binding IsExcluded}">
+                                                <StackPanel Spacing="3">
+                                                    <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
+                                                        <TextBlock Classes="capnum" FontFamily="{StaticResource MonoFont}"
+                                                                   VerticalAlignment="Center" Text="{Binding NumberDisplay}"/>
+                                                        <TextBlock Grid.Column="1" Classes="badge" Text="{Binding CapturedAtText}"/>
+                                                        <WrapPanel Grid.Column="2" VerticalAlignment="Center">
+                                                            <TextBlock Classes="badge" Margin="0,0,8,0" Text="{Binding SourceText}"/>
+                                                            <TextBlock Classes="badge" Margin="0,0,8,0" Text="{Binding RoleText}"/>
+                                                            <TextBlock Classes="badge warn" Margin="0,0,8,0" Text="EXCLUDED"
+                                                                       IsVisible="{Binding IsExcluded}"/>
+                                                        </WrapPanel>
+                                                        <TextBlock Grid.Column="3" Classes="money" Text="{Binding SubtotalDisplay}"/>
+                                                    </Grid>
+                                                    <ItemsControl ItemsSource="{Binding Lines}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate DataType="vr:ActivityLootLineViewModel">
+                                                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                                                    <TextBlock Classes="capline" TextTrimming="CharacterEllipsis"
+                                                                               Text="{Binding Name}"/>
+                                                                    <TextBlock Grid.Column="1" Classes="money" FontSize="10.5"
+                                                                               Text="{Binding QuantityText}"/>
+                                                                    <TextBlock Grid.Column="2" Classes="money" FontSize="10.5" MinWidth="110"
+                                                                               Text="{Binding ValueText}"/>
+                                                                </Grid>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    <TextBlock Classes="hint" Margin="0" Text="ADDED BELOW THE LIST"
+                                                               IsVisible="{Binding IsAddedAfterEdit}"/>
+                                                    <!-- Why it counts or not, in words, then the one action that changes
+                                                         it. A repeat carries its own way back in, named for what it is. -->
+                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                        <TextBlock Classes="hint" Margin="0" VerticalAlignment="Center"
+                                                                   Text="{Binding StateText}"/>
+                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                                                    IsVisible="{Binding !$parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.IsReadOnly}">
+                                                            <Button Classes="rowaction" Content="{Binding ToggleText}"
+                                                                    IsVisible="{Binding CanLeaveOutOrCountAgain}"
+                                                                    IsEnabled="{Binding $parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.CanCorrect}"
+                                                                    Command="{Binding $parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.ToggleCaptureExcludedCommand}"
+                                                                    CommandParameter="{Binding}"/>
+                                                            <Button Classes="rowaction reinclude" Content="count this repeat anyway"
+                                                                    IsVisible="{Binding CanReinclude}"
+                                                                    IsEnabled="{Binding $parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.CanCorrect}"
+                                                                    Command="{Binding $parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.ReincludeCaptureCommand}"
+                                                                    CommandParameter="{Binding}"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Border>
+
+                            <TextBlock Classes="hint" Margin="0,2,0,0" Text="{Binding Loot.AddedAfterEditNote}"
+                                       IsVisible="{Binding Loot.AddedAfterEditNote, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                            <TextBlock Classes="hint" Margin="0,2,0,0" Text="{Binding Loot.RunStatusMessage}"
+                                       IsVisible="{Binding Loot.RunStatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                            <TextBlock Classes="hint" Margin="0,2,0,0" IsVisible="{Binding Loot.IsBusy}"
+                                       Text="Saving the change and counting the totals again…"/>
+
+                            <!-- ── Rewrite by hand ── replacement, not a correction script: what is in the box is what
+                                 this character's loot becomes, and the captures it replaces stay underneath, excluded. -->
+                            <StackPanel Spacing="4" Margin="0,6,0,0" IsVisible="{Binding Loot.IsEditingLoot}">
+                                <TextBox AcceptsReturn="True" MinHeight="90" TextWrapping="NoWrap"
+                                         FontFamily="{StaticResource MonoFont}"
+                                         PlaceholderText="Name, tab, quantity — one row per line."
+                                         Text="{Binding Loot.LootText, Mode=TwoWay}"/>
+                                <TextBlock Classes="hint" Margin="0" Text="{Binding Loot.LootTextRefusal}"
+                                           IsVisible="{Binding Loot.LootTextRefusal, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Classes="rewrite" Content="{Binding Loot.FinishLootEditText}"
+                                            IsEnabled="{Binding Loot.CanFinishLootEdit}"
+                                            Command="{Binding Loot.FinishLootEditCommand}"/>
+                                    <Button Classes="rowaction" Content="cancel"
+                                            IsEnabled="{Binding !Loot.IsBusy}"
+                                            Command="{Binding Loot.CancelLootEditCommand}"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,6,0,0"
+                                  IsVisible="{Binding !Loot.IsEditingLoot}">
+                                <TextBlock Classes="hint" Margin="0" VerticalAlignment="Center"
+                                           Text="{Binding Loot.ManualListCaption}"/>
+                                <Button Grid.Column="1" Classes="rewrite" Content="✎  REWRITE LOOT BY HAND"
+                                        IsVisible="{Binding Loot.CanOfferLootEdit}"
+                                        IsEnabled="{Binding Loot.CanEditLoot}"
+                                        Command="{Binding Loot.BeginLootEditCommand}"
+                                        ToolTip.Tip="Replace this character's loot with a list you type or paste. The captures it replaces stay below, excluded."/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Under everything: what the whole group brought in. The same figure as NET above, set apart so it reads as
+             the answer to the list rather than one more row of it. -->
+        <Border Classes="grouptotal" IsVisible="{Binding HasCaptures}">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="label" Foreground="{DynamicResource TextAccentBrush}" VerticalAlignment="Center"
+                           Text="GROUP TOTAL"/>
+                <TextBlock Grid.Column="1" Classes="money total" FontSize="15" Text="{Binding NetIskDisplay}"/>
+            </Grid>
+        </Border>
+    </StackPanel>
+</UserControl>

@@ -4,12 +4,13 @@ using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Events;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
-internal sealed class SetRunLootCaptureRoleCommandHandler(IDbContextFactory<ClientDbContext> contextFactory)
+internal sealed class SetRunLootCaptureRoleCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus)
     : ICommandHandler<SetRunLootCaptureRoleCommand, Result>
 {
     public async Task<Result> Handle(SetRunLootCaptureRoleCommand command, CancellationToken cancellationToken = default)
@@ -31,6 +32,9 @@ internal sealed class SetRunLootCaptureRoleCommandHandler(IDbContextFactory<Clie
 
         await RunLootCaptureRoles.AssignAsync(db, capture, command.Role, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
+        // The run window shows this run twice since ET-215 — the starting-hold picker and the run's own block in the
+        // per-character loot — and the block has to follow a new starting hold as much as a new capture.
+        await eventBus.PublishAsync(new RunLootCapturedEvent(capture.RunId), EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 }

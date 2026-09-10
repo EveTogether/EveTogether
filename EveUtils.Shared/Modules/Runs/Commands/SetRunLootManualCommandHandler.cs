@@ -11,15 +11,22 @@ using Microsoft.EntityFrameworkCore;
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
-internal sealed class SetRunLootManualCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus)
+internal sealed class SetRunLootManualCommandHandler(
+    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher)
     : ICommandHandler<SetRunLootManualCommand, Result<Guid>>
 {
     public async Task<Result<Guid>> Handle(SetRunLootManualCommand command, CancellationToken cancellationToken = default)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        Result<Run> opened = await RunLootWrites.OpenRunAsync(db, command.RunId, cancellationToken);
-        if (!opened.IsSuccess)
+        // A saved run takes this too (ET-215): writing the list out is how a pilot corrects loot the clipboard got
+        // wrong, and he often only sees that once the activity is saved and totalled.
+        Result<Run> opened = await RunLootWrites.OpenForCorrectionAsync(db, command.RunId, cancellationToken);
+        if (!opened.IsSuccess || opened.Value is not { } run)
             return Result<Guid>.Failure([.. opened.Messages]);
+
+        bool isSaved = run.State is RunState.Saved;
+        if (isSaved)
+            RunLootWrites.MarkCorrected(run);
 
         List<RunLootCapture> captures = await db.Set<RunLootCapture>()
             .Where(candidate => candidate.RunId == command.RunId)
@@ -63,7 +70,11 @@ internal sealed class SetRunLootManualCommandHandler(IDbContextFactory<ClientDbC
             superseded.IsExcluded = true;
 
         await db.SaveChangesAsync(cancellationToken);
+        if (isSaved)
+            await dispatcher.Send(new RebuildActivitySummariesCommand(command.RunId), cancellationToken);
         await eventBus.PublishAsync(new RunLootCapturedEvent(command.RunId), EventTarget.Local, cancellationToken);
+        if (isSaved)
+            await eventBus.PublishAsync(new RunLootCorrectedEvent(command.RunId), EventTarget.Local, cancellationToken);
         return Result<Guid>.Success(manual.Id);
     }
 }

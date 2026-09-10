@@ -1,16 +1,17 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
+using EveUtils.Client.Imaging;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
-using EveUtils.Shared.Modules.Market.Repositories;
+using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
-using EveUtils.Shared.Modules.Runs.Tally;
 using EveUtils.Shared.Modules.Sde;
 using ActivityKind = EveUtils.Shared.Modules.Runs.Enums.ActivityKind;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
@@ -36,24 +37,34 @@ namespace EveUtils.Client.ViewModels.Runs;
 public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshableModule
 {
     private readonly CqrsDispatcher _dispatcher;
-    private readonly IMarketPriceRepository? _prices;
     private readonly Guid _activitySummaryId;
     private readonly Func<long, string>? _nameOf;
     private readonly IEsiClient? _esi;
     private readonly IEsiLocationClient? _locations;
     private readonly ISdeAccessor? _sde;
+    private readonly IReadOnlySet<long>? _ownCharacterIds;
+    private readonly Func<Task>? _republish;
 
+    /// <param name="ownCharacterIds">This machine's own characters. A run of anyone else came in from a server and is
+    /// shown read-only (ET-215); null treats every run as this machine's own.</param>
+    /// <param name="republish">Publishes this activity again — the runs screen's own PUBLISH, handed down so a
+    /// correction that left the server's copy behind can be answered right where it was made.</param>
     public ActivityDetailViewModel(CqrsDispatcher dispatcher, Guid activitySummaryId,
-        IMarketPriceRepository? prices = null, Func<long, string>? nameOf = null,
-        IEsiClient? esi = null, IEsiLocationClient? locations = null, ISdeAccessor? sde = null)
+        IAppraisalProvider? appraisal = null, Func<long, string>? nameOf = null,
+        IEsiClient? esi = null, IEsiLocationClient? locations = null, ISdeAccessor? sde = null,
+        ICharacterPortraitProvider? portraits = null, ITypeImageProvider? images = null,
+        IReadOnlySet<long>? ownCharacterIds = null, Func<Task>? republish = null)
     {
         _dispatcher = dispatcher;
         _activitySummaryId = activitySummaryId;
-        _prices = prices;
         _nameOf = nameOf;
         _esi = esi;
         _locations = locations;
         _sde = sde;
+        _ownCharacterIds = ownCharacterIds;
+        _republish = republish;
+        LootOverview = new ActivityLootViewModel(() => new RunLootViewModel(dispatcher, appraisal, sde, images), portraits);
+        LootOverview.LootCorrected += () => _ = _ReloadAfterCorrectionAsync();
     }
 
     public ActivitySection Activity { get; } = new() { Title = "ACTIVITY", IsExpanded = true };
@@ -69,8 +80,10 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     public ObservableCollection<ActivityEnemyCharacterRowViewModel> EnemyCharacterRows { get; } = [];
     public ObservableCollection<ActivityRunRowViewModel> RunRows { get; } = [];
     public ObservableCollection<ActivityBountyRowViewModel> BountyRows { get; } = [];
-    public ObservableCollection<ActivityLootCaptureRowViewModel> LootCaptureRows { get; } = [];
-    public ObservableCollection<ActivityLootCharacterRowViewModel> LootCharacterRows { get; } = [];
+
+    /// <summary>The LOOT section, grouped by character and correctable (ET-215) — the same component the run window
+    /// shows, so a saved activity and a running one read the same.</summary>
+    public ActivityLootViewModel LootOverview { get; }
 
     [ObservableProperty] private string _siteText = string.Empty;
     [ObservableProperty] private string _kindText = string.Empty;
@@ -131,19 +144,22 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     [ObservableProperty] private bool _hasBountyFigures;
     [ObservableProperty] private string _bountyText = string.Empty;
 
-    [ObservableProperty] private bool _hasLootFigures;
+    /// <summary>A run of this activity had its loot corrected after it was published (ET-215): the server still
+    /// shows the older figures. Said on the screen for as long as it is true — never left for the pilot to find out
+    /// from someone reading the server — and never fixed by pushing anything on the pilot's behalf.</summary>
+    [ObservableProperty] private bool _isPublishedCopyBehind;
 
-    /// <summary>Whether any participant's own run has a priced capture — the same "no figure for nobody" rule
-    /// <see cref="HasEnemyFigures"/> follows, so the per-character breakdown does not show a false zero for a
-    /// character whose captures had nothing priced yet (ET-211).</summary>
-    [ObservableProperty] private bool _hasLootCharacterFigures;
-    [ObservableProperty] private string _lootIskText = string.Empty;
-    [ObservableProperty] private string _consumedIskText = string.Empty;
-    [ObservableProperty] private string _netIskText = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RepublishText))]
+    [NotifyCanExecuteChangedFor(nameof(RepublishCommand))]
+    private bool _isRepublishing;
 
-    /// <summary>Counted, not hidden: a row the lookup has no price for is not worth nothing, it is worth something
-    /// nobody has told us (ET-159 AC-2).</summary>
-    [ObservableProperty] private string? _linesWithoutPriceText;
+    public string PublishedCopyText =>
+        "Changed since it was published. The server still has the old figures until you publish it again.";
+
+    public bool CanRepublish => _republish is not null;
+
+    public string RepublishText => IsRepublishing ? "PUBLISHING…" : "PUBLISH AGAIN";
 
     [ObservableProperty] private string _participantCountText = string.Empty;
     [ObservableProperty] private string _fleetBasisText = string.Empty;
@@ -168,38 +184,53 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         }
 
         StatusMessage = null;
-        IReadOnlyDictionary<int, decimal> unitPrices = await _UnitPricesAsync(detail.Value, cancellationToken);
         (string? escalationJumpsText, string? escalationJumpsEmptyText) =
             await _EscalationJumpsAsync(detail.Value, cancellationToken);
-        _Apply(detail.Value, unitPrices, escalationJumpsText, escalationJumpsEmptyText);
+        _Apply(detail.Value, escalationJumpsText, escalationJumpsEmptyText);
+        await _ApplyLootBlocksAsync(detail.Value, cancellationToken);
     }
 
     /// <summary>
-    /// Values every loot line by type id through ET's own price cache — the same lookup
-    /// <c>RebuildActivitySummariesCommandHandler</c> used to build the totals this screen shows, so a line and the
-    /// total above it cannot tell different stories. Never <see cref="RunLootEntryDto.ClipboardPrice"/>: that column
-    /// is kept as what the pilot's inventory window happened to show and is never held for a valuation.
+    /// A correction in the LOOT section landed and the summary behind this screen is already rebuilt (the command
+    /// does that, once, before it returns). The block that was corrected re-read itself; what is left is everything
+    /// the summary feeds — TOTAL ISK, the section's own header, and whether the published copy is now behind.
+    /// Nothing else is read again: the other blocks, and the escalation's ESI route, did not change.
     /// </summary>
-    private async Task<IReadOnlyDictionary<int, decimal>> _UnitPricesAsync(
-        ActivityDetailDto detail, CancellationToken cancellationToken)
+    private async Task _ReloadAfterCorrectionAsync()
     {
-        if (_prices is null)
-            return new Dictionary<int, decimal>();
+        Result<ActivityDetailDto> detail = await _dispatcher.Query(new GetActivityDetailQuery(_activitySummaryId));
+        if (!detail.IsSuccess || detail.Value is null)
+        {
+            StatusMessage = detail.Messages.Count > 0 ? detail.Messages[0].Text : "The activity could not be read.";
+            return;
+        }
 
-        List<int> typeIds = [.. detail.Runs
-            .SelectMany(run => run.LootCaptures)
-            .SelectMany(capture => capture.Entries)
-            .Select(entry => entry.ItemTypeId)
-            .Distinct()];
-        if (typeIds.Count == 0)
-            return new Dictionary<int, decimal>();
-
-        IReadOnlyDictionary<int, double> averages = await _prices.GetAveragePricesAsync(typeIds, cancellationToken);
-        return averages.ToDictionary(price => price.Key, price => (decimal)price.Value);
+        _ApplyHeader(detail.Value);
+        _ApplyLoot(detail.Value);
+        _ApplyTotalIsk(detail.Value);
     }
 
-    private void _Apply(ActivityDetailDto detail, IReadOnlyDictionary<int, decimal> unitPrices,
-        string? escalationJumpsText, string? escalationJumpsEmptyText)
+    [RelayCommand(CanExecute = nameof(CanStartRepublish))]
+    private async Task RepublishAsync()
+    {
+        if (_republish is null)
+            return;
+
+        IsRepublishing = true;
+        try
+        {
+            await _republish();
+            await _ReloadAfterCorrectionAsync();
+        }
+        finally
+        {
+            IsRepublishing = false;
+        }
+    }
+
+    private bool CanStartRepublish() => !IsRepublishing;
+
+    private void _Apply(ActivityDetailDto detail, string? escalationJumpsText, string? escalationJumpsEmptyText)
     {
         _ApplyHeader(detail);
         _ApplyActivity(detail);
@@ -207,9 +238,9 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         _ApplyEnemies(detail);
         _ApplyFleet(detail);
         _ApplyBounty(detail);
-        _ApplyLoot(detail, unitPrices);
+        _ApplyLoot(detail);
         _ApplyEscalation(detail, escalationJumpsText, escalationJumpsEmptyText);
-        _ApplySectionsPerKind(detail.ActivityKind);
+        _ApplySectionsPerKind(detail);
         // After Bounty, Loot and Rewards: the total is built from what each of them just settled.
         _ApplyTotalIsk(detail);
     }
@@ -369,81 +400,42 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         TotalIskText = $"{total:N2} ISK";
     }
 
-    private void _ApplyLoot(ActivityDetailDto detail, IReadOnlyDictionary<int, decimal> unitPrices)
+    /// <summary>What the summary says about the loot, and whether the server's copy is still the same. The figures in
+    /// the header are the summary's own — the same numbers the runs overview and TOTAL ISK are made of.</summary>
+    private void _ApplyLoot(ActivityDetailDto detail)
     {
-        LootCaptureRows.Clear();
-        foreach (RunLootCaptureDto capture in detail.Runs.SelectMany(run => run.LootCaptures)
-                     .OrderBy(capture => capture.CapturedAtUtc))
-            LootCaptureRows.Add(new ActivityLootCaptureRowViewModel(capture,
-                [.. capture.Entries.Select(entry => new ActivityLootLineViewModel(entry,
-                    unitPrices.TryGetValue(entry.ItemTypeId, out decimal price) ? price : null))]));
-
-        HasLootFigures = LootCaptureRows.Count > 0;
-        // The totals are the summary's own, already built from this same lookup with the excluded captures left
-        // out — recomputing them here is how a detail starts disagreeing with the row that led to it (ET-160).
-        LootIskText = _IskOrNoPrice(detail.LootIskGained);
-        ConsumedIskText = _IskOrNoPrice(detail.LootIskLost);
-        NetIskText = _IskOrNoPrice(detail.LootIskNet);
-        LootEmptyText = HasLootFigures
+        RunLootCaptureDto[] captures = [.. detail.Runs.SelectMany(run => run.LootCaptures)];
+        LootEmptyText = captures.Length > 0
             ? null
             : "No loot capture was recorded for this activity — nothing was copied, so there is nothing to value.";
-
-        int withoutPrice = LootCaptureRows.Where(capture => !capture.IsExcluded)
-            .SelectMany(capture => capture.Lines).Count(line => !line.HasPrice);
-        LinesWithoutPriceText = withoutPrice switch
-        {
-            0 => null,
-            1 => "1 line has no price in the cache and counts towards nothing.",
-            _ => $"{withoutPrice} lines have no price in the cache and count towards nothing."
-        };
-
-        Loot.HeaderSummary = HasLootFigures
-            ? $"{NetIskText} · {LootCaptureRows.Count} captures · {LootCaptureRows.Count(row => row.IsExcluded)} excluded"
+        Loot.HeaderSummary = captures.Length > 0
+            ? $"{_IskOrNoPrice(detail.LootIskNet)} · {captures.Length} captures · {captures.Count(capture => capture.IsExcluded)} excluded"
             : "nothing captured";
-
-        // One row per character, the same breakdown BOUNTY and ENEMIES already give (ET-211): each participant's
-        // own run now carries only its own copier's captures (ET-130 deel 4), so the same per-run LootTally the
-        // overall figures above are built from can be summed per character instead of over the whole activity.
-        // Largest contribution first, same ordering rule as the bounty breakdown.
-        LootCharacterRows.Clear();
-        foreach ((long characterId, decimal netIsk) in detail.Runs
-                     .GroupBy(run => run.CharacterId)
-                     .Select(group => (group.Key, NetIsk: _CharacterLootNetIsk(group, unitPrices)))
-                     .Where(entry => entry.NetIsk is not null)
-                     .OrderByDescending(entry => entry.NetIsk)
-                     .Select(entry => (entry.Key, NetIsk: entry.NetIsk!.Value)))
-            LootCharacterRows.Add(new ActivityLootCharacterRowViewModel(characterId, netIsk, _nameOf));
-
-        HasLootCharacterFigures = LootCharacterRows.Count > 0;
+        IsPublishedCopyBehind = detail.Runs.Any(run => run.SyncState is RunSyncState.Outdated);
     }
 
-    /// <summary>One character's net loot across every run they hold in this activity — the same per-run
-    /// <see cref="LootTally"/> difference <c>RebuildActivitySummariesCommandHandler</c> uses for the activity-wide
-    /// figure, just grouped by character before it is summed, so the rows and the total above them can never
-    /// disagree.</summary>
-    private static decimal? _CharacterLootNetIsk(
-        IEnumerable<ActivityRunDetailDto> runs, IReadOnlyDictionary<int, decimal> unitPrices)
+    /// <summary>
+    /// One block per run, each showing that run's own captures (ET-215) — the grouping ET-211 made true, since a
+    /// capture now lands on the run of the character who copied it. A run from before that carries the whole
+    /// group's loot and the others carry none, and that is exactly how it is shown: no share is worked out after
+    /// the fact that was never recorded. Largest first on the way in, like BOUNTY and ENEMIES; a later re-read keeps
+    /// the order, so a correction never moves the block the pilot is working in.
+    /// </summary>
+    private async Task _ApplyLootBlocksAsync(ActivityDetailDto detail, CancellationToken cancellationToken)
     {
-        List<LootTallyLine> lines = [.. runs.SelectMany(run => LootTally.Count(_TallyCaptures(run)))];
-        decimal? gained = _CharacterLootValue(lines, LootKind.Gained, unitPrices);
-        decimal? lost = _CharacterLootValue(lines, LootKind.Lost, unitPrices);
-        return gained is null && lost is null ? null : gained.GetValueOrDefault() - lost.GetValueOrDefault();
-    }
+        bool isFirstRead = LootOverview.Characters.Count == 0;
+        foreach (ActivityRunDetailDto run in detail.Runs)
+        {
+            ActivityLootCharacterViewModel block = LootOverview.Show(run.RunId, run.CharacterId,
+                _nameOf?.Invoke(run.CharacterId) ?? $"character {run.CharacterId}");
+            block.Loot.IsLocked = true;
+            block.Loot.IsReadOnly = _ownCharacterIds is { } own && !own.Contains(run.CharacterId);
+            await block.Loot.LoadAsync(run.LootCaptures, cancellationToken);
+        }
 
-    private static IReadOnlyList<LootTallyCapture> _TallyCaptures(ActivityRunDetailDto run) =>
-        [.. run.LootCaptures
-            .OrderBy(capture => capture.CapturedAtUtc)
-            .Select(capture => new LootTallyCapture(capture.Role, capture.IsExcluded,
-                [.. capture.Entries.Select(entry =>
-                    new LootTallyLine(entry.ItemTypeId, entry.Quantity, Volume: null, entry.LootKind))]))];
-
-    private static decimal? _CharacterLootValue(
-        IEnumerable<LootTallyLine> lines, LootKind kind, IReadOnlyDictionary<int, decimal> unitPrices)
-    {
-        decimal[] values = [.. lines
-            .Where(line => line.LootKind == kind && unitPrices.ContainsKey(line.ItemTypeId))
-            .Select(line => unitPrices[line.ItemTypeId] * line.Quantity.GetValueOrDefault())];
-        return values.Length == 0 ? null : values.Sum();
+        LootOverview.Keep([.. detail.Runs.Select(run => run.RunId)]);
+        if (isFirstRead)
+            LootOverview.OrderByValue();
     }
 
     private void _ApplyEscalation(ActivityDetailDto detail, string? escalationJumpsText, string? escalationJumpsEmptyText)
@@ -514,11 +506,12 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     /// a crew even when that crew is one pilot. The other four are a judgment about the kind, overridden whenever
     /// there is data for them, because a table is not a reason to hide a stored row.
     /// </summary>
-    private void _ApplySectionsPerKind(ActivityKind kind)
+    private void _ApplySectionsPerKind(ActivityDetailDto detail)
     {
+        ActivityKind kind = detail.ActivityKind;
         IsRewardsShown = kind == ActivityKind.Mission || RewardRows.Count > 0;
         IsBountyShown = kind is ActivityKind.Abyssal or ActivityKind.Site || HasBountyFigures;
-        IsLootShown = kind is ActivityKind.Abyssal or ActivityKind.Site || LootCaptureRows.Count > 0;
+        IsLootShown = kind is ActivityKind.Abyssal or ActivityKind.Site || detail.Runs.Any(run => run.LootCaptures.Count > 0);
         IsEscalationShown = kind == ActivityKind.Site || EscalationText is not null;
 
         string noun = _KindNoun(kind);

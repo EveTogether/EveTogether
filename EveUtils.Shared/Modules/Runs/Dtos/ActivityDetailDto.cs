@@ -18,12 +18,14 @@ public sealed record RunParameterDto(
 /// <summary>One run within the activity, with its own loot captures — never another run's, and never the loot of
 /// whichever run happens to be running right now. <see cref="TimesCorrectedAtUtc"/> travels along because the
 /// corrected moments are written over the start and stop themselves: without the stamp nothing downstream could
-/// tell this run's duration was typed rather than measured (ET-98).</summary>
+/// tell this run's duration was typed rather than measured (ET-98). <see cref="SyncState"/> travels so the screen can
+/// say when a correction left a published copy behind (ET-215).</summary>
 public sealed record ActivityRunDetailDto(
     Guid RunId, long CharacterId, RunRole Role, bool IsParticipant, bool IsPayoutEligible,
     DateTime StartedAtUtc, DateTime? StoppedAtUtc, DateTime? TimesCorrectedAtUtc,
     int? AgentId, int? MissionLevel, string? Signature, string? FitNameSnapshot,
-    IReadOnlyList<RunLootCaptureDto> LootCaptures);
+    IReadOnlyList<RunLootCaptureDto> LootCaptures,
+    RunSyncState SyncState = RunSyncState.Local);
 
 /// <summary>One activity, fully expanded. The totals (<see cref="LootIskGained"/> etc.) are
 /// <c>ActivitySummary</c>'s own — already computed excluding excluded loot captures — rather than recomputed here,

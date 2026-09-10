@@ -72,6 +72,25 @@
                 <Setter Property="Padding" Value="8,6"/>
                 <Setter Property="Margin" Value="0,2,0,4"/>
             </Style>
+            <!-- Its own class rather than "accent": the stock theme fills an accent button with the faction colour
+                 and puts light text on it, which on the red and green factions falls under 4.5:1. Bright text on the
+                 soft tint holds on all four. -->
+            <Style Selector="Button.republish">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="LetterSpacing" Value="1.2"/>
+            </Style>
+            <Style Selector="Button.republish:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="Button.republish:disabled /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            </Style>
         </DockPanel.Styles>
 
         <!-- ══ Header ══ what this activity was, and how long it took. -->
@@ -114,6 +133,17 @@
                 <TextBlock x:Name="StatusMessage" Classes="hint" Margin="0" TextWrapping="Wrap"
                            IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
                            Text="{Binding StatusMessage}"/>
+                <!-- A correction made after publishing leaves the server's copy behind (ET-215). Said here, where the
+                     TOTAL ISK it changed is, and answered here too — but only ever by the pilot pressing it. -->
+                <Border x:Name="PublishedCopyBehind" Classes="chip warn" HorizontalAlignment="Stretch" CornerRadius="0"
+                        Padding="10,6" IsVisible="{Binding IsPublishedCopyBehind}">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <TextBlock FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"
+                                   Text="{Binding PublishedCopyText}"/>
+                        <Button Grid.Column="1" Classes="republish" Content="{Binding RepublishText}"
+                                IsVisible="{Binding CanRepublish}" Command="{Binding RepublishCommand}"/>
+                    </Grid>
+                </Border>
             </StackPanel>
         </Border>
 
@@ -296,69 +326,9 @@
                                   IsChecked="{Binding Loot.IsExpanded, Mode=TwoWay}"/>
                     <Border Classes="sectionbody" IsVisible="{Binding Loot.IsExpanded}">
                         <StackPanel>
-                            <!-- One row per character — the same breakdown BOUNTY and ENEMIES already give
-                                 (ET-211): loot copied from a character's own client lands on that character's own
-                                 run, so it can finally be broken out here too. No totals strip of its own: the
-                                 LOOT/CONSUMED/NET figures right below already are the group's total. -->
-                            <ItemsControl x:Name="LootCharacterList" ItemsSource="{Binding LootCharacterRows}"
-                                          IsVisible="{Binding HasLootCharacterFigures}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="vr:ActivityLootCharacterRowViewModel">
-                                        <Grid Classes="kv" ColumnDefinitions="*,Auto">
-                                            <TextBlock Text="{Binding CharacterText}"/>
-                                            <TextBlock Grid.Column="1" Classes="money" Text="{Binding IskText}"/>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <!-- The three figures are only drawn when something was captured: a zero here would
-                                 read as a valuation that came out at nothing. -->
-                            <StackPanel IsVisible="{Binding HasLootFigures}">
-                                <Grid Classes="kv" ColumnDefinitions="Auto,*">
-                                    <TextBlock Text="LOOT"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding LootIskText}"/>
-                                </Grid>
-                                <Grid Classes="kv" ColumnDefinitions="Auto,*">
-                                    <TextBlock Text="CONSUMED"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding ConsumedIskText}"/>
-                                </Grid>
-                                <Grid Classes="kv" ColumnDefinitions="Auto,*">
-                                    <TextBlock Text="NET"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding NetIskText}"/>
-                                </Grid>
-                                <TextBlock Classes="hint" Margin="0,6,0,0"
-                                           Text="Valued per type id from the cached ESI average price, never from the copied ISK column."/>
-                                <TextBlock x:Name="LinesWithoutPrice" Classes="hint" Margin="0"
-                                           IsVisible="{Binding LinesWithoutPriceText, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                           Text="{Binding LinesWithoutPriceText}"/>
-                            </StackPanel>
-                            <ItemsControl x:Name="LootList" ItemsSource="{Binding LootCaptureRows}" Margin="0,4,0,0">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="vr:ActivityLootCaptureRowViewModel">
-                                        <StackPanel Spacing="2" Margin="0,4">
-                                            <!-- An excluded capture keeps its row and its lines: leaving it out
-                                                 would balance just as well and lose the fact that it was taken. -->
-                                            <Grid Classes="kv" ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                                                <TextBlock Text="{Binding CapturedAtText}"/>
-                                                <TextBlock Grid.Column="1" Text="{Binding StateText}"/>
-                                            </Grid>
-                                            <ItemsControl ItemsSource="{Binding Lines}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate DataType="vr:ActivityLootLineViewModel">
-                                                        <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                                                            <TextBlock Text="{Binding Name}"/>
-                                                            <TextBlock Grid.Column="1" VerticalAlignment="Center"
-                                                                       Text="{Binding QuantityText}"/>
-                                                            <TextBlock Grid.Column="2" VerticalAlignment="Center"
-                                                                       Text="{Binding ValueText}"/>
-                                                        </Grid>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                            <!-- Grouped by character and correctable after the fact (ET-215) — the same component the
+                                 run window's LOOT section is, so the two read the same. -->
+                            <v:ActivityLootView x:Name="LootOverview" DataContext="{Binding LootOverview}"/>
                             <TextBlock x:Name="LootEmpty" Classes="hint" TextWrapping="Wrap"
                                        IsVisible="{Binding LootEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
                                        Text="{Binding LootEmptyText}"/>

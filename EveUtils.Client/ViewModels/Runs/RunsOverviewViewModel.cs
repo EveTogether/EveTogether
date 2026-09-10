@@ -17,7 +17,7 @@ using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
-using EveUtils.Shared.Modules.Market.Repositories;
+using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -55,6 +55,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private readonly DispatcherTimer? _clock;
     private readonly RunsFleetFilter? _fleetFilter;
     private readonly IDisposable? _runSavedSubscription;
+    private readonly IDisposable? _runLootCorrectedSubscription;
     private readonly IDisposable? _runStartedSubscription;
     private readonly IDisposable? _runRunningStateChangedSubscription;
     private bool _canPublish;
@@ -105,6 +106,10 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         // trust that: post the refresh to the UI thread instead of touching an ObservableCollection off it.
         IEventBus? eventBus = services.GetService<IEventBus>();
         _runSavedSubscription = eventBus?.Subscribe<RunSavedEvent>(
+            evt => Dispatcher.UIThread.Post(() => _ = _OnRunSavedAsync()));
+        // A saved activity's loot corrected on its detail screen (ET-215) moves its row's net and its day's total just
+        // as much as a save does, and the same refill answers it.
+        _runLootCorrectedSubscription = eventBus?.Subscribe<RunLootCorrectedEvent>(
             evt => Dispatcher.UIThread.Post(() => _ = _OnRunSavedAsync()));
 
         // A run starting, stopping or resuming elsewhere while this screen sits open used to leave its lane exactly
@@ -516,9 +521,14 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     {
         _dialogs.ShowActivityDetail(
             new ActivityDetailViewModel(_dispatcher, row.ActivitySummaryId,
-                _services.GetService<IMarketPriceRepository>(), _NameOf,
+                _services.GetService<IAppraisalProvider>(), _NameOf,
                 _services.GetService<IEsiClient>(), _services.GetService<IEsiLocationClient>(),
-                _services.GetService<ISdeAccessor>()),
+                _services.GetService<ISdeAccessor>(), _services.GetService<ICharacterPortraitProvider>(),
+                _services.GetService<ITypeImageProvider>(),
+                // Only this machine's own pilots' runs can be corrected there: anyone else's came in from a server
+                // and could never be published back (ET-215).
+                _namesById.Keys.ToHashSet(),
+                _canPublish ? () => _PublishAsync(row) : null),
             row.ActivitySummaryId);
         return Task.CompletedTask;
     }
@@ -541,6 +551,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     public void Dispose()
     {
         _runSavedSubscription?.Dispose();
+        _runLootCorrectedSubscription?.Dispose();
         _runStartedSubscription?.Dispose();
         _runRunningStateChangedSubscription?.Dispose();
         if (_clock is null)

@@ -70,5 +70,6 @@ internal sealed class GetActivityDetailQueryHandler(IDbContextFactory<ClientDbCo
         run.Id, run.CharacterId, run.Role, run.IsParticipant, run.IsPayoutEligible,
         run.StartedAtUtc, run.StoppedAtUtc, run.TimesCorrectedAtUtc,
         run.AgentId, run.MissionLevel, run.Signature, run.FitNameSnapshot,
-        [.. lootCaptures.OrderBy(capture => capture.CapturedAtUtc).Select(RunLootCaptureMapper.ToDto)]);
+        [.. lootCaptures.OrderBy(capture => capture.CapturedAtUtc).Select(RunLootCaptureMapper.ToDto)],
+        run.SyncState);
 }

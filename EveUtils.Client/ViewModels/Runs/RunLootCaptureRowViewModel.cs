@@ -61,19 +61,35 @@ public sealed partial class RunLootCaptureRowViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanReinclude))]
+    [NotifyPropertyChangedFor(nameof(StateText))]
+    [NotifyPropertyChangedFor(nameof(ToggleText))]
+    [NotifyPropertyChangedFor(nameof(CanLeaveOutOrCountAgain))]
     private bool _isExcluded;
+
+    public string CapturedAtText => CapturedAtUtc.ToLocalTime().ToString("HH:mm:ss");
+
+    /// <summary>Why it counts or does not, in words — the colour of the row alone is not a reason.</summary>
+    public string StateText => !IsExcluded
+        ? "counted"
+        : RepeatOfDisplay ?? "excluded — counts towards nothing";
+
+    /// <summary>The generic switch every capture carries (ET-215). A repeat carries its own, named way back in
+    /// instead, so the one exclusion worth arguing with is not reduced to the same button as every other.</summary>
+    public bool CanLeaveOutOrCountAgain => !CanReinclude;
+
+    public string ToggleText => IsExcluded ? "count it again" : "leave it out";
 
     /// <summary>What this capture came to on its own, whether or not it counts — the weight of the block, readable
     /// without opening it. Set by the section, which is where the prices are.</summary>
     [ObservableProperty] private string? _subtotalDisplay;
 
+    /// <summary>Its rows as they came in, each valued — set by the section, which holds the prices.</summary>
+    [ObservableProperty] private IReadOnlyList<ActivityLootLineViewModel> _lines = [];
+
     /// <summary>It came in after the pilot's last edit, so its rows are under his list rather than in it. Derived
     /// from the order and never stored: it means "later than the hand-written capture", which the list already
     /// says.</summary>
     [ObservableProperty] private bool _isAddedAfterEdit;
-
-    /// <summary>Its rows, as it came in, read-only. Shut by default — the strip is there to be scanned.</summary>
-    [ObservableProperty] private bool _isExpanded;
 
     /// <summary>How the starting-hold picker names it, which is how the strip names it too.</summary>
     public string PickerText => $"{NumberDisplay} · {SourceText} · {LineCountText}";

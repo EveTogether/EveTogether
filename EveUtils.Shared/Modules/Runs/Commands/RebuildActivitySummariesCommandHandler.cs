@@ -18,9 +18,22 @@ internal sealed class RebuildActivitySummariesCommandHandler(
     public async Task<Result<int>> Handle(RebuildActivitySummariesCommand command, CancellationToken cancellationToken = default)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        List<Run> runs = await db.Set<Run>()
+        IQueryable<Run> saved = db.Set<Run>()
             .AsNoTracking()
-            .Where(run => run.State == RunState.Saved && !run.DeletedAtUtc.HasValue)
+            .Where(run => run.State == RunState.Saved && !run.DeletedAtUtc.HasValue);
+        IQueryable<ActivitySummary> replaced = db.Set<ActivitySummary>();
+        if (command.ActivityOfRunId is { } runId)
+        {
+            // The same key the full rebuild groups on below: the group code, or the run itself when it has none.
+            string? groupCode = await db.Set<Run>().Where(run => run.Id == runId)
+                .Select(run => run.GroupCode).FirstOrDefaultAsync(cancellationToken);
+            saved = groupCode is null ? saved.Where(run => run.Id == runId) : saved.Where(run => run.GroupCode == groupCode);
+            replaced = groupCode is null
+                ? replaced.Where(summary => summary.RunId == runId)
+                : replaced.Where(summary => summary.GroupCode == groupCode);
+        }
+
+        List<Run> runs = await saved
             .Include(run => run.LootCaptures)
                 .ThenInclude(capture => capture.Entries)
             .Include(run => run.BountyEntries)
@@ -37,9 +50,26 @@ internal sealed class RebuildActivitySummariesCommandHandler(
             .Distinct()];
         IReadOnlyDictionary<int, double> prices = await marketPrices.GetAveragePricesAsync(lootTypeIds, cancellationToken);
 
-        db.Set<ActivitySummary>().RemoveRange(await db.Set<ActivitySummary>().ToListAsync(cancellationToken));
+        // Updated in place rather than deleted and re-added, so an activity keeps its summary id across rebuilds and a
+        // screen that opened it by that id — the detail screen, an overview row — still finds it after a save or a
+        // correction (ET-215).
+        List<ActivitySummary> stale = await replaced.ToListAsync(cancellationToken);
+        db.Set<ActivitySummary>().RemoveRange(stale);
+        Dictionary<string, ActivitySummary> existing = stale
+            .GroupBy(summary => summary.GroupCode ?? $"{summary.RunId}")
+            .ToDictionary(group => group.Key, group => group.First());
         foreach (IGrouping<string, Run> activity in runs.GroupBy(run => run.GroupCode ?? run.Id.ToString()))
-            db.Set<ActivitySummary>().Add(_Build(activity.ToArray(), prices));
+        {
+            ActivitySummary built = _Build(activity.ToArray(), prices);
+            if (existing.Remove(activity.Key, out ActivitySummary? kept))
+            {
+                built.Id = kept.Id;
+                db.Entry(kept).State = EntityState.Modified;
+                db.Entry(kept).CurrentValues.SetValues(built);
+            }
+            else
+                db.Set<ActivitySummary>().Add(built);
+        }
 
         await db.SaveChangesAsync(cancellationToken);
         return Result<int>.Success(runs.Count);

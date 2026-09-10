@@ -65,7 +65,8 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         // Unlike a fit, which keeps no trace of having been shared, a run records where it stands towards a server —
         // so the row says it rather than making the reader open the server tab to find out.
         IsQueuedForServer = row.ServerSyncStates.Any(state => state.IsPending);
-        IsOnServer = row.ServerSyncStates.Count > 0 && !IsQueuedForServer;
+        IsBehindServer = !IsQueuedForServer && row.ServerSyncStates.Any(state => state.IsOutdated);
+        IsOnServer = row.ServerSyncStates.Count > 0 && !IsQueuedForServer && !IsBehindServer;
         Chips = [.. row.Rewards
             .OrderBy(reward => (int)reward.ParameterKey)
             .Select(reward => new ActivityRewardChipViewModel(reward.ParameterKey, reward.Amount))];
@@ -102,9 +103,13 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     /// <summary>Queued for a server but not yet accepted by it — either never pushed, or edited after it was.</summary>
     public bool IsQueuedForServer { get; }
 
-    public string SyncText => IsQueuedForServer ? "queued" : "published";
+    /// <summary>Published, then its loot corrected here (ET-215). The server still holds the older figures and keeps
+    /// them until PUBLISH is pressed again — said on the row so the difference is never silent.</summary>
+    public bool IsBehindServer { get; }
 
-    public bool HasSyncText => IsOnServer || IsQueuedForServer;
+    public string SyncText => IsQueuedForServer ? "queued" : IsBehindServer ? "changed since published" : "published";
+
+    public bool HasSyncText => IsOnServer || IsQueuedForServer || IsBehindServer;
 
     /// <summary>False when no server is coupled at all, which is also when the runs screen shows no server tab —
     /// the same rule the fit browser follows rather than offering an action with nowhere to go.</summary>
