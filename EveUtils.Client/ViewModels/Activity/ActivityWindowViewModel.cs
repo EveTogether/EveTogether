@@ -138,9 +138,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private readonly IDisposable? _fleetRunStoppedSubscription;
     private readonly IDisposable? _fleetRunDiscardedSubscription;
 
-    // The bounty lines seen while this run was running, with their own times — what SAVE writes as the run's
-    // RunBountyEntry rows, and what the section adds up meanwhile.
-    private readonly List<RunBountyEntryInput> _bounties = [];
 
     // The fleet's latest location sample per member, so the envelope is re-taken over the whole fleet on every
     // sample rather than over whichever one happened to arrive last.
@@ -1580,14 +1577,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         SignatureId = run.Signature;
         SignatureName = run.SiteName;
         MatchedSites = [];
-        // _bounties and _enemyObservations are deliberately left standing (ET-210 review finding, 2026-09-09, third
-        // round): clearing them here used to be the bug, not the fix. Both used to be reset on every switch, on the
-        // reasoning that they were "per character" — but _enemyObservations is a hand-typed count with nowhere else
-        // to live, and switching away from the character it was started for and back again threw it out for good;
-        // Jithran's own enemies vanished exactly that way. SaveRunAsync no longer even reads _bounties for a group
-        // (GamelogClientService.GetFleetRunBounty does, switch-independently) — only a solo run still uses it, and a
-        // solo run is never switched away from. Loot needs no reset either — it lives under the run's own id in the
-        // store, and RunLoot re-reads it the moment RunId changes (OnRunIdChanged).
+        // _enemyObservations is deliberately left standing (ET-210 review finding, 2026-09-09, third round):
+        // clearing it here used to be the bug, not the fix. It used to be reset on every switch, on the reasoning
+        // that it was "per character" — but it is a hand-typed count with nowhere else to live, and switching away
+        // from the character it was started for and back again threw it out for good; Jithran's own enemies
+        // vanished exactly that way. Bounty needs no such care any more (ET-219): it is written straight onto its
+        // own run's RunBountyEntry rows as it comes in (GamelogClientService.AddBountyAsync), independently of
+        // which character this window happens to be showing. Loot needs no reset either — it lives under the run's
+        // own id in the store, and RunLoot re-reads it the moment RunId changes (OnRunIdChanged).
         await _AdoptCharacterAsync(characterId);
         await _RefreshActingCharacterAsync();
         _RefreshRunCharacters();
@@ -1866,7 +1863,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         StoppedAtUtc = null;
         // A stopped manual result is final; a later ESI anchor cannot reopen it.
         _isManualRun = true;
-        _bounties.Clear();
         BountyIsk = 0;
         RunState = ActivityRunState.Running;
         _StartEnemyObservations();
@@ -2393,29 +2389,17 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             using var scope = _services.CreateScope();
             CqrsDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
 
-            // A group's own bounty (ET-210 review finding, 2026-09-09, third round) comes from GamelogClientService's
-            // per-run tally for EVERY character in it, including the acting one — not from _bounties. _bounties only
-            // ever holds what THIS window watched while the character it is now showing was the one on screen, and
-            // switching which character the column shows (deel 3) leaves a gap in it for whichever stretch a
-            // DIFFERENT character was on screen: Jithran's own bounty and hand-typed enemies went missing from a
-            // five-character save exactly because he had switched the column away from himself and back. A solo run
-            // (Participants.Count == 1, nothing to switch away from) keeps the older, more detailed _bounties list,
-            // with its individually-timestamped payout lines — that path was never broken and loses nothing by
-            // staying as it was.
-            bool isGroup = Participants.Count > 1;
-            GamelogClientService? gamelog = isGroup && FleetId is not null
-                ? _services.GetService<GamelogClientService>()
-                : null;
-            IReadOnlyList<RunBountyEntryInput> actingBounty = gamelog is not null && FleetId is { } actingFleetId
-                && _runCharacterId is { } actingCharacterId
-                ? _FleetBountyEntry(gamelog, actingFleetId, actingCharacterId, nowUtc)
-                : _bounties;
-
+            // Bounty is no longer collected here at all (ET-219): GamelogClientService.AddBountyAsync writes every
+            // payout straight onto its own run's RunBountyEntry rows as it comes in, for every character — acting or
+            // sibling — independently of which one this window's column happens to be showing. SAVE sending its own
+            // bounty lines on top of that would double it, so this call (and the sibling one below) always sends
+            // none of its own.
+            //
             // The summary rebuild is deferred to one call after every row in the group is saved (ET-210 review
             // finding): it scans every saved run in the store and prices its loot, and running that scan once per
             // row — five times for a five-character group — was the whole of the five-to-six-second stall.
             Result result = await dispatcher.Send(new SaveRunCommand(
-                runId, EffectiveStopUtc ?? nowUtc, nowUtc, [], actingBounty,
+                runId, EffectiveStopUtc ?? nowUtc, nowUtc, [], [],
                 _runCharacterId is { } actingId ? _EnemyInputsFor(actingId) : [],
                 _escalationParameters,
                 // Null leaves the row's own start alone; only a hand-corrected start travels.
@@ -2438,11 +2422,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             // to commit.
             foreach (RunParticipantViewModel sibling in Participants.Where(participant => participant.RunId != runId))
             {
-                IReadOnlyList<RunBountyEntryInput> siblingBounty = gamelog is not null && FleetId is { } fleetId
-                    ? _FleetBountyEntry(gamelog, fleetId, sibling.CharacterId, nowUtc)
-                    : [];
                 Result siblingResult = await dispatcher.Send(new SaveRunCommand(
-                    sibling.RunId, EffectiveStopUtc ?? nowUtc, nowUtc, [], siblingBounty,
+                    sibling.RunId, EffectiveStopUtc ?? nowUtc, nowUtc, [], [],
                     _EnemyInputsFor(sibling.CharacterId), [],
                     LootStrategy: LootStrategy, RebuildSummaries: false));
                 if (!siblingResult.IsSuccess)
@@ -2470,15 +2451,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             IsSaving = false;
         }
     }
-
-    /// <summary>One synthetic line carrying a character's whole per-run bounty total, or none when they earned
-    /// nothing — the shape <c>SaveRunCommand.BountyEntries</c> wants, built from a figure that has no per-line
-    /// history of its own (<see cref="GamelogClientService.GetFleetRunBounty"/>).</summary>
-    private static IReadOnlyList<RunBountyEntryInput> _FleetBountyEntry(
-        GamelogClientService gamelog, long fleetId, int characterId, DateTime nowUtc) =>
-        gamelog.GetFleetRunBounty(fleetId, characterId) is { } isk and > 0
-            ? [new RunBountyEntryInput { OccurredAtUtc = nowUtc, Isk = isk }]
-            : [];
 
     /// <summary>Raised when this window is done with its run and should go away: a save that landed, or a discard by
     /// the pilot who commands the run (ET-155). The window closes on it; nothing else listens, and nothing crosses to
@@ -2650,7 +2622,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // Otherwise a discarded manual run left the window refusing every later fleet anchor: the flag that makes a
         // stopped manual result final outlived the result it was final about.
         _isManualRun = false;
-        _bounties.Clear();
         BountyIsk = 0;
         TotalLootIsk = null;
         Participants.Clear();
@@ -2874,9 +2845,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     }
 
     /// <summary>
-    /// Every bounty line this pilot's gamelog writes while the run is going, at the line's own time — the run's
-    /// <c>RunBountyEntry</c> rows, which SAVE hands straight to the store. Filtered by character because the section
-    /// says "own character" and this client watches every pilot's log at once.
+    /// Drives the "own character" bounty figure this window shows for whichever character the column is on right
+    /// now. The row itself is already written by <see cref="GamelogClientService.AddBountyAsync"/> straight onto
+    /// its own run's <c>RunBountyEntry</c> (ET-219) — this handler is display-only, filtered by character because
+    /// the section says "own character" and this client watches every pilot's log at once.
     /// </summary>
     private void _OnBountyObserved(string characterName, BountyEvent bounty)
     {
@@ -2886,7 +2858,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            _bounties.Add(new RunBountyEntryInput { OccurredAtUtc = bounty.Timestamp, Isk = bounty.Isk });
             BountyIsk += bounty.Isk;
             Refresh(DateTime.UtcNow);
         });
