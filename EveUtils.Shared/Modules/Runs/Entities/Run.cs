@@ -63,6 +63,12 @@ public sealed class Run
     public bool IsPayoutEligible { get; set; }
     public string? FitContentHash { get; set; }
     public string? FitNameSnapshot { get; set; }
+
+    /// <summary>The pilot's name as it was known locally the moment this run started (ET-212) — never re-looked-up
+    /// later, the same reasoning as <see cref="FitNameSnapshot"/>. Null on every run saved before this column
+    /// existed, and on a run from a fleetmate whose own client had not yet learned it either; both fall back to
+    /// whatever the reader can still resolve live.</summary>
+    public string? CharacterNameSnapshot { get; set; }
     public RunSyncState SyncState { get; set; }
 
     /// <summary>The server <see cref="SyncState"/> and <see cref="LastPushedAtUtc"/> are about, or null while the run

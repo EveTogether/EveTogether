@@ -3,15 +3,19 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 namespace EveUtils.Client.ViewModels.Runs;
 
 /// <summary>
-/// One of the runs behind an activity — one per character who flew it. Named by character id where there is nothing
-/// better: the client never fills a participant list, so a name here would have to be invented (ET-131 gap 5).
+/// One of the runs behind an activity — one per character who flew it. Named from what was recorded on the run
+/// itself when it started (ET-212); a run saved before that column existed, or synced from a fleetmate's older
+/// client, has none, and falls back to a live lookup and then to the bare id.
 /// </summary>
-/// <param name="nameOf">Turns a character id into a name where the caller has one — for a local character it does,
-/// and the row above these already names the crew that way, so without it one row would name the same pilot two
-/// different ways. Left out, every row falls back to the id, which is what the detail screen still does.</param>
+/// <param name="nameOf">Turns a character id into a name where the caller has one and <see cref="ActivityRunDetailDto.CharacterNameSnapshot"/>
+/// is empty — for a local character still logged in it does, and the row above these already names the crew that
+/// way, so without it one row would name the same pilot two different ways. Left out, every such row falls back to
+/// the id, which is what the detail screen still does.</param>
 public sealed class ActivityRunRowViewModel(ActivityRunDetailDto run, Func<long, string>? nameOf = null)
 {
-    public string CharacterText { get; } = nameOf?.Invoke(run.CharacterId) ?? $"character {run.CharacterId}";
+    public string CharacterText { get; } = !string.IsNullOrEmpty(run.CharacterNameSnapshot)
+        ? run.CharacterNameSnapshot
+        : nameOf?.Invoke(run.CharacterId) ?? $"character {run.CharacterId}";
 
     public string DurationText { get; } = run.StoppedAtUtc is { } stoppedAtUtc
         ? (stoppedAtUtc - run.StartedAtUtc).ToString(@"hh\:mm\:ss")

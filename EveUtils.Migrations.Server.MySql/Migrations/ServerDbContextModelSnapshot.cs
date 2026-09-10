@@ -787,6 +787,10 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.Property<long>("CharacterId")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("CharacterNameSnapshot")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
                     b.Property<DateTime?>("DeletedAtUtc")
                         .HasColumnType("datetime(6)");
 

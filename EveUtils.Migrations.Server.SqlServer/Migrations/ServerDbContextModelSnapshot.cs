@@ -787,6 +787,10 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                     b.Property<long>("CharacterId")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("CharacterNameSnapshot")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
                     b.Property<DateTime?>("DeletedAtUtc")
                         .HasColumnType("datetime2");
 

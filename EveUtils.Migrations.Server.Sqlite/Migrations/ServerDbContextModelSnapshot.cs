@@ -748,6 +748,10 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.Property<long>("CharacterId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("CharacterNameSnapshot")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("DeletedAtUtc")
                         .HasColumnType("TEXT");
 

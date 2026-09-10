@@ -609,7 +609,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         int? solarSystemId = _ResolveSolarSystemId();
         foreach (Character character in candidates.Where(candidate => picked.Contains(candidate.EsiCharacterId!.Value)))
             await _SendAdditionalStartRunCommandAsync(
-                dispatcher, character.EsiCharacterId!.Value, AnchorUtc ?? DateTime.UtcNow, solarSystemId);
+                dispatcher, character.EsiCharacterId!.Value, character.Name, AnchorUtc ?? DateTime.UtcNow, solarSystemId);
 
         await _RefreshParticipantsAsync();
     }
@@ -1911,6 +1911,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 IsFleetCommander: Authority.IsFleetCommander,
                 FitContentHash: fitContentHash,
                 FitNameSnapshot: fitNameSnapshot,
+                CharacterNameSnapshot: _runCharacterName,
                 SolarSystemName: SolarSystem,
                 // This window's own start button is the clipboard/signature path — the site comes from what the
                 // pilot pasted, not from a catalogue pick (ET-163).
@@ -1950,7 +1951,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (_additionalCharacters.Count > 0)
         {
             foreach ((int Id, string Name) extra in _additionalCharacters)
-                await _SendAdditionalStartRunCommandAsync(dispatcher, extra.Id, startedAtUtc, solarSystemId);
+                await _SendAdditionalStartRunCommandAsync(dispatcher, extra.Id, extra.Name, startedAtUtc, solarSystemId);
             _additionalCharacters = [];
         }
 
@@ -1963,7 +1964,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// group code, never the fleet commander (only the acting character ever is). Best-effort: one extra character
     /// failing to register is reported and does not undo the run this window itself already has.</summary>
     private async Task _SendAdditionalStartRunCommandAsync(
-        CqrsDispatcher dispatcher, long characterId, DateTime startedAtUtc, int? solarSystemId)
+        CqrsDispatcher dispatcher, long characterId, string characterName, DateTime startedAtUtc, int? solarSystemId)
     {
         // Fit is genuinely per pilot — each toon flies its own ship — so unlike the site's system this is read
         // fresh for this specific character, not carried over from the one that started the group (ET-210 review
@@ -1980,6 +1981,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             IsFleetCommander: false,
             FitContentHash: fitContentHash,
             FitNameSnapshot: fitNameSnapshot,
+            CharacterNameSnapshot: characterName,
             SolarSystemName: SolarSystem,
             Origin: EveUtils.Shared.Modules.Runs.Enums.RunOrigin.Clipboard,
             SiteTypeSource: Kind switch
