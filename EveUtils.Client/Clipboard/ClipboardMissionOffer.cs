@@ -116,9 +116,8 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
 
             var window = new ActivityWindowViewModel(ActivityKind.Mission, _services)
             {
-                // No site name of its own — the agent's name is the one thing this window can show for it, carried
-                // on the same field a site's name travels on.
-                SignatureName = mission.AgentName,
+                // Mission captures lack a site name. Prefer the reported agent, then the Objectives header.
+                SignatureName = mission.AgentName ?? mission.ObjectivesHeaderName,
                 MissionAgentId = agent?.AgentId,
                 MissionLevel = agent?.Level,
                 MissionSolarSystemId = agent?.SolarSystemId,
