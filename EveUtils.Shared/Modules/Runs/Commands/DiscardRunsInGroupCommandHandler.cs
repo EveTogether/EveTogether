@@ -42,7 +42,10 @@ internal sealed class DiscardRunsInGroupCommandHandler(
         // covers the whole group, since every subscriber reloads its own running set wholesale rather than reading
         // the id this event carries (ET-220).
         if (runs.Count > 0)
+        {
             await eventBus.PublishAsync(new RunRunningStateChangedEvent(runs[0].Id), EventTarget.Local, cancellationToken);
+            await eventBus.PublishAsync(new RunsChangedEvent(null, command.GroupCode), EventTarget.Local, cancellationToken);
+        }
 
         // Reuses DeleteRunCommand (ET-214) per affected run rather than a second bulk-update path: this group is
         // small (a fleet or an ET-210 multi-toon pick, never a whole day's history), and a never-saved run's own

@@ -27,6 +27,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     private readonly Func<ActivityOverviewRowViewModel, Task> _loadSubRuns;
     private readonly Func<ActivityOverviewRowViewModel, Task> _openDetail;
     private readonly Func<ActivityOverviewRowViewModel, Task>? _publish;
+    private readonly ActivityOverviewRowDto _source;
     private bool _subRunsLoaded;
 
     public ActivityOverviewRowViewModel(
@@ -39,6 +40,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         _loadSubRuns = loadSubRuns;
         _openDetail = openDetail;
         _publish = publish;
+        _source = row;
         ActivitySummaryId = row.ActivitySummaryId;
         StartedAtLocal = row.StartedAtUtc.ToLocalTime();
         Duration = TimeSpan.FromSeconds(row.DurationSeconds);
@@ -143,7 +145,13 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     private async Task ToggleAsync()
     {
         IsExpanded = !IsExpanded;
-        if (!IsExpanded || _subRunsLoaded)
+        if (IsExpanded)
+            await _LoadSubRunsOnceAsync();
+    }
+
+    private async Task _LoadSubRunsOnceAsync()
+    {
+        if (_subRunsLoaded)
             return;
 
         _subRunsLoaded = true;
@@ -155,6 +163,35 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 
     [RelayCommand]
     private Task OpenDetailAsync() => _openDetail(this);
+
+    /// <summary>Whether this row already says everything <paramref name="row"/> would, so a refresh can keep this very
+    /// instance on screen (ET-222). Record equality for every figure — a column added to the DTO later takes part
+    /// without anyone having to list it here — and the three lists compared by content, which a record compares by
+    /// reference.</summary>
+    public bool IsShowing(ActivityOverviewRowDto row, bool canPublish) =>
+        CanPublish == canPublish
+        && _WithoutLists(_source) == _WithoutLists(row)
+        && _source.CharacterIds.SequenceEqual(row.CharacterIds)
+        && _source.Rewards.SequenceEqual(row.Rewards)
+        && _source.ServerSyncStates.SequenceEqual(row.ServerSyncStates);
+
+    /// <summary>Takes over from the row this one replaces on a refresh: open stays open, with its runs read again
+    /// rather than left showing the figures that made the old row out of date.</summary>
+    public async Task ContinueFromAsync(ActivityOverviewRowViewModel previous)
+    {
+        if (!previous.IsExpanded)
+            return;
+
+        IsExpanded = true;
+        await _LoadSubRunsOnceAsync();
+    }
+
+    private static ActivityOverviewRowDto _WithoutLists(ActivityOverviewRowDto row) => row with
+    {
+        CharacterIds = Array.Empty<long>(),
+        Rewards = Array.Empty<ActivityRewardDto>(),
+        ServerSyncStates = Array.Empty<ActivityServerSyncDto>()
+    };
 
     // A kind added later gets its own name rather than an exception: this row is a list entry, and the whole screen
     // going down over one unknown value is the failure mode AGENTS.md §2 is about.

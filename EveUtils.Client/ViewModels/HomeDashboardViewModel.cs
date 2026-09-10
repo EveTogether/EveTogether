@@ -13,6 +13,7 @@ using EveUtils.Client.Gamelog;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Messaging;
 using EveUtils.Client.Platform;
+using EveUtils.Client.Runs;
 using EveUtils.Client.Transport;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Shared.Cqrs;
@@ -21,7 +22,6 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fittings.Events;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Events;
-using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Transport;
 using Microsoft.Extensions.DependencyInjection;
@@ -103,13 +103,13 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
         {
             bus.Subscribe<FleetChangedEvent>(evt => Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = LoadFleetsAsync()));
             bus.Subscribe<FitSharedEvent>(evt => Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = LoadFitsAsync()));
-            // ET-195: a run saved elsewhere (or from this screen) must move "ISK today" without waiting for the next
-            // manual REFRESH — RebuildRosterAsync already re-fetches the registry and recomputes it, same as the
-            // presence subscription above, so this reuses that path instead of a second ISK-only copy of it.
-            bus.Subscribe<RunSavedEvent>(evt => Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = RebuildRosterAsync()));
-            // A saved run's loot corrected afterwards (ET-215) moves "ISK today" the same way.
-            bus.Subscribe<RunLootCorrectedEvent>(evt => Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = RebuildRosterAsync()));
         }
+
+        // "ISK today" is the one figure here a run moves (ET-195). It used to follow a save and a loot correction and
+        // nothing else, so deleting or restoring a saved activity, or a sync bringing one in, left it standing until
+        // the next REFRESH (ET-222). Every run change now reaches it, and only it is read again — not the whole
+        // roster, which a payout landing every few seconds has no business rebuilding. Home lives for the session.
+        services.GetService<RunChangeFeed>()?.Subscribe(_ => RefreshIskTodayAsync());
 
         // Live location for online characters (even without combat): every parsed gamelog line — including a jump —
         // raises CharacterObserved, so we refresh that character's location from the gamelog snapshot.
@@ -248,6 +248,12 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
     /// whether or not its tracker is still around, and a tracker's own bounty is a lifetime total, not a per-run or
     /// per-day one, so it is never added here — folding it in without double-counting would need the dashboard to
     /// know which part of that lifetime figure belongs to a run not yet saved, which nothing here tracks.</summary>
+    private async Task RefreshIskTodayAsync()
+    {
+        if (_registry is not null)
+            await UpdateIskTodayAsync(await _registry.GetAllAsync());
+    }
+
     private async Task UpdateIskTodayAsync(IReadOnlyList<Character> characters)
     {
         if (_dispatcher is null)

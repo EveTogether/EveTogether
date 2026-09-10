@@ -212,6 +212,9 @@ public sealed partial class RunLootViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(CanEditLoot))]
     private bool _isEditingLoot;
 
+    /// <summary>A read <see cref="LoadWhenIdleAsync"/> held back while a correction was open, still owed.</summary>
+    private bool _isLoadDeferred;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanFinishLootEdit))]
     private string? _lootText;
@@ -291,6 +294,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
     /// captures with it, so its blocks need not ask the store again one run at a time.</summary>
     public async Task LoadAsync(IReadOnlyList<RunLootCaptureDto> captures, CancellationToken cancellationToken = default)
     {
+        _isLoadDeferred = false;
         RunStatusMessage = null;
         await _LoadPricesAsync(captures.SelectMany(capture => capture.Entries), cancellationToken);
         _names.Clear();
@@ -316,6 +320,34 @@ public sealed partial class RunLootViewModel : ViewModelBase
 
         _MarkAddedAfterEdit();
         _Recompute();
+    }
+
+    /// <summary>
+    /// <see cref="LoadAsync"/>, unless the pilot is in the middle of correcting this block — the list open to be
+    /// written by hand, or a change still being stored. Then the read waits, and the block reads itself from the
+    /// store the moment that ends (ET-222): a sync, or a correction from a second window, must never swap the
+    /// captures out from under a list being typed from them.
+    /// </summary>
+    public Task LoadWhenIdleAsync(IReadOnlyList<RunLootCaptureDto> captures, CancellationToken cancellationToken = default)
+    {
+        if (!IsEditingLoot && !IsBusy)
+            return LoadAsync(captures, cancellationToken);
+
+        _isLoadDeferred = true;
+        return Task.CompletedTask;
+    }
+
+    partial void OnIsEditingLootChanged(bool value) => _LoadIfDeferred();
+
+    partial void OnIsBusyChanged(bool value) => _LoadIfDeferred();
+
+    private void _LoadIfDeferred()
+    {
+        if (!_isLoadDeferred || IsEditingLoot || IsBusy)
+            return;
+
+        _isLoadDeferred = false;
+        _ = RefreshAsync();
     }
 
     /// <summary>Excludes or re-includes a capture and updates the total to match. Never removes the row — exclusion

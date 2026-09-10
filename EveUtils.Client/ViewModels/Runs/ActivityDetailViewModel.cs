@@ -6,6 +6,7 @@ using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Imaging;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
@@ -36,13 +37,14 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// A kind that does not claim a section still gets it when there is data for it, so a reward booked against a site
 /// run cannot disappear behind the table.
 /// </summary>
-public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshableModule
+public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshableModule, IDisposable
 {
     private readonly CqrsDispatcher _dispatcher;
-    /// <summary>Not readonly: a full delete removes the <c>ActivitySummary</c> row outright, so undoing it builds a
-    /// brand new one with a new id (<c>RebuildActivitySummariesCommandHandler</c> only reuses an id across a
-    /// rebuild that still has a row to reuse) — <see cref="UndoDeleteAsync"/> looks the fresh one up and moves this
-    /// screen onto it rather than going on asking the query for an id that no longer exists (ET-214).</summary>
+    private readonly IDisposable? _runChangesSubscription;
+    /// <summary>Not readonly: a full delete removes the <c>ActivitySummary</c> row outright, and undoing it builds a
+    /// new one. Since ET-222 that row takes the same id back, but an activity whose row was first built before then
+    /// does not — <see cref="UndoDeleteAsync"/> and <see cref="_OnRunsChangedAsync"/> look it up by its runs and move
+    /// this screen onto it rather than going on asking the query for an id that no longer exists (ET-214).</summary>
     private Guid _activitySummaryId;
     private readonly Func<long, string>? _nameOf;
     private readonly IEsiClient? _esi;
@@ -66,11 +68,14 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     /// correction that left the server's copy behind can be answered right where it was made.</param>
     /// <param name="dialogs">Confirms the delete (ET-214). Null makes the delete control a no-op rather than skip
     /// confirmation — the same "no service, no action" rule every other optional dependency here already follows.</param>
+    /// <param name="runChanges">Keeps this screen current with what happens to its activity anywhere else (ET-222).
+    /// Null leaves it showing what it read, as it did before.</param>
     public ActivityDetailViewModel(CqrsDispatcher dispatcher, Guid activitySummaryId,
         IAppraisalProvider? appraisal = null, Func<long, string>? nameOf = null,
         IEsiClient? esi = null, IEsiLocationClient? locations = null, ISdeAccessor? sde = null,
         ICharacterPortraitProvider? portraits = null, ITypeImageProvider? images = null,
-        IReadOnlySet<long>? ownCharacterIds = null, Func<Task>? republish = null, IDialogService? dialogs = null)
+        IReadOnlySet<long>? ownCharacterIds = null, Func<Task>? republish = null, IDialogService? dialogs = null,
+        RunChangeFeed? runChanges = null)
     {
         _dispatcher = dispatcher;
         _activitySummaryId = activitySummaryId;
@@ -83,6 +88,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         _dialogs = dialogs;
         LootOverview = new ActivityLootViewModel(() => new RunLootViewModel(dispatcher, appraisal, sde, images), portraits);
         LootOverview.LootCorrected += () => _ = _ReloadAfterCorrectionAsync();
+        _runChangesSubscription = runChanges?.Subscribe(_OnRunsChangedAsync);
     }
 
     public ActivitySection Activity { get; } = new() { Title = "ACTIVITY", IsExpanded = true };
@@ -262,6 +268,88 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         _ApplyTotalIsk(detail.Value);
     }
 
+    /// <summary>
+    /// A run changed somewhere else — a sync, a second window, the runs screen (ET-222). Until this, an open detail
+    /// screen only ever moved for what it did itself. Read again only when the change reached this activity, and never
+    /// on top of this screen's own delete, undo or publish: each of those reads the activity again once it lands, and
+    /// a second read racing it could land last with what was there before.
+    ///
+    /// The sections are updated in place — the same objects, open or folded as the reader left them — and a loot
+    /// block with a correction open waits for it (<see cref="RunLootViewModel.LoadWhenIdleAsync"/>). An activity that
+    /// is gone shows ET-214's deleted state, Undo included; one that was restored follows its runs back.
+    /// </summary>
+    private async Task _OnRunsChangedAsync(RunChangeBatch changed)
+    {
+        if (IsDeleting || IsUndoingDelete || IsRepublishing || _lastDetail is not { } shown
+            || !changed.Concerns(shown.Runs.Select(run => run.RunId), shown.GroupCode))
+            return;
+
+        Result<ActivityDetailDto> detail = await _dispatcher.Query(new GetActivityDetailQuery(_activitySummaryId));
+        if (detail.Messages.Any(message => message.Code == MessageCodes.NotFound))
+        {
+            if (await _FindAgainAsync(shown.GroupCode, _LoneRunIdOf(shown)) is not { } foundId)
+            {
+                _ShowDeleted(shown);
+                return;
+            }
+
+            _activitySummaryId = foundId;
+            detail = await _dispatcher.Query(new GetActivityDetailQuery(_activitySummaryId));
+        }
+
+        if (!detail.IsSuccess || detail.Value is not { } current)
+        {
+            StatusMessage = detail.Messages.Count > 0 ? detail.Messages[0].Text : "The activity could not be read.";
+            return;
+        }
+
+        StatusMessage = null;
+        IsDeleted = false;
+        _lastDetail = current;
+        // The jump count is a live ESI read (ET-127); only a changed destination is worth asking it again for.
+        (string? escalationJumpsText, string? escalationJumpsEmptyText) =
+            _EscalationDestinationOf(current) == _EscalationDestinationOf(shown)
+                ? (EscalationJumpsText, EscalationJumpsEmptyText)
+                : await _EscalationJumpsAsync(current, CancellationToken.None);
+        _Apply(current, escalationJumpsText, escalationJumpsEmptyText);
+        await _ApplyLootBlocksAsync(current, CancellationToken.None);
+    }
+
+    /// <summary>The deleted state for a delete made somewhere else, set up exactly as <see cref="DeleteAsync"/> sets
+    /// it up for its own, so Undo here restores what went.</summary>
+    private void _ShowDeleted(ActivityDetailDto shown)
+    {
+        if (IsDeleted)
+            return;
+
+        _deletedGroupCode = shown.GroupCode;
+        _deletedRunId = _LoneRunIdOf(shown);
+        IsDeleted = true;
+        CanDelete = false;
+    }
+
+    /// <summary>The activity these runs make up now, by the key its summary is built on — the group code, or the run
+    /// itself when it has none. An activity deleted whole lost its summary row, and one restored before ET-222 made
+    /// that id stable came back under a new one.</summary>
+    private async Task<Guid?> _FindAgainAsync(string? groupCode, Guid? loneRunId)
+    {
+        Result<IReadOnlyList<ActivityOverviewRowDto>> overview = await _dispatcher.Query(new GetActivityOverviewQuery());
+        if (overview is not { IsSuccess: true, Value: { } rows })
+            return null;
+
+        ActivityOverviewRowDto? found = groupCode is not null
+            ? rows.FirstOrDefault(row => row.GroupCode == groupCode)
+            : rows.FirstOrDefault(row => row.RunId == loneRunId);
+        return found?.ActivitySummaryId;
+    }
+
+    private static Guid? _LoneRunIdOf(ActivityDetailDto detail) =>
+        detail.GroupCode is null ? detail.Runs.FirstOrDefault()?.RunId : null;
+
+    private static string? _EscalationDestinationOf(ActivityDetailDto detail) =>
+        detail.Parameters.FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.EscalationSolarSystemId)
+            ?.TypedValue;
+
     [RelayCommand(CanExecute = nameof(CanStartRepublish))]
     private async Task RepublishAsync()
     {
@@ -367,14 +455,11 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
                 return;
             }
 
-            // The delete's own rebuild removed the ActivitySummary row outright, so restoring it built a new one
-            // with a new id — nothing reuses the old id here, unlike a rebuild that still had a row to update in
-            // place. Find the fresh one before asking for it by the id that no longer exists.
-            Result<IReadOnlyList<ActivityOverviewRowDto>> overview = await _dispatcher.Query(new GetActivityOverviewQuery());
-            if (overview is { IsSuccess: true, Value: { } rows } && (_deletedGroupCode is { } code
-                    ? rows.FirstOrDefault(row => row.GroupCode == code)
-                    : rows.FirstOrDefault(row => row.RunId == _deletedRunId)) is { } restored)
-                _activitySummaryId = restored.ActivitySummaryId;
+            // The delete's own rebuild removed the ActivitySummary row outright. Since ET-222 the restore builds it
+            // back under the same id, but an activity whose summary predates that comes back under a new one — find
+            // it by its runs before asking for it by an id that may no longer exist.
+            if (await _FindAgainAsync(_deletedGroupCode, _deletedRunId) is { } restoredId)
+                _activitySummaryId = restoredId;
 
             IsDeleted = false;
             await LoadAsync();
@@ -629,7 +714,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
                 _ResolveName(detail, run.CharacterId));
             block.Loot.IsLocked = true;
             block.Loot.IsReadOnly = _ownCharacterIds is { } own && !own.Contains(run.CharacterId);
-            await block.Loot.LoadAsync(run.LootCaptures, cancellationToken);
+            await block.Loot.LoadWhenIdleAsync(run.LootCaptures, cancellationToken);
         }
 
         LootOverview.Keep([.. detail.Runs.Select(run => run.RunId)]);
@@ -731,6 +816,8 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
             ? null
             : $"Not shown for this kind of activity: {string.Join("; ", absent)}.";
     }
+
+    public void Dispose() => _runChangesSubscription?.Dispose();
 
     private static bool _IsRewardParameter(RunParameterDto parameter) =>
         parameter.ParameterKey is not (RunParameterKey.Escalation or RunParameterKey.EscalationDungeonId

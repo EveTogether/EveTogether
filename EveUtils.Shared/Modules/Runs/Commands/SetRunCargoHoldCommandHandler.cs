@@ -60,6 +60,7 @@ internal sealed class SetRunCargoHoldCommandHandler(IDbContextFactory<ClientDbCo
         await RunLootCaptureRoles.AssignAsync(db, capture, command.Role, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         await eventBus.PublishAsync(new RunLootCapturedEvent(run.Id), EventTarget.Local, cancellationToken);
+        await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         return Result<Guid>.Success(capture.Id);
     }
 }

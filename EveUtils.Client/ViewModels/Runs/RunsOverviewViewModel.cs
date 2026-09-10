@@ -21,7 +21,6 @@ using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
-using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Transport;
@@ -54,12 +53,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private readonly IReadOnlyDictionary<long, string> _namesById;
     private readonly DispatcherTimer? _clock;
     private readonly RunsFleetFilter? _fleetFilter;
-    private readonly IDisposable? _runSavedSubscription;
-    private readonly IDisposable? _runLootCorrectedSubscription;
-    private readonly IDisposable? _runDeletedSubscription;
-    private readonly IDisposable? _runRestoredSubscription;
-    private readonly IDisposable? _runStartedSubscription;
-    private readonly IDisposable? _runRunningStateChangedSubscription;
+    private readonly IDisposable? _runChangesSubscription;
     private bool _canPublish;
 
     /// <summary>Set once per load when <see cref="_fleetFilter"/> is active and turned up nothing: whether that
@@ -98,38 +92,11 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             foreach (RunningLaneViewModel lane in Lanes)
                 _ = lane.LoadPortraitAsync(portraits);
 
-        // A run finished elsewhere while this screen was already open used to sit unseen until the RUNS entry was
-        // reopened, since nothing here ever heard about it (ET-189) — this is the same "screen open, event fired"
-        // gap AddRunLootCaptureCommandHandler's comment already names for loot.
-        //
-        // InProcessEventBus calls a subscriber on whatever thread published — today that is always the UI thread
-        // (both SaveRunCommand call sites are button click handlers), but the bus itself makes no such promise, so
-        // this follows HomeDashboardViewModel's pattern (HomeDashboardViewModel.cs, FleetChangedEvent) rather than
-        // trust that: post the refresh to the UI thread instead of touching an ObservableCollection off it.
-        IEventBus? eventBus = services.GetService<IEventBus>();
-        _runSavedSubscription = eventBus?.Subscribe<RunSavedEvent>(
-            evt => Dispatcher.UIThread.Post(() => _ = _OnRunSavedAsync()));
-        // A saved activity's loot corrected on its detail screen (ET-215) moves its row's net and its day's total just
-        // as much as a save does, and the same refill answers it.
-        _runLootCorrectedSubscription = eventBus?.Subscribe<RunLootCorrectedEvent>(
-            evt => Dispatcher.UIThread.Post(() => _ = _OnRunSavedAsync()));
-        // An activity deleted from its detail screen (ET-214), or that deletion undone, must not leave this screen's
-        // own row and day total stale if it happened to be open at the same time — the same "screen open, event
-        // fired" gap as every subscription above. ET-220 round 2: also refills UNFINISHED, since a discarded run's
-        // own delete/restore (unlike ET-214's, which only ever touched a Saved run) can leave a Stopped, not-yet-
-        // saved run in that band's stale state — Jithran's own undo used to only take effect on reopening the screen.
-        _runDeletedSubscription = eventBus?.Subscribe<RunDeletedEvent>(
-            evt => Dispatcher.UIThread.Post(() => _ = _OnRunDeletedOrRestoredAsync()));
-        _runRestoredSubscription = eventBus?.Subscribe<RunRestoredEvent>(
-            evt => Dispatcher.UIThread.Post(() => _ = _OnRunDeletedOrRestoredAsync()));
-
-        // A run starting, stopping or resuming elsewhere while this screen sits open used to leave its lane exactly
-        // where it stood, START button included, until the RUNS entry was reopened — the same gap ET-189 named for
-        // the day bands, now measured against the band above them too (ET-203).
-        _runStartedSubscription = eventBus?.Subscribe<RunStartedEvent>(
-            evt => Dispatcher.UIThread.Post(() => _ = _LoadLanesAsync(CancellationToken.None)));
-        _runRunningStateChangedSubscription = eventBus?.Subscribe<RunRunningStateChangedEvent>(
-            evt => Dispatcher.UIThread.Post(() => _ = _LoadLanesAsync(CancellationToken.None)));
+        // One subscription for every way a run can change (ET-222). This screen used to hold six, one per event, each
+        // added when the gap before it was found (ET-189, ET-203, ET-220) and each knowing which part to reload — the
+        // next command or event was always one more pairing nobody remembered. The feed hands the change over on the
+        // UI thread and folds a burst of payouts into one read, so all that is left here is what to read again.
+        _runChangesSubscription = services.GetService<RunChangeFeed>()?.Subscribe(_RefreshAsync);
 
         if (!runClock)
             return;
@@ -191,20 +158,29 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         await _LoadUnfinishedRunsAsync(cancellationToken);
 
         await _RefreshServerTabsAsync(cancellationToken);
-        await _FillTabsAsync(cancellationToken);
+        await _FillTabsAsync(null, cancellationToken);
     }
 
-    /// <summary>Reads the overview and refills every tab's day bands from it. Split out of <see cref="LoadAsync"/>
-    /// so a live update (<see cref="_OnRunSavedAsync"/>) can redo just this part — the lanes and unfinished band
-    /// have nothing to do with a run being saved.</summary>
-    private async Task _FillTabsAsync(CancellationToken cancellationToken)
+    /// <summary>Everything on this screen a run can change, read again in place (ET-222): the lanes, UNFINISHED and
+    /// every tab's days. Not the auto-save <see cref="LoadAsync"/> runs first — a refresh answers a change and never
+    /// makes one. Already on the UI thread, handed over by <see cref="RunChangeFeed"/>, so no token: nothing is in
+    /// flight for one to cancel.</summary>
+    private async Task _RefreshAsync(RunChangeBatch changed)
+    {
+        await _LoadLanesAsync(CancellationToken.None);
+        await _LoadUnfinishedRunsAsync(CancellationToken.None);
+        await _FillTabsAsync(changed, CancellationToken.None);
+    }
+
+    /// <summary>Reads the overview and brings every tab's day bands in line with it.</summary>
+    /// <param name="changed">What moved, when this answers a change; null reads every open row's runs again.</param>
+    private async Task _FillTabsAsync(RunChangeBatch? changed, CancellationToken cancellationToken)
     {
         Result<IReadOnlyList<ActivityOverviewRowDto>> overview =
             await _dispatcher.Query(new GetActivityOverviewQuery(FleetId: _fleetFilter?.FleetId), cancellationToken);
-        foreach (RunsTabViewModel tab in Tabs)
-            tab.Days.Clear();
         if (!overview.IsSuccess || overview.Value is null)
         {
+            // What is on screen stays: a read that failed says nothing about what the days hold.
             StatusMessage = overview.Messages.Count > 0 ? overview.Messages[0].Text : "The activities could not be read.";
             return;
         }
@@ -214,40 +190,10 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         // existing (ET-185: GetFleetRunCoverageQuery is the "why is this empty" question, not the "what is here" one).
         _fleetHistoryKnownEmpty = overview.Value.Count > 0 || _fleetFilter is null || await _IsFleetHistoryKnownEmptyAsync(
             _fleetFilter, cancellationToken);
+        List<Task> subRunReads = [];
         foreach (RunsTabViewModel tab in Tabs)
-            _FillTab(tab, overview.Value);
-    }
-
-    /// <summary>A run was saved somewhere — this screen's own unfinished-run actions reload through
-    /// <see cref="_AfterFinishingAsync"/> already, so this is for the other source: a run window that finished one
-    /// while this screen sat open (ET-189). Refills the day bands only, and restores each day's expand state (ET-191)
-    /// across the refill rather than resetting it — <see cref="RunsDayViewModel"/> has no way to update its own
-    /// totals in place, so a rebuild is how a new row's day total lands too, first day of the evening included.
-    /// Runs already on the UI thread — posted there by the subscription above — so no cancellation token to hand
-    /// down; there is nothing in flight for a token to cancel.</summary>
-    private async Task _OnRunSavedAsync()
-    {
-        Dictionary<RunsTabViewModel, Dictionary<DateTime, bool>> expandedByTab = Tabs.ToDictionary(
-            tab => tab, tab => tab.Days.ToDictionary(day => day.Day, day => day.IsExpanded));
-        await _FillTabsAsync(CancellationToken.None);
-        foreach (RunsTabViewModel tab in Tabs)
-        {
-            if (!expandedByTab.TryGetValue(tab, out Dictionary<DateTime, bool>? expandedByDay))
-                continue;
-            foreach (RunsDayViewModel day in tab.Days)
-                if (expandedByDay.TryGetValue(day.Day, out bool isExpanded))
-                    day.IsExpanded = isExpanded;
-        }
-    }
-
-    /// <summary>RunDeletedEvent/RunRestoredEvent's own refresh (ET-220 round 2). ET-214's delete/restore only ever
-    /// reached a Saved run, which never appears in UNFINISHED, so <see cref="_OnRunSavedAsync"/>'s day-band-only
-    /// refill was enough. ET-220 added deleting (and undoing) a discarded, Stopped-but-never-saved run, which
-    /// UNFINISHED does show — so this also refills that band, not just the days.</summary>
-    private async Task _OnRunDeletedOrRestoredAsync()
-    {
-        await _OnRunSavedAsync();
-        await _LoadUnfinishedRunsAsync(CancellationToken.None);
+            _FillTab(tab, overview.Value, changed, subRunReads);
+        await Task.WhenAll(subRunReads);
     }
 
     /// <summary>
@@ -258,27 +204,67 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// A run someone else flew SOLO on that server is not here, and that is the server's own rule rather than a gap
     /// in this filter: <c>ServerRunSyncRepository.ListChangedAsync</c> hands back a run only to a character who holds
     /// a run in the same group, so the server never tells us about it and no screen can show it.
+    ///
+    /// Reconciled rather than rebuilt (ET-222): a day already on screen is the same band afterwards, open or folded as
+    /// the reader left it (ET-189), and a row whose figures did not move is the same row — which is what keeps an
+    /// opened row open and the scroll offset where it was while payouts land every few seconds. An activity is
+    /// recognised by its summary id, which a rebuild keeps (ET-215).
     /// </summary>
-    private void _FillTab(RunsTabViewModel tab, IReadOnlyList<ActivityOverviewRowDto> overview)
+    private void _FillTab(RunsTabViewModel tab, IReadOnlyList<ActivityOverviewRowDto> overview, RunChangeBatch? changed,
+        List<Task> subRunReads)
     {
         List<ActivityOverviewRowDto> rows = tab.ServerAddress is { } address
             ? [.. overview.Where(row => row.ServerSyncStates.Any(state => state.ServerAddress == address))]
             : [.. overview];
+        Dictionary<Guid, ActivityOverviewRowViewModel> shownRows = tab.Days.SelectMany(day => day.Rows)
+            .ToDictionary(row => row.ActivitySummaryId);
+        Dictionary<DateTime, RunsDayViewModel> shownDays = tab.Days.ToDictionary(day => day.Day);
 
+        List<RunsDayViewModel> days = [];
         foreach (IGrouping<DateTime, ActivityOverviewRowViewModel> day in rows
-                     .Select(row => new ActivityOverviewRowViewModel(row, _NameOf, _LoadSubRunsAsync, _OpenDetailAsync,
-                         _canPublish ? _PublishAsync : null))
+                     .Select(row => _RowFor(row, shownRows, changed, subRunReads))
                      .GroupBy(row => row.StartedAtLocal.Date))
-            tab.Days.Add(new RunsDayViewModel(day.Key, [.. day]));
+        {
+            if (shownDays.TryGetValue(day.Key, out RunsDayViewModel? shown))
+            {
+                shown.Show([.. day]);
+                days.Add(shown);
+            }
+            else
+                days.Add(new RunsDayViewModel(day.Key, [.. day]));
+        }
+
+        tab.Days.ReconcileTo(days);
 
         // Opens on the most recent day only (ET-199), so he never has to scroll through weeks of history to reach
         // today; every older evening still says its piece collapsed, via RunsWindow's sectionsummary in the band
-        // itself. _OnRunSavedAsync (ET-189) restores whatever the session already set for a day that survives its
-        // rebuild — this default only ever reaches a day this tab is showing for the first time.
-        if (tab.Days.Count > 0)
-            tab.Days.MaxBy(day => day.Day)!.IsExpanded = true;
+        // itself. A day already on screen keeps whatever the reader set for it — this default only ever reaches a
+        // day this tab is showing for the first time, the evening's first save included.
+        if (days.MaxBy(day => day.Day) is { } latest && !shownDays.ContainsKey(latest.Day))
+            latest.IsExpanded = true;
 
         tab.StatusMessage = tab.Days.Count > 0 ? null : _EmptyMessageFor(tab);
+    }
+
+    /// <summary>The row already on screen when it still says the same, a new one in its place when it does not. An
+    /// unchanged row that is open has its runs read again when the change reached them: a pilot's share or a
+    /// corrected time moves a run without moving the activity's figures.</summary>
+    private ActivityOverviewRowViewModel _RowFor(ActivityOverviewRowDto row,
+        IReadOnlyDictionary<Guid, ActivityOverviewRowViewModel> shownRows, RunChangeBatch? changed, List<Task> subRunReads)
+    {
+        shownRows.TryGetValue(row.ActivitySummaryId, out ActivityOverviewRowViewModel? shown);
+        if (shown is not null && shown.IsShowing(row, _canPublish))
+        {
+            if (shown.IsExpanded && (changed is null || changed.Concerns(row.RunId is { } runId ? [runId] : [], row.GroupCode)))
+                subRunReads.Add(_LoadSubRunsAsync(shown));
+            return shown;
+        }
+
+        var fresh = new ActivityOverviewRowViewModel(row, _NameOf, _LoadSubRunsAsync, _OpenDetailAsync,
+            _canPublish ? _PublishAsync : null);
+        if (shown is not null)
+            subRunReads.Add(fresh.ContinueFromAsync(shown));
+        return fresh;
     }
 
     /// <summary>Why a tab shows nothing. Unfiltered, that is just "nothing saved" or "nothing published" — but a
@@ -343,10 +329,11 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     {
         Result<IReadOnlyList<UnfinishedRunDto>> unfinished =
             await _dispatcher.Query(new GetUnfinishedRunsQuery(), cancellationToken);
-        UnfinishedRuns.Clear();
-        foreach (UnfinishedRunDto run in unfinished.Value ?? [])
-            UnfinishedRuns.Add(new UnfinishedRunViewModel(run, _NameOf(run.CharacterId),
-                _SaveUnfinishedRunAsync, _DeleteUnfinishedRunAsync));
+        Dictionary<Guid, UnfinishedRunViewModel> shown = UnfinishedRuns.ToDictionary(run => run.RunId);
+        UnfinishedRuns.ReconcileTo([.. (unfinished.Value ?? []).Select(run =>
+            shown.TryGetValue(run.RunId, out UnfinishedRunViewModel? same) && same.IsShowing(run)
+                ? same
+                : new UnfinishedRunViewModel(run, _NameOf(run.CharacterId), _SaveUnfinishedRunAsync, _DeleteUnfinishedRunAsync))]);
         HasUnfinishedRuns = UnfinishedRuns.Count > 0;
     }
 
@@ -549,7 +536,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
                 // Only this machine's own pilots' runs can be corrected there, or deleted from there (ET-214):
                 // anyone else's came in from a server and could never be published back (ET-215).
                 _namesById.Keys.ToHashSet(),
-                _canPublish ? () => _PublishAsync(row) : null, _dialogs),
+                _canPublish ? () => _PublishAsync(row) : null, _dialogs, _services.GetService<RunChangeFeed>()),
             row.ActivitySummaryId);
         return Task.CompletedTask;
     }
@@ -571,12 +558,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     public void Dispose()
     {
-        _runSavedSubscription?.Dispose();
-        _runLootCorrectedSubscription?.Dispose();
-        _runDeletedSubscription?.Dispose();
-        _runRestoredSubscription?.Dispose();
-        _runStartedSubscription?.Dispose();
-        _runRunningStateChangedSubscription?.Dispose();
+        _runChangesSubscription?.Dispose();
         if (_clock is null)
             return;
 

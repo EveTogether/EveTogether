@@ -118,6 +118,7 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
         if (command.RebuildSummaries)
             await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
         await eventBus.PublishAsync(new RunSavedEvent(command.RunId), EventTarget.Local, cancellationToken);
+        await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 }

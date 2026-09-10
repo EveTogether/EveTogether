@@ -77,6 +77,7 @@ internal sealed class StartRunCommandHandler(IDbContextFactory<ClientDbContext> 
                 groupCode, command.StartedAtUtc, command.IsFleetCommander, command.SiteName, command.SolarSystemName,
                 command.Signature),
                 checked((int)command.CharacterId)), EventTarget.Both, cancellationToken);
+        await eventBus.PublishAsync(new RunsChangedEvent(id, groupCode), EventTarget.Local, cancellationToken);
         return Result<Guid>.Success(id);
     }
 

@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
@@ -5,6 +7,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Runs.Tally;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,7 +15,7 @@ namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
 internal sealed class RebuildActivitySummariesCommandHandler(
-    IDbContextFactory<ClientDbContext> contextFactory, IMarketPriceRepository marketPrices)
+    IDbContextFactory<ClientDbContext> contextFactory, IMarketPriceRepository marketPrices, IEventBus eventBus)
     : ICommandHandler<RebuildActivitySummariesCommand, Result<int>>
 {
     public async Task<Result<int>> Handle(RebuildActivitySummariesCommand command, CancellationToken cancellationToken = default)
@@ -22,10 +25,11 @@ internal sealed class RebuildActivitySummariesCommandHandler(
             .AsNoTracking()
             .Where(run => run.State == RunState.Saved && !run.DeletedAtUtc.HasValue);
         IQueryable<ActivitySummary> replaced = db.Set<ActivitySummary>();
+        string? groupCode = null;
         if (command.ActivityOfRunId is { } runId)
         {
             // The same key the full rebuild groups on below: the group code, or the run itself when it has none.
-            string? groupCode = await db.Set<Run>().Where(run => run.Id == runId)
+            groupCode = await db.Set<Run>().Where(run => run.Id == runId)
                 .Select(run => run.GroupCode).FirstOrDefaultAsync(cancellationToken);
             saved = groupCode is null ? saved.Where(run => run.Id == runId) : saved.Where(run => run.GroupCode == groupCode);
             replaced = groupCode is null
@@ -60,7 +64,7 @@ internal sealed class RebuildActivitySummariesCommandHandler(
             .ToDictionary(group => group.Key, group => group.First());
         foreach (IGrouping<string, Run> activity in runs.GroupBy(run => run.GroupCode ?? run.Id.ToString()))
         {
-            ActivitySummary built = _Build(activity.ToArray(), prices);
+            ActivitySummary built = _Build(activity.Key, activity.ToArray(), prices);
             if (existing.Remove(activity.Key, out ActivitySummary? kept))
             {
                 built.Id = kept.Id;
@@ -72,10 +76,20 @@ internal sealed class RebuildActivitySummariesCommandHandler(
         }
 
         await db.SaveChangesAsync(cancellationToken);
+        // The summaries are what the runs overview and the dashboard read, so a rebuild changes what they show in its
+        // own right — and it is the only change that lands after a group SAVE (ET-210), whose runs each skip it.
+        await eventBus.PublishAsync(new RunsChangedEvent(command.ActivityOfRunId, groupCode), EventTarget.Local, cancellationToken);
         return Result<int>.Success(runs.Count);
     }
 
-    private static ActivitySummary _Build(IReadOnlyList<Run> runs, IReadOnlyDictionary<int, double> prices)
+    /// <summary>An id derived from the key the activity is grouped on rather than drawn fresh. A row that is still
+    /// standing keeps whatever id it already has (ET-215); this is for the row built anew — above all an activity
+    /// deleted whole, whose row went with it, and then restored: it comes back under the id a screen may still be
+    /// holding for it, instead of under a new one nobody knows (ET-222).</summary>
+    private static Guid _IdFor(string activityKey) =>
+        new(SHA256.HashData(Encoding.UTF8.GetBytes($"activity-summary:{activityKey}")).AsSpan(0, 16));
+
+    private static ActivitySummary _Build(string activityKey, IReadOnlyList<Run> runs, IReadOnlyDictionary<int, double> prices)
     {
         Run source = runs.OrderBy(run => run.StartedAtUtc).ThenBy(run => run.Id).First();
         DateTime startedAtUtc = runs.Min(run => run.StartedAtUtc);
@@ -96,7 +110,7 @@ internal sealed class RebuildActivitySummariesCommandHandler(
 
         return new ActivitySummary
         {
-            Id = Guid.CreateVersion7(),
+            Id = _IdFor(activityKey),
             GroupCode = source.GroupCode,
             RunId = source.GroupCode is null ? source.Id : null,
             ActivityKind = source.ActivityKind,

@@ -31,6 +31,7 @@ internal sealed class DiscardRunCommandHandler(
         // SetRunStoppedCommandHandler already closes for STOP — a discard changes the same running/not-running state
         // and was the one caller that never said so (ET-220).
         await eventBus.PublishAsync(new RunRunningStateChangedEvent(run.Id), EventTarget.Local, cancellationToken);
+        await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
 
         // Reuses DeleteRunCommand (ET-214) rather than a second place that writes DeletedAtUtc: a run that was
         // already saved is never in here (ET-105 AC-1 — RunDiscard.Apply leaves a saved run's state untouched, and

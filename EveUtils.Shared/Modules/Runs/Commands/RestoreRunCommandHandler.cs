@@ -25,6 +25,7 @@ internal sealed class RestoreRunCommandHandler(
 
         await dispatcher.Send(new RebuildActivitySummariesCommand(command.RunId), cancellationToken);
         await eventBus.PublishAsync(new RunRestoredEvent(command.RunId), EventTarget.Local, cancellationToken);
+        await eventBus.PublishAsync(new RunsChangedEvent(command.RunId), EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 }

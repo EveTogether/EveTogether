@@ -37,6 +37,7 @@ internal sealed class SetRunStoppedCommandHandler(IDbContextFactory<ClientDbCont
         // The RUNNING band (ET-203) has no other way to hear that this character's lane just changed: nothing else
         // in the app subscribes to a stop or a resume today.
         await eventBus.PublishAsync(new RunRunningStateChangedEvent(command.RunId), EventTarget.Local, cancellationToken);
+        await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 }
