@@ -6,6 +6,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Formatting;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Identity;
@@ -427,6 +428,90 @@ public sealed class RunsOverviewTests
 
         ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(presented.ViewModel.Tabs[0].Days).Rows);
         Assert.Equal("Homefront", row.SiteText);
+    }
+
+    /// <summary>ET-217 AC-1/AC-2: an unfinished row shows what its run earned so far, added up the exact same way
+    /// TotalIskCalculator adds up the run window's own TOTAL ISK and a saved activity's — an ISK-shaped mission
+    /// reward parameter here, formatted through the same IskFormat the rest of the app uses. Counter-proof: read
+    /// TotalIskText off a row built without wiring UnfinishedRunDto.TotalIsk through (the shape of this ticket before
+    /// the fix) and this goes red on "0 ISK" instead of the reward's own amount.</summary>
+    [AvaloniaFact]
+    public async Task UnfinishedRun_WithAKnownReward_ShowsItsTotalIsk()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        DateTime stoppedAtUtc = DateTime.UtcNow.AddHours(-1);
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Mission,
+            stoppedAtUtc.AddMinutes(-15), 1234, "Homefront", 30000142,
+            Parameters:
+            [
+                new RunParameterInput
+                {
+                    ParameterKey = RunParameterKey.Isk, TypedValue = "1", Amount = 12_345_678m,
+                    ObservedAtUtc = stoppedAtUtc
+                }
+            ]), cancellationToken);
+        await dispatcher.Send(new SetRunStoppedCommand(started.Value, stoppedAtUtc), cancellationToken);
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+        UnfinishedRunViewModel run = Assert.Single(presented.ViewModel.UnfinishedRuns);
+
+        Assert.Equal(IskFormat.ExactOrZero(12_345_678d), run.TotalIskText);
+        Assert.False(run.TotalIskUnknown);
+    }
+
+    /// <summary>ET-217 AC-4, reopened 2026-09-10: Jithran read a bare "ISK" on a run with nothing to show, which is
+    /// what IskFormat.Exact's "— ISK" looked like to him — indistinguishable from a rendering glitch, not a plain
+    /// zero. A run with no loot and no bounty is a real, known zero, so it must say "0 ISK" outright. Counter-proof:
+    /// this goes red against the pre-fix reading of "— ISK" (verified by reverting UnfinishedRunViewModel.TotalIskText
+    /// to IskFormat.Exact and rerunning before restoring it).</summary>
+    [AvaloniaFact]
+    public async Task UnfinishedRun_WithNoLootAndNoBounty_ShowsZeroIsk()
+    {
+        using var instance = TestClientInstance.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _StopSiteRunAsync(_Dispatcher(instance), 90000001, cancellationToken);
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+        UnfinishedRunViewModel run = Assert.Single(presented.ViewModel.UnfinishedRuns);
+
+        Assert.Equal("0 ISK", run.TotalIskText);
+        Assert.False(run.TotalIskUnknown);
+    }
+
+    /// <summary>ET-217 review: a run that captured loot nobody has priced yet is a different thing from a run that
+    /// earned nothing — showing "0 ISK" there would claim an answer nobody has. Counter-proof: the row reads a
+    /// dedicated unknown state instead of a number, and TotalIskUnknown says so for the view to style differently.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task UnfinishedRun_WithUnpricedLootAndNoOtherEarnings_ShowsUnknown()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        DateTime stoppedAtUtc = DateTime.UtcNow.AddHours(-1);
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site,
+            stoppedAtUtc.AddMinutes(-15), 1234, "Homefront", 30000142), cancellationToken);
+        // Type id 999999999 is deliberately not in any price fixture, so this loot has no known value.
+        await dispatcher.Send(new AddRunLootCaptureCommand(new RunLootCaptureInput
+        {
+            CapturedAtUtc = stoppedAtUtc, Source = LootCaptureSource.Clipboard, Role = LootCaptureRole.Snapshot,
+            Entries =
+            [
+                new RunLootEntryInput
+                {
+                    ItemTypeId = 999999999, Name = "Unpriced Widget", Quantity = 1, LootKind = LootKind.Gained
+                }
+            ]
+        }), cancellationToken);
+        await dispatcher.Send(new SetRunStoppedCommand(started.Value, stoppedAtUtc), cancellationToken);
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+        UnfinishedRunViewModel run = Assert.Single(presented.ViewModel.UnfinishedRuns);
+
+        Assert.Equal("not priced yet", run.TotalIskText);
+        Assert.True(run.TotalIskUnknown);
     }
 
     /// <summary>ET-179 AC-3: the runs that were saved are shown as they always were. An evening is what was
