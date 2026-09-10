@@ -523,6 +523,33 @@ public sealed class RunsOverviewTests
         Assert.Equal("Homefront", row.SiteText);
     }
 
+    /// <summary>ET-214 round 2: deleting an activity from its own detail screen must not leave this screen's row and
+    /// day total stale if it happens to be open at the same time — the same "screen open, event fired" gap ET-189
+    /// closed for saves, now measured for <c>RunDeletedEvent</c>. Counter-proof: without that subscription this
+    /// reads the deleted row forever, since nothing else here ever asks the overview to reload.</summary>
+    [AvaloniaFact]
+    public async Task RunDeletedFromItsDetailScreenWhileOverviewIsOpen_RemovesTheRowWithoutReopening()
+    {
+        using var instance = TestClientInstance.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunAsync(_Dispatcher(instance), 90000001, groupCode: null, cancellationToken: cancellationToken);
+        var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(true) };
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken, dialogs: dialogs);
+        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(presented.ViewModel.Tabs[0].Days).Rows);
+
+        // The exact path a real click takes: the row opens the detail through the very IDialogService the overview
+        // itself was built with, so the confirm below answers the same dialogs field either screen would ask.
+        await row.OpenDetailCommand.ExecuteAsync(null);
+        ActivityDetailViewModel detail = dialogs.LastActivityDetail!;
+        await detail.LoadAsync(cancellationToken);
+
+        await detail.DeleteCommand.ExecuteAsync(null);
+        Dispatcher.UIThread.RunJobs(); // the refresh is posted to the UI thread, not run inline (ET-189 review)
+
+        Assert.Empty(presented.ViewModel.Tabs[0].Days);
+    }
+
     /// <summary>ET-191's per-day expand toggle must survive the live refresh ET-189 adds: a second run landing on a
     /// day the operator collapsed must not spring it back open, and must still land in that day's own total.
     /// Counter-proof: refill every day band from scratch without carrying its <c>IsExpanded</c> over (the naive
