@@ -346,6 +346,33 @@ public sealed class RunsOverviewTests
         Assert.Equal("START", lane.ActionText);
     }
 
+    /// <summary>ET-220 round 2: Jithran's own report — clicking Undo on the discard toast did not put the run back in
+    /// UNFINISHED until he reopened the RUNS entry. Cause, measured: <c>RunRestoredEvent</c>'s subscription only
+    /// refilled the day bands (<c>_OnRunSavedAsync</c>), never <c>UnfinishedRuns</c> — harmless for ET-214's own
+    /// restore, which only ever reached a Saved run that was never in that band to begin with. Counter-proof: a
+    /// subscription that still only refills the day bands (the shape before this fix) leaves <c>UnfinishedRuns</c>
+    /// empty here.</summary>
+    [AvaloniaFact]
+    public async Task UndoingADiscard_PutsTheRunBackInUnfinishedWithoutReopening()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142), cancellationToken);
+        await dispatcher.Send(
+            new DiscardRunCommand(started.Value, StartedAtUtc.AddMinutes(5), DeleteAfterDiscard: true), cancellationToken);
+
+        (_, RunsOverviewViewModel viewModel) = await _WindowAsync(instance, 758, cancellationToken);
+        Assert.Empty(viewModel.UnfinishedRuns);
+
+        await dispatcher.Send(new RestoreRunCommand(started.Value), cancellationToken);
+        Dispatcher.UIThread.RunJobs(); // the refresh is posted to the UI thread, not run inline
+
+        UnfinishedRunViewModel run = Assert.Single(viewModel.UnfinishedRuns);
+        Assert.Equal("Homefront", run.SiteText);
+    }
+
     /// <summary>
     /// Acceptatie 2026-09-04, bevinding 1: "net" is what the activity brought in, and on a combat site that is
     /// mostly bounty. Measured on a copy of the operator's own store, the screen read 6.777 ISK where the same

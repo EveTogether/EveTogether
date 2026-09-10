@@ -377,7 +377,8 @@ taken from the matching `## vX.Y.Z` section below.
 - **DISCARD on your own run now actually throws it away.** The runs overview used to keep counting up
   a discarded run's timer until the screen was reopened, and the run itself still turned up in
   UNFINISHED afterwards even though you'd already thrown it away — both are fixed. A toast right after
-  offers **Undo**, in case that was a misclick on a run worth keeping. Ending a shared run as fleet
+  offers **Undo**, in case that was a misclick on a run worth keeping — Undo now also puts the run back
+  in UNFINISHED right away instead of only after reopening the screen. Ending a shared run as fleet
   commander is unchanged: it still leaves every other member's own run exactly as it was, saved or not.
 - **A saved activity now remembers each participant's name, instead of only guessing it from whoever
   happens to still be logged in.** A pilot's name is written down the moment their run starts, so it
