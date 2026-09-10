@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Runs.Dtos;
 
 namespace EveUtils.Client.ViewModels.Runs;
@@ -41,6 +42,11 @@ public sealed partial class UnfinishedRunViewModel(
     /// <summary>Counted in whole hours rather than <c>hh:mm:ss</c>: a run left standing for a day and a half is
     /// exactly what lands here, and a wrapped clock would read it back as an hour and a half.</summary>
     public string DurationText { get; } = _Elapsed((run.StoppedAtUtc ?? run.StartedAtUtc) - run.StartedAtUtc);
+
+    /// <summary>What this run earned so far, out of the same sum the run window's own TOTAL ISK and a saved
+    /// activity's TOTAL ISK are made of (<see cref="UnfinishedRunDto.TotalIsk"/>) — shown honestly rather than left
+    /// blank when there is nothing yet, the same "— ISK" a saved figure without a value already reads.</summary>
+    public string TotalIskText { get; } = IskFormat.Exact((double)run.TotalIsk);
 
     [RelayCommand]
     private Task SaveAsync() => save(this);

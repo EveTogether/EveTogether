@@ -6,6 +6,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Formatting;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Identity;
@@ -427,6 +428,51 @@ public sealed class RunsOverviewTests
 
         ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(presented.ViewModel.Tabs[0].Days).Rows);
         Assert.Equal("Homefront", row.SiteText);
+    }
+
+    /// <summary>ET-217 AC-1/AC-2: an unfinished row shows what its run earned so far, added up the exact same way
+    /// TotalIskCalculator adds up the run window's own TOTAL ISK and a saved activity's — an ISK-shaped mission
+    /// reward parameter here, formatted through the same IskFormat the rest of the app uses. Counter-proof: read
+    /// TotalIskText off a row built without wiring UnfinishedRunDto.TotalIsk through (the shape of this ticket before
+    /// the fix) and this goes red on "— ISK" instead of the reward's own amount.</summary>
+    [AvaloniaFact]
+    public async Task UnfinishedRun_WithAKnownReward_ShowsItsTotalIsk()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        DateTime stoppedAtUtc = DateTime.UtcNow.AddHours(-1);
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Mission,
+            stoppedAtUtc.AddMinutes(-15), 1234, "Homefront", 30000142,
+            Parameters:
+            [
+                new RunParameterInput
+                {
+                    ParameterKey = RunParameterKey.Isk, TypedValue = "1", Amount = 12_345_678m,
+                    ObservedAtUtc = stoppedAtUtc
+                }
+            ]), cancellationToken);
+        await dispatcher.Send(new SetRunStoppedCommand(started.Value, stoppedAtUtc), cancellationToken);
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+        UnfinishedRunViewModel run = Assert.Single(presented.ViewModel.UnfinishedRuns);
+
+        Assert.Equal(IskFormat.Exact(12_345_678d), run.TotalIskText);
+    }
+
+    /// <summary>ET-217 AC-4: a run with nothing to show yet reads that honestly — the same "— ISK" IskFormat already
+    /// uses for a saved figure with no value — rather than a blank column.</summary>
+    [AvaloniaFact]
+    public async Task UnfinishedRun_WithNoEarnings_ShowsTheHonestDash()
+    {
+        using var instance = TestClientInstance.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _StopSiteRunAsync(_Dispatcher(instance), 90000001, cancellationToken);
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+        UnfinishedRunViewModel run = Assert.Single(presented.ViewModel.UnfinishedRuns);
+
+        Assert.Equal("— ISK", run.TotalIskText);
     }
 
     /// <summary>ET-179 AC-3: the runs that were saved are shown as they always were. An evening is what was

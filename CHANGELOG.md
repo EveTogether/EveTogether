@@ -14,6 +14,10 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- The **UNFINISHED** band on the runs screen now shows each stopped-but-not-saved run's own **TOTAL ISK** so
+  far, right beside its duration — bounty, priced loot and ISK-shaped rewards added up the same way a saved
+  activity's or the run window's own TOTAL ISK is, so you can tell what you'd be keeping or throwing away
+  before you decide. A run with nothing to show yet reads "— ISK" rather than an empty space.
 - **Starting a run now lets you register it for more than one of your own characters at once.** If
   several of your EVE clients are open, the "whose run is this?" question at START now lets you tick
   more than one — useful when multiboxing the same site on several toons. Each ticked character gets

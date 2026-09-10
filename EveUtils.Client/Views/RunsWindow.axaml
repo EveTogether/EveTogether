@@ -243,7 +243,7 @@
                     <ItemsControl x:Name="UnfinishedList" ItemsSource="{Binding UnfinishedRuns}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="vr:UnfinishedRunViewModel">
-                                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10" Margin="0,3">
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="10" Margin="0,3">
                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                         <TextBlock FontSize="11.5" TextTrimming="CharacterEllipsis"
                                                    Foreground="{StaticResource TextBrightBrush}"
@@ -251,9 +251,10 @@
                                         <TextBlock Classes="rowsub" Text="{Binding StoppedText}"/>
                                     </StackPanel>
                                     <TextBlock Grid.Column="1" Classes="rowfigure" Text="{Binding DurationText}"/>
-                                    <Button Grid.Column="2" Classes="rowaction" MinWidth="62"
-                                            Content="SAVE" Command="{Binding SaveCommand}"/>
+                                    <TextBlock Grid.Column="2" Classes="rowfigure" Text="{Binding TotalIskText}"/>
                                     <Button Grid.Column="3" Classes="rowaction" MinWidth="62"
+                                            Content="SAVE" Command="{Binding SaveCommand}"/>
+                                    <Button Grid.Column="4" Classes="rowaction" MinWidth="62"
                                             Content="DELETE" Command="{Binding DeleteCommand}"/>
                                 </Grid>
                             </DataTemplate>
