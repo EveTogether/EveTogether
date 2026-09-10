@@ -39,7 +39,7 @@ public partial class CharacterPickerWindow : ChromedWindow
     }
 
     public CharacterPickerWindow(string prompt, IReadOnlyList<CharacterPickOption> options, bool multiSelect = false,
-        int? preselectedCharacterId = null) : this()
+        IReadOnlyList<int>? preselectedCharacterIds = null) : this()
     {
         _multiSelect = multiSelect;
         // Set in code-behind: an ElementName binding to a plain property reads "" at load time (assigned after).
@@ -55,18 +55,23 @@ public partial class CharacterPickerWindow : ChromedWindow
         foreach (var o in options)
             Options.Add(new CharacterPickRowViewModel(o));
 
-        // ET-216: whoever's own clipboard copy raised this question starts ticked — a starting point the pilot can
-        // add to or clear, never an automatic start. Left alone (no selection at all, same as before this ticket)
-        // when the id names nobody shown here or a row that cannot be picked at all — an unknown sender, a sender
-        // who isn't among these candidates, or a disabled option are all the same "nothing to preselect" case.
-        if (preselectedCharacterId is { } id
-            && Options.FirstOrDefault(o => o.CharacterId == id && o.Enabled) is { } preselected)
-        {
-            if (_multiSelect)
-                list.SelectedItems?.Add(preselected);
-            else
-                list.SelectedItem = preselected;
-        }
+        // ET-216 (widened to a list, ET-221 follow-up): whoever's own clipboard copy raised this question starts
+        // ticked — or, for the manual start dialog, whichever characters were already ticked the last time this
+        // same dialog was opened, so reopening the picker does not throw the pilot's earlier picks away. A starting
+        // point either way, never an automatic choice. An id that names nobody shown here, or a row that cannot be
+        // picked at all, is simply skipped — an unknown sender, a sender who isn't among these candidates, or a
+        // disabled option are all the same "nothing to preselect" case, and do not stop the rest from ticking.
+        foreach (int id in preselectedCharacterIds ?? [])
+            if (Options.FirstOrDefault(o => o.CharacterId == id && o.Enabled) is { } preselected)
+            {
+                if (_multiSelect)
+                    list.SelectedItems?.Add(preselected);
+                else
+                {
+                    list.SelectedItem = preselected;
+                    break; // single-select: only the first valid id can ever apply
+                }
+            }
 
         // Program.Services is only wired in the real app (Program.Main), not in headless tests that new up this
         // window directly. One fire-and-forget load per row (not awaited in sequence), same as the fleet roster's

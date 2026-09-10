@@ -104,7 +104,7 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
                     [.. candidates.Select(character => new CharacterPickOption(
                         character.EsiCharacterId!.Value, character.Name,
                         flying.Contains(character) ? "EVE client running" : "local character", Enabled: true))],
-                    preselectedCharacterId);
+                    preselectedCharacterId is { } preselectedId ? [preselectedId] : null);
                 pilot = picked is { Count: > 0 }
                     ? candidates.FirstOrDefault(character => character.EsiCharacterId == picked[0])
                     : null;

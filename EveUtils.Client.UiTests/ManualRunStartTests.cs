@@ -267,6 +267,41 @@ public sealed class ManualRunStartTests
         Assert.Null(soloRun.GroupCode);
     }
 
+    // Jithran, 2026-09-10, testing ET-221: "als ik erop klik kan ik meerdere chars selecteren. als ik dan weer op
+    // dat veld klik is alles weer uitgevinkt en moet ik opnieuw alles aanvinken". Red against the code before this
+    // fix: the dialog always reopened the picker with the one fixed id captured at construction, so a second pick
+    // was thrown away the moment the picker was reopened.
+    [AvaloniaFact]
+    public async Task ReopeningThePicker_KeepsEveryPreviouslyPickedCharacterTicked()
+    {
+        using var instance = CreateInstance();
+        Character pilot = new("Manual Pilot", 90000002);
+        Character alt = new("Manual Alt", 90000003);
+        var dialogs = new RecordingDialogService
+        {
+            OnPickCharacters = (_, options) =>
+                Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId)])
+        };
+        var vm = new ManualRunStartViewModel(
+            instance.Services.GetRequiredService<IDispatcher>(),
+            instance.Services.GetRequiredService<ISdeAccessor>(),
+            dialogs,
+            kind => new ActivityWindowViewModel(kind, instance.Services),
+            [pilot, alt]);
+
+        // First open: nothing picked yet beyond the dialog's own single-character default, so only the pilot is
+        // preselected — the picker ticks both because OnPickCharacters above always returns every offered option.
+        await vm.PickCharactersCommand.ExecuteAsync(null);
+        Assert.Equal([pilot, alt], vm.SelectedCharacters);
+
+        // Second open: the picker must be asked to preselect BOTH characters already picked, not just the pilot —
+        // this is what a test double can prove without driving the real checkbox UI.
+        await vm.PickCharactersCommand.ExecuteAsync(null);
+
+        Assert.Equal([90000002, 90000003], dialogs.LastPreselectedCharacterIds);
+        Assert.Equal([pilot, alt], vm.SelectedCharacters);
+    }
+
     // The abyssal path is ET-221's own named pitfall: a run standing by for two characters has to reach both once it
     // actually fires, through the same UseAdditionalCharacters/_StoreRunAsync mechanism ActivityWindowViewModel
     // already uses for a fleet-run offer accepted with several clients up — not a silent "only the first character".

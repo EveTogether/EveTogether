@@ -68,16 +68,17 @@ public sealed class RecordingDialogService : IDialogService
     public Func<string, IReadOnlyList<CharacterPickOption>, Task<IReadOnlyList<int>?>> OnPickCharacters { get; set; } =
         (_, _) => Task.FromResult<IReadOnlyList<int>?>(null);
 
-    /// <summary>The <c>preselectedCharacterId</c> of the last <see cref="PickCharactersAsync"/> call (ET-216), or
-    /// null if never shown or no character was preselected for that call.</summary>
-    public int? LastPreselectedCharacterId { get; private set; }
+    /// <summary>The <c>preselectedCharacterIds</c> of the last <see cref="PickCharactersAsync"/> call (ET-216,
+    /// widened to a list in the ET-221 follow-up), or null if never shown or nobody was preselected for that call.
+    /// </summary>
+    public IReadOnlyList<int>? LastPreselectedCharacterIds { get; private set; }
 
     public Task<IReadOnlyList<int>?> PickCharactersAsync(string prompt, IReadOnlyList<CharacterPickOption> options,
-        int? preselectedCharacterId = null)
+        IReadOnlyList<int>? preselectedCharacterIds = null)
     {
         LastPrompt = prompt;
         LastOptions = options;
-        LastPreselectedCharacterId = preselectedCharacterId;
+        LastPreselectedCharacterIds = preselectedCharacterIds;
         return OnPickCharacters(prompt, options);
     }
 

@@ -53,7 +53,9 @@ taken from the matching `## vX.Y.Z` section below.
   can add others alongside it. Every character offered here still needs to be one of your registered
   characters — every one of them, whether or not its client happens to be running right now, same as
   before. Each ticked character gets its own run, sharing one group, exactly like every other way of
-  starting a run for several toons at once.
+  starting a run for several toons at once. Reopening the "who is this for?" picker no longer clears
+  everyone you had already ticked back to just the one it started with — it now remembers your picks
+  for as long as the dialog stays open.
 - Reopening the activity window, or a clipboard copy naming a running site, no longer gets confused
   when more than one of your characters has a run going at the same time — each is tracked and shown
   on its own. A character's own bounty meter (shown live on the FLEET panel, and saved with the run)

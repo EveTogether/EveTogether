@@ -48,7 +48,6 @@ public partial class ManualRunStartViewModel : ViewModelBase
     private readonly IDialogService _dialogs;
     private readonly IToastService? _toasts;
     private readonly Func<ActivityKind, ActivityWindowViewModel> _runWindowFor;
-    private readonly int? _preselectedCharacterId;
 
     /// <param name="runWindowFor">Builds the run window this dialog hands over to. A delegate rather than the
     /// container: what that view model needs is its own business, and this one still says on its signature that a
@@ -67,8 +66,7 @@ public partial class ManualRunStartViewModel : ViewModelBase
         _toasts = toasts;
         _runWindowFor = runWindowFor;
         Characters = [.. characters.Where(character => character.EsiCharacterId is > 0)];
-        _preselectedCharacterId = preselectedCharacter?.EsiCharacterId;
-        Character? starting = Characters.FirstOrDefault(character => character.EsiCharacterId == _preselectedCharacterId)
+        Character? starting = Characters.FirstOrDefault(character => character.EsiCharacterId == preselectedCharacter?.EsiCharacterId)
             ?? Characters.FirstOrDefault();
         SelectedCharacters = starting is null ? [] : [starting];
         SelectedActivityKind = ActivityKind.Site;
@@ -96,14 +94,25 @@ public partial class ManualRunStartViewModel : ViewModelBase
 
     /// <summary>Reopens the same multi-select every other ET-210 start path uses — no second picking UI invented for
     /// this dialog. Dismissed leaves the current picks untouched, same as everywhere else this dialog is asked.
-    /// </summary>
+    ///
+    /// Preselects whatever is already ticked in <see cref="SelectedCharacters"/> — not a fixed id captured once at
+    /// construction — so reopening the picker after choosing several characters starts with all of them still
+    /// ticked instead of only the very first one (Jithran, 2026-09-10: "als ik erop klik kan ik meerdere chars
+    /// selecteren. als ik dan weer op dat veld klik is alles weer uitgevinkt"). The picker's own returned order
+    /// follows the fixed candidate list, not click order (see <see cref="CharacterPickOption"/>'s callers), so
+    /// re-ticking the same set reproduces the same order it returned last time — the first character stays the
+    /// pilot across a reopen without any special-casing here.</summary>
     [RelayCommand]
     private async Task PickCharactersAsync()
     {
+        IReadOnlyList<int> preselected = [.. SelectedCharacters
+            .Where(character => character.EsiCharacterId is not null)
+            .Select(character => character.EsiCharacterId!.Value)];
+
         IReadOnlyList<int>? picked = await _dialogs.PickCharactersAsync("Who is starting this run?",
             [.. Characters.Select(character => new CharacterPickOption(
                 character.EsiCharacterId!.Value, character.Name, string.Empty, Enabled: true))],
-            _preselectedCharacterId);
+            preselected);
 
         if (picked is not { Count: > 0 })
             return;

@@ -41,14 +41,15 @@ public interface IDialogService
     /// Multi-select character picker: choose one or more characters for a bulk action (e.g. join / add to a fleet
     /// with several toons at once). Returns the chosen character ids, or null if cancelled.
     /// </summary>
-    /// <param name="preselectedCharacterId">
-    /// Ticked before the pilot looks at the dialog (ET-216) — a starting point they can add to or clear, never an
-    /// automatic choice. Silently ignored (no preselection, no error) when it names nobody in <paramref name="options"/>
-    /// or an option that is not <see cref="CharacterPickOption.Enabled"/>. Leave null for every caller that has no
-    /// opinion here — the fleet screens' own "which character(s)" questions are unaffected by this parameter existing.
+    /// <param name="preselectedCharacterIds">
+    /// Ticked before the pilot looks at the dialog (ET-216, widened to a list ET-221 follow-up) — a starting point
+    /// they can add to or clear, never an automatic choice. An id that names nobody in <paramref name="options"/>
+    /// or an option that is not <see cref="CharacterPickOption.Enabled"/> is silently skipped (no error) rather
+    /// than dropping the rest. Leave null (or empty) for every caller that has no opinion here — the fleet
+    /// screens' own "which character(s)" questions are unaffected by this parameter existing.
     /// </param>
     Task<IReadOnlyList<int>?> PickCharactersAsync(string prompt, IReadOnlyList<CharacterPickOption> options,
-        int? preselectedCharacterId = null);
+        IReadOnlyList<int>? preselectedCharacterIds = null);
 
     /// <summary>
     /// Couple-server dialog: asks for a server address + optional label. Returns the result,
