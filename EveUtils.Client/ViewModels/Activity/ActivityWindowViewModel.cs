@@ -2470,9 +2470,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public bool HasRunNotice => RunNoticeText is not null;
 
     /// <summary>
-    /// End the shared run for everyone in it. Confirmed first, because it reaches every other member's machine —
-    /// and it still takes nothing from them: a member who already saved keeps their run, unlinked from the group
-    /// (ET-105 AC-1).
+    /// Throw this pilot's own run(s) away, and end the shared run for everyone else in it. Confirmed first, because
+    /// it reaches every other member's machine — and it still takes nothing from them: a member who already saved
+    /// keeps their run, merely unlinked from the group (ET-105 AC-1). What DISCARD takes from this pilot is
+    /// different: their own run here — an ET-210 group of their own toons included — is not yet saved, and pressing
+    /// this button means they never want it back, so it is soft-deleted rather than left to sit in UNFINISHED
+    /// (ET-220).
     /// </summary>
     [RelayCommand]
     private async Task DiscardRunAsync()
@@ -2483,25 +2486,37 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         var dialogs = _services.GetRequiredService<IDialogService>();
         // Shared-ness is GroupCode and nothing else (ET-152) — the same test the rest of this window uses, so the
         // question this dialog asks matches what DISCARD actually does below: a solo run reaches nobody but this
-        // window, and saying "the fleet" over one is the wrong warning read at the moment it matters most.
-        string discardMessage = GroupCode is not null
-            ? "This ends the run for every member of the fleet. Nobody loses what they already saved — their run "
-              + "stays, on its own, no longer part of this group."
-            : "This ends the run. Nothing already saved is lost — it just won't be added to.";
+        // window, and saying "the fleet" over one is the wrong warning read at the moment it matters most. A real
+        // fleet (FleetId set) is the only case that reaches someone else at all — GroupCode alone also covers
+        // ET-210's own multi-toon pick, which is nobody's business but this pilot's own.
+        string discardMessage = FleetId is not null && GroupCode is not null
+            ? "This ends the run for every member of the fleet, and throws your own copy of it away. Nobody else "
+              + "loses what they already saved — their run stays, on its own, no longer part of this group."
+            : GroupCode is not null
+                ? "This throws away every one of your own runs in this group. None of them will be saved, and none "
+                  + "will show up as unfinished."
+                : "This throws the run away. It won't be saved, and it won't show up as unfinished.";
         if (!await dialogs.ConfirmAsync("Discard this run?", discardMessage, "Discard"))
             return;
 
         DateTime nowUtc = DateTime.UtcNow;
+        // Captured before the group ends below (GroupCode = null): this is what tells the Undo toast, and a later
+        // undo, whether to restore one run or the whole group. Null whenever a fleet is involved — a real fleet's
+        // group discard is the FC's shared decision, not this pilot's own thing to undo alone.
+        string? ownGroupCode = FleetId is null ? GroupCode : null;
         using var scope = _services.CreateScope();
         var dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
         // A fleet's own group code is discarded whole already, below: FleetRunDiscardedEvent (EventTarget.Both)
         // reaches FleetRunGroupCodeCoordinator on THIS client too, and it already runs DiscardRunsInGroupCommand for
         // every local row sharing the code — a second one here would be redundant, not wrong, but there is no reason
         // to race it. Outside a fleet (ET-210's manual multi-pick, which mints its own group code with no fleet to
-        // announce to) nothing else ever discards the siblings, so this is the only place it happens.
-        Result discarded = GroupCode is { } soloGroupCode && FleetId is null
-            ? await dispatcher.Send(new DiscardRunsInGroupCommand(soloGroupCode, nowUtc))
-            : await dispatcher.Send(new DiscardRunCommand(runId, nowUtc));
+        // announce to) nothing else ever discards the siblings, so this is the only place it happens. Either way,
+        // DeleteAfterDiscard: true — this pilot is discarding their own run(s) by their own hand, not receiving
+        // someone else's fanout, which is the one case (FleetRunGroupCodeCoordinator's own call, further down) that
+        // must keep it false.
+        Result discarded = ownGroupCode is { } soloGroupCode
+            ? await dispatcher.Send(new DiscardRunsInGroupCommand(soloGroupCode, nowUtc, DeleteAfterDiscard: true))
+            : await dispatcher.Send(new DiscardRunCommand(runId, nowUtc, DeleteAfterDiscard: true));
         if (!discarded.IsSuccess)
         {
             _services.GetService<IToastService>()?.Show("Run not discarded",
@@ -2515,12 +2530,37 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 new FleetRunDiscardedEvent(new RunGroupDiscard(fleetId, Kind, groupCode, nowUtc)),
                 EventTarget.Both);
 
+        // Soft-deleted, not gone for good (ET-220): a ten-minute run is a painful thing to lose to a misclick, and
+        // Undo here answers that exactly like ET-214's own delete does — RestoreRunCommand/RestoreRunsInGroupCommand,
+        // the same pair, un-deleting back to a Stopped, not-yet-saved run that lands right back in UNFINISHED for
+        // this pilot to decide about again.
+        _services.GetService<IToastService>()?.Show("Run thrown away",
+            ownGroupCode is not null
+                ? "Every one of your own runs in this group is gone. Undo brings the whole group back."
+                : "This run is gone. Undo brings it back, unfinished, exactly where it left off.",
+            ToastKind.Success,
+            [new ToastAction("Undo", () => _ = _UndoDiscardAsync(ownGroupCode, runId))]);
+
         // Thrown away means this window is done, so it closes (ET-155). It used to be cleaned out and left standing
         // ready for the next START, which is the very shape in which old run state kept coming back. Only here: a
         // refused command and a cancelled confirmation both fall out above with the window still on its run.
         _SendPendingCopyToANewWindow();
         GroupCode = null;   // the group ended with the run, which is what a discard reaches the other members to say.
         CloseRequested?.Invoke();
+    }
+
+    /// <summary>The Undo toast's own callback (ET-220) — a fresh scope of its own, since the toast can outlive the
+    /// scope <see cref="DiscardRunAsync"/> disposed when it returned.</summary>
+    private async Task _UndoDiscardAsync(string? groupCode, Guid runId)
+    {
+        using var scope = _services.CreateScope();
+        var dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
+        Result restored = groupCode is { } code
+            ? await dispatcher.Send(new RestoreRunsInGroupCommand(code))
+            : await dispatcher.Send(new RestoreRunCommand(runId));
+        if (!restored.IsSuccess)
+            _services.GetService<IToastService>()?.Show("Run not restored",
+                restored.Messages.FirstOrDefault()?.Text ?? "Could not undo the discard.", ToastKind.Error);
     }
 
     /// <summary>
@@ -2591,8 +2631,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         // This pilot's own row and nothing else. Announcing the end to the fleet hangs on CanControl and lives in
         // DiscardRunAsync; throwing away your own registration is not that, so no FleetRunDiscardedEvent goes out.
+        // DeleteAfterDiscard: true for the same reason as DiscardRunAsync (ET-220) — "throw your own registration
+        // away" above already says this is a delete, not a mere stop.
         using var scope = _services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new DiscardRunCommand(runId, DateTime.UtcNow));
+        await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+            .Send(new DiscardRunCommand(runId, DateTime.UtcNow, DeleteAfterDiscard: true));
+        // Same Undo toast as DiscardRunAsync (ET-220) — a misclick on "Discard" here is just as painful as one on
+        // the DISCARD button, and the window is already on its way out either way.
+        _services.GetService<IToastService>()?.Show("Run thrown away",
+            "This run is gone. Undo brings it back, unfinished, exactly where it left off.", ToastKind.Success,
+            [new ToastAction("Undo", () => _ = _UndoDiscardAsync(groupCode: null, runId))]);
         return true;
     }
 

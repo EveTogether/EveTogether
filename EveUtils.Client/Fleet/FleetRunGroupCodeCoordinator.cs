@@ -93,7 +93,10 @@ public sealed class FleetRunGroupCodeCoordinator : ISingletonService, IDisposabl
     /// <summary>
     /// The fleet commander ended the run. Every client applies it to its own rows only — the command matches on the
     /// group code, and the only runs in this database are this pilot's, so no machine ever writes another's data.
-    /// A member who already saved keeps their run; it is merely unlinked (ET-105 AC-1).
+    /// A member who already saved keeps their run; it is merely unlinked (ET-105 AC-1). DeleteAfterDiscard is
+    /// deliberately left false: a member's own run that was not yet saved still survives this as an unfinished run
+    /// they can decide about themselves — this is the commander ending the shared activity, not this member
+    /// throwing their own registration away (ET-220).
     /// </summary>
     private async Task _OnDiscardedAsync(FleetRunDiscardedEvent integrationEvent, CancellationToken cancellationToken)
     {

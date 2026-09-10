@@ -115,11 +115,13 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             evt => Dispatcher.UIThread.Post(() => _ = _OnRunSavedAsync()));
         // An activity deleted from its detail screen (ET-214), or that deletion undone, must not leave this screen's
         // own row and day total stale if it happened to be open at the same time — the same "screen open, event
-        // fired" gap as every subscription above.
+        // fired" gap as every subscription above. ET-220 round 2: also refills UNFINISHED, since a discarded run's
+        // own delete/restore (unlike ET-214's, which only ever touched a Saved run) can leave a Stopped, not-yet-
+        // saved run in that band's stale state — Jithran's own undo used to only take effect on reopening the screen.
         _runDeletedSubscription = eventBus?.Subscribe<RunDeletedEvent>(
-            evt => Dispatcher.UIThread.Post(() => _ = _OnRunSavedAsync()));
+            evt => Dispatcher.UIThread.Post(() => _ = _OnRunDeletedOrRestoredAsync()));
         _runRestoredSubscription = eventBus?.Subscribe<RunRestoredEvent>(
-            evt => Dispatcher.UIThread.Post(() => _ = _OnRunSavedAsync()));
+            evt => Dispatcher.UIThread.Post(() => _ = _OnRunDeletedOrRestoredAsync()));
 
         // A run starting, stopping or resuming elsewhere while this screen sits open used to leave its lane exactly
         // where it stood, START button included, until the RUNS entry was reopened — the same gap ET-189 named for
@@ -236,6 +238,16 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
                 if (expandedByDay.TryGetValue(day.Day, out bool isExpanded))
                     day.IsExpanded = isExpanded;
         }
+    }
+
+    /// <summary>RunDeletedEvent/RunRestoredEvent's own refresh (ET-220 round 2). ET-214's delete/restore only ever
+    /// reached a Saved run, which never appears in UNFINISHED, so <see cref="_OnRunSavedAsync"/>'s day-band-only
+    /// refill was enough. ET-220 added deleting (and undoing) a discarded, Stopped-but-never-saved run, which
+    /// UNFINISHED does show — so this also refills that band, not just the days.</summary>
+    private async Task _OnRunDeletedOrRestoredAsync()
+    {
+        await _OnRunSavedAsync();
+        await _LoadUnfinishedRunsAsync(CancellationToken.None);
     }
 
     /// <summary>

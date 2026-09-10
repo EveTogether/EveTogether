@@ -309,6 +309,31 @@ public sealed class RunLifecycleTests
         Assert.Equal(closes ? 1 : 0, closed);
     }
 
+    /// <summary>ET-220: a successful DISCARD offers Undo — the same soft-delete ET-214 already lets you undo, and a
+    /// ten-minute run is a painful thing to lose to a misclick. The action itself, wired to
+    /// <c>RestoreRunCommand</c>/<c>RestoreRunsInGroupCommand</c>, is a fire-and-forget callback like every other
+    /// toast action in this app and is not itself re-tested here — those commands already have their own
+    /// command-level tests (ET-214's <c>RunDeleteTests</c>).</summary>
+    [AvaloniaFact]
+    public async Task SuccessfulDiscard_OffersUndo()
+    {
+        using var instance = _Instance(out var dialogs, out var toasts);
+        await _SeedAsync(instance);
+        dialogs.OnConfirm = (_, _) => Task.FromResult(true);
+
+        using var window = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
+        await window.LoadAsync();
+        window.SignatureName = "Blood Watch";
+        await window.StartRunCommand.ExecuteAsync(null);
+
+        await window.DiscardRunCommand.ExecuteAsync(null);
+
+        var toast = Assert.Single(toasts.ActionToasts);
+        Assert.Equal("Run thrown away", toast.Title);
+        Assert.Equal(ToastKind.Success, toast.Kind);
+        Assert.Equal("Undo", Assert.Single(toast.Actions).Label);
+    }
+
     /// <summary>
     /// The other side of the same discard. The member did not do this and may only read about it, so his window stays
     /// open with the clock at rest and a line that says what happened — and it does not contradict what the
