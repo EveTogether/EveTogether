@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Client.Formatting;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
@@ -50,7 +51,7 @@ public sealed partial class RunParticipantViewModel : ObservableObject
     public string PayoutDisplay => !IsPayoutEligible
         ? "0 ISK — excluded from the split"
         : PayoutIsk is { } isk
-            ? $"{isk:N2} ISK"
+            ? IskFormat.Whole(isk)
             : "no figure yet";
 
     /// <summary>Both flags said out loud, because the interesting row is the one where they disagree.</summary>

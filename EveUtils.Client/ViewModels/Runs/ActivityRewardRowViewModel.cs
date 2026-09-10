@@ -1,3 +1,4 @@
+using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 
@@ -19,10 +20,16 @@ public sealed class ActivityRewardRowViewModel(RunParameterDto parameter)
         .ToUpperInvariant();
 
     /// <summary>The measured amount when there is one, otherwise what the pilot's own line said. Never a zero
-    /// standing in for "no figure".</summary>
+    /// standing in for "no figure". An ISK-shaped key rounds to whole ISK through <see cref="IskFormat"/> like
+    /// every other ISK readout (ET-218); Standings and any other genuinely fractional key keep their own decimals,
+    /// since only ISK is rounded here.</summary>
     public string ValueText { get; } = parameter.Amount is { } amount
-        ? amount == Math.Truncate(amount) ? amount.ToString("N0") : amount.ToString("N2")
+        ? _IsIskShaped(parameter.ParameterKey) ? IskFormat.Number(amount)
+        : amount == Math.Truncate(amount) ? amount.ToString("N0") : amount.ToString("N2")
         : parameter.TypedValue;
+
+    private static bool _IsIskShaped(RunParameterKey key) => key is RunParameterKey.Isk or RunParameterKey.BonusIsk
+        or RunParameterKey.Bounty or RunParameterKey.FixedPayout or RunParameterKey.Escrow;
 
     public string? NoteText { get; } = parameter.BonusWindowSeconds is { } seconds
         ? $"within {TimeSpan.FromSeconds(seconds):h\\:mm} h of accepting"

@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Esi;
+using EveUtils.Client.Formatting;
 using EveUtils.Client.Imaging;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Sde;
@@ -194,7 +195,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
 
     public string EntriesWithoutPriceLabel => "Rows without a price";
 
-    public string TotalIskDisplay => TotalIsk is { } value ? $"{value:N2} ISK" : "no price";
+    public string TotalIskDisplay => IskFormat.WholeOrNoPrice(TotalIsk);
 
     public string LootIskDisplay => _Display(LootIsk);
 
@@ -642,7 +643,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
             decimal? subtotal = _Sum(
                 capture.Entries.Select(entry => new LootTallyLine(entry.ItemTypeId, entry.Quantity, Volume: null, entry.LootKind)));
             capture.SubtotalDisplay = _Display(subtotal);
-            capture.SubtotalAmountText = subtotal is { } amount ? $"{amount:N2}" : "no price";
+            capture.SubtotalAmountText = IskFormat.NumberOrNoPrice(subtotal);
             capture.Lines = [.. capture.Entries.Select(entry => new ActivityLootLineViewModel(
                 entry.ItemTypeId, entry.Name, entry.Quantity, _UnitPrice(entry.ItemTypeId), entry.LootKind))];
         }
@@ -683,5 +684,5 @@ public sealed partial class RunLootViewModel : ViewModelBase
         return values.Length == 0 ? null : values.Sum();
     }
 
-    private static string _Display(decimal? value) => value is { } isk ? $"{isk:N2} ISK" : "no price";
+    private static string _Display(decimal? value) => IskFormat.WholeOrNoPrice(value);
 }

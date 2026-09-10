@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Client.Formatting;
 using EveUtils.Client.Imaging;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -50,10 +51,10 @@ public sealed partial class ActivityLootLineViewModel : ObservableObject
 
     public decimal? Value { get; }
 
-    public string ValueText => Value is { } value ? $"{value:N2} ISK" : "no price";
+    public string ValueText => IskFormat.WholeOrNoPrice(Value);
 
     /// <summary>The value without its unit, for the columns under a figure that already says ISK.</summary>
-    public string AmountText => Value is { } value ? $"{value:N2}" : "no price";
+    public string AmountText => IskFormat.NumberOrNoPrice(Value);
 
     /// <summary>Spent rather than picked up. Its own category and never loot with a minus in front of it, which is
     /// the reading <see cref="LootKind"/> has carried since it was written.</summary>

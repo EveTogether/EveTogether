@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Client.Formatting;
 
 namespace EveUtils.Client.ViewModels.Activity;
 
@@ -43,5 +44,5 @@ public sealed partial class ActivityFleetMemberViewModel : ObservableObject
     };
 
     /// <summary>The one ISK format this window writes, the same one the payout figures beside it use.</summary>
-    public static string Isk(decimal value) => $"{value:N2} ISK";
+    public static string Isk(decimal value) => IskFormat.Whole(value);
 }

@@ -204,7 +204,7 @@ public sealed class ActivityDetailTests
 
         List<string> texts = await _RenderAsync(instance, cancellationToken);
 
-        Assert.Contains(texts, text => text == $"{300m:N2} ISK");
+        Assert.Contains(texts, text => text == $"{300m:N0} ISK");
         Assert.DoesNotContain(texts, text => text.Contains("999"));
         Assert.Contains(texts, text => text == "no price");
         Assert.Contains(texts, text => text.StartsWith("1 line has no price"));
@@ -243,7 +243,7 @@ public sealed class ActivityDetailTests
         root.UpdateLayout();
         List<string> texts = RenderedText.VisibleTexts(root);
 
-        Assert.Contains(texts, text => text == $"{300m:N2} ISK");            // 100 x 3 once, not twice
+        Assert.Contains(texts, text => text == $"{300m:N0} ISK");            // 100 x 3 once, not twice
         Assert.Contains(texts, text => text == "EXCLUDED");
         Assert.Contains(texts, text => text == "excluded — repeat of #1");
         Assert.Equal(2, texts.Count(text => text == "Tritanium"));           // counted, and left out — both still listed
@@ -416,7 +416,7 @@ public sealed class ActivityDetailTests
 
         List<string> texts = await _RenderAsync(instance, cancellationToken);
 
-        Assert.Contains(texts, text => text == $"{214_188m:N2} ISK");        // the bounty is on screen
+        Assert.Contains(texts, text => text == $"{214_188m:N0} ISK");        // the bounty is on screen
         Assert.DoesNotContain(texts, text => text.Contains("no combat measured"));
         Assert.DoesNotContain(texts, text => text.Contains("That is a measurement, not an empty list"));
         Assert.Contains(texts, text => text == "none counted");
@@ -533,7 +533,7 @@ public sealed class ActivityDetailTests
 
         Assert.Contains("Homefront", dialogs.LastConfirmMessage);
         Assert.Contains("1 of your own runs", dialogs.LastConfirmMessage);
-        Assert.Contains($"{1_500_000m:N2} ISK", dialogs.LastConfirmMessage);
+        Assert.Contains($"{1_500_000m:N0} ISK", dialogs.LastConfirmMessage);
         Assert.Contains("One run from another pilot stays", dialogs.LastConfirmMessage);
     }
 
@@ -671,10 +671,10 @@ public sealed class ActivityDetailTests
         await viewModel.LoadAsync(cancellationToken);
 
         Assert.Equal(2, viewModel.BountyRows.Count);
-        Assert.Contains(viewModel.BountyRows, r => r.CharacterText == "Jithran" && r.IskText == $"{675_000m:N2} ISK");
-        Assert.Contains(viewModel.BountyRows, r => r.CharacterText == "Second Pilot" && r.IskText == $"{675_000m:N2} ISK");
+        Assert.Contains(viewModel.BountyRows, r => r.CharacterText == "Jithran" && r.IskText == $"{675_000m:N0} ISK");
+        Assert.Contains(viewModel.BountyRows, r => r.CharacterText == "Second Pilot" && r.IskText == $"{675_000m:N0} ISK");
         // The total is set apart from the rows, not folded into one of them, but it still has to equal their sum.
-        Assert.Equal($"{1_350_000m:N2} ISK", viewModel.BountyText);
+        Assert.Equal($"{1_350_000m:N0} ISK", viewModel.BountyText);
     }
 
     /// <summary>
@@ -705,10 +705,10 @@ public sealed class ActivityDetailTests
         await viewModel.LoadAsync(cancellationToken);
 
         Assert.Equal(2, viewModel.LootOverview.Characters.Count);
-        Assert.Contains(viewModel.LootOverview.Characters, r => r.CharacterText == "Jithran" && r.SubtotalText == $"{300m:N2} ISK");
-        Assert.Contains(viewModel.LootOverview.Characters, r => r.CharacterText == "Second Pilot" && r.SubtotalText == $"{400m:N2} ISK");
+        Assert.Contains(viewModel.LootOverview.Characters, r => r.CharacterText == "Jithran" && r.SubtotalText == $"{300m:N0} ISK");
+        Assert.Contains(viewModel.LootOverview.Characters, r => r.CharacterText == "Second Pilot" && r.SubtotalText == $"{400m:N0} ISK");
         // The per-character blocks are set apart from the group's own total, but they still have to sum to it.
-        Assert.Equal($"{700m:N2} ISK", viewModel.LootOverview.NetIskDisplay);
+        Assert.Equal($"{700m:N0} ISK", viewModel.LootOverview.NetIskDisplay);
     }
 
     private static async Task _SaveSiteRunWithLootAsync(ICqrsDispatcher dispatcher, long characterId,
@@ -797,7 +797,7 @@ public sealed class ActivityDetailTests
 
         Assert.True(viewModel.HasTotalIsk);
         // 1,000,000 bounty + 500,000 BonusIsk — not the 1,000,000 "mission Bounty" line, not the 1,240 LP.
-        Assert.Equal($"{1_500_000m:N2} ISK", viewModel.TotalIskText);
+        Assert.Equal($"{1_500_000m:N0} ISK", viewModel.TotalIskText);
     }
 
     private static async Task _SaveSiteRunWithBountyAsync(ICqrsDispatcher dispatcher, long characterId,

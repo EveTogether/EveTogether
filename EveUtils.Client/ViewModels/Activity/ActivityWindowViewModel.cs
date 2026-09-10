@@ -12,6 +12,7 @@ using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Formatting;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Notifications;
@@ -3106,7 +3107,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         decimal total = bountyIsk + lootIsk.GetValueOrDefault() + rewardIsk;
         HasGroupTotalIsk = bountyIsk > 0 || lootIsk is not null || rewardIsk > 0;
-        GroupTotalIskText = $"{total:N2} ISK";
+        GroupTotalIskText = IskFormat.Whole(total);
     }
 
     // The signature arrives after construction, from the object initialiser the toast opens the window with — so the

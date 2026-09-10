@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
+using EveUtils.Client.Formatting;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Messaging;
@@ -544,7 +545,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         // Not "0 ISK": BountyIsk is zero both when nothing was shot and when nothing was measured, and only the
         // absence of bounty rows tells those apart.
         HasBountyFigures = detail.BountyEntries.Count > 0;
-        BountyText = $"{detail.BountyIsk:N2} ISK";
+        BountyText = IskFormat.Whole(detail.BountyIsk);
         BountyEmptyText = HasBountyFigures
             ? null
             : "No bounty line came past in the game log for this activity.";
@@ -575,7 +576,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         // Never a zero for a figure nobody offered: an activity with no bounty, no priced loot and no ISK-form
         // reward has nothing to show here, same rule every other figure on this screen follows.
         HasTotalIsk = detail.BountyIsk > 0 || detail.LootIskNet is not null || rewardIsk > 0;
-        TotalIskText = $"{total:N2} ISK";
+        TotalIskText = IskFormat.Whole(total);
     }
 
     /// <summary>What the summary says about the loot, and whether the server's copy is still the same. The figures in
@@ -718,7 +719,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
 
     /// <summary>"no price" and not "0 ISK": a figure nobody has must not look like a figure that came out at zero
     /// (ET-65 AC-5).</summary>
-    private static string _IskOrNoPrice(decimal? isk) => isk is { } value ? $"{value:N2} ISK" : "no price";
+    private static string _IskOrNoPrice(decimal? isk) => IskFormat.WholeOrNoPrice(isk);
 
     private static string _KindLabel(ActivityKind kind) => kind switch
     {

@@ -310,7 +310,9 @@ public sealed class RunLootViewModelTests
         Assert.Equal(2, viewModel.ItemRows.Count);
         ActivityLootLineViewModel scraps = Assert.Single(viewModel.ItemRows, row => row.ItemTypeId == 15331);
         Assert.Equal("3×", scraps.QuantityText);
-        Assert.Equal($"{3 * 965.32m:N2}", scraps.AmountText);
+        // ET-218: the display rounds to whole ISK from the exact sum (2,895.96 → 2,896), never from three
+        // already-rounded lines of 965 (which would read 2,895).
+        Assert.Equal($"{3 * 965.32m:N0}", scraps.AmountText);
         Assert.Equal("(2 captures)", scraps.CaptureCountText);
         Assert.False(scraps.IsExcluded);
         Assert.Equal(3 * 965.32m + 20m, viewModel.NetIsk);

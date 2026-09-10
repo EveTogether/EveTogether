@@ -54,25 +54,25 @@ public sealed class SavedActivityLootCorrectionTests
         RunsOverviewViewModel overview = await _OverviewAsync(instance);
         Assert.Contains("+1k ISK net", Assert.Single(overview.Tabs[0].Days).SummaryText);
         ActivityDetailViewModel detail = await _DetailAsync(instance, overview);
-        Assert.Equal($"{1_000m:N2} ISK", detail.TotalIskText);
+        Assert.Equal($"{1_000m:N0} ISK", detail.TotalIskText);
 
         ActivityLootCharacterViewModel jithran = _Block(detail, "Jithran");
         Assert.True(await jithran.Loot.ToggleExcludedAsync(jithran.Loot.Captures[1], Token));
-        await ActivityWindowHarness.WaitUntil(() => detail.TotalIskText == $"{700m:N2} ISK"
+        await ActivityWindowHarness.WaitUntil(() => detail.TotalIskText == $"{700m:N0} ISK"
                                                     && overview.Tabs[0].Days.Single().SummaryText.Contains("+700 ISK net"));
 
-        Assert.Equal($"{300m:N2} ISK", jithran.SubtotalText);
-        Assert.Equal($"{400m:N2} ISK", _Block(detail, "Abnoba Auscent").SubtotalText);
-        Assert.Equal($"{700m:N2} ISK", detail.LootOverview.NetIskDisplay);
-        Assert.Equal($"{700m:N2} ISK", detail.TotalIskText);
+        Assert.Equal($"{300m:N0} ISK", jithran.SubtotalText);
+        Assert.Equal($"{400m:N0} ISK", _Block(detail, "Abnoba Auscent").SubtotalText);
+        Assert.Equal($"{700m:N0} ISK", detail.LootOverview.NetIskDisplay);
+        Assert.Equal($"{700m:N0} ISK", detail.TotalIskText);
         Assert.Contains("+700 ISK net", overview.Tabs[0].Days.Single().SummaryText);
         Assert.Null(detail.StatusMessage);
 
         // Counting it again puts every figure back.
         Assert.True(await jithran.Loot.ToggleExcludedAsync(jithran.Loot.Captures[1], Token));
-        await ActivityWindowHarness.WaitUntil(() => detail.TotalIskText == $"{1_000m:N2} ISK");
-        Assert.Equal($"{1_000m:N2} ISK", detail.TotalIskText);
-        Assert.Equal($"{600m:N2} ISK", jithran.SubtotalText);
+        await ActivityWindowHarness.WaitUntil(() => detail.TotalIskText == $"{1_000m:N0} ISK");
+        Assert.Equal($"{1_000m:N0} ISK", detail.TotalIskText);
+        Assert.Equal($"{600m:N0} ISK", jithran.SubtotalText);
     }
 
     /// <summary>
@@ -193,10 +193,10 @@ public sealed class SavedActivityLootCorrectionTests
 
         ActivityLootCharacterViewModel jithran = _Block(detail, "Jithran");
         ActivityLootCharacterViewModel abnoba = _Block(detail, "Abnoba Auscent");
-        Assert.Equal($"{600m:N2} ISK", jithran.SubtotalText);
+        Assert.Equal($"{600m:N0} ISK", jithran.SubtotalText);
         Assert.False(abnoba.Loot.HasCaptures);
         Assert.Equal("no price", abnoba.SubtotalText);
-        Assert.Equal($"{600m:N2} ISK", detail.LootOverview.NetIskDisplay);
+        Assert.Equal($"{600m:N0} ISK", detail.LootOverview.NetIskDisplay);
         Assert.Same(jithran, detail.LootOverview.Characters[0]);   // largest first
     }
 

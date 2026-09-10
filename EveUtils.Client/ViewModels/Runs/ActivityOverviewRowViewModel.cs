@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 
@@ -51,7 +52,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         NetIsk = row.LootIskNet is null && row.BountyIsk == 0 ? null : (row.LootIskNet ?? 0) + row.BountyIsk;
         HasNet = NetIsk.HasValue;
         NetText = NetIsk is { } net
-            ? (net < 0 ? string.Empty : "+") + ActivityRewardChipViewModel.Compact(net) + " ISK"
+            ? (net < 0 ? string.Empty : "+") + IskFormat.Compact(net) + " ISK"
             : string.Empty;
         CrewText = row.CharacterIds.Count == 0
             ? $"{row.ParticipantCount} pilots"

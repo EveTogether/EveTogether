@@ -1,3 +1,5 @@
+using EveUtils.Client.Formatting;
+
 namespace EveUtils.Client.ViewModels.Runs;
 
 /// <summary>
@@ -12,5 +14,5 @@ public sealed class ActivityBountyRowViewModel(long characterId, decimal isk, Fu
 {
     public string CharacterText { get; } = nameOf?.Invoke(characterId) ?? $"character {characterId}";
 
-    public string IskText { get; } = $"{isk:N2} ISK";
+    public string IskText { get; } = IskFormat.Whole(isk);
 }

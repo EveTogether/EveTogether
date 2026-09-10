@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Runs.Enums;
 
 namespace EveUtils.Client.ViewModels.Runs;
@@ -46,26 +47,13 @@ public sealed class ActivityRewardChipViewModel(RunParameterKey key, decimal? am
         _ => Enum.IsDefined(key) ? key.ToString().ToUpperInvariant() : $"KIND {(int)key}"
     };
 
-    /// <summary>ISK-shaped forms are compacted, because their figures are the ones that run to ten digits; a count
-    /// is written out, because rounding 1,240 loyalty points to "1.2k" throws away the part that was measured.</summary>
+    /// <summary>ISK-shaped forms are compacted through <see cref="IskFormat.Compact"/>, because their figures are
+    /// the ones that run to ten digits; a count is written out, because rounding 1,240 loyalty points to "1.2k"
+    /// throws away the part that was measured.</summary>
     private static string _Figure(RunParameterKey key, decimal value) => key switch
     {
         RunParameterKey.Isk or RunParameterKey.BonusIsk or RunParameterKey.Bounty
-            or RunParameterKey.FixedPayout or RunParameterKey.Escrow => Compact(value),
+            or RunParameterKey.FixedPayout or RunParameterKey.Escrow => IskFormat.Compact(value),
         _ => value.ToString("#,0.##", CultureInfo.InvariantCulture)
     };
-
-    /// <summary>Signed short form ("84.2M", "-1.2M", "1.2k"), unit-free so the caller supplies the noun.</summary>
-    internal static string Compact(decimal value)
-    {
-        string sign = value < 0 ? "-" : string.Empty;
-        decimal size = Math.Abs(value);
-        return size switch
-        {
-            >= 1_000_000_000m => sign + (size / 1_000_000_000m).ToString("0.##", CultureInfo.InvariantCulture) + "B",
-            >= 1_000_000m => sign + (size / 1_000_000m).ToString("0.##", CultureInfo.InvariantCulture) + "M",
-            >= 1_000m => sign + (size / 1_000m).ToString("0.#", CultureInfo.InvariantCulture) + "k",
-            _ => sign + size.ToString("0.##", CultureInfo.InvariantCulture)
-        };
-    }
 }
