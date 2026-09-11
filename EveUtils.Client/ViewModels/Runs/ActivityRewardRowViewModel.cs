@@ -22,11 +22,15 @@ public sealed class ActivityRewardRowViewModel(RunParameterDto parameter)
     /// <summary>The measured amount when there is one, otherwise what the pilot's own line said. Never a zero
     /// standing in for "no figure". An ISK-shaped key rounds to whole ISK through <see cref="IskFormat"/> like
     /// every other ISK readout (ET-218); Standings and any other genuinely fractional key keep their own decimals,
-    /// since only ISK is rounded here.</summary>
-    public string ValueText { get; } = parameter.Amount is { } amount
-        ? _IsIskShaped(parameter.ParameterKey) ? IskFormat.Number(amount)
-        : amount == Math.Truncate(amount) ? amount.ToString("N0") : amount.ToString("N2")
-        : parameter.TypedValue;
+    /// since only ISK is rounded here. An item reward's own <see cref="RunParameterDto.Amount"/> is its quantity,
+    /// not a figure to format on its own — <see cref="RunParameterDto.TypedValue"/> already reads "10 x Quafe
+    /// Ultra", which is what a reader wants here, not a bare "10" (ET-237).</summary>
+    public string ValueText { get; } = parameter.ParameterKey == RunParameterKey.Item
+        ? parameter.TypedValue
+        : parameter.Amount is { } amount
+            ? _IsIskShaped(parameter.ParameterKey) ? IskFormat.Number(amount)
+            : amount == Math.Truncate(amount) ? amount.ToString("N0") : amount.ToString("N2")
+            : parameter.TypedValue;
 
     private static bool _IsIskShaped(RunParameterKey key) => key is RunParameterKey.Isk or RunParameterKey.BonusIsk
         or RunParameterKey.Bounty or RunParameterKey.FixedPayout or RunParameterKey.Escrow;

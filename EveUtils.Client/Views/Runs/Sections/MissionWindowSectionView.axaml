@@ -2,11 +2,29 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
              xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
-             x:Class="EveUtils.Client.Views.Runs.Sections.RewardsDetailSectionView"
-             x:DataType="vs:RewardsDetailSectionViewModel">
+             x:Class="EveUtils.Client.Views.Runs.Sections.MissionWindowSectionView"
+             x:DataType="vs:MissionWindowSectionViewModel">
     <StackPanel>
-        <!-- One row per form and never one total: the key list keeps growing, and LP and
-             Evermarks have no rate to convert into ISK against. -->
+        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+            <TextBlock Text="AGENT"/>
+            <TextBlock Grid.Column="1" Text="{Binding AgentText}"/>
+        </Grid>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsLevelShown}">
+            <TextBlock Text="LEVEL"/>
+            <TextBlock Grid.Column="1" Text="{Binding LevelText}"/>
+        </Grid>
+
+        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasBonus}">
+            <TextBlock Text="BONUS ISK"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{Binding BonusValueText}"/>
+                <Border Classes="chip" Classes.ok="{Binding IsBonusOk}" Classes.warn="{Binding IsBonusWarning}"
+                        Classes.dim="{Binding IsBonusExpired}">
+                    <TextBlock Text="{Binding BonusCountdownText}"/>
+                </Border>
+            </StackPanel>
+        </Grid>
+
         <ItemsControl x:Name="RewardList" ItemsSource="{Binding RewardRows}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="vr:ActivityRewardRowViewModel">

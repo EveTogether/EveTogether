@@ -1293,11 +1293,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         _RefreshLocation(nowUtc);
         _RefreshClock(nowUtc);
-        _RefreshGroupTotalIsk();
-        _RefreshSummaries();
         _ = RefreshFleetCommandAsync(nowUtc);
+        // Before the total and the summaries: a section's own Refresh is what settles this tick's figures (a
+        // mission's bonus falling out of expiry, ET-237) — reading them first would sum and summarise last tick's
+        // answer instead of this one's.
         foreach (RunWindowSection section in _AllSections())
             section.Refresh(nowUtc);
+        _RefreshGroupTotalIsk();
+        _RefreshSummaries();
         _ = _RefreshActingCharacterAsync();
         _ = _RefreshRunCharactersAsync();
         _ = _RefreshParticipantsAsync();
@@ -2582,9 +2585,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// database or network round trip, so ticking every second costs no more than formatting a string does.
     ///
     /// Sums the same three things the saved detail screen's TOTAL ISK does (<c>ActivityDetailViewModel._ApplyTotalIsk</c>):
-    /// bounty, captured loot net of what was lost, and ISK-form mission rewards (Isk, BonusIsk, FixedPayout,
-    /// Escrow) — never the mission's own separate <see cref="RunParameterKey.Bounty"/> line, which is a stated
-    /// reward figure rather than an observed payout and would double-count against the gamelog's own bounty.
+    /// bounty, captured loot net of what was lost, and <see cref="TotalIskCalculator.RewardIsk"/>'s own ISK-form
+    /// reward parameters (Isk, BonusIsk, FixedPayout, Escrow) — never the mission's own separate
+    /// <see cref="RunParameterKey.Bounty"/> line, which is a stated reward figure rather than an observed payout and
+    /// would double-count against the gamelog's own bounty. Less whatever a section's own
+    /// <see cref="RunWindowSection.ExpiredBonusIsk"/> says has expired out of that sum (ET-237).
     ///
     /// Bounty is summed per participant through <see cref="GamelogClientService.GetFleetRunBounty"/> — the same
     /// switch-independent source SAVE already uses for a group — rather than the acting character's own
@@ -2605,10 +2610,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         decimal? lootIsk = isGroup ? LootOverview?.NetIsk : RunLoot?.NetIsk;
 
-        decimal rewardIsk = PendingParameters
-            .Where(parameter => parameter.ParameterKey is RunParameterKey.Isk or RunParameterKey.BonusIsk
-                or RunParameterKey.FixedPayout or RunParameterKey.Escrow)
-            .Sum(parameter => parameter.Amount.GetValueOrDefault());
+        // The general reward sum, less whatever a section says has expired out of it — a mission's own bonus once
+        // its time window has passed (ET-237). Never a replacement for the sum: a type with no such rule subtracts
+        // nothing.
+        decimal rewardIsk = TotalIskCalculator.RewardIsk(
+            PendingParameters.Select(parameter => (parameter.ParameterKey, parameter.Amount)))
+            - _AllSections().Sum(section => section.ExpiredBonusIsk);
 
         decimal total = bountyIsk + lootIsk.GetValueOrDefault() + rewardIsk;
         HasGroupTotalIsk = bountyIsk > 0 || lootIsk is not null || rewardIsk > 0;

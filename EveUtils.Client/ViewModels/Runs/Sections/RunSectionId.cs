@@ -8,7 +8,7 @@ namespace EveUtils.Client.ViewModels.Runs.Sections;
 public enum RunSectionId
 {
     Activity,
-    Rewards,
+    Mission,
     Enemies,
     Fit,
     Fleet,

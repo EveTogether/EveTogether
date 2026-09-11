@@ -11,6 +11,7 @@ using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Market.Services;
+using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -476,10 +477,12 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
 
     private void _ApplyTotalIsk(ActivityDetailDto detail)
     {
-        decimal rewardIsk = detail.Parameters
-            .Where(parameter => parameter.ParameterKey is RunParameterKey.Isk or RunParameterKey.BonusIsk
-                or RunParameterKey.FixedPayout or RunParameterKey.Escrow)
-            .Sum(parameter => parameter.Amount.GetValueOrDefault());
+        // The general reward sum, less whatever a section says has expired out of it — a mission's own bonus once
+        // its time window has passed (ET-237). Never a replacement for the sum: a type with no such rule subtracts
+        // nothing.
+        decimal rewardIsk = TotalIskCalculator.RewardIsk(
+            detail.Parameters.Select(parameter => (parameter.ParameterKey, parameter.Amount)))
+            - _sections.Sum(section => section.ExpiredBonusIsk);
         decimal total = detail.BountyIsk + detail.LootIskNet.GetValueOrDefault() + rewardIsk;
 
         // Never a zero for a figure nobody offered: an activity with no bounty, no priced loot and no ISK-form

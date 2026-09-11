@@ -15,6 +15,8 @@ taken from the matching `## vX.Y.Z` section below.
 
 - Mission reward lines EVE Together cannot yet recognise are now kept untouched with the run, so they can be classified later instead of disappearing.
 - Mission runs now show their agent's level instead of abyssal weather and tier badges.
+- Mission runs now have their own MISSION section, in both the run window and the saved activity screen: the agent by name (a regular agent's mission, which states no agent at all, says so honestly), ISK, Loyalty Points, items and any reward line the app does not yet recognise. A bonus reward counts down while its time window is open, reads as expired once it has passed, and drops out of TOTAL ISK the moment it does — a bonus you actually earned before stopping the run stays counted even if the window sits open a while longer before you save it. A mission run can now also be marked blitzed, cherry-picked, cleared or full clear, the same as a site, and remembers your last choice for missions on their own.
+- The saved activity screen now shows a mission's agent by name instead of a bare id.
 
 ### Added
 - **A run now shows what it actually was.** A Data Site, a Relic Site, a Gas Site, an Ore Site or a Wormhole used

@@ -1,0 +1,94 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Client.Formatting;
+using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Sde;
+
+namespace EveUtils.Client.ViewModels.Runs.Sections;
+
+/// <summary>
+/// MISSION on the detail screen (ET-237): the agent a mission came from, named rather than left as a bare id, and
+/// what it handed out — one row per reward form, never one total, since <see cref="RunParameterKey"/> only ever
+/// grows and Loyalty Points and Evermarks have no rate to convert into ISK against.
+/// </summary>
+public sealed partial class MissionDetailSectionViewModel(ISdeAccessor? sde) : RunDetailSection(RunSectionId.Mission, "MISSION")
+{
+    private decimal? _bonusAmount;
+
+    public ObservableCollection<ActivityRewardRowViewModel> RewardRows { get; } = [];
+
+    [ObservableProperty] private string? _rewardsEmptyText;
+
+    /// <summary>Null for a regular agent's mission, whose capture has no "Report to" line at all (ET-237) — shown
+    /// honestly rather than guessed at.</summary>
+    [ObservableProperty] private bool _hasAgent;
+
+    [ObservableProperty] private string _agentText = string.Empty;
+
+    [ObservableProperty] private bool _isLevelShown;
+
+    [ObservableProperty] private string _levelText = string.Empty;
+
+    [ObservableProperty] private bool _hasBonus;
+
+    [ObservableProperty] private string _bonusValueText = string.Empty;
+
+    /// <summary>Judged against when the run stopped, not against wall-clock "now" — a bonus met minutes before STOP
+    /// stays earned no matter how long the activity has sat saved since (ET-237).</summary>
+    [ObservableProperty] private bool _isBonusExpired;
+
+    public override bool HasContent => HasAgent || HasBonus || RewardRows.Count > 0;
+
+    // The window section's own docstring explains why this only ever subtracts (ET-237).
+    public override decimal ExpiredBonusIsk => IsBonusExpired ? _bonusAmount ?? 0m : 0m;
+
+    public override void Apply(RunDetailSectionInput input)
+    {
+        ActivityDetailDto detail = input.Detail;
+        ActivityRunDetailDto? withAgent = detail.Runs.FirstOrDefault(run => run.AgentId is not null);
+        HasAgent = withAgent?.AgentId is not null;
+        AgentText = withAgent?.AgentId is { } agentId
+            ? sde?.GetAgent(agentId)?.Name ?? $"agent {agentId}"
+            : "not stated in this capture";
+        IsLevelShown = withAgent?.MissionLevel is not null;
+        LevelText = withAgent?.MissionLevel is { } level ? $"Level {level}" : string.Empty;
+
+        RunParameterDto? bonus = detail.Parameters.FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.BonusIsk);
+        _bonusAmount = bonus?.Amount;
+        HasBonus = bonus is not null;
+        BonusValueText = bonus?.Amount is { } amount ? $"{IskFormat.Number(amount)} ISK" : string.Empty;
+        IsBonusExpired = bonus is { BonusWindowSeconds: { } seconds }
+            && (detail.StoppedAtUtc ?? DateTime.UtcNow) >= bonus.ObservedAtUtc.AddSeconds(seconds);
+
+        RewardRows.Clear();
+        foreach (RunParameterDto parameter in detail.Parameters.Where(_IsRewardRow))
+            RewardRows.Add(new ActivityRewardRowViewModel(parameter));
+
+        RewardsEmptyText = !HasAgent && !HasBonus && RewardRows.Count == 0
+            ? "No reward was recorded for this mission."
+            : null;
+
+        List<string> parts = [];
+        if (HasAgent)
+            parts.Add(IsLevelShown ? $"{AgentText} · {LevelText}" : AgentText);
+        if (HasBonus)
+            parts.Add(IsBonusExpired ? "bonus expired" : $"{BonusValueText} bonus");
+        parts.AddRange(RewardRows.Select(row => $"{row.ValueText} {row.Label}"));
+        HeaderSummary = parts.Count > 0 ? string.Join(" · ", parts) : "nothing recorded";
+    }
+
+    public override string AbsentReason(string noun) =>
+        $"no MISSION — {noun} pays in what it drops, not in a reward agreed beforehand";
+
+    // The bonus gets its own block above with its own expiry treatment; everything else that used to sit under
+    // ACTIVITY's Objectives line stays there (ET-237 moved only the agent, not the courier's own cargo counters).
+    private static bool _IsRewardRow(RunParameterDto parameter) =>
+        parameter.ParameterKey is not (RunParameterKey.BonusIsk or RunParameterKey.Escalation
+            or RunParameterKey.EscalationDungeonId or RunParameterKey.EscalationSystem
+            or RunParameterKey.EscalationSolarSystemId or RunParameterKey.EscalationExpiresAtUtc
+            or RunParameterKey.Smugglers or RunParameterKey.Civilians);
+}

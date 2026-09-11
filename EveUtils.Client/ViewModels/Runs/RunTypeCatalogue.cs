@@ -123,9 +123,20 @@ public static class RunTypeCatalogue
             Icon = MaterialIconKind.ClipboardTextOutline,
             WindowTitle = "MISSION RUN",
             Noun = "a mission",
-            WindowSections = StandardWindow,
-            DetailSections = [RunSectionId.Activity, RunSectionId.Rewards, RunSectionId.Enemies, RunSectionId.Fleet],
-            HasAgent = true
+            // Diverges from StandardWindow: MISSION stands right after ACTIVITY, where a mission's own facts belong
+            // (ET-237) — nothing else names the same run window sections in a different order (RunSectionModules
+            // fixes the order every type is checked against).
+            WindowSections =
+            [
+                RunSectionId.Activity, RunSectionId.Mission, RunSectionId.Enemies, RunSectionId.Fit,
+                RunSectionId.Fleet, RunSectionId.Bounty, RunSectionId.Loot
+            ],
+            DetailSections = [RunSectionId.Activity, RunSectionId.Mission, RunSectionId.Enemies, RunSectionId.Fleet],
+            HasAgent = true,
+            // Same four a site loots by, same order (ET-172 backlog gap, closed by ET-237): a courier has nothing to
+            // blitz or clear, so the row stays optional with no preselection — IsLootStrategyShown already hides an
+            // empty list, and nothing here forces a choice on one that has none to make.
+            LootStrategies = SiteLootStrategies
         },
         // Nothing resolves to Mining yet (ET-229 adds its detection and its MINING section); until then it carries
         // only what every run has.

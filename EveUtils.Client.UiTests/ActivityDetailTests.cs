@@ -163,9 +163,10 @@ public sealed class ActivityDetailTests
         Assert.Equal("system 30000142", viewModel.Activity().LocationText);
     }
 
-    /// <summary>AC-1, mission half: a mission names its agent and its level and shows REWARDS, and carries no
+    /// <summary>AC-1, mission half: a mission names its agent and its level and shows MISSION, and carries no
     /// BOUNTY or LOOT section. Counter-proof: give every kind the same fixed block of sections and this goes red on
-    /// a visible BOUNTY heading.</summary>
+    /// a visible BOUNTY heading. The agent reads as a bare id here because this render path wires no SDE — see
+    /// <see cref="Mission_NamesTheAgentFromTheSde_InsteadOfTheBareId"/> for the id resolved into a name.</summary>
     [AvaloniaFact]
     public async Task Mission_ShowsAgentAndRewards_AndNoBountyOrLootSection()
     {
@@ -184,9 +185,65 @@ public sealed class ActivityDetailTests
 
         Assert.Contains(texts, text => text == "agent 3018841");
         Assert.Contains(texts, text => text == "Level 2");
-        Assert.Contains(texts, text => text == "REWARDS");
+        Assert.Contains(texts, text => text == "MISSION");
         Assert.DoesNotContain(texts, text => text == "BOUNTY");
         Assert.DoesNotContain(texts, text => text == "LOOT");
+    }
+
+    /// <summary>AC-2: the detail screen shows the agent by name, not as "agent 3018841" — ET-235's own complaint
+    /// about this screen. Counter-proof: read <c>AgentId</c> straight into <c>AgentText</c> without the SDE lookup
+    /// and this goes red on the bare id.</summary>
+    [AvaloniaFact]
+    public async Task Mission_NamesTheAgentFromTheSde_InsteadOfTheBareId()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Mission, StartedAtUtc,
+            4022, "Paragon Requests: Ships for Tips", 30000142,
+            SiteTypeSource: SiteTypeSource.Mission, AgentId: 3018841, MissionLevel: 2), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(8), StartedAtUtc.AddMinutes(9),
+            [], [], [], []), cancellationToken);
+        Result<IReadOnlyList<ActivityOverviewRowDto>> overview =
+            await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(overview));
+
+        var sde = new FakeSdeAccessor().AddAgent(new SdeAgent(3018841, "Kaesa Baldwin", Level: 2, AgentTypeId: 2,
+            AgentTypeName: "BasicAgent", DivisionId: 1, IsLocator: false, CorporationId: 1000010,
+            LocationId: 60003760, SolarSystemId: 30000142, SolarSystemName: "Jita"));
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IAppraisalProvider>(), sde: sde);
+        await viewModel.LoadAsync(cancellationToken);
+
+        Assert.Equal("Kaesa Baldwin", viewModel.Mission().AgentText);
+        Assert.Equal("Level 2", viewModel.Mission().LevelText);
+    }
+
+    /// <summary>ET-237 comment 1: a regular agent's mission has no "Report to" line at all, so nothing states the
+    /// agent — the screen says that honestly rather than showing a bare id it does not have.</summary>
+    [AvaloniaFact]
+    public async Task Mission_WithNoAgentInTheCapture_SaysSoRatherThanShowingAnId()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Mission, StartedAtUtc,
+            9999, "Cargo Delivery Objectives", 30000142, SiteTypeSource: SiteTypeSource.Mission), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(8), StartedAtUtc.AddMinutes(9),
+            [], [], [],
+            [new RunParameterInput { ParameterKey = RunParameterKey.Isk, TypedValue = "360000", Amount = 360_000m, ObservedAtUtc = StartedAtUtc }]),
+            cancellationToken);
+        Result<IReadOnlyList<ActivityOverviewRowDto>> overview =
+            await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(overview));
+
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IAppraisalProvider>());
+        await viewModel.LoadAsync(cancellationToken);
+
+        Assert.False(viewModel.Mission().HasAgent);
+        Assert.Equal("not stated in this capture", viewModel.Mission().AgentText);
+        Assert.False(viewModel.Mission().IsLevelShown);
     }
 
     /// <summary>AC-1, anomaly half: a site shows ENEMIES, BOUNTY and LOOT and carries no agent row. Counter-proof:
