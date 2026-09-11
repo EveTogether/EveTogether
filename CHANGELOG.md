@@ -13,6 +13,9 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- Mission reward lines EVE Together cannot yet recognise are now kept untouched with the run, so they can be classified later instead of disappearing.
+- Mission runs now show their agent's level instead of abyssal weather and tier badges.
+
 ### Added
 - The **UNFINISHED** band on the runs screen now shows each stopped-but-not-saved run's own **TOTAL ISK** so
   far, right beside its duration — bounty, priced loot and ISK-shaped rewards added up the same way a saved

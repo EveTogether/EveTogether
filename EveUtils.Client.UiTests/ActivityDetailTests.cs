@@ -132,7 +132,7 @@ public sealed class ActivityDetailTests
         List<string> texts = await _RenderAsync(instance, cancellationToken);
 
         Assert.Contains(texts, text => text == "agent 3018841");
-        Assert.Contains(texts, text => text == "level 2");
+        Assert.Contains(texts, text => text == "Level 2");
         Assert.Contains(texts, text => text == "REWARDS");
         Assert.DoesNotContain(texts, text => text == "BOUNTY");
         Assert.DoesNotContain(texts, text => text == "LOOT");

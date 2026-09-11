@@ -446,8 +446,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     // every kind but Mission, same as Run.AgentId/MissionLevel themselves. The system comes from the agent's own
     // station, never from the clipboard text (ET-172 sub 4 AC-4) — there is no location text to parse anyway.
     public int? MissionAgentId { get; set; }
-    public int? MissionLevel { get; set; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsMissionLevelShown))]
+    [NotifyPropertyChangedFor(nameof(MissionLevelText))]
+    private int? _missionLevel;
     public int? MissionSolarSystemId { get; set; }
+
+    public bool IsMissionLevelShown => Kind == ActivityKind.Mission && MissionLevel is not null;
+
+    public string MissionLevelText => MissionLevel is { } level ? $"Level {level}" : string.Empty;
 
     // The reward lines a mission's clipboard capture already carried at accept time, written onto the run the
     // moment it starts rather than waited for — a mission is not looted the way a site is (ET-174 AC-4).
@@ -655,7 +662,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public AbyssalWeather? Weather => WeatherIndex is { } index ? AbyssalWeather.All[index] : null;
 
-    public bool HasWeatherAndTier => WeatherIndex is not null && TierIndex is not null;
+    // The kind guard states the invariant; production missions already leave both indexes null.
+    public bool HasWeatherAndTier => IsAbyssal && WeatherIndex is not null && TierIndex is not null;
 
     /// <summary>Drives the one chip in the header that asks for something. Only ever true for an abyssal run — a
     /// site has neither.</summary>

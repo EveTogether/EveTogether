@@ -535,7 +535,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         IsAgentShown = detail.ActivityKind == ActivityKind.Mission;
         ActivityRunDetailDto? withAgent = detail.Runs.FirstOrDefault(run => run.AgentId is not null);
         AgentText = withAgent?.AgentId is { } agentId ? $"agent {agentId}" : "not recorded";
-        MissionLevelText = withAgent?.MissionLevel is { } level ? $"level {level}" : "not recorded";
+        MissionLevelText = withAgent?.MissionLevel is { } level ? $"Level {level}" : "not recorded";
         LocationText = _LocationText(detail.SolarSystemId);
         SignatureText = source?.Signature ?? string.Empty;
         IsSignatureShown = !string.IsNullOrWhiteSpace(source?.Signature);

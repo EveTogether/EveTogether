@@ -49,6 +49,13 @@ public sealed class ClipboardMissionOfferTests
         { SpaceSeparatedMissionBlock.Replace("1.000.000", "5 000"), 5_000m }
     };
 
+    public static TheoryData<string[], bool, string?> MissionRewardVariants => new()
+    {
+        { [" \t1.000.000 ISK\t", " \tMysterious reward\t"], true, null },
+        { [" \t1.000.000 ISK\t", " \t1.610.000 ISK\t"], false, null },
+        { [" \tMysterious reward\t ", " \t1.000.000 ISK\t"], true, " \tMysterious reward\t " }
+    };
+
     // ET-172 sub 4 AC-1..AC-5, AC-7: the SDE facts measured against build 3492266 in the epic's own grooming —
     // Aralin Jick is agent 3019407, level 4, an EpicArcAgent, at Nishah (system 30005040).
     private static SdeAgent AralinJick => new(3019407, "Aralin Jick", Level: 4, AgentTypeId: 10,
@@ -66,9 +73,12 @@ public sealed class ClipboardMissionOfferTests
         env.Sde.AddAgent(AralinJick);
         await env.AddCharacterAsync();
 
+        ActivityWindowViewModel? open = null;
         if (windowAlreadyOpen)
-            env.Dialogs.ShowActivityWindow(new ActivityWindowViewModel(ActivityKind.Mission, env.Services),
-                RunWindowOpenTrigger.LocalUser);
+        {
+            open = new ActivityWindowViewModel(ActivityKind.Mission, env.Services);
+            env.Dialogs.ShowActivityWindow(open, RunWindowOpenTrigger.LocalUser);
+        }
 
         env.Copy(MeasuredMissionBlock);
         Run run = await WaitForRunningMissionAsync(env);
@@ -77,6 +87,11 @@ public sealed class ClipboardMissionOfferTests
         Assert.Equal(4, run.MissionLevel);                                    // AC-3
         Assert.Equal(30005040, run.SolarSystemId);                            // AC-4 — not the "0,6" in the text
         Assert.Equal(SiteTypeSource.Mission, run.SiteTypeSource);             // AC-5
+        if (open is not null)
+        {
+            await open.LastMission;
+            Assert.Equal("Level 4", open.MissionLevelText);
+        }
 
         // AC-7: the arc-ness is not stored redundantly — it is read back through the very agent id the run carries.
         SdeAgent? agent = env.Sde.GetAgent(run.AgentId!.Value);
@@ -120,6 +135,27 @@ public sealed class ClipboardMissionOfferTests
             && p.BonusWindowSeconds == 21600);
         Assert.Contains(parameters, p => p.ParameterKey == RunParameterKey.LoyaltyPoints && p.Amount == 5_000m);
         Assert.Contains(parameters, p => p.ParameterKey == RunParameterKey.Item && p.Amount == 3m && p.ItemTypeId == 34);
+    }
+
+    [AvaloniaTheory]
+    [MemberData(nameof(MissionRewardVariants))]
+    public async Task AMissionCapture_WithKnownAndUnknownRewardVariants_PreservesTheExpectedParameters(
+        string[] rewards, bool expectsUnknown, string? expectedRawLine)
+    {
+        using var env = await Env.StartAsync();
+        env.Sde.AddAgent(AralinJick);
+        await env.AddCharacterAsync();
+
+        env.Copy(_MissionCapture(rewards));
+        Run run = await WaitForRunningMissionAsync(env);
+        await using ClientDbContext db = await env.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        List<RunParameter> parameters = await db.Set<RunParameter>().Where(parameter => parameter.RunId == run.Id).ToListAsync();
+
+        Assert.Contains(parameters, parameter => parameter.ParameterKey == RunParameterKey.Isk && parameter.Amount == 1_000_000m);
+        RunParameter? unknown = parameters.SingleOrDefault(parameter => parameter.ParameterKey == RunParameterKey.Unknown);
+        Assert.Equal(expectsUnknown, unknown is not null);
+        if (expectedRawLine is not null)
+            Assert.Equal(expectedRawLine, unknown?.TypedValue);
     }
 
     [AvaloniaTheory]
@@ -193,6 +229,17 @@ public sealed class ClipboardMissionOfferTests
             directory?.FullName ?? throw new InvalidOperationException("the solution root is not above the test binary"),
             "EveUtils.Client.UiTests", "Fixtures", name));
     }
+
+    private static string _MissionCapture(params string[] rewards) =>
+        "Aralin Jick Objectives\r\n" +
+        "The following objectives must be completed to finish the mission:\r\n" +
+        "\r\n" +
+        "Report to Aralin Jick\r\n" +
+        " \tAgent Location\t0,6 Nishah VII - Moon 5 - Kor-Azor Family Treasury\r\n" +
+        "\r\n" +
+        "Rewards\r\n" +
+        "The following rewards will be yours if you complete this mission:\r\n" +
+        string.Join("\r\n", rewards);
 
     private sealed class Env : IDisposable
     {

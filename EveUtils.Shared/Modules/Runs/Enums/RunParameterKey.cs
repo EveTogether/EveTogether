@@ -33,5 +33,8 @@ public enum RunParameterKey
     EscalationSolarSystemId,
     /// <summary>The computed UTC deadline, never a default duration (ET-125 AC-3): the pilot carries over whatever
     /// remaining time the Agency showed, and this is that reading turned into a moment.</summary>
-    EscalationExpiresAtUtc
+    EscalationExpiresAtUtc,
+    /// <summary>A clipboard line whose reward form is not yet classified. Its unmodified text stays in
+    /// <see cref="Entities.RunParameter.TypedValue"/> so it can be classified later.</summary>
+    Unknown
 }
