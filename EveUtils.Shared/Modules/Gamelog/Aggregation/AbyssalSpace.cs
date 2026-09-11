@@ -33,6 +33,20 @@ public static class AbyssalSpace
         anchorMs > 0 ? receivedUtc - TimeSpan.FromMilliseconds(sentMs - anchorMs) : null;
 
     /// <summary>
+    /// <see cref="AnchorFromWire"/> for a source value whose <see cref="DateTime.Kind"/> cannot be trusted — a run
+    /// time that has round-tripped through a database column, client or server side, comes back
+    /// <see cref="DateTimeKind.Unspecified"/> regardless of the UTC value it holds (ET-244, measured: a run pulled
+    /// from a self-hosted server landed two hours early on a CEST machine). <c>DateTime.ToUniversalTime()</c> reads
+    /// an unspecified <see cref="DateTime"/> as local time and would silently shift it by the reader's own UTC
+    /// offset; the field name already says the value is UTC, so it is taken at that word instead.
+    /// </summary>
+    public static DateTime AnchorFromWireUtc(DateTime sourceUtc, long sentMs, DateTime receivedUtc)
+    {
+        DateTime utc = DateTime.SpecifyKind(sourceUtc, DateTimeKind.Utc);
+        return AnchorFromWire(new DateTimeOffset(utc).ToUnixTimeMilliseconds(), sentMs, receivedUtc) ?? utc;
+    }
+
+    /// <summary>
     /// How long is left on the run, or null when there is no anchor or the deadline has passed.
     ///
     /// The countdown never claims more time than there is. <paramref name="anchorUtc"/> is the last moment we could

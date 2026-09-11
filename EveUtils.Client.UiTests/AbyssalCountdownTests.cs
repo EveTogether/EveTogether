@@ -237,6 +237,29 @@ public class AbyssalCountdownTests
         Assert.Equal("Abyssal (--:--)", AbyssalSpace.Describe("Aphend", At1740 - AbyssalSpace.RunLimit, At1740));
     }
 
+    /// <summary>
+    /// ET-244, measured: a run pulled from a self-hosted server landed two hours early on a CEST machine. The value
+    /// had round-tripped through a database column and come back <see cref="DateTimeKind.Unspecified"/>, and the old
+    /// code's <c>sourceUtc.ToUniversalTime()</c> read that as local time, subtracting the reader's own UTC offset.
+    /// This test only reproduces on a machine whose local zone is not UTC — the same reason the bug went unnoticed
+    /// on the server, which runs in UTC.
+    /// </summary>
+    [Fact]
+    public void AnchorFromWireUtc_UnspecifiedKind_IsNotMisreadAsLocalTime()
+    {
+        Assert.NotEqual(TimeSpan.Zero, TimeZoneInfo.Local.GetUtcOffset(DateTime.UtcNow));
+
+        var startedAtUtc = new DateTime(2026, 9, 11, 18, 49, 42, DateTimeKind.Unspecified);
+        var stoppedAtUtc = new DateTime(2026, 9, 11, 18, 56, 39, DateTimeKind.Unspecified);
+        var sentAt = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
+
+        DateTime rebasedStart = AbyssalSpace.AnchorFromWireUtc(startedAtUtc, sentAt, DateTime.UtcNow);
+        DateTime rebasedStop = AbyssalSpace.AnchorFromWireUtc(stoppedAtUtc, sentAt, DateTime.UtcNow);
+
+        Assert.InRange(rebasedStart, startedAtUtc.AddSeconds(-5), startedAtUtc.AddSeconds(5));
+        Assert.InRange(rebasedStop, stoppedAtUtc.AddSeconds(-5), stoppedAtUtc.AddSeconds(5));
+    }
+
     /// <summary>Staying inside must not re-anchor: the clock would stand still at full time forever.</summary>
     [Fact]
     public void RepeatedInsideReadings_DoNotMoveTheAnchor()

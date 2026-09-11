@@ -67,6 +67,5 @@ public sealed class RunsGrpcService(ServerSessionService sessions, IRunSyncRepos
         return session ?? throw new RpcException(new Status(StatusCode.Unauthenticated, "Not authenticated — pair with the server first."));
     }
     private static DateTime _Anchor(DateTime sourceUtc, long sentAtUnixMilliseconds) =>
-        AbyssalSpace.AnchorFromWire(new DateTimeOffset(sourceUtc.ToUniversalTime()).ToUnixTimeMilliseconds(), sentAtUnixMilliseconds, DateTime.UtcNow)
-        ?? sourceUtc;
+        AbyssalSpace.AnchorFromWireUtc(sourceUtc, sentAtUnixMilliseconds, DateTime.UtcNow);
 }

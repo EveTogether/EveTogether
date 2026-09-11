@@ -548,6 +548,11 @@ taken from the matching `## vX.Y.Z` section below.
 - **A mission's bonus time window now keeps its minutes, not only its hours.** "Within 1 hour and 16 minutes"
   used to be read as a flat hour, rounding the window down; a window given only in minutes was not read at
   all. Both now count correctly.
+- **A fleet mate's run pulled from a server no longer lands hours off.** Syncing runs read a time back out of
+  a database column and treated it as local time instead of UTC — on a machine outside UTC (say, Central
+  European Summer Time) that shifted a fleet mate's run by the reader's own time zone offset, and threw off
+  the whole activity's shared duration along with it. Both directions of the sync now always read that time
+  as UTC.
 
 ## v0.2.0-beta — 2026-07-06
 
