@@ -41,4 +41,9 @@ public sealed record StartRunCommand(
     RunOrigin Origin = RunOrigin.Unknown,
     // What a mission's clipboard capture already knows at accept time — the reward lines, not the loot found later.
     // Empty for every caller but a mission (ET-172 sub 4): a site or an abyssal run has nothing to give here yet.
-    IReadOnlyList<RunParameterInput>? Parameters = null) : ICommand<Result<Guid>>;
+    IReadOnlyList<RunParameterInput>? Parameters = null,
+    // Announced to the fleet only (ET-241), same rule as SolarSystemName above: this command does not persist them
+    // onto the run itself — ActivityWindowSectionViewModel.AddToSave does that once, at SAVE, as a RunParameter, so a
+    // tier or weather picked after START is never lost and never written twice.
+    int? AbyssalTierIndex = null,
+    string? AbyssalWeatherName = null) : ICommand<Result<Guid>>;

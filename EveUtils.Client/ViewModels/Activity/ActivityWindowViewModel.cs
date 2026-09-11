@@ -83,6 +83,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private readonly IDisposable? _fleetRunStartedSubscription;
     private readonly IDisposable? _fleetRunStoppedSubscription;
     private readonly IDisposable? _fleetRunDiscardedSubscription;
+    private readonly IDisposable? _fleetRunAbyssalUpdatedSubscription;
 
 
     // The fleet's latest location sample per member, so the envelope is re-taken over the whole fleet on every
@@ -128,6 +129,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _fleetRunStartedSubscription = services.GetService<IEventBus>()?.Subscribe<FleetRunGroupCodeEvent>(_OnFleetRunStarted);
         _fleetRunStoppedSubscription = services.GetService<IEventBus>()?.Subscribe<FleetRunStoppedEvent>(_OnFleetRunStopped);
         _fleetRunDiscardedSubscription = services.GetService<IEventBus>()?.Subscribe<FleetRunDiscardedEvent>(_OnFleetRunDiscarded);
+        // The commander changed the pocket's tier or weather after this member already joined (ET-241) — same
+        // shape as the three subscriptions above, kept in step for as long as the run runs.
+        _fleetRunAbyssalUpdatedSubscription = services.GetService<IEventBus>()?
+            .Subscribe<FleetRunGroupAbyssalUpdatedEvent>(_OnFleetAbyssalUpdated);
         RunLoot = services.GetService<CqrsDispatcher>() is { } dispatcher
             ? new RunLootViewModel(dispatcher, services.GetService<IAppraisalProvider>(), services.GetService<ISdeAccessor>())
             : null;
@@ -164,6 +169,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     int? IRunWindowContext.RunCharacterId => _runCharacterId;
 
     int? IRunWindowContext.ActingCharacterId => _ActingCharacterId();
+
+    bool IRunWindowContext.IsFleetCommander => Authority.IsFleetCommander;
 
     /// <summary>The run on screen, for what belongs to one run only: the registration way, the two paste boxes and
     /// the starting-hold picker. Follows the character column.</summary>
@@ -950,6 +957,18 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // system, not to the pilot (ET-151) — so LOCATION reads RUS-326 · Shousran here too instead of the bare
         // system it showed a member while the commander had the site.
         SignatureId ??= start.Signature;
+        // Same rule, same reason (ET-239): a member who already copied their own signature keeps the type it
+        // resolved to; only a member with none reads the commander's.
+        SignatureGroup ??= start.SignatureGroupSnapshot;
+        // Unlike the two lines above, this is never "only where empty" (ET-241): the commander's own answer always
+        // wins over whatever this member's window already picked up from its own remembered settings — an unrelated
+        // abyssal's leftover tier and weather, which reads as established when it is really just a stale default
+        // (the trap ET-208 decision 3 names). A member's own later, deliberate pick through the ACTIVITY section
+        // still stands: this only runs once, when the commander's own start reaches this window.
+        if (start.AbyssalTierIndex is { } tierIndex)
+            TierIndex = tierIndex;
+        if (AbyssalWeather.IndexOf(start.AbyssalWeatherName) is { } weatherIndex)
+            WeatherIndex = weatherIndex;
         RunState = ActivityRunState.Running;
         _OnRunWatched();
         // A joined run still needs its own row, or this member's loot and bounties have nothing to hang off.
@@ -1005,6 +1024,23 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                             + "Nothing you already saved is gone. Close this window when you have read it.";
             if (RunLoot is not null)
                 _ = RunLoot.RefreshAsync();
+            Refresh(DateTime.UtcNow);
+        });
+    }
+
+    /// <summary>The commander changed the pocket's tier or weather after this member already joined (ET-241) — the
+    /// same two facts <see cref="JoinFleetRun"/> takes at the start, kept in step for as long as the run runs.
+    /// Unconditional, same reasoning as the join itself: the commander's own answer always wins here.</summary>
+    private void _OnFleetAbyssalUpdated(FleetRunGroupAbyssalUpdatedEvent integrationEvent)
+    {
+        RunGroupAbyssalUpdate changed = integrationEvent.Data;
+        if (GroupCode is not { } groupCode || !string.Equals(groupCode, changed.GroupCode, StringComparison.Ordinal))
+            return;
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            TierIndex = changed.TierIndex;
+            WeatherIndex = AbyssalWeather.IndexOf(changed.WeatherName);
             Refresh(DateTime.UtcNow);
         });
     }
@@ -1452,7 +1488,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 SiteTypeSource: _SiteTypeSource(),
                 AgentId: MissionAgentId,
                 MissionLevel: MissionLevel,
-                Parameters: PendingParameters));
+                Parameters: PendingParameters,
+                // Announced to the fleet only if this window already knows them (ET-241) — SAVE is what actually
+                // persists them onto the run, through ActivityWindowSectionViewModel.AddToSave.
+                AbyssalTierIndex: TierIndex,
+                AbyssalWeatherName: Weather?.Name));
         if (!started.IsSuccess)
         {
             _services.GetService<IToastService>()?.Show("Run not started",
@@ -2515,6 +2555,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _fleetRunStartedSubscription?.Dispose();
         _fleetRunStoppedSubscription?.Dispose();
         _fleetRunDiscardedSubscription?.Dispose();
+        _fleetRunAbyssalUpdatedSubscription?.Dispose();
         _timer?.Stop();
         _timer = null;
     }

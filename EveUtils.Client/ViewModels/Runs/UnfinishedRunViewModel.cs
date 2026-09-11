@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Formatting;
+using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
 
 namespace EveUtils.Client.ViewModels.Runs;
@@ -28,7 +29,16 @@ public sealed partial class UnfinishedRunViewModel(
 
     public string CharacterText { get; } = characterName;
 
-    public string SiteText { get; } = string.IsNullOrWhiteSpace(run.SiteName) ? "Unnamed site" : run.SiteName;
+    // An abyssal never has a site name to fall back to — this reads the type's own honest name instead of "Unnamed
+    // site" (ET-241). Its tier and weather are only ever persisted at SAVE (ActivityWindowSectionViewModel.AddToSave),
+    // so an unfinished row — stopped, not yet saved — always reads the plain "Abyssal" here, same as a site with no
+    // name yet reads "Unnamed site" until it has one.
+    public string SiteText { get; } = !string.IsNullOrWhiteSpace(run.SiteName)
+        ? run.SiteName
+        : RunTypeCatalogue.For(RunTypeResolver.Resolve(run.ActivityKind, run.SignatureGroupSnapshot)).Space
+            is RunSpace.AbyssalPocket
+            ? "Abyssal"
+            : "Unnamed site";
 
     /// <summary>What it was and who flew it, as one run of text — two of these rows differ by the pilot as often as
     /// by the site, so neither may be the one that gets trimmed away first.</summary>

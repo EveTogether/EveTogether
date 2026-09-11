@@ -8,6 +8,9 @@ using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -98,6 +101,7 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
         Context.WeatherIndex = index;
         _AfterChoice();
         await _PersistAsync(WeatherSettingKey, index.ToString(CultureInfo.InvariantCulture));
+        await _AnnounceAbyssalFactsIfCommandingAsync();
     }
 
     [RelayCommand]
@@ -106,6 +110,7 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
         Context.TierIndex = index;
         _AfterChoice();
         await _PersistAsync(TierSettingKey, index.ToString(CultureInfo.InvariantCulture));
+        await _AnnounceAbyssalFactsIfCommandingAsync();
     }
 
     [RelayCommand]
@@ -116,6 +121,22 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
         _AfterChoice();
         await _PersistAsync(WeatherSettingKey, string.Empty);
         await _PersistAsync(TierSettingKey, string.Empty);
+        await _AnnounceAbyssalFactsIfCommandingAsync();
+    }
+
+    /// <summary>Tell the rest of the fleet the pocket's tier or weather just changed (ET-241) — only when this
+    /// client commands it and the run is shared, and only the commander's own change: a member picking their own
+    /// answer for their own display is not an announcement, or every member's guess would fight over the others'.
+    /// </summary>
+    private async Task _AnnounceAbyssalFactsIfCommandingAsync()
+    {
+        if (!Context.IsFleetCommander || Context.FleetId is not { } fleetId || Context.GroupCode is not { } groupCode
+            || Context.Services.GetService<IEventBus>() is not { } eventBus)
+            return;
+
+        await eventBus.PublishAsync(new FleetRunGroupAbyssalUpdatedEvent(
+            new RunGroupAbyssalUpdate(fleetId, Context.Kind, groupCode, Context.TierIndex, Context.Weather?.Name),
+            Context.RunCharacterId), EventTarget.Both);
     }
 
     /// <summary>Reopen the picker on the run that is already answered — the one line it folded behind.</summary>
@@ -284,9 +305,12 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
     {
         if (settings is not null)
         {
-            Context.WeatherIndex = _Restore(settings.FirstOrDefault(s => s.Key == WeatherSettingKey)?.Value,
+            // Only where nothing has claimed either fact yet: a member who joined on the fleet commander's own tier
+            // and weather (ET-241, JoinFleetRun) keeps it — this is the last-remembered fallback for a window with
+            // neither, not a value that overrides an answer already known to be real.
+            Context.WeatherIndex ??= _Restore(settings.FirstOrDefault(s => s.Key == WeatherSettingKey)?.Value,
                 AbyssalWeather.All.Count);
-            Context.TierIndex = _Restore(settings.FirstOrDefault(s => s.Key == TierSettingKey)?.Value,
+            Context.TierIndex ??= _Restore(settings.FirstOrDefault(s => s.Key == TierSettingKey)?.Value,
                 AbyssalTiers.Names.Count);
 
             // A remembered strategy this type does not loot by addresses nothing here, so it reads as unset — the
@@ -314,13 +338,23 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
             : "not set yet · no location";
     }
 
-    /// <summary>The loot strategy goes with every run of the group; the escalation only with the one it was
-    /// registered on.</summary>
+    /// <summary>The loot strategy and the pocket's own tier and weather go with every run of the group — everybody
+    /// flew the same instance; the escalation only with the one it was registered on.</summary>
     public override void AddToSave(RunSaveDraft draft)
     {
         draft.LootStrategy = LootStrategy;
         if (draft.IsActingRun)
             draft.Parameters.AddRange(_escalationParameters);
+
+        // Never lost at save (ET-241): the window only ever held this in Context.WeatherIndex/TierIndex, with no
+        // column and no RunParameter row until now — measured in a real run's database as zero rows before this.
+        if (Context.HasWeatherAndTier)
+            draft.Parameters.Add(new RunParameterInput
+            {
+                ParameterKey = RunParameterKey.AbyssalFilament,
+                TypedValue = $"{Context.TierIndex}|{Context.Weather!.Name}",
+                ObservedAtUtc = DateTime.UtcNow
+            });
     }
 
     protected override void OnContextChanged(string? propertyName)

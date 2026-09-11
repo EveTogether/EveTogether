@@ -78,13 +78,22 @@ public static class RunTypeCatalogue
     public static IReadOnlyList<RunLootStrategy> SiteLootStrategies { get; } =
         [RunLootStrategy.Blitzed, RunLootStrategy.CherryPicked, RunLootStrategy.Cleared, RunLootStrategy.FullClear];
 
-    // Every run window has the same six today, whatever its type. A data or relic site keeps ENEMIES and BOUNTY even
-    // though it usually has neither: it can still have rats, and both sections already say what they have not seen
-    // (the ET-236 choice, rather than one that appears only once something comes in).
+    // Every site run window has these same six (ET-241 dropped BOUNTY for Abyssal below — see AbyssalWindow). A data
+    // or relic site keeps ENEMIES and BOUNTY even though it usually has neither: it can still have rats, and both
+    // sections already say what they have not seen (the ET-236 choice, rather than one that appears only once
+    // something comes in).
     private static readonly IReadOnlyList<RunSectionId> StandardWindow =
     [
         RunSectionId.Activity, RunSectionId.Enemies, RunSectionId.Fit, RunSectionId.Fleet, RunSectionId.Bounty,
         RunSectionId.Loot
+    ];
+
+    // An abyssal pocket has no NPC bounty at all (ET-241, Jithran flying one with Raymond, 2026-09-11) — unlike a
+    // data or relic site, which merely usually has none, this is never a gap BOUNTY could one day fill, so the
+    // section itself is dropped rather than kept around showing nothing.
+    private static readonly IReadOnlyList<RunSectionId> AbyssalWindow =
+    [
+        RunSectionId.Activity, RunSectionId.Enemies, RunSectionId.Fit, RunSectionId.Fleet, RunSectionId.Loot
     ];
 
     private static readonly IReadOnlyList<RunSectionId> SiteDetail =
@@ -160,9 +169,8 @@ public static class RunTypeCatalogue
             Icon = MaterialIconKind.StormOutline,
             WindowTitle = "ABYSSAL RUN",
             Noun = "an abyssal pocket",
-            WindowSections = StandardWindow,
-            DetailSections =
-                [RunSectionId.Activity, RunSectionId.Enemies, RunSectionId.Fleet, RunSectionId.Bounty, RunSectionId.Loot],
+            WindowSections = AbyssalWindow,
+            DetailSections = [RunSectionId.Activity, RunSectionId.Enemies, RunSectionId.Fleet, RunSectionId.Loot],
             Space = RunSpace.AbyssalPocket,
             LootStrategies = AbyssalLootStrategies
         }

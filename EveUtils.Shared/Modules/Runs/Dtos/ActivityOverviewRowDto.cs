@@ -45,4 +45,9 @@ public sealed record ActivityOverviewRowDto(
     bool HasAutoSavedRun,
     /// <summary>The servers this activity's runs were queued for or pushed to, from the runs themselves. Empty on an
     /// activity that never left this machine.</summary>
-    IReadOnlyList<ActivityServerSyncDto> ServerSyncStates);
+    IReadOnlyList<ActivityServerSyncDto> ServerSyncStates,
+    /// <summary>The abyssal pocket's own stored tier and weather (ET-241), raw as <c>RunParameterKey.AbyssalFilament</c>
+    /// wrote it — null on every non-abyssal activity, and on an abyssal saved before this ticket. Not a member of
+    /// <see cref="Rewards"/>: it names what the run was, it is not something the pilot earned. Read into a name (e.g.
+    /// "Agitated Dark") by the client, which is the only side that knows the tier's own word.</summary>
+    string? AbyssalFilamentText = null);

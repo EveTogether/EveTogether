@@ -13,6 +13,18 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **An abyssal pocket no longer shows a BOUNTY section**, in the run window or the saved activity screen — there is
+  no NPC bounty in one at all. A run flown in one is also no longer saved as "Unnamed site": it is now named after
+  its filament, the same way EVE itself does — "Agitated Dark", say — in the run window, the runs overview, the
+  saved activity screen and the server tab. A pocket's tier and weather are now actually saved with the run; before
+  this they lived only in the open window and were lost the moment it closed.
+- **A fleet member joining a shared run now sees the same site type as the commander** — a Data Site copied by the
+  commander used to reach a member reading only the honest-but-poorer "Site", since the fleet's own start message
+  never carried the scanner group behind it. The same message now also carries an abyssal's tier and weather, so a
+  member's window shows the commander's real answer instead of falling back to whatever this member's own client
+  last remembered from some unrelated abyssal — reported by Raymond as "T0 Dark" on a run Jithran had started as a
+  T3 Dark. Changing the tier or weather mid-run now reaches every member already on the run, too. An unknown tier
+  or weather now reads "not set" rather than guessing the first one on the list.
 - Mission reward lines EVE Together cannot yet recognise are now kept untouched with the run, so they can be classified later instead of disappearing.
 - Mission runs now show their agent's level instead of abyssal weather and tier badges.
 - Mission runs now have their own MISSION section, in both the run window and the saved activity screen: the agent by name (a regular agent's mission, which states no agent at all, says so honestly), ISK, Loyalty Points, items and any reward line the app does not yet recognise. A bonus reward counts down while its time window is open, reads as expired once it has passed, and drops out of TOTAL ISK the moment it does — a bonus you actually earned before stopping the run stays counted even if the window sits open a while longer before you save it. A mission run can now also be marked blitzed, cherry-picked, cleared or full clear, the same as a site, and remembers your last choice for missions on their own.

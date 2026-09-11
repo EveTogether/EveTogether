@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Material.Icons;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -47,8 +48,14 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         StartedAtLocal = row.StartedAtUtc.ToLocalTime();
         Duration = TimeSpan.FromSeconds(row.DurationSeconds);
         TimeText = StartedAtLocal.ToString("HH:mm");
-        SiteText = string.IsNullOrWhiteSpace(row.SiteName) ? "Unnamed site" : row.SiteName;
         RunTypeDefinition type = RunTypeCatalogue.For(RunTypeResolver.Resolve(row.ActivityKind, row.SignatureGroupSnapshot));
+        // An abyssal has no site at all — it never reads "Unnamed site" (ET-241), it reads what filament opened it,
+        // or the type's own honest name while that is still unknown.
+        SiteText = !string.IsNullOrWhiteSpace(row.SiteName)
+            ? row.SiteName
+            : type.Space is RunSpace.AbyssalPocket
+                ? AbyssalFilamentName.From(row.AbyssalFilamentText)
+                : "Unnamed site";
         KindText = type.Name;
         TypeIcon = type.Icon;
         DurationText = Duration.ToString(@"hh\:mm\:ss");

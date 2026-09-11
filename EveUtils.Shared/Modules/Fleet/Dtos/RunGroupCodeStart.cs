@@ -13,6 +13,16 @@ namespace EveUtils.Shared.Modules.Fleet.Dtos;
 /// cosmic signature's id is a property of the system and not of the pilot: every capsuleer in that system reads the
 /// same code off their own scanner, which is the whole reason a corp's mapping tools can share signature ids at all.
 /// It is re-rolled at downtime, and the run does not outlive one (ET-151).</param>
+/// <param name="SignatureGroupSnapshot">The scanner's own group text behind <see cref="SiteName"/> (ET-226), so a
+/// member's own run resolves to the same TYPE the commander's does instead of the honest-but-poorer "Site" a member
+/// with no scan of their own would otherwise show (ET-239). Null on an older commander's client, which a member on
+/// this build reads the same as a manual start with no scan of its own.</param>
+/// <param name="AbyssalTierIndex">The pocket's own tier, if the commander's window already knew it at START (ET-241)
+/// — never stored by this message, only announced, so a member's window shows the commander's real answer instead of
+/// falling back to whatever an unrelated abyssal last left in this member's own remembered settings (the ET-208
+/// decision 3 trap: a first-looking value that reads as if it were established).</param>
+/// <param name="AbyssalWeatherName">The pocket's own weather, by its plain name (e.g. "Dark") — alongside
+/// <see cref="AbyssalTierIndex"/>, same reasoning.</param>
 public sealed record RunGroupCodeStart(
     long FleetId,
     ActivityKind ActivityKind,
@@ -21,4 +31,7 @@ public sealed record RunGroupCodeStart(
     bool IsFleetCommander,
     string? SiteName = null,
     string? SolarSystemName = null,
-    string? Signature = null);
+    string? Signature = null,
+    string? SignatureGroupSnapshot = null,
+    int? AbyssalTierIndex = null,
+    string? AbyssalWeatherName = null);
