@@ -40,6 +40,10 @@ public partial class App : Application
             // apply the persisted faction theme (default Gallente is already merged in App.axaml).
             _ = Program.Services.GetRequiredService<Theming.IThemeService>().InitializeAsync();
 
+            // Keyboard shortcuts (ET-209): reads any recorded overrides before the window can receive its first
+            // key press.
+            _ = Program.Services.GetRequiredService<Input.KeyboardShortcutRegistry>().InitializeAsync();
+
             // Global safety net: surface unhandled UI-thread errors as a message box instead of crashing.
             InstallGlobalErrorHandler();
 

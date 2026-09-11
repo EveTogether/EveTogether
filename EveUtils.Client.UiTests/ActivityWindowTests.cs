@@ -727,6 +727,40 @@ public class ActivityWindowTests
         Assert.False(set.NeedsWeatherAndTier);
     }
 
+    [AvaloniaTheory]
+    [InlineData(ActivityKind.Mission, false)]
+    [InlineData(ActivityKind.Mission, true)]
+    [InlineData(ActivityKind.Abyssal, false)]
+    public void HeaderChips_ShowTheMissionLevelOrAbyssalWeatherAndTier(ActivityKind kind, bool levelArrivesAfterOpening)
+    {
+        var model = new ActivityWindowViewModel(kind, _Unused()) { WeatherIndex = 0, TierIndex = 0 };
+        if (!levelArrivesAfterOpening)
+            model.MissionLevel = 4;
+
+        ActivityWindow window = _Open(model, expanded: false);
+
+        if (levelArrivesAfterOpening)
+        {
+            model.MissionLevel = 4;
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        Border level = window.FindControl<Border>("MissionLevelChip")
+            ?? throw new Xunit.Sdk.XunitException("the mission level chip was not rendered");
+        Border tier = window.FindControl<Border>("TierChip")
+            ?? throw new Xunit.Sdk.XunitException("the tier chip was not rendered");
+        Border weather = window.FindControl<Border>("WeatherChip")
+            ?? throw new Xunit.Sdk.XunitException("the weather chip was not rendered");
+
+        Assert.Equal(kind == ActivityKind.Mission, level.IsVisible);
+        Assert.Equal(kind == ActivityKind.Abyssal, tier.IsVisible);
+        Assert.Equal(kind == ActivityKind.Abyssal, weather.IsVisible);
+        if (kind == ActivityKind.Mission)
+            Assert.Equal("Level 4", Assert.Single(level.GetVisualDescendants().OfType<TextBlock>()).Text);
+
+        window.Close();
+    }
+
     [Fact]
     public void ThePickerFoldsAwayOnceAnswered_AndReopensOnRequest()
     {

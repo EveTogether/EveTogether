@@ -175,6 +175,7 @@ public class LocalApiEndpointsTests
         public Task<IReadOnlyList<EveUtils.Shared.Modules.Settings.Entities.ClientSetting>> ListAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<EveUtils.Shared.Modules.Settings.Entities.ClientSetting>>([]);
         public Task UpsertAsync(string key, string value, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeleteAsync(string key, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class StubCharacterRegistry(IReadOnlyList<Character> characters) : ICharacterRegistry
