@@ -7,8 +7,7 @@ public sealed class RunEnemyObservation
     public int EnemyTypeId { get; set; }
     public string EnemyName { get; set; } = string.Empty;
 
-    /// <summary>How many of this type the player counted. Only a run row with a count above zero is stored at all,
-    /// so this column is never the default (ET-106).</summary>
+    /// <summary>How many of this type the player counted. Zero means it was seen but not counted.</summary>
     public int Count { get; set; }
 
     /// <summary>First and last sighting across every observation of this type, both ways round.</summary>

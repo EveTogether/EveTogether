@@ -39,7 +39,7 @@ public sealed class EnemiesWindowSectionViewModel : RunWindowSection
             : [];
 
     /// <summary>Shut, the section still has to answer both halves of the question it exists for: which kinds were
-    /// seen, and how many of them carry a count. A count of zero is not stored (ET-106), so "seen" and "counted"
+    /// seen, and how many of them carry a count. Zero means "seen, not counted", so "seen" and "counted"
     /// are different numbers and the header is the only place they are both visible.</summary>
     public override void RefreshSummary()
     {
