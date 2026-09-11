@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.Runs;
 using EveUtils.Client.Transport;
@@ -613,6 +614,50 @@ public sealed class RunStorageTests
         DateTime stoppedAtUtc = stored.StoppedAtUtc ?? throw new InvalidOperationException("The stopped time was not synchronized.");
         Assert.InRange(stoppedAtUtc, receivedAtUtc.AddMinutes(-1), DateTime.UtcNow.AddMinutes(1));
         Assert.InRange(stored.StartedAtUtc, receivedAtUtc.AddMinutes(-16), receivedAtUtc.AddMinutes(-14));
+    }
+
+    /// <summary>
+    /// ET-244, measured: Raymond's abyssal runs landed two hours early in Jithran's local database after a pull.
+    /// A run's times had round-tripped through a database column (server side on push, then again on this pull) and
+    /// come back <see cref="DateTimeKind.Unspecified"/> on the wire — the JSON has no offset for an unspecified
+    /// value, so deserializing it here reproduces exactly that. The old <c>_Anchor</c> read it as local time and
+    /// subtracted this machine's own UTC offset. Only reproduces on a machine whose local zone is not UTC, which is
+    /// also why the bug only ever showed up on Jithran's own client.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ApplyPulledRuns_UnspecifiedKindOnTheWire_IsNotShiftedByTheReadersOwnTimeZone()
+    {
+        Assert.NotEqual(TimeSpan.Zero, TimeZoneInfo.Local.GetUtcOffset(DateTime.UtcNow));
+        using var instance = TestClientInstance.Create();
+        RunSynchronizationApplier applier = instance.Services.GetRequiredService<RunSynchronizationApplier>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var startedAtUtc = new DateTime(2026, 9, 11, 18, 49, 42, DateTimeKind.Unspecified);
+        var stoppedAtUtc = new DateTime(2026, 9, 11, 18, 56, 39, DateTimeKind.Unspecified);
+        var remote = new Run
+        {
+            Id = Guid.CreateVersion7(),
+            CharacterId = 90000002,
+            GroupCode = "HF-Z6U3",
+            ActivityKind = ActivityKind.Abyssal,
+            State = RunState.Saved,
+            StartedAtUtc = startedAtUtc,
+            StoppedAtUtc = stoppedAtUtc,
+            SavedAtUtc = stoppedAtUtc,
+            SiteTypeId = 1234,
+            SyncState = RunSyncState.Synced,
+            Revision = 2
+        };
+        var payload = new RunWirePayload { Run = RunWireData.FromEntity(remote), SentAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
+        RunWirePayload rehydrated = JsonSerializer.Deserialize<RunWirePayload>(JsonSerializer.Serialize(payload))
+            ?? throw new InvalidOperationException("The payload did not round-trip.");
+
+        await applier.ApplyAsync(ServerAddress, [rehydrated], new HashSet<Guid>(), cancellationToken);
+
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        Run stored = Assert.Single(await db.Set<Run>().ToListAsync(cancellationToken));
+        DateTime storedStoppedAtUtc = stored.StoppedAtUtc ?? throw new InvalidOperationException("The stopped time was not synchronized.");
+        Assert.InRange(stored.StartedAtUtc, startedAtUtc.AddSeconds(-5), startedAtUtc.AddSeconds(5));
+        Assert.InRange(storedStoppedAtUtc, stoppedAtUtc.AddSeconds(-5), stoppedAtUtc.AddSeconds(5));
     }
 
     [AvaloniaFact]

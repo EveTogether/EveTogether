@@ -60,6 +60,5 @@ public sealed class RunSynchronizationApplier(
     }
 
     private static DateTime _Anchor(DateTime sourceUtc, long sentAtUnixMilliseconds) =>
-        AbyssalSpace.AnchorFromWire(new DateTimeOffset(sourceUtc.ToUniversalTime()).ToUnixTimeMilliseconds(), sentAtUnixMilliseconds, DateTime.UtcNow)
-        ?? sourceUtc;
+        AbyssalSpace.AnchorFromWireUtc(sourceUtc, sentAtUnixMilliseconds, DateTime.UtcNow);
 }
