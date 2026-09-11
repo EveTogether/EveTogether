@@ -48,6 +48,11 @@ public sealed partial class MissionWindowSectionViewModel : RunWindowSection
 
     public string LevelText => Context.MissionLevel is { } level ? $"Level {level}" : string.Empty;
 
+    /// <summary>Set when the capture opened with EVE's own warning sentence for an important (storyline) mission
+    /// (ET-251) — never derived from anything else, since that sentence is the only signal this project has
+    /// measured for it.</summary>
+    public bool IsImportantMission { get; private set; }
+
     // ── The rewards ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Every reward line but the bonus, which gets its own countdown block below — LP, Evermarks, items and
@@ -108,6 +113,8 @@ public sealed partial class MissionWindowSectionViewModel : RunWindowSection
     public override void RefreshSummary()
     {
         List<string> parts = [];
+        if (IsImportantMission)
+            parts.Add("important · affects faction standing");
         if (HasBonus)
             parts.Add(IsBonusExpired ? "bonus expired" : $"{BonusValueText} bonus");
         parts.AddRange(RewardRows.Select(row => $"{row.ValueText} {row.Label}"));
@@ -125,6 +132,8 @@ public sealed partial class MissionWindowSectionViewModel : RunWindowSection
         _bonusDeadlineUtc = null;
         RewardRows.Clear();
 
+        IsImportantMission = parameters.Any(parameter => parameter.ParameterKey == RunParameterKey.ImportantMission);
+
         RunParameterInput? bonus = parameters.FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.BonusIsk);
         if (bonus is not null)
         {
@@ -132,7 +141,8 @@ public sealed partial class MissionWindowSectionViewModel : RunWindowSection
             _bonusDeadlineUtc = bonus.BonusWindowSeconds is { } seconds ? bonus.ObservedAtUtc.AddSeconds(seconds) : null;
         }
 
-        foreach (RunParameterInput parameter in parameters.Where(parameter => parameter.ParameterKey != RunParameterKey.BonusIsk))
+        foreach (RunParameterInput parameter in parameters.Where(parameter =>
+            parameter.ParameterKey is not (RunParameterKey.BonusIsk or RunParameterKey.ImportantMission)))
             RewardRows.Add(new ActivityRewardRowViewModel(new RunParameterDto(Guid.Empty, parameter.ParameterKey,
                 parameter.TypedValue, parameter.Amount, parameter.ItemTypeId, parameter.BonusWindowSeconds, parameter.ObservedAtUtc)));
 

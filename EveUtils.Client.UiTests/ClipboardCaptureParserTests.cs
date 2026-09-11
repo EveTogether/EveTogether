@@ -288,6 +288,73 @@ public sealed class ClipboardCaptureParserTests
             reward.ParameterKey == RunParameterKey.Evermarks && reward.Amount == 250m);
     }
 
+    // ET-251: an important (storyline) mission opens with a warning sentence before the header, one non-empty line
+    // ahead of it — the recogniser must still find the header there, not only on the very first line.
+    [Fact]
+    public void Recognise_ImportantMissionCapture_YieldsMissionShape()
+    {
+        string text = _Fixture("mission-materials-for-war-preparation.txt");
+
+        Assert.Equal(ClipboardShape.Mission, ClipboardShapeRecogniser.Recognise(text));
+    }
+
+    // ET-251: Jithran's capture — the preface sentence pushes the header to the second non-empty line, the only
+    // reward is an item ("1 x Cybernetic Subprocessor - Standard", a plain "x" rather than "×"), there is no plain
+    // ISK reward at all, and the bonus window is stated only in minutes.
+    [Fact]
+    public void ParseMission_ImportantMissionCapture_ReadsHeaderImportantFlagItemRewardAndBonusWindow()
+    {
+        string text = _Fixture("mission-materials-for-war-preparation.txt");
+
+        var capture = ClipboardMissionParser.Parse(text);
+
+        Assert.NotNull(capture);
+        Assert.Equal("Materials For War Preparation", capture!.ObjectivesHeaderName);
+        Assert.Null(capture.AgentName);
+        Assert.True(capture.IsImportantMission);
+        Assert.Equal(2280, capture.BonusWindowSeconds); // "within 38 minutes"
+        Assert.Collection(capture.Rewards,
+            reward =>
+            {
+                Assert.Equal(RunParameterKey.Item, reward.ParameterKey);
+                Assert.Equal("Cybernetic Subprocessor - Standard", reward.ItemName);
+                Assert.Equal(1, reward.ItemQuantity);
+            },
+            reward =>
+            {
+                Assert.Equal(RunParameterKey.BonusIsk, reward.ParameterKey);
+                Assert.Equal(141_000m, reward.Amount);
+            });
+    }
+
+    // ET-251: EVE Journal's own regex expected only "×" (multiplication sign); the one real item-reward capture
+    // this project has uses a plain "x" instead, and the quantity may carry a thousands separator.
+    [Fact]
+    public void ParseMission_ItemRewardWithPlainXAndThousandsSeparatedQuantity_IsReadAsAnItem()
+    {
+        const string text =
+            "Aralin Jick Objectives\nThe following objectives must be completed to finish the mission:\n\n" +
+            "Report to Aralin Jick\n\nRewards\nThe following rewards will be yours if you complete this mission:\n" +
+            " \t1,500 x Tritanium";
+
+        var reward = Assert.Single(ClipboardMissionParser.Parse(text)!.Rewards);
+
+        Assert.Equal(RunParameterKey.Item, reward.ParameterKey);
+        Assert.Equal("Tritanium", reward.ItemName);
+        Assert.Equal(1500, reward.ItemQuantity);
+    }
+
+    // ET-251 AC-5: not recognised without a Rewards block, important-mission preface or not.
+    [Fact]
+    public void Recognise_ImportantMissionPrefaceWithoutRewardsBlock_StaysUnrecognised()
+    {
+        const string text =
+            "This is an important mission, which will have significant impact on your faction standings.\n\n" +
+            "Materials For War Preparation Objectives\nThe following objectives must be completed to finish the mission:";
+
+        Assert.Equal(ClipboardShape.Unrecognised, ClipboardShapeRecogniser.Recognise(text));
+    }
+
     [Fact]
     public void ParseMission_EdgeCases_RefuseRatherThanGuess()
     {

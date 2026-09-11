@@ -26,8 +26,17 @@ internal sealed class GetRunningRunQueryHandler(IDbContextFactory<ClientDbContex
                     : $"{runningCount} runs are running for this character, so which one this window is showing is ambiguous.",
                     "Runs"));
 
+        // ET-252: a window adopting this row is not the one that started it, so the mission facts it needs — agent,
+        // level, system and the reward lines already on the run — travel with it here rather than being left for
+        // MISSION to show as unstated. Empty for a site or an abyssal, the same as AgentId/MissionLevel already are.
+        List<RunParameterDto> parameters = await db.Set<RunParameter>().AsNoTracking()
+            .Where(parameter => parameter.RunId == run.Id)
+            .Select(parameter => new RunParameterDto(parameter.RunId, parameter.ParameterKey, parameter.TypedValue,
+                parameter.Amount, parameter.ItemTypeId, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))
+            .ToListAsync(cancellationToken);
+
         return Result<RunningRunDto>.Success(new RunningRunDto(
             run.Id, run.CharacterId, run.ActivityKind, run.StartedAtUtc, run.GroupCode, run.SiteName, run.Signature,
-            run.SignatureGroupSnapshot));
+            run.SignatureGroupSnapshot, run.AgentId, run.MissionLevel, run.SolarSystemId, parameters));
     }
 }

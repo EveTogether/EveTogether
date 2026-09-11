@@ -155,6 +155,14 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
     {
         DateTime now = DateTime.UtcNow;
         var parameters = new List<RunParameterInput>();
+        if (mission.IsImportantMission)
+            parameters.Add(new RunParameterInput
+            {
+                ParameterKey = RunParameterKey.ImportantMission,
+                TypedValue = "important mission",
+                ObservedAtUtc = now
+            });
+
         foreach (ClipboardMissionReward reward in mission.Rewards)
         {
             RunParameterKey key = reward.ParameterKey ?? RunParameterKey.Unknown;

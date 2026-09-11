@@ -43,5 +43,10 @@ public enum RunParameterKey
     /// purpose. <see cref="Entities.RunParameter.TypedValue"/> holds <c>"{tier index}|{weather name}"</c>; the tier
     /// word itself (e.g. "Agitated") is looked up from the index at read time, never stored as text, so renaming a
     /// tier only ever means changing one list.</summary>
-    AbyssalFilament
+    AbyssalFilament,
+
+    /// <summary>The clipboard capture opened with EVE's own warning sentence for an important (storyline) mission
+    /// (ET-251) — never a reward, so MISSION shows it as its own fact rather than folding it into
+    /// <see cref="Entities.RunParameter.TypedValue"/>'s reward rows.</summary>
+    ImportantMission
 }

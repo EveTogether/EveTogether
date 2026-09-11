@@ -98,6 +98,29 @@ public sealed class ClipboardMissionOfferTests
         Assert.Equal("EpicArcAgent", agent?.AgentTypeName);
     }
 
+    // ET-252 AC-2: a mission copied while a window is already open reaches it through ApplyMission rather than a
+    // fresh construction — MISSION must still show what the run actually earned, not "nothing recorded".
+    [AvaloniaFact]
+    public async Task AMissionCapture_WithWindowAlreadyOpen_ShowsTheRewardsInTheMissionSection()
+    {
+        using var env = await Env.StartAsync();
+        await env.AddCharacterAsync();
+
+        var open = new ActivityWindowViewModel(ActivityKind.Mission, env.Services);
+        env.Dialogs.ShowActivityWindow(open, RunWindowOpenTrigger.LocalUser);
+
+        env.Copy(_Fixture("mission-mining-misappropriation.txt"));
+        await WaitForRunningMissionAsync(env);
+        await open.LastMission;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Null(open.Mission().RewardsEmptyText);
+        Assert.Contains(open.Mission().RewardRows, row => row.Label == "ISK" && row.ValueText == "2,460,000");
+        Assert.Contains(open.Mission().RewardRows, row => row.Label == "LOYALTY POINTS" && row.ValueText == "4,858");
+        Assert.True(open.Mission().HasBonus);
+        Assert.Equal("2,460,000 ISK", open.Mission().BonusValueText);
+    }
+
     // AC-6 countercheck: one test over the full reward block, all four RunParameterKey shapes it can produce. No real
     // capture carries a Loyalty Points or Item line, so this block is built rather than measured — its only job is
     // to prove the four reward shapes each land on the row ET-137 already defined for them.
@@ -183,6 +206,36 @@ public sealed class ClipboardMissionOfferTests
                 Assert.Equal(1_610_000m, parameter.Amount);
                 Assert.Equal(21600, parameter.BonusWindowSeconds);
             });
+    }
+
+    // ET-251: Jithran's "Materials For War Preparation" capture — an important (storyline) mission, whose warning
+    // sentence sits before the header, with a single item reward ("1 x Cybernetic Subprocessor - Standard", a
+    // plain "x") and no plain ISK reward at all. Acceptance 1: the run takes the header's own name, since there is
+    // no agent to prefer it over. Acceptance 2/3: the item reward carries its SDE type id, the bonus is 141,000 ISK
+    // within 38 minutes, and the run is marked as an important mission.
+    [AvaloniaFact]
+    public async Task AnImportantMissionCapture_StartsARunNamedFromTheHeader_MarkedImportant_WithTheItemRewardTyped()
+    {
+        using var env = await Env.StartAsync();
+        env.Sde.Add(32014, "Cybernetic Subprocessor - Standard", groupId: 1, categoryId: 20);
+        await env.AddCharacterAsync();
+
+        env.Copy(_Fixture("mission-materials-for-war-preparation.txt"));
+        Run run = await WaitForRunningMissionAsync(env);
+
+        Assert.Equal(ActivityKind.Mission, run.ActivityKind);
+        Assert.Equal("Materials For War Preparation", run.SiteName); // AC-1: no agent, so the header names the run
+        Assert.Null(run.AgentId);
+
+        await using ClientDbContext db = await env.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        List<RunParameter> parameters = await db.Set<RunParameter>().Where(parameter => parameter.RunId == run.Id).ToListAsync();
+
+        Assert.Contains(parameters, parameter => parameter.ParameterKey == RunParameterKey.ImportantMission); // AC-3
+        Assert.Contains(parameters, parameter => parameter.ParameterKey == RunParameterKey.Item
+            && parameter.Amount == 1m && parameter.ItemTypeId == 32014); // AC-2
+        Assert.Contains(parameters, parameter => parameter.ParameterKey == RunParameterKey.BonusIsk
+            && parameter.Amount == 141_000m && parameter.BonusWindowSeconds == 2280); // AC-2
+        Assert.DoesNotContain(parameters, parameter => parameter.ParameterKey == RunParameterKey.Isk);
     }
 
     // AC-8 countercheck: a made-up agent name — the SDE import is a snapshot, and CCP adds agents. A miss must not

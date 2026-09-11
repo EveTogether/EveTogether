@@ -60,6 +60,40 @@ public sealed class MissionSectionTests
         Assert.Equal("Level 4", window.Mission().LevelText);
     }
 
+    // ── The important-mission flag (ET-251) ───────────────────────────────────────────────────────
+
+    /// <summary>An important mission's own <see cref="RunParameterKey.ImportantMission"/> parameter marks the run
+    /// rather than showing as a reward row.</summary>
+    [Fact]
+    public void ImportantMissionParameter_IsShownAsTheFlag_NotAsARewardRow()
+    {
+        var window = new ActivityWindowViewModel(ActivityKind.Mission, new ServiceCollection().BuildServiceProvider())
+        {
+            PendingParameters =
+            [
+                new RunParameterInput { ParameterKey = RunParameterKey.ImportantMission, TypedValue = "important mission", ObservedAtUtc = NowUtc },
+                new RunParameterInput { ParameterKey = RunParameterKey.Item, TypedValue = "1 x Cybernetic Subprocessor - Standard", Amount = 1m, ObservedAtUtc = NowUtc }
+            ]
+        };
+
+        window.Refresh(NowUtc);
+
+        Assert.True(window.Mission().IsImportantMission);
+        Assert.Single(window.Mission().RewardRows);
+        Assert.Contains("important · affects faction standing", window.Mission().HeaderSummary);
+    }
+
+    /// <summary>A mission with no such parameter reads as not important — nothing is guessed from the reward shape
+    /// alone.</summary>
+    [Fact]
+    public void NoImportantMissionParameter_ReadsAsNotImportant()
+    {
+        var window = new ActivityWindowViewModel(ActivityKind.Mission, new ServiceCollection().BuildServiceProvider());
+        window.Refresh(NowUtc);
+
+        Assert.False(window.Mission().IsImportantMission);
+    }
+
     // ── The rewards and the object-initialiser build order ────────────────────────────────────────
 
     /// <summary>The window is constructed, then handed its <c>PendingParameters</c> through an object initialiser
