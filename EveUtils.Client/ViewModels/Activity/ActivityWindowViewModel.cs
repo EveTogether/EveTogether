@@ -84,7 +84,19 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private readonly IDisposable? _fleetRunStoppedSubscription;
     private readonly IDisposable? _fleetRunDiscardedSubscription;
     private readonly IDisposable? _fleetRunAbyssalUpdatedSubscription;
+    private readonly IDisposable? _fleetRunPreparedSubscription;
+    private readonly IDisposable? _fleetPilotStoppedSubscription;
 
+    // Every pilot's own leg of a run whose clock is per pilot, as each announced it (ET-243) — what the fleet's clock is
+    // made of. App-wide, so this window knows who went in before it opened.
+    private readonly FleetRunLegs? _fleetLegs;
+
+    // This window put its run out to the fleet before anybody was in it (ET-246), so closing it unanswered calls it off.
+    private bool _hasPreparedOffer;
+
+    // What the location watch could see on the last tick: whether this pilot's own way into the pocket would be seen.
+    private bool _canSeeCrossing;
+    private bool _startedOnEntry;
 
     // The fleet's latest location sample per member, so the envelope is re-taken over the whole fleet on every
     // sample rather than over whichever one happened to arrive last.
@@ -133,6 +145,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // shape as the three subscriptions above, kept in step for as long as the run runs.
         _fleetRunAbyssalUpdatedSubscription = services.GetService<IEventBus>()?
             .Subscribe<FleetRunGroupAbyssalUpdatedEvent>(_OnFleetAbyssalUpdated);
+        // A pocket's own lifecycle across the fleet (ET-246, ET-243): the commander's run set up before anyone is in,
+        // and every pilot's own way out.
+        _fleetRunPreparedSubscription = services.GetService<IEventBus>()?
+            .Subscribe<FleetRunGroupPreparedEvent>(_OnFleetRunPrepared);
+        _fleetPilotStoppedSubscription = services.GetService<IEventBus>()?
+            .Subscribe<FleetRunPilotStoppedEvent>(_OnFleetPilotStopped);
+        _fleetLegs = services.GetService<FleetRunLegs>();
         RunLoot = services.GetService<CqrsDispatcher>() is { } dispatcher
             ? new RunLootViewModel(dispatcher, services.GetService<IAppraisalProvider>(), services.GetService<ISdeAccessor>())
             : null;
@@ -187,9 +206,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     // ── The run ─────────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>The envelope START — the earliest moment anyone in the run could be proved to be in it: the stored
-    /// run's own <c>StartedAtUtc</c> when a pilot pressed START, and the <c>Min()</c> over the fleet's re-based
-    /// anchors when the fleet's samples put it earlier.</summary>
+    /// <summary>This run's START — the stored run's own <c>StartedAtUtc</c>, or the commander's for a joined site. In a
+    /// pocket it is this pilot's own way in and nobody else's (ET-246); the fleet's earliest is the FLEET line.</summary>
     [ObservableProperty] private DateTime? _anchorUtc;
 
     [ObservableProperty]
@@ -514,6 +532,25 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     [ObservableProperty] private string _groupTotalIskText = string.Empty;
 
+    // ── Armed, and the fleet's own clock ────────────────────────────────────────────────────────────
+    // A pocket's run starts by itself on the way in, and until ET-246 nothing on the window said so. And a fleet's run
+    // lasts from its first pilot in to its last one out (ET-243), which no single pilot's clock shows.
+
+    /// <summary>Waiting for this pilot's way into the pocket — the window says so for as long as it waits.</summary>
+    [ObservableProperty] private bool _isArmedShown;
+
+    /// <summary>The way in will actually be seen. False is the window saying it cannot, and what to do instead.</summary>
+    [ObservableProperty] private bool _isArmed;
+
+    [ObservableProperty] private string _armedText = string.Empty;
+
+    [ObservableProperty] private bool _hasFleetClock;
+
+    [ObservableProperty] private string _fleetClockText = string.Empty;
+
+    /// <summary>This pilot is out and somebody is still in: the activity is not over, only this pilot's part of it.</summary>
+    [ObservableProperty] private bool _isWaitingForFleet;
+
     // ── Correcting the clock after the fact ─────────────────────────────────────────────────────────
     // Manual start and stop are the only source a site run has — there is no site-entry or site-exit line in the
     // gamelog to fall back on — so the human slack is part of the measurement: you press START once the fight is
@@ -521,8 +558,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     // systematically off, which is why this is part of the run and not a convenience.
 
     /// <summary>The start as the pilot corrected it, or null while the measured one still stands. Held beside
-    /// <see cref="AnchorUtc"/> rather than over it: the measured moment is what the fleet envelope is made of, and
-    /// overwriting it would lose the difference the window exists to show.</summary>
+    /// <see cref="AnchorUtc"/> rather than over it: overwriting the measured moment would lose the difference the
+    /// window exists to show.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsTimeCorrected))]
     [NotifyPropertyChangedFor(nameof(TimeSourceText))]
@@ -567,9 +604,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <summary>Hidden while a copy is waiting: the answers there are SAVE, DISCARD and KEEP, and START would pick
     /// the run being waited on back up without answering any of them.</summary>
     public bool IsStartButtonVisible =>
-        Authority.CanControl && RunState != ActivityRunState.Running && _pendingCopy is null;
+        _MayTimeOwnLeg && RunState != ActivityRunState.Running && _pendingCopy is null;
 
-    public bool IsStopButtonVisible => Authority.CanControl && RunState == ActivityRunState.Running;
+    public bool IsStopButtonVisible => _MayTimeOwnLeg && RunState == ActivityRunState.Running;
+
+    /// <summary>In a run whose clock is per pilot, START and STOP time this pilot's own leg and nobody else's (ET-246),
+    /// so there they are every pilot's own buttons; DISCARD still ends the run for everybody and stays the commander's.
+    /// </summary>
+    private bool _MayTimeOwnLeg => Authority.CanControl
+        || RunType.ClockPerPilot && RunState is not (ActivityRunState.Discarded or ActivityRunState.Saved);
 
     /// <summary>The third way out of a copy waiting behind a run (Raymond, 2026-09-04): SAVE and DISCARD both end
     /// the run and let the copy take over, and this one throws the copy away instead. It takes START's slot, which
@@ -604,7 +647,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// unknown fleet boss is a state worth naming rather than an empty corner (ET-65 AC-7's rule, applied here).</summary>
     public bool IsCommandStatusShown => !Authority.CanControl;
 
-    public string CommandStatusText => Authority.StatusText;
+    /// <summary>The authority's own sentence, except where it would be wrong: in a run whose clock is per pilot the
+    /// pilot keeps START and STOP for their own leg, and only DISCARD is out of reach.</summary>
+    public string CommandStatusText => !RunType.ClockPerPilot
+        ? Authority.StatusText
+        : Authority.Level switch
+        {
+            RunControlAuthorityLevel.Denied => (Authority.FleetCommanderName is { Length: > 0 } commander
+                                                   ? $"Only {commander}, who commands this fleet,"
+                                                   : "Only the fleet commander")
+                                               + " can discard this run. Your own clock starts and stops with you.",
+            RunControlAuthorityLevel.Unknown =>
+                "Who commands this fleet is not known right now, so DISCARD is hidden. Your own clock starts and stops with you.",
+            _ => Authority.StatusText
+        };
 
     /// <summary>
     /// Why this run has no fleet while the pilot plainly has several. Only when both halves are true: several
@@ -671,16 +727,19 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         ActivityRunState.NotStarted => "not started",
         ActivityRunState.Discarded => "discarded by the fleet commander",
-        _ => _isManualRun ? "manual" : "estimated from fleet"
+        _ => _startedOnEntry ? "started on entry" : _isManualRun ? "manual" : "estimated from fleet"
     };
 
     /// <summary>
     /// What the clock does not say on its face. <c>AbyssalSpace.Describe</c> writes a "+" for this; here it is a
     /// sentence under the figure instead, which is where it ended up after the first round of review.
+    ///
+    /// In a pocket it is this pilot's own twenty minutes (ET-243): each pilot's pocket collapses on its own clock, so
+    /// the fleet's earliest entry is the FLEET line's figure and never this one's.
     /// </summary>
     public string ClockHint => _IsInPocket
-        ? (FleetMemberCount > 1 ? $"{FleetStatusText}: the envelope is the earliest anchored run. " : string.Empty)
-          + "The clock is a floor — the moment of entry cannot be observed, so this is at most what is left."
+        ? "Your own twenty minutes, from your own way in. The clock is a floor — the moment of entry cannot be "
+          + "observed, so this is at most what is left."
         : _pendingCopy is { } waiting
             ? $"{waiting.Name} is copied and waiting. Save or discard this {SignatureName} run and it takes over; "
               + "KEEP drops the copy and puts the clock back on this run."
@@ -946,13 +1005,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// in hand is a second source to keep in step. The site name and the scan id are only taken where this window has
     /// none — a member who copied a signature of their own keeps it, and <c>_AdoptRunningRunAsync</c> below decides
     /// between the two runs.
+    ///
+    /// A run whose clock is per pilot (ET-246) is joined armed instead — prepared or already started alike: the
+    /// commander's moment is his own way in, not this pilot's, so nothing starts and no row is made until this pilot
+    /// goes in or presses START.
     /// </summary>
     public void JoinFleetRun(RunGroupCodeStart start)
     {
         GroupCode = start.GroupCode;
         FleetId = start.FleetId;
-        AnchorUtc = start.StartedAtUtc;
-        StoppedAtUtc = null;
         // The commander's scan id names the same signature on this member's own scanner — the id belongs to the
         // system, not to the pilot (ET-151) — so LOCATION reads RUS-326 · Shousran here too instead of the bare
         // system it showed a member while the commander had the site.
@@ -969,6 +1030,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             TierIndex = tierIndex;
         if (AbyssalWeather.IndexOf(start.AbyssalWeatherName) is { } weatherIndex)
             WeatherIndex = weatherIndex;
+
+        if (RunType.ClockPerPilot)
+        {
+            Refresh(DateTime.UtcNow);
+            return;
+        }
+
+        AnchorUtc = start.StartedAtUtc;
+        StoppedAtUtc = null;
         RunState = ActivityRunState.Running;
         _OnRunWatched();
         // A joined run still needs its own row, or this member's loot and bounties have nothing to hang off.
@@ -978,10 +1048,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     /// <summary>The commander started, and this window was already open on nothing. Only a start that came from the
     /// commander joins a window: a member's own start is announced too, and it is not an invitation. The kind
-    /// comparison is identity, kept on purpose (ET-236): a window only joins a run of the kind it was opened as.</summary>
+    /// comparison is identity, kept on purpose (ET-236): a window only joins a run of the kind it was opened as.
+    ///
+    /// Under this window's own code, in a run whose clock is per pilot, every start is a leg of the fleet's clock
+    /// instead (ET-243) — a member's as much as the commander's — and a window armed on one run joins no other.</summary>
     private void _OnFleetRunStarted(FleetRunGroupCodeEvent integrationEvent)
     {
         RunGroupCodeStart start = integrationEvent.Data;
+        if (RunType.ClockPerPilot && GroupCode is { } groupCode)
+        {
+            if (string.Equals(groupCode, start.GroupCode, StringComparison.Ordinal))
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => _RefreshFleetClock(DateTime.UtcNow));
+            return;
+        }
+
         if (!start.IsFleetCommander || RunState != ActivityRunState.NotStarted
             || (FleetId is { } fleetId && fleetId != start.FleetId) || start.ActivityKind != Kind)
             return;
@@ -989,13 +1069,41 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         Avalonia.Threading.Dispatcher.UIThread.Post(() => JoinFleetRun(start));
     }
 
+    /// <summary>The commander set a run up before anyone went in (ET-246), and this window is open on nothing: it arms
+    /// on it, the same way it would join his start. Only a type whose clock is per pilot is ever prepared.</summary>
+    private void _OnFleetRunPrepared(FleetRunGroupPreparedEvent integrationEvent)
+    {
+        RunGroupCodeStart start = integrationEvent.Data;
+        if (!start.IsFleetCommander || !RunType.ClockPerPilot || RunState != ActivityRunState.NotStarted
+            || GroupCode is not null || (FleetId is { } fleetId && fleetId != start.FleetId)
+            || start.ActivityKind != Kind)
+            return;
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => JoinFleetRun(start));
+    }
+
+    /// <summary>In a run whose clock is per pilot the commander's STOP ends his own leg, never this one (ET-243) — an
+    /// older commander's client still sends it, and it is ignored here: only this pilot's own way out, or their own
+    /// STOP, stops their clock.</summary>
     private void _OnFleetRunStopped(FleetRunStoppedEvent integrationEvent)
     {
         RunGroupStop stop = integrationEvent.Data;
-        if (GroupCode is not { } groupCode || !string.Equals(groupCode, stop.GroupCode, StringComparison.Ordinal))
+        if (RunType.ClockPerPilot || GroupCode is not { } groupCode
+            || !string.Equals(groupCode, stop.GroupCode, StringComparison.Ordinal))
             return;
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() => StopRun(stop.StoppedAtUtc));
+    }
+
+    /// <summary>One pilot of this run came out (ET-243). Nothing of this window's own stops; the fleet's clock learns
+    /// who is still in.</summary>
+    private void _OnFleetPilotStopped(FleetRunPilotStoppedEvent integrationEvent)
+    {
+        if (GroupCode is not { } groupCode
+            || !string.Equals(groupCode, integrationEvent.Data.GroupCode, StringComparison.Ordinal))
+            return;
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => _RefreshFleetClock(DateTime.UtcNow));
     }
 
     /// <summary>
@@ -1016,6 +1124,17 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
+            // Armed and never gone in (ET-246): there is no run of this pilot's to end, so the window goes back to
+            // being armed on nothing and says what happened — a Discarded state would claim a run that never was.
+            if (RunState is ActivityRunState.NotStarted && RunId is null)
+            {
+                GroupCode = null;
+                RunNoticeText = "The fleet commander called this run off before you went in. Nothing of yours was "
+                                + "recorded. Close this window, or fly the pocket on your own.";
+                Refresh(DateTime.UtcNow);
+                return;
+            }
+
             StoppedAtUtc ??= discard.DiscardedAtUtc;
             RunState = ActivityRunState.Discarded;
             _OnRunClosed();
@@ -1329,6 +1448,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         _RefreshLocation(nowUtc);
         _RefreshClock(nowUtc);
+        _RefreshArmed();
+        _RefreshFleetClock(nowUtc);
         _ = RefreshFleetCommandAsync(nowUtc);
         // Before the total and the summaries: a section's own Refresh is what settles this tick's figures (a
         // mission's bonus falling out of expiry, ET-237) — reading them first would sum and summarise last tick's
@@ -1415,6 +1536,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
         }
 
+        _startedOnEntry = false;
         StartManualRun(nowUtc);
         await _StoreRunAsync(nowUtc);
     }
@@ -1423,7 +1545,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private void StopRun() => StopRun(DateTime.UtcNow);
 
     /// <summary>Move the window to a running run on the clock. <see cref="StartRunAsync"/> is what also gives it a
-    /// row in the store; the fleet envelope calls this too, for a run nobody pressed a button for.</summary>
+    /// row in the store; the way into a pocket calls this too, for a run nobody pressed a button for.</summary>
     public void StartManualRun(DateTime nowUtc)
     {
         AnchorUtc = nowUtc;
@@ -1659,11 +1781,32 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     ///
     /// Only from the window that commands the run: a member stopping their own leg ends nobody else's, and the
     /// event is received back here too, where <see cref="StopRun"/>'s own guard makes the second one a no-op.
+    ///
+    /// In a run whose clock is per pilot there is no such thing (ET-243): every pilot's stop — the commander's too —
+    /// goes out as that pilot's own way out, which stops nobody and tells the shared clock who is still in. One per
+    /// character of this pilot's own the window stops, since their other toons stop with it (ET-210) — never for a
+    /// fleet mate's run that a sync may already have put in this store.
     /// </summary>
     private void _AnnounceStopToFleet(DateTime stoppedAtUtc)
     {
-        if (!Authority.CanControl || FleetId is not { } fleetId || GroupCode is not { } groupCode
+        if (FleetId is not { } fleetId || GroupCode is not { } groupCode
             || _services.GetService<IEventBus>() is not { } eventBus)
+            return;
+
+        if (RunType.ClockPerPilot)
+        {
+            RunGroupStop leg = new(fleetId, Kind, groupCode, stoppedAtUtc);
+            HashSet<int> pilots = [.. Participants
+                .Select(participant => participant.CharacterId)
+                .Where(characterId => RunCharacters.Any(row => row.IsEsiLinked && row.CharacterId == characterId))];
+            if (_runCharacterId is { } own)
+                pilots.Add(own);
+            foreach (int pilot in pilots)
+                _ = eventBus.PublishAsync(new FleetRunPilotStoppedEvent(leg, pilot), EventTarget.Both);
+            return;
+        }
+
+        if (!Authority.CanControl)
             return;
 
         _ = eventBus.PublishAsync(
@@ -1676,9 +1819,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// an end before its start is not a duration, and an abyssal run longer than <c>AbyssalSpace.RunLimit</c> is a
     /// run whose pilot was dead before it ended.
     ///
-    /// It moves this run's row and nothing else. A group's envelope hangs on the earliest start over the whole
-    /// fleet, taken from the samples in <see cref="ApplyFleetEnvelope"/> — correcting your own clock does not
-    /// re-anchor anybody, which is why <see cref="AnchorUtc"/> is left standing as the measured moment.
+    /// It moves this run's row and nothing else. The activity's own span is worked out from every pilot's saved run
+    /// (first in to last out) — correcting your own clock does not re-anchor anybody, which is why
+    /// <see cref="AnchorUtc"/> is left standing as the measured moment.
     /// </summary>
     [RelayCommand]
     private void ApplyTimeCorrection()
@@ -1771,6 +1914,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // of the comparison are now one pilot.
         int? commander = _CommanderOf(fleetId);
         ApplyFleetCommand(fleetId, commander, _ActingCharacterId(), _CommanderNameOf(commander));
+        // Right after the verdict it hangs on: who commands the fleet is the one thing it needs this sweep to settle.
+        _OfferPreparedRunToFleet();
         if (FleetsInPlay > 0)
         {
             UnstartedFleetName = null;
@@ -1784,6 +1929,51 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             _unstartedFleetNoticeCheckedAtUtc = nowUtc;
             (UnstartedFleetName, FormingFleetCount) = await _UnstartedFleetNameAsync();
         }
+    }
+
+    /// <summary>
+    /// Put this pocket out to the fleet before anybody is in it (ET-246): this pilot commands the fleet, the window is
+    /// armed on nothing yet, and the tier and weather are known — what a member needs to pick the same filament. The
+    /// group code is minted here, ahead of the run, so the start that follows files every pilot's run under the code
+    /// they were offered. Once per window; a later change of tier or weather reaches the members the way it always
+    /// did (ET-241), because the run now has a code to send it under.
+    /// </summary>
+    private void _OfferPreparedRunToFleet()
+    {
+        if (_hasPreparedOffer || !RunType.ClockPerPilot || RunState is not ActivityRunState.NotStarted
+            || RunId is not null || GroupCode is not null || !Authority.IsFleetCommander || FleetId is not { } fleetId
+            || !HasWeatherAndTier || _services.GetService<IEventBus>() is not { } eventBus)
+            return;
+
+        // Before the code, not after: setting it re-runs this sweep, which must find the offer already made.
+        _hasPreparedOffer = true;
+        string groupCode = RunGroupCode.Create();
+        GroupCode = groupCode;
+        _ = eventBus.PublishAsync(new FleetRunGroupPreparedEvent(
+            new RunGroupCodeStart(fleetId, Kind, groupCode, DateTime.UtcNow, IsFleetCommander: true,
+                SolarSystemName: SolarSystem, SignatureGroupSnapshot: SignatureGroup,
+                AbyssalTierIndex: TierIndex, AbyssalWeatherName: Weather?.Name),
+            _ActingCharacterId()), EventTarget.Both);
+        _RefreshArmed();
+    }
+
+    /// <summary>
+    /// The commander closes a prepared run that nobody went into (ET-246): the offer comes down on every member's screen
+    /// and nothing is left behind. It is the same <c>fleet.run-discarded</c> an ended run sends — there is no row
+    /// anywhere for it to end. Once any pilot is in, closing this window is only this pilot sitting it out.
+    /// </summary>
+    private void _WithdrawPreparedOffer()
+    {
+        if (!_hasPreparedOffer || RunState is not ActivityRunState.NotStarted
+            || FleetId is not { } fleetId || GroupCode is not { } groupCode
+            || _fleetLegs?.Of(groupCode) is { Count: > 0 } || _services.GetService<IEventBus>() is not { } eventBus)
+            return;
+
+        _hasPreparedOffer = false;
+        _isDiscarding = true;
+        _ = eventBus.PublishAsync(
+            new FleetRunDiscardedEvent(new RunGroupDiscard(fleetId, Kind, groupCode, DateTime.UtcNow)),
+            EventTarget.Both);
     }
 
     /// <summary>
@@ -2195,6 +2385,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// </summary>
     public async Task<bool> RequestCloseAsync()
     {
+        _WithdrawPreparedOffer();
         if (RunId is not { } runId || RunState is ActivityRunState.NotStarted or ActivityRunState.Saved
             || _services.GetService<CqrsDispatcher>() is null)
             return true;
@@ -2340,15 +2531,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         AnchoredFleetMemberCount = anchors.Count;
 
-        if (RunState is not (ActivityRunState.Stopped or ActivityRunState.Saved) && !_isManualRun && anchors.Count > 0)
+        // Only this pilot's own anchor starts this window (ET-246). Each anchor is one member's own way in, and taking
+        // the earliest of them started every window in the fleet the moment the first pilot jumped.
+        if (RunState is ActivityRunState.NotStarted && _ActingCharacterId() is { } own
+            && members.FirstOrDefault(sample => sample.CharacterId == own) is { } mine
+            && AbyssalSpace.AnchorFromWire(mine.AbyssalAnchorMs, mine.UnixMs, receivedUtc) is { } ownAnchor)
         {
-            AnchorUtc = anchors.Min();
+            AnchorUtc = ownAnchor;
             StoppedAtUtc = null;
+            _startedOnEntry = true;
             RunState = ActivityRunState.Running;
             _OnRunWatched();
             // A run nobody pressed START for still needs its row, or the loot has nothing to attach to.
             if (RunId is null)
-                _ = _BeginEstimatedRunAsync(AnchorUtc.Value);
+                _ = _BeginEstimatedRunAsync(ownAnchor);
         }
 
         Refresh(receivedUtc);
@@ -2466,10 +2662,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// </summary>
     private void _RefreshLocation(DateTime nowUtc)
     {
+        _canSeeCrossing = false;
         if (_gamelog is null || _runCharacterName is null)
             return;
 
         CharacterMetricsSnapshot snapshot = _gamelog.Snapshot(_runCharacterName);
+        _canSeeCrossing = snapshot.LocationUnavailableReason is null;
         bool? wasInside = InsideAbyssal;
         if (snapshot.AbyssalAnchor is not null)
             InsideAbyssal = true;
@@ -2525,6 +2723,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         try
         {
+            _startedOnEntry = true;
             StartManualRun(lastSeenOutsideUtc);
             await _BeginEstimatedRunAsync(lastSeenOutsideUtc);
         }
@@ -2535,6 +2734,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             // Same treatment _StartOnArrivalAsync gives the other start nobody pressed.
             RunState = ActivityRunState.NotStarted;
             AnchorUtc = null;
+            _startedOnEntry = false;
             OnPropertyChanged(nameof(IsStartButtonVisible));
             _services.GetService<IToastService>()?.Show("Run not started",
                 $"Going into the abyss did not start this run: {ex.Message}. Press START to record it.",
@@ -2556,6 +2756,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _fleetRunStoppedSubscription?.Dispose();
         _fleetRunDiscardedSubscription?.Dispose();
         _fleetRunAbyssalUpdatedSubscription?.Dispose();
+        _fleetRunPreparedSubscription?.Dispose();
+        _fleetPilotStoppedSubscription?.Dispose();
         _timer?.Stop();
         _timer = null;
     }
@@ -2619,6 +2821,99 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         ClockText = remaining is { } left ? _Elapsed(left) : NoClock;
         IsClockCritical = remaining is null || remaining <= CriticalAt;
         IsClockWarning = remaining > CriticalAt && remaining <= WarningAt;
+    }
+
+    /// <summary>
+    /// Whether the window is waiting for this pilot's way in, and whether that way in will be seen at all: the location
+    /// watch can only start a run for a pilot it knows and can locate, and an armed banner over a crossing nobody will
+    /// report would be the silent failure this line exists to replace.
+    /// </summary>
+    private void _RefreshArmed()
+    {
+        IsArmedShown = RunType.ClockPerPilot && RunState is ActivityRunState.NotStarted && _pendingCopy is null;
+        IsArmed = IsArmedShown && _canSeeCrossing;
+        string filament = HasWeatherAndTier ? $" — {AbyssalFilamentName.From(TierIndex, Weather?.Name)}" : string.Empty;
+        ArmedText = !IsArmedShown
+            ? string.Empty
+            : !_canSeeCrossing
+                ? _runCharacterName is { } pilot
+                    ? $"This client cannot see where {pilot} is, so going in will not start the run. "
+                      + "Press START when you jump in."
+                    : "Nobody is picked for this run yet, so going in will not start it. Pick the pilot above, "
+                      + "or press START when you jump in."
+                : GroupCode is null
+                    ? "Starts by itself when you jump into the abyss. START starts it now."
+                    : Authority.IsFleetCommander
+                        ? $"Offered to the fleet{filament}. Your run starts by itself when you jump into the abyss, "
+                          + "and each pilot's starts when they do. START starts yours now."
+                        : $"Fleet run{filament}. Starts by itself when you jump into the abyss — not when the "
+                          + "commander does. START starts it now.";
+    }
+
+    /// <summary>
+    /// The fleet's own clock (ET-243): from the first pilot in to the last one out, over every leg announced under this
+    /// run's code, with this pilot's own taken from the window rather than from the echo of its own announcement.
+    ///
+    /// A leg that never reported its way out counts as out once the pocket is gone: nobody is inside longer than
+    /// <see cref="AbyssalSpace.RunLimit"/>, and a lost announcement — a server that does not relay it yet, a client
+    /// that went down inside — would otherwise read "still in" for the rest of the evening.
+    /// </summary>
+    private void _RefreshFleetClock(DateTime nowUtc)
+    {
+        Dictionary<int, (DateTime In, DateTime? Out)> legs = [];
+        if (RunType.ClockPerPilot && GroupCode is { } groupCode && FleetId is not null)
+        {
+            foreach (FleetRunLeg leg in _fleetLegs?.Of(groupCode) ?? [])
+            {
+                DateTime collapsedAtUtc = leg.StartedAtUtc + AbyssalSpace.RunLimit;
+                legs[leg.CharacterId] = (leg.StartedAtUtc,
+                    leg.StoppedAtUtc ?? (nowUtc >= collapsedAtUtc ? collapsedAtUtc : (DateTime?)null));
+            }
+
+            if (_runCharacterId is { } own && EffectiveStartUtc is { } ownStart
+                && RunState is ActivityRunState.Running or ActivityRunState.Stopped)
+                legs[own] = (ownStart, RunState is ActivityRunState.Running ? null : EffectiveStopUtc);
+        }
+
+        HasFleetClock = legs.Count > 0;
+        if (!HasFleetClock)
+        {
+            FleetClockText = string.Empty;
+            IsWaitingForFleet = false;
+            return;
+        }
+
+        DateTime firstIn = legs.Values.Min(leg => leg.In);
+        int inside = legs.Values.Count(leg => leg.Out is null);
+        if (inside == 0)
+        {
+            DateTime lastOut = legs.Values.Max(leg => leg.Out ?? leg.In);
+            FleetClockText =
+                $"first in {_LocalTime(firstIn)} · last out {_LocalTime(lastOut)} · {_Elapsed(lastOut - firstIn)}";
+            IsWaitingForFleet = false;
+            if (RunState is ActivityRunState.NotStarted)
+                _EndedWithoutThisPilot();
+            return;
+        }
+
+        IsWaitingForFleet = RunState is ActivityRunState.Stopped;
+        string stillIn = inside == 1 ? "1 pilot" : $"{inside} pilots";
+        FleetClockText = IsWaitingForFleet
+            ? $"first in {_LocalTime(firstIn)} · {_Elapsed(nowUtc - firstIn)} so far · you are out, waiting for {stillIn}"
+            : $"first in {_LocalTime(firstIn)} · {_Elapsed(nowUtc - firstIn)} so far · {stillIn} in";
+    }
+
+    /// <summary>
+    /// Everyone who went in is out and this pilot never went in — the one who stayed behind, or the hauler outside. The
+    /// run is over for the fleet, so this window lets go of it: going in now would be a pocket of its own, not a late
+    /// leg of one that has already ended, and a window left armed on it would say otherwise.
+    /// </summary>
+    private void _EndedWithoutThisPilot()
+    {
+        GroupCode = null;
+        RunNoticeText = "Everyone who went in on this fleet run is out, so it ended without you. Nothing of yours was "
+                        + "recorded. Close this window, or fly the next pocket on your own.";
+        _RefreshArmed();
     }
 
     /// <summary>

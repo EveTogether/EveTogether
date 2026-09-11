@@ -29,6 +29,10 @@ namespace EveUtils.Client.Runs;
 /// takes it away, not even the commander ending the run. A card that removes itself is a card the pilot can miss,
 /// and missing it is missing the group, which is the whole point of the feature. Accepting an offer whose run has
 /// since ended is refused with a toast that says so, rather than opening a window onto a dead group code.
+///
+/// The one exception is an offer made before anybody went in (ET-246, <see cref="FleetRunGroupPreparedEvent"/>):
+/// there is no run behind it yet to miss, so the commander calling it off takes the card down. The real start, when
+/// it comes, replaces that card rather than standing beside it.
 /// </summary>
 public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
 {
@@ -38,46 +42,61 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
     private readonly IDialogService _dialogs;
     private readonly IServiceProvider _services;
     private readonly IDisposable _subscription;
+    private readonly IDisposable _preparedSubscription;
     private readonly IDisposable _discardSubscription;
     private readonly HashSet<string> _endedGroupCodes = new(StringComparer.Ordinal);
+    // The group codes whose card on screen is still the prepared one — the only cards a call-off takes down.
+    private readonly HashSet<string> _preparedOffers = new(StringComparer.Ordinal);
     private readonly object _gate = new();
 
     public FleetRunWindowPresenter(IEventBus eventBus, IDialogService dialogs, IServiceProvider services)
     {
         _dialogs = dialogs;
         _services = services;
-        _subscription = eventBus.Subscribe<FleetRunGroupCodeEvent>(_OnFleetRunStartedAsync);
+        _subscription = eventBus.Subscribe<FleetRunGroupCodeEvent>((integrationEvent, cancellationToken) =>
+            _OnCommanderOfferAsync(new Offer(integrationEvent.Data, IsPrepared: false), cancellationToken));
+        _preparedSubscription = eventBus.Subscribe<FleetRunGroupPreparedEvent>((integrationEvent, cancellationToken) =>
+            _OnCommanderOfferAsync(new Offer(integrationEvent.Data, IsPrepared: true), cancellationToken));
         _discardSubscription = eventBus.Subscribe<FleetRunDiscardedEvent>(_OnFleetRunEndedAsync);
     }
 
     public void Dispose()
     {
         _subscription.Dispose();
+        _preparedSubscription.Dispose();
         _discardSubscription.Dispose();
     }
 
-    private async Task _OnFleetRunStartedAsync(FleetRunGroupCodeEvent integrationEvent, CancellationToken cancellationToken)
+    private async Task _OnCommanderOfferAsync(Offer offer, CancellationToken cancellationToken)
     {
         // Only the commander's start reaches everybody. A member's own start is their own business.
-        if (!integrationEvent.Data.IsFleetCommander)
+        if (!offer.Start.IsFleetCommander)
             return;
 
         if (await _AutoOpensAsync(cancellationToken))
         {
-            _Open(integrationEvent.Data);
+            _Open(offer);
             return;
         }
 
         // A window already up is the commander's own client, or a member already in a run: there is nothing to
         // offer, which is the same answer RunWindowPresentation gives that case.
         if (!_dialogs.IsActivityWindowOpen)
-            _Offer(integrationEvent.Data);
+            _Offer(offer);
     }
 
     private Task _OnFleetRunEndedAsync(FleetRunDiscardedEvent integrationEvent, CancellationToken cancellationToken)
     {
+        string groupCode = integrationEvent.Data.GroupCode;
+        bool withdrawn;
         lock (_gate)
-            _endedGroupCodes.Add(integrationEvent.Data.GroupCode);
+        {
+            _endedGroupCodes.Add(groupCode);
+            withdrawn = _preparedOffers.Remove(groupCode);
+        }
+
+        if (withdrawn)
+            _services.GetService<IToastService>()?.Dismiss(_OfferKey(groupCode));
         return Task.CompletedTask;
     }
 
@@ -92,27 +111,38 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
         return false;
     }
 
-    private void _Offer(RunGroupCodeStart start) =>
-        Dispatcher.UIThread.Post(() => _services.GetService<IToastService>()?.Show(
-            "Fleet run started",
-            _Where(start),
-            ToastKind.Information,
-            [new ToastAction("Join run", () => _Accept(start), ToastActionStyle.Affirmative)]));
+    private void _Offer(Offer offer)
+    {
+        lock (_gate)
+            if (offer.IsPrepared)
+                _preparedOffers.Add(offer.Start.GroupCode);
+            else
+                _preparedOffers.Remove(offer.Start.GroupCode);
 
-    private void _Accept(RunGroupCodeStart start)
+        Dispatcher.UIThread.Post(() => _services.GetService<IToastService>()?.Show(
+            offer.IsPrepared ? "Fleet run prepared" : "Fleet run started",
+            offer.IsPrepared ? $"{_Where(offer.Start)} — your run starts when you jump in" : _Where(offer.Start),
+            ToastKind.Information,
+            [new ToastAction("Join run", () => _Accept(offer), ToastActionStyle.Affirmative)],
+            onClosed: null, replacementKey: _OfferKey(offer.Start.GroupCode)));
+    }
+
+    private static string _OfferKey(string groupCode) => $"fleet-run-offer:{groupCode}";
+
+    private void _Accept(Offer offer)
     {
         bool ended;
         lock (_gate)
-            ended = _endedGroupCodes.Contains(start.GroupCode);
+            ended = _endedGroupCodes.Contains(offer.Start.GroupCode);
 
         if (ended)
         {
             _services.GetService<IToastService>()?.Show("Fleet run already ended",
-                $"{_Where(start)} — the commander ended it before you joined.", ToastKind.Information);
+                $"{_Where(offer.Start)} — the commander ended it before you joined.", ToastKind.Information);
             return;
         }
 
-        _ = _AcceptAsync(start);
+        _ = _AcceptAsync(offer);
     }
 
     /// <summary>
@@ -125,12 +155,12 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
     /// (Wayland, an unsupported platform) degrades to: the window opens as before and the pilot is asked at START
     /// by <c>_ResolveCharacterAsync</c>, over every character rather than only the flying ones.
     /// </summary>
-    private async Task _AcceptAsync(RunGroupCodeStart start)
+    private async Task _AcceptAsync(Offer offer)
     {
         IReadOnlyList<Character> flying = await _FlyingCharactersAsync();
         if (flying.Count < 2)
         {
-            _Open(start);
+            _Open(offer);
             return;
         }
 
@@ -148,7 +178,7 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
         Character pilot = flying.First(character => character.EsiCharacterId == picked[0]);
         IReadOnlyList<Character> additional =
             [.. flying.Where(character => character.EsiCharacterId is { } id && picked.Skip(1).Contains(id))];
-        _Open(start, pilot, additional);
+        _Open(offer, pilot, additional);
     }
 
     /// <summary>
@@ -162,13 +192,13 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
             ? []
             : InGameCharacters.Among(await registry.GetAllAsync(), _services.GetService<ILocalCharacterPresence>());
 
-    private void _Open(RunGroupCodeStart start, Character? pilot = null, IReadOnlyList<Character>? additional = null)
+    private void _Open(Offer offer, Character? pilot = null, IReadOnlyList<Character>? additional = null)
     {
         Dispatcher.UIThread.Post(() =>
         {
             // The commander's kind, passed on as it came. It used to be squeezed through "abyssal or else a site"
             // here, which is how a remote start of any other kind arrived as a site (ET-174 AC-3).
-            ActivityWindowViewModel window = new(start.ActivityKind, _services);
+            ActivityWindowViewModel window = new(offer.Start.ActivityKind, _services);
             // The pilot first: joining creates this member's own run row, and that row is filed under whoever this
             // window is for.
             if (pilot is { EsiCharacterId: { } characterId })
@@ -178,14 +208,23 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
             if (additional is { Count: > 0 })
                 window.UseAdditionalCharacters(
                     [.. additional.Select(character => (character.EsiCharacterId!.Value, character.Name))]);
-            window.JoinFleetRun(start);
+            window.JoinFleetRun(offer.Start);
             _dialogs.ShowActivityWindow(window, RunWindowOpenTrigger.RemoteFleetCommander);
         });
     }
 
+    /// <summary>What the commander announced, and whether it was only prepared rather than started (ET-246).</summary>
+    private sealed record Offer(RunGroupCodeStart Start, bool IsPrepared);
+
     private static string _Where(RunGroupCodeStart start) =>
-        string.Join(" · ", new[] { start.SiteName, start.SolarSystemName }
+        string.Join(" · ", new[] { _SiteOf(start), start.SolarSystemName }
             .Where(part => !string.IsNullOrWhiteSpace(part))) is { Length: > 0 } named
             ? named
             : "Site and system not known";
+
+    // A pocket has no site name, so its filament stands in the site's place — "Fierce Dark · Osmon" (ET-246).
+    private static string? _SiteOf(RunGroupCodeStart start) => start.SiteName
+        ?? (start.AbyssalTierIndex is not null
+            ? AbyssalFilamentName.From(start.AbyssalTierIndex, start.AbyssalWeatherName)
+            : null);
 }

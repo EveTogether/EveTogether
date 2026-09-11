@@ -63,6 +63,60 @@
                 <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             </Style>
 
+            <!-- ── Armed ── (ET-246) the one state in which the window is waiting on the pilot rather than counting,
+                 so it is a plate and not a hint line: accent while going in will start the run, amber while it will
+                 not — the text then says what to do instead. -->
+            <Style Selector="Border.armed">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="10,7"/>
+            </Style>
+            <Style Selector="Border.armed.off">
+                <Setter Property="Background" Value="{StaticResource BgRowBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource WarnBrush}"/>
+            </Style>
+            <!-- Filled when armed and only outlined when not: an Amarr accent and the warning amber are nearly one
+                 colour, so the difference between the two states cannot be left to the ink alone. -->
+            <Style Selector="Border.armedbadge">
+                <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="6,1,6,2"/>
+                <Setter Property="VerticalAlignment" Value="Top"/>
+            </Style>
+            <Style Selector="Border.armedbadge TextBlock">
+                <Setter Property="Foreground" Value="{StaticResource BgPanelBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="FontWeight" Value="Bold"/>
+                <Setter Property="LetterSpacing" Value="1.8"/>
+            </Style>
+            <Style Selector="Border.armedbadge.off">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="{StaticResource WarnBrush}"/>
+            </Style>
+            <Style Selector="Border.armedbadge.off TextBlock">
+                <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+            </Style>
+            <Style Selector="Border.armed TextBlock.armedtext">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="LineHeight" Value="15"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
+
+            <!-- ── The fleet's clock ── (ET-243) first pilot in to last one out, in the clock's own mono ink. Amber
+                 while this pilot is out and somebody is still in: their part is over, the activity is not. -->
+            <Style Selector="TextBlock.fleetclock">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
+            <Style Selector="TextBlock.fleetclock.waiting">
+                <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+            </Style>
+
             <!-- ── A section header ── a flat full-width row, not a button that looks like one: the whole line is the
                  hit target, and nothing about it should read as an action to take. -->
             <Style Selector="ToggleButton.section">
@@ -433,7 +487,7 @@
             </ScrollViewer>
         </Border>
 
-        <!-- ══ The clock ══ the envelope as what it is: two moments and the time between them. A per-member bar chart
+        <!-- ══ The clock ══ this run as what it is: two moments and the time between them. A per-member bar chart
              stood here and came out — the starts sit seconds apart on a twenty-minute axis, so the bars overlapped
              into one and said nothing. -->
         <Border DockPanel.Dock="Top" Padding="14,13,14,15" BorderThickness="0,0,0,1"
@@ -463,6 +517,29 @@
                         </TextBlock>
                     </StackPanel>
                 </Grid>
+
+                <!-- The fleet's clock (ET-243): the figure above is this pilot's own pocket; this is the activity's. -->
+                <Grid x:Name="FleetClock" ColumnDefinitions="Auto,*" ColumnSpacing="10"
+                      IsVisible="{Binding HasFleetClock}">
+                    <TextBlock Classes="label" VerticalAlignment="Center" Text="FLEET"/>
+                    <TextBlock x:Name="FleetClockText" Grid.Column="1" Classes="fleetclock"
+                               Classes.waiting="{Binding IsWaitingForFleet}" Text="{Binding FleetClockText}"/>
+                </Grid>
+
+                <!-- Armed (ET-246): a pocket's run starts by itself on the way in, said while the window waits for it.
+                     START under it is still the way to start it by hand. -->
+                <Border x:Name="ArmedBanner" Classes="armed" Classes.off="{Binding !IsArmed}"
+                        IsVisible="{Binding IsArmedShown}">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                        <Border Classes="armedbadge" Classes.off="{Binding !IsArmed}">
+                            <Panel>
+                                <TextBlock Text="ARMED" IsVisible="{Binding IsArmed}"/>
+                                <TextBlock Text="NOT ARMED" IsVisible="{Binding !IsArmed}"/>
+                            </Panel>
+                        </Border>
+                        <TextBlock x:Name="ArmedText" Grid.Column="1" Classes="armedtext" Text="{Binding ArmedText}"/>
+                    </Grid>
+                </Border>
 
                 <!-- ══ The run controls ══ fixed cells, so the block never moves under the pointer when the run
                      changes state. START and STOP share the first cell and are never both on: they are the same

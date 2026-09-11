@@ -13,6 +13,22 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **A fleet abyssal now times every pilot on their own way in and out.** A member's clock used to start the moment
+  the fleet commander jumped and stop the moment he pressed STOP or left the pocket — even for a member still inside,
+  who lost the rest of their time. Now each pilot's run starts when they themselves jump in and stops when they
+  themselves come out, and the saved activity runs from the first pilot in to the last one out, with each pilot's
+  own time still listed beside it. While the run is on, a FLEET line under the clock shows the fleet's own clock —
+  when the first pilot went in, how long ago, and who is still inside — and turns amber when you are out and waiting
+  on the others. Every pilot, not only the commander, now has START and STOP for their own run; ending the run for
+  everybody stays the commander's.
+- **The commander can set up a fleet abyssal before anyone goes in.** With the run window open in a fleet and the
+  tier and weather picked, the members are offered the run straight away — "Fierce Dark · Osmon" — instead of only
+  once the commander is already inside. A member who joins is armed and waiting: the window says plainly that the
+  run starts by itself when you jump into the abyss, with START beside it for starting by hand, and it says so just
+  as plainly when it cannot see you go in. Closing a prepared run before anyone went in takes the offer back off
+  every member's screen and leaves nothing behind; a member who never went in is told when the run ended without
+  them. The early offer needs the server to be updated; until then members are offered the run once the commander
+  is in, as before.
 - **An abyssal pocket no longer shows a BOUNTY section**, in the run window or the saved activity screen — there is
   no NPC bounty in one at all. A run flown in one is also no longer saved as "Unnamed site": it is now named after
   its filament, the same way EVE itself does — "Agitated Dark", say — in the run window, the runs overview, the

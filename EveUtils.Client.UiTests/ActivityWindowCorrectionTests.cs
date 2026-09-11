@@ -174,30 +174,24 @@ public sealed class ActivityWindowCorrectionTests
 
     /// <summary>
     /// The design answer this ticket asked for, held in code: a member's own correction moves their own row and
-    /// leaves the group's envelope where the fleet's samples put it. <see cref="ActivityWindowViewModel.AnchorUtc"/>
-    /// <i>is</i> that envelope — the earliest anchor over the whole fleet — so what this holds is that correcting
-    /// your clock never re-anchors anybody else's.
+    /// nothing else. <see cref="ActivityWindowViewModel.AnchorUtc"/> stays the measured moment — since ET-246 a
+    /// pocket's is this pilot's own way in, and the fleet's first entry is the FLEET line's — so what this holds is
+    /// that correcting your clock re-anchors nothing but the figure SAVE writes for you.
     /// </summary>
     [Fact]
-    public void CorrectingYourOwnTime_LeavesTheGroupEnvelopeWhereTheFleetPutIt()
+    public void CorrectingYourOwnTime_LeavesTheMeasuredStartWhereItWas()
     {
         var model = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
-        // Someone else entered first, so the envelope hangs on their anchor and not on this pilot's.
-        model.ApplyFleetEnvelope(
-        [
-            new MetricSample(1, 7, MetricKind.Location, 0, 1_000_000, AbyssalAnchorMs: 700_000),
-            new MetricSample(2, 7, MetricKind.Location, 0, 1_000_000, AbyssalAnchorMs: 900_000)
-        ], Anchor);
-        DateTime envelope = Assert.IsType<DateTime>(model.AnchorUtc);
-        model.StopRun(envelope.AddMinutes(6));
+        model.StartManualRun(Anchor);
+        model.StopRun(Anchor.AddMinutes(6));
 
-        model.StartCorrectionText = _Local(envelope.AddMinutes(2));
-        model.EndCorrectionText = _Local(envelope.AddMinutes(6));
+        model.StartCorrectionText = _Local(Anchor.AddMinutes(2));
+        model.EndCorrectionText = _Local(Anchor.AddMinutes(6));
         model.ApplyTimeCorrectionCommand.Execute(null);
 
         Assert.Null(model.TimeCorrectionError);
-        Assert.Equal(envelope, model.AnchorUtc);
-        Assert.Equal(envelope.AddMinutes(2), model.EffectiveStartUtc);
+        Assert.Equal(Anchor, model.AnchorUtc);
+        Assert.Equal(Anchor.AddMinutes(2), model.EffectiveStartUtc);
         Assert.Contains("moves this run only", model.TimeSourceText, StringComparison.Ordinal);
     }
 

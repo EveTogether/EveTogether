@@ -10,13 +10,15 @@ namespace EveUtils.Client.ViewModels.Activity;
 /// </summary>
 public static class AbyssalFilamentName
 {
-    public static string From(string? typedValue)
-    {
-        if (typedValue?.Split('|') is [{ } tierText, { Length: > 0 } weatherName]
-            && int.TryParse(tierText, NumberStyles.Integer, CultureInfo.InvariantCulture, out int tier)
-            && tier >= 0 && tier < AbyssalTiers.Names.Count)
-            return $"{AbyssalTiers.Names[tier]} {weatherName}";
+    public static string From(string? typedValue) =>
+        typedValue?.Split('|') is [{ } tierText, { } weatherName]
+        && int.TryParse(tierText, NumberStyles.Integer, CultureInfo.InvariantCulture, out int tier)
+            ? From(tier, weatherName)
+            : "Abyssal";
 
-        return "Abyssal";
-    }
+    /// <summary>The same name from the two facts as a fleet announcement carries them (ET-246).</summary>
+    public static string From(int? tierIndex, string? weatherName) =>
+        tierIndex is { } tier && tier >= 0 && tier < AbyssalTiers.Names.Count && weatherName is { Length: > 0 }
+            ? $"{AbyssalTiers.Names[tier]} {weatherName}"
+            : "Abyssal";
 }

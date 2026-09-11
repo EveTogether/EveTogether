@@ -43,4 +43,9 @@ public sealed class RecordingToastService : IToastService
         Positions.Add(position);
         ActionToasts.Add((title, message, kind, actions, replacementKey));
     }
+
+    /// <summary>Every key a card was taken down under, in order.</summary>
+    public List<string> Dismissed { get; } = new();
+
+    public void Dismiss(string replacementKey) => Dismissed.Add(replacementKey);
 }

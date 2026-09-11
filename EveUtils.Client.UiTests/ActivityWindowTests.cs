@@ -403,8 +403,13 @@ public class ActivityWindowTests
         Assert.Equal("still running", model.EndText);
     }
 
+    /// <summary>
+    /// ET-246: a pocket's run starts on this pilot's own way in. The envelope used to take the earliest fleet anchor
+    /// as this window's start, so a member's clock began the moment the commander jumped — the anchors are each
+    /// member's own entry, and here they are only counted.
+    /// </summary>
     [Fact]
-    public void FleetEnvelope_RebasesAnchorsBeforeTakingTheEarliest_AndCountsOnlyAnchoredMembers()
+    public void FleetEnvelope_CountsOnlyAnchoredMembers_AndStartsNobodysRun()
     {
         DateTime received = Anchor.AddMinutes(8);
         var model = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
@@ -416,7 +421,8 @@ public class ActivityWindowTests
             new MetricSample(3, 7, MetricKind.Location, 0, 1_000_000)
         ], received);
 
-        Assert.Equal(received.AddSeconds(-300), model.AnchorUtc);
+        Assert.Equal(ActivityRunState.NotStarted, model.RunState);
+        Assert.Null(model.AnchorUtc);
         Assert.Equal(2, model.AnchoredFleetMemberCount);
         Assert.Equal(3, model.FleetMemberCount);
         Assert.Contains("2 of 3", model.Fleet().HeaderSummary);
@@ -434,7 +440,6 @@ public class ActivityWindowTests
             new MetricSample(2, 7, MetricKind.Location, 0, 1_000_000)
         ], received);
 
-        Assert.Equal(received.AddMinutes(-20), model.AnchorUtc);
         Assert.Equal(1, model.AnchoredFleetMemberCount);
         Assert.Equal(2, model.FleetMemberCount);
     }
@@ -501,14 +506,13 @@ public class ActivityWindowTests
     {
         MetricSample automaticAnchor = new(1, 7, MetricKind.Location, 0, 1_000_000, AbyssalAnchorMs: 700_000);
         var stopped = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
-        stopped.ApplyFleetEnvelope([automaticAnchor], Anchor.AddMinutes(8));
-        DateTime automaticStart = stopped.AnchorUtc ?? throw new InvalidOperationException("Automatic anchor did not start the run.");
+        stopped.StartManualRun(Anchor.AddMinutes(2));
         stopped.StopRun(Anchor.AddMinutes(4));
 
         stopped.ApplyFleetEnvelope([automaticAnchor], Anchor.AddMinutes(8));
 
         Assert.Equal(ActivityRunState.Stopped, stopped.RunState);
-        Assert.Equal(automaticStart, stopped.AnchorUtc);
+        Assert.Equal(Anchor.AddMinutes(2), stopped.AnchorUtc);
     }
 
     [Fact]
@@ -538,26 +542,27 @@ public class ActivityWindowTests
         Assert.Equal(manualStart.ToLocalTime().ToString("HH:mm:ss"), model.StartText);
     }
 
+    /// <summary>A fleet mate already in the pocket leaves this window armed and waiting for this pilot (ET-246): START
+    /// stays on offer and the window says it is armed — no clock of anybody else's is put on it.</summary>
     [Fact]
-    public void AutomaticEnvelope_ManualStartOverridesTheSuggestion()
+    public void AFleetMateInThePocket_LeavesThisWindowArmed_WithStartOnOffer()
     {
         var model = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
-        DateTime received = Anchor.AddMinutes(8);
 
         model.ApplyFleetEnvelope(
-        [new MetricSample(1, 7, MetricKind.Location, 0, 1_000_000, AbyssalAnchorMs: 700_000)], received);
+        [new MetricSample(1, 7, MetricKind.Location, 0, 1_000_000, AbyssalAnchorMs: 700_000)], Anchor.AddMinutes(8));
 
-        // The estimate starts the run, so it is a run: stop is the only thing left to do to it, whoever put the
-        // clock on the screen. Offering START next to a ticking clock is what Raymond saw.
-        Assert.Equal("estimated from fleet", model.RunOriginText);
-        Assert.False(model.IsStartButtonVisible);
-        Assert.True(model.IsStopButtonVisible);
+        Assert.Equal("not started", model.RunOriginText);
+        Assert.True(model.IsStartButtonVisible);
+        Assert.False(model.IsStopButtonVisible);
+        Assert.True(model.IsArmedShown);
 
         model.StartManualRun(Anchor.AddMinutes(5));
 
         Assert.Equal("manual", model.RunOriginText);
         Assert.Equal(Anchor.AddMinutes(5), model.AnchorUtc);
         Assert.False(model.IsStartButtonVisible);
+        Assert.False(model.IsArmedShown);
     }
 
     // ── The four buttons, against every state the run can be in ─────────────────────────────────────
