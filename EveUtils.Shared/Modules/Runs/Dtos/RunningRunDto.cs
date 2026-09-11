@@ -15,4 +15,14 @@ public sealed record RunningRunDto(
     string? Signature,
     /// <summary>The scanner's own group text for this site (ET-226) — carried so a window resuming an already
     /// running run can still show the right TYPE, not just one freshly copying a signature.</summary>
-    string? SignatureGroupSnapshot = null);
+    string? SignatureGroupSnapshot = null,
+    /// <summary>The mission facts a window used to forget the moment it was not the one that started the run
+    /// (ET-252) — a second window, a restart, or the same mission copied again while one was already open all
+    /// adopt this same row rather than being freshly told about it, and none of these four carried over: MISSION
+    /// read the agent as unstated, the level and system as unknown, and the reward lines as never recorded, even
+    /// though the run this row is had every one of them since the moment it started. Null/empty for anything that
+    /// is not a mission.</summary>
+    int? AgentId = null,
+    int? MissionLevel = null,
+    int? SolarSystemId = null,
+    IReadOnlyList<RunParameterDto>? Parameters = null);

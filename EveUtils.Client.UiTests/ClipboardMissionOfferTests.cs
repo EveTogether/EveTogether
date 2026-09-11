@@ -98,6 +98,29 @@ public sealed class ClipboardMissionOfferTests
         Assert.Equal("EpicArcAgent", agent?.AgentTypeName);
     }
 
+    // ET-252 AC-2: a mission copied while a window is already open reaches it through ApplyMission rather than a
+    // fresh construction — MISSION must still show what the run actually earned, not "nothing recorded".
+    [AvaloniaFact]
+    public async Task AMissionCapture_WithWindowAlreadyOpen_ShowsTheRewardsInTheMissionSection()
+    {
+        using var env = await Env.StartAsync();
+        await env.AddCharacterAsync();
+
+        var open = new ActivityWindowViewModel(ActivityKind.Mission, env.Services);
+        env.Dialogs.ShowActivityWindow(open, RunWindowOpenTrigger.LocalUser);
+
+        env.Copy(_Fixture("mission-mining-misappropriation.txt"));
+        await WaitForRunningMissionAsync(env);
+        await open.LastMission;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Null(open.Mission().RewardsEmptyText);
+        Assert.Contains(open.Mission().RewardRows, row => row.Label == "ISK" && row.ValueText == "2,460,000");
+        Assert.Contains(open.Mission().RewardRows, row => row.Label == "LOYALTY POINTS" && row.ValueText == "4,858");
+        Assert.True(open.Mission().HasBonus);
+        Assert.Equal("2,460,000 ISK", open.Mission().BonusValueText);
+    }
+
     // AC-6 countercheck: one test over the full reward block, all four RunParameterKey shapes it can produce. No real
     // capture carries a Loyalty Points or Item line, so this block is built rather than measured — its only job is
     // to prove the four reward shapes each land on the row ET-137 already defined for them.

@@ -64,6 +64,7 @@ taken from the matching `## vX.Y.Z` section below.
   it, no longer read "not recorded" either: both now show the system the filament was entered from when it is
   known ("entered from Dresi"), and the LOCATION row is left out entirely when it is not.
 - **Copying an important mission now starts a run.** The warning sentence EVE shows above an important mission's own header — "This is an important mission, which will have significant impact on your faction standings." — used to sit in front of the name and stop the run from starting at all. Its item reward is now also read correctly, even written as "1 x …" rather than "1 × …", and gets its item type looked up the same way any other item reward does. MISSION now shows when a run came from an important mission.
+- **MISSION no longer reads "nothing recorded" for a mission run window did not itself start.** Reopening the run window after restarting the app while a mission was still going, or opening a second window on the same run, used to lose the agent, the level and every reward line — they were only ever handed to a window at the moment it started the run, and adopting an already-running one carried none of it over, even though it was sitting in the store the whole time. The saved activity screen was never affected.
 
 ### Added
 - **A run now shows what it actually was.** A Data Site, a Relic Site, a Gas Site, an Ore Site or a Wormhole used

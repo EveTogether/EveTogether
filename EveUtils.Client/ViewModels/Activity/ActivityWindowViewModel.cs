@@ -967,6 +967,27 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         await _AdoptCharacterAsync(checked((int)run.CharacterId));
         _OnRunWatched();
 
+        // ET-252: this window is not the one that started the run, so MISSION has nothing of its own to show
+        // unless the agent, level, system and the reward lines already on the row travel with the adoption —
+        // otherwise it reads the agent as unstated and every reward as never recorded, even though the run itself
+        // has carried them since the moment it started. Skipped on the way to a waiting copy just below: that
+        // window is about to show a DIFFERENT mission's facts, not this retired run's.
+        if (Kind == ActivityKind.Mission && _pendingCopy is null)
+        {
+            MissionAgentId = run.AgentId;
+            MissionLevel = run.MissionLevel;
+            MissionSolarSystemId = run.SolarSystemId;
+            PendingParameters = [.. (run.Parameters ?? []).Select(parameter => new RunParameterInput
+            {
+                ParameterKey = parameter.ParameterKey,
+                TypedValue = parameter.TypedValue,
+                Amount = parameter.Amount,
+                ItemTypeId = parameter.ItemTypeId,
+                BonusWindowSeconds = parameter.BonusWindowSeconds,
+                ObservedAtUtc = parameter.ObservedAtUtc
+            })];
+        }
+
         // After the state above: StopRun only acts on a run it considers running.
         if (_pendingCopy is not null)
             StopRun(DateTime.UtcNow);
