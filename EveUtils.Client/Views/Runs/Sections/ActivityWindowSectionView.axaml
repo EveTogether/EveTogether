@@ -26,16 +26,11 @@
         <!-- Only what the site itself demands. A row that could only ever read "not known yet" is
              not shown at all: the reader learns nothing from our catalogue's shape. -->
         <StackPanel IsVisible="{Binding !IsInPocket}">
-            <!-- The value sits one level deeper than Grid.kv > TextBlock:nth-child(2) reaches (the
-                 icon rides beside it, not inside it), so brightness, size and right alignment are
-                 restated here rather than left to fall back to the section body's dim default. -->
             <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasSignature}">
                 <TextBlock Text="TYPE"/>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
-                            HorizontalAlignment="Right"
-                            TextElement.Foreground="{StaticResource TextBrightBrush}">
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                     <mi:MaterialIcon Kind="{Binding TypeIcon}" Classes="icon-sm"/>
-                    <TextBlock Text="{Binding SignatureTypeText}" FontSize="11.5"/>
+                    <TextBlock Text="{Binding SignatureTypeText}"/>
                 </StackPanel>
             </Grid>
             <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasSignature}">

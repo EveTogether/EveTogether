@@ -28,6 +28,7 @@ public sealed partial class MissionWindowSectionViewModel : RunWindowSection
 {
     private DateTime? _bonusDeadlineUtc;
     private decimal? _bonusAmount;
+    private string? _missionLocationSystemName;
     private IReadOnlyList<RunParameterInput>? _syncedWith;
 
     public MissionWindowSectionViewModel(IRunWindowContext context) : base(context, RunSectionId.Mission, "MISSION")
@@ -47,6 +48,18 @@ public sealed partial class MissionWindowSectionViewModel : RunWindowSection
     public bool IsLevelShown => Context.MissionLevel is not null;
 
     public string LevelText => Context.MissionLevel is { } level ? $"Level {level}" : string.Empty;
+
+    // ── The mission's own destination ─────────────────────────────────────────────────────────────
+
+    /// <summary>The mission's own target, from the capture's plain "Location" line — never the pilot's own system
+    /// (see <c>ActivityDetailSectionViewModel.LocationText</c>). Shown only on an exact SDE match (ET-253); an
+    /// unrecognised name has nothing else worth showing, unlike an escalation's destination, which keeps the raw
+    /// text.</summary>
+    public bool IsMissionLocationShown => MissionLocationText.Length > 0;
+
+    public string MissionLocationText => _missionLocationSystemName is { Length: > 0 } name
+        ? Context.Services.GetService<ISdeAccessor>()?.FindSolarSystemByName(name)?.Name ?? string.Empty
+        : string.Empty;
 
     /// <summary>Set when the capture opened with EVE's own warning sentence for an important (storyline) mission
     /// (ET-251) — never derived from anything else, since that sentence is the only signal this project has
@@ -133,6 +146,7 @@ public sealed partial class MissionWindowSectionViewModel : RunWindowSection
         RewardRows.Clear();
 
         IsImportantMission = parameters.Any(parameter => parameter.ParameterKey == RunParameterKey.ImportantMission);
+        _missionLocationSystemName = parameters.FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.MissionLocation)?.TypedValue;
 
         RunParameterInput? bonus = parameters.FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.BonusIsk);
         if (bonus is not null)
@@ -142,7 +156,7 @@ public sealed partial class MissionWindowSectionViewModel : RunWindowSection
         }
 
         foreach (RunParameterInput parameter in parameters.Where(parameter =>
-            parameter.ParameterKey is not (RunParameterKey.BonusIsk or RunParameterKey.ImportantMission)))
+            parameter.ParameterKey is not (RunParameterKey.BonusIsk or RunParameterKey.ImportantMission or RunParameterKey.MissionLocation)))
             RewardRows.Add(new ActivityRewardRowViewModel(new RunParameterDto(Guid.Empty, parameter.ParameterKey,
                 parameter.TypedValue, parameter.Amount, parameter.ItemTypeId, parameter.BonusWindowSeconds, parameter.ObservedAtUtc)));
 

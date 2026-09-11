@@ -193,6 +193,16 @@
                 <Setter Property="TextAlignment" Value="Right"/>
                 <Setter Property="TextWrapping" Value="Wrap"/>
             </Style>
+            <!-- ET-226 fixed this once for the TYPE row alone (an icon beside its name) by restating brightness,
+                 size and right alignment locally; ET-253 found the same gap on BONUS ISK (a figure beside a
+                 countdown chip) and fixes it here instead, structurally — see EveUtils.axaml's own copy of this
+                 rule for the reasoning; duplicated here rather than shared because a style declared where it could
+                 be inherited from is the thing that silently goes missing in this window (see the note above). -->
+            <Style Selector="Grid.kv > StackPanel:nth-child(2)">
+                <Setter Property="HorizontalAlignment" Value="Right"/>
+                <Setter Property="TextElement.Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="TextElement.FontSize" Value="11.5"/>
+            </Style>
 
             <!-- ── The hint under a section ── where the window says what it does NOT know, and why. Half the reason
                  this window exists is that it refuses to fill a field it cannot source. -->

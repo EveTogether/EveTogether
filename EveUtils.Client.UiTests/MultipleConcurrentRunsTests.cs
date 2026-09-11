@@ -572,6 +572,44 @@ public class MultipleConcurrentRunsTests
             detail.Value.Runs.Select(run => run.FitNameSnapshot).OrderBy(name => name));
     }
 
+    // ── The pilot's own system, stored at mission start the same way a site's already is (ET-253) ──
+
+    /// <summary>
+    /// Counter-proof, red against the pre-fix code: a regular agent's mission (no "Report to" line in the capture —
+    /// mission-captures.md) has no agent, and so no <c>MissionSolarSystemId</c> either (ET-176's own station-only
+    /// source). <c>Run.SolarSystemId</c> stayed null even though the pilot's own live location was known the whole
+    /// time the run window was open — the same source a site's own fix already reads via
+    /// <c>ActivityWindowViewModel._ResolveSolarSystemId</c>. LOCATION and the ACTIVITY header both read "not
+    /// recorded" for a run measured this way in Jithran's own <c>client.db</c> (ET-253).
+    /// </summary>
+    [AvaloniaFact]
+    public async Task SavedMissionActivity_CarriesThePilotsOwnSystem_EvenWithNoAgentInTheCapture()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync(configure: services =>
+            services.AddSingleton<ISdeAccessor>(new FakeSdeAccessor().AddSolarSystem(new SdeSolarSystem(30004079, "Aphend", 0.6))));
+
+        ActivityWindowViewModel model = await harness.OpenAsync(ActivityKind.Mission);
+        model.SignatureName = "Mining Misappropriation";
+        harness.Services.GetRequiredService<GamelogClientService>()
+            .SetLocation(ActivityWindowHarness.CharacterName, "Aphend", DateTime.UtcNow);
+
+        await model.StartRunCommand.ExecuteAsync(null);
+        await ActivityWindowHarness.WaitUntil(() => model.RunId is not null);
+
+        model.StopRun(DateTime.UtcNow);
+        await ActivityWindowHarness.WaitUntil(() => model.RunState == ActivityRunState.Stopped);
+        await model.SaveRunCommand.ExecuteAsync(null);
+
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Result<IReadOnlyList<ActivityOverviewRowDto>> overview = await dispatcher.Query(new GetActivityOverviewQuery());
+        ActivityOverviewRowDto row = Assert.Single(overview.Value!);
+        Assert.Equal(30004079, row.SolarSystemId);
+
+        Result<ActivityDetailDto> detail = await dispatcher.Query(new GetActivityDetailQuery(row.ActivitySummaryId));
+        Assert.True(detail.IsSuccess);
+        Assert.Equal(30004079, detail.Value!.SolarSystemId);
+    }
+
     private static ShipFitDetectionReading _Observed(ShipFitCandidate selected) =>
         new(ShipFitDetectionState.Observed, DateTimeOffset.UtcNow, selected.ShipTypeId, 1, "Ship",
             selected, ShipFitMatchReason.Manual, [selected]);

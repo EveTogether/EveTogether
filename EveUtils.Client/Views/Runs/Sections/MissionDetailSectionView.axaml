@@ -17,6 +17,10 @@
             <TextBlock Text="LEVEL"/>
             <TextBlock Grid.Column="1" Text="{Binding LevelText}"/>
         </Grid>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsMissionLocationShown}">
+            <TextBlock Text="MISSION LOCATION"/>
+            <TextBlock Grid.Column="1" Text="{Binding MissionLocationText}"/>
+        </Grid>
 
         <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasBonus}">
             <TextBlock Text="BONUS ISK"/>

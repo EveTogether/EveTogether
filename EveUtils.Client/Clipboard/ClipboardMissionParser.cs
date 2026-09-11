@@ -9,15 +9,21 @@ namespace EveUtils.Client.Clipboard;
 public sealed record ClipboardMissionReward(RunParameterKey? ParameterKey, decimal? Amount, string? ItemName,
     long? ItemQuantity, string RawLine);
 
-/// <summary><see cref="ObjectivesHeaderName"/> is the header line's own name, not the mission's — this capture never states one.</summary>
+/// <summary><see cref="ObjectivesHeaderName"/> is the header line's own name, not the mission's — this capture never states one.
+/// <see cref="LocationSystemName"/> is the mission's own destination (ET-253), never the pilot's own system.</summary>
 public sealed record ClipboardMissionCapture(string? ObjectivesHeaderName, string? AgentName, int? BonusWindowSeconds,
-    IReadOnlyList<ClipboardMissionReward> Rewards, bool IsImportantMission);
+    IReadOnlyList<ClipboardMissionReward> Rewards, bool IsImportantMission, string? LocationSystemName = null);
 
 /// <summary>The location row next to "Report to &lt;agent&gt;" is never read: the agent name alone is the resolving key (ET-172 sub 1), and the location text is free-form prose no parser should trust.</summary>
 public static partial class ClipboardMissionParser
 {
     private const string ObjectivesHeaderSuffix = " Objectives";
     private const string ReportToPrefix = "Report to ";
+
+    // ET-253: the plain Objective's own destination ("Location\t0.6 Aphend") — never "Drop-off Location" (cargo's
+    // own station, not the encounter) or "Agent Location" (the agent's station, resolved separately via the SDE
+    // agent lookup instead).
+    private const string LocationLabel = "Location";
 
     // ET-251: the same preface EVE shows above the header for an important (storyline) mission — the only signal
     // this project has measured for the flag, so matched literally rather than on a looser "important" keyword.
@@ -43,6 +49,7 @@ public static partial class ClipboardMissionParser
         string? objectivesHeaderName = null;
         string? agentName = null;
         int? bonusWindowSeconds = null;
+        string? locationSystemName = null;
         var isImportantMission = false;
         var rewards = new List<ClipboardMissionReward>();
         var block = RewardBlock.None;
@@ -97,6 +104,16 @@ public static partial class ClipboardMissionParser
                 continue;
             }
 
+            // The plain Location row lives in the Objectives block (block == None), same as the comment on the
+            // reward-content branch below already notes. First one wins — a courier's own "Drop-off Location" is a
+            // different tab field entirely ("Drop-off Location", not "Location"), so it never matches here.
+            if (block == RewardBlock.None && locationSystemName is null)
+            {
+                string[] fields = trimmed.Split('\t', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                if (fields.Length >= 2 && fields[0] == LocationLabel)
+                    locationSystemName = _SystemNameFrom(fields[1]);
+            }
+
             // A reward content row is indented ("\t1.000.000 ISK"); the explanatory sentence above it is not, and
             // the location row lives in the Objectives block where this branch never runs (block == None there).
             if (block != RewardBlock.None && line.Length > 0 && char.IsWhiteSpace(line[0]))
@@ -123,9 +140,19 @@ public static partial class ClipboardMissionParser
             }
         }
 
-        return objectivesHeaderName is null && agentName is null && rewards.Count == 0 && bonusWindowSeconds is null && !isImportantMission
+        return objectivesHeaderName is null && agentName is null && rewards.Count == 0 && bonusWindowSeconds is null
+            && !isImportantMission && locationSystemName is null
             ? null
-            : new ClipboardMissionCapture(objectivesHeaderName, agentName, bonusWindowSeconds, rewards, isImportantMission);
+            : new ClipboardMissionCapture(objectivesHeaderName, agentName, bonusWindowSeconds, rewards, isImportantMission,
+                locationSystemName);
+    }
+
+    // "0.6 Aphend" -> "Aphend": the security rating and the name are always tab-adjacent as one field, separated by
+    // exactly one space, and no k-space system name carries a space of its own.
+    private static string? _SystemNameFrom(string value)
+    {
+        int spaceIndex = value.IndexOf(' ');
+        return spaceIndex >= 0 && spaceIndex < value.Length - 1 ? value[(spaceIndex + 1)..].Trim() : null;
     }
 
     private static ClipboardMissionReward ParseReward(string rawLine, string value, RunParameterKey iskKind)

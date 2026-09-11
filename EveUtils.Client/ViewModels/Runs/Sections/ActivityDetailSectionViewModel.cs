@@ -41,9 +41,10 @@ public sealed partial class ActivityDetailSectionViewModel(ISdeAccessor? sde)
         // was entered from, worth a row only when it is actually known, never a "not recorded" about a place the
         // pocket was never going to have (ET-248, Jithran + Raymond's Fierce Dark, 2026-09-11).
         IsLocationShown = !isAbyssal || detail.SolarSystemId is not null;
+        string? knownLocation = _ResolvedSystemName(detail.SolarSystemId);
         LocationText = isAbyssal
-            ? _EnteredFromText(detail.SolarSystemId)
-            : _LocationText(detail.SolarSystemId);
+            ? (knownLocation is { Length: > 0 } entered ? $"entered from {entered}" : string.Empty)
+            : knownLocation ?? "not recorded";
         SignatureText = source?.Signature ?? string.Empty;
         IsSignatureShown = !string.IsNullOrWhiteSpace(source?.Signature);
         FitText = source?.FitNameSnapshot ?? "not recognised";
@@ -56,21 +57,20 @@ public sealed partial class ActivityDetailSectionViewModel(ISdeAccessor? sde)
         HasObjectives = objectives.Length > 0;
         ObjectivesText = HasObjectives ? string.Join(" · ", objectives) : null;
 
-        HeaderSummary = IsLocationShown ? $"{input.RunType.Name} · {LocationText}" : input.RunType.Name;
+        // Never "not recorded" in a header — the row above is exempt from this and may still name a genuine gap in
+        // words, but the header either states a real place or says only the type (ET-248 drew this line for
+        // abyssals first; ET-253 makes it the rule for every type, since a mission with no recorded system read
+        // "Mission run · not recorded" the same way here before this).
+        HeaderSummary = knownLocation is { Length: > 0 }
+            ? $"{input.RunType.Name} · {(isAbyssal ? $"entered from {knownLocation}" : knownLocation)}"
+            : input.RunType.Name;
     }
 
     /// <summary>The system a run was on, named through the local SDE (ET-213) — never ESI, and never the bare id
     /// the store carries. The same reading the run window already gives live: a plain name, no security status,
     /// because the window itself does not show one either. A stored id the SDE does not carry — an older build, a
-    /// boundary case — falls back to the id itself rather than a blank line or an error.</summary>
-    private string _LocationText(int? solarSystemId) =>
-        solarSystemId is not { } id
-            ? "not recorded"
-            : sde?.GetSolarSystem(id)?.Name ?? $"system {id}";
-
-    /// <summary>Only ever called once <see cref="IsLocationShown"/> is already true for an abyssal — the row is
-    /// dropped rather than shown when the system is not known, so this never has to say "not recorded" about a
-    /// place the pocket itself never has.</summary>
-    private string _EnteredFromText(int? solarSystemId) =>
-        solarSystemId is not { } id ? string.Empty : $"entered from {sde?.GetSolarSystem(id)?.Name ?? $"system {id}"}";
+    /// boundary case — falls back to the id itself rather than a blank line or an error. Null only when no system
+    /// was ever recorded at all.</summary>
+    private string? _ResolvedSystemName(int? solarSystemId) =>
+        solarSystemId is not { } id ? null : sde?.GetSolarSystem(id)?.Name ?? $"system {id}";
 }

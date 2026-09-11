@@ -163,6 +163,14 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
                 ObservedAtUtc = now
             });
 
+        if (mission.LocationSystemName is { Length: > 0 } locationSystemName)
+            parameters.Add(new RunParameterInput
+            {
+                ParameterKey = RunParameterKey.MissionLocation,
+                TypedValue = locationSystemName,
+                ObservedAtUtc = now
+            });
+
         foreach (ClipboardMissionReward reward in mission.Rewards)
         {
             RunParameterKey key = reward.ParameterKey ?? RunParameterKey.Unknown;

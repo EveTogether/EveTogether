@@ -1756,17 +1756,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             section.OnCharacterRunStarted(checked((int)characterId));
     }
 
-    /// <summary>The site's own solar system, resolved once for the whole group starting on it (ET-210 review
-    /// finding, 2026-09-25): a mission already carries its system id from the SDE agent lookup, but a site or an
-    /// abyssal run only ever had the LOCATION section's own live name (<see cref="SolarSystem"/>) — never turned
-    /// into the numeric id <c>Run.SolarSystemId</c> actually stores, so a saved activity's LOCATION always read
-    /// "not recorded" regardless of how many characters it held. Null when the SDE has no exact match, same as an
-    /// unmatched site name reads elsewhere in this window (ET-178).</summary>
-    private int? _ResolveSolarSystemId() => RunType.HasAgent
-        ? MissionSolarSystemId
-        : SolarSystem is { Length: > 0 } name
-            ? _services.GetService<ISdeAccessor>()?.FindSolarSystemByName(name)?.SolarSystemId
-            : null;
+    /// <summary>The pilot's own solar system, resolved once for the whole group starting on it (ET-210 review
+    /// finding, 2026-09-25): a site or an abyssal run only ever had the LOCATION section's own live name
+    /// (<see cref="SolarSystem"/>) — never turned into the numeric id <c>Run.SolarSystemId</c> actually stores, so a
+    /// saved activity's LOCATION always read "not recorded" regardless of how many characters it held. Null when the
+    /// SDE has no exact match, same as an unmatched site name reads elsewhere in this window (ET-178).
+    ///
+    /// A mission with a "Report to" agent the SDE recognises prefers that agent's own station
+    /// (<see cref="MissionSolarSystemId"/>) — unchanged since ET-176. Falls back to the pilot's own live system,
+    /// exactly like a site does, for a regular agent's mission (no "Report to" line, ET-253): that capture never
+    /// carries a system of its own, but the pilot's own location is known live the whole time the run window is
+    /// open, and was simply never asked for.</summary>
+    private int? _ResolveSolarSystemId() => MissionSolarSystemId ?? (SolarSystem is { Length: > 0 } name
+        ? _services.GetService<ISdeAccessor>()?.FindSolarSystemByName(name)?.SolarSystemId
+        : null);
 
     /// <summary>Which id space the stored run's site came from. A kind check kept on purpose (ET-236): this is how
     /// the store files the row's site, keyed on the kind it is filed under, not anything a section shows. A site with
