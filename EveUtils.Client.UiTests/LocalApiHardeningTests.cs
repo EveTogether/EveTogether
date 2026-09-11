@@ -178,5 +178,6 @@ public class LocalApiHardeningTests
         }
 
         public Task UpsertAsync(string key, string value, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeleteAsync(string key, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

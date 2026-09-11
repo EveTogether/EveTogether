@@ -29,4 +29,15 @@ internal sealed class SettingRepository(IDbContextFactory<SharedDbContext> conte
 
         await db.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task DeleteAsync(string key, CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+
+        var existing = await db.Set<ClientSetting>().FirstOrDefaultAsync(s => s.Key == key, cancellationToken);
+        if (existing is null) return;
+
+        db.Set<ClientSetting>().Remove(existing);
+        await db.SaveChangesAsync(cancellationToken);
+    }
 }

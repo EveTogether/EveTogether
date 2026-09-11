@@ -7,4 +7,6 @@ public interface ISettingRepository
     Task<IReadOnlyList<ClientSetting>> ListAsync(CancellationToken cancellationToken = default);
 
     Task UpsertAsync(string key, string value, CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(string key, CancellationToken cancellationToken = default);
 }

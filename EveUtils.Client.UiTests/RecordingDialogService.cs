@@ -22,6 +22,11 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public sealed class RecordingDialogService : IDialogService
 {
+    /// <inheritdoc/>
+#pragma warning disable CS0067 // no test using this double closes a routed module, so nothing ever raises it
+    public event Action<string>? ModuleClosed;
+#pragma warning restore CS0067
+
     /// <summary>Chooses the picked character id (or null to cancel). Default: cancel.</summary>
     public Func<string, IReadOnlyList<CharacterPickOption>, Task<int?>> OnPickCharacter { get; set; } =
         (_, _) => Task.FromResult<int?>(null);

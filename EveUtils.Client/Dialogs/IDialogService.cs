@@ -1,3 +1,4 @@
+using System;
 using EveUtils.Client.Runs;
 using EveUtils.Client.Theming;
 using EveUtils.Client.ViewModels;
@@ -16,6 +17,10 @@ namespace EveUtils.Client.Dialogs;
 /// </summary>
 public interface IDialogService
 {
+    /// <summary>Raised with a module's id whenever it closes, docked or floating (ET-209's "reopen last closed
+    /// tab").</summary>
+    event Action<string>? ModuleClosed;
+
     /// <summary>
     /// Scope-selection dialog: shows each ESI scope the client can request with name + scope +
     /// description (from the scope registry). At sign-in (no <paramref name="preselected"/>) every scope is

@@ -1,8 +1,12 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
+using Avalonia.Input;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Input;
 using Material.Icons;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.Dialogs;
 
@@ -30,6 +34,11 @@ public sealed class ModuleHostService
 
     public void SetOwner(Window owner) => _owner = owner;
     public void SetHost(IModuleHostDisplay host) => _host = host;
+
+    /// <summary>Raised with a module's id whenever it closes, docked or floating (ET-209's "reopen last closed
+    /// tab" listens here — only for the handful of no-argument modules simple enough to reopen from scratch; see
+    /// <c>MainWindowViewModel</c>).</summary>
+    public event Action<string>? ModuleClosed;
 
     /// <summary>Number of modules currently shown as their own (floating) windows — i.e. pop-outs. Docked modules are
     /// tabs inside the main window and are not counted (closing the main window takes them with it).</summary>
@@ -84,6 +93,9 @@ public sealed class ModuleHostService
         if (window is IHostableModuleWindow hostable)
             hostable.CloseRequested = () => Dismiss(frame);
         window.Closed += (_, _) => OnWindowClosed(frame);
+        // Only ever reaches this window while it is actually shown — i.e. floating (docked hides it and steals its
+        // content, so it cannot hold keyboard focus then). The docked case is MainWindow's own key handling instead.
+        window.KeyDown += (_, e) => _OnFloatingWindowKeyDown(e, frame);
 
         _modules.Add(frame);
         Render(select: frame);
@@ -135,6 +147,7 @@ public sealed class ModuleHostService
         frame.Window.Close();   // fires Closed → the window's own cleanup (e.g. EsiMetrics disposes its VM)
         if (removed)
         {
+            ModuleClosed?.Invoke(frame.Id);
             var neighbour = _modules.Count == 0 ? null : _modules[System.Math.Min(index, _modules.Count - 1)];
             Render(select: neighbour);
         }
@@ -143,6 +156,36 @@ public sealed class ModuleHostService
     // A floating module window closed by the user (its X) — drop it from the set and re-render.
     private void OnWindowClosed(ModuleFrame frame)
     {
-        if (_modules.Remove(frame)) Render(select: null);
+        if (_modules.Remove(frame))
+        {
+            ModuleClosed?.Invoke(frame.Id);
+            Render(select: null);
+        }
+    }
+
+    // Floating-only shortcuts (ET-209): Close mirrors the chrome's own titlebar X exactly (Window.Close(), not
+    // Dismiss — Dismiss is for the tab's X, which never applies here since a floating window carries no tab).
+    // Tab-cycling/reopen/settings are meaningless without a tab strip, so they are MainWindow's own handling only.
+    private void _OnFloatingWindowKeyDown(KeyEventArgs e, ModuleFrame frame)
+    {
+        if (e.Handled) return;
+        var registry = Program.Services?.GetService<KeyboardShortcutRegistry>();
+        if (registry is null || !registry.TryResolve(new KeyGesture(e.Key, e.KeyModifiers), out var action)) return;
+
+        switch (action)
+        {
+            case ShortcutAction.CloseTab:
+                frame.Window.Close();
+                break;
+            case ShortcutAction.RefreshModule:
+                ShortcutDispatch.RefreshModule(frame.Content);
+                break;
+            case ShortcutAction.FocusSearch:
+                ShortcutDispatch.FocusSearch(frame.Content);
+                break;
+            default:
+                return;
+        }
+        e.Handled = true;
     }
 }

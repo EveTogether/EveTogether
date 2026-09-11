@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Threading;
+using EveUtils.Client.Input;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels;
@@ -16,6 +18,7 @@ using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.DependencyInjection;
 using Material.Icons;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.Dialogs;
 
@@ -43,6 +46,13 @@ public sealed class DialogService : IDialogService, ISingletonService
     {
         _owner = owner;
         _moduleHost.SetOwner(owner);
+    }
+
+    /// <inheritdoc/>
+    public event Action<string>? ModuleClosed
+    {
+        add => _moduleHost.ModuleClosed += value;
+        remove => _moduleHost.ModuleClosed -= value;
     }
 
     /// <summary>Wires the docked module host (the main view-model): the tab sink for hosted modules.</summary>
@@ -211,6 +221,21 @@ public sealed class DialogService : IDialogService, ISingletonService
     {
         if (_activityWindow is not null)
             dialog.Topmost = true;
+
+        // Esc closes a modal dialog the same way its own Cancel/Close button does — Window.Close() with no result,
+        // which ShowDialog<TResult> resolves as default(TResult) (false/null — "not confirmed"), exactly what a
+        // dialog's own Cancel already returns. One place for every modal shown through this method (ET-209),
+        // instead of touching each dialog's own XAML/code-behind. Read live so a rebind in Settings needs no restart.
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Handled) return;
+            var registry = Program.Services?.GetService<KeyboardShortcutRegistry>();
+            if (registry is null || !registry.TryResolve(new KeyGesture(e.Key, e.KeyModifiers), out var action) ||
+                action != ShortcutAction.CloseDialog)
+                return;
+            e.Handled = true;
+            dialog.Close();
+        };
 
         return dialog;
     }

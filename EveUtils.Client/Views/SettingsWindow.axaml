@@ -32,6 +32,7 @@
                     <ListBoxItem Content="Interface"/>
                     <ListBoxItem Content="Privacy &amp; Sharing"/>
                     <ListBoxItem Content="Integrations"/>
+                    <ListBoxItem Content="Keyboard shortcuts"/>
                 </ListBox>
             </DockPanel>
         </Border>
@@ -224,6 +225,18 @@
                         <TextBlock Text="Off by default. A read-only server bound to 127.0.0.1 only (never your network) — for example to feed your own stream overlays or widgets (Twitch/OBS). Start or stop it here; the interactive API reference (Scalar) opens via API docs. Default port 8001."
                                    FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
                     </StackPanel>
+                </StackPanel>
+
+                <!-- ── Keyboard shortcuts ── -->
+                <StackPanel x:Name="KeyboardShortcutsPanel" Spacing="12" IsVisible="False">
+                    <TextBlock Text="Keyboard shortcuts" FontWeight="Bold" FontSize="16"
+                               Foreground="{StaticResource TextBrightBrush}"/>
+                    <TextBlock Text="Click a shortcut's key combination, then press the new one. Esc cancels the recording without changing it. Only what you change from the default is remembered — a future update's new defaults still reach anything you never touched."
+                               FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    <StackPanel x:Name="ShortcutRowsPanel" Spacing="2"/>
+                    <TextBlock x:Name="ShortcutMessageBlock" FontSize="10" TextWrapping="Wrap"
+                               Foreground="{DynamicResource RedBrush}" IsVisible="False"/>
+                    <Button Content="Reset all to defaults" Click="OnResetAllShortcuts" HorizontalAlignment="Left"/>
                 </StackPanel>
 
             </Panel>

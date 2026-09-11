@@ -197,5 +197,11 @@ public class LocalApiServerTests
             _settings.Add(new ClientSetting { Key = key, Value = value });
             return Task.CompletedTask;
         }
+
+        public Task DeleteAsync(string key, CancellationToken cancellationToken = default)
+        {
+            _settings.RemoveAll(s => s.Key == key);
+            return Task.CompletedTask;
+        }
     }
 }

@@ -57,7 +57,7 @@
             <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
                 <TextBox Grid.Column="0" Text="{Binding SearchText}" PlaceholderText="Search compositions…"
                          MaxWidth="320" HorizontalAlignment="Left" FontSize="11"/>
-                <Button Grid.Column="1" Content="REFRESH" FontSize="9" Margin="0,0,6,0" Command="{Binding RefreshCommand}"/>
+                <Button Grid.Column="1" Content="REFRESH" FontSize="9" Margin="0,0,6,0" Command="{Binding RefreshCommand}" ToolTip.Tip="F5 / Ctrl+R"/>
                 <Button Grid.Column="2" Content="+ NEW COMPOSITION" FontSize="9" Classes="accent"
                         Command="{Binding NewCompositionCommand}"/>
             </Grid>
