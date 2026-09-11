@@ -104,6 +104,50 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private readonly DpsRenderDriver? _renderDriver;
     private string _localCharacter = "Pilot-" + (Environment.GetEnvironmentVariable("EVEUTILS_INSTANCE") ?? "Local");
 
+    // ── Ctrl+Shift+T: reopen last closed tab (ET-209) ────────────────────────────────────────────
+    // Scoped to the no-argument, single-instance rail modules: reopening one is exactly re-running the same
+    // LaunchModule the rail button would. A per-entity module (a specific fleet's roster/metrics, a fit detail, an
+    // activity) has no single obvious "the one to reopen" without fabricating context it never had, so those are
+    // left out on purpose — closing one simply never enters this stack.
+    private static readonly IReadOnlyDictionary<string, string> ReopenRailIdByModuleId = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["fit-browser"] = "fits",
+        ["fleets"] = "fleet",
+        ["compositions"] = "compositions",
+        ["esi-metrics"] = "esi",
+        ["settings-sync"] = "settings-sync",
+        ["appraisal"] = "appraisal",
+        ["inbox"] = "inbox",
+        ["app-logs"] = "logs",
+        ["settings"] = "settings",
+        ["runs"] = "runs",
+    };
+
+    private const int RecentlyClosedModulesCapacity = 10;
+    private readonly List<string> _recentlyClosedModuleIds = [];
+
+    private void OnModuleClosed(string moduleId)
+    {
+        if (!ReopenRailIdByModuleId.ContainsKey(moduleId)) return;
+        _recentlyClosedModuleIds.Remove(moduleId); // de-dupe: closing the same module again just moves it to the top
+        _recentlyClosedModuleIds.Add(moduleId);
+        if (_recentlyClosedModuleIds.Count > RecentlyClosedModulesCapacity)
+            _recentlyClosedModuleIds.RemoveAt(0);
+    }
+
+    /// <summary>Ctrl+Shift+T: reopens whichever eligible module closed most recently. A no-op with nothing to
+    /// reopen — <see cref="LaunchModule"/> itself already re-selects instead of duplicating if the module somehow
+    /// reopened by another route in the meantime.</summary>
+    [RelayCommand]
+    private async Task ReopenLastClosedTab()
+    {
+        if (_recentlyClosedModuleIds.Count == 0) return;
+        var moduleId = _recentlyClosedModuleIds[^1];
+        _recentlyClosedModuleIds.RemoveAt(_recentlyClosedModuleIds.Count - 1);
+        if (ReopenRailIdByModuleId.TryGetValue(moduleId, out var railId))
+            await LaunchModule(railId);
+    }
+
     // ── Collections ──────────────────────────────────────────────────────────────────────────────
 
     public ObservableCollection<ShipDto> Ships { get; } = [];
@@ -361,6 +405,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _watcher.CharacterObserved += OnGamelogCharacterObserved;
         _registry = services.GetRequiredService<ICharacterRegistry>();
         _dialogs = services.GetRequiredService<IDialogService>();
+        _dialogs.ModuleClosed += OnModuleClosed;   // ET-209: Ctrl+Shift+T reopens the last eligible one
         _scopeRegistry = services.GetRequiredService<IEsiScopeRegistry>();
         _fitShare = services.GetRequiredService<ServerFitShareClient>();
         _fitExportActions = services.GetRequiredService<IFitExportActions>();

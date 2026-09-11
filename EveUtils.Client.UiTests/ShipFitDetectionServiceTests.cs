@@ -247,5 +247,11 @@ public sealed class ShipFitDetectionServiceTests
             _values[key] = value;
             return Task.CompletedTask;
         }
+
+        public Task DeleteAsync(string key, CancellationToken cancellationToken = default)
+        {
+            _values.Remove(key);
+            return Task.CompletedTask;
+        }
     }
 }

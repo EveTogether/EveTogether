@@ -13,6 +13,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Input;
 using EveUtils.Client.ViewModels;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.Extensions.DependencyInjection;
@@ -411,4 +412,62 @@ public partial class MainWindow : Window
 
     private void ToggleMaximize() =>
         WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+    // Docked-host keyboard shortcuts (ET-209): only reaches here unhandled, so a focused text field's own Ctrl+C/V/
+    // etc. still wins — none of these gestures overlap with text editing. Floating module windows carry the same
+    // Close/Refresh/Search handling on themselves instead (ModuleHostService), since only they can be focused then;
+    // the tab-cycling/reopen/settings actions below are meaningless without a tab strip, so they live only here.
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (e.Handled) return;
+        if (DataContext is not MainWindowViewModel vm) return;
+
+        var registry = Program.Services?.GetService<KeyboardShortcutRegistry>();
+        if (registry is null || !registry.TryResolve(new KeyGesture(e.Key, e.KeyModifiers), out var action)) return;
+
+        switch (action)
+        {
+            case ShortcutAction.CloseTab:
+                vm.SelectedHostTab?.CloseCommand.Execute(null);
+                break;
+            case ShortcutAction.NextTab:
+                vm.SelectedHostTab = TabCycling.Next(vm.HostTabs, vm.SelectedHostTab) ?? vm.SelectedHostTab;
+                break;
+            case ShortcutAction.PreviousTab:
+                vm.SelectedHostTab = TabCycling.Previous(vm.HostTabs, vm.SelectedHostTab) ?? vm.SelectedHostTab;
+                break;
+            case ShortcutAction.GoToTab1: _SelectTab(vm, 1); break;
+            case ShortcutAction.GoToTab2: _SelectTab(vm, 2); break;
+            case ShortcutAction.GoToTab3: _SelectTab(vm, 3); break;
+            case ShortcutAction.GoToTab4: _SelectTab(vm, 4); break;
+            case ShortcutAction.GoToTab5: _SelectTab(vm, 5); break;
+            case ShortcutAction.GoToTab6: _SelectTab(vm, 6); break;
+            case ShortcutAction.GoToTab7: _SelectTab(vm, 7); break;
+            case ShortcutAction.GoToTab8: _SelectTab(vm, 8); break;
+            case ShortcutAction.GoToLastTab:
+                vm.SelectedHostTab = TabCycling.Last(vm.HostTabs) ?? vm.SelectedHostTab;
+                break;
+            case ShortcutAction.ReopenClosedTab:
+                vm.ReopenLastClosedTabCommand.Execute(null);
+                break;
+            case ShortcutAction.RefreshModule:
+                ShortcutDispatch.RefreshModule(vm.SelectedHostTab?.Content);
+                break;
+            case ShortcutAction.FocusSearch:
+                ShortcutDispatch.FocusSearch(vm.SelectedHostTab?.Content);
+                break;
+            case ShortcutAction.OpenSettings:
+                vm.LaunchModuleCommand.Execute("settings");
+                break;
+            default:
+                return;
+        }
+        e.Handled = true;
+    }
+
+    private static void _SelectTab(MainWindowViewModel vm, int oneBasedIndex)
+    {
+        if (TabCycling.At(vm.HostTabs, oneBasedIndex) is { } tab) vm.SelectedHostTab = tab;
+    }
 }

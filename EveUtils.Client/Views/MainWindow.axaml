@@ -302,7 +302,7 @@
                         </Button>
                         <Border Classes="rail-divider"/>
                         <Button Classes="railitem" Command="{Binding LaunchModuleCommand}" CommandParameter="settings"
-                                ToolTip.Tip="Settings">
+                                ToolTip.Tip="Settings (Ctrl+,)">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
                                 <mi:MaterialIcon Classes="rail" Kind="TuneVariant"/>
                                 <TextBlock Text="SETTINGS" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
@@ -488,7 +488,7 @@
                                         <mi:MaterialIcon Classes="icon-sm" Kind="{Binding Icon}"/>
                                         <TextBlock Text="{Binding Title}" FontSize="11" VerticalAlignment="Center"/>
                                         <Button Classes="tabclose" Command="{Binding CloseCommand}"
-                                                ToolTip.Tip="Close this module">
+                                                ToolTip.Tip="Close this module (Ctrl+W)">
                                             <mi:MaterialIcon Classes="icon-sm" Kind="Close"/>
                                         </Button>
                                     </StackPanel>
@@ -517,7 +517,7 @@
                                                     <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="11"
                                                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                                     <Button Grid.Column="2" Classes="tabclose" Command="{Binding CloseCommand}"
-                                                            ToolTip.Tip="Close this module">
+                                                            ToolTip.Tip="Close this module (Ctrl+W)">
                                                         <mi:MaterialIcon Classes="icon-sm" Kind="Close"/>
                                                     </Button>
                                                 </Grid>

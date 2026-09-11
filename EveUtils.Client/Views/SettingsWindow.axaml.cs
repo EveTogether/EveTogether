@@ -1,17 +1,23 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Input;
 using EveUtils.Client.LocalApi;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.Views;
 
@@ -46,6 +52,15 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private Button _localApiStartStopButton = null!, _localApiDocsButton = null!, _localApiWidgetButton = null!;
     private RadioButton _factionGallente = null!, _factionAmarr = null!, _factionCaldari = null!, _factionMinmatar = null!;
     private StackPanel _generalPanel = null!, _interfacePanel = null!, _privacyPanel = null!, _integrationsPanel = null!;
+    private StackPanel _keyboardShortcutsPanel = null!, _shortcutRowsPanel = null!;
+    private TextBlock _shortcutMessageBlock = null!;
+
+    // Keyboard shortcuts (ET-209): each row persists itself the moment it changes, independent of this window's own
+    // Save/Cancel — conflicts have to be visible immediately, not deferred to a batch Save the user might cancel.
+    private KeyboardShortcutRegistry? _shortcutRegistry;
+    private readonly Dictionary<ShortcutAction, Button> _shortcutGestureButtons = new();
+    private readonly Dictionary<ShortcutAction, Button> _shortcutResetButtons = new();
+    private ShortcutAction? _recordingAction;
 
     /// <summary>Set by the module host so Save/Cancel dismiss the docked tab; null when floating (then we Close()).</summary>
     public Action? CloseRequested { get; set; }
@@ -57,6 +72,9 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     /// Lives here rather than at the caller because the order it refers to is in this file's own markup.
     /// </remarks>
     public const int PrivacyCategory = 2;
+
+    /// <summary>Index of the Keyboard shortcuts entry in <c>CategoryNav</c>.</summary>
+    public const int KeyboardShortcutsCategory = 4;
 
     public SettingsWindow()
     {
@@ -99,6 +117,10 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _interfacePanel = this.FindControl<StackPanel>("InterfacePanel")!;
         _privacyPanel = this.FindControl<StackPanel>("PrivacyPanel")!;
         _integrationsPanel = this.FindControl<StackPanel>("IntegrationsPanel")!;
+        _keyboardShortcutsPanel = this.FindControl<StackPanel>("KeyboardShortcutsPanel")!;
+        _shortcutRowsPanel = this.FindControl<StackPanel>("ShortcutRowsPanel")!;
+        _shortcutMessageBlock = this.FindControl<TextBlock>("ShortcutMessageBlock")!;
+        BuildShortcutRows();
 
         _gamelogDirBox.Text = string.IsNullOrWhiteSpace(currentDirectory) ? detectedDefault : currentDirectory;
         _gamelogDirBox.TextChanged += (_, _) => UpdateHint();
@@ -148,6 +170,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _interfacePanel.IsVisible = index == 1;
         _privacyPanel.IsVisible = index == 2;
         _integrationsPanel.IsVisible = index == 3;
+        _keyboardShortcutsPanel.IsVisible = index == KeyboardShortcutsCategory;
     }
 
     private void OnLocalApiStatusChanged(LocalApiStatusSnapshot snapshot) =>
@@ -302,6 +325,114 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     {
         var path = Composition.ClientServices.DataDirectory();   // also ensures the directory exists
         _ = TopLevel.GetTopLevel(this)?.Launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(path));
+    }
+
+    // One row per action: a label, a button showing its current gesture(s) (click to record a new one) and a Reset
+    // button (enabled only once the action carries an override). Built in code, matching this window's existing
+    // style, rather than an ItemsControl/row-view-model — there is no other data-bound list in this file to match.
+    private void BuildShortcutRows()
+    {
+        _shortcutRegistry = Program.Services?.GetService<KeyboardShortcutRegistry>();
+        _shortcutRowsPanel.Children.Clear();
+        _shortcutGestureButtons.Clear();
+        _shortcutResetButtons.Clear();
+
+        foreach (var action in Enum.GetValues<ShortcutAction>())
+        {
+            var label = new TextBlock
+            {
+                Text = KeyboardShortcutDefaults.DisplayNames[action], Width = 260,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            var gestureButton = new Button { MinWidth = 150, HorizontalContentAlignment = HorizontalAlignment.Center, Margin = new Thickness(8, 0) };
+            gestureButton.Click += (_, _) => OnRecordShortcutClicked(action, gestureButton);
+            gestureButton.AddHandler(KeyDownEvent, (_, e) => OnShortcutRecorderKeyDown(action, gestureButton, e), RoutingStrategies.Tunnel);
+            gestureButton.LostFocus += (_, _) => CancelRecordingIfActive(action, gestureButton);
+
+            var resetButton = new Button { Content = "Reset" };
+            resetButton.Click += async (_, _) => await OnResetShortcutClickedAsync(action, gestureButton, resetButton);
+
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2) };
+            row.Children.Add(label);
+            row.Children.Add(gestureButton);
+            row.Children.Add(resetButton);
+            _shortcutRowsPanel.Children.Add(row);
+
+            _shortcutGestureButtons[action] = gestureButton;
+            _shortcutResetButtons[action] = resetButton;
+        }
+
+        RefreshShortcutRows();
+    }
+
+    private void RefreshShortcutRows()
+    {
+        foreach (var (action, button) in _shortcutGestureButtons)
+        {
+            button.Content = _shortcutRegistry?.DisplayText(action) ?? "—";
+            _shortcutResetButtons[action].IsEnabled = _shortcutRegistry?.IsOverridden(action) ?? false;
+        }
+    }
+
+    private void OnRecordShortcutClicked(ShortcutAction action, Button button)
+    {
+        if (_shortcutRegistry is null) return;
+        _recordingAction = action;
+        button.Content = "Press a key…";
+        button.Focus();
+    }
+
+    // Tunnelled so it sees the key before the button's own click/space-activation handling would.
+    private void OnShortcutRecorderKeyDown(ShortcutAction action, Button button, KeyEventArgs e)
+    {
+        if (_recordingAction != action || _shortcutRegistry is null) return;
+        e.Handled = true; // never let a key pressed while recording reach a tab/window shortcut underneath
+
+        // A bare modifier press is not a gesture yet — keep waiting for the key it is held for.
+        if (e.Key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift
+            or Key.LWin or Key.RWin) return;
+
+        _recordingAction = null;
+        if (e.Key == Key.Escape) { RefreshShortcutRows(); return; } // cancel recording, keep the previous gesture
+
+        _ = ApplyRecordedGestureAsync(_shortcutRegistry, action, new KeyGesture(e.Key, e.KeyModifiers));
+    }
+
+    private void CancelRecordingIfActive(ShortcutAction action, Button button)
+    {
+        if (_recordingAction != action) return;
+        _recordingAction = null;
+        RefreshShortcutRows();
+    }
+
+    private async Task ApplyRecordedGestureAsync(KeyboardShortcutRegistry registry, ShortcutAction action, KeyGesture gesture)
+    {
+        var result = await registry.SetOverrideAsync(action, gesture);
+        ShowShortcutMessage(result.IsSuccess ? null : result.Messages.FirstOrDefault()?.Text);
+        RefreshShortcutRows();
+    }
+
+    private async Task OnResetShortcutClickedAsync(ShortcutAction action, Button button, Button resetButton)
+    {
+        if (_shortcutRegistry is null) return;
+        await _shortcutRegistry.ResetToDefaultAsync(action);
+        ShowShortcutMessage(null);
+        RefreshShortcutRows();
+    }
+
+    private async void OnResetAllShortcuts(object? sender, RoutedEventArgs e)
+    {
+        if (_shortcutRegistry is null) return;
+        await _shortcutRegistry.ResetAllToDefaultAsync();
+        ShowShortcutMessage(null);
+        RefreshShortcutRows();
+    }
+
+    private void ShowShortcutMessage(string? message)
+    {
+        _shortcutMessageBlock.Text = message ?? "";
+        _shortcutMessageBlock.IsVisible = !string.IsNullOrEmpty(message);
     }
 
     private SettingsResult BuildResult(bool reimportSde)

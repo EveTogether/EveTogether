@@ -14,6 +14,17 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- **Keyboard shortcuts.** Common browser/desktop shortcuts now work throughout the app whenever it has focus:
+  Ctrl+W closes the current tab or floating module window (through the exact same close question a running
+  activity or an unsaved edit already asks — nothing is skipped), Ctrl+Tab/Ctrl+Shift+Tab and Ctrl+1…8/Ctrl+9
+  switch tabs, Ctrl+Shift+T reopens the last tab you closed, F5/Ctrl+R refreshes the current screen, Ctrl+F
+  jumps to its search box where it has one, Ctrl+, opens Settings, and Esc cancels a dialog. None of this ever
+  fires while EVE itself has focus, none of it touches text-editing keys, and Ctrl+Alt combinations were left
+  out entirely so they don't collide with AutoHotkey setups that already use them. A new **Keyboard shortcuts**
+  section in Settings lists every shortcut, lets you record a different key, disable one, or reset it (or all
+  of them) back to default — a clash with another shortcut is refused and explained rather than silently
+  allowed. Only what you change is remembered, so a future update's new defaults still reach anything you
+  never touched.
 - The **UNFINISHED** band on the runs screen now shows each stopped-but-not-saved run's own **TOTAL ISK** so
   far, right beside its duration — bounty, priced loot and ISK-shaped rewards added up the same way a saved
   activity's or the run window's own TOTAL ISK is, so you can tell what you'd be keeping or throwing away
