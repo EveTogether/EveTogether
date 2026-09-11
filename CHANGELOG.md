@@ -13,6 +13,17 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **BONUS ISK on a mission now lines up under ISK and LOYALTY POINTS instead of crowding its label**, the same bug
+  TYPE had before, when it was only fixed for that one row. Fixed structurally this time, for every key/value row in
+  the run window and the activity detail screen, whatever the value turns out to be (a figure beside a countdown
+  chip, an icon beside a name) rather than plain text alone.
+- **A mission run now records where you were when you started it, the same way a site does.** A regular agent's
+  mission (no "Report to" line in the capture) used to leave LOCATION reading "not recorded" even though the run
+  window showed your own system live for as long as it stayed open — it was simply never stored. The mission's own
+  destination is now shown too, as its own MISSION LOCATION line, resolved from the capture's own Location line
+  when the SDE recognises the name exactly. Neither the ACTIVITY header nor a run window's own title ever reads
+  "· not recorded" any more, for any run type — when the location genuinely is not known, only the type shows,
+  the same rule an abyssal already had.
 - **A fleet abyssal pilot who stops and starts their own run again is now shown as "in" again within seconds.**
   Stopping and picking your own leg back up used to leave you reading "out" on everybody else's FLEET line until the
   twenty-minute cut-off quietly corrected it. The resume is now announced the moment it happens, in its own message

@@ -48,5 +48,11 @@ public enum RunParameterKey
     /// <summary>The clipboard capture opened with EVE's own warning sentence for an important (storyline) mission
     /// (ET-251) — never a reward, so MISSION shows it as its own fact rather than folding it into
     /// <see cref="Entities.RunParameter.TypedValue"/>'s reward rows.</summary>
-    ImportantMission
+    ImportantMission,
+
+    /// <summary>The mission's own destination system, from the Objectives block's plain "Location" line (e.g.
+    /// "0.6 Aphend" parses down to "Aphend") — never a reward. This is the mission's own target, not the pilot's
+    /// own system at run start (<c>Run.SolarSystemId</c>); shown only where the SDE recognises the name exactly
+    /// (ET-253).</summary>
+    MissionLocation
 }

@@ -46,7 +46,13 @@ public sealed partial class MissionDetailSectionViewModel(ISdeAccessor? sde) : R
     /// stays earned no matter how long the activity has sat saved since (ET-237).</summary>
     [ObservableProperty] private bool _isBonusExpired;
 
-    public override bool HasContent => HasAgent || HasBonus || IsImportantMission || RewardRows.Count > 0;
+    /// <summary>The mission's own target, from the capture's plain "Location" line — never the pilot's own system
+    /// (see <c>ActivityDetailSectionViewModel.LocationText</c>). Shown only on an exact SDE match (ET-253).</summary>
+    [ObservableProperty] private bool _isMissionLocationShown;
+
+    [ObservableProperty] private string _missionLocationText = string.Empty;
+
+    public override bool HasContent => HasAgent || HasBonus || IsImportantMission || IsMissionLocationShown || RewardRows.Count > 0;
 
     // The window section's own docstring explains why this only ever subtracts (ET-237).
     public override decimal ExpiredBonusIsk => IsBonusExpired ? _bonusAmount ?? 0m : 0m;
@@ -63,6 +69,13 @@ public sealed partial class MissionDetailSectionViewModel(ISdeAccessor? sde) : R
         LevelText = withAgent?.MissionLevel is { } level ? $"Level {level}" : string.Empty;
 
         IsImportantMission = detail.Parameters.Any(parameter => parameter.ParameterKey == RunParameterKey.ImportantMission);
+
+        RunParameterDto? missionLocation = detail.Parameters.FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.MissionLocation);
+        string? resolvedMissionLocation = missionLocation?.TypedValue is { Length: > 0 } locationName
+            ? sde?.FindSolarSystemByName(locationName)?.Name
+            : null;
+        IsMissionLocationShown = resolvedMissionLocation is not null;
+        MissionLocationText = resolvedMissionLocation ?? string.Empty;
 
         RunParameterDto? bonus = detail.Parameters.FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.BonusIsk);
         _bonusAmount = bonus?.Amount;

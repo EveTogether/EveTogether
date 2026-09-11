@@ -857,6 +857,17 @@
         <Setter Property="TextAlignment" Value="Right"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
     </Style>
+    <!-- ET-226 fixed this once for the TYPE row alone (an icon beside its name) by restating brightness, size and
+         right alignment locally; ET-253 found the same gap on BONUS ISK (a figure beside a countdown chip) and
+         fixes it here instead, structurally: a value that is not a bare TextBlock still gets the same treatment,
+         whatever it turns out to be. TextElement.Foreground/FontSize are attached and inherited, so an inner
+         TextBlock that sets neither of its own (the plain value text) picks them up; one that already carries its
+         own colour (a chip's countdown text, styled by Border.chip) keeps it, since that is the nearer ancestor. -->
+    <Style Selector="Grid.kv > StackPanel:nth-child(2)">
+        <Setter Property="HorizontalAlignment" Value="Right"/>
+        <Setter Property="TextElement.Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="TextElement.FontSize" Value="11.5"/>
+    </Style>
 
     <!-- Where a section says what it does NOT know, and why. -->
     <Style Selector="TextBlock.hint">
