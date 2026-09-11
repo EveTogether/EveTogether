@@ -21,6 +21,9 @@ public sealed record ActivityOverviewRowDto(
     Guid? RunId,
     ActivityKind ActivityKind,
     string? SiteName,
+    // The scanner's own group text for this site (ET-226) — resolved into the TYPE this row shows via
+    // RunTypeResolver, the same way the run window and the detail screen do.
+    string? SignatureGroupSnapshot,
     int? SolarSystemId,
     DateTime StartedAtUtc,
     int DurationSeconds,

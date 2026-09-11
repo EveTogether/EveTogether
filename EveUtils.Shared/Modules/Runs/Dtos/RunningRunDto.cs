@@ -12,4 +12,7 @@ public sealed record RunningRunDto(
     string? SiteName,
     /// <summary>The scan id this run was started from, e.g. RUS-326. Two runs of the same site are still two runs,
     /// and this is the only thing that tells them apart.</summary>
-    string? Signature);
+    string? Signature,
+    /// <summary>The scanner's own group text for this site (ET-226) — carried so a window resuming an already
+    /// running run can still show the right TYPE, not just one freshly copying a signature.</summary>
+    string? SignatureGroupSnapshot = null);

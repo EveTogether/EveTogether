@@ -27,6 +27,7 @@ internal sealed class GetRunningRunQueryHandler(IDbContextFactory<ClientDbContex
                     "Runs"));
 
         return Result<RunningRunDto>.Success(new RunningRunDto(
-            run.Id, run.CharacterId, run.ActivityKind, run.StartedAtUtc, run.GroupCode, run.SiteName, run.Signature));
+            run.Id, run.CharacterId, run.ActivityKind, run.StartedAtUtc, run.GroupCode, run.SiteName, run.Signature,
+            run.SignatureGroupSnapshot));
     }
 }

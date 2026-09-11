@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:va="using:EveUtils.Client.ViewModels.Activity"
         xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="560" d:DesignHeight="560"
@@ -548,9 +549,17 @@
                         <!-- Only what the site itself demands. A row that could only ever read "not known yet" is
                              not shown at all: the reader learns nothing from our catalogue's shape. -->
                         <StackPanel IsVisible="{Binding !IsAbyssal}">
+                            <!-- The value sits one level deeper than Grid.kv > TextBlock:nth-child(2) reaches (the
+                                 icon rides beside it, not inside it), so brightness, size and right alignment are
+                                 restated here rather than left to fall back to the section body's dim default. -->
                             <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasSignature}">
                                 <TextBlock Text="TYPE"/>
-                                <TextBlock Grid.Column="1" Text="{Binding SignatureTypeText}"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                            HorizontalAlignment="Right"
+                                            TextElement.Foreground="{StaticResource TextBrightBrush}">
+                                    <mi:MaterialIcon Kind="{Binding TypeIcon}" Classes="icon-sm"/>
+                                    <TextBlock Text="{Binding SignatureTypeText}" FontSize="11.5"/>
+                                </StackPanel>
                             </Grid>
                             <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasSignature}">
                                 <TextBlock Text="SITE"/>

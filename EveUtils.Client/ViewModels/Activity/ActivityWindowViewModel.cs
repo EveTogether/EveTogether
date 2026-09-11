@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Material.Icons;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
@@ -23,6 +24,7 @@ using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fittings.Entities;
 using EveUtils.Shared.Modules.Fittings.Repositories;
@@ -413,6 +415,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// anything the SDE could enrich it to. Always null in the abyss; a filament carries no signature.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SignatureTypeText))]
+    [NotifyPropertyChangedFor(nameof(TypeIcon))]
     [NotifyPropertyChangedFor(nameof(HasSignature))]
     private string? _signatureGroup;
 
@@ -947,7 +950,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// row that can only ever read "not known yet" is worse than no row.</summary>
     public bool HasSignature => SignatureGroup is not null || SignatureName is not null;
 
-    public string SignatureTypeText => SignatureGroup ?? "not known yet";
+    /// <summary>TYPE, from the same catalogue the detail screen and the runs overview read (ET-226) — never "not
+    /// known yet" for a kind <see cref="Kind"/> already settles on its own (Mission, Abyssal); only a site with no
+    /// scanner group resolves to the catalogue's honest "Site".</summary>
+    public string SignatureTypeText => RunTypeCatalogue.For(RunTypeResolver.Resolve(Kind, SignatureGroup)).Name;
+
+    /// <summary>The icon beside <see cref="SignatureTypeText"/>, from the same catalogue row.</summary>
+    public MaterialIconKind TypeIcon => RunTypeCatalogue.For(RunTypeResolver.Resolve(Kind, SignatureGroup)).Icon;
 
     /// <summary>The site, described by what every catalogue match agrees it is — archetype, faction, DED, whether
     /// it turns you away at the gate. Silent about anything they disagree on, and silent about the catalogue
@@ -1188,7 +1197,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             _pendingCopy = new PendingCopy(Kind, copied, StartsOnArrival, SignatureId, SignatureGroup, MatchedSites,
                 null, null, null, []);
             SignatureId = run.Signature;
-            SignatureGroup = null;
+            SignatureGroup = run.SignatureGroupSnapshot;
             SignatureName = run.SiteName;
             MatchedSites = [];
             _SignatureDecision("the run left open belongs to a group, so it waits", copied);
@@ -1200,6 +1209,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             // above already carries this for the run it closes out or waits on; this is the same field for
             // the plain case, which used to leave SITE reading "not known yet" for a site the store already had.
             SignatureId = run.Signature;
+            SignatureGroup = run.SignatureGroupSnapshot;
             SignatureName = run.SiteName;
         }
 
@@ -1584,6 +1594,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         RunState = ActivityRunState.Running;
         _isManualRun = true;
         SignatureId = run.Signature;
+        SignatureGroup = run.SignatureGroupSnapshot;
         SignatureName = run.SiteName;
         MatchedSites = [];
         // _enemyObservations is deliberately left standing (ET-210 review finding, 2026-09-09, third round):
@@ -1920,6 +1931,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 FitContentHash: fitContentHash,
                 FitNameSnapshot: fitNameSnapshot,
                 CharacterNameSnapshot: _runCharacterName,
+                SignatureGroupSnapshot: SignatureGroup,
                 SolarSystemName: SolarSystem,
                 // This window's own start button is the clipboard/signature path — the site comes from what the
                 // pilot pasted, not from a catalogue pick (ET-163).
@@ -1990,6 +2002,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             FitContentHash: fitContentHash,
             FitNameSnapshot: fitNameSnapshot,
             CharacterNameSnapshot: characterName,
+            SignatureGroupSnapshot: SignatureGroup,
             SolarSystemName: SolarSystem,
             Origin: EveUtils.Shared.Modules.Runs.Enums.RunOrigin.Clipboard,
             SiteTypeSource: Kind switch

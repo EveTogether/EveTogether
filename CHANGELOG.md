@@ -17,6 +17,11 @@ taken from the matching `## vX.Y.Z` section below.
 - Mission runs now show their agent's level instead of abyssal weather and tier badges.
 
 ### Added
+- **A run now shows what it actually was.** A Data Site, a Relic Site, a Gas Site, an Ore Site or a Wormhole used
+  to be saved and shown as "Combat Site" regardless — now each reads under its own name, with its own icon, the
+  same way in the run window, the saved activity screen and the runs overview. A mission run no longer reads
+  "not known yet" either; it now says "Mission run" from the moment you start it. A run started by hand, or an
+  older run saved before this, honestly reads "Site" rather than guessing what kind it was.
 - **Keyboard shortcuts.** Common browser/desktop shortcuts now work throughout the app whenever it has focus:
   Ctrl+W closes the current tab or floating module window (through the exact same close question a running
   activity or an unsaved edit already asks — nothing is skipped), Ctrl+Tab/Ctrl+Shift+Tab and Ctrl+1…8/Ctrl+9

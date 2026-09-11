@@ -94,7 +94,8 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
     {
         RunParameter[] rewards = [.. rewardRows];
         return new ActivityOverviewRowDto(
-            summary.Id, summary.GroupCode, summary.RunId, summary.ActivityKind, summary.SiteName, summary.SolarSystemId,
+            summary.Id, summary.GroupCode, summary.RunId, summary.ActivityKind, summary.SiteName,
+            summary.SignatureGroupSnapshot, summary.SolarSystemId,
             summary.StartedAtUtc, summary.DurationSeconds, summary.RunsIncluded, summary.ParticipantCount,
             [.. crew.Distinct().Order()],
             [.. rewards.GroupBy(reward => reward.ParameterKey)

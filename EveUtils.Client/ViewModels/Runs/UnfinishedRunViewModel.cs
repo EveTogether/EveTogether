@@ -37,7 +37,7 @@ public sealed partial class UnfinishedRunViewModel(
 
     /// <summary>When it was left, and what it was — the only two facts that tell one stale row from the next.</summary>
     public string StoppedText { get; } =
-        $"{ActivityOverviewRowViewModel.KindLabel(run.ActivityKind)} · " + (run.StoppedAtUtc is { } stoppedAtUtc
+        $"{ActivityOverviewRowViewModel.KindLabel(run.ActivityKind, run.SignatureGroupSnapshot)} · " + (run.StoppedAtUtc is { } stoppedAtUtc
             ? $"stopped {stoppedAtUtc.ToLocalTime():d MMM HH:mm}"
             : $"started {run.StartedAtUtc.ToLocalTime():d MMM HH:mm}, never stopped");
 

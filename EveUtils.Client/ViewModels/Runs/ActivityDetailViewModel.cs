@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Material.Icons;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Formatting;
@@ -11,6 +12,7 @@ using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Market.Services;
+using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -111,6 +113,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
 
     [ObservableProperty] private string _siteText = string.Empty;
     [ObservableProperty] private string _kindText = string.Empty;
+    [ObservableProperty] private MaterialIconKind _typeIcon;
     [ObservableProperty] private string _durationText = string.Empty;
     [ObservableProperty] private string _startText = string.Empty;
     [ObservableProperty] private string _endText = string.Empty;
@@ -516,7 +519,11 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     private void _ApplyHeader(ActivityDetailDto detail)
     {
         SiteText = detail.SiteName ?? "site not recorded";
-        KindText = _KindLabel(detail.ActivityKind);
+        // Same catalogue the run window and the runs overview read (ET-226) — a mission never reads "not known
+        // yet" here, and a site with no recorded scanner group reads "Site", never "Combat Site".
+        RunTypeDefinition type = RunTypeCatalogue.For(RunTypeResolver.Resolve(detail.ActivityKind, detail.SignatureGroupSnapshot));
+        KindText = type.Name;
+        TypeIcon = type.Icon;
         DurationText = TimeSpan.FromSeconds(detail.DurationSeconds).ToString(@"hh\:mm\:ss");
         StartText = detail.StartedAtUtc.ToLocalTime().ToString("HH:mm:ss");
         EndText = detail.StoppedAtUtc is { } stoppedAtUtc
@@ -827,14 +834,6 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     /// <summary>"no price" and not "0 ISK": a figure nobody has must not look like a figure that came out at zero
     /// (ET-65 AC-5).</summary>
     private static string _IskOrNoPrice(decimal? isk) => IskFormat.WholeOrNoPrice(isk);
-
-    private static string _KindLabel(ActivityKind kind) => kind switch
-    {
-        ActivityKind.Abyssal => "Abyssal",
-        ActivityKind.Site => "Combat Site",
-        ActivityKind.Mission => "Mission",
-        _ => kind.ToString()
-    };
 
     // Default arm rather than a throw: ActivityKind is stored by value and only ever grows, and a kind this screen
     // has never heard of should read a little vaguer, not take the window down (AGENTS.md §2).

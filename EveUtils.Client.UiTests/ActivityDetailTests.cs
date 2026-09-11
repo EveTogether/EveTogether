@@ -89,7 +89,58 @@ public sealed class ActivityDetailTests
         await viewModel.LoadAsync(cancellationToken);
 
         Assert.Equal("Cistuvaert", viewModel.LocationText);
-        Assert.Equal("Combat Site · Cistuvaert", viewModel.Activity.HeaderSummary);
+        // "Site", not "Combat Site": _SaveSiteRunAsync never records a scanner group, and ET-226 stopped that
+        // defaulting to Combat Site — see ActivityDetailTests.KindText_ReadsSite_WhenNoGroupWasEverRecorded.
+        Assert.Equal("Site · Cistuvaert", viewModel.Activity.HeaderSummary);
+    }
+
+    // ── TYPE reads the recorded scanner group, not a default (ET-226) ──────────────────────────────────
+
+    /// <summary>
+    /// Counter-proof: Jithran, 2026-09-10 — a Data Site he ran ("Local Sansha Production Installation") showed
+    /// "Combat Site" here, because <c>ActivityDetailViewModel._KindLabel</c> mapped every <c>ActivityKind.Site</c>
+    /// run to the literal string "Combat Site" regardless of what the scanner actually said. Red against the
+    /// pre-fix code: <c>KindText</c> read "Combat Site" and <c>Activity.HeaderSummary</c> read "Combat Site ·
+    /// Cistuvaert" for this same Data Site run.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task KindText_ReadsTheRecordedSiteGroup_NotTheCombatSiteDefault()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Local Sansha Production Installation", 30000142, SignatureGroupSnapshot: "Data Site"), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15),
+            StartedAtUtc.AddMinutes(16), [], [], [], []), cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(
+            await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
+
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IAppraisalProvider>());
+        await viewModel.LoadAsync(cancellationToken);
+
+        Assert.Equal("Data Site", viewModel.KindText);
+        Assert.StartsWith("Data Site", viewModel.Activity.HeaderSummary);
+    }
+
+    /// <summary>A run whose group was never recorded — a manual start, or one saved before this column existed —
+    /// reads the honest "Site", never "Combat Site" as a default (ET-226 AC-3).</summary>
+    [AvaloniaFact]
+    public async Task KindText_ReadsSite_WhenNoGroupWasEverRecorded()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunAsync(dispatcher, 90000001, null, cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(
+            await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
+
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IAppraisalProvider>());
+        await viewModel.LoadAsync(cancellationToken);
+
+        Assert.Equal("Site", viewModel.KindText);
     }
 
     /// <summary>AC-4: a stored id the SDE does not carry — no SDE at all here, the widest version of that case —

@@ -10,6 +10,7 @@ public sealed class ActivitySummaryConfiguration : IEntityTypeConfiguration<Acti
         builder.HasKey(summary => summary.Id);
         builder.Property(summary => summary.GroupCode).HasMaxLength(64);
         builder.Property(summary => summary.SiteName).HasMaxLength(255);
+        builder.Property(summary => summary.SignatureGroupSnapshot).HasMaxLength(64);
         builder.Property(summary => summary.LootIskGained).HasPrecision(18, 2);
         builder.Property(summary => summary.LootIskLost).HasPrecision(18, 2);
         builder.Property(summary => summary.LootIskNet).HasPrecision(18, 2);

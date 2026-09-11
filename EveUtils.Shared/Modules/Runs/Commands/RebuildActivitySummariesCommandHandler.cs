@@ -116,6 +116,7 @@ internal sealed class RebuildActivitySummariesCommandHandler(
             ActivityKind = source.ActivityKind,
             SiteTypeId = source.SiteTypeId,
             SiteName = source.SiteName,
+            SignatureGroupSnapshot = source.SignatureGroupSnapshot,
             SolarSystemId = source.SolarSystemId,
             StartedAtUtc = startedAtUtc,
             StoppedAtUtc = stoppedAtUtc,

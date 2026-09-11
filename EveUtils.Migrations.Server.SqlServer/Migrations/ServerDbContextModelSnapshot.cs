@@ -841,6 +841,10 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
+                    b.Property<string>("SignatureGroupSnapshot")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("SiteName")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
