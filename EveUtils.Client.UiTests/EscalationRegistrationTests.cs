@@ -46,7 +46,7 @@ public sealed class EscalationRegistrationTests
             return Task.FromResult(true);
         };
         DateTime beforeRegister = DateTime.UtcNow;
-        await model.RegisterEscalationCommand.ExecuteAsync(null);
+        await model.Activity().RegisterEscalationCommand.ExecuteAsync(null);
         await model.SaveRunCommand.ExecuteAsync(null);
 
         var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
@@ -57,9 +57,9 @@ public sealed class EscalationRegistrationTests
         var detail = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId);
         await detail.LoadAsync();
 
-        Assert.Equal("Command Relay Outpost", detail.EscalationText);
-        Assert.Equal("Amamake", detail.EscalationSystemText);
-        Assert.NotNull(detail.EscalationExpiresAtText);
+        Assert.Equal("Command Relay Outpost", detail.Escalation().EscalationText);
+        Assert.Equal("Amamake", detail.Escalation().EscalationSystemText);
+        Assert.NotNull(detail.Escalation().EscalationExpiresAtText);
 
         await using ClientDbContext db = await harness.Services
             .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
@@ -98,7 +98,7 @@ public sealed class EscalationRegistrationTests
             dialog.RegisterCommand.Execute(null);
             return Task.FromResult(true);
         };
-        await model.RegisterEscalationCommand.ExecuteAsync(null);
+        await model.Activity().RegisterEscalationCommand.ExecuteAsync(null);
         await model.SaveRunCommand.ExecuteAsync(null);
 
         await using ClientDbContext db = await harness.Services

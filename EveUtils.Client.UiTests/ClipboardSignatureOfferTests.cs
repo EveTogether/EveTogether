@@ -442,13 +442,13 @@ public sealed class ClipboardSignatureOfferTests
         // TYPE reads "Site", not the raw scanner text: "Homefront Operation Site - Combat Site" matches none of
         // the six recognised groups, and ET-226 catalogues a homefront through its archetype (ET-228), never by
         // pattern-matching this composite group string.
-        Assert.Equal("Site", opened.SignatureTypeText);
+        Assert.Equal("Site", opened.Activity().SignatureTypeText);
         // One description, and the toast that opened this window used the same one.
         Assert.Equal("Suspicious Signal: Secure the Intel — Homefront Operations · Caldari State · DED 4 · ship-restricted",
-            opened.SignatureSiteText);
-        Assert.Equal("Destroyer, Frigate", opened.ShipRestrictionText);
+            opened.Activity().SignatureSiteText);
+        Assert.Equal("Destroyer, Frigate", opened.Activity().ShipRestrictionText);
         Assert.Equal("Suspicious Signal: Secure the Intel · Homefront Operations · Caldari State · DED 4 · ship-restricted",
-            opened.Activity.HeaderSummary);
+            opened.Activity().HeaderSummary);
     }
 
     private static SdeSite Site(int dungeonId, string name, string? archetype = null, int? archetypeId = null,

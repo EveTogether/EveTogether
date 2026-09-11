@@ -63,7 +63,7 @@ public sealed class SavedActivityLootCorrectionTests
 
         Assert.Equal($"{300m:N0} ISK", jithran.SubtotalText);
         Assert.Equal($"{400m:N0} ISK", _Block(detail, "Abnoba Auscent").SubtotalText);
-        Assert.Equal($"{700m:N0} ISK", detail.LootOverview.NetIskDisplay);
+        Assert.Equal($"{700m:N0} ISK", detail.Loot().LootOverview.NetIskDisplay);
         Assert.Equal($"{700m:N0} ISK", detail.TotalIskText);
         Assert.Contains("+700 ISK net", overview.Tabs[0].Days.Single().SummaryText);
         Assert.Null(detail.StatusMessage);
@@ -95,11 +95,11 @@ public sealed class SavedActivityLootCorrectionTests
         ActivityDetailViewModel detail = await _DetailAsync(instance, await _OverviewAsync(instance));
         rebuilds.Clear();
 
-        ActivityLootCharacterViewModel first = detail.LootOverview.Characters[0];
+        ActivityLootCharacterViewModel first = detail.Loot().LootOverview.Characters[0];
         Assert.True(await first.Loot.ToggleExcludedAsync(first.Loot.Captures[0], Token));
         Assert.Single(rebuilds);
 
-        ActivityLootCharacterViewModel second = detail.LootOverview.Characters[1];
+        ActivityLootCharacterViewModel second = detail.Loot().LootOverview.Characters[1];
         second.Loot.BeginLootEditCommand.Execute(null);
         second.Loot.LootText = "Tritanium\t1";
         Assert.True(await second.Loot.ReplaceLootWithTextAsync(Token));
@@ -130,7 +130,7 @@ public sealed class SavedActivityLootCorrectionTests
         });
         Assert.False(detail.IsPublishedCopyBehind);
 
-        ActivityLootCharacterViewModel block = Assert.Single(detail.LootOverview.Characters);
+        ActivityLootCharacterViewModel block = Assert.Single(detail.Loot().LootOverview.Characters);
         Assert.True(await block.Loot.ToggleExcludedAsync(block.Loot.Captures[0], Token));
         await ActivityWindowHarness.WaitUntil(() => detail.IsPublishedCopyBehind
                                                     && _Row(overview).IsBehindServer);
@@ -196,8 +196,8 @@ public sealed class SavedActivityLootCorrectionTests
         Assert.Equal($"{600m:N0} ISK", jithran.SubtotalText);
         Assert.False(abnoba.Loot.HasCaptures);
         Assert.Equal("no price", abnoba.SubtotalText);
-        Assert.Equal($"{600m:N0} ISK", detail.LootOverview.NetIskDisplay);
-        Assert.Same(jithran, detail.LootOverview.Characters[0]);   // largest first
+        Assert.Equal($"{600m:N0} ISK", detail.Loot().LootOverview.NetIskDisplay);
+        Assert.Same(jithran, detail.Loot().LootOverview.Characters[0]);   // largest first
     }
 
     /// <summary>
@@ -216,7 +216,7 @@ public sealed class SavedActivityLootCorrectionTests
 
         ActivityDetailViewModel detail = await _DetailAsync(instance, overview);
 
-        ActivityLootCharacterViewModel theirs = Assert.Single(detail.LootOverview.Characters, block => block.CharacterId == 90000009);
+        ActivityLootCharacterViewModel theirs = Assert.Single(detail.Loot().LootOverview.Characters, block => block.CharacterId == 90000009);
         Assert.True(theirs.Loot.IsReadOnly);
         Assert.False(theirs.Loot.CanEditLoot);
         Assert.False(await theirs.Loot.ToggleExcludedAsync(theirs.Loot.Captures[0], Token));
@@ -291,7 +291,7 @@ public sealed class SavedActivityLootCorrectionTests
         Assert.Single(Assert.Single(overview.Tabs[0].Days).Rows);
 
     private static ActivityLootCharacterViewModel _Block(ActivityDetailViewModel detail, string name) =>
-        Assert.Single(detail.LootOverview.Characters, block => block.CharacterText == name);
+        Assert.Single(detail.Loot().LootOverview.Characters, block => block.CharacterText == name);
 
     /// <summary>What <c>RunSynchronizationService._MarkSyncedAsync</c> leaves behind once a server accepted the push.</summary>
     private static async Task _MarkPublishedAsync(TestClientInstance instance, Guid runId)

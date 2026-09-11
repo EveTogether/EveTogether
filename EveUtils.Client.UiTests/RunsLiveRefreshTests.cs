@@ -236,12 +236,12 @@ public sealed class RunsLiveRefreshTests
         ActivityDetailViewModel detail = await _DetailThroughTheRowAsync(instance);
         Assert.Equal($"{600m:N0} ISK", detail.TotalIskText);
 
-        Guid secondCapture = detail.LootOverview.Characters[0].Loot.Captures[1].CaptureId;
+        Guid secondCapture = detail.Loot().LootOverview.Characters[0].Loot.Captures[1].CaptureId;
         await dispatcher.Send(new SetRunLootCaptureExclusionCommand(secondCapture, true), Token);
         await ActivityWindowHarness.WaitUntil(() => detail.TotalIskText == $"{300m:N0} ISK");
 
         Assert.Equal($"{300m:N0} ISK", detail.TotalIskText);
-        Assert.True(detail.LootOverview.Characters[0].Loot.Captures[1].IsExcluded);
+        Assert.True(detail.Loot().LootOverview.Characters[0].Loot.Captures[1].IsExcluded);
     }
 
     /// <summary>A group-mate's run a server hands back joins the open detail screen of that activity. It is only
@@ -253,12 +253,12 @@ public sealed class RunsLiveRefreshTests
         ICqrsDispatcher dispatcher = _Dispatcher(instance);
         await _SaveAsync(dispatcher, Pilot, StartedAtUtc, groupCode: GroupCode);
         ActivityDetailViewModel detail = await _DetailThroughTheRowAsync(instance);
-        Assert.Single(detail.RunRows);
+        Assert.Single(detail.Fleet().RunRows);
 
         await _PullCrewmateRunAsync(instance, GroupCode);
-        await ActivityWindowHarness.WaitUntil(() => detail.RunRows.Count == 2);
+        await ActivityWindowHarness.WaitUntil(() => detail.Fleet().RunRows.Count == 2);
 
-        Assert.Equal(2, detail.RunRows.Count);
+        Assert.Equal(2, detail.Fleet().RunRows.Count);
     }
 
     /// <summary>An activity deleted from somewhere else — a second detail window, the runs screen — shows ET-214's
@@ -320,7 +320,7 @@ public sealed class RunsLiveRefreshTests
         await _PriceTritaniumAsync(instance);
         await _SaveAsync(dispatcher, Pilot, StartedAtUtc, captureQuantities: [3, 3]);
         ActivityDetailViewModel detail = await _DetailThroughTheRowAsync(instance);
-        RunLootViewModel loot = detail.LootOverview.Characters[0].Loot;
+        RunLootViewModel loot = detail.Loot().LootOverview.Characters[0].Loot;
         loot.BeginLootEditCommand.Execute(null);
         loot.LootText = "Tritanium\t9";
 

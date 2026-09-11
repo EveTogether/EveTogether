@@ -117,7 +117,7 @@ public class ActivityWindowWiringTests
 
         await ActivityWindowHarness.WaitUntil(() => model.RunLoot.Captures.Count > 0);
         Assert.Single(model.RunLoot.Captures);
-        Assert.DoesNotContain("no loot captured", model.Loot.HeaderSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("no loot captured", model.Loot().HeaderSummary, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -725,7 +725,7 @@ public class ActivityWindowWiringTests
         model.Refresh(DateTime.UtcNow.AddMinutes(1));
 
         Assert.Equal(ActivityRunState.Running, model.RunState);
-        Assert.DoesNotContain("No run is running", model.Loot.HeaderSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("No run is running", model.Loot().HeaderSummary, StringComparison.OrdinalIgnoreCase);
         Assert.Null(model.RunLoot!.RunStatusMessage);
     }
 
@@ -858,8 +858,8 @@ public class ActivityWindowWiringTests
         OverlayShots.Capture(window, "eveutils-activity-manual-start-adopts-site");
 
         Assert.Equal("Sansha Refuge", model.SignatureName);
-        Assert.Equal("Sansha Refuge", model.SignatureSiteText);
-        Assert.True(model.HasSignature, "the window still reads no signature for a site the store already had");
+        Assert.Equal("Sansha Refuge", model.Activity().SignatureSiteText);
+        Assert.True(model.Activity().HasSignature, "the window still reads no signature for a site the store already had");
         window.Close();
     }
 
@@ -1063,8 +1063,8 @@ public class ActivityWindowWiringTests
 
         await ActivityWindowHarness.WaitUntil(() => model.BountyIsk > 0);
         Assert.Equal(67_500, model.BountyIsk);
-        Assert.Contains("67,500", model.BountyText);
-        Assert.Contains("67,500", model.Bounty.HeaderSummary);
+        Assert.Contains("67,500", model.Bounty().BountyText);
+        Assert.Contains("67,500", model.Bounty().HeaderSummary);
     }
 
     /// <summary>The payouts are the run's own rows, at the times the log wrote them — SAVE hands them to the store
@@ -1098,10 +1098,10 @@ public class ActivityWindowWiringTests
         await ActivityWindowHarness.WaitUntil(() =>
         {
             model.Refresh(DateTime.UtcNow);
-            return model.LocationText == "Aphend";
+            return model.Activity().LocationText == "Aphend";
         });
-        Assert.Equal("Aphend", model.LocationText);
-        Assert.True(model.IsLocationShown);
+        Assert.Equal("Aphend", model.Activity().LocationText);
+        Assert.True(model.Activity().IsLocationShown);
     }
 
     /// <summary>The same reading, for a pilot the client knows is not in the game: the system they undocked in is
@@ -1118,9 +1118,9 @@ public class ActivityWindowWiringTests
         await ActivityWindowHarness.WaitUntil(() =>
         {
             model.Refresh(DateTime.UtcNow);
-            return model.LocationText == "offline";
+            return model.Activity().LocationText == "offline";
         });
-        Assert.Equal("offline", model.LocationText);
+        Assert.Equal("offline", model.Activity().LocationText);
     }
 
     /// <summary>
@@ -1138,8 +1138,8 @@ public class ActivityWindowWiringTests
 
         await harness.WriteLineAsync(ActivityWindowHarness.CombatLine(250, "Centii Servant"));
 
-        await ActivityWindowHarness.WaitUntil(() => model.EnemyObservations.Count > 0);
-        RunEnemyObservationViewModel observed = Assert.Single(model.EnemyObservations);
+        await ActivityWindowHarness.WaitUntil(() => model.Enemies().EnemyObservations.Count > 0);
+        RunEnemyObservationViewModel observed = Assert.Single(model.Enemies().EnemyObservations);
         Assert.Equal("Centii Servant", observed.EnemyName);
         Assert.Equal(new DateTime(2030, 1, 1, 12, 0, 5, DateTimeKind.Utc), observed.FirstObservedAtUtc);
     }
@@ -1161,10 +1161,10 @@ public class ActivityWindowWiringTests
         await harness.WriteLineAsync(ActivityWindowHarness.CombatLine(250, "Centii Servant", "12:00:05"));
         await harness.WriteLineAsync(ActivityWindowHarness.IncomingCombatLine(7, "Centii Servant", "12:00:41"));
 
-        await ActivityWindowHarness.WaitUntil(() => model.EnemyObservations.Count > 0
-            && model.EnemyObservations[0].LastObservedAtUtc.Second == 41);
+        await ActivityWindowHarness.WaitUntil(() => model.Enemies().EnemyObservations.Count > 0
+            && model.Enemies().EnemyObservations[0].LastObservedAtUtc.Second == 41);
 
-        RunEnemyObservationViewModel observed = Assert.Single(model.EnemyObservations);
+        RunEnemyObservationViewModel observed = Assert.Single(model.Enemies().EnemyObservations);
         Assert.Equal("Centii Servant", observed.EnemyName);
         Assert.Equal(new DateTime(2030, 1, 1, 12, 0, 5, DateTimeKind.Utc), observed.FirstObservedAtUtc);
         Assert.Equal(new DateTime(2030, 1, 1, 12, 0, 41, DateTimeKind.Utc), observed.LastObservedAtUtc);
@@ -1184,13 +1184,13 @@ public class ActivityWindowWiringTests
         await harness.StartWatchingAsync();
         await model.StartRunCommand.ExecuteAsync(null);
         await harness.WriteLineAsync(ActivityWindowHarness.CombatLine(250, "Centii Servant"));
-        await ActivityWindowHarness.WaitUntil(() => model.EnemyObservations.Count > 0);
+        await ActivityWindowHarness.WaitUntil(() => model.Enemies().EnemyObservations.Count > 0);
         Guid runId = Assert.NotNull(model.RunId);
 
         model.StopRun(new DateTime(2030, 1, 1, 12, 5, 0, DateTimeKind.Utc));
 
         // Still there with the counter usable — this is the moment the player reaches for it.
-        RunEnemyObservationViewModel observed = Assert.Single(model.EnemyObservations);
+        RunEnemyObservationViewModel observed = Assert.Single(model.Enemies().EnemyObservations);
         observed.Count = 4;
         await model.SaveRunCommand.ExecuteAsync(null);
 
@@ -1217,17 +1217,17 @@ public class ActivityWindowWiringTests
         await harness.StartWatchingAsync();
         await model.StartRunCommand.ExecuteAsync(null);
         await harness.WriteLineAsync(ActivityWindowHarness.CombatLine(250, "Centii Servant"));
-        await ActivityWindowHarness.WaitUntil(() => model.EnemyObservations.Count > 0);
+        await ActivityWindowHarness.WaitUntil(() => model.Enemies().EnemyObservations.Count > 0);
         Guid runId = Assert.NotNull(model.RunId);
 
         model.StopRun(new DateTime(2030, 1, 1, 12, 5, 0, DateTimeKind.Utc));
-        string uncounted = model.Enemies.HeaderSummary;
+        string uncounted = model.Enemies().HeaderSummary;
         Assert.Contains("none counted", uncounted);
 
-        model.EnemyObservations[0].Count = 2;
-        Assert.NotEqual(uncounted, model.Enemies.HeaderSummary);
-        model.EnemyObservations[0].Count = 0;
-        Assert.Equal(uncounted, model.Enemies.HeaderSummary);
+        model.Enemies().EnemyObservations[0].Count = 2;
+        Assert.NotEqual(uncounted, model.Enemies().HeaderSummary);
+        model.Enemies().EnemyObservations[0].Count = 0;
+        Assert.Equal(uncounted, model.Enemies().HeaderSummary);
 
         await model.SaveRunCommand.ExecuteAsync(null);
 
@@ -1248,7 +1248,7 @@ public class ActivityWindowWiringTests
         ActivityWindowViewModel model = await harness.OpenAsync();
 
         Assert.False(model.IsFleetShown);
-        Assert.DoesNotContain("solo", model.Fleet.HeaderSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("solo", model.Fleet().HeaderSummary, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("solo", model.FleetStatusText, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -1269,7 +1269,7 @@ public class ActivityWindowWiringTests
         Assert.True(model.IsFleetShown);
         Assert.Equal(2, model.FleetMemberCount);
         Assert.Equal(2, model.AnchoredFleetMemberCount);
-        Assert.Equal("based on 2 of 2 members sharing their location", model.Fleet.HeaderSummary);
+        Assert.Equal("based on 2 of 2 members sharing their location", model.Fleet().HeaderSummary);
     }
 
     /// <summary>A fleet run nobody pressed START for still gets its row: the envelope is what began it, and the loot

@@ -303,6 +303,11 @@ taken from the matching `## vX.Y.Z` section below.
   `docker-compose.yml` already references instead of building it from source.
 
 ### Changed
+- **The run window and the saved activity screen are now built from the sections each kind of activity
+  needs.** Nothing looks or works differently yet: combat, data and relic sites, abyssal runs, missions,
+  group runs of your own characters and fleet runs all show the same sections as before. What this changes is
+  what comes next: missions, mining and homefronts can each get a section of their own without the other
+  kinds of activity changing along with them.
 - **The runs overview now opens with only the most recent day expanded**, all earlier days collapsed
   but still showing their summary — it used to open with every day expanded, which meant scrolling
   past your entire history to see today. This applies per tab, so Local and every coupled server keep

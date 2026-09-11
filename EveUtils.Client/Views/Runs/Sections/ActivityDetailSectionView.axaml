@@ -1,0 +1,37 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.ActivityDetailSectionView"
+             x:DataType="vs:ActivityDetailSectionViewModel">
+    <StackPanel>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+            <TextBlock Text="SITE"/>
+            <TextBlock Grid.Column="1" Text="{Binding SiteText}"/>
+        </Grid>
+        <!-- Only a type handed out by an agent has one, so nothing else carries these two rows. -->
+        <Grid x:Name="AgentRow" Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsAgentShown}">
+            <TextBlock Text="AGENT"/>
+            <TextBlock Grid.Column="1" Text="{Binding AgentText}"/>
+        </Grid>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsAgentShown}">
+            <TextBlock Text="LEVEL"/>
+            <TextBlock Grid.Column="1" Text="{Binding MissionLevelText}"/>
+        </Grid>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsSignatureShown}">
+            <TextBlock Text="SIGNATURE"/>
+            <TextBlock Grid.Column="1" Text="{Binding SignatureText}"/>
+        </Grid>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+            <TextBlock Text="LOCATION"/>
+            <TextBlock Grid.Column="1" Text="{Binding LocationText}"/>
+        </Grid>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+            <TextBlock Text="FIT"/>
+            <TextBlock Grid.Column="1" Text="{Binding FitText}"/>
+        </Grid>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasObjectives}">
+            <TextBlock Text="OBJECTIVES"/>
+            <TextBlock Grid.Column="1" Text="{Binding ObjectivesText}"/>
+        </Grid>
+    </StackPanel>
+</UserControl>

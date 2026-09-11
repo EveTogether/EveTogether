@@ -98,7 +98,7 @@ public sealed class FleetMemberIskTests
         await _ShareIskAsync(instance, Other, otherLoot, otherBounty);
 
         Assert.Equal(2, window.FleetMembers.Count);
-        Assert.True(window.IsFleetTotalShown);
+        Assert.True(window.Fleet().IsFleetTotalShown);
 
         decimal? loot = _Sum(pilotLoot, otherLoot);
         decimal? bounty = _Sum(pilotBounty, otherBounty);
@@ -109,16 +109,16 @@ public sealed class FleetMemberIskTests
 
         if (loot is null && bounty is null)
         {
-            Assert.Equal("no member is sharing loot or bounty", window.FleetTotalText);
+            Assert.Equal("no member is sharing loot or bounty", window.Fleet().FleetTotalText);
             return;
         }
 
         Assert.Contains(
             loot is { } lootTotal ? ActivityFleetMemberViewModel.Isk(lootTotal) : "loot not shared",
-            window.FleetTotalText);
+            window.Fleet().FleetTotalText);
         Assert.Contains(
             bounty is { } bountyTotal ? ActivityFleetMemberViewModel.Isk(bountyTotal) : "bounty not shared",
-            window.FleetTotalText);
+            window.Fleet().FleetTotalText);
     }
 
     private static decimal? _Sum(int? first, int? second) =>

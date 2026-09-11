@@ -1,0 +1,145 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:va="using:EveUtils.Client.ViewModels.Activity"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             x:Class="EveUtils.Client.Views.Runs.Sections.ActivityWindowSectionView"
+             x:DataType="vs:ActivityWindowSectionViewModel">
+    <!-- Styled by the run window it stands in (Grid.kv, TextBlock.hint, Button.pick, Button.link): a section module
+         brings its content, never a second look. -->
+    <StackPanel>
+        <StackPanel IsVisible="{Binding IsInPocket}">
+            <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasWeatherAndTier}">
+                <TextBlock Text="WEATHER"/>
+                <TextBlock Grid.Column="1" Text="{Binding WeatherEnvironmentText}"/>
+            </Grid>
+            <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasWeatherAndTier}">
+                <TextBlock Text="EFFECT"/>
+                <TextBlock Grid.Column="1" Text="{Binding WeatherEffectText}"/>
+            </Grid>
+            <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasWeatherAndTier}">
+                <TextBlock Text="TIER"/>
+                <TextBlock Grid.Column="1" Text="{Binding TierText}"/>
+            </Grid>
+        </StackPanel>
+
+        <!-- Only what the site itself demands. A row that could only ever read "not known yet" is
+             not shown at all: the reader learns nothing from our catalogue's shape. -->
+        <StackPanel IsVisible="{Binding !IsInPocket}">
+            <!-- The value sits one level deeper than Grid.kv > TextBlock:nth-child(2) reaches (the
+                 icon rides beside it, not inside it), so brightness, size and right alignment are
+                 restated here rather than left to fall back to the section body's dim default. -->
+            <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasSignature}">
+                <TextBlock Text="TYPE"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                            HorizontalAlignment="Right"
+                            TextElement.Foreground="{StaticResource TextBrightBrush}">
+                    <mi:MaterialIcon Kind="{Binding TypeIcon}" Classes="icon-sm"/>
+                    <TextBlock Text="{Binding SignatureTypeText}" FontSize="11.5"/>
+                </StackPanel>
+            </Grid>
+            <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasSignature}">
+                <TextBlock Text="SITE"/>
+                <TextBlock Grid.Column="1" Text="{Binding SignatureSiteText}"/>
+            </Grid>
+            <!-- The hull list is behind this, not in the section: thirty-odd names over five lines
+                 pushed LOCATION and LOOT STRATEGY off the bottom. The SITE line above still carries
+                 "ship-restricted" itself, so the FACT of the restriction is never hidden — and it
+                 stays visible even for a restricted site whose allow-list resolves to nothing,
+                 which is exactly the case that has no list to open. -->
+            <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasShipRestriction}">
+                <TextBlock Text=""/>
+                <Button Grid.Column="1" Classes="link" Content="which ships may enter?"
+                        HorizontalAlignment="Left"
+                        Command="{Binding ShowShipRestrictionCommand}"/>
+            </Grid>
+            <!-- ET-125: the pilot's own moment to register, not an automatic detection — ET-124
+                 measured that neither the SDE, ESI nor the gamelog knows an escalation happened. -->
+            <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsEscalationRegistrationShown}">
+                <TextBlock Text=""/>
+                <Button Grid.Column="1" Classes="link" Content="register escalation"
+                        HorizontalAlignment="Left"
+                        Command="{Binding RegisterEscalationCommand}"/>
+            </Grid>
+            <TextBlock Text="{Binding EscalationRegisteredText}"
+                       IsVisible="{Binding EscalationRegisteredText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                       Classes="hint" Margin="0"/>
+        </StackPanel>
+
+        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsLocationShown}">
+            <TextBlock Text="LOCATION"/>
+            <TextBlock Grid.Column="1" Text="{Binding LocationText}"/>
+        </Grid>
+        <!-- Set, not reported: the label is what makes the duration readable, so the row it sits on
+             is the row you answer it with. -->
+        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsLootStrategyShown}">
+            <TextBlock Text="LOOT STRATEGY" VerticalAlignment="Center"/>
+            <ItemsControl Grid.Column="1" HorizontalAlignment="Right"
+                          ItemsSource="{Binding LootStrategyChoices}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel HorizontalAlignment="Right"/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="va:ActivityChoice">
+                        <Button Classes="pick" Classes.on="{Binding IsSelected}"
+                                Content="{Binding Label}"
+                                Command="{Binding $parent[ItemsControl].((vs:ActivityWindowSectionViewModel)DataContext).SelectLootStrategyCommand}"
+                                CommandParameter="{Binding Index}"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Grid>
+
+        <!-- ── The manual entry ── the only field in this window the user fills in, because nothing
+             can detect it. Answered, it folds behind one line: twelve buttons standing open under a
+             question nobody is asking any more would be the loudest thing in the section. -->
+        <StackPanel IsVisible="{Binding IsInPocket}">
+        <Button Classes="pick" Content="change tier / weather" HorizontalAlignment="Left"
+                Margin="0,8,0,0"
+                IsVisible="{Binding !IsPickerShown}"
+                Command="{Binding OpenPickerCommand}"/>
+
+        <StackPanel IsVisible="{Binding IsPickerShown}" Margin="0,8,0,0">
+            <TextBlock Classes="label" Text="WEATHER" Margin="0,0,0,4"/>
+            <ItemsControl ItemsSource="{Binding WeatherChoices}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="va:ActivityChoice">
+                        <Button Classes="pick" Classes.on="{Binding IsSelected}"
+                                Content="{Binding Label}" ToolTip.Tip="{Binding Tooltip}"
+                                Command="{Binding $parent[ItemsControl].((vs:ActivityWindowSectionViewModel)DataContext).SelectWeatherCommand}"
+                                CommandParameter="{Binding Index}"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Classes="label" Text="TIER" Margin="0,4,0,4"/>
+            <ItemsControl ItemsSource="{Binding TierChoices}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="va:ActivityChoice">
+                        <Button Classes="pick" Classes.on="{Binding IsSelected}"
+                                Content="{Binding Label}"
+                                Command="{Binding $parent[ItemsControl].((vs:ActivityWindowSectionViewModel)DataContext).SelectTierCommand}"
+                                CommandParameter="{Binding Index}"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Button Classes="pick" Content="clear" HorizontalAlignment="Left"
+                    IsVisible="{Binding HasWeatherAndTier}"
+                    Command="{Binding ClearWeatherAndTierCommand}"/>
+        </StackPanel>
+
+        <!-- Kept where the four notes went: without it the EFFECT row reads as two numbers rather
+             than as the band one of them will be. -->
+        <TextBlock Classes="hint"
+                   Text="The resist penalty is rolled per site, so it is shown as the band it can land in."/>
+        </StackPanel>
+
+    </StackPanel>
+</UserControl>

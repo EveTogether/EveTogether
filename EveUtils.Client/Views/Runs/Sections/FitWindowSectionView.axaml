@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.FitWindowSectionView"
+             x:DataType="vs:FitWindowSectionViewModel">
+    <StackPanel Spacing="6">
+        <TextBlock Classes="hint" Margin="0" Text="{Binding FitText}"/>
+        <TextBlock Classes="hint" Margin="0" Text="{Binding FitVelocityText}"/>
+        <TextBlock Classes="hint" Margin="0" Text="{Binding FitWarpSpeedText}"/>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+            <Button Classes="pick" Content="choose fit" Command="{Binding ChooseFitCommand}"/>
+            <!-- Only offered once there is a fit to take off; unlinking nothing is not a state. -->
+            <Button Classes="pick" Content="detach fit" Command="{Binding DetachFitCommand}"
+                    IsVisible="{Binding HasFit}"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

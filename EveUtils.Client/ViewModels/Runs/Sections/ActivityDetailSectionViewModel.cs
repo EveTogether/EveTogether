@@ -1,0 +1,63 @@
+using System.Linq;
+using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Sde;
+
+namespace EveUtils.Client.ViewModels.Runs.Sections;
+
+/// <summary>ACTIVITY on the detail screen: which site, given by which agent, where, and on which fit.</summary>
+public sealed partial class ActivityDetailSectionViewModel(ISdeAccessor? sde)
+    : RunDetailSection(RunSectionId.Activity, "ACTIVITY")
+{
+    [ObservableProperty] private string _siteText = string.Empty;
+    [ObservableProperty] private bool _isAgentShown;
+    [ObservableProperty] private string _agentText = string.Empty;
+    [ObservableProperty] private string _missionLevelText = string.Empty;
+    [ObservableProperty] private string _locationText = string.Empty;
+    [ObservableProperty] private string _signatureText = string.Empty;
+    [ObservableProperty] private bool _isSignatureShown;
+    [ObservableProperty] private string _fitText = string.Empty;
+    [ObservableProperty] private string? _objectivesText;
+    [ObservableProperty] private bool _hasObjectives;
+
+    public override bool HasContent => true;
+
+    public override void Apply(RunDetailSectionInput input)
+    {
+        ActivityDetailDto detail = input.Detail;
+        ActivityRunDetailDto? source = detail.Runs.FirstOrDefault();
+        SiteText = detail.SiteName ?? "site not recorded";
+        // Only a type handed out by an agent has one, so the row is not there for anything else — a line that could
+        // only ever read "not applicable" teaches the reader about our catalogue, not about their run.
+        IsAgentShown = input.RunType.HasAgent;
+        ActivityRunDetailDto? withAgent = detail.Runs.FirstOrDefault(run => run.AgentId is not null);
+        AgentText = withAgent?.AgentId is { } agentId ? $"agent {agentId}" : "not recorded";
+        MissionLevelText = withAgent?.MissionLevel is { } level ? $"Level {level}" : "not recorded";
+        LocationText = _LocationText(detail.SolarSystemId);
+        SignatureText = source?.Signature ?? string.Empty;
+        IsSignatureShown = !string.IsNullOrWhiteSpace(source?.Signature);
+        FitText = source?.FitNameSnapshot ?? "not recognised";
+
+        // Mission counters, and only those: the reward forms belong under REWARDS, the escalation under its own
+        // section. They stay empty until somebody types them — nothing plausible is filled in for them.
+        string[] objectives = [.. detail.Parameters
+            .Where(parameter => parameter.ParameterKey is RunParameterKey.Smugglers or RunParameterKey.Civilians)
+            .Select(parameter => $"{parameter.ParameterKey.ToString().ToLowerInvariant()} {parameter.TypedValue}")];
+        HasObjectives = objectives.Length > 0;
+        ObjectivesText = HasObjectives ? string.Join(" · ", objectives) : null;
+
+        HeaderSummary = input.RunType.HasAgent
+            ? $"{AgentText} · {MissionLevelText}"
+            : $"{input.RunType.Name} · {LocationText}";
+    }
+
+    /// <summary>The system a run was on, named through the local SDE (ET-213) — never ESI, and never the bare id
+    /// the store carries. The same reading the run window already gives live: a plain name, no security status,
+    /// because the window itself does not show one either. A stored id the SDE does not carry — an older build, a
+    /// boundary case — falls back to the id itself rather than a blank line or an error.</summary>
+    private string _LocationText(int? solarSystemId) =>
+        solarSystemId is not { } id
+            ? "not recorded"
+            : sde?.GetSolarSystem(id)?.Name ?? $"system {id}";
+}

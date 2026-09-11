@@ -1,0 +1,15 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:EveUtils.Client.Views"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.LootDetailSectionView"
+             x:DataType="vs:LootDetailSectionViewModel">
+    <StackPanel>
+        <!-- Grouped by character and correctable (ET-215) — the same component the
+             run window's LOOT section is, so the two read the same. -->
+        <v:ActivityLootView x:Name="LootOverview" DataContext="{Binding LootOverview}"/>
+        <TextBlock x:Name="LootEmpty" Classes="hint" TextWrapping="Wrap"
+                   IsVisible="{Binding LootEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding LootEmptyText}"/>
+    </StackPanel>
+</UserControl>

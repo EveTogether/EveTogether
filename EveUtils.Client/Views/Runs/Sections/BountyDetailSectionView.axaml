@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.BountyDetailSectionView"
+             x:DataType="vs:BountyDetailSectionViewModel">
+    <StackPanel>
+        <!-- One row per character — the same breakdown FLEET already gives for participation
+             (ET-210 review finding, 2026-09-09: a multi-character activity showed one combined
+             figure and no way to tell who brought in what). -->
+        <ItemsControl x:Name="BountyList" ItemsSource="{Binding BountyRows}"
+                      IsVisible="{Binding HasBountyFigures}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:ActivityBountyRowViewModel">
+                    <Grid Classes="kv" ColumnDefinitions="*,Auto">
+                        <TextBlock Text="{Binding CharacterText}"/>
+                        <TextBlock Grid.Column="1" Classes="money" Text="{Binding IskText}"/>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <!-- Set apart in its own strip rather than one more row of the list above, so the total
+             reads as a total. -->
+        <Border Classes="totals" IsVisible="{Binding HasBountyFigures}">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="label" Text="TOTAL" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Classes="money total" Text="{Binding BountyText}"/>
+            </Grid>
+        </Border>
+        <TextBlock x:Name="BountyEmpty" Classes="hint" TextWrapping="Wrap"
+                   IsVisible="{Binding BountyEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding BountyEmptyText}"/>
+    </StackPanel>
+</UserControl>

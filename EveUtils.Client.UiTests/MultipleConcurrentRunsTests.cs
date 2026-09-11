@@ -293,8 +293,8 @@ public class MultipleConcurrentRunsTests
         await gamelog.AddBountyAsync(ActivityWindowHarness.CharacterName, new BountyEvent(DateTime.UtcNow, 337_500));
         await gamelog.AddHitAsync(ActivityWindowHarness.CharacterName, DamageDirection.Outgoing, 500,
             "Centii Servant", HitQuality.Hits, DateTime.UtcNow);
-        await ActivityWindowHarness.WaitUntil(() => model.EnemyObservations.Count == 1);
-        model.EnemyObservations[0].Count = 4;
+        await ActivityWindowHarness.WaitUntil(() => model.Enemies().EnemyObservations.Count == 1);
+        model.Enemies().EnemyObservations[0].Count = 4;
 
         // Switch the column to the second character — exactly what deel 3's character column lets a pilot do
         // mid-run, and exactly what threw the starter's own data away before this fix.
@@ -313,8 +313,8 @@ public class MultipleConcurrentRunsTests
         // not one shared tally.
         await gamelog.AddHitAsync("Second Pilot", DamageDirection.Outgoing, 500, "Centii Servant",
             HitQuality.Hits, DateTime.UtcNow);
-        await ActivityWindowHarness.WaitUntil(() => model.EnemyObservations.Count == 1);
-        model.EnemyObservations[0].Count = 2;
+        await ActivityWindowHarness.WaitUntil(() => model.Enemies().EnemyObservations.Count == 1);
+        model.Enemies().EnemyObservations[0].Count = 2;
 
         // Switch back to the starter.
         RunCharacterRowViewModel first = model.RunCharacters.Single(row => row.CharacterId == ActivityWindowHarness.CharacterId);
@@ -337,10 +337,10 @@ public class MultipleConcurrentRunsTests
         await viewModel.LoadAsync();
 
         // Each character's own hand-typed count, kept over the switch and broken out per character with a total.
-        Assert.Equal(2, viewModel.EnemyCharacterRows.Count);
-        Assert.Contains(viewModel.EnemyCharacterRows, r => r.CharacterText == "Starter" && r.CountText == "4 enemies");
-        Assert.Contains(viewModel.EnemyCharacterRows, r => r.CharacterText == "Second Pilot" && r.CountText == "2 enemies");
-        Assert.Equal("6 enemies", viewModel.EnemyTotalCountText);
+        Assert.Equal(2, viewModel.Enemies().EnemyCharacterRows.Count);
+        Assert.Contains(viewModel.Enemies().EnemyCharacterRows, r => r.CharacterText == "Starter" && r.CountText == "4 enemies");
+        Assert.Contains(viewModel.Enemies().EnemyCharacterRows, r => r.CharacterText == "Second Pilot" && r.CountText == "2 enemies");
+        Assert.Equal("6 enemies", viewModel.Enemies().EnemyTotalCountText);
     }
 
     // ── The live window's own running total covers the group, not just the viewed character (ET-210 review, round 4 follow-up) ──

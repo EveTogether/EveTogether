@@ -201,12 +201,12 @@ public sealed class RunLifecycleTests
         using var instance = _Instance(out _, out _);
         using var window = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
 
-        Assert.DoesNotContain("Prices are the clipboard column", window.IskLabel, StringComparison.Ordinal);
-        Assert.Contains("price", window.IskLabel, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Prices are the clipboard column", window.Loot().IskLabel, StringComparison.Ordinal);
+        Assert.Contains("price", window.Loot().IskLabel, StringComparison.OrdinalIgnoreCase);
         // The caption used to carry a second sentence warning that the figure beside each row was the copied column
         // instead. It was true, and it is gone because the rows are valued on type id now like everything else —
         // the warning was answered rather than deleted, and one line says the whole thing.
-        Assert.DoesNotContain("copied column", window.IskLabel, StringComparison.Ordinal);
+        Assert.DoesNotContain("copied column", window.Loot().IskLabel, StringComparison.Ordinal);
     }
 
     // ── The close question ──────────────────────────────────────────────────────────────────────────
