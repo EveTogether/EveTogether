@@ -1210,7 +1210,7 @@ public class ActivityWindowWiringTests
     /// header names both numbers, so a folded section still says what SAVE will and will not keep.
     /// </summary>
     [AvaloniaFact]
-    public async Task AnEnemyLeftAtZero_IsNotStored_AndTheSectionSaysSoBeforeSave()
+    public async Task AnEnemyLeftAtZero_IsStoredAsNotCounted()
     {
         using var harness = await ActivityWindowHarness.CreateAsync();
         ActivityWindowViewModel model = await harness.OpenAsync();
@@ -1234,9 +1234,10 @@ public class ActivityWindowWiringTests
         await using ClientDbContext db = await harness.Services
             .GetRequiredService<IDbContextFactory<ClientDbContext>>()
             .CreateDbContextAsync(TestContext.Current.CancellationToken);
-        Assert.Empty(await db.Set<RunEnemyObservation>()
+        RunEnemyObservation observation = Assert.Single(await db.Set<RunEnemyObservation>()
             .Where(row => row.RunId == runId)
             .ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(0, observation.Count);
     }
 
     // ── The fleet reaches the window ────────────────────────────────────────────────────────────────

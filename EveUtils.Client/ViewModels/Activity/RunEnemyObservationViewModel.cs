@@ -14,8 +14,7 @@ public sealed partial class RunEnemyObservationViewModel(int enemyTypeId, string
 
     public DateTime LastObservedAtUtc { get; private set; } = observedAtUtc;
 
-    /// <summary>Zero is "seen, not counted" and is never stored (ET-106); the list has to show which of the two a
-    /// row is, or the player cannot tell what SAVE will keep.</summary>
+    /// <summary>Zero means "seen, not counted"; the list has to show which of the two a row is.</summary>
     public bool IsCounted => Count > 0;
 
     public string CountStateText => IsCounted ? $"{Count} counted" : "not counted";

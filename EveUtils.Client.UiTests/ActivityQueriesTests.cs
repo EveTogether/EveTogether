@@ -231,6 +231,52 @@ public sealed class ActivityQueriesTests
         Assert.Contains(row.Rewards, reward => reward.ParameterKey == RunParameterKey.Filament);   // did not silently vanish
     }
 
+    [AvaloniaFact]
+    public async Task Detail_ObservedAndCountedEnemies_PreserveTheirCounts()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16), [], [],
+            [
+                new RunEnemyObservationInput { Count = 3, EnemyTypeId = 111, EnemyName = "Centii Scavenger", FirstObservedAtUtc = StartedAtUtc, LastObservedAtUtc = StartedAtUtc },
+                new RunEnemyObservationInput { Count = 0, EnemyTypeId = 112, EnemyName = "Centii Loyalist", FirstObservedAtUtc = StartedAtUtc, LastObservedAtUtc = StartedAtUtc }
+            ], []), cancellationToken);
+        await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
+
+        ActivityOverviewRowDto row = Assert.Single(_Value(await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
+        ActivityDetailDto detail = _Value(await dispatcher.Query(new GetActivityDetailQuery(row.ActivitySummaryId), cancellationToken));
+
+        Assert.Equal(2, detail.EnemyObservations.Count);
+        Assert.Contains(detail.EnemyObservations, observation => observation.EnemyTypeId == 111 && observation.Count == 3);
+        Assert.Contains(detail.EnemyObservations, observation => observation.EnemyTypeId == 112 && observation.Count == 0);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false, 3)]
+    [InlineData(true, 2)]
+    public async Task Overview_ObservedEnemyTypes_CountsDistinctTypes(bool repeatsAnEnemyType, int expectedEnemyTypeCount)
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16), [], [],
+            [
+                new RunEnemyObservationInput { Count = 4, EnemyTypeId = 111, EnemyName = "Centii Scavenger", FirstObservedAtUtc = StartedAtUtc, LastObservedAtUtc = StartedAtUtc },
+                new RunEnemyObservationInput { Count = 0, EnemyTypeId = 112, EnemyName = "Centii Loyalist", FirstObservedAtUtc = StartedAtUtc, LastObservedAtUtc = StartedAtUtc },
+                new RunEnemyObservationInput { Count = 0, EnemyTypeId = repeatsAnEnemyType ? 111 : 113, EnemyName = "Centii Enslaver", FirstObservedAtUtc = StartedAtUtc, LastObservedAtUtc = StartedAtUtc }
+            ], []), cancellationToken);
+        await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
+
+        ActivityOverviewRowDto row = Assert.Single(_Value(await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
+
+        Assert.Equal(expectedEnemyTypeCount, row.EnemyTypeCount);
+    }
+
     private static async Task _SaveRunAsync(IDispatcher dispatcher, long characterId, string? groupCode, CancellationToken cancellationToken)
     {
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site, StartedAtUtc,
