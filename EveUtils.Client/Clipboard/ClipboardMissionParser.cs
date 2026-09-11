@@ -24,7 +24,7 @@ public static partial class ClipboardMissionParser
     [GeneratedRegex(@"^(?<qty>\d+)\s*×\s*(?<name>.+)$")]
     private static partial Regex ItemRewardPattern();
 
-    [GeneratedRegex(@"within (?<hours>\d+) hours?")]
+    [GeneratedRegex(@"within (?:(?<hours>\d+) hours?(?: and (?<minutes>\d+) minutes?)?|(?<minutes>\d+) minutes?)")]
     private static partial Regex BonusWindowPattern();
 
     public static ClipboardMissionCapture? Parse(string text)
@@ -84,8 +84,18 @@ public static partial class ClipboardMissionParser
             if (block == RewardBlock.BonusRewards && bonusWindowSeconds is null)
             {
                 var match = BonusWindowPattern().Match(line);
-                if (match.Success && ClipboardInventoryParser.TryParseWholeNumber(match.Groups["hours"].Value, out var hours))
-                    bonusWindowSeconds = (int)(hours * 3600);
+                if (match.Success)
+                {
+                    // Either half can be absent ("within 6 hours", "within 45 minutes"), never both — the
+                    // alternation in BonusWindowPattern already refuses a match with neither.
+                    long hours = 0, minutes = 0;
+                    var hasHours = match.Groups["hours"].Success
+                        && ClipboardInventoryParser.TryParseWholeNumber(match.Groups["hours"].Value, out hours);
+                    var hasMinutes = match.Groups["minutes"].Success
+                        && ClipboardInventoryParser.TryParseWholeNumber(match.Groups["minutes"].Value, out minutes);
+                    if (hasHours || hasMinutes)
+                        bonusWindowSeconds = (int)(hours * 3600 + minutes * 60);
+                }
             }
         }
 
@@ -99,14 +109,11 @@ public static partial class ClipboardMissionParser
         var trimmed = value.Trim();
 
         if (trimmed.EndsWith(" ISK", StringComparison.Ordinal)
-            && ClipboardInventoryParser.TryParseLocalNumber(trimmed[..^" ISK".Length].TrimEnd(), out var amount))
+            && TryParseWholeRewardAmount(trimmed[..^" ISK".Length].TrimEnd(), out var amount))
             return new ClipboardMissionReward(iskKind, amount, null, null, rawLine);
 
-        // No real capture has ever shown a loyalty-point reward line; "<n> Loyalty Points" follows the ISK line's own
-        // shape (a localized number plus a literal suffix) since that is the only reward text this project has ever
-        // measured — treat this as an assumption, not a second measured form.
         if (trimmed.EndsWith(" Loyalty Points", StringComparison.Ordinal)
-            && ClipboardInventoryParser.TryParseLocalNumber(trimmed[..^" Loyalty Points".Length].TrimEnd(), out var loyaltyPoints))
+            && TryParseWholeRewardAmount(trimmed[..^" Loyalty Points".Length].TrimEnd(), out var loyaltyPoints))
             return new ClipboardMissionReward(RunParameterKey.LoyaltyPoints, loyaltyPoints, null, null, rawLine);
 
         var itemMatch = ItemRewardPattern().Match(trimmed);
@@ -114,6 +121,24 @@ public static partial class ClipboardMissionParser
             return new ClipboardMissionReward(RunParameterKey.Item, null, itemMatch.Groups["name"].Value.Trim(), quantity, rawLine);
 
         return new ClipboardMissionReward(null, null, null, null, rawLine);
+    }
+
+    // ISK and Loyalty Points mission rewards are always whole numbers in EVE, never decimals, so a single
+    // "360,000"-style separator can only be a thousands mark here — unlike ClipboardInventoryParser.TryParseLocalNumber,
+    // which must stay ambiguous about that same shape because an inventory price genuinely can carry a decimal
+    // (ET-238). Reuses the same trap-free whole-number reader already shared for item quantities and the bonus-window
+    // hour/minute counts, after folding the space-family group separators that reader does not itself expect.
+    private static bool TryParseWholeRewardAmount(string value, out decimal amount)
+    {
+        var normalized = value.Replace(' ', '.').Replace(' ', '.').Replace(' ', '.');
+        if (ClipboardInventoryParser.TryParseWholeNumber(normalized, out var whole))
+        {
+            amount = whole;
+            return true;
+        }
+
+        amount = default;
+        return false;
     }
 
     private static string LastTabField(string line)
