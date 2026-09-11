@@ -18,4 +18,16 @@ public sealed record AbyssalWeather(string Name, string EnvironmentName, string 
         new("Firestorm", "Plasma Firestorm", "+50% armor", "thermal resistance"),
         new("Gamma", "Gamma-Ray Afterglow", "+50% shield", "explosive resistance")
     ];
+
+    /// <summary>The index <see cref="All"/> carries this weather's name under, or null when <paramref name="name"/>
+    /// is null or matches none of them — a message from an older build naming a weather this one dropped, say. Never
+    /// throws: a fleetmate's window reading "tier not known" is the answer to that, not an exception (ET-241).</summary>
+    public static int? IndexOf(string? name)
+    {
+        if (name is null)
+            return null;
+
+        int index = All.ToList().FindIndex(weather => weather.Name == name);
+        return index >= 0 ? index : null;
+    }
 }

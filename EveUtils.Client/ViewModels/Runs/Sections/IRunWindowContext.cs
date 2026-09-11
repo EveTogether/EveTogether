@@ -29,6 +29,16 @@ public interface IRunWindowContext : INotifyPropertyChanged
 
     ActivityRunState RunState { get; }
 
+    /// <summary>The fleet this run belongs to, or null for a solo run.</summary>
+    long? FleetId { get; }
+
+    /// <summary>The code shared with the rest of this run's group, or null for a solo run.</summary>
+    string? GroupCode { get; }
+
+    /// <summary>Whether the acting pilot commands <see cref="FleetId"/> — only the commander's own change of a
+    /// shared fact (a pocket's tier and weather, ET-241) is announced to the rest of the group.</summary>
+    bool IsFleetCommander { get; }
+
     /// <summary>The instant the run stopped, times-corrected if it was — null while it is still running. A section
     /// that judges something against "when the run ended" (a mission's bonus window) freezes on this the moment the
     /// clock stops, rather than keep judging it against wall-clock time while the window sits open before SAVE.</summary>

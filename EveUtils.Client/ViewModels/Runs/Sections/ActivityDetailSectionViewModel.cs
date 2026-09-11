@@ -1,5 +1,7 @@
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde;
@@ -25,7 +27,13 @@ public sealed partial class ActivityDetailSectionViewModel(ISdeAccessor? sde)
     {
         ActivityDetailDto detail = input.Detail;
         ActivityRunDetailDto? source = detail.Runs.FirstOrDefault();
-        SiteText = detail.SiteName ?? "site not recorded";
+        // An abyssal has no site to record at all — this reads what filament opened it (ET-241), or the type's own
+        // honest name while that is unknown, instead of a line about a site that was never going to exist.
+        SiteText = detail.SiteName
+            ?? (input.RunType.Space is RunSpace.AbyssalPocket
+                ? AbyssalFilamentName.From(detail.Parameters
+                    .FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.AbyssalFilament)?.TypedValue)
+                : "site not recorded");
         LocationText = _LocationText(detail.SolarSystemId);
         SignatureText = source?.Signature ?? string.Empty;
         IsSignatureShown = !string.IsNullOrWhiteSpace(source?.Signature);

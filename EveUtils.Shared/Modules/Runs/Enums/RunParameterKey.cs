@@ -36,5 +36,12 @@ public enum RunParameterKey
     EscalationExpiresAtUtc,
     /// <summary>A clipboard line whose reward form is not yet classified. Its unmodified text stays in
     /// <see cref="Entities.RunParameter.TypedValue"/> so it can be classified later.</summary>
-    Unknown
+    Unknown,
+
+    /// <summary>The abyssal pocket's own tier and weather (ET-241), chosen in the run window and otherwise lost at
+    /// save — never a reward, so <c>GetActivityOverviewQueryHandler</c> keeps it out of the reward-chip list on
+    /// purpose. <see cref="Entities.RunParameter.TypedValue"/> holds <c>"{tier index}|{weather name}"</c>; the tier
+    /// word itself (e.g. "Agitated") is looked up from the index at read time, never stored as text, so renaming a
+    /// tier only ever means changing one list.</summary>
+    AbyssalFilament
 }

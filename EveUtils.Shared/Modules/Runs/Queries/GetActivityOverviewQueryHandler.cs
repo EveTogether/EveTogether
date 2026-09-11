@@ -92,7 +92,12 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
         ActivitySummary summary, IEnumerable<RunParameter> rewardRows, IEnumerable<long> crew, bool hasAutoSavedRun,
         IEnumerable<ActivityServerSyncDto> serverSyncStates)
     {
-        RunParameter[] rewards = [.. rewardRows];
+        RunParameter[] all = [.. rewardRows];
+        // AbyssalFilament is the pocket's own tier and weather (ET-241), never a reward the pilot earned — read
+        // separately for the row's own name, and kept out of the reward-chip list below on purpose.
+        string? abyssalFilamentText =
+            all.FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.AbyssalFilament)?.TypedValue;
+        RunParameter[] rewards = [.. all.Where(parameter => parameter.ParameterKey != RunParameterKey.AbyssalFilament)];
         return new ActivityOverviewRowDto(
             summary.Id, summary.GroupCode, summary.RunId, summary.ActivityKind, summary.SiteName,
             summary.SignatureGroupSnapshot, summary.SolarSystemId,
@@ -103,7 +108,8 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             summary.BountyIsk, summary.LootIskNet, summary.EnemyTypeCount,
             rewards.Any(reward => reward.ParameterKey == RunParameterKey.Escalation),
             hasAutoSavedRun,
-            [.. serverSyncStates]);
+            [.. serverSyncStates],
+            abyssalFilamentText);
     }
 
     private static decimal? _SumOrNull(IEnumerable<decimal?> amounts)

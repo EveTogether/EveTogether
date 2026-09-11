@@ -51,6 +51,15 @@ public sealed class FleetWireEvents : IWireEventCatalog
             return new FleetRunStoppedEvent(payload, characterId);
         });
 
+        // The commander changed the pocket's tier or weather mid-run (ET-241); a member already on the group code
+        // adopts it the same way it adopted the original announcement.
+        registry.Register("fleet.run-group.abyssal-updated", (payloadJson, characterId) =>
+        {
+            var payload = JsonSerializer.Deserialize<RunGroupAbyssalUpdate>(payloadJson)
+                          ?? throw new InvalidOperationException("Invalid fleet.run-group.abyssal-updated payload.");
+            return new FleetRunGroupAbyssalUpdatedEvent(payload, characterId);
+        });
+
         registry.Register("fleet.run-discarded", (payloadJson, characterId) =>
         {
             var payload = JsonSerializer.Deserialize<RunGroupDiscard>(payloadJson)

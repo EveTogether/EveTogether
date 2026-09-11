@@ -59,13 +59,15 @@ public class ActivityWindowTests
     // ── AC-1 — every section says something, open or shut ───────────────────────────────────────────
 
     [Theory]
-    [InlineData(ActivityKind.Abyssal)]
-    [InlineData(ActivityKind.Site)]
-    public void EmptyRun_EverySectionSummary_SaysSomething(ActivityKind kind)
+    // An abyssal pocket has no NPC bounty at all, so it has five sections rather than a site's six — no BOUNTY to
+    // stand shut and silent (ET-241).
+    [InlineData(ActivityKind.Abyssal, 5)]
+    [InlineData(ActivityKind.Site, 6)]
+    public void EmptyRun_EverySectionSummary_SaysSomething(ActivityKind kind, int expectedSectionCount)
     {
         var model = new ActivityWindowViewModel(kind, _Unused());
 
-        Assert.Equal(6, model.Sections.Count);
+        Assert.Equal(expectedSectionCount, model.Sections.Count);
         foreach (var section in model.Sections)
             Assert.False(string.IsNullOrWhiteSpace(section.HeaderSummary),
                 $"{section.Title} is silent with its body shut on an empty {kind} run");
@@ -274,15 +276,23 @@ public class ActivityWindowTests
     }
 
     [Fact]
-    public void InTheAbyss_BountyAndLocationSayWhyTheyAreEmpty()
+    public void InTheAbyss_LocationSaysWhyItIsEmpty()
     {
         var model = _Filled(ActivityKind.Abyssal);
 
-        Assert.Contains("no bounty", model.Bounty().HeaderSummary, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("— no bounty in abyssal space", model.Bounty().BountyText);
         Assert.Contains("no location", model.Activity().HeaderSummary, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("pocket", model.Activity().LocationText, StringComparison.OrdinalIgnoreCase);
-        Assert.NotEqual("0", model.Bounty().HeaderSummary);
+    }
+
+    /// <summary>An abyssal pocket has no NPC bounty at all (ET-241, Jithran flying one with Raymond, 2026-09-11) —
+    /// unlike a data or relic site, which merely usually has none, the window draws no BOUNTY section for it at
+    /// all, rather than one that always says so.</summary>
+    [Fact]
+    public void InTheAbyss_ThereIsNoBountySectionAtAll()
+    {
+        var model = _Filled(ActivityKind.Abyssal);
+
+        Assert.DoesNotContain(model.Sections, section => section is BountyWindowSectionViewModel);
     }
 
     /// <summary>
