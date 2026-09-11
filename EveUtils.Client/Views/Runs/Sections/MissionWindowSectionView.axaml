@@ -5,6 +5,10 @@
              x:Class="EveUtils.Client.Views.Runs.Sections.MissionWindowSectionView"
              x:DataType="vs:MissionWindowSectionViewModel">
     <StackPanel>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsImportantMission}">
+            <TextBlock Text="IMPORTANT"/>
+            <TextBlock Grid.Column="1" Text="affects faction standing"/>
+        </Grid>
         <Grid Classes="kv" ColumnDefinitions="Auto,*">
             <TextBlock Text="AGENT"/>
             <TextBlock Grid.Column="1" Text="{Binding AgentText}"/>

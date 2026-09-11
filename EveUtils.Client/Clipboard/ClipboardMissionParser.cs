@@ -11,7 +11,7 @@ public sealed record ClipboardMissionReward(RunParameterKey? ParameterKey, decim
 
 /// <summary><see cref="ObjectivesHeaderName"/> is the header line's own name, not the mission's — this capture never states one.</summary>
 public sealed record ClipboardMissionCapture(string? ObjectivesHeaderName, string? AgentName, int? BonusWindowSeconds,
-    IReadOnlyList<ClipboardMissionReward> Rewards);
+    IReadOnlyList<ClipboardMissionReward> Rewards, bool IsImportantMission);
 
 /// <summary>The location row next to "Report to &lt;agent&gt;" is never read: the agent name alone is the resolving key (ET-172 sub 1), and the location text is free-form prose no parser should trust.</summary>
 public static partial class ClipboardMissionParser
@@ -19,9 +19,20 @@ public static partial class ClipboardMissionParser
     private const string ObjectivesHeaderSuffix = " Objectives";
     private const string ReportToPrefix = "Report to ";
 
-    // "<qty> × <item>" is not a form ET has ever captured; it is EVE Journal's own regex input, measured against
-    // their source during ET-172's grooming, not a live client here.
-    [GeneratedRegex(@"^(?<qty>\d+)\s*×\s*(?<name>.+)$")]
+    // ET-251: the same preface EVE shows above the header for an important (storyline) mission — the only signal
+    // this project has measured for the flag, so matched literally rather than on a looser "important" keyword.
+    private const string ImportantMissionPreface =
+        "This is an important mission, which will have significant impact on your faction standings.";
+
+    // ET-251: an important mission's header sits one line below this preface, so the header is looked for among
+    // the first couple of non-empty lines, the same bound ClipboardShapeRecogniser.IsMissionShape uses.
+    private const int MaxHeaderSearchLines = 2;
+
+    // ET-251: the one real capture with an item reward uses a plain "x" ("1 x Cybernetic Subprocessor -
+    // Standard"), never measured against a "×" (multiplication sign) before this — that shape stays accepted too,
+    // in case a client somewhere still emits it (EVE Journal's own regex, measured against their source during
+    // ET-172's grooming, not a live client). The quantity may carry a thousands separator (ET-251).
+    [GeneratedRegex(@"^(?<qty>[\d.,]+)\s*[x×]\s*(?<name>.+)$")]
     private static partial Regex ItemRewardPattern();
 
     [GeneratedRegex(@"within (?:(?<hours>\d+) hours?(?: and (?<minutes>\d+) minutes?)?|(?<minutes>\d+) minutes?)")]
@@ -32,28 +43,41 @@ public static partial class ClipboardMissionParser
         string? objectivesHeaderName = null;
         string? agentName = null;
         int? bonusWindowSeconds = null;
+        var isImportantMission = false;
         var rewards = new List<ClipboardMissionReward>();
         var block = RewardBlock.None;
-        var isFirstLine = true;
+        var headerSearchOpen = true;
+        var nonEmptyLinesSeen = 0;
 
         foreach (var clipboardLine in text.Split('\n'))
         {
             string rawLine = clipboardLine.EndsWith('\r') ? clipboardLine[..^1] : clipboardLine;
             string line = rawLine;
-
-            if (isFirstLine)
-            {
-                isFirstLine = false;
-                var header = line.Trim();
-                if (header.Length > ObjectivesHeaderSuffix.Length && header.EndsWith(ObjectivesHeaderSuffix, StringComparison.Ordinal))
-                    objectivesHeaderName = header[..^ObjectivesHeaderSuffix.Length];
-
-                continue;
-            }
-
             var trimmed = line.Trim();
             if (trimmed.Length == 0)
                 continue;
+
+            if (headerSearchOpen)
+            {
+                nonEmptyLinesSeen++;
+                if (trimmed.Length > ObjectivesHeaderSuffix.Length && trimmed.EndsWith(ObjectivesHeaderSuffix, StringComparison.Ordinal))
+                {
+                    objectivesHeaderName = trimmed[..^ObjectivesHeaderSuffix.Length];
+                    headerSearchOpen = false;
+                    continue;
+                }
+
+                if (trimmed == ImportantMissionPreface)
+                {
+                    isImportantMission = true;
+                    if (nonEmptyLinesSeen >= MaxHeaderSearchLines)
+                        headerSearchOpen = false;
+                    continue;
+                }
+
+                if (nonEmptyLinesSeen >= MaxHeaderSearchLines)
+                    headerSearchOpen = false;
+            }
 
             if (trimmed == "Rewards")
             {
@@ -99,9 +123,9 @@ public static partial class ClipboardMissionParser
             }
         }
 
-        return objectivesHeaderName is null && agentName is null && rewards.Count == 0 && bonusWindowSeconds is null
+        return objectivesHeaderName is null && agentName is null && rewards.Count == 0 && bonusWindowSeconds is null && !isImportantMission
             ? null
-            : new ClipboardMissionCapture(objectivesHeaderName, agentName, bonusWindowSeconds, rewards);
+            : new ClipboardMissionCapture(objectivesHeaderName, agentName, bonusWindowSeconds, rewards, isImportantMission);
     }
 
     private static ClipboardMissionReward ParseReward(string rawLine, string value, RunParameterKey iskKind)

@@ -185,6 +185,36 @@ public sealed class ClipboardMissionOfferTests
             });
     }
 
+    // ET-251: Jithran's "Materials For War Preparation" capture — an important (storyline) mission, whose warning
+    // sentence sits before the header, with a single item reward ("1 x Cybernetic Subprocessor - Standard", a
+    // plain "x") and no plain ISK reward at all. Acceptance 1: the run takes the header's own name, since there is
+    // no agent to prefer it over. Acceptance 2/3: the item reward carries its SDE type id, the bonus is 141,000 ISK
+    // within 38 minutes, and the run is marked as an important mission.
+    [AvaloniaFact]
+    public async Task AnImportantMissionCapture_StartsARunNamedFromTheHeader_MarkedImportant_WithTheItemRewardTyped()
+    {
+        using var env = await Env.StartAsync();
+        env.Sde.Add(32014, "Cybernetic Subprocessor - Standard", groupId: 1, categoryId: 20);
+        await env.AddCharacterAsync();
+
+        env.Copy(_Fixture("mission-materials-for-war-preparation.txt"));
+        Run run = await WaitForRunningMissionAsync(env);
+
+        Assert.Equal(ActivityKind.Mission, run.ActivityKind);
+        Assert.Equal("Materials For War Preparation", run.SiteName); // AC-1: no agent, so the header names the run
+        Assert.Null(run.AgentId);
+
+        await using ClientDbContext db = await env.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        List<RunParameter> parameters = await db.Set<RunParameter>().Where(parameter => parameter.RunId == run.Id).ToListAsync();
+
+        Assert.Contains(parameters, parameter => parameter.ParameterKey == RunParameterKey.ImportantMission); // AC-3
+        Assert.Contains(parameters, parameter => parameter.ParameterKey == RunParameterKey.Item
+            && parameter.Amount == 1m && parameter.ItemTypeId == 32014); // AC-2
+        Assert.Contains(parameters, parameter => parameter.ParameterKey == RunParameterKey.BonusIsk
+            && parameter.Amount == 141_000m && parameter.BonusWindowSeconds == 2280); // AC-2
+        Assert.DoesNotContain(parameters, parameter => parameter.ParameterKey == RunParameterKey.Isk);
+    }
+
     // AC-8 countercheck: a made-up agent name — the SDE import is a snapshot, and CCP adds agents. A miss must not
     // block the run.
     [AvaloniaFact]

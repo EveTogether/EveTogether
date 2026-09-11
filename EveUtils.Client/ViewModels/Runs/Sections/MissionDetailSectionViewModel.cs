@@ -33,6 +33,11 @@ public sealed partial class MissionDetailSectionViewModel(ISdeAccessor? sde) : R
 
     [ObservableProperty] private string _levelText = string.Empty;
 
+    /// <summary>Set when the capture opened with EVE's own warning sentence for an important (storyline) mission
+    /// (ET-251) — never derived from anything else, since that sentence is the only signal this project has
+    /// measured for it.</summary>
+    [ObservableProperty] private bool _isImportantMission;
+
     [ObservableProperty] private bool _hasBonus;
 
     [ObservableProperty] private string _bonusValueText = string.Empty;
@@ -41,7 +46,7 @@ public sealed partial class MissionDetailSectionViewModel(ISdeAccessor? sde) : R
     /// stays earned no matter how long the activity has sat saved since (ET-237).</summary>
     [ObservableProperty] private bool _isBonusExpired;
 
-    public override bool HasContent => HasAgent || HasBonus || RewardRows.Count > 0;
+    public override bool HasContent => HasAgent || HasBonus || IsImportantMission || RewardRows.Count > 0;
 
     // The window section's own docstring explains why this only ever subtracts (ET-237).
     public override decimal ExpiredBonusIsk => IsBonusExpired ? _bonusAmount ?? 0m : 0m;
@@ -56,6 +61,8 @@ public sealed partial class MissionDetailSectionViewModel(ISdeAccessor? sde) : R
             : "not stated in this capture";
         IsLevelShown = withAgent?.MissionLevel is not null;
         LevelText = withAgent?.MissionLevel is { } level ? $"Level {level}" : string.Empty;
+
+        IsImportantMission = detail.Parameters.Any(parameter => parameter.ParameterKey == RunParameterKey.ImportantMission);
 
         RunParameterDto? bonus = detail.Parameters.FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.BonusIsk);
         _bonusAmount = bonus?.Amount;
@@ -73,6 +80,8 @@ public sealed partial class MissionDetailSectionViewModel(ISdeAccessor? sde) : R
             : null;
 
         List<string> parts = [];
+        if (IsImportantMission)
+            parts.Add("important · affects faction standing");
         if (HasAgent)
             parts.Add(IsLevelShown ? $"{AgentText} · {LevelText}" : AgentText);
         if (HasBonus)
@@ -90,5 +99,5 @@ public sealed partial class MissionDetailSectionViewModel(ISdeAccessor? sde) : R
         parameter.ParameterKey is not (RunParameterKey.BonusIsk or RunParameterKey.Escalation
             or RunParameterKey.EscalationDungeonId or RunParameterKey.EscalationSystem
             or RunParameterKey.EscalationSolarSystemId or RunParameterKey.EscalationExpiresAtUtc
-            or RunParameterKey.Smugglers or RunParameterKey.Civilians);
+            or RunParameterKey.Smugglers or RunParameterKey.Civilians or RunParameterKey.ImportantMission);
 }

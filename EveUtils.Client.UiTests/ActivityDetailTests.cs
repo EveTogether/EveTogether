@@ -246,6 +246,32 @@ public sealed class ActivityDetailTests
         Assert.False(viewModel.Mission().IsLevelShown);
     }
 
+    /// <summary>ET-251: an important mission is marked as such and shown in MISSION as its own fact, not folded
+    /// into the reward rows.</summary>
+    [AvaloniaFact]
+    public async Task Mission_MarkedImportant_ShowsInMissionSection_AndNotAsARewardRow()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Mission, StartedAtUtc,
+            9999, "Materials For War Preparation", 30000142, SiteTypeSource: SiteTypeSource.Mission), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(8), StartedAtUtc.AddMinutes(9),
+            [], [], [],
+            [new RunParameterInput { ParameterKey = RunParameterKey.ImportantMission, TypedValue = "important mission", ObservedAtUtc = StartedAtUtc }]),
+            cancellationToken);
+        Result<IReadOnlyList<ActivityOverviewRowDto>> overview =
+            await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(overview));
+
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IAppraisalProvider>());
+        await viewModel.LoadAsync(cancellationToken);
+
+        Assert.True(viewModel.Mission().IsImportantMission);
+        Assert.Empty(viewModel.Mission().RewardRows);
+    }
+
     /// <summary>AC-1, anomaly half: a site shows ENEMIES, BOUNTY and LOOT and carries no agent row. Counter-proof:
     /// the same fixed block of sections for every kind puts an agent row on a site, and this goes red.</summary>
     [AvaloniaFact]

@@ -50,20 +50,44 @@ public static partial class ClipboardShapeRecogniser
         return IsInventoryTable(text) ? ClipboardShape.Inventory : ClipboardShape.Unrecognised;
     }
 
-    // ET-175: a mission capture opens with "<agent> Objectives" and carries a "Rewards" block further down. Both
-    // are required — either word alone is common enough in ordinary copied text to misfire — but nothing past
-    // that is checked here, because recognition only decides the shape, not the content (ClipboardMissionParser).
+    // ET-251: an important mission opens with a warning sentence before the header ("This is an important
+    // mission, which will have significant impact on your faction standings."), so the header is looked for among
+    // the first couple of non-empty lines, not only the very first one.
+    private const int MaxHeaderSearchLines = 2;
+
+    // ET-175: a mission capture opens with "<agent> Objectives" (allowing for ET-251's preface sentence) and
+    // carries a "Rewards" block further down. Both are required — either alone is common enough in ordinary copied
+    // text to misfire — but nothing past that is checked here, because recognition only decides the shape, not the
+    // content (ClipboardMissionParser).
     private static bool IsMissionShape(string text)
     {
-        if (FirstNonEmptyLine(text) is not { } header
-            || header.Length <= MissionObjectivesHeaderSuffix.Length
-            || !header.EndsWith(MissionObjectivesHeaderSuffix, StringComparison.Ordinal))
+        if (!_HasObjectivesHeader(text))
             return false;
 
         foreach (var line in text.Split('\n'))
         {
             if (line.TrimEnd('\r').Trim() == "Rewards")
                 return true;
+        }
+
+        return false;
+    }
+
+    private static bool _HasObjectivesHeader(string text)
+    {
+        var nonEmptyLinesSeen = 0;
+        foreach (var line in text.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Length == 0)
+                continue;
+
+            if (trimmed.Length > MissionObjectivesHeaderSuffix.Length
+                && trimmed.EndsWith(MissionObjectivesHeaderSuffix, StringComparison.Ordinal))
+                return true;
+
+            if (++nonEmptyLinesSeen >= MaxHeaderSearchLines)
+                return false;
         }
 
         return false;
