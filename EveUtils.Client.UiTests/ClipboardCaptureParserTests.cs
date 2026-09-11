@@ -189,6 +189,86 @@ public sealed class ClipboardCaptureParserTests
         Assert.Equal(0.6m, locationNumber);
     }
 
+    // ET-238 AC-1: Jithran's own capture, "Cargo Delivery" — a courier mission from a plain (non-epic-arc) agent.
+    // Unlike Aralin Jick's epic-arc capture above, there is no "Report to" line: AgentName stays null and the
+    // header carries the mission name, not an agent name. "360,000" and "1,150" are a single separator with
+    // three trailing digits each — TryParseLocalNumber refuses that as ambiguous, but a mission reward is always
+    // a whole ISK/LP number, never a decimal, so it must still be read. The Objectives-block cargo rows
+    // ("10 x Quafe Ultra") sit outside the Rewards block and must not appear as rewards.
+    [Fact]
+    public void ParseMission_JithransCargoDeliveryCapture_ReadsWholeRewardsAndTheHourAndMinuteBonusWindow()
+    {
+        string text = _Fixture("mission-cargo-delivery.txt");
+
+        var capture = ClipboardMissionParser.Parse(text);
+
+        Assert.NotNull(capture);
+        Assert.Equal("Cargo Delivery", capture!.ObjectivesHeaderName);
+        Assert.Null(capture.AgentName);
+        Assert.Equal(4560, capture.BonusWindowSeconds); // 1 hour and 16 minutes
+        Assert.Collection(capture.Rewards,
+            reward =>
+            {
+                Assert.Equal(RunParameterKey.Isk, reward.ParameterKey);
+                Assert.Equal(360_000m, reward.Amount);
+            },
+            reward =>
+            {
+                Assert.Equal(RunParameterKey.LoyaltyPoints, reward.ParameterKey);
+                Assert.Equal(1_150m, reward.Amount);
+            },
+            reward =>
+            {
+                Assert.Equal(RunParameterKey.BonusIsk, reward.ParameterKey);
+                Assert.Equal(347_000m, reward.Amount);
+            });
+    }
+
+    // ET-238 AC-2: Jithran's second capture, "Unauthorized Military Presence" — an encounter mission, same shape.
+    [Fact]
+    public void ParseMission_JithransUnauthorizedMilitaryPresenceCapture_ReadsWholeRewardsAndTheHourAndMinuteBonusWindow()
+    {
+        string text = _Fixture("mission-unauthorized-military-presence.txt");
+
+        var capture = ClipboardMissionParser.Parse(text);
+
+        Assert.NotNull(capture);
+        Assert.Equal("Unauthorized Military Presence", capture!.ObjectivesHeaderName);
+        Assert.Null(capture.AgentName);
+        Assert.Equal(7920, capture.BonusWindowSeconds); // 2 hours and 12 minutes
+        Assert.Collection(capture.Rewards,
+            reward =>
+            {
+                Assert.Equal(RunParameterKey.Isk, reward.ParameterKey);
+                Assert.Equal(553_000m, reward.Amount);
+            },
+            reward =>
+            {
+                Assert.Equal(RunParameterKey.LoyaltyPoints, reward.ParameterKey);
+                Assert.Equal(2_004m, reward.Amount);
+            },
+            reward =>
+            {
+                Assert.Equal(RunParameterKey.BonusIsk, reward.ParameterKey);
+                Assert.Equal(532_000m, reward.Amount);
+            });
+    }
+
+    // ET-238: a window given only in minutes, with no hour count at all, previously matched nothing.
+    [Fact]
+    public void ParseMission_BonusWindowGivenOnlyInMinutes_ReadsWindowInSeconds()
+    {
+        const string text =
+            "Aralin Jick Objectives\nThe following objectives must be completed to finish the mission:\n\n" +
+            "Report to Aralin Jick\n\nRewards\nThe following rewards will be yours if you complete this mission:\n" +
+            " \t1.000.000 ISK\n\nBonus Rewards\nThe following rewards will be awarded to you as a bonus if you " +
+            "complete the mission within 45 minutes:\n \t1.610.000 ISK";
+
+        var capture = ClipboardMissionParser.Parse(text);
+
+        Assert.Equal(2700, capture!.BonusWindowSeconds);
+    }
+
     [Fact]
     public void ParseMission_EdgeCases_RefuseRatherThanGuess()
     {

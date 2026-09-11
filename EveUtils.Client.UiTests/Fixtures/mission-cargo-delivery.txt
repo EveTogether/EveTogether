@@ -1,0 +1,24 @@
+Cargo Delivery Objectives
+The following objectives must be completed to finish the mission:
+
+Bring Item Objective
+Acquire these goods:
+
+ 	 	Drop-off Location	0.6 Aphend VII - Moon 7 - Carthum Conglomerate Foundry
+ 		Item	10 x Quafe Ultra (1.0 m³)
+
+
+Objective
+Retrieve the cargo from the warehouse, and bring it to your agent.
+ 	 	Location	0.7 Romi
+
+
+Rewards
+The following rewards will be yours if you complete this mission:
+ 	360,000 ISK
+	1,150 Loyalty Points
+
+
+Bonus Rewards
+The following rewards will be awarded to you as a bonus if you complete the mission within 1 hour and 16 minutes:
+ 	347,000 ISK

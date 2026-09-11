@@ -530,6 +530,12 @@ taken from the matching `## vX.Y.Z` section below.
   `965.32 ISK` or `11,510,569.11 ISK` with cents nobody uses. A total is rounded once, from the exact sum of
   what makes it up, so it always matches what the rows underneath it add up to. Typing or pasting an ISK
   amount still accepts decimals; only the on-screen figure is rounded.
+- **Mission ISK and Loyalty Point rewards written with just one thousands separator, like `360,000 ISK` or
+  `1,150 Loyalty Points`, are now recognised** instead of being kept as unrecognised text — a mission reward
+  is always a whole number, so there is no decimal it could otherwise be mistaken for.
+- **A mission's bonus time window now keeps its minutes, not only its hours.** "Within 1 hour and 16 minutes"
+  used to be read as a flat hour, rounding the window down; a window given only in minutes was not read at
+  all. Both now count correctly.
 
 ## v0.2.0-beta — 2026-07-06
 

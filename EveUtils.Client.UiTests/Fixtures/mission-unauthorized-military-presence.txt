@@ -1,0 +1,25 @@
+Unauthorized Military Presence Objectives
+The following objectives must be completed to finish the mission:
+
+Bring Item Objective
+Acquire these goods:
+
+ 	 	Drop-off Location	0.6 Aphend VII - Moon 7 - Carthum Conglomerate Foundry
+ 		Item	10 x Militants (20.0 m³)
+
+
+Objective
+Intercept the personnel transport ship, destroy its guards, and bring the militants to your agent.
+ 	 	Location	0.6 Dresi
+
+This site contains normal ship restrictions.
+
+Rewards
+The following rewards will be yours if you complete this mission:
+ 	553,000 ISK
+	2,004 Loyalty Points
+
+
+Bonus Rewards
+The following rewards will be awarded to you as a bonus if you complete the mission within 2 hours and 12 minutes:
+ 	532,000 ISK
