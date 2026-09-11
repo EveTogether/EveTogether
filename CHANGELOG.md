@@ -13,6 +13,19 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **A fleet abyssal pilot who stops and starts their own run again is now shown as "in" again within seconds.**
+  Stopping and picking your own leg back up used to leave you reading "out" on everybody else's FLEET line until the
+  twenty-minute cut-off quietly corrected it. The resume is now announced the moment it happens, in its own message
+  so an older client or a server not yet updated simply ignores it rather than misreading it as something else. This
+  needs the server to be updated; until then a resumed leg still corrects itself once the twenty minutes are up, as
+  before.
+- **Several of your own toons flying one abyssal together now each keep their own clock.** Before, picking more than
+  one of your own characters at START (or adding one mid-run) started and stopped every one of them together with
+  whichever toon this window was showing — a toon that jumped in later, or came out earlier, was timed as if it had
+  done neither. Each toon now starts when it crosses into the pocket on its own account and stops when it comes back
+  out on its own, exactly like a separate fleet member would; a toon that never goes in is never started at all. SAVE
+  still commits the whole group together in one go, and the saved activity's span still runs from the first toon in
+  to the last one out.
 - **A fleet abyssal now times every pilot on their own way in and out.** A member's clock used to start the moment
   the fleet commander jumped and stop the moment he pressed STOP or left the pocket — even for a member still inside,
   who lost the rest of their time. Now each pilot's run starts when they themselves jump in and stops when they

@@ -20,6 +20,7 @@ public sealed class FleetRunLegs : ISingletonService, IDisposable
     private readonly Dictionary<string, Dictionary<int, FleetRunLeg>> _legs = new(StringComparer.Ordinal);
     private readonly IDisposable _startedSubscription;
     private readonly IDisposable _stoppedSubscription;
+    private readonly IDisposable _resumedSubscription;
     private readonly IDisposable _discardedSubscription;
 
     public FleetRunLegs(IEventBus eventBus)
@@ -28,6 +29,10 @@ public sealed class FleetRunLegs : ISingletonService, IDisposable
             _NoteStarted(integrationEvent.Data.GroupCode, integrationEvent.CharacterId, integrationEvent.Data.StartedAtUtc));
         _stoppedSubscription = eventBus.Subscribe<FleetRunPilotStoppedEvent>(integrationEvent =>
             _NoteStopped(integrationEvent.Data.GroupCode, integrationEvent.CharacterId, integrationEvent.Data.StoppedAtUtc));
+        // A resume (ET-250) is read exactly like a fresh leg's start — the same "in again" fact, so one pilot who
+        // stops and starts again is not left reading "out" on everybody else's FLEET line until the 20-minute cut-off.
+        _resumedSubscription = eventBus.Subscribe<FleetRunPilotResumedEvent>(integrationEvent =>
+            _NoteStarted(integrationEvent.Data.GroupCode, integrationEvent.CharacterId, integrationEvent.Data.StartedAtUtc));
         _discardedSubscription = eventBus.Subscribe<FleetRunDiscardedEvent>(integrationEvent =>
         {
             lock (_gate)
@@ -39,6 +44,7 @@ public sealed class FleetRunLegs : ISingletonService, IDisposable
     {
         _startedSubscription.Dispose();
         _stoppedSubscription.Dispose();
+        _resumedSubscription.Dispose();
         _discardedSubscription.Dispose();
     }
 
