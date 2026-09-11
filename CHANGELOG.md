@@ -13,6 +13,19 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **A fleet abyssal pilot who stops and starts their own run again is now shown as "in" again within seconds.**
+  Stopping and picking your own leg back up used to leave you reading "out" on everybody else's FLEET line until the
+  twenty-minute cut-off quietly corrected it. The resume is now announced the moment it happens, in its own message
+  so an older client or a server not yet updated simply ignores it rather than misreading it as something else. This
+  needs the server to be updated; until then a resumed leg still corrects itself once the twenty minutes are up, as
+  before.
+- **Several of your own toons flying one abyssal together now each keep their own clock.** Before, picking more than
+  one of your own characters at START (or adding one mid-run) started and stopped every one of them together with
+  whichever toon this window was showing — a toon that jumped in later, or came out earlier, was timed as if it had
+  done neither. Each toon now starts when it crosses into the pocket on its own account and stops when it comes back
+  out on its own, exactly like a separate fleet member would; a toon that never goes in is never started at all. SAVE
+  still commits the whole group together in one go, and the saved activity's span still runs from the first toon in
+  to the last one out.
 - **A fleet abyssal now times every pilot on their own way in and out.** A member's clock used to start the moment
   the fleet commander jumped and stop the moment he pressed STOP or left the pocket — even for a member still inside,
   who lost the rest of their time. Now each pilot's run starts when they themselves jump in and stops when they
@@ -45,6 +58,11 @@ taken from the matching `## vX.Y.Z` section below.
 - Mission runs now show their agent's level instead of abyssal weather and tier badges.
 - Mission runs now have their own MISSION section, in both the run window and the saved activity screen: the agent by name (a regular agent's mission, which states no agent at all, says so honestly), ISK, Loyalty Points, items and any reward line the app does not yet recognise. A bonus reward counts down while its time window is open, reads as expired once it has passed, and drops out of TOTAL ISK the moment it does — a bonus you actually earned before stopping the run stays counted even if the window sits open a while longer before you save it. A mission run can now also be marked blitzed, cherry-picked, cleared or full clear, the same as a site, and remembers your last choice for missions on their own.
 - The saved activity screen now shows a mission's agent by name instead of a bare id.
+- **An abyssal's saved activity screen no longer shows a MISSION section.** A pocket's own tier and weather were
+  being counted as a reward, so the screen picked up a MISSION section with two rows reading the raw stored value
+  ("ABYSSAL FILAMENT 3|Dark") — one per run of the group. LOCATION on an abyssal, and the ACTIVITY header beside
+  it, no longer read "not recorded" either: both now show the system the filament was entered from when it is
+  known ("entered from Dresi"), and the LOCATION row is left out entirely when it is not.
 - **Copying an important mission now starts a run.** The warning sentence EVE shows above an important mission's own header — "This is an important mission, which will have significant impact on your faction standings." — used to sit in front of the name and stop the run from starting at all. Its item reward is now also read correctly, even written as "1 x …" rather than "1 × …", and gets its item type looked up the same way any other item reward does. MISSION now shows when a run came from an important mission.
 
 ### Added

@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Material.Icons;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Imaging;
@@ -448,7 +449,14 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
 
     private void _ApplyHeader(ActivityDetailDto detail, RunTypeDefinition type)
     {
-        SiteText = detail.SiteName ?? "site not recorded";
+        // The same fallback ACTIVITY's own SiteText uses (ET-241, ET-248): this title bar is a second, independent
+        // reading of the same fact, and an abyssal read "site not recorded" up here while the section right below it
+        // already correctly read "Fierce Dark" — ET-241 updated ActivityDetailSectionViewModel but missed this copy.
+        SiteText = detail.SiteName
+            ?? (type.Space is RunSpace.AbyssalPocket
+                ? AbyssalFilamentName.From(detail.Parameters
+                    .FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.AbyssalFilament)?.TypedValue)
+                : "site not recorded");
         // Same catalogue the run window and the runs overview read (ET-226) — a mission never reads "not known
         // yet" here, and a site with no recorded scanner group reads "Site", never "Combat Site".
         KindText = type.Name;

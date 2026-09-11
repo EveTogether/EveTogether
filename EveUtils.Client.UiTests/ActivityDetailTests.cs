@@ -190,6 +190,49 @@ public sealed class ActivityDetailTests
         Assert.DoesNotContain(texts, text => text == "LOOT");
     }
 
+    /// <summary>
+    /// ET-248, rendered end to end: Jithran + Raymond's Fierce Dark, 2026-09-11 — an abyssal's detail screen showed a
+    /// MISSION section with two rows reading "ABYSSAL FILAMENT 3|Dark" (one per run of the group) and LOCATION read
+    /// "not recorded", also in the ACTIVITY header ("Abyssal · not recorded"). Both runs here carry
+    /// <see cref="RunParameterKey.AbyssalFilament"/>, reproducing why it showed twice. Counter-proof: no rendered
+    /// text is "MISSION", "ABYSSAL FILAMENT" or the raw "3|Dark", and LOCATION reads the entry system rather than
+    /// "not recorded" anywhere on screen.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AbyssalDetail_RendersNoMissionSection_AndNoRawFilamentValue_AndTheEntrySystemAsLocation()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        const string groupCode = "HF-Z6U3";
+        foreach (long characterId in (long[])[90000001, 90000002])
+        {
+            Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Abyssal,
+                StartedAtUtc, 0, null, 30004079, groupCode), cancellationToken);
+            await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(20),
+                StartedAtUtc.AddMinutes(21), [], [], [],
+                [new RunParameterInput { ParameterKey = RunParameterKey.AbyssalFilament, TypedValue = "3|Dark", ObservedAtUtc = StartedAtUtc }]),
+                cancellationToken);
+        }
+
+        List<string> texts = await _RenderAsync(instance, cancellationToken);
+
+        Assert.DoesNotContain(texts, text => text == "MISSION");
+        Assert.DoesNotContain(texts, text => text.Contains("ABYSSAL FILAMENT", StringComparison.Ordinal));
+        Assert.DoesNotContain(texts, text => text.Contains("3|Dark", StringComparison.Ordinal));
+        // Never "not recorded" for LOCATION, the header, or the panel's own title (ActivityDetailViewModel's own
+        // SiteText, bound to the title above KindText — a second, independent reading of the same fact ET-241
+        // already fixed once in ActivityDetailSectionViewModel, ET-248 measured it never fixed here). Matched as a
+        // whole line rather than a substring, since FLEET legitimately says participant names "are not recorded
+        // yet" elsewhere on this very screen and that sentence is not this bug.
+        Assert.DoesNotContain(texts, text => text is "not recorded" or "site not recorded");
+        Assert.DoesNotContain(texts, text => text.Contains("Abyssal · not recorded", StringComparison.Ordinal));
+        Assert.Contains(texts, text => text == "Fierce Dark");
+        // No FakeSdeAccessor wired into this render path, so the system falls back to its bare id — still "entered
+        // from …", never a raw stored value and never silence about where the pocket was entered from.
+        Assert.Contains(texts, text => text == "entered from system 30004079");
+    }
+
     /// <summary>AC-2: the detail screen shows the agent by name, not as "agent 3018841" — ET-235's own complaint
     /// about this screen. Counter-proof: read <c>AgentId</c> straight into <c>AgentText</c> without the SDE lookup
     /// and this goes red on the bare id.</summary>

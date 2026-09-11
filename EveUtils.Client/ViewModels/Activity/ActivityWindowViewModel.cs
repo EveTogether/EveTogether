@@ -86,10 +86,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private readonly IDisposable? _fleetRunAbyssalUpdatedSubscription;
     private readonly IDisposable? _fleetRunPreparedSubscription;
     private readonly IDisposable? _fleetPilotStoppedSubscription;
+    private readonly IDisposable? _fleetPilotResumedSubscription;
 
     // Every pilot's own leg of a run whose clock is per pilot, as each announced it (ET-243) — what the fleet's clock is
     // made of. App-wide, so this window knows who went in before it opened.
     private readonly FleetRunLegs? _fleetLegs;
+
+    // Own characters riding alongside the acting one (ET-210) in a run whose clock is per pilot, picked but not yet
+    // seen inside the pocket on their own account — a hauler who stays outside never leaves this list (ET-250).
+    private readonly List<(int Id, string Name)> _ownLegsPending = [];
+
+    // Whether each own character already on their own leg — the acting one aside, which _RefreshLocation already
+    // tracks through InsideAbyssal — was last seen inside the pocket, keyed by character id. Read by
+    // _RefreshOwnPilotLegs to tell a fresh crossing from one already accounted for.
+    private readonly Dictionary<int, bool> _ownLegWasInside = [];
 
     // This window put its run out to the fleet before anybody was in it (ET-246), so closing it unanswered calls it off.
     private bool _hasPreparedOffer;
@@ -151,6 +161,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             .Subscribe<FleetRunGroupPreparedEvent>(_OnFleetRunPrepared);
         _fleetPilotStoppedSubscription = services.GetService<IEventBus>()?
             .Subscribe<FleetRunPilotStoppedEvent>(_OnFleetPilotStopped);
+        _fleetPilotResumedSubscription = services.GetService<IEventBus>()?
+            .Subscribe<FleetRunPilotResumedEvent>(_OnFleetPilotResumed);
         _fleetLegs = services.GetService<FleetRunLegs>();
         RunLoot = services.GetService<CqrsDispatcher>() is { } dispatcher
             ? new RunLootViewModel(dispatcher, services.GetService<IAppraisalProvider>(), services.GetService<ISdeAccessor>())
@@ -472,9 +484,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         }
 
         int? solarSystemId = _ResolveSolarSystemId();
-        foreach (Character character in candidates.Where(candidate => picked.Contains(candidate.EsiCharacterId!.Value)))
-            await _SendAdditionalStartRunCommandAsync(
-                dispatcher, character.EsiCharacterId!.Value, character.Name, AnchorUtc ?? DateTime.UtcNow, solarSystemId);
+        IEnumerable<Character> chosen =
+            candidates.Where(candidate => picked.Contains(candidate.EsiCharacterId!.Value));
+        // Same per-pilot rule as the initial pick (ET-250): a toon added mid-run to a pocket still crosses on its
+        // own moment, not the instant it was added on this window.
+        if (RunType.ClockPerPilot)
+            _ownLegsPending.AddRange(chosen.Select(character => (character.EsiCharacterId!.Value, character.Name)));
+        else
+            foreach (Character character in chosen)
+                await _SendAdditionalStartRunCommandAsync(
+                    dispatcher, character.EsiCharacterId!.Value, character.Name, AnchorUtc ?? DateTime.UtcNow, solarSystemId);
 
         await _RefreshParticipantsAsync();
     }
@@ -1106,6 +1125,17 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         Avalonia.Threading.Dispatcher.UIThread.Post(() => _RefreshFleetClock(DateTime.UtcNow));
     }
 
+    /// <summary>One pilot of this run picked their own leg back up after their own STOP (ET-250). Nothing of this
+    /// window's own changes; the fleet's clock learns they are in again.</summary>
+    private void _OnFleetPilotResumed(FleetRunPilotResumedEvent integrationEvent)
+    {
+        if (GroupCode is not { } groupCode
+            || !string.Equals(groupCode, integrationEvent.Data.GroupCode, StringComparison.Ordinal))
+            return;
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => _RefreshFleetClock(DateTime.UtcNow));
+    }
+
     /// <summary>
     /// The commander threw the run away, and this is a member's window. It stays open and says so (ET-155): the
     /// member is the one this happened to rather than the one who did it, and a toast is gone in seconds while he may
@@ -1447,6 +1477,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public void Refresh(DateTime nowUtc)
     {
         _RefreshLocation(nowUtc);
+        _RefreshOwnPilotLegs(nowUtc);
         _RefreshClock(nowUtc);
         _RefreshArmed();
         _RefreshFleetClock(nowUtc);
@@ -1503,6 +1534,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             CorrectedStopUtc = null;
             RunState = ActivityRunState.Running;
             _OnRunWatched();
+            // A run whose clock is per pilot (ET-243) has no group-wide resume — only this pilot's own leg is picked
+            // back up, and only their own announcement says so (ET-250): the old fleet.run-group would also read as
+            // this pilot's fresh start to FleetRunGroupCodeCoordinator, and fleet.run-group.pilot-stopped is read the
+            // other way around, so a resume needed a type of its own.
+            if (RunType.ClockPerPilot && _runCharacterId is { } own)
+                _AnnouncePilotResumeToFleet(own, nowUtc);
             if (RunLoot is not null)
                 await RunLoot.RefreshAsync();
             Refresh(nowUtc);
@@ -1634,10 +1671,18 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // Every other character picked alongside this one (ET-210) gets its own row under the same GroupCode, filed
         // as though it started on its own — FleetRunGroupCodeCoordinator already treats N members starting on one
         // group code as ordinary, whether those members are on N machines or, as here, all local to this one.
+        //
+        // A pocket is a per-pilot space (ET-250): a picked toon has its own client and crosses in on its own moment,
+        // same as a hauler-toon that never goes in at all must never start (the ET-246 "never went in" rule, applied
+        // to this pilot's own toons). So for a run whose clock is per pilot nothing starts here — each one waits in
+        // _ownLegsPending for _RefreshOwnPilotLegs to see it cross on its own account.
         if (_additionalCharacters.Count > 0)
         {
-            foreach ((int Id, string Name) extra in _additionalCharacters)
-                await _SendAdditionalStartRunCommandAsync(dispatcher, extra.Id, extra.Name, startedAtUtc, solarSystemId);
+            if (RunType.ClockPerPilot)
+                _ownLegsPending.AddRange(_additionalCharacters);
+            else
+                foreach ((int Id, string Name) extra in _additionalCharacters)
+                    await _SendAdditionalStartRunCommandAsync(dispatcher, extra.Id, extra.Name, startedAtUtc, solarSystemId);
             _additionalCharacters = [];
         }
 
@@ -1766,6 +1811,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         using var scope = _services.CreateScope();
         var dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
         await dispatcher.Send(new SetRunStoppedCommand(runId, stoppedAtUtc));
+        // A pocket is a per-pilot space (ET-243, ET-250): every own toon riding along times its own leg off its own
+        // crossing (_RefreshOwnPilotLegs), so this pilot's own STOP or resume moves nothing but this pilot's own row.
+        if (RunType.ClockPerPilot)
+            return;
+
         // A shared GroupCode here is always this pilot's own other toons (ET-210), never a remote fleet member's —
         // their row lives in a database this client cannot reach — so the clock this window's pilot controls is the
         // group's, and stopping every participant alongside this window's own run is never somebody else's to touch.
@@ -1783,34 +1833,54 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// event is received back here too, where <see cref="StopRun"/>'s own guard makes the second one a no-op.
     ///
     /// In a run whose clock is per pilot there is no such thing (ET-243): every pilot's stop — the commander's too —
-    /// goes out as that pilot's own way out, which stops nobody and tells the shared clock who is still in. One per
-    /// character of this pilot's own the window stops, since their other toons stop with it (ET-210) — never for a
-    /// fleet mate's run that a sync may already have put in this store.
+    /// goes out as that pilot's own way out, which stops nobody and tells the shared clock who is still in. Only this
+    /// window's own pilot: every other own toon riding along stops on its own way out instead (ET-250,
+    /// <see cref="_RefreshOwnPilotLegs"/>), never in lockstep with this one — a hauler-toon still in the pocket must
+    /// not be read as "out" because the acting character's own STOP was pressed.
     /// </summary>
     private void _AnnounceStopToFleet(DateTime stoppedAtUtc)
+    {
+        if (RunType.ClockPerPilot)
+        {
+            if (_runCharacterId is { } own)
+                _AnnouncePilotStopToFleet(own, stoppedAtUtc);
+            return;
+        }
+
+        if (FleetId is not { } fleetId || GroupCode is not { } groupCode
+            || _services.GetService<IEventBus>() is not { } eventBus || !Authority.CanControl)
+            return;
+
+        _ = eventBus.PublishAsync(
+            new FleetRunStoppedEvent(new RunGroupStop(fleetId, Kind, groupCode, stoppedAtUtc)),
+            EventTarget.Both);
+    }
+
+    /// <summary>One own character's own way out of a run whose clock is per pilot (ET-243, ET-250) — this window's own
+    /// pilot from <see cref="_AnnounceStopToFleet"/>, or another own toon riding along from
+    /// <see cref="_RefreshOwnPilotLegs"/>. A no-op outside a real fleet: nothing announces to nobody, and the stored
+    /// row already moved regardless (<see cref="_SetStoredRunStoppedAsync"/>, <see cref="_StopOwnPilotLegAsync"/>).</summary>
+    private void _AnnouncePilotStopToFleet(int characterId, DateTime stoppedAtUtc)
     {
         if (FleetId is not { } fleetId || GroupCode is not { } groupCode
             || _services.GetService<IEventBus>() is not { } eventBus)
             return;
 
-        if (RunType.ClockPerPilot)
-        {
-            RunGroupStop leg = new(fleetId, Kind, groupCode, stoppedAtUtc);
-            HashSet<int> pilots = [.. Participants
-                .Select(participant => participant.CharacterId)
-                .Where(characterId => RunCharacters.Any(row => row.IsEsiLinked && row.CharacterId == characterId))];
-            if (_runCharacterId is { } own)
-                pilots.Add(own);
-            foreach (int pilot in pilots)
-                _ = eventBus.PublishAsync(new FleetRunPilotStoppedEvent(leg, pilot), EventTarget.Both);
-            return;
-        }
+        _ = eventBus.PublishAsync(
+            new FleetRunPilotStoppedEvent(new RunGroupStop(fleetId, Kind, groupCode, stoppedAtUtc), characterId),
+            EventTarget.Both);
+    }
 
-        if (!Authority.CanControl)
+    /// <summary>One own character's own leg picked back up (ET-250) — this window's own pilot from
+    /// <see cref="StartRunAsync"/>, or another own toon riding along from <see cref="_RefreshOwnPilotLegs"/>.</summary>
+    private void _AnnouncePilotResumeToFleet(int characterId, DateTime startedAtUtc)
+    {
+        if (FleetId is not { } fleetId || GroupCode is not { } groupCode
+            || _services.GetService<IEventBus>() is not { } eventBus)
             return;
 
         _ = eventBus.PublishAsync(
-            new FleetRunStoppedEvent(new RunGroupStop(fleetId, Kind, groupCode, stoppedAtUtc)),
+            new FleetRunPilotResumedEvent(new RunGroupResume(fleetId, Kind, groupCode, startedAtUtc), characterId),
             EventTarget.Both);
     }
 
@@ -2742,6 +2812,94 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         }
     }
 
+    /// <summary>
+    /// Every other own toon riding along in a run whose clock is per pilot (ET-210, ET-243) on its own way in and
+    /// out, exactly as <see cref="_StartOrStopOnAbyssalCrossing"/> already does for the acting character — a pocket
+    /// only ever shows a pilot their own crossing, so a toon picked alongside this window's own character has to be
+    /// read from its own gamelog, never assumed from this one's (ET-250).
+    ///
+    /// A toon still in <see cref="_ownLegsPending"/> has no row yet: it gets one, at its own anchor, the moment its
+    /// own snapshot shows it inside. One already running (a row in <see cref="Participants"/>) is watched for its own
+    /// way out, and for a way back in if it had already left — the same pause-and-resume STOP already is for the
+    /// acting character (Raymond, 2026-09-02), just on this toon's own account instead of a button press.
+    /// </summary>
+    private void _RefreshOwnPilotLegs(DateTime nowUtc)
+    {
+        if (!RunType.ClockPerPilot || _gamelog is null)
+            return;
+
+        foreach ((int Id, string Name) pending in _ownLegsPending.ToList())
+        {
+            CharacterMetricsSnapshot snapshot = _gamelog.Snapshot(pending.Name);
+            if (snapshot.AbyssalAnchor is not { } enteredAtUtc)
+                continue;
+
+            _ownLegsPending.Remove(pending);
+            _ownLegWasInside[pending.Id] = true;
+            _ = _StartOwnPilotLegAsync(pending.Id, pending.Name, enteredAtUtc);
+        }
+
+        foreach (RunParticipantViewModel sibling in Participants.Where(participant => participant.RunId != RunId))
+        {
+            CharacterMetricsSnapshot snapshot = _gamelog.Snapshot(sibling.CharacterName);
+            bool wasInside = _ownLegWasInside.GetValueOrDefault(sibling.CharacterId, true);
+            bool isInside = snapshot.AbyssalAnchor is not null;
+            if (wasInside && !isInside && snapshot.Location is not null && snapshot.LocationUnavailableReason is null)
+            {
+                _ownLegWasInside[sibling.CharacterId] = false;
+                _ = _StopOwnPilotLegAsync(sibling.RunId, sibling.CharacterId, nowUtc);
+            }
+            else if (!wasInside && isInside)
+            {
+                _ownLegWasInside[sibling.CharacterId] = true;
+                _ = _ResumeOwnPilotLegAsync(sibling.RunId, sibling.CharacterId, nowUtc);
+            }
+        }
+    }
+
+    /// <summary>One own toon's own row, made at its own anchor rather than this window's — <see cref="_ResolveFitAsync"/>
+    /// and the rest of <see cref="_SendAdditionalStartRunCommandAsync"/> already read per character.</summary>
+    private async Task _StartOwnPilotLegAsync(int characterId, string characterName, DateTime enteredAtUtc)
+    {
+        if (_services.GetService<CqrsDispatcher>() is null)
+            return;
+
+        using var scope = _services.CreateScope();
+        CqrsDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
+        await _SendAdditionalStartRunCommandAsync(
+            dispatcher, characterId, characterName, enteredAtUtc, _ResolveSolarSystemId());
+        await _RefreshParticipantsAsync();
+    }
+
+    /// <summary>One own toon's own way out — its row alone, never this window's or another sibling's
+    /// (<see cref="_SetStoredRunStoppedAsync"/> already leaves every other own toon's row untouched for this same
+    /// reason). Announced under the pilot's own id, same as this window's own STOP (ET-250).</summary>
+    private async Task _StopOwnPilotLegAsync(Guid runId, int characterId, DateTime stoppedAtUtc)
+    {
+        if (_services.GetService<CqrsDispatcher>() is not null)
+        {
+            using var scope = _services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+                .Send(new SetRunStoppedCommand(runId, stoppedAtUtc));
+        }
+
+        _AnnouncePilotStopToFleet(characterId, stoppedAtUtc);
+    }
+
+    /// <summary>One own toon's own way back in after its own way out, before this pilot's group has saved or
+    /// discarded it — the pause SAVE and DISCARD still answer for the whole group (ET-210), only STOP is per toon.</summary>
+    private async Task _ResumeOwnPilotLegAsync(Guid runId, int characterId, DateTime resumedAtUtc)
+    {
+        if (_services.GetService<CqrsDispatcher>() is not null)
+        {
+            using var scope = _services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+                .Send(new SetRunStoppedCommand(runId, null));
+        }
+
+        _AnnouncePilotResumeToFleet(characterId, resumedAtUtc);
+    }
+
     public void Dispose()
     {
         if (_gamelog is not null)
@@ -2758,6 +2916,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _fleetRunAbyssalUpdatedSubscription?.Dispose();
         _fleetRunPreparedSubscription?.Dispose();
         _fleetPilotStoppedSubscription?.Dispose();
+        _fleetPilotResumedSubscription?.Dispose();
         _timer?.Stop();
         _timer = null;
     }
@@ -2777,6 +2936,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         foreach (RunWindowSection section in _AllSections())
             section.OnRunClosed();
+        _ownLegsPending.Clear();
+        _ownLegWasInside.Clear();
         _RefreshSummaries();
     }
 
