@@ -6,14 +6,12 @@ using EveUtils.Shared.Modules.Sde;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
 
-/// <summary>ACTIVITY on the detail screen: which site, given by which agent, where, and on which fit.</summary>
+/// <summary>ACTIVITY on the detail screen: which site, where, and on which fit. The agent and level a mission was
+/// handed out by live in MISSION instead (ET-237) — the section that also shows what it handed out.</summary>
 public sealed partial class ActivityDetailSectionViewModel(ISdeAccessor? sde)
     : RunDetailSection(RunSectionId.Activity, "ACTIVITY")
 {
     [ObservableProperty] private string _siteText = string.Empty;
-    [ObservableProperty] private bool _isAgentShown;
-    [ObservableProperty] private string _agentText = string.Empty;
-    [ObservableProperty] private string _missionLevelText = string.Empty;
     [ObservableProperty] private string _locationText = string.Empty;
     [ObservableProperty] private string _signatureText = string.Empty;
     [ObservableProperty] private bool _isSignatureShown;
@@ -28,18 +26,12 @@ public sealed partial class ActivityDetailSectionViewModel(ISdeAccessor? sde)
         ActivityDetailDto detail = input.Detail;
         ActivityRunDetailDto? source = detail.Runs.FirstOrDefault();
         SiteText = detail.SiteName ?? "site not recorded";
-        // Only a type handed out by an agent has one, so the row is not there for anything else — a line that could
-        // only ever read "not applicable" teaches the reader about our catalogue, not about their run.
-        IsAgentShown = input.RunType.HasAgent;
-        ActivityRunDetailDto? withAgent = detail.Runs.FirstOrDefault(run => run.AgentId is not null);
-        AgentText = withAgent?.AgentId is { } agentId ? $"agent {agentId}" : "not recorded";
-        MissionLevelText = withAgent?.MissionLevel is { } level ? $"Level {level}" : "not recorded";
         LocationText = _LocationText(detail.SolarSystemId);
         SignatureText = source?.Signature ?? string.Empty;
         IsSignatureShown = !string.IsNullOrWhiteSpace(source?.Signature);
         FitText = source?.FitNameSnapshot ?? "not recognised";
 
-        // Mission counters, and only those: the reward forms belong under REWARDS, the escalation under its own
+        // Mission counters, and only those: the reward forms belong under MISSION, the escalation under its own
         // section. They stay empty until somebody types them — nothing plausible is filled in for them.
         string[] objectives = [.. detail.Parameters
             .Where(parameter => parameter.ParameterKey is RunParameterKey.Smugglers or RunParameterKey.Civilians)
@@ -47,9 +39,7 @@ public sealed partial class ActivityDetailSectionViewModel(ISdeAccessor? sde)
         HasObjectives = objectives.Length > 0;
         ObjectivesText = HasObjectives ? string.Join(" · ", objectives) : null;
 
-        HeaderSummary = input.RunType.HasAgent
-            ? $"{AgentText} · {MissionLevelText}"
-            : $"{input.RunType.Name} · {LocationText}";
+        HeaderSummary = $"{input.RunType.Name} · {LocationText}";
     }
 
     /// <summary>The system a run was on, named through the local SDE (ET-213) — never ESI, and never the bare id

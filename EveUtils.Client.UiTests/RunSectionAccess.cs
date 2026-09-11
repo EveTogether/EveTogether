@@ -12,6 +12,7 @@ namespace EveUtils.Client.UiTests;
 internal static class RunSectionAccess
 {
     public static ActivityWindowSectionViewModel Activity(this ActivityWindowViewModel window) => window._Section<ActivityWindowSectionViewModel>();
+    public static MissionWindowSectionViewModel Mission(this ActivityWindowViewModel window) => window._Section<MissionWindowSectionViewModel>();
     public static EnemiesWindowSectionViewModel Enemies(this ActivityWindowViewModel window) => window._Section<EnemiesWindowSectionViewModel>();
     public static FitWindowSectionViewModel Fit(this ActivityWindowViewModel window) => window._Section<FitWindowSectionViewModel>();
     public static FleetWindowSectionViewModel Fleet(this ActivityWindowViewModel window) => window._Section<FleetWindowSectionViewModel>();
@@ -19,7 +20,7 @@ internal static class RunSectionAccess
     public static LootWindowSectionViewModel Loot(this ActivityWindowViewModel window) => window._Section<LootWindowSectionViewModel>();
 
     public static ActivityDetailSectionViewModel Activity(this ActivityDetailViewModel detail) => detail._Section<ActivityDetailSectionViewModel>();
-    public static RewardsDetailSectionViewModel Rewards(this ActivityDetailViewModel detail) => detail._Section<RewardsDetailSectionViewModel>();
+    public static MissionDetailSectionViewModel Mission(this ActivityDetailViewModel detail) => detail._Section<MissionDetailSectionViewModel>();
     public static EnemiesDetailSectionViewModel Enemies(this ActivityDetailViewModel detail) => detail._Section<EnemiesDetailSectionViewModel>();
     public static FleetDetailSectionViewModel Fleet(this ActivityDetailViewModel detail) => detail._Section<FleetDetailSectionViewModel>();
     public static BountyDetailSectionViewModel Bounty(this ActivityDetailViewModel detail) => detail._Section<BountyDetailSectionViewModel>();

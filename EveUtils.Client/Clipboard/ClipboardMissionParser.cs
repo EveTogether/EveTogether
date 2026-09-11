@@ -116,6 +116,12 @@ public static partial class ClipboardMissionParser
             && TryParseWholeRewardAmount(trimmed[..^" Loyalty Points".Length].TrimEnd(), out var loyaltyPoints))
             return new ClipboardMissionReward(RunParameterKey.LoyaltyPoints, loyaltyPoints, null, null, rawLine);
 
+        // Same reward-line shape as Loyalty Points above — inferred from it, not measured against a capture of its
+        // own (ET-237): no real "copy all" with an Evermarks line has reached this project yet.
+        if (trimmed.EndsWith(" Evermarks", StringComparison.Ordinal)
+            && TryParseWholeRewardAmount(trimmed[..^" Evermarks".Length].TrimEnd(), out var evermarks))
+            return new ClipboardMissionReward(RunParameterKey.Evermarks, evermarks, null, null, rawLine);
+
         var itemMatch = ItemRewardPattern().Match(trimmed);
         if (itemMatch.Success && ClipboardInventoryParser.TryParseWholeNumber(itemMatch.Groups["qty"].Value, out var quantity))
             return new ClipboardMissionReward(RunParameterKey.Item, null, itemMatch.Groups["name"].Value.Trim(), quantity, rawLine);

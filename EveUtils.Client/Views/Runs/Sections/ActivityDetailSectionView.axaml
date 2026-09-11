@@ -8,15 +8,6 @@
             <TextBlock Text="SITE"/>
             <TextBlock Grid.Column="1" Text="{Binding SiteText}"/>
         </Grid>
-        <!-- Only a type handed out by an agent has one, so nothing else carries these two rows. -->
-        <Grid x:Name="AgentRow" Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsAgentShown}">
-            <TextBlock Text="AGENT"/>
-            <TextBlock Grid.Column="1" Text="{Binding AgentText}"/>
-        </Grid>
-        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsAgentShown}">
-            <TextBlock Text="LEVEL"/>
-            <TextBlock Grid.Column="1" Text="{Binding MissionLevelText}"/>
-        </Grid>
         <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsSignatureShown}">
             <TextBlock Text="SIGNATURE"/>
             <TextBlock Grid.Column="1" Text="{Binding SignatureText}"/>

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde.Dtos;
 
@@ -27,6 +28,11 @@ public interface IRunWindowContext : INotifyPropertyChanged
     RunTypeDefinition RunType { get; }
 
     ActivityRunState RunState { get; }
+
+    /// <summary>The instant the run stopped, times-corrected if it was — null while it is still running. A section
+    /// that judges something against "when the run ended" (a mission's bonus window) freezes on this the moment the
+    /// clock stops, rather than keep judging it against wall-clock time while the window sits open before SAVE.</summary>
+    DateTime? EffectiveStopUtc { get; }
 
     /// <summary>The run on screen — whichever of the group's runs the character column shows.</summary>
     Guid? RunId { get; }
@@ -56,6 +62,19 @@ public interface IRunWindowContext : INotifyPropertyChanged
     string? LocationDisplay { get; }
 
     bool IsInsideAbyssal { get; }
+
+    // ── The agent (ET-172 sub 4, ET-237) ──────────────────────────────────────────────────────────
+
+    /// <summary>Null for every kind but Mission, and null even for a mission whose capture had no "Report to" line —
+    /// a regular agent's mission states no agent at all, which the MISSION section shows honestly rather than
+    /// guessing one.</summary>
+    int? MissionAgentId { get; }
+
+    int? MissionLevel { get; }
+
+    /// <summary>The reward lines a mission's clipboard capture already carried at accept time — never re-read from
+    /// the store, since nothing about a mission's reward changes after it was accepted.</summary>
+    IReadOnlyList<RunParameterInput> PendingParameters { get; }
 
     // ── The pocket ─────────────────────────────────────────────────────────────────────────────────
     // Held by the window because its header shows them; set by the section that asks for them.

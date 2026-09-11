@@ -269,6 +269,25 @@ public sealed class ClipboardCaptureParserTests
         Assert.Equal(2700, capture!.BonusWindowSeconds);
     }
 
+    // ET-237: no real "copy all" with an Evermarks line has reached this project (unlike the two captures above,
+    // which are measured). Inferred from the Loyalty Points line's own shape, since both are the same reward-line
+    // generator with a different suffix — synthetic, and named as such, the same way the minutes-only bonus window
+    // above is.
+    [Fact]
+    public void ParseMission_EvermarksReward_ReadsTheSameShapeAsLoyaltyPoints()
+    {
+        const string text =
+            "Aralin Jick Objectives\nThe following objectives must be completed to finish the mission:\n\n" +
+            "Report to Aralin Jick\n\nRewards\nThe following rewards will be yours if you complete this mission:\n" +
+            " \t1.000.000 ISK\n \t250 Evermarks";
+
+        var capture = ClipboardMissionParser.Parse(text);
+
+        Assert.NotNull(capture);
+        Assert.Contains(capture!.Rewards, reward =>
+            reward.ParameterKey == RunParameterKey.Evermarks && reward.Amount == 250m);
+    }
+
     [Fact]
     public void ParseMission_EdgeCases_RefuseRatherThanGuess()
     {
