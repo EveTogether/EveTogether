@@ -76,6 +76,29 @@ public class ActivityWindowWiringTests
     }
 
     /// <summary>
+    /// ET-226: the signature group known at copy time (ET-178's own group column) now survives onto the <c>Run</c>
+    /// row, where before this ticket it was read for the window's own TYPE text and then discarded — <c>Run</c> had
+    /// no column for it at all. Red against the pre-fix code: the command this test sends had no
+    /// <c>SignatureGroupSnapshot</c> parameter, and <c>RunningRunDto</c> no matching property, so a Data Site run
+    /// had nothing here to assert on.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Start_RecordsTheCopiedSignatureGroupOnTheRun()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        model.SignatureGroup = "Data Site";
+        model.SignatureId = "AAA-001";
+        model.SignatureName = "Local Sansha Production Installation";
+
+        await model.StartRunCommand.ExecuteAsync(null);
+
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Result<RunningRunDto> running = await dispatcher.Query(new GetRunningRunQuery());
+        Assert.Equal("Data Site", running.Value!.SignatureGroupSnapshot);
+    }
+
+    /// <summary>
     /// A copy taken while the window stands open reaches the section that shows it. Raymond, 2026-09-02: the toast
     /// said "Loot copied" and the LOOT section under it went on reading "no loot captured" — the capture really was
     /// filed against the run, and the window simply never looked again. Stored through the same command the

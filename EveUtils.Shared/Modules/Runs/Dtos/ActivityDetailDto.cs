@@ -39,6 +39,9 @@ public sealed record ActivityDetailDto(
     string? GroupCode,
     ActivityKind ActivityKind,
     string? SiteName,
+    // The scanner's own group text for this site (ET-226) — the source RunTypeResolver turns into the TYPE this
+    // screen, the run window and the runs overview all show the same way.
+    string? SignatureGroupSnapshot,
     int? SolarSystemId,
     DateTime StartedAtUtc,
     DateTime? StoppedAtUtc,

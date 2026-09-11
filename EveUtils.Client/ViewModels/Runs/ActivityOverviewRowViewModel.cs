@@ -5,7 +5,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Material.Icons;
 using EveUtils.Client.Formatting;
+using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 
@@ -46,7 +48,9 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         Duration = TimeSpan.FromSeconds(row.DurationSeconds);
         TimeText = StartedAtLocal.ToString("HH:mm");
         SiteText = string.IsNullOrWhiteSpace(row.SiteName) ? "Unnamed site" : row.SiteName;
-        KindText = KindLabel(row.ActivityKind);
+        RunTypeDefinition type = RunTypeCatalogue.For(RunTypeResolver.Resolve(row.ActivityKind, row.SignatureGroupSnapshot));
+        KindText = type.Name;
+        TypeIcon = type.Icon;
         DurationText = Duration.ToString(@"hh\:mm\:ss");
         // "Net" is what the activity brought in, which on a combat site is mostly bounty: leaving it out read a
         // 1.26M ISK evening as its 6.8k of salvage (acceptatie 2026-09-04). Null only when neither half exists —
@@ -87,6 +91,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     public string TimeText { get; }
     public string SiteText { get; }
     public string KindText { get; }
+    public MaterialIconKind TypeIcon { get; }
     public string DurationText { get; }
     public string CrewText { get; }
     public string EnemiesText { get; }
@@ -193,13 +198,9 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         ServerSyncStates = Array.Empty<ActivityServerSyncDto>()
     };
 
-    // A kind added later gets its own name rather than an exception: this row is a list entry, and the whole screen
-    // going down over one unknown value is the failure mode AGENTS.md §2 is about.
-    public static string KindLabel(ActivityKind kind) => kind switch
-    {
-        ActivityKind.Abyssal => "ABYSSAL",
-        ActivityKind.Site => "SITE",
-        ActivityKind.Mission => "MISSION",
-        _ => kind.ToString().ToUpperInvariant()
-    };
+    /// <summary>TYPE, from the same catalogue every other run list reads (ET-226) — "Data Site", "Mission run", …,
+    /// never a bare kind name. Shared with <see cref="UnfinishedRunViewModel"/>, the only other reader of a run's
+    /// type outside this row itself.</summary>
+    public static string KindLabel(ActivityKind kind, string? signatureGroupSnapshot) =>
+        RunTypeCatalogue.For(RunTypeResolver.Resolve(kind, signatureGroupSnapshot)).Name;
 }

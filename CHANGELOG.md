@@ -14,6 +14,11 @@ taken from the matching `## vX.Y.Z` section below.
 ## [Unreleased]
 
 ### Added
+- **A run now shows what it actually was.** A Data Site, a Relic Site, a Gas Site, an Ore Site or a Wormhole used
+  to be saved and shown as "Combat Site" regardless — now each reads under its own name, with its own icon, the
+  same way in the run window, the saved activity screen and the runs overview. A mission run no longer reads
+  "not known yet" either; it now says "Mission run" from the moment you start it. A run started by hand, or an
+  older run saved before this, honestly reads "Site" rather than guessing what kind it was.
 - The **UNFINISHED** band on the runs screen now shows each stopped-but-not-saved run's own **TOTAL ISK** so
   far, right beside its duration — bounty, priced loot and ISK-shaped rewards added up the same way a saved
   activity's or the run window's own TOTAL ISK is, so you can tell what you'd be keeping or throwing away

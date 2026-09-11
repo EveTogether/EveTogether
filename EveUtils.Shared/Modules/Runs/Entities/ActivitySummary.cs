@@ -10,6 +10,11 @@ public sealed class ActivitySummary
     public ActivityKind ActivityKind { get; set; }
     public int SiteTypeId { get; set; }
     public string? SiteName { get; set; }
+
+    /// <summary>The representative run's own <see cref="Run.SignatureGroupSnapshot"/> (ET-226) — carried here so the
+    /// runs overview can resolve a TYPE for this row without reading every run behind it.</summary>
+    public string? SignatureGroupSnapshot { get; set; }
+
     public int? SolarSystemId { get; set; }
     public DateTime StartedAtUtc { get; set; }
     public DateTime? StoppedAtUtc { get; set; }

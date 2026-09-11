@@ -439,8 +439,10 @@ public sealed class ClipboardSignatureOfferTests
         env.Copy(MeasuredHomefrontLine);
 
         var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
-        // TYPE stays the scan window's own words: the SDE carries no scanner-type mapping to enrich it with.
-        Assert.Equal("Homefront Operation Site - Combat Site", opened.SignatureTypeText);
+        // TYPE reads "Site", not the raw scanner text: "Homefront Operation Site - Combat Site" matches none of
+        // the six recognised groups, and ET-226 catalogues a homefront through its archetype (ET-228), never by
+        // pattern-matching this composite group string.
+        Assert.Equal("Site", opened.SignatureTypeText);
         // One description, and the toast that opened this window used the same one.
         Assert.Equal("Suspicious Signal: Secure the Intel — Homefront Operations · Caldari State · DED 4 · ship-restricted",
             opened.SignatureSiteText);

@@ -47,6 +47,7 @@ internal sealed class StartRunCommandHandler(IDbContextFactory<ClientDbContext> 
             FitContentHash = command.FitContentHash,
             FitNameSnapshot = command.FitNameSnapshot,
             CharacterNameSnapshot = command.CharacterNameSnapshot,
+            SignatureGroupSnapshot = command.SignatureGroupSnapshot,
             Origin = command.Origin,
             SyncState = RunSyncState.Local,
             Revision = 1

@@ -841,6 +841,10 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
+                    b.Property<string>("SignatureGroupSnapshot")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("SiteName")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");

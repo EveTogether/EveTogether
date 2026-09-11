@@ -69,6 +69,16 @@ public sealed class Run
     /// existed, and on a run from a fleetmate whose own client had not yet learned it either; both fall back to
     /// whatever the reader can still resolve live.</summary>
     public string? CharacterNameSnapshot { get; set; }
+
+    /// <summary>The scanner's own group text for this site — "Combat Site", "Data Site", … — captured once when the
+    /// run started, never re-looked-up (ET-226, the same snapshot reasoning as <see cref="FitNameSnapshot"/> and
+    /// <see cref="CharacterNameSnapshot"/>). This is a source, not the type itself:
+    /// <see cref="EveUtils.Shared.Modules.Runs.RunTypeResolver"/> turns it into a <see cref="Enums.RunTypeId"/>
+    /// together with <see cref="ActivityKind"/>, so a mission or an
+    /// abyssal never needs this column at all. Null on a manual start, a run saved before this column existed, or
+    /// one the scanner never named a group for.</summary>
+    public string? SignatureGroupSnapshot { get; set; }
+
     public RunSyncState SyncState { get; set; }
 
     /// <summary>The server <see cref="SyncState"/> and <see cref="LastPushedAtUtc"/> are about, or null while the run

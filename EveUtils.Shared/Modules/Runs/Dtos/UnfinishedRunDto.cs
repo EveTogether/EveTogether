@@ -19,6 +19,9 @@ public sealed record UnfinishedRunDto(
     long CharacterId,
     ActivityKind ActivityKind,
     string? SiteName,
+    // The scanner's own group text for this site (ET-226) — resolved into the TYPE this row shows the same way
+    // every other run-list row does.
+    string? SignatureGroupSnapshot,
     DateTime StartedAtUtc,
     DateTime? StoppedAtUtc,
     decimal TotalIsk,

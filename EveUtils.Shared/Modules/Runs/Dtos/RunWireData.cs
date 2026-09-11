@@ -43,6 +43,10 @@ public sealed class RunWireData
     /// <summary>Travels for the same reason as <see cref="FitNameSnapshot"/> (ET-212): a fleetmate's run must still
     /// name its pilot after a sync even if that pilot is not logged in anywhere the receiving client can ask.</summary>
     public string? CharacterNameSnapshot { get; init; }
+
+    /// <summary>Travels for the same reason as <see cref="CharacterNameSnapshot"/> (ET-226): the type a fleetmate's
+    /// run resolves to must survive a sync too.</summary>
+    public string? SignatureGroupSnapshot { get; init; }
     public DateTime? LastPushedAtUtc { get; init; }
     public required int Revision { get; init; }
     public required IReadOnlyList<RunLootCaptureWireData> LootCaptures { get; init; }
@@ -78,6 +82,7 @@ public sealed class RunWireData
         FitContentHash = run.FitContentHash,
         FitNameSnapshot = run.FitNameSnapshot,
         CharacterNameSnapshot = run.CharacterNameSnapshot,
+        SignatureGroupSnapshot = run.SignatureGroupSnapshot,
         LastPushedAtUtc = run.LastPushedAtUtc,
         Revision = run.Revision,
         LootCaptures = run.LootCaptures.Select(capture => new RunLootCaptureWireData
@@ -147,6 +152,7 @@ public sealed class RunWireData
             FitContentHash = FitContentHash,
             FitNameSnapshot = FitNameSnapshot,
             CharacterNameSnapshot = CharacterNameSnapshot,
+            SignatureGroupSnapshot = SignatureGroupSnapshot,
             LastPushedAtUtc = LastPushedAtUtc,
             Revision = Revision
         };

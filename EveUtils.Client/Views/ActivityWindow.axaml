@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:va="using:EveUtils.Client.ViewModels.Activity"
         xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="560" d:DesignHeight="560"
@@ -547,7 +548,10 @@
                         <StackPanel IsVisible="{Binding !IsAbyssal}">
                             <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasSignature}">
                                 <TextBlock Text="TYPE"/>
-                                <TextBlock Grid.Column="1" Text="{Binding SignatureTypeText}"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                    <mi:MaterialIcon Kind="{Binding TypeIcon}" Classes="icon-sm"/>
+                                    <TextBlock Text="{Binding SignatureTypeText}"/>
+                                </StackPanel>
                             </Grid>
                             <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasSignature}">
                                 <TextBlock Text="SITE"/>

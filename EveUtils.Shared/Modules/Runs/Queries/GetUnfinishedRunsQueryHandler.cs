@@ -50,8 +50,8 @@ internal sealed class GetUnfinishedRunsQueryHandler(
         {
             (decimal total, bool unknown) = _TotalIsk(run, prices);
             return new UnfinishedRunDto(
-                run.Id, run.CharacterId, run.ActivityKind, run.SiteName, run.StartedAtUtc, run.StoppedAtUtc,
-                total, unknown);
+                run.Id, run.CharacterId, run.ActivityKind, run.SiteName, run.SignatureGroupSnapshot,
+                run.StartedAtUtc, run.StoppedAtUtc, total, unknown);
         })];
         return Result<IReadOnlyList<UnfinishedRunDto>>.Success(dtos);
     }

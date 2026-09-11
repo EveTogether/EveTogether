@@ -802,6 +802,10 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SignatureGroupSnapshot")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SiteName")
                         .HasMaxLength(255)
                         .HasColumnType("TEXT");

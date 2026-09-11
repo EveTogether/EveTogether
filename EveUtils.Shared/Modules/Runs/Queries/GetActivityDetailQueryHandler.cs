@@ -49,7 +49,8 @@ internal sealed class GetActivityDetailQueryHandler(IDbContextFactory<ClientDbCo
             .AsNoTracking().Where(parameter => runIds.Contains(parameter.RunId)).ToListAsync(cancellationToken);
 
         return Result<ActivityDetailDto>.Success(new ActivityDetailDto(
-            summary.Id, summary.GroupCode, summary.ActivityKind, summary.SiteName, summary.SolarSystemId,
+            summary.Id, summary.GroupCode, summary.ActivityKind, summary.SiteName, summary.SignatureGroupSnapshot,
+            summary.SolarSystemId,
             summary.StartedAtUtc, summary.StoppedAtUtc, summary.DurationSeconds,
             summary.LootIskGained, summary.LootIskLost, summary.LootIskNet, summary.BountyIsk, summary.ExpectedPayoutIsk,
             summary.ParticipantCount, summary.PayoutEligibleCount,
