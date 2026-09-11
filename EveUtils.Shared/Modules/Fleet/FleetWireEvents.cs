@@ -67,6 +67,14 @@ public sealed class FleetWireEvents : IWireEventCatalog
             return new FleetRunPilotStoppedEvent(payload, characterId);
         });
 
+        // One pilot's own leg started again after their own STOP (ET-250) — stops nobody and starts nobody else.
+        registry.Register("fleet.run-group.pilot-resumed", (payloadJson, characterId) =>
+        {
+            var payload = JsonSerializer.Deserialize<RunGroupResume>(payloadJson)
+                          ?? throw new InvalidOperationException("Invalid fleet.run-group.pilot-resumed payload.");
+            return new FleetRunPilotResumedEvent(payload, characterId);
+        });
+
         // The commander changed the pocket's tier or weather mid-run (ET-241); a member already on the group code
         // adopts it the same way it adopted the original announcement.
         registry.Register("fleet.run-group.abyssal-updated", (payloadJson, characterId) =>

@@ -1,4 +1,6 @@
 using Avalonia.Headless.XUnit;
+using EveUtils.Client.Esi;
+using EveUtils.Client.Gamelog;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
@@ -25,8 +27,12 @@ public sealed class ManualRunStartTests
     private static readonly DateTime StartedAtUtc = new(2026, 9, 4, 12, 0, 0, DateTimeKind.Utc);
     private static readonly SdeSite Site = new(4321, "Sansha's Nest", null, null, null, null, null, null, false, []);
 
-    private static TestClientInstance CreateInstance() => TestClientInstance.Create(services =>
-        services.AddSingleton<ISdeAccessor>(new FakeSdeAccessor().AddSite(Site)));
+    private static TestClientInstance CreateInstance(Action<IServiceCollection>? configure = null) =>
+        TestClientInstance.Create(services =>
+        {
+            services.AddSingleton<ISdeAccessor>(new FakeSdeAccessor().AddSite(Site));
+            configure?.Invoke(services);
+        });
 
     private static ManualRunStartViewModel CreateViewModel(TestClientInstance instance,
         RecordingDialogService? dialogs = null, long characterId = 90000002) =>
@@ -305,10 +311,19 @@ public sealed class ManualRunStartTests
     // The abyssal path is ET-221's own named pitfall: a run standing by for two characters has to reach both once it
     // actually fires, through the same UseAdditionalCharacters/_StoreRunAsync mechanism ActivityWindowViewModel
     // already uses for a fleet-run offer accepted with several clients up — not a silent "only the first character".
+    //
+    // A pocket is a per-pilot space (ET-250), so "both" no longer means "at once": the second character has its own
+    // client and its own crossing, and gets no row until its own gamelog says it is in — a hauler-toon that stayed
+    // outside must never start, the same rule ET-246 already applies to a fleet member who never went in.
     [AvaloniaFact]
-    public async Task AnAbyssal_WithASecondCharacterPicked_StartsARunForBothOnceItFires()
+    public async Task AnAbyssal_WithASecondCharacterPicked_StartsTheSecondOnItsOwnCrossing()
     {
-        using var instance = CreateInstance();
+        const int Pilot = 90000002;
+        const int Alt = 90000003;
+        const int Aphend = 30002718;       // an ordinary high-sec system
+        const int AbyssalRoom = 32000042;  // inside ADR01's range
+        var watch = new PerCharacterLocationWatch();
+        using var instance = CreateInstance(services => services.AddSingleton<IEsiLocationMonitor>(watch));
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         var dialogs = new RecordingDialogService
         {
@@ -320,7 +335,7 @@ public sealed class ManualRunStartTests
             instance.Services.GetRequiredService<ISdeAccessor>(),
             dialogs,
             kind => new ActivityWindowViewModel(kind, instance.Services),
-            [new Character("Manual Pilot", 90000002), new Character("Manual Alt", 90000003)]);
+            [new Character("Manual Pilot", Pilot), new Character("Manual Alt", Alt)]);
         vm.SelectedActivityKind = ActivityKind.Abyssal;
 
         await vm.PickCharactersCommand.ExecuteAsync(null);
@@ -333,14 +348,58 @@ public sealed class ManualRunStartTests
             Assert.Empty(await before.Set<Run>().ToListAsync(cancellationToken));
 
         // START or the location watch fires the abyssal later — simulated here by the window's own command, the
-        // same one production code runs.
+        // same one production code runs. Only the acting pilot's own row exists so far: the alt has not crossed.
         await opened.StartRunCommand.ExecuteAsync(null);
 
-        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
-            .CreateDbContextAsync(cancellationToken);
-        List<Run> runs = await db.Set<Run>().ToListAsync(cancellationToken);
+        List<Run> runs;
+        await using (ClientDbContext afterPilot = await instance.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken))
+            runs = await afterPilot.Set<Run>().ToListAsync(cancellationToken);
+        Assert.Single(runs);
+
+        // The alt's own client sees it cross, some time after the pilot's own start.
+        var gamelog = instance.Services.GetRequiredService<GamelogClientService>();
+        gamelog.MapCharacter(Alt, "Manual Alt");
+        DateTime seenOutside = DateTime.UtcNow.AddSeconds(-10);
+        watch.Report(Alt, Aphend, seenOutside);
+        watch.Report(Alt, AbyssalRoom, seenOutside.AddSeconds(6));
+        opened.Refresh(DateTime.UtcNow);
+
+        IDbContextFactory<ClientDbContext> factory =
+            instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>();
+        for (var attempt = 0; attempt < 40 && runs.Count < 2; attempt++)
+        {
+            await Task.Delay(25);
+            await using ClientDbContext db = await factory.CreateDbContextAsync(cancellationToken);
+            runs = await db.Set<Run>().ToListAsync(cancellationToken);
+        }
+
         Assert.Equal(2, runs.Count);
         string? groupCode = Assert.Single(runs.Select(run => run.GroupCode).Distinct());
         Assert.NotNull(groupCode);
+        Run altRun = Assert.Single(runs, run => run.CharacterId == Alt);
+        Assert.Equal(seenOutside, altRun.StartedAtUtc);
+    }
+
+    /// <summary>Stands in for the ESI poll loop, per character, so a test can drive one toon's crossing without
+    /// moving another's (<see cref="EsiLocationBootstrapTests"/> has the single-reader shape this one splits).</summary>
+    private sealed class PerCharacterLocationWatch : IEsiLocationMonitor
+    {
+        private readonly Dictionary<int, Action<EsiLocationReading>> _readers = [];
+
+        public void Watch(int characterId, string characterName, Action<EsiLocationReading> onReading) =>
+            _readers[characterId] = onReading;
+
+        public void UiReady() { }
+
+        public void Stop(int characterId) => _readers.Remove(characterId);
+
+        public bool IsWatching(int characterId) => _readers.ContainsKey(characterId);
+
+        public void Report(int characterId, int solarSystemId, DateTime atUtc)
+        {
+            if (_readers.TryGetValue(characterId, out var onReading))
+                onReading(new EsiLocationReading(solarSystemId, atUtc));
+        }
     }
 }

@@ -87,6 +87,67 @@ public sealed class FleetAbyssalLifecycleTests
         }
     }
 
+    // ── ET-250: a stopped leg picked back up is announced too ───────────────────────────────────────
+
+    /// <summary>Acceptance 1 (ET-250): a pilot presses STOP and then START again in the same leg. The restart is
+    /// announced too, in its own shape rather than a repeat of fleet.run-group (which an older client, and
+    /// FleetRunGroupCodeCoordinator on this one, would misread as a fresh start) or of pilot-stopped (read the
+    /// other way around).</summary>
+    [AvaloniaFact]
+    public async Task StoppingAndStartingTheSameLegAgain_IsAnnouncedAsAResume()
+    {
+        var (instance, _, _, bus, presenter) = _Harness(commander: Pilot);
+        using (instance)
+        using (presenter)
+        {
+            List<string> announced = [];
+            using var stops = bus.Subscribe<FleetRunPilotStoppedEvent>(e => announced.Add($"pilot-stopped:{e.CharacterId}"));
+            using var resumes = bus.Subscribe<FleetRunPilotResumedEvent>(e => announced.Add($"pilot-resumed:{e.CharacterId}"));
+            using var window = new ActivityWindowViewModel(ActivityKind.Abyssal, instance.Services);
+            await window.LoadAsync();
+            await window.StartRunCommand.ExecuteAsync(null);
+
+            window.StopRunCommand.Execute(null);
+            await _SettleAsync(() => announced.Count > 0);
+            await window.StartRunCommand.ExecuteAsync(null);
+            await _SettleAsync(() => announced.Count > 1);
+
+            Assert.Equal([$"pilot-stopped:{Pilot}", $"pilot-resumed:{Pilot}"], announced);
+            Assert.Equal(ActivityRunState.Running, window.RunState);
+        }
+    }
+
+    /// <summary>Acceptance 1 (ET-250), from the other side: another pilot's window reads the resumed leg as "in"
+    /// again within seconds, not only once the 20-minute cut-off would have retired it.</summary>
+    [AvaloniaFact]
+    public async Task AResumedLeg_ReadsAsInAgain_OnAnotherPilotsFleetClock()
+    {
+        var (instance, dialogs, _, bus, presenter) = _Harness(commander: Commander);
+        using (instance)
+        using (presenter)
+        {
+            DateTime firstIn = DateTime.UtcNow.AddMinutes(-9);
+            using var window = await _ArmedAsync(instance);
+            dialogs.IsActivityWindowOpen = true;
+            // This pilot's own leg stays in throughout, so the commander coming out does not read as the run having
+            // ended without this pilot (_EndedWithoutThisPilot) — the point under test is the commander's own leg.
+            window.StartManualRun(firstIn.AddMinutes(1));
+
+            await bus.PublishAsync(new FleetRunGroupCodeEvent(_Start(firstIn), Commander));
+            await bus.PublishAsync(new FleetRunPilotStoppedEvent(
+                new RunGroupStop(FleetId, ActivityKind.Abyssal, GroupCode, firstIn.AddMinutes(5)), Commander));
+            window.Refresh(firstIn.AddMinutes(6));
+
+            Assert.EndsWith("1 pilot in", window.FleetClockText);
+
+            await bus.PublishAsync(new FleetRunPilotResumedEvent(
+                new RunGroupResume(FleetId, ActivityKind.Abyssal, GroupCode, firstIn.AddMinutes(7)), Commander));
+            window.Refresh(firstIn.AddMinutes(8));
+
+            Assert.EndsWith("2 pilots in", window.FleetClockText);
+        }
+    }
+
     // ── ET-246: joining arms, the pilot's own way in starts ──────────────────────────────────────────
 
     /// <summary>The commander is already in. Accepting his offer puts nothing on this pilot's clock and makes no row
