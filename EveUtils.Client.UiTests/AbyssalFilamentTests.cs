@@ -14,10 +14,12 @@ using EveUtils.Shared.Data;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
+using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -113,6 +115,91 @@ public sealed class AbyssalFilamentTests
         var detail = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId);
         await detail.LoadAsync();
         Assert.Equal("Agitated Dark", detail.Activity().SiteText);
+    }
+
+    // ── ET-248: MISSION never leaks onto an abyssal's detail screen ────────────────────────────────────
+
+    /// <summary>
+    /// Counter-proof: Jithran + Raymond's Fierce Dark, 2026-09-11 — the detail screen showed a MISSION section with
+    /// two rows reading "ABYSSAL FILAMENT 3|Dark", once per run of the group. Measured cause:
+    /// <c>RunTypeCatalogue.Abyssal.DetailSections</c> never claims <c>RunSectionId.Mission</c>, but
+    /// <c>ActivityDetailViewModel._ApplySectionsPerType</c> also shows an unclaimed section when it
+    /// <c>HasContent</c> — a deliberate rule (ET-236) so a reward booked against a type that never declared MISSION
+    /// still reaches the screen. <c>MissionDetailSectionViewModel._IsRewardRow</c> used to exclude everything but a
+    /// fixed list of non-reward keys, and <c>RunParameterKey.AbyssalFilament</c> (added by ET-241, after that list
+    /// was written) was never on it, so it read as two reward rows and <c>HasContent</c> came back true. Red before
+    /// the fix (an inclusion list instead): both runs of the group carry the parameter, exactly as in the report.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AbyssalDetail_HasNoMissionSection_EvenThoughEveryRunInTheGroupCarriesTheFilamentParameter()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await _SaveAbyssalRunAsync(dispatcher, 90000001, GroupCode, solarSystemId: null, "3|Dark");
+        await _SaveAbyssalRunAsync(dispatcher, 90000002, GroupCode, solarSystemId: null, "3|Dark");
+        await dispatcher.Send(new RebuildActivitySummariesCommand());
+        ActivityOverviewRowDto row = Assert.Single((await dispatcher.Query(new GetActivityOverviewQuery())).Value!);
+
+        var detail = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId);
+        await detail.LoadAsync();
+
+        Assert.DoesNotContain(detail.Sections, section => section is MissionDetailSectionViewModel);
+        Assert.Contains("no MISSION", detail.AbsentSectionsText!, StringComparison.Ordinal);
+    }
+
+    // ── ET-248: LOCATION on an abyssal — the entry system when known, never "not recorded" ────────────
+
+    [AvaloniaFact]
+    public async Task AbyssalDetail_LocationReadsTheEntrySystem_WhenItIsKnown()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await _SaveAbyssalRunAsync(dispatcher, 90000001, null, solarSystemId: 30004079, "2|Dark");
+        ActivityOverviewRowDto row = Assert.Single((await dispatcher.Query(new GetActivityOverviewQuery())).Value!);
+
+        var sde = new FakeSdeAccessor().AddSolarSystem(new SdeSolarSystem(30004079, "Dresi", 0.5));
+        var detail = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId, sde: sde);
+        await detail.LoadAsync();
+
+        Assert.True(detail.Activity().IsLocationShown);
+        Assert.Equal("entered from Dresi", detail.Activity().LocationText);
+        Assert.Equal("Abyssal · entered from Dresi", detail.Activity().HeaderSummary);
+    }
+
+    [AvaloniaFact]
+    public async Task AbyssalDetail_HasNoLocationRow_WhenTheEntrySystemIsUnknown()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await _SaveAbyssalRunAsync(dispatcher, 90000001, null, solarSystemId: null, "2|Dark");
+        ActivityOverviewRowDto row = Assert.Single((await dispatcher.Query(new GetActivityOverviewQuery())).Value!);
+
+        var detail = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId);
+        await detail.LoadAsync();
+
+        Assert.False(detail.Activity().IsLocationShown);
+        // Never "not recorded" — an abyssal pocket has no location of its own, so an unknown entry system is a row
+        // that is not there, not one that measured nothing.
+        Assert.DoesNotContain("not recorded", detail.Activity().HeaderSummary, StringComparison.Ordinal);
+        Assert.Equal("Abyssal", detail.Activity().HeaderSummary);
+    }
+
+    private static async Task<Guid> _SaveAbyssalRunAsync(
+        IDispatcher dispatcher, long characterId, string? groupCode, int? solarSystemId, string filamentValue)
+    {
+        DateTime startedAtUtc = new(2026, 9, 11, 20, 0, 0, DateTimeKind.Utc);
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Abyssal,
+            startedAtUtc, 0, null, solarSystemId, groupCode));
+        await dispatcher.Send(new SaveRunCommand(started.Value, startedAtUtc.AddMinutes(20),
+            startedAtUtc.AddMinutes(21), [], [], [],
+            [
+                new RunParameterInput
+                {
+                    ParameterKey = RunParameterKey.AbyssalFilament, TypedValue = filamentValue,
+                    ObservedAtUtc = startedAtUtc
+                }
+            ]));
+        return started.Value;
     }
 
     // ── ET-239 + ET-241's fleet part: the commander's own facts reach a joining member ─────────────────

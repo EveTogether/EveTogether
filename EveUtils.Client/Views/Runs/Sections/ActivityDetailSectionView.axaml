@@ -12,7 +12,7 @@
             <TextBlock Text="SIGNATURE"/>
             <TextBlock Grid.Column="1" Text="{Binding SignatureText}"/>
         </Grid>
-        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsLocationShown}">
             <TextBlock Text="LOCATION"/>
             <TextBlock Grid.Column="1" Text="{Binding LocationText}"/>
         </Grid>

@@ -45,6 +45,11 @@ taken from the matching `## vX.Y.Z` section below.
 - Mission runs now show their agent's level instead of abyssal weather and tier badges.
 - Mission runs now have their own MISSION section, in both the run window and the saved activity screen: the agent by name (a regular agent's mission, which states no agent at all, says so honestly), ISK, Loyalty Points, items and any reward line the app does not yet recognise. A bonus reward counts down while its time window is open, reads as expired once it has passed, and drops out of TOTAL ISK the moment it does — a bonus you actually earned before stopping the run stays counted even if the window sits open a while longer before you save it. A mission run can now also be marked blitzed, cherry-picked, cleared or full clear, the same as a site, and remembers your last choice for missions on their own.
 - The saved activity screen now shows a mission's agent by name instead of a bare id.
+- **An abyssal's saved activity screen no longer shows a MISSION section.** A pocket's own tier and weather were
+  being counted as a reward, so the screen picked up a MISSION section with two rows reading the raw stored value
+  ("ABYSSAL FILAMENT 3|Dark") — one per run of the group. LOCATION on an abyssal, and the ACTIVITY header beside
+  it, no longer read "not recorded" either: both now show the system the filament was entered from when it is
+  known ("entered from Dresi"), and the LOCATION row is left out entirely when it is not.
 
 ### Added
 - **A run now shows what it actually was.** A Data Site, a Relic Site, a Gas Site, an Ore Site or a Wormhole used
