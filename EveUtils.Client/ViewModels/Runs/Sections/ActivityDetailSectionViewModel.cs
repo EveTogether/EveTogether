@@ -15,6 +15,7 @@ public sealed partial class ActivityDetailSectionViewModel(ISdeAccessor? sde)
 {
     [ObservableProperty] private string _siteText = string.Empty;
     [ObservableProperty] private string _locationText = string.Empty;
+    [ObservableProperty] private bool _isLocationShown;
     [ObservableProperty] private string _signatureText = string.Empty;
     [ObservableProperty] private bool _isSignatureShown;
     [ObservableProperty] private string _fitText = string.Empty;
@@ -29,12 +30,20 @@ public sealed partial class ActivityDetailSectionViewModel(ISdeAccessor? sde)
         ActivityRunDetailDto? source = detail.Runs.FirstOrDefault();
         // An abyssal has no site to record at all — this reads what filament opened it (ET-241), or the type's own
         // honest name while that is unknown, instead of a line about a site that was never going to exist.
+        bool isAbyssal = input.RunType.Space is RunSpace.AbyssalPocket;
         SiteText = detail.SiteName
-            ?? (input.RunType.Space is RunSpace.AbyssalPocket
+            ?? (isAbyssal
                 ? AbyssalFilamentName.From(detail.Parameters
                     .FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.AbyssalFilament)?.TypedValue)
                 : "site not recorded");
-        LocationText = _LocationText(detail.SolarSystemId);
+        // A site with no recorded system reads "not recorded" — a gap in what this app measured, worth naming. An
+        // abyssal pocket has no location of its own at all; a stored SolarSystemId there is the system the filament
+        // was entered from, worth a row only when it is actually known, never a "not recorded" about a place the
+        // pocket was never going to have (ET-248, Jithran + Raymond's Fierce Dark, 2026-09-11).
+        IsLocationShown = !isAbyssal || detail.SolarSystemId is not null;
+        LocationText = isAbyssal
+            ? _EnteredFromText(detail.SolarSystemId)
+            : _LocationText(detail.SolarSystemId);
         SignatureText = source?.Signature ?? string.Empty;
         IsSignatureShown = !string.IsNullOrWhiteSpace(source?.Signature);
         FitText = source?.FitNameSnapshot ?? "not recognised";
@@ -47,7 +56,7 @@ public sealed partial class ActivityDetailSectionViewModel(ISdeAccessor? sde)
         HasObjectives = objectives.Length > 0;
         ObjectivesText = HasObjectives ? string.Join(" · ", objectives) : null;
 
-        HeaderSummary = $"{input.RunType.Name} · {LocationText}";
+        HeaderSummary = IsLocationShown ? $"{input.RunType.Name} · {LocationText}" : input.RunType.Name;
     }
 
     /// <summary>The system a run was on, named through the local SDE (ET-213) — never ESI, and never the bare id
@@ -58,4 +67,10 @@ public sealed partial class ActivityDetailSectionViewModel(ISdeAccessor? sde)
         solarSystemId is not { } id
             ? "not recorded"
             : sde?.GetSolarSystem(id)?.Name ?? $"system {id}";
+
+    /// <summary>Only ever called once <see cref="IsLocationShown"/> is already true for an abyssal — the row is
+    /// dropped rather than shown when the system is not known, so this never has to say "not recorded" about a
+    /// place the pocket itself never has.</summary>
+    private string _EnteredFromText(int? solarSystemId) =>
+        solarSystemId is not { } id ? string.Empty : $"entered from {sde?.GetSolarSystem(id)?.Name ?? $"system {id}"}";
 }

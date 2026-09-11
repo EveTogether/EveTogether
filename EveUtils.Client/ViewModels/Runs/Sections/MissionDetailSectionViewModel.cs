@@ -86,9 +86,15 @@ public sealed partial class MissionDetailSectionViewModel(ISdeAccessor? sde) : R
 
     // The bonus gets its own block above with its own expiry treatment; everything else that used to sit under
     // ACTIVITY's Objectives line stays there (ET-237 moved only the agent, not the courier's own cargo counters).
+    //
+    // Named by what it is, not by what it is not (ET-248): an exclusion list looks complete until the next
+    // RunParameterKey lands and is not on it — exactly what happened to RunParameterKey.AbyssalFilament, which
+    // showed up here as two "ABYSSAL FILAMENT 3|Dark" reward rows and, through HasContent below, put a MISSION
+    // section on an abyssal's detail screen even though RunTypeCatalogue never claims one for that type. A key
+    // this list has not caught up with now starts out of the rewards rather than in them.
     private static bool _IsRewardRow(RunParameterDto parameter) =>
-        parameter.ParameterKey is not (RunParameterKey.BonusIsk or RunParameterKey.Escalation
-            or RunParameterKey.EscalationDungeonId or RunParameterKey.EscalationSystem
-            or RunParameterKey.EscalationSolarSystemId or RunParameterKey.EscalationExpiresAtUtc
-            or RunParameterKey.Smugglers or RunParameterKey.Civilians);
+        parameter.ParameterKey is RunParameterKey.Isk or RunParameterKey.Bounty or RunParameterKey.FixedPayout
+            or RunParameterKey.Escrow or RunParameterKey.LoyaltyPoints or RunParameterKey.Evermarks
+            or RunParameterKey.Item or RunParameterKey.Loot or RunParameterKey.Standings or RunParameterKey.Filament
+            or RunParameterKey.Unknown;
 }
