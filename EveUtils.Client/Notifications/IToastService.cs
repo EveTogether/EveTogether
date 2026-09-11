@@ -33,4 +33,10 @@ public interface IToastService
     void Show(string title, string? message, ToastKind kind, IReadOnlyList<ToastAction> actions, Action? onClosed,
         string? replacementKey = null, ToastPosition? position = null);
 
+    /// <summary>
+    /// Takes down the action card shown under <paramref name="replacementKey"/>, if one is up — for an offer its sender
+    /// withdrew before it was answered. A card still on its way is not shown at all.
+    /// </summary>
+    void Dismiss(string replacementKey);
+
 }

@@ -44,11 +44,27 @@ public sealed class FleetWireEvents : IWireEventCatalog
             return new FleetRunGroupCodeEvent(payload, characterId);
         });
 
+        // The commander set an abyssal up before anyone went in (ET-246): the start's own payload, offered early.
+        registry.Register("fleet.run-group.prepared", (payloadJson, characterId) =>
+        {
+            var payload = JsonSerializer.Deserialize<RunGroupCodeStart>(payloadJson)
+                          ?? throw new InvalidOperationException("Invalid fleet.run-group.prepared payload.");
+            return new FleetRunGroupPreparedEvent(payload, characterId);
+        });
+
         registry.Register("fleet.run-stopped", (payloadJson, characterId) =>
         {
             var payload = JsonSerializer.Deserialize<RunGroupStop>(payloadJson)
                           ?? throw new InvalidOperationException("Invalid fleet.run-stopped payload.");
             return new FleetRunStoppedEvent(payload, characterId);
+        });
+
+        // One pilot's own exit from a run whose clock is per pilot (ET-243) — stops nobody else.
+        registry.Register("fleet.run-group.pilot-stopped", (payloadJson, characterId) =>
+        {
+            var payload = JsonSerializer.Deserialize<RunGroupStop>(payloadJson)
+                          ?? throw new InvalidOperationException("Invalid fleet.run-group.pilot-stopped payload.");
+            return new FleetRunPilotStoppedEvent(payload, characterId);
         });
 
         // The commander changed the pocket's tier or weather mid-run (ET-241); a member already on the group code

@@ -102,6 +102,20 @@ public sealed class ToastService : IToastService, ISingletonService
     internal static TimeSpan? ExpirationFor(IReadOnlyList<ToastAction> actions) =>
         actions.Count > 0 ? TimeSpan.Zero : null;
 
+    public void Dismiss(string replacementKey)
+    {
+        // Forgetting the version first is what stops a card that was posted but not yet shown: ShowAction checks it.
+        lock (_replacementGate)
+            _replacementVersions.Remove(replacementKey);
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            foreach ((WindowNotificationManager manager, Dictionary<string, object> replacements) in _replacements)
+                if (replacements.Remove(replacementKey, out object? card))
+                    manager.Close(card);
+        });
+    }
+
     private long? _ReserveReplacement(string? replacementKey)
     {
         if (replacementKey is null)

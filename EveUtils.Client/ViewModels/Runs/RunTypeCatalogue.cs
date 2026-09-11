@@ -53,6 +53,12 @@ public sealed record RunTypeDefinition
     /// offers to register one for exactly those (ET-124 measured that only a site escalates). Derived rather than
     /// stated twice, so the two cannot drift apart.</summary>
     public bool Escalates => DetailSections.Contains(RunSectionId.Escalation);
+
+    /// <summary>Each pilot's clock starts on their own way in and stops on their own way out, so a shared run of this
+    /// type lasts from the first pilot in to the last one out and the commander's STOP ends only the commander's own
+    /// leg (ET-243, ET-246). Derived from the space: an abyssal pocket is the one place whose entry and exit this app
+    /// sees per pilot, and a type claiming this without it would wait on a crossing nothing ever reports.</summary>
+    public bool ClockPerPilot => Space is RunSpace.AbyssalPocket;
 }
 
 /// <summary>

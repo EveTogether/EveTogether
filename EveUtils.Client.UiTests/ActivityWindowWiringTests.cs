@@ -1273,8 +1273,9 @@ public class ActivityWindowWiringTests
         Assert.Equal("based on 2 of 2 members sharing their location", model.Fleet().HeaderSummary);
     }
 
-    /// <summary>A fleet run nobody pressed START for still gets its row: the envelope is what began it, and the loot
-    /// has to have somewhere to go all the same.</summary>
+    /// <summary>A fleet run nobody pressed START for still gets its row: this pilot's own anchor among the fleet's
+    /// samples is what began it (since ET-246 only their own does), and the loot has to have somewhere to go all the
+    /// same.</summary>
     [AvaloniaFact]
     public async Task AnAbyssalRunStartedByTheFleetEnvelope_AlsoGetsItsStoredRun()
     {
