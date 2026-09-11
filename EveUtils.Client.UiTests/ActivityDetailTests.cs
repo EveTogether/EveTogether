@@ -548,7 +548,8 @@ public sealed class ActivityDetailTests
         Assert.Contains(texts, text => text == $"{214_188m:N0} ISK");        // the bounty is on screen
         Assert.Contains(texts, text => text == expectedSummary);
         Assert.Equal(allAreUncounted ? 3 : 2, texts.Count(text => text == "not counted"));
-        Assert.DoesNotContain(texts, text => text == "0");
+        // Neither a by-type row nor the per-character breakdown and its TOTAL may read as a zero.
+        Assert.DoesNotContain(texts, text => text is "0" or "0 enemies");
     }
 
     // ── Delete, understated, from the bottom of the screen (ET-214 round 2) ────────────────────────────
