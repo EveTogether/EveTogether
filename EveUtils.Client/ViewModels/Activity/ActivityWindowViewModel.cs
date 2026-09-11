@@ -3,13 +3,10 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Material.Icons;
-using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
@@ -18,15 +15,12 @@ using EveUtils.Client.Gamelog;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Platform;
-using EveUtils.Client.ViewModels;
-using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs;
-using EveUtils.Shared.Modules.Fittings.Dtos;
-using EveUtils.Shared.Modules.Fittings.Entities;
 using EveUtils.Shared.Modules.Fittings.Repositories;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
@@ -44,7 +38,7 @@ using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Sde.Dtos;
-using EveUtils.Shared.Modules.Settings.Commands;
+using EveUtils.Shared.Modules.Settings.Dtos;
 using EveUtils.Shared.Modules.Settings.Queries;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Logging;
@@ -63,68 +57,17 @@ namespace EveUtils.Client.ViewModels.Activity;
 /// and the bounties all hang off one id, so "a run is running" means the same thing here as it does in the database.
 /// STOP only stops the clock: the row stays open until SAVE or DISCARD, so loot copied after the last rat still
 /// lands on the run it came from.
+///
+/// What stands under the clock is not this class's: the run's type names its sections (<see cref="RunTypeCatalogue"/>),
+/// each section is a module of its own (<see cref="RunSectionModules"/>), and a module sees this window only as
+/// <see cref="IRunWindowContext"/> (ET-236). What is left here is the frame — the header, the clock, the run controls
+/// and the run's own lifecycle — and the state those and the sections share.
 /// </summary>
-public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposable
+public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposable, IRunWindowContext
 {
-    /// <summary>Where the manual weather and tier are remembered. Under <c>ui.</c> with the other shell prefs, and
-    /// remembered at all because you fly the same tier several runs in a row — which is what turns two clicks a run
-    /// into two clicks an evening.</summary>
-    public const string WeatherSettingKey = "ui.activity.weather";
-
-    public const string TierSettingKey = "ui.activity.tier";
-
-    /// <summary>Remembered for the same reason as the tier: you loot the same way several runs in a row. One key per
-    /// kind, because the kinds loot in different words and a shared key had them overwriting each other's answer.</summary>
-    public static string LootStrategySettingKey(ActivityKind kind) =>
-        $"ui.activity.lootstrategy.{kind.ToString().ToLowerInvariant()}";
-
-    /// <summary>Which way this kind registers loot, remembered per kind for the reason the strategy is: in the abyss
-    /// filaments and ammunition go up and a starting cargo hold earns its keep, on a combat site you only ever pick
-    /// things up. Absent means <see cref="ActivityLootMode.Clipboard"/>, which is what keeps a pilot who never opens
-    /// this row on exactly the way he has now.</summary>
-    public static string LootModeSettingKey(ActivityKind kind) =>
-        $"ui.activity.lootmode.{kind.ToString().ToLowerInvariant()}";
-
     /// <summary>Once a second. The readout is a clock, and a clock cannot be read faster than it ticks.</summary>
     public static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan UnstartedFleetNoticeRefreshInterval = TimeSpan.FromSeconds(30);
-
-    /// <summary>The seven abyssal tiers, index = the T-number the filament is sold under.</summary>
-    public static IReadOnlyList<string> Tiers { get; } =
-        ["Tranquil", "Calm", "Agitated", "Fierce", "Raging", "Chaotic", "Cataclysmic"];
-
-    /// <summary>How much of the pocket you opened. Kinds loot in different vocabularies, so each gets its own list
-    /// rather than one that half fits each — and a kind with nothing sensible to offer gets none.</summary>
-    public static IReadOnlyList<RunLootStrategy> AbyssalLootStrategies { get; } =
-        [RunLootStrategy.BioadaptiveOnly, RunLootStrategy.BioadaptiveAndTriglavian, RunLootStrategy.AllCans];
-
-    /// <summary>In order of how much of the site you did, which is why cherry-picked stands second and not last.
-    /// Cherry-picking is a site's move and only a site's: an abyssal pocket is instanced for you and your fleet, so
-    /// there is nobody to leave the other cans to.</summary>
-    public static IReadOnlyList<RunLootStrategy> SiteLootStrategies { get; } =
-        [RunLootStrategy.Blitzed, RunLootStrategy.CherryPicked, RunLootStrategy.Cleared, RunLootStrategy.FullClear];
-
-    /// <summary>Clipboard first, and first for good: it is the default and the one nobody has to choose.</summary>
-    public static IReadOnlyList<ActivityLootMode> LootModes { get; } =
-        [ActivityLootMode.Clipboard, ActivityLootMode.CargoDiff];
-
-    private static string LabelOf(ActivityLootMode mode) =>
-        mode is ActivityLootMode.CargoDiff ? "start + end hold" : "clipboard";
-
-    /// <summary>The words on the chips. They live here and not in the stored value, so rewording one never reaches a
-    /// run that was already saved.</summary>
-    private static string LabelOf(RunLootStrategy strategy) => strategy switch
-    {
-        RunLootStrategy.BioadaptiveOnly => "bioadaptive only",
-        RunLootStrategy.BioadaptiveAndTriglavian => "bioadaptive + triglavian",
-        RunLootStrategy.AllCans => "all cans",
-        RunLootStrategy.Blitzed => "blitzed",
-        RunLootStrategy.Cleared => "cleared",
-        RunLootStrategy.FullClear => "full clear",
-        RunLootStrategy.CherryPicked => "cherry-picked",
-        // A run written by a newer build: its own name beats an empty chip.
-        _ => strategy.ToString()
-    };
 
     // Amber then red, on the last five and the last two minutes. Both are enough time to leave, which is the only
     // decision the clock exists to inform.
@@ -162,15 +105,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private string? _runCharacterName;
     private int? _commanderNameId;
     private string? _commanderName;
-    private ShipFitDetectionReading? _fitReading;
 
-    /// <summary>One collector per character in the group, each fed only by that character's own gamelog (ET-210
-    /// review finding, 2026-09-09, round 4: Jithran chose per-character tracking with a group total over one
-    /// shared tally). Keyed on characterId rather than on which run this window is currently showing, so switching
-    /// the column (deel 3) never touches a character's own count — the exact loss round 3 fixed for the single
-    /// collector this replaces, now guaranteed by construction: nothing here is ever reassigned or cleared for one
-    /// character because another one was clicked.</summary>
-    private readonly Dictionary<int, RunEnemyObservationCollector> _enemyObservationsByCharacter = [];
+    /// <summary>Every section this window has built, kept for as long as the window lives rather than as long as its
+    /// type claims it — a type change mid-run hides a section, it does not throw its state away.</summary>
+    private readonly Dictionary<RunSectionId, RunWindowSection> _sections = [];
 
     public ActivityWindowViewModel(ActivityKind kind, IServiceProvider services)
     {
@@ -178,10 +116,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _services = services;
         _gamelog = services.GetService<GamelogClientService>();
         if (_gamelog is not null)
-        {
-            _gamelog.CombatObserved += _OnCombatObserved;
             _gamelog.BountyObserved += _OnBountyObserved;
-        }
 
         _metricSubscription = services.GetService<IEventBus>()?.Subscribe<FleetMetricEvent>(_OnFleetMetric);
         // The clipboard records loot; this window shows it, and the two never met. Without this the LOOT section
@@ -207,28 +142,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (LootOverview is not null)
             LootOverview.PropertyChanged += (_, _) => _RefreshSummaries();
 
-        WeatherChoices = AbyssalWeather.All
-            .Select((weather, index) => new ActivityChoice
-            {
-                Index = index,
-                Label = weather.Name,
-                Tooltip = $"{weather.EnvironmentName} — {weather.Bonus}, penalty on {weather.PenaltyTarget}"
-            })
-            .ToList();
-
-        TierChoices = Tiers
-            .Select((tier, index) => new ActivityChoice { Index = index, Label = tier })
-            .ToList();
-
-        LootStrategyChoices = LootStrategies
-            .Select((strategy, index) => new ActivityChoice { Index = index, Label = LabelOf(strategy) })
-            .ToList();
-
-        LootModeChoices = LootModes
-            .Select((mode, index) => new ActivityChoice { Index = index, Label = LabelOf(mode) })
-            .ToList();
-
-        Sections = [Activity, Enemies, Fit, Fleet, Bounty, Loot];
+        _SyncSectionsToType();
         Refresh(DateTime.UtcNow);
     }
 
@@ -237,12 +151,19 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// another kind halfway through.</summary>
     public ActivityKind Kind { get; }
 
-    /// <summary>The acting character's own sightings — whichever run the column is currently showing. Every other
-    /// group member's own collector keeps counting in the background regardless (ET-210 round 4).</summary>
-    public IReadOnlyList<RunEnemyObservationViewModel> EnemyObservations =>
-        _runCharacterId is { } id && _enemyObservationsByCharacter.TryGetValue(id, out RunEnemyObservationCollector? collector)
-            ? collector.Observations
-            : [];
+    /// <summary>What this run is, from the one catalogue every run screen reads (ET-226). Unlike <see cref="Kind"/> it
+    /// can change mid-run: a site started without a scanner group gets one when the run it adopts carries it.</summary>
+    public RunTypeDefinition RunType => RunTypeCatalogue.For(Kind, SignatureGroup);
+
+    /// <summary>The sections the run's type has, in the order <see cref="RunSectionModules"/> gives them — what the
+    /// window draws under its clock.</summary>
+    public ObservableCollection<RunWindowSection> Sections { get; } = [];
+
+    IServiceProvider IRunWindowContext.Services => _services;
+
+    int? IRunWindowContext.RunCharacterId => _runCharacterId;
+
+    int? IRunWindowContext.ActingCharacterId => _ActingCharacterId();
 
     /// <summary>The run on screen, for what belongs to one run only: the registration way, the two paste boxes and
     /// the starting-hold picker. Follows the character column.</summary>
@@ -255,7 +176,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     /// <summary>Only for what is genuinely the abyss's own: the 20-minute deadline, the tier and weather, the
     /// per-member anchors. Never for "and everything else is a site" — that is what this window used to do.</summary>
-    public bool IsAbyssal => Kind == ActivityKind.Abyssal;
+    private bool _IsInPocket => RunType.Space is RunSpace.AbyssalPocket;
 
     // ── The run ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -364,82 +285,42 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     /// <summary>The solar system the run is in. Always null in the abyss — a pocket has no location, and the window
     /// says so rather than leaving the field blank.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(LocationText))]
-    [NotifyPropertyChangedFor(nameof(IsLocationShown))]
-    private string? _solarSystem;
+    [ObservableProperty] private string? _solarSystem;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(LocationText))]
-    [NotifyPropertyChangedFor(nameof(IsLocationShown))]
-    [NotifyPropertyChangedFor(nameof(BountyText))]
     [NotifyPropertyChangedFor(nameof(IsInsideAbyssal))]
     private bool? _insideAbyssal;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(LocationText))]
-    [NotifyPropertyChangedFor(nameof(IsLocationShown))]
-    private string? _locationDisplay;
+    [ObservableProperty] private string? _locationDisplay;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(BountyText))]
-    private long _bountyIsk;
-
-    /// <summary>What was looted and what was left. Without it "19 minutes" says nothing — which is why it is set
-    /// here rather than only displayed.</summary>
-    [ObservableProperty] private RunLootStrategy? _lootStrategy;
-
-    public IReadOnlyList<ActivityChoice> LootStrategyChoices { get; }
-
-    /// <summary>Which way this window's LOOT section is worked. The controls of the way you do not use are not on
-    /// screen; the figures are not this row's business either way (Zyra, 2026-09-04).</summary>
-    [ObservableProperty] private ActivityLootMode _lootMode;
-
-    public IReadOnlyList<ActivityChoice> LootModeChoices { get; }
-
-    /// <summary>The list this run's kind loots by. Empty is a real answer and not a gap: a mission is not looted in
-    /// these words at all, so it gets no list rather than the site list it never fitted (ET-174 AC-4).</summary>
-    public IReadOnlyList<RunLootStrategy> LootStrategies => Kind switch
-    {
-        ActivityKind.Abyssal => AbyssalLootStrategies,
-        ActivityKind.Site => SiteLootStrategies,
-        // A mission, and any kind this build has not met: no list at all.
-        _ => []
-    };
-
-    /// <summary>Hidden rather than shown empty: a LOOT STRATEGY row with no buttons under it reads as a question
-    /// the window failed to load, not as one that does not apply here.</summary>
-    public bool IsLootStrategyShown => LootStrategyChoices.Count > 0;
+    [ObservableProperty] private long _bountyIsk;
 
     /// <summary>What the copied signature's own text said it was (ET-100) — the raw scan-window field, not
-    /// anything the SDE could enrich it to. Always null in the abyss; a filament carries no signature.</summary>
+    /// anything the SDE could enrich it to. Always null in the abyss; a filament carries no signature. The one fact
+    /// the run's type can change on mid-run, so everything the type decides is announced with it.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SignatureTypeText))]
-    [NotifyPropertyChangedFor(nameof(TypeIcon))]
-    [NotifyPropertyChangedFor(nameof(HasSignature))]
+    [NotifyPropertyChangedFor(nameof(RunType))]
+    [NotifyPropertyChangedFor(nameof(HeaderTitle))]
+    [NotifyPropertyChangedFor(nameof(IsMissionLevelShown))]
+    [NotifyPropertyChangedFor(nameof(HasWeatherAndTier))]
+    [NotifyPropertyChangedFor(nameof(NeedsWeatherAndTier))]
     private string? _signatureGroup;
+
+    partial void OnSignatureGroupChanged(string? value) => _SyncSectionsToType();
 
     /// <summary>The scan's own id, e.g. <c>RUS-326</c> — what tells one Sansha Refuge from the next one, which a
     /// site name cannot. Shown after the location, so the row names the site as well as the system.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(LocationText))]
-    private string? _signatureId;
+    [ObservableProperty] private string? _signatureId;
 
     /// <summary>The signature's name once fully scanned — same field, same source as <see cref="SignatureGroup"/>.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SignatureSiteText))]
-    [NotifyPropertyChangedFor(nameof(HasSignature))]
     [NotifyPropertyChangedFor(nameof(ClockHint))]
     private string? _signatureName;
 
     /// <summary>What the site catalogue carries under <see cref="SignatureName"/> (ET-80). Empty is the ordinary
     /// case rather than a fault — the match is on the English name only, so a miss cannot prove the site is absent —
     /// and so is more than one, since 218 catalogue names are shared by 613 dungeons. Nothing below ever picks one.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SignatureSiteText))]
-    [NotifyPropertyChangedFor(nameof(ShipRestrictionText))]
-    [NotifyPropertyChangedFor(nameof(HasShipRestriction))]
-    private IReadOnlyList<SdeSite> _matchedSites = [];
+    [ObservableProperty] private IReadOnlyList<SdeSite> _matchedSites = [];
 
     // Whether this window starts its run by itself once it has settled, instead of waiting for START. Set by the
     // clipboard signature offer (ET-158), which has no button to press.
@@ -455,7 +336,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private int? _missionLevel;
     public int? MissionSolarSystemId { get; set; }
 
-    public bool IsMissionLevelShown => Kind == ActivityKind.Mission && MissionLevel is not null;
+    public bool IsMissionLevelShown => RunType.HasAgent && MissionLevel is not null;
 
     public string MissionLevelText => MissionLevel is { } level ? $"Level {level}" : string.Empty;
 
@@ -463,81 +344,30 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     // moment it starts rather than waited for — a mission is not looted the way a site is (ET-174 AC-4).
     public IReadOnlyList<RunParameterInput> PendingParameters { get; set; } = [];
 
-    // What RegisterEscalationAsync collected, carried to SAVE rather than written the moment it is entered: unlike
-    // the mission rewards above, an escalation is entered mid-run, long before there is a stop time to save against
-    // (ET-125). Cleared and rebuilt on every registration — one escalation per run, the last one entered wins.
-    private readonly List<RunParameterInput> _escalationParameters = [];
+    // ── The sections ────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Only a site run escalates (ET-124 measured this; an abyssal pocket and a mission do not).</summary>
-    public bool IsEscalationRegistrationShown => Kind == ActivityKind.Site;
-
-    /// <summary>What was last registered this session, or null before the pilot has registered one — shown beside
-    /// the button so pressing it again does not read as the only way to tell whether it worked.</summary>
-    [ObservableProperty] private string? _escalationRegisteredText;
-
-    /// <summary>
-    /// Opens the register-escalation dialog (ET-125) and, on Register, holds the result for SAVE to write. Nothing
-    /// here ever supplies a duration on the pilot's behalf — see <see cref="EscalationDialogViewModel"/>'s own
-    /// docstring for why (AC-3).
-    /// </summary>
-    [RelayCommand]
-    private async Task RegisterEscalationAsync()
+    /// <summary>Bring <see cref="Sections"/> to what the run's type claims. A section is built the first time a type
+    /// claims it and kept from then on; one the type no longer claims leaves the screen with its state intact, and the
+    /// ones that stay keep their instance — open or folded as the pilot left them.</summary>
+    private void _SyncSectionsToType()
     {
-        if (_services.GetService<IDialogService>() is not { } dialogs || _services.GetService<ISdeAccessor>() is not { } sde)
-            return;
+        List<RunWindowSection> claimed = [];
+        foreach (RunSectionModule module in RunSectionModules.All)
+        {
+            if (module.CreateForWindow is not { } create || !RunType.WindowSections.Contains(module.Id))
+                continue;
 
-        var dialog = new EscalationDialogViewModel(sde);
-        if (!await dialogs.ShowEscalationDialogAsync(dialog) || dialog.Result is not { } result)
-            return;
+            if (!_sections.TryGetValue(module.Id, out RunWindowSection? section))
+                _sections[module.Id] = section = create(this);
+            claimed.Add(section);
+        }
 
-        DateTime nowUtc = DateTime.UtcNow;
-        _escalationParameters.Clear();
-        _escalationParameters.Add(new RunParameterInput
-        {
-            ParameterKey = RunParameterKey.Escalation, TypedValue = result.SiteName, ObservedAtUtc = nowUtc
-        });
-        if (result.DungeonId is { } dungeonId)
-            _escalationParameters.Add(new RunParameterInput
-            {
-                ParameterKey = RunParameterKey.EscalationDungeonId,
-                TypedValue = dungeonId.ToString(CultureInfo.InvariantCulture),
-                ObservedAtUtc = nowUtc
-            });
-        _escalationParameters.Add(new RunParameterInput
-        {
-            ParameterKey = RunParameterKey.EscalationSystem, TypedValue = result.DestinationSystem, ObservedAtUtc = nowUtc
-        });
-        if (result.DestinationSolarSystemId is { } destinationSolarSystemId)
-            _escalationParameters.Add(new RunParameterInput
-            {
-                ParameterKey = RunParameterKey.EscalationSolarSystemId,
-                TypedValue = destinationSolarSystemId.ToString(CultureInfo.InvariantCulture),
-                ObservedAtUtc = nowUtc
-            });
-        _escalationParameters.Add(new RunParameterInput
-        {
-            ParameterKey = RunParameterKey.EscalationExpiresAtUtc,
-            TypedValue = result.ExpiresAtUtc.ToString("o", CultureInfo.InvariantCulture),
-            ObservedAtUtc = nowUtc
-        });
-        EscalationRegisteredText = $"{result.SiteName} · {result.DestinationSystem}";
+        Sections.ReconcileTo(claimed);
     }
 
-    // ── The six sections ────────────────────────────────────────────────────────────────────────────
-
-    public ActivitySection Activity { get; } = new() { Title = "ACTIVITY", IsExpanded = true };
-
-    /// <summary>One row per enemy type, on its own rather than inside ACTIVITY: a site's worth of rats pushed every
-    /// other section under the fold (ET-115).</summary>
-    public ActivitySection Enemies { get; } = new() { Title = "ENEMIES" };
-
-    public ActivitySection Fit { get; } = new() { Title = "FIT" };
-
-    public ActivitySection Fleet { get; } = new() { Title = "FLEET" };
-
-    public ActivitySection Bounty { get; } = new() { Title = "BOUNTY" };
-
-    public ActivitySection Loot { get; } = new() { Title = "LOOT" };
+    /// <summary>Every section this window built, claimed or not, in screen order — what the lifecycle reaches.</summary>
+    private IEnumerable<RunWindowSection> _AllSections() =>
+        RunSectionModules.All.Select(module => _sections.GetValueOrDefault(module.Id)).OfType<RunWindowSection>();
 
     /// <summary>
     /// Whose run this is, by name, for the header. The window knew this all along and never said it: the FLEET
@@ -624,61 +454,35 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         await _RefreshParticipantsAsync();
     }
 
-    /// <summary>The run's one fit (ET-107) — filled from ET-101's detection, or the reason it could not be. Never a
-    /// proposal standing beside a choice: a manual pick comes back through the same reading as its own match reason.</summary>
-    [ObservableProperty]
-    private string _fitText = "no fit: the run has no character yet";
-
-    /// <summary>Whether <see cref="FitText"/> names a fit. A state rather than a comparison against the text, so
-    /// rewording a line can never silently flip what the window offers.</summary>
-    [ObservableProperty] private bool _hasFit;
-
-    [ObservableProperty] private string _fitVelocityText = "no max velocity";
-
-    [ObservableProperty] private string _fitWarpSpeedText = "no warp speed";
-
-    /// <summary>All six in window order — what the test walks to prove none of them is ever silent.</summary>
-    public IReadOnlyList<ActivitySection> Sections { get; }
-
     // ── Weather and tier ────────────────────────────────────────────────────────────────────────────
-
-    public IReadOnlyList<ActivityChoice> WeatherChoices { get; }
-
-    public IReadOnlyList<ActivityChoice> TierChoices { get; }
+    // The pocket's own two facts, held here because the header shows them; the ACTIVITY section asks for them and
+    // remembers them.
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Weather))]
     [NotifyPropertyChangedFor(nameof(HasWeatherAndTier))]
     [NotifyPropertyChangedFor(nameof(NeedsWeatherAndTier))]
-    [NotifyPropertyChangedFor(nameof(IsPickerShown))]
-    [NotifyPropertyChangedFor(nameof(WeatherEnvironmentText))]
-    [NotifyPropertyChangedFor(nameof(WeatherEffectText))]
     private int? _weatherIndex;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasWeatherAndTier))]
     [NotifyPropertyChangedFor(nameof(NeedsWeatherAndTier))]
-    [NotifyPropertyChangedFor(nameof(IsPickerShown))]
     [NotifyPropertyChangedFor(nameof(TierText))]
-    [NotifyPropertyChangedFor(nameof(WeatherEffectText))]
     private int? _tierIndex;
 
     public AbyssalWeather? Weather => WeatherIndex is { } index ? AbyssalWeather.All[index] : null;
 
-    // The kind guard states the invariant; production missions already leave both indexes null.
-    public bool HasWeatherAndTier => IsAbyssal && WeatherIndex is not null && TierIndex is not null;
+    // The type guard states the invariant: the remembered indexes are restored for every window, and only a pocket
+    // has either.
+    public bool HasWeatherAndTier => _IsInPocket && WeatherIndex is not null && TierIndex is not null;
 
     /// <summary>Drives the one chip in the header that asks for something. Only ever true for an abyssal run — a
     /// site has neither.</summary>
-    public bool NeedsWeatherAndTier => IsAbyssal && !HasWeatherAndTier;
+    public bool NeedsWeatherAndTier => _IsInPocket && !HasWeatherAndTier;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsPickerShown))]
-    private bool _isPickerOpen;
-
-    /// <summary>Twelve buttons are worth the room while the question is open and in the way once it is answered, so
-    /// the picker folds behind one line as soon as both halves are set.</summary>
-    public bool IsPickerShown => !HasWeatherAndTier || IsPickerOpen;
+    public string TierText => TierIndex is { } tier
+        ? $"{AbyssalTiers.Names[tier]} (Tier {tier})"
+        : "not set";
 
     // ── The clock ───────────────────────────────────────────────────────────────────────────────────
 
@@ -746,19 +550,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         ? "corrected by hand — this is what SAVE stores, and it moves this run only"
         : "measured from START and STOP";
 
-    /// <summary>What a kind this build has never heard of is called. A run stored by a later version still opens
-    /// and still reads as a run — the window going down over a header is the failure mode AGENTS.md §2 forbids.
-    /// No kind that ships may land here, and a test walks every <see cref="ActivityKind"/> to say so (ET-174 AC-1):
-    /// adding one without deciding its title turns that test red.</summary>
-    public const string UnknownKindHeader = "RUN";
-
-    public string HeaderTitle => Kind switch
-    {
-        ActivityKind.Abyssal => "ABYSSAL RUN",
-        ActivityKind.Site => "SITE RUN",
-        ActivityKind.Mission => "MISSION RUN",
-        _ => UnknownKindHeader
-    };
+    /// <summary>The title bar, from the run's type — "RUN" for a kind this build has never heard of, so a run stored
+    /// by a later version still opens and still reads as a run (<see cref="RunTypeCatalogue.NewerBuildKind"/>).</summary>
+    public string HeaderTitle => RunType.WindowTitle;
 
     // Start, stop and discard steer the run for everybody in it, so all three hang off the same authority (AC-4).
     // Start and stop are the same slot seen from two sides and never both apply: a run that is going can only be
@@ -843,55 +637,18 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public ObservableCollection<RunParticipantViewModel> Participants { get; } = [];
 
-    /// <summary>Shown over every payout figure. The window reports an expectation, and never implies EVE's own
-    /// payout rule follows our exclusions.</summary>
-    public string PayoutExpectationLabel => RunPayoutSplit.ExpectationLabel;
-
-    /// <summary>Who this window has actually heard from, one row per member that sent a location sample. Never a
-    /// roster: nothing here can see a member who is not sharing their location, which is what
-    /// <see cref="FleetBasisText"/> is on screen to say.</summary>
+    /// <summary>Who this window has actually heard from, one row per member that sent a sample. Never a roster:
+    /// nothing here can see a member who is not sharing, which is what the FLEET section says under it.</summary>
     public ObservableCollection<ActivityFleetMemberViewModel> FleetMembers { get; } = [];
 
     /// <summary>What the figures were counted over. "sharing a location" read as "they are in the same place", which
     /// is the very question a pilot asks this chip — under it stood RaymondKrah in Amarr and Jithran in Shaggoth
     /// (Raymond, 2026-09-03). Each member shares theirs, and that is all this counts.</summary>
     public string FleetStatusText => FleetMemberCount > 1
-        ? IsAbyssal
+        ? _IsInPocket
             ? $"based on {AnchoredFleetMemberCount} of {FleetMemberCount} members sharing their location"
             : $"based on {FleetMemberCount} members sharing their location"
         : "no other member has reported in yet";
-
-    /// <summary>
-    /// What the count is counted from, said outright. <see cref="FleetMemberCount"/> counts location samples, so a
-    /// member who does not share their location is missing from both the number and the list — and a list of two
-    /// names in a fleet of three is a lie unless it says what it is a list of.
-    /// </summary>
-    public string FleetBasisText => FleetMembers.Count == 0
-        ? "No member has shared anything yet, so there is nobody to list."
-        : "Counted from what members share. A member sharing nothing is in the fleet but not in this list.";
-
-    /// <summary>
-    /// What the rows above add up to, and only them. That is why it stands between the names and
-    /// <see cref="FleetBasisText"/>: a total that covered more than the rows it sits under would need explaining,
-    /// and the caption below is already the line that says the fleet may be larger than this list. A member sharing
-    /// neither figure is in neither the rows nor the sum, which is the same rule in both places.
-    ///
-    /// Never a zero for a figure nobody offered — the two halves are counted apart, so a fleet sharing bounty and no
-    /// loot says exactly that rather than reporting nothing looted.
-    /// </summary>
-    public string FleetTotalText => (_FleetSum(row => row.LootIsk), _FleetSum(row => row.BountyIsk)) switch
-    {
-        (null, null) => "no member is sharing loot or bounty",
-        ({ } loot, null) => $"loot {ActivityFleetMemberViewModel.Isk(loot)} · bounty not shared",
-        (null, { } bounty) => $"loot not shared · bounty {ActivityFleetMemberViewModel.Isk(bounty)}",
-        ({ } loot, { } bounty) =>
-            $"loot {ActivityFleetMemberViewModel.Isk(loot)} · bounty {ActivityFleetMemberViewModel.Isk(bounty)}"
-    };
-
-    public bool IsFleetTotalShown => FleetMembers.Count > 0;
-
-    private decimal? _FleetSum(Func<ActivityFleetMemberViewModel, decimal?> figure) =>
-        FleetMembers.Select(figure).OfType<decimal>().ToList() is { Count: > 0 } shared ? shared.Sum() : null;
 
     /// <summary>
     /// Whether there is a fleet to show at all. Nothing here may claim "solo": the window is never told the pilot
@@ -914,7 +671,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// What the clock does not say on its face. <c>AbyssalSpace.Describe</c> writes a "+" for this; here it is a
     /// sentence under the figure instead, which is where it ended up after the first round of review.
     /// </summary>
-    public string ClockHint => IsAbyssal
+    public string ClockHint => _IsInPocket
         ? (FleetMemberCount > 1 ? $"{FleetStatusText}: the envelope is the earliest anchored run. " : string.Empty)
           + "The clock is a floor — the moment of entry cannot be observed, so this is at most what is left."
         : _pendingCopy is { } waiting
@@ -926,95 +683,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 ? "Stopped runs keep their figures; start picks this run back up."
                 : "Manual start and stop are the only source for this run.";
 
-    // ── Section bodies ──────────────────────────────────────────────────────────────────────────────
-
-    public bool IsInsideAbyssal => InsideAbyssal ?? IsAbyssal;
-
-    public string LocationText => IsInsideAbyssal
-        ? "none — an abyssal pocket has no location"
-        : (LocationDisplay ?? SolarSystem) is { } place
-            // Never behind "not known yet": that line is about us rather than about where he is, and a scan id in
-            // brackets after it would read as half a place.
-            ? SignatureId is { Length: > 0 } signature ? $"{place} ({signature})" : place
-            : "not known yet";
-
-    /// <summary>Shown only once there is a system to show. "not known yet" is a line about us, not about where he
-    /// is, and the row is hidden instead.</summary>
-    public bool IsLocationShown => IsInsideAbyssal || LocationDisplay is not null || SolarSystem is not null;
-
-    public string BountyText => IsInsideAbyssal
-        ? "— no bounty in abyssal space"
-        : BountyIsk > 0 ? $"{IskFormat.Whole(BountyIsk)} — own character" : "no payouts yet — own character";
-
-    /// <summary>Whether there is a copied signature behind this run at all. A run started by hand has none, and a
-    /// row that can only ever read "not known yet" is worse than no row.</summary>
-    public bool HasSignature => SignatureGroup is not null || SignatureName is not null;
-
-    /// <summary>TYPE, from the same catalogue the detail screen and the runs overview read (ET-226) — never "not
-    /// known yet" for a kind <see cref="Kind"/> already settles on its own (Mission, Abyssal); only a site with no
-    /// scanner group resolves to the catalogue's honest "Site".</summary>
-    public string SignatureTypeText => RunTypeCatalogue.For(RunTypeResolver.Resolve(Kind, SignatureGroup)).Name;
-
-    /// <summary>The icon beside <see cref="SignatureTypeText"/>, from the same catalogue row.</summary>
-    public MaterialIconKind TypeIcon => RunTypeCatalogue.For(RunTypeResolver.Resolve(Kind, SignatureGroup)).Icon;
-
-    /// <summary>The site, described by what every catalogue match agrees it is — archetype, faction, DED, whether
-    /// it turns you away at the gate. Silent about anything they disagree on, and silent about the catalogue
-    /// itself: how many rows happen to share an English name is our problem, not the reader's.</summary>
-    public string SignatureSiteText => SignatureName is not { } name
-        ? "not known yet"
-        : SdeSiteDescription.DescribeCommon(MatchedSites) is { Length: > 0 } common
-            ? $"{name} — {common}"
-            : name;
-
-    /// <summary>The hulls the site lets in, when every match names the same ones — the one fact here that can turn
-    /// you away at the gate, so it is stated before you warp rather than discovered after. Null when there is
-    /// nothing to add over <see cref="SignatureSiteText"/>, which already carries "ship-restricted" itself.</summary>
-    public string? ShipRestrictionText =>
-        MatchedSites.Select(_ShipRule).Distinct().ToList() is [{ } only] ? only : null;
-
-    public bool HasShipRestriction => ShipRestrictionText is not null;
-
-    /// <summary>
-    /// The hull list behind the site line, on demand. It used to stand inline in the ACTIVITY section, where a site
-    /// like Blood Lookout ran to thirty-odd names over five lines and pushed LOCATION and LOOT STRATEGY off the
-    /// bottom (Raymond, 2026-09-02). The site line still says <c>ship-restricted</c> itself, so the fact of the
-    /// restriction never depended on this list being visible.
-    ///
-    /// Shown through <see cref="IDialogService.ShowMessageAsync"/>, the same plain dialog the fit picker falls back
-    /// on — no new surface for one list.
-    /// </summary>
-    [RelayCommand]
-    private async Task ShowShipRestrictionAsync()
-    {
-        if (ShipRestrictionText is not { } hulls)
-            return;
-
-        await _services.GetRequiredService<IDialogService>()
-            .ShowMessageAsync("Ships allowed at this site", hulls);
-    }
-
-    public string TierText => TierIndex is { } tier
-        ? $"{Tiers[tier]} (Tier {tier})"
-        : "not set";
-
-    public string WeatherEnvironmentText => Weather?.EnvironmentName ?? "not set";
-
-    public string WeatherEffectText => Weather is { } weather && TierIndex is { } tier
-        ? $"{weather.Bonus} · {_PenaltyRange(tier)} {weather.PenaltyTarget}"
-        : "not set";
-
-    /// <summary>
-    /// The caption over the ISK figures in the loot section. It names its own source on purpose, and it used to name
-    /// the wrong one: it read "Prices are the clipboard column as it stood at the copy" long after the ISK in a
-    /// copied line stopped being held at all.
-    ///
-    /// It then carried a second sentence warning that the figure beside each row was the copied column instead. That
-    /// sentence was true and is now gone, because the rows are valued the same way the totals are — a warning worth
-    /// removing by making it wrong rather than by deleting it. Which cache snapshot valued them is
-    /// <see cref="RunLootViewModel.TotalIskLabel"/>'s to say, and it says it beside the total rather than twice.
-    /// </summary>
-    public string IskLabel => "Prices come from EVE Together's own hourly price lookup on type id.";
+    /// <summary>Whether the pilot is in a pocket right now: what ESI last saw, and before it has seen anything, what
+    /// the run's type says.</summary>
+    public bool IsInsideAbyssal => InsideAbyssal ?? _IsInPocket;
 
     // ── Lifecycle ───────────────────────────────────────────────────────────────────────────────────
 
@@ -1025,28 +696,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         // Same guard _AdoptRunningRunAsync already carries: with no dispatcher there is nothing remembered to
         // restore, and that is a window without a store rather than a fault.
+        IReadOnlyList<SettingDto>? settings = null;
         if (_services.GetService<CqrsDispatcher>() is not null)
         {
             using var scope = _services.CreateScope();
-            var settings = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Query(new GetSettingsQuery());
-
-            WeatherIndex = _Restore(settings.FirstOrDefault(s => s.Key == WeatherSettingKey)?.Value,
-                AbyssalWeather.All.Count);
-            TierIndex = _Restore(settings.FirstOrDefault(s => s.Key == TierSettingKey)?.Value, Tiers.Count);
-
-            // A remembered strategy this kind does not loot by addresses nothing here, so it reads as unset — the
-            // same rule the two indices get.
-            string? remembered = settings.FirstOrDefault(s => s.Key == LootStrategySettingKey(Kind))?.Value;
-            LootStrategy = LootStrategies.Cast<RunLootStrategy?>()
-                .FirstOrDefault(candidate => candidate.ToString() == remembered);
-
-            // Anything unreadable reads as clipboard, which is the only default that cannot surprise anyone.
-            LootMode = settings.FirstOrDefault(s => s.Key == LootModeSettingKey(Kind))?.Value == nameof(ActivityLootMode.CargoDiff)
-                ? ActivityLootMode.CargoDiff
-                : ActivityLootMode.Clipboard;
+            settings = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Query(new GetSettingsQuery());
         }
 
-        _SyncChoices();
+        foreach (RunWindowSection section in _AllSections())
+            section.Load(settings);
         await _ResolveCharacterAsync(mayAsk: false);
         await _LoadRunCharactersAsync();
         await _AdoptRunningRunAsync();
@@ -1160,7 +818,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // independent counts of one, not one count of six. A window that does not know its pilot yet (a fleet-run
         // offer accepted with no picker shown, because too few clients were up to ask) still falls back to the old
         // app-wide count: with only one run anywhere, that one is unambiguous regardless of whose it is, and
-        // _AdoptCharacterAsync below learns the pilot FROM the row it adopts.
+        // _AdoptCharacterAsync below learns the pilot FROM the row it adopts. The kind comparison is identity, kept on
+        // purpose (ET-236): a window only ever takes over a run of the kind it was opened as.
         Result<RunningRunDto> running = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
             .Query(new GetRunningRunQuery(_runCharacterId));
         if (!running.IsSuccess || running.Value is not { } run || run.ActivityKind != Kind)
@@ -1221,7 +880,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _isManualRun = true;
         RunState = ActivityRunState.Running;
         await _AdoptCharacterAsync(checked((int)run.CharacterId));
-        _StartEnemyObservations();
+        _OnRunWatched();
 
         // After the state above: StopRun only acts on a run it considers running.
         if (_pendingCopy is not null)
@@ -1292,14 +951,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // system it showed a member while the commander had the site.
         SignatureId ??= start.Signature;
         RunState = ActivityRunState.Running;
-        _StartEnemyObservations();
+        _OnRunWatched();
         // A joined run still needs its own row, or this member's loot and bounties have nothing to hang off.
         _ = _BeginEstimatedRunAsync(start.StartedAtUtc, start.SiteName);
         Refresh(DateTime.UtcNow);
     }
 
     /// <summary>The commander started, and this window was already open on nothing. Only a start that came from the
-    /// commander joins a window: a member's own start is announced too, and it is not an invitation.</summary>
+    /// commander joins a window: a member's own start is announced too, and it is not an invitation. The kind
+    /// comparison is identity, kept on purpose (ET-236): a window only joins a run of the kind it was opened as.</summary>
     private void _OnFleetRunStarted(FleetRunGroupCodeEvent integrationEvent)
     {
         RunGroupCodeStart start = integrationEvent.Data;
@@ -1339,7 +999,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         {
             StoppedAtUtc ??= discard.DiscardedAtUtc;
             RunState = ActivityRunState.Discarded;
-            _EndEnemyObservations();
+            _OnRunClosed();
             GroupCode = null;
             RunNoticeText = "The fleet commander discarded this run, so it is no longer part of the group. "
                             + "Nothing you already saved is gone. Close this window when you have read it.";
@@ -1582,6 +1242,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         using var scope = _services.CreateScope();
         Result<RunningRunDto> result = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
             .Query(new GetRunningRunQuery(characterId));
+        // Identity, kept on purpose (ET-236): the column only switches between runs of the window's own kind.
         if (!result.IsSuccess || result.Value is not { } run || run.Id != runId || run.ActivityKind != Kind)
             return;
 
@@ -1613,103 +1274,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         Refresh(DateTime.UtcNow);
     }
 
-    /// <summary>Fill the run's fit from ET-101's reading. Clock-driven like the fleet command is, so starting a run
-    /// fills it without the player confirming anything. An unlinked fit comes back through the same reading, so it
-    /// survives this window being closed and reopened mid-run.</summary>
-    public async Task RefreshFitAsync()
-    {
-        if (_ActingCharacterId() is not { } characterId
-            || _services.GetService<IShipFitDetectionService>() is not { } detection)
-            return;
-
-        ShipFitDetectionReading reading = detection.GetReading(characterId);
-        if (ReferenceEquals(reading, _fitReading))
-            return;
-
-        _fitReading = reading;
-        ApplyFitDetection(reading);
-        await _LoadFitStatsAsync(reading.SelectedFit?.Id);
-    }
-
-    private async Task _LoadFitStatsAsync(int? fittingId)
-    {
-        if (fittingId is not { } id || _services.GetService<IFittingRepository>() is not { } fittings)
-        {
-            ApplyFitStats(null, fitCouldBeRead: true);
-            return;
-        }
-
-        LocalFitting? fitting = await fittings.FindByIdAsync(id);
-        EsiFitting? esi = _ReadFitting(fitting?.RawJson);
-        ApplyFitStats(
-            esi is null ? null : await _services.GetRequiredService<IFitStatsProvider>().ComputeAsync(esi),
-            fitCouldBeRead: esi is not null);
-    }
-
-    private static EsiFitting? _ReadFitting(string? rawJson)
-    {
-        if (rawJson is null)
-            return null;
-        try { return JsonSerializer.Deserialize<EsiFitting>(rawJson); }
-        catch (JsonException) { return null; }
-    }
-
-    [RelayCommand]
-    private async Task ChooseFitAsync()
-    {
-        var dialogs = _services.GetRequiredService<IDialogService>();
-        if (_ActingCharacterId() is not { } characterId)
-        {
-            await dialogs.ShowMessageAsync("Choose a fit",
-                "Start the run first — its character is what a fit is filed under.");
-            return;
-        }
-
-        var picker = new FitPickerViewModel(_services, FitPickerMode.Single, alreadyAdded: null,
-            composition: null, currentFitHash: null, skillCheckCharacterId: characterId);
-        FitReferenceInfo? fit = await dialogs.PickFitAsync(picker);
-        if (fit is null)
-            return;
-        if (fit.LocalFittingId is null)
-        {
-            await dialogs.ShowMessageAsync("Choose a local fit", "Only a local fit can be filed against a run.");
-            return;
-        }
-
-        var detection = _services.GetRequiredService<IShipFitDetectionService>();
-        Result overrideResult = await detection.SetManualFitAsync(characterId, fit.LocalFittingId);
-        if (!overrideResult.IsSuccess)
-        {
-            await dialogs.ShowMessageAsync("Fit selection",
-                overrideResult.Messages.FirstOrDefault()?.Text ?? "Could not save the fit selection.");
-            return;
-        }
-
-        _fitReading = null;
-        await RefreshFitAsync();
-    }
-
-    /// <summary>Unlink: the run goes on without a fit. Stored by the detection service rather than held here, or
-    /// closing and reopening the window mid-run would quietly fill back in what the player just took off.</summary>
-    [RelayCommand]
-    private async Task DetachFitAsync()
-    {
-        if (_ActingCharacterId() is not { } characterId
-            || _services.GetService<IShipFitDetectionService>() is not { } detection)
-            return;
-
-        Result detached = await detection.DetachFitAsync(characterId);
-        if (!detached.IsSuccess)
-        {
-            await _services.GetRequiredService<IDialogService>().ShowMessageAsync("Fit selection",
-                detached.Messages.FirstOrDefault()?.Text ?? "Could not unlink the fit.");
-            return;
-        }
-
-        _fitReading = null;
-        await RefreshFitAsync();
-    }
-
     /// <summary>Begin ticking. Separate from the constructor so a test drives <see cref="Refresh"/> with a clock it
     /// controls rather than racing a timer.</summary>
     public void Start()
@@ -1732,7 +1296,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _RefreshGroupTotalIsk();
         _RefreshSummaries();
         _ = RefreshFleetCommandAsync(nowUtc);
-        _ = RefreshFitAsync();
+        foreach (RunWindowSection section in _AllSections())
+            section.Refresh(nowUtc);
         _ = _RefreshActingCharacterAsync();
         _ = _RefreshRunCharactersAsync();
         _ = _RefreshParticipantsAsync();
@@ -1757,63 +1322,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         source.SetLootIsk(characterId, RunState is ActivityRunState.NotStarted ? null : RunLoot?.NetIsk);
     }
 
-    [RelayCommand]
-    private async Task SelectWeatherAsync(int index)
-    {
-        WeatherIndex = index;
-        _AfterChoice();
-        await _PersistAsync(WeatherSettingKey, index.ToString(CultureInfo.InvariantCulture));
-    }
-
-    [RelayCommand]
-    private async Task SelectTierAsync(int index)
-    {
-        TierIndex = index;
-        _AfterChoice();
-        await _PersistAsync(TierSettingKey, index.ToString(CultureInfo.InvariantCulture));
-    }
-
-    /// <summary>Pressing the strategy that is already set clears it — the row has no other way back to unset, and
-    /// a wrong label on a saved run is worse than none.</summary>
-    [RelayCommand]
-    private async Task SelectLootStrategyAsync(int index)
-    {
-        LootStrategy = LootStrategy == LootStrategies[index] ? null : LootStrategies[index];
-        _SyncChoices();
-        Refresh(DateTime.UtcNow);
-        await _PersistAsync(LootStrategySettingKey(Kind), LootStrategy?.ToString() ?? string.Empty);
-        // Onto the run the moment it is pressed, so a run the app finishes by itself (ET-179) keeps the answer. A
-        // strategy chosen before START has no row yet and reaches the run through SAVE.
-        if (RunId is { } runId)
-        {
-            using var scope = _services.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
-                .Send(new SetRunLootStrategyCommand(runId, LootStrategy));
-        }
-    }
-
-    [RelayCommand]
-    private async Task SelectLootModeAsync(int index)
-    {
-        LootMode = LootModes[index];
-        _SyncChoices();
-        await _PersistAsync(LootModeSettingKey(Kind), LootMode.ToString());
-    }
-
-    [RelayCommand]
-    private async Task ClearWeatherAndTierAsync()
-    {
-        WeatherIndex = null;
-        TierIndex = null;
-        _AfterChoice();
-        await _PersistAsync(WeatherSettingKey, string.Empty);
-        await _PersistAsync(TierSettingKey, string.Empty);
-    }
-
-    /// <summary>Reopen the picker on the run that is already answered — the one line it folded behind.</summary>
-    [RelayCommand]
-    private void OpenPicker() => IsPickerOpen = true;
-
     /// <summary>The button. Creating the stored run is the whole of it — without that row there is no run for the
     /// loot, the bounties or the enemies to hang off, and the clock would be counting on its own.
     ///
@@ -1834,7 +1342,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             StoppedAtUtc = null;
             CorrectedStopUtc = null;
             RunState = ActivityRunState.Running;
-            _StartEnemyObservations();
+            _OnRunWatched();
             if (RunLoot is not null)
                 await RunLoot.RefreshAsync();
             Refresh(nowUtc);
@@ -1885,7 +1393,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _isManualRun = true;
         BountyIsk = 0;
         RunState = ActivityRunState.Running;
-        _StartEnemyObservations();
+        _OnRunWatched();
         OnPropertyChanged(nameof(IsStartButtonVisible));
         OnPropertyChanged(nameof(RunOriginText));
         Refresh(nowUtc);
@@ -1937,15 +1445,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 // pilot pasted, not from a catalogue pick (ET-163).
                 Origin: EveUtils.Shared.Modules.Runs.Enums.RunOrigin.Clipboard,
                 // Every non-mission caller leaves AgentId/MissionLevel/Parameters at their defaults (null, null,
-                // empty) — only ClipboardMissionOffer ever sets them (ET-172 sub 4). A site with a copied name the
-                // catalogue never carries is Uncatalogued, not Site with a blank id (ET-178 AC-2): otherwise it
-                // reads back no differently from a site that was never named at all.
-                SiteTypeSource: Kind switch
-                {
-                    ActivityKind.Mission => SiteTypeSource.Mission,
-                    ActivityKind.Site when SignatureName is not null && MatchedSites.Count == 0 => SiteTypeSource.Uncatalogued,
-                    _ => SiteTypeSource.Site
-                },
+                // empty) — only ClipboardMissionOffer ever sets them (ET-172 sub 4).
+                SiteTypeSource: _SiteTypeSource(),
                 AgentId: MissionAgentId,
                 MissionLevel: MissionLevel,
                 Parameters: PendingParameters));
@@ -2005,12 +1506,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             SignatureGroupSnapshot: SignatureGroup,
             SolarSystemName: SolarSystem,
             Origin: EveUtils.Shared.Modules.Runs.Enums.RunOrigin.Clipboard,
-            SiteTypeSource: Kind switch
-            {
-                ActivityKind.Mission => SiteTypeSource.Mission,
-                ActivityKind.Site when SignatureName is not null && MatchedSites.Count == 0 => SiteTypeSource.Uncatalogued,
-                _ => SiteTypeSource.Site
-            },
+            SiteTypeSource: _SiteTypeSource(),
             AgentId: MissionAgentId,
             MissionLevel: MissionLevel,
             Parameters: PendingParameters));
@@ -2025,7 +1521,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         // Watched from the same instant its own run exists (ET-210 review, round 4) — this character's own gamelog
         // counts towards the group's enemies from here on, exactly like its bounty and loot already do.
-        _EnsureEnemyObservations(checked((int)characterId));
+        foreach (RunWindowSection section in _AllSections())
+            section.OnCharacterRunStarted(checked((int)characterId));
     }
 
     /// <summary>The site's own solar system, resolved once for the whole group starting on it (ET-210 review
@@ -2034,11 +1531,22 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// into the numeric id <c>Run.SolarSystemId</c> actually stores, so a saved activity's LOCATION always read
     /// "not recorded" regardless of how many characters it held. Null when the SDE has no exact match, same as an
     /// unmatched site name reads elsewhere in this window (ET-178).</summary>
-    private int? _ResolveSolarSystemId() => Kind == ActivityKind.Mission
+    private int? _ResolveSolarSystemId() => RunType.HasAgent
         ? MissionSolarSystemId
         : SolarSystem is { Length: > 0 } name
             ? _services.GetService<ISdeAccessor>()?.FindSolarSystemByName(name)?.SolarSystemId
             : null;
+
+    /// <summary>Which id space the stored run's site came from. A kind check kept on purpose (ET-236): this is how
+    /// the store files the row's site, keyed on the kind it is filed under, not anything a section shows. A site with
+    /// a copied name the catalogue never carries is Uncatalogued, not Site with a blank id (ET-178 AC-2): otherwise it
+    /// reads back no differently from a site that was never named at all.</summary>
+    private SiteTypeSource _SiteTypeSource() => Kind switch
+    {
+        ActivityKind.Mission => SiteTypeSource.Mission,
+        ActivityKind.Site when SignatureName is not null && MatchedSites.Count == 0 => SiteTypeSource.Uncatalogued,
+        _ => SiteTypeSource.Site
+    };
 
     /// <summary>What ET-101's own detection already knows for this specific character, turned into what
     /// <c>StartRunCommand</c> stores — <see cref="IShipFitDetectionService"/> answers per character, not only for
@@ -2149,7 +1657,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
         }
 
-        if (IsAbyssal && end - start > AbyssalSpace.RunLimit)
+        if (_IsInPocket && end - start > AbyssalSpace.RunLimit)
         {
             TimeCorrectionError =
                 $"An abyssal run cannot last longer than {AbyssalSpace.RunLimit.TotalMinutes:N0} minutes — "
@@ -2391,6 +1899,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public string SaveButtonText => IsSaving ? "SAVING…" : "SAVE";
 
+    private RunSaveDraft _SaveDraftFor(Guid runId, int? characterId, bool isActingRun)
+    {
+        var draft = new RunSaveDraft(runId, characterId, isActingRun);
+        foreach (RunWindowSection section in _AllSections())
+            section.AddToSave(draft);
+        return draft;
+    }
+
     /// <summary>
     /// This member commits their own part of the run — every member's own button, never the FC's (ET-105). The
     /// enemy observations are converted here: ET-106 left that seam open so the run would have one lifecycle
@@ -2422,14 +1938,18 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             // The summary rebuild is deferred to one call after every row in the group is saved (ET-210 review
             // finding): it scans every saved run in the store and prices its loot, and running that scan once per
             // row — five times for a five-character group — was the whole of the five-to-six-second stall.
+            //
+            // What each run carries besides its times — its enemies, its escalation, how it was looted — is the
+            // sections' to add (ET-236).
+            RunSaveDraft own = _SaveDraftFor(runId, _runCharacterId, isActingRun: true);
             Result result = await dispatcher.Send(new SaveRunCommand(
                 runId, EffectiveStopUtc ?? nowUtc, nowUtc, [], [],
-                _runCharacterId is { } actingId ? _EnemyInputsFor(actingId) : [],
-                _escalationParameters,
+                own.Enemies,
+                own.Parameters,
                 // Null leaves the row's own start alone; only a hand-corrected start travels.
                 CorrectedStartUtc,
                 IsTimeCorrected ? nowUtc : null,
-                LootStrategy: LootStrategy,
+                LootStrategy: own.LootStrategy,
                 RebuildSummaries: false));
             if (!result.IsSuccess)
             {
@@ -2446,10 +1966,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             // to commit.
             foreach (RunParticipantViewModel sibling in Participants.Where(participant => participant.RunId != runId))
             {
+                RunSaveDraft theirs = _SaveDraftFor(sibling.RunId, sibling.CharacterId, isActingRun: false);
                 Result siblingResult = await dispatcher.Send(new SaveRunCommand(
                     sibling.RunId, EffectiveStopUtc ?? nowUtc, nowUtc, [], [],
-                    _EnemyInputsFor(sibling.CharacterId), [],
-                    LootStrategy: LootStrategy, RebuildSummaries: false));
+                    theirs.Enemies, theirs.Parameters,
+                    LootStrategy: theirs.LootStrategy, RebuildSummaries: false));
                 if (!siblingResult.IsSuccess)
                     _services.GetService<IToastService>()?.Show("A run in this group was not saved",
                         siblingResult.Messages.FirstOrDefault()?.Text ?? "Could not save one of the other characters' runs.",
@@ -2458,7 +1979,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
             // The one rebuild the whole group's saves needed, run once now that every row is in.
             await dispatcher.Send(new RebuildActivitySummariesCommand());
-            _EndEnemyObservations();
+            _OnRunClosed();
             if (RunLoot is not null)
                 await RunLoot.RefreshAsync();
             Refresh(nowUtc);
@@ -2666,45 +2187,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     }
 
     /// <summary>
-    /// Everything the last run left standing on this window, in one place. A new run starts clean (Raymond,
-    /// 2026-09-02): what survives a run survives because it was decided to, not because nobody cleared it, and one
-    /// method rather than three copies is the whole point — three drift apart the first time a field is added, which
-    /// is how this gap opened.
-    ///
-    /// START is deliberately not one of its callers: STOP is a pause, so pressing START again picks the same run
-    /// back up. Ending a run closes the window now — SAVE and DISCARD both do (ET-155) — so what is left here is the
-    /// one case where the window stays and the run does not: a copied site taking over from a run just closed out.
-    ///
-    /// Kept on purpose, and each for its own reason: the weather, the tier and the loot strategy, because you fly the
-    /// same ones several runs in a row — which is what their settings keys exist for; the signature and its matched
-    /// sites, because they are what the window was opened on rather than anything the run produced; and whose run it
-    /// is, because that is the client's pilot and not this run's property. The fleet's members are not run state
-    /// either — they are whoever is heard from right now, and stop being listed on their own when they go quiet.
-    /// </summary>
-    private void _ResetForNewRun()
-    {
-        RunId = null;
-        AnchorUtc = null;
-        StoppedAtUtc = null;
-        CorrectedStartUtc = null;
-        CorrectedStopUtc = null;
-        TimeCorrectionError = null;
-        RunState = ActivityRunState.NotStarted;
-        RunNoticeText = null;
-        // Otherwise a discarded manual run left the window refusing every later fleet anchor: the flag that makes a
-        // stopped manual result final outlived the result it was final about.
-        _isManualRun = false;
-        BountyIsk = 0;
-        TotalLootIsk = null;
-        Participants.Clear();
-        _SyncLootOverview();
-        // ET-101 reads the ship again for the new run rather than leaving the last one's fit on screen; the reading
-        // itself lives in the detection service, so this only drops what this window cached of it.
-        _fitReading = null;
-        _EndEnemyObservations();
-    }
-
-    /// <summary>
     /// A clipboard copy has just been filed against a run. The LOOT section itself is only redrawn when it is
     /// <i>this</i> window's own run, so a second window on another run does not redraw for loot that is not its
     /// own — the window reads its loot from the store, and until this arrived nothing told it to read again: a copy
@@ -2801,7 +2283,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         FleetMemberCount = members.Count;
         _SyncFleetMembers(members);
 
-        if (!IsAbyssal)
+        if (!_IsInPocket)
         {
             AnchoredFleetMemberCount = 0;
             Refresh(receivedUtc);
@@ -2820,7 +2302,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             AnchorUtc = anchors.Min();
             StoppedAtUtc = null;
             RunState = ActivityRunState.Running;
-            _StartEnemyObservations();
+            _OnRunWatched();
             // A run nobody pressed START for still needs its row, or the loot has nothing to attach to.
             if (RunId is null)
                 _ = _BeginEstimatedRunAsync(AnchorUtc.Value);
@@ -2857,9 +2339,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             FleetMembers.Remove(gone);
 
         OnPropertyChanged(nameof(IsFleetShown));
-        OnPropertyChanged(nameof(FleetBasisText));
-        OnPropertyChanged(nameof(FleetTotalText));
-        OnPropertyChanged(nameof(IsFleetTotalShown));
+        // The rows changed under the same collection; said as a change of it, for the sections that read it.
+        OnPropertyChanged(nameof(FleetMembers));
     }
 
     /// <summary>The row for a member, made on first sight. A name public ESI has already resolved is not thrown away
@@ -2972,7 +2453,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// </summary>
     private void _StartOrStopOnAbyssalCrossing(bool? wasInside, DateTime? anchorUtc, DateTime nowUtc)
     {
-        if (!IsAbyssal)
+        if (!_IsInPocket)
             return;
 
         // The anchor leads, because it is the only thing that rules out a cold start inside: this branch is entered
@@ -3021,10 +2502,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public void Dispose()
     {
         if (_gamelog is not null)
-        {
-            _gamelog.CombatObserved -= _OnCombatObserved;
             _gamelog.BountyObserved -= _OnBountyObserved;
-        }
+
+        foreach (RunWindowSection section in _AllSections())
+            section.Dispose();
 
         _metricSubscription?.Dispose();
         _lootSubscription?.Dispose();
@@ -3035,77 +2516,30 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _timer = null;
     }
 
-    // The event fires for damage either way — "250 to Centii Scavenger" and "1 from Centii Servant" alike — and both
-    // are the same kind of enemy, so the direction is dropped here rather than carried into the list (ET-115).
-    // Routed straight to that character's OWN collector — each already refuses everyone else's id internally, so
-    // this only ever widens a row's own observed window, never another character's.
-    private void _OnCombatObserved(int characterId, string target, DateTime observedAtUtc, DamageDirection direction)
+    /// <summary>The run on screen is on the clock — started, resumed, joined, adopted or anchored by the fleet — and
+    /// every section hears it.</summary>
+    private void _OnRunWatched()
     {
-        if (RunState != ActivityRunState.Running)
-            return;
-
-        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            _enemyObservationsByCharacter.GetValueOrDefault(characterId)?.Record(characterId, target, observedAtUtc));
-    }
-
-    /// <summary>Give the ACTING character its own tally, if it does not have one yet. Kept as the no-arg entry
-    /// point every existing call site already uses (window start, resume, join, fleet anchor) — each of those is
-    /// about the character this window is acting as, never about a sibling.</summary>
-    private void _StartEnemyObservations()
-    {
-        if (_runCharacterId is { } id)
-            _EnsureEnemyObservations(id);
-
-        OnPropertyChanged(nameof(EnemyObservations));
+        foreach (RunWindowSection section in _AllSections())
+            section.OnRunStarted();
         _RefreshSummaries();
     }
 
-    /// <summary>Give ANY character in the group its own tally (ET-210 review finding, 2026-09-09, round 4) — called
-    /// for a sibling the moment its own <c>StartRunCommand</c> is sent, so its gamelog is being watched for enemies
-    /// from the same instant its bounty and loot start counting. A no-op past the first call for a character, same
-    /// as the single collector this replaces was for the acting one.</summary>
-    private void _EnsureEnemyObservations(int characterId)
+    /// <summary>The run is committed or thrown away, and every section lets go of what it was collecting — the whole
+    /// group's, since STOP, SAVE and DISCARD act on the whole group (ET-210).</summary>
+    private void _OnRunClosed()
     {
-        if (_enemyObservationsByCharacter.ContainsKey(characterId)
-            || _services.GetService<ISdeAccessor>() is not { } sde)
-            return;
-
-        var collector = new RunEnemyObservationCollector(characterId,
-            name => sde.TryGetTypeId(name, out int typeId) ? typeId : null);
-        // Only the summary: re-announcing the list itself while a count is being typed would rebind the editor
-        // under the cursor. The rows are an ObservableCollection — the list keeps itself up to date. Wired for
-        // every character, not just the acting one, so a background sibling's count still moves the group total.
-        collector.Changed += _RefreshSummaries;
-        _enemyObservationsByCharacter[characterId] = collector;
-    }
-
-    /// <summary>Let go of every character's list, once the run it belongs to is committed or thrown away — the
-    /// whole group's, not just the acting character's, since STOP/SAVE/DISCARD already act on the whole group
-    /// (ET-210).</summary>
-    private void _EndEnemyObservations()
-    {
-        foreach (RunEnemyObservationCollector collector in _enemyObservationsByCharacter.Values)
-            collector.Changed -= _RefreshSummaries;
-
-        _enemyObservationsByCharacter.Clear();
-        OnPropertyChanged(nameof(EnemyObservations));
+        foreach (RunWindowSection section in _AllSections())
+            section.OnRunClosed();
         _RefreshSummaries();
     }
-
-    /// <summary>What <see cref="SaveRunCommand"/> stores for one character — empty when nobody ever typed a count
-    /// for them, the same "seen, not counted, never stored" rule <see cref="RunEnemyObservationViewModel.IsCounted"/>
-    /// already applies live.</summary>
-    private IReadOnlyList<RunEnemyObservationInput> _EnemyInputsFor(int characterId) =>
-        _enemyObservationsByCharacter.TryGetValue(characterId, out RunEnemyObservationCollector? collector)
-            ? collector.ToInputs()
-            : [];
 
     // ── Internals ───────────────────────────────────────────────────────────────────────────────────
 
     private void _RefreshClock(DateTime nowUtc)
     {
         DateTime effectiveNow = EffectiveStopUtc ?? nowUtc;
-        ClockLabel = IsAbyssal
+        ClockLabel = _IsInPocket
             ? RunState == ActivityRunState.Stopped ? "TIME LEFT AT STOP" : "TIME LEFT"
             : "ELAPSED";
 
@@ -3121,7 +2555,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         StartText = _LocalTime(start);
 
-        if (!IsAbyssal)
+        if (!_IsInPocket)
         {
             ClockText = _Elapsed(effectiveNow - start);
             IsClockWarning = false;
@@ -3189,18 +2623,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     private void _RefreshSummaries()
     {
-        Activity.HeaderSummary = _ActivitySummary();
-        Enemies.HeaderSummary = _EnemySummary();
-        Fit.HeaderSummary = FitText;
-        // Never "solo": nothing here can observe the absence of a fleet, only the presence of one. Without any the
-        // section is hidden (IsFleetShown) and this line is not on screen at all.
-        Fleet.HeaderSummary = FleetMemberCount > 1 ? FleetStatusText : "no fleet has reported in";
-        Bounty.HeaderSummary = BountyText;
-        // What was collected first, the value as an aside. A shut section that only reported "no price" read as a
-        // fault while two items sat in it (Raymond, 2026-09-02). The whole group's, since the section under it is.
-        Loot.HeaderSummary = LootOverview is { HasCaptures: true } overview
-            ? $"{_LootItemCount()} · {overview.NetIskDisplay}"
-            : RunLoot?.RunStatusMessage ?? "no loot captured";
+        foreach (RunWindowSection section in _AllSections())
+            section.RefreshSummary();
     }
 
     /// <summary>
@@ -3260,7 +2684,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // (Raymond, 2026-09-04). Now every run takes the one route a group run always took: the clock stops, the
         // copy waits, and SAVE, DISCARD or KEEP answers it. GroupCode no longer decides anything here, so this route
         // and _AdoptRunningRunAsync's own close-out no longer read the same — that one is about a run left in the
-        // store rather than one being flown, and it keeps its discard until a report says otherwise.
+        // store rather than one being flown, and it keeps its discard until a report says otherwise. A copied signature
+        // is a site, whatever this window is showing, so that is the kind the waiting window opens as.
         _pendingCopy = new PendingCopy(ActivityKind.Site, name, StartsOnArrival, id, group, sites, null, null, null, []);
         StopRun(DateTime.UtcNow);
         _SignatureDecision($"the open {SignatureName} run is not this one, so this waits", name);
@@ -3302,7 +2727,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         // A run that is not this one was going: the same wait a copied signature gets, for the same reason. Guarded
         // on a named agent because the waiting copy is what a new window is later built from, and a window has to
-        // open on something the pilot recognises rather than on a stand-in this method made up.
+        // open on something the pilot recognises rather than on a stand-in this method made up. A copied mission opens
+        // a mission window, whatever this one is showing.
         if (agentName is { Length: > 0 } waiting && RunState is not ActivityRunState.NotStarted
             && !_IsSameRun(SignatureId, SignatureName, null, waiting))
         {
@@ -3337,125 +2763,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             "Copied signature {Signature}: {What} (run {RunId}, state {State}, group {Group}, fleet {Fleet}).",
             name, what, RunId, RunState, GroupCode, FleetId);
 
-    private string _LootItemCount()
-    {
-        int items = LootOverview?.Characters.Sum(block => block.Loot.Captures
-            .Where(capture => !capture.IsExcluded).Sum(capture => capture.Entries.Count)) ?? 0;
-        return items == 1 ? "1 item" : $"{items} items";
-    }
-
-    internal void ApplyFitDetection(ShipFitDetectionReading reading)
-    {
-        // The four detection states of ET-101 stay four: whether a character may look at all, has not looked yet,
-        // looked and found nothing, or looked and found too much are different answers with different remedies.
-        FitText = reading.State switch
-        {
-            ShipFitDetectionState.Unobserved => "no fit: ship type has not been read yet",
-            ShipFitDetectionState.ScopeMissing => "no fit: ship-type scope is missing",
-            ShipFitDetectionState.Observed when reading.MatchReason == ShipFitMatchReason.Detached =>
-                "no fit: unlinked from this run",
-            ShipFitDetectionState.Observed when reading.MatchReason == ShipFitMatchReason.NoFitFound =>
-                "no fit: no known fit matches the observed ship",
-            ShipFitDetectionState.Observed when reading.SelectedFit is { } fit =>
-                $"fit: {fit.Name} ({_FitMatchReason(reading.MatchReason)})",
-            ShipFitDetectionState.Observed => "no fit: no single fit matches the observed ship",
-            _ => "no fit: ship fit is unavailable"
-        };
-        HasFit = reading is { State: ShipFitDetectionState.Observed, SelectedFit: not null };
-        _RefreshSummaries();
-    }
-
-    internal void ApplyFitStats(FitStats? stats, bool fitCouldBeRead)
-    {
-        if (!fitCouldBeRead)
-        {
-            FitVelocityText = "fit could not be read";
-            FitWarpSpeedText = "fit could not be read";
-            return;
-        }
-
-        FitVelocityText = stats is null ? "no max velocity" : $"max velocity: {stats.MaxVelocity:N0} m/s";
-        FitWarpSpeedText = stats is null ? "no warp speed" : $"warp speed: {stats.WarpSpeed:N2} AU/s";
-    }
-
-    private static string _FitMatchReason(ShipFitMatchReason? reason) => reason switch
-    {
-        ShipFitMatchReason.ShipName => "name matches the observed ship",
-        ShipFitMatchReason.OnlyFitForShipType => "only known fit for this ship type",
-        ShipFitMatchReason.Manual => "manual choice",
-        _ => "automatic suggestion"
-    };
-
-    private string _ActivitySummary()
-    {
-        if (!IsAbyssal)
-            return string.Join(" · ", new[] { SignatureName ?? "no signature", _ShortDemand(), SolarSystem }
-                .Where(part => part is not null));
-
-        return Weather is { } weather && TierIndex is { } tier
-            ? $"{Tiers[tier]} T{tier} · {weather.Name} · no location"
-            : "not set yet · no location";
-    }
-
-    /// <summary>Shut, the section still has to answer both halves of the question it exists for: which kinds were
-    /// seen, and how many of them carry a count. A count of zero is not stored (ET-106), so "seen" and "counted"
-    /// are different numbers and the header is the only place they are both visible.</summary>
-    private string _EnemySummary()
-    {
-        int types = EnemyObservations.Count;
-        if (types == 0)
-            return RunState == ActivityRunState.NotStarted ? "no run watched yet" : "no enemies seen yet";
-
-        int counted = EnemyObservations.Count(observation => observation.IsCounted);
-        return $"{types} {(types == 1 ? "type" : "types")} · {(counted == 0 ? "none counted" : $"{counted} counted")}";
-    }
-
-    /// <summary>The shut header carries what the run demands, not only what it is called — the same description the
-    /// site line and the toast use, so the three cannot drift apart. Silent when the entries sharing the name do
-    /// not agree: a demand is worth nothing if it might be the neighbour's.</summary>
-    private string? _ShortDemand() =>
-        SdeSiteDescription.DescribeCommon(MatchedSites) is { Length: > 0 } common ? common : null;
-
-    /// <summary>The hulls a site names, or null when it names none. A restricted site whose allow-list resolves to
-    /// no groups says nothing here and stays "ship-restricted" on the site line — reading it as "anything goes" is
-    /// the one mistake here that costs a ship.</summary>
-    private static string? _ShipRule(SdeSite site) =>
-        site is { IsShipRestricted: true, AllowedShipGroups: not [] }
-            ? string.Join(", ", site.AllowedShipGroups.Select(group => group.Name).Order())
-            : null;
-
-    private void _AfterChoice()
-    {
-        IsPickerOpen = !HasWeatherAndTier;
-        _SyncChoices();
-        Refresh(DateTime.UtcNow);
-    }
-
-    /// <summary>Mirror the selection onto the buttons. The choices carry it themselves so the picker can be a flat
-    /// <c>ItemsControl</c> instead of five and seven hand-written buttons.</summary>
-    private void _SyncChoices()
-    {
-        foreach (var choice in WeatherChoices)
-            choice.IsSelected = choice.Index == WeatherIndex;
-
-        foreach (var choice in TierChoices)
-            choice.IsSelected = choice.Index == TierIndex;
-
-        foreach (var choice in LootStrategyChoices)
-            choice.IsSelected = LootStrategy is { } chosen && LootStrategies[choice.Index] == chosen;
-
-        foreach (var choice in LootModeChoices)
-            choice.IsSelected = LootModes[choice.Index] == LootMode;
-    }
-
-    /// <summary>The mode moves controls on and off screen and nothing else — the figures follow the roles on the
-    /// captures, so switching back and forth cannot change what the run is worth.</summary>
-    partial void OnLootModeChanged(ActivityLootMode value)
-    {
-        if (RunLoot is not null)
-            RunLoot.IsCargoDiffShown = value is ActivityLootMode.CargoDiff;
-    }
-
     /// <summary>SAVE is the lock, and so is ET-179 finishing a run left standing: a committed run's loot carries no
     /// controls at all, which is the whole difference between an editable section and a fixed one.</summary>
     partial void OnRunStateChanged(ActivityRunState value)
@@ -3465,25 +2772,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         foreach (ActivityLootCharacterViewModel block in LootOverview?.Characters ?? [])
             block.Loot.IsLocked = value is ActivityRunState.Saved;
     }
-
-    private async Task _PersistAsync(string key, string value)
-    {
-        using var scope = _services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new SetSettingCommand(key, value));
-    }
-
-    /// <summary>The resist penalty is rolled per site rather than fixed per tier, so the window shows the band it
-    /// can land in instead of a number it would be inventing — the same three strengths AbyssalBeacons offers as an
-    /// explicit choice.</summary>
-    private static string _PenaltyRange(int tier) => tier <= 3 ? "-30% or -50%" : "-50% or -70%";
-
-    /// <summary>A stored index that no longer addresses anything is treated as unset — the alternative is a window
-    /// that throws on open because a list got shorter.</summary>
-    private static int? _Restore(string? stored, int count) =>
-        int.TryParse(stored, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index)
-        && index >= 0 && index < count
-            ? index
-            : null;
 
     private static string _LocalTime(DateTime utc) =>
         utc.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture);

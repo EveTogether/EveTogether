@@ -60,7 +60,7 @@ public sealed class ActivityDetailTests
             nameOf: id => id == 90000001 ? "RaymondKrah" : $"character {id}");
         await viewModel.LoadAsync(cancellationToken);
 
-        Assert.Equal("RaymondKrah", Assert.Single(viewModel.RunRows).CharacterText);
+        Assert.Equal("RaymondKrah", Assert.Single(viewModel.Fleet().RunRows).CharacterText);
     }
 
     // ── LOCATION shows a name, not a bare id (ET-213) ───────────────────────────────────────────────
@@ -88,10 +88,10 @@ public sealed class ActivityDetailTests
             instance.Services.GetRequiredService<IAppraisalProvider>(), sde: sde);
         await viewModel.LoadAsync(cancellationToken);
 
-        Assert.Equal("Cistuvaert", viewModel.LocationText);
+        Assert.Equal("Cistuvaert", viewModel.Activity().LocationText);
         // "Site", not "Combat Site": _SaveSiteRunAsync never records a scanner group, and ET-226 stopped that
         // defaulting to Combat Site — see ActivityDetailTests.KindText_ReadsSite_WhenNoGroupWasEverRecorded.
-        Assert.Equal("Site · Cistuvaert", viewModel.Activity.HeaderSummary);
+        Assert.Equal("Site · Cistuvaert", viewModel.Activity().HeaderSummary);
     }
 
     // ── TYPE reads the recorded scanner group, not a default (ET-226) ──────────────────────────────────
@@ -121,7 +121,7 @@ public sealed class ActivityDetailTests
         await viewModel.LoadAsync(cancellationToken);
 
         Assert.Equal("Data Site", viewModel.KindText);
-        Assert.StartsWith("Data Site", viewModel.Activity.HeaderSummary);
+        Assert.StartsWith("Data Site", viewModel.Activity().HeaderSummary);
     }
 
     /// <summary>A run whose group was never recorded — a manual start, or one saved before this column existed —
@@ -160,7 +160,7 @@ public sealed class ActivityDetailTests
             instance.Services.GetRequiredService<IAppraisalProvider>(), sde: new FakeSdeAccessor());
         await viewModel.LoadAsync(cancellationToken);
 
-        Assert.Equal("system 30000142", viewModel.LocationText);
+        Assert.Equal("system 30000142", viewModel.Activity().LocationText);
     }
 
     /// <summary>AC-1, mission half: a mission names its agent and its level and shows REWARDS, and carries no
@@ -289,7 +289,7 @@ public sealed class ActivityDetailTests
 
         (ActivityDetailWindow window, Window root) = await _PresentAsync(instance, 758, cancellationToken);
         ActivityDetailViewModel viewModel = Assert.IsType<ActivityDetailViewModel>(window.DataContext);
-        Assert.Single(viewModel.LootOverview.Characters).IsCapturesShown = true;
+        Assert.Single(viewModel.Loot().LootOverview.Characters).IsCapturesShown = true;
         Dispatcher.UIThread.RunJobs();
         root.UpdateLayout();
         List<string> texts = RenderedText.VisibleTexts(root);
@@ -553,13 +553,13 @@ public sealed class ActivityDetailTests
         var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(true) };
         ActivityDetailViewModel viewModel = await _ViewModelAsync(instance, dispatcher, cancellationToken,
             ownCharacterIds: [90000001], dialogs: dialogs);
-        Assert.Equal("2 participants", viewModel.ParticipantCountText);
+        Assert.Equal("2 participants", viewModel.Fleet().ParticipantCountText);
 
         await viewModel.DeleteCommand.ExecuteAsync(null);
 
         Assert.False(viewModel.IsDeleted);
         Assert.False(viewModel.CanDelete);
-        Assert.Equal("1 participants", viewModel.ParticipantCountText);
+        Assert.Equal("1 participants", viewModel.Fleet().ParticipantCountText);
 
         await using ClientDbContext db = await instance.Services
             .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
@@ -744,11 +744,11 @@ public sealed class ActivityDetailTests
             nameOf: id => id == 90000001 ? "Jithran" : "Second Pilot");
         await viewModel.LoadAsync(cancellationToken);
 
-        Assert.Equal(2, viewModel.BountyRows.Count);
-        Assert.Contains(viewModel.BountyRows, r => r.CharacterText == "Jithran" && r.IskText == $"{675_000m:N0} ISK");
-        Assert.Contains(viewModel.BountyRows, r => r.CharacterText == "Second Pilot" && r.IskText == $"{675_000m:N0} ISK");
+        Assert.Equal(2, viewModel.Bounty().BountyRows.Count);
+        Assert.Contains(viewModel.Bounty().BountyRows, r => r.CharacterText == "Jithran" && r.IskText == $"{675_000m:N0} ISK");
+        Assert.Contains(viewModel.Bounty().BountyRows, r => r.CharacterText == "Second Pilot" && r.IskText == $"{675_000m:N0} ISK");
         // The total is set apart from the rows, not folded into one of them, but it still has to equal their sum.
-        Assert.Equal($"{1_350_000m:N0} ISK", viewModel.BountyText);
+        Assert.Equal($"{1_350_000m:N0} ISK", viewModel.Bounty().BountyText);
     }
 
     /// <summary>
@@ -778,11 +778,11 @@ public sealed class ActivityDetailTests
             nameOf: id => id == 90000001 ? "Jithran" : "Second Pilot");
         await viewModel.LoadAsync(cancellationToken);
 
-        Assert.Equal(2, viewModel.LootOverview.Characters.Count);
-        Assert.Contains(viewModel.LootOverview.Characters, r => r.CharacterText == "Jithran" && r.SubtotalText == $"{300m:N0} ISK");
-        Assert.Contains(viewModel.LootOverview.Characters, r => r.CharacterText == "Second Pilot" && r.SubtotalText == $"{400m:N0} ISK");
+        Assert.Equal(2, viewModel.Loot().LootOverview.Characters.Count);
+        Assert.Contains(viewModel.Loot().LootOverview.Characters, r => r.CharacterText == "Jithran" && r.SubtotalText == $"{300m:N0} ISK");
+        Assert.Contains(viewModel.Loot().LootOverview.Characters, r => r.CharacterText == "Second Pilot" && r.SubtotalText == $"{400m:N0} ISK");
         // The per-character blocks are set apart from the group's own total, but they still have to sum to it.
-        Assert.Equal($"{700m:N0} ISK", viewModel.LootOverview.NetIskDisplay);
+        Assert.Equal($"{700m:N0} ISK", viewModel.Loot().LootOverview.NetIskDisplay);
     }
 
     private static async Task _SaveSiteRunWithLootAsync(ICqrsDispatcher dispatcher, long characterId,
@@ -830,11 +830,11 @@ public sealed class ActivityDetailTests
             nameOf: id => id == 90000001 ? "Jithran" : "Second Pilot");
         await viewModel.LoadAsync(cancellationToken);
 
-        Assert.Equal(2, viewModel.EnemyCharacterRows.Count);
-        Assert.Contains(viewModel.EnemyCharacterRows, r => r.CharacterText == "Jithran" && r.CountText == "4 enemies");
-        Assert.Contains(viewModel.EnemyCharacterRows, r => r.CharacterText == "Second Pilot" && r.CountText == "2 enemies");
+        Assert.Equal(2, viewModel.Enemies().EnemyCharacterRows.Count);
+        Assert.Contains(viewModel.Enemies().EnemyCharacterRows, r => r.CharacterText == "Jithran" && r.CountText == "4 enemies");
+        Assert.Contains(viewModel.Enemies().EnemyCharacterRows, r => r.CharacterText == "Second Pilot" && r.CountText == "2 enemies");
         // The by-type list keeps both species; the group total is set apart, not one more row of either list.
-        Assert.Equal("6 enemies", viewModel.EnemyTotalCountText);
+        Assert.Equal("6 enemies", viewModel.Enemies().EnemyTotalCountText);
     }
 
     /// <summary>

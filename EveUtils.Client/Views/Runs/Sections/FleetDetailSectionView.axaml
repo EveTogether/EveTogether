@@ -1,0 +1,31 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.FleetDetailSectionView"
+             x:DataType="vs:FleetDetailSectionViewModel">
+    <StackPanel>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+            <TextBlock Text="PARTICIPANTS"/>
+            <TextBlock x:Name="ParticipantCount" Grid.Column="1" Text="{Binding ParticipantCountText}"/>
+        </Grid>
+        <ItemsControl x:Name="RunList" ItemsSource="{Binding RunRows}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:ActivityRunRowViewModel">
+                    <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                        <StackPanel>
+                            <TextBlock Text="{Binding CharacterText}"
+                                       Foreground="{StaticResource TextBrightBrush}" FontSize="11.5"/>
+                            <TextBlock Classes="hint" Margin="0" Text="{Binding StandingText}"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Classes="hint" Margin="0"
+                                   VerticalAlignment="Center" Text="{Binding TimeSourceText}"/>
+                        <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding DurationText}"/>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock x:Name="FleetBasis" Classes="hint" TextWrapping="Wrap" Text="{Binding FleetBasisText}"
+                   IsVisible="{Binding FleetBasisText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+    </StackPanel>
+</UserControl>

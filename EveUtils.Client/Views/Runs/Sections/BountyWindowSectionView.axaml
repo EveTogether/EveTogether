@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.BountyWindowSectionView"
+             x:DataType="vs:BountyWindowSectionViewModel">
+    <StackPanel>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+            <TextBlock Text="OWN CHARACTER"/>
+            <TextBlock Grid.Column="1" Text="{Binding BountyText}"/>
+        </Grid>
+    </StackPanel>
+</UserControl>

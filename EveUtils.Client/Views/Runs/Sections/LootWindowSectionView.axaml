@@ -1,0 +1,79 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:EveUtils.Client.Views"
+             xmlns:va="using:EveUtils.Client.ViewModels.Activity"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.LootWindowSectionView"
+             x:DataType="vs:LootWindowSectionViewModel">
+    <StackPanel>
+        <!-- The caption names where these figures come from. It has to, and it has to be right: it read
+             "the clipboard column" long after the copied ISK stopped being kept at all. -->
+        <TextBlock Classes="hint" Margin="0" Text="{Binding IskLabel}"/>
+        <!-- Which two captures the figures are the difference between — in BOTH ways of working, so
+             someone back on the clipboard way who sees an unexpected total can read why in one
+             glance, and reach the control that decides it: the starting-hold list below. -->
+        <TextBlock Classes="hint" Margin="0" Text="{Binding RunLoot.DifferenceText}"/>
+        <TextBlock Classes="hint" Margin="0" Text="{Binding RunLoot.RunStatusMessage}"/>
+
+        <!-- Set where it applies, like LOOT STRATEGY, and per kind for the same reason. It
+             decides which controls are on screen and never what the run is worth. -->
+        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding !RunLoot.IsLocked}">
+            <TextBlock Text="REGISTRATION" VerticalAlignment="Center"/>
+            <ItemsControl Grid.Column="1" HorizontalAlignment="Right" ItemsSource="{Binding LootModeChoices}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel HorizontalAlignment="Right"/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="va:ActivityChoice">
+                        <Button Classes="pick" Classes.on="{Binding IsSelected}"
+                                Content="{Binding Label}"
+                                Command="{Binding $parent[ItemsControl].((vs:LootWindowSectionViewModel)DataContext).SelectLootModeCommand}"
+                                CommandParameter="{Binding Index}"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Grid>
+
+        <!-- The two holds. Only in the way that uses them, and only while the run is open: a saved
+             section carries no controls at all. -->
+        <StackPanel Spacing="4" IsVisible="{Binding RunLoot.IsCargoDiffShown}">
+            <StackPanel Spacing="4" IsVisible="{Binding !RunLoot.IsLocked}">
+                <!-- One place to say which capture the run started from. Two starting holds stay
+                     impossible because SetRunLootCaptureRoleCommand takes the role off whoever had
+                     it in the same write — this list is the shape of the question, not the guard. -->
+                <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                    <TextBlock Text="STARTS FROM" VerticalAlignment="Center"/>
+                    <ComboBox Grid.Column="1" HorizontalAlignment="Right" MinWidth="200"
+                              PlaceholderText="no starting hold — every capture counts"
+                              ItemsSource="{Binding RunLoot.Captures}"
+                              SelectedItem="{Binding RunLoot.CargoBeforeCapture, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="vr:RunLootCaptureRowViewModel">
+                                <TextBlock Text="{Binding PickerText}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </Grid>
+                <TextBlock Classes="hint" Margin="0" Text="STARTING HOLD"/>
+                <TextBox AcceptsReturn="True" MinHeight="54" TextWrapping="NoWrap"
+                         PlaceholderText="Paste your cargo hold — Ctrl+A, Ctrl+C in the inventory window."
+                         Text="{Binding RunLoot.CargoBeforeText, Mode=TwoWay}"/>
+                <TextBlock Classes="hint" Margin="0" Text="{Binding RunLoot.CargoBeforeStatus}"/>
+                <TextBlock Classes="hint" Margin="0" Text="ENDING HOLD"/>
+                <TextBox AcceptsReturn="True" MinHeight="54" TextWrapping="NoWrap"
+                         PlaceholderText="Leave this empty and the last capture is the ending hold."
+                         Text="{Binding RunLoot.CargoAfterText, Mode=TwoWay}"/>
+                <TextBlock Classes="hint" Margin="0" Text="{Binding RunLoot.CargoAfterStatus}"/>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- An editable section says until when; a fixed one says it is fixed. Never nothing. -->
+        <TextBlock Classes="hint" Text="{Binding RunLoot.EditableUntilText}"/>
+
+        <!-- ── The loot ── one block per character in the group, the same component the saved
+             activity shows (ET-215): the items that count, the captures behind them, and the list
+             rewritten by hand. The holds and the starting hold above stay this run's own. -->
+        <v:ActivityLootView DataContext="{Binding LootOverview}"/>
+    </StackPanel>
+</UserControl>

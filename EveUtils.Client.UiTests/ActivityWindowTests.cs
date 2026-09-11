@@ -23,6 +23,8 @@ using EveUtils.Client.Fleet;
 using EveUtils.Client.Theming;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Messaging;
@@ -89,11 +91,11 @@ public class ActivityWindowTests
     {
         var abyssal = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
 
-        Assert.DoesNotContain("ET-40", abyssal.Fit.HeaderSummary);
-        Assert.Contains("no fit", abyssal.Fit.HeaderSummary);
-        Assert.Equal("no loot captured", abyssal.Loot.HeaderSummary);
+        Assert.DoesNotContain("ET-40", abyssal.Fit().HeaderSummary);
+        Assert.Contains("no fit", abyssal.Fit().HeaderSummary);
+        Assert.Equal("no loot captured", abyssal.Loot().HeaderSummary);
         // ACTIVITY no longer waits on anything (ET-80): with nothing copied it names the gap instead of a ticket.
-        Assert.Equal("no signature", new ActivityWindowViewModel(ActivityKind.Site, _Unused()).Activity.HeaderSummary);
+        Assert.Equal("no signature", new ActivityWindowViewModel(ActivityKind.Site, _Unused()).Activity().HeaderSummary);
     }
 
     /// <summary>ET-107 AC-3. The four detection states of ET-101 have to survive the automatic fill: in all four the
@@ -113,9 +115,9 @@ public class ActivityWindowTests
             _Observed(null, ShipFitMatchReason.AmbiguousShipType),
         })
         {
-            model.ApplyFitDetection(reading);
-            Assert.False(model.HasFit, "the run must begin without a fit when there is nothing to fill it with");
-            texts.Add(model.FitText);
+            model.Fit().ApplyFitDetection(reading);
+            Assert.False(model.Fit().HasFit, "the run must begin without a fit when there is nothing to fill it with");
+            texts.Add(model.Fit().FitText);
         }
 
         Assert.Equal(4, texts.Distinct(StringComparer.OrdinalIgnoreCase).Count());
@@ -125,7 +127,7 @@ public class ActivityWindowTests
         Assert.Contains("scope", texts[1], StringComparison.OrdinalIgnoreCase);
         Assert.Contains("no known fit", texts[2], StringComparison.OrdinalIgnoreCase);
         Assert.All(texts, text => Assert.StartsWith("no fit:", text, StringComparison.OrdinalIgnoreCase));
-        Assert.NotNull(model.ChooseFitCommand);
+        Assert.NotNull(model.Fit().ChooseFitCommand);
     }
 
     /// <summary>ET-107 AC-1. Starting a run fills the fit from ET-101's reading — the player confirms nothing. Driven
@@ -138,10 +140,10 @@ public class ActivityWindowTests
 
         model.StartManualRun(Anchor);
 
-        Assert.True(model.HasFit);
-        Assert.Contains("Escalation 3/10 - LZ", model.FitText);
-        Assert.Contains("name matches the observed ship", model.FitText);
-        Assert.Equal(model.FitText, model.Fit.HeaderSummary);
+        Assert.True(model.Fit().HasFit);
+        Assert.Contains("Escalation 3/10 - LZ", model.Fit().FitText);
+        Assert.Contains("name matches the observed ship", model.Fit().FitText);
+        Assert.Equal(model.Fit().FitText, model.Fit().HeaderSummary);
     }
 
     /// <summary>ET-107 AC-2 and AC-4. One fit per run with its origin as a detail: a manual choice arrives through the
@@ -154,10 +156,10 @@ public class ActivityWindowTests
 
         model.Refresh(Anchor);
 
-        Assert.True(model.HasFit);
-        Assert.StartsWith("fit: Hand-picked Gila", model.FitText);
-        Assert.Contains("manual choice", model.FitText);
-        Assert.DoesNotContain("suggest", model.FitText, StringComparison.OrdinalIgnoreCase);
+        Assert.True(model.Fit().HasFit);
+        Assert.StartsWith("fit: Hand-picked Gila", model.Fit().FitText);
+        Assert.Contains("manual choice", model.Fit().FitText);
+        Assert.DoesNotContain("suggest", model.Fit().FitText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(typeof(ActivityWindowViewModel).GetProperties(),
             property => property.Name.Contains("Suggest", StringComparison.OrdinalIgnoreCase)
                 || property.Name.Contains("Chosen", StringComparison.OrdinalIgnoreCase));
@@ -173,23 +175,23 @@ public class ActivityWindowTests
             _WithFitDetection(_Observed(new ShipFitCandidate(7, "Escalation 3/10 - LZ", 17715), ShipFitMatchReason.ShipName));
         var model = new ActivityWindowViewModel(ActivityKind.Abyssal, services);
         model.StartManualRun(Anchor);
-        Assert.True(model.HasFit);
+        Assert.True(model.Fit().HasFit);
 
-        await model.DetachFitCommand.ExecuteAsync(null);
+        await model.Fit().DetachFitCommand.ExecuteAsync(null);
         model.Refresh(Anchor.AddSeconds(1));
-        await model.RefreshFitAsync();
+        await model.Fit().RefreshFitAsync();
 
-        Assert.False(model.HasFit);
-        Assert.Contains("unlinked", model.FitText, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("no max velocity", model.FitVelocityText);
+        Assert.False(model.Fit().HasFit);
+        Assert.Contains("unlinked", model.Fit().FitText, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("no max velocity", model.Fit().FitVelocityText);
 
         // Closing and reopening mid-run: a new view model over the same services, as DialogService builds one.
         model.Dispose();
         var reopened = new ActivityWindowViewModel(ActivityKind.Abyssal, services);
         reopened.StartManualRun(Anchor.AddSeconds(2));
 
-        Assert.False(reopened.HasFit);
-        Assert.Contains("unlinked", reopened.FitText, StringComparison.OrdinalIgnoreCase);
+        Assert.False(reopened.Fit().HasFit);
+        Assert.Contains("unlinked", reopened.Fit().FitText, StringComparison.OrdinalIgnoreCase);
     }
 
     private static ShipFitDetectionReading _Observed(ShipFitCandidate? selected, ShipFitMatchReason reason) =>
@@ -247,7 +249,7 @@ public class ActivityWindowTests
         await harness.StartWatchingAsync();
         await model.StartRunCommand.ExecuteAsync(null);
         await harness.WriteLineAsync(ActivityWindowHarness.CombatLine(250, "Centii Servant"));
-        await ActivityWindowHarness.WaitUntil(() => model.EnemyObservations.Count > 0);
+        await ActivityWindowHarness.WaitUntil(() => model.Enemies().EnemyObservations.Count > 0);
 
         ActivityWindow window = _Open(model, expanded: true);
 
@@ -265,10 +267,10 @@ public class ActivityWindowTests
     {
         var model = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
 
-        model.ApplyFitStats(null, fitCouldBeRead: false);
+        model.Fit().ApplyFitStats(null, fitCouldBeRead: false);
 
-        Assert.Equal("fit could not be read", model.FitVelocityText);
-        Assert.Equal("fit could not be read", model.FitWarpSpeedText);
+        Assert.Equal("fit could not be read", model.Fit().FitVelocityText);
+        Assert.Equal("fit could not be read", model.Fit().FitWarpSpeedText);
     }
 
     [Fact]
@@ -276,11 +278,11 @@ public class ActivityWindowTests
     {
         var model = _Filled(ActivityKind.Abyssal);
 
-        Assert.Contains("no bounty", model.Bounty.HeaderSummary, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("— no bounty in abyssal space", model.BountyText);
-        Assert.Contains("no location", model.Activity.HeaderSummary, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("pocket", model.LocationText, StringComparison.OrdinalIgnoreCase);
-        Assert.NotEqual("0", model.Bounty.HeaderSummary);
+        Assert.Contains("no bounty", model.Bounty().HeaderSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("— no bounty in abyssal space", model.Bounty().BountyText);
+        Assert.Contains("no location", model.Activity().HeaderSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("pocket", model.Activity().LocationText, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual("0", model.Bounty().HeaderSummary);
     }
 
     /// <summary>
@@ -297,15 +299,16 @@ public class ActivityWindowTests
         ActivityKind kind, string? system, string? signatureId, string expected)
     {
         var model = new ActivityWindowViewModel(kind, _Unused());
+        ActivityWindowSectionViewModel activity = model.Activity();
         var changed = new List<string?>();
-        model.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+        activity.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
 
         model.SolarSystem = system;
         model.SignatureId = signatureId;
 
-        Assert.Equal(expected, model.LocationText);
+        Assert.Equal(expected, activity.LocationText);
         // The value being right is half of it: without the notification the row never redraws.
-        Assert.Contains(nameof(model.LocationText), changed);
+        Assert.Contains(nameof(activity.LocationText), changed);
     }
 
     /// <summary>A row that would only report our own ignorance is not on screen at all — that rule is what took the
@@ -315,7 +318,7 @@ public class ActivityWindowTests
     {
         var model = new ActivityWindowViewModel(ActivityKind.Site, _Unused());
 
-        Assert.False(model.IsLocationShown);
+        Assert.False(model.Activity().IsLocationShown);
     }
 
 
@@ -406,7 +409,7 @@ public class ActivityWindowTests
         Assert.Equal(received.AddSeconds(-300), model.AnchorUtc);
         Assert.Equal(2, model.AnchoredFleetMemberCount);
         Assert.Equal(3, model.FleetMemberCount);
-        Assert.Contains("2 of 3", model.Fleet.HeaderSummary);
+        Assert.Contains("2 of 3", model.Fleet().HeaderSummary);
     }
 
     [Fact]
@@ -441,7 +444,7 @@ public class ActivityWindowTests
         Assert.Equal(ActivityRunState.NotStarted, site.RunState);
         Assert.Null(site.AnchorUtc);
         Assert.Equal(2, site.FleetMemberCount);
-        Assert.Contains("based on 2 members sharing their location", site.Fleet.HeaderSummary);
+        Assert.Contains("based on 2 members sharing their location", site.Fleet().HeaderSummary);
     }
 
     /// <summary>
@@ -671,8 +674,8 @@ public class ActivityWindowTests
         Assert.Null(first.WeatherIndex);
         Assert.Null(first.TierIndex);
 
-        await first.SelectWeatherCommand.ExecuteAsync(3);
-        await first.SelectTierCommand.ExecuteAsync(5);
+        await first.Activity().SelectWeatherCommand.ExecuteAsync(3);
+        await first.Activity().SelectTierCommand.ExecuteAsync(5);
 
         var second = new ActivityWindowViewModel(ActivityKind.Abyssal, instance.Services);
         await second.LoadAsync();
@@ -680,10 +683,10 @@ public class ActivityWindowTests
         Assert.Equal(3, second.WeatherIndex);
         Assert.Equal(5, second.TierIndex);
         Assert.Equal("Firestorm", second.Weather?.Name);
-        Assert.True(second.WeatherChoices[3].IsSelected);
-        Assert.True(second.TierChoices[5].IsSelected);
+        Assert.True(second.Activity().WeatherChoices[3].IsSelected);
+        Assert.True(second.Activity().TierChoices[5].IsSelected);
 
-        await second.ClearWeatherAndTierCommand.ExecuteAsync(null);
+        await second.Activity().ClearWeatherAndTierCommand.ExecuteAsync(null);
 
         var third = new ActivityWindowViewModel(ActivityKind.Abyssal, instance.Services);
         await third.LoadAsync();
@@ -696,8 +699,8 @@ public class ActivityWindowTests
     {
         using var instance = TestClientInstance.Create();
         var settings = instance.Services.GetRequiredService<ISettingRepository>();
-        await settings.UpsertAsync(ActivityWindowViewModel.WeatherSettingKey, "9");
-        await settings.UpsertAsync(ActivityWindowViewModel.TierSettingKey, "not a number");
+        await settings.UpsertAsync(ActivityWindowSectionViewModel.WeatherSettingKey, "9");
+        await settings.UpsertAsync(ActivityWindowSectionViewModel.TierSettingKey, "not a number");
 
         var model = new ActivityWindowViewModel(ActivityKind.Abyssal, instance.Services);
         await model.LoadAsync();
@@ -765,16 +768,16 @@ public class ActivityWindowTests
     public void ThePickerFoldsAwayOnceAnswered_AndReopensOnRequest()
     {
         var model = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
-        Assert.True(model.IsPickerShown);
+        Assert.True(model.Activity().IsPickerShown);
 
         model.WeatherIndex = 1;
-        Assert.True(model.IsPickerShown);   // half an answer is not an answer
+        Assert.True(model.Activity().IsPickerShown);   // half an answer is not an answer
 
         model.TierIndex = 2;
-        Assert.False(model.IsPickerShown);
+        Assert.False(model.Activity().IsPickerShown);
 
-        model.OpenPickerCommand.Execute(null);
-        Assert.True(model.IsPickerShown);
+        model.Activity().OpenPickerCommand.Execute(null);
+        Assert.True(model.Activity().IsPickerShown);
     }
 
     [Fact]
@@ -782,9 +785,9 @@ public class ActivityWindowTests
     {
         var model = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
 
-        Assert.Equal(5, model.WeatherChoices.Count);
-        Assert.Equal(7, model.TierChoices.Count);
-        Assert.All(model.WeatherChoices, choice => Assert.False(string.IsNullOrWhiteSpace(choice.Tooltip)));
+        Assert.Equal(5, model.Activity().WeatherChoices.Count);
+        Assert.Equal(7, model.Activity().TierChoices.Count);
+        Assert.All(model.Activity().WeatherChoices, choice => Assert.False(string.IsNullOrWhiteSpace(choice.Tooltip)));
     }
 
     // ── The loot strategy: a label you can set, not one that only reports it is unset ────────────────
@@ -795,15 +798,15 @@ public class ActivityWindowTests
         var abyssal = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused());
         var site = new ActivityWindowViewModel(ActivityKind.Site, _Unused());
 
-        Assert.NotEmpty(abyssal.LootStrategyChoices);
-        Assert.NotEmpty(site.LootStrategyChoices);
+        Assert.NotEmpty(abyssal.Activity().LootStrategyChoices);
+        Assert.NotEmpty(site.Activity().LootStrategyChoices);
         Assert.NotEqual(
-            abyssal.LootStrategyChoices.Select(choice => choice.Label),
-            site.LootStrategyChoices.Select(choice => choice.Label));
-        Assert.All(abyssal.LootStrategyChoices, choice => Assert.False(choice.IsSelected));
+            abyssal.Activity().LootStrategyChoices.Select(choice => choice.Label),
+            site.Activity().LootStrategyChoices.Select(choice => choice.Label));
+        Assert.All(abyssal.Activity().LootStrategyChoices, choice => Assert.False(choice.IsSelected));
         // Leaving the other cans is a site's move: an abyssal pocket is instanced, so there is nobody to leave them to.
-        Assert.Contains(RunLootStrategy.CherryPicked, site.LootStrategies);
-        Assert.DoesNotContain(RunLootStrategy.CherryPicked, abyssal.LootStrategies);
+        Assert.Contains(RunLootStrategy.CherryPicked, site.Activity().LootStrategies);
+        Assert.DoesNotContain(RunLootStrategy.CherryPicked, abyssal.Activity().LootStrategies);
     }
 
     [AvaloniaFact]
@@ -813,24 +816,24 @@ public class ActivityWindowTests
 
         var first = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
         await first.LoadAsync();
-        Assert.Null(first.LootStrategy);
+        Assert.Null(first.Activity().LootStrategy);
 
-        await first.SelectLootStrategyCommand.ExecuteAsync(1);
-        Assert.Equal(ActivityWindowViewModel.SiteLootStrategies[1], first.LootStrategy);
-        Assert.True(first.LootStrategyChoices[1].IsSelected);
+        await first.Activity().SelectLootStrategyCommand.ExecuteAsync(1);
+        Assert.Equal(RunTypeCatalogue.SiteLootStrategies[1], first.Activity().LootStrategy);
+        Assert.True(first.Activity().LootStrategyChoices[1].IsSelected);
 
         var second = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
         await second.LoadAsync();
-        Assert.Equal(ActivityWindowViewModel.SiteLootStrategies[1], second.LootStrategy);
-        Assert.True(second.LootStrategyChoices[1].IsSelected);
+        Assert.Equal(RunTypeCatalogue.SiteLootStrategies[1], second.Activity().LootStrategy);
+        Assert.True(second.Activity().LootStrategyChoices[1].IsSelected);
 
         // The row has no other way back: pressing the answer again is how you take it back.
-        await second.SelectLootStrategyCommand.ExecuteAsync(1);
-        Assert.Null(second.LootStrategy);
+        await second.Activity().SelectLootStrategyCommand.ExecuteAsync(1);
+        Assert.Null(second.Activity().LootStrategy);
 
         var third = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
         await third.LoadAsync();
-        Assert.Null(third.LootStrategy);
+        Assert.Null(third.Activity().LootStrategy);
     }
 
     /// <summary>One key per kind. On the shared key the two kinds overwrote each other's answer, so the second
@@ -842,17 +845,17 @@ public class ActivityWindowTests
 
         var site = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
         await site.LoadAsync();
-        await site.SelectLootStrategyCommand.ExecuteAsync(0);
+        await site.Activity().SelectLootStrategyCommand.ExecuteAsync(0);
 
         var abyssal = new ActivityWindowViewModel(ActivityKind.Abyssal, instance.Services);
         await abyssal.LoadAsync();
-        Assert.Null(abyssal.LootStrategy);
-        Assert.All(abyssal.LootStrategyChoices, choice => Assert.False(choice.IsSelected));
-        await abyssal.SelectLootStrategyCommand.ExecuteAsync(2);
+        Assert.Null(abyssal.Activity().LootStrategy);
+        Assert.All(abyssal.Activity().LootStrategyChoices, choice => Assert.False(choice.IsSelected));
+        await abyssal.Activity().SelectLootStrategyCommand.ExecuteAsync(2);
 
         var nextSite = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
         await nextSite.LoadAsync();
-        Assert.Equal(ActivityWindowViewModel.SiteLootStrategies[0], nextSite.LootStrategy);
+        Assert.Equal(RunTypeCatalogue.SiteLootStrategies[0], nextSite.Activity().LootStrategy);
     }
 
     /// <summary>Set, and stored — the whole point of the row. Both ways in: chosen before there is a run to write it
@@ -865,13 +868,13 @@ public class ActivityWindowTests
         using ActivityWindowHarness harness = await ActivityWindowHarness.CreateAsync();
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         ActivityWindowViewModel window = await harness.OpenAsync(ActivityKind.Site);
-        int cherryPicked = window.LootStrategies.ToList().IndexOf(RunLootStrategy.CherryPicked);
+        int cherryPicked = window.Activity().LootStrategies.ToList().IndexOf(RunLootStrategy.CherryPicked);
 
         if (chosenBeforeStart)
-            await window.SelectLootStrategyCommand.ExecuteAsync(cherryPicked);
+            await window.Activity().SelectLootStrategyCommand.ExecuteAsync(cherryPicked);
         await window.StartRunCommand.ExecuteAsync(null);
         if (!chosenBeforeStart)
-            await window.SelectLootStrategyCommand.ExecuteAsync(cherryPicked);
+            await window.Activity().SelectLootStrategyCommand.ExecuteAsync(cherryPicked);
 
         window.StopRun(DateTime.UtcNow);
         await window.SaveRunCommand.ExecuteAsync(null);
@@ -892,7 +895,7 @@ public class ActivityWindowTests
         ActivityWindowViewModel window = await harness.OpenAsync(ActivityKind.Site);
 
         await window.StartRunCommand.ExecuteAsync(null);
-        await window.SelectLootStrategyCommand.ExecuteAsync(0);
+        await window.Activity().SelectLootStrategyCommand.ExecuteAsync(0);
         window.StopRun(DateTime.UtcNow);
 
         await harness.Services.GetRequiredService<Shared.Cqrs.IDispatcher>()
@@ -902,17 +905,17 @@ public class ActivityWindowTests
             .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
         Run stored = Assert.Single(await db.Set<Run>().ToListAsync(cancellationToken));
         Assert.NotNull(stored.AutoSavedAtUtc);
-        Assert.Equal(ActivityWindowViewModel.SiteLootStrategies[0], stored.LootStrategy);
+        Assert.Equal(RunTypeCatalogue.SiteLootStrategies[0], stored.LootStrategy);
     }
 
     [Fact]
     public void ThePenaltyIsShownAsTheBandItRollsIn_NotAsANumberPerTier()
     {
         var model = new ActivityWindowViewModel(ActivityKind.Abyssal, _Unused()) { WeatherIndex = 4, TierIndex = 2 };
-        Assert.Contains("-30% or -50%", model.WeatherEffectText);
+        Assert.Contains("-30% or -50%", model.Activity().WeatherEffectText);
 
         model.TierIndex = 5;
-        Assert.Contains("-50% or -70%", model.WeatherEffectText);
+        Assert.Contains("-50% or -70%", model.Activity().WeatherEffectText);
     }
 
     // ── AC-6 — the ISK figures name their own source, and claim nothing else ────────────────────────
@@ -936,9 +939,9 @@ public class ActivityWindowTests
         // ISK stopped being kept at all. It names the price lookup now — and nothing else, because the warning that
         // the per-row figure was the copied column stopped being true when the rows started being valued the same
         // way the totals are. A caption that names the wrong source makes a right number look doubtful.
-        Assert.DoesNotContain("Prices are the clipboard column", model.IskLabel, StringComparison.Ordinal);
-        Assert.DoesNotContain("copied column", model.IskLabel, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("type id", model.IskLabel, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Prices are the clipboard column", model.Loot().IskLabel, StringComparison.Ordinal);
+        Assert.DoesNotContain("copied column", model.Loot().IskLabel, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("type id", model.Loot().IskLabel, StringComparison.OrdinalIgnoreCase);
     }
 
     // ── AC-7 — the four faction palettes reach this window ──────────────────────────────────────────
@@ -1105,10 +1108,10 @@ public class ActivityWindowTests
     {
         var model = _Site(_Entry("Haunted Yard"));
 
-        Assert.Equal("Haunted Yard", model.SignatureSiteText);
-        Assert.Equal("Haunted Yard", model.Activity.HeaderSummary);
-        Assert.False(model.HasShipRestriction);
-        Assert.Null(model.ShipRestrictionText);
+        Assert.Equal("Haunted Yard", model.Activity().SignatureSiteText);
+        Assert.Equal("Haunted Yard", model.Activity().HeaderSummary);
+        Assert.False(model.Activity().HasShipRestriction);
+        Assert.Null(model.Activity().ShipRestrictionText);
     }
 
     // The branch that costs a ship if it collapses into the unrestricted one: a handful of the catalogue's type
@@ -1119,9 +1122,9 @@ public class ActivityWindowTests
     {
         var model = _Site(_Entry("Sleeper Cache", restricted: true));
 
-        Assert.Equal("Sleeper Cache — ship-restricted", model.SignatureSiteText);
-        Assert.False(model.HasShipRestriction);
-        Assert.Equal("Sleeper Cache · ship-restricted", model.Activity.HeaderSummary);
+        Assert.Equal("Sleeper Cache — ship-restricted", model.Activity().SignatureSiteText);
+        Assert.False(model.Activity().HasShipRestriction);
+        Assert.Equal("Sleeper Cache · ship-restricted", model.Activity().HeaderSummary);
     }
 
     [Fact]
@@ -1129,9 +1132,9 @@ public class ActivityWindowTests
     {
         var model = _Site(_Entry("Limited Sleeper Cache", groups: [new SdeGroup(25, 6, "Frigate", true)]));
 
-        Assert.True(model.HasShipRestriction);
-        Assert.Equal("Frigate", model.ShipRestrictionText);
-        Assert.Equal("Limited Sleeper Cache — ship-restricted", model.SignatureSiteText);
+        Assert.True(model.Activity().HasShipRestriction);
+        Assert.Equal("Frigate", model.Activity().ShipRestrictionText);
+        Assert.Equal("Limited Sleeper Cache — ship-restricted", model.Activity().SignatureSiteText);
     }
 
     [Fact]
@@ -1143,14 +1146,14 @@ public class ActivityWindowTests
 
         // Both are restricted, so that holds; the ratings disagree, so no DED is claimed. What is never said is
         // how many rows our own catalogue happens to carry — that is our problem, not the pilot's.
-        Assert.Equal("SCC Secure Key Storage — ship-restricted", model.SignatureSiteText);
-        Assert.DoesNotContain("catalogue", model.SignatureSiteText, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("entries", model.SignatureSiteText, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("DED", model.SignatureSiteText, StringComparison.Ordinal);
+        Assert.Equal("SCC Secure Key Storage — ship-restricted", model.Activity().SignatureSiteText);
+        Assert.DoesNotContain("catalogue", model.Activity().SignatureSiteText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("entries", model.Activity().SignatureSiteText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DED", model.Activity().SignatureSiteText, StringComparison.Ordinal);
 
         // Which hulls is the open question, so the row that would answer it stays away rather than picking one.
-        Assert.False(model.HasShipRestriction);
-        Assert.Equal("SCC Secure Key Storage · ship-restricted", model.Activity.HeaderSummary);
+        Assert.False(model.Activity().HasShipRestriction);
+        Assert.Equal("SCC Secure Key Storage · ship-restricted", model.Activity().HeaderSummary);
     }
 
     [Fact]
@@ -1161,8 +1164,8 @@ public class ActivityWindowTests
         var matches = new[] { _Entry("Angel Hideaway", ded: 3, restricted: true) };
         var model = _Site(matches);
 
-        Assert.Equal($"Angel Hideaway — {SdeSiteDescription.DescribeCommon(matches)}", model.SignatureSiteText);
-        Assert.Equal($"Angel Hideaway · {SdeSiteDescription.DescribeCommon(matches)}", model.Activity.HeaderSummary);
+        Assert.Equal($"Angel Hideaway — {SdeSiteDescription.DescribeCommon(matches)}", model.Activity().SignatureSiteText);
+        Assert.Equal($"Angel Hideaway · {SdeSiteDescription.DescribeCommon(matches)}", model.Activity().HeaderSummary);
         Assert.Equal(SdeSiteDescription.DescribeMatches(matches), SdeSiteDescription.DescribeCommon(matches));
     }
 
@@ -1180,7 +1183,7 @@ public class ActivityWindowTests
         model.StartManualRun(Anchor);
         model.Refresh(Anchor.AddMinutes(3));
 
-        foreach (var text in _ExposedText(model).Concat(model.LootStrategyChoices.Select(choice => choice.Label)))
+        foreach (var text in _ExposedText(model).Concat(model.Activity().LootStrategyChoices.Select(choice => choice.Label)))
             Assert.DoesNotMatch(TicketNumber, text);
     }
 
@@ -1283,7 +1286,7 @@ public class ActivityWindowTests
             .OfType<string>()
             .Concat(model.Sections.Select(section => section.Title))
             .Concat(model.Sections.Select(section => section.HeaderSummary))
-            .Concat(model.WeatherChoices.Select(choice => choice.Tooltip).OfType<string>());
+            .Concat(model.Activity().WeatherChoices.Select(choice => choice.Tooltip).OfType<string>());
 
     /// <summary>Every resource key the markup asks for under one of the two markup extensions.</summary>
     private static IEnumerable<string> _Keys(string markup, string extension) =>

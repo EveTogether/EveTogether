@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:va="using:EveUtils.Client.ViewModels.Activity"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.EnemiesWindowSectionView"
+             x:DataType="vs:EnemiesWindowSectionViewModel">
+    <!-- Its own section, folded by default: a site's worth of rats inside ACTIVITY pushed FIT, FLEET,
+         BOUNTY and LOOT under the fold. The count is typed after the fight, so the rows outlive STOP. -->
+    <ItemsControl x:Name="EnemyList" ItemsSource="{Binding EnemyObservations}">
+        <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="va:RunEnemyObservationViewModel">
+                <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                    <TextBlock Text="{Binding EnemyName}" VerticalAlignment="Center"/>
+                    <!-- Seen is not counted, and only a counted row is saved (ET-106) — the row has
+                         to say which of the two it is. -->
+                    <TextBlock Grid.Column="1" Classes="hint" Margin="0" VerticalAlignment="Center"
+                               Text="{Binding CountStateText}"/>
+                    <NumericUpDown Grid.Column="2" Classes="count" Width="72" Minimum="0" Maximum="999" Increment="1"
+                                   FormatString="0" Value="{Binding Count, Mode=TwoWay}"/>
+                </Grid>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+</UserControl>

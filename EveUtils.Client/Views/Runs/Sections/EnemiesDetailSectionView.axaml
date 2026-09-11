@@ -1,0 +1,48 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.EnemiesDetailSectionView"
+             x:DataType="vs:EnemiesDetailSectionViewModel">
+    <StackPanel>
+        <!-- One row per character, the same breakdown BOUNTY gives (ET-210 review finding,
+             2026-09-09, round 4): each toon's own gamelog counts towards its own total, summed
+             across every type it saw — which species is still in the by-type list below. -->
+        <ItemsControl x:Name="EnemyCharacterList" ItemsSource="{Binding EnemyCharacterRows}"
+                      IsVisible="{Binding HasEnemyFigures}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:ActivityEnemyCharacterRowViewModel">
+                    <Grid Classes="kv" ColumnDefinitions="*,Auto">
+                        <TextBlock Text="{Binding CharacterText}"/>
+                        <TextBlock Grid.Column="1" Classes="money" Text="{Binding CountText}"/>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <!-- Set apart in its own strip rather than one more row of the list above, so the total
+             reads as a total — the same treatment BOUNTY's total gets. -->
+        <Border Classes="totals" IsVisible="{Binding HasEnemyFigures}">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="label" Text="TOTAL" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Classes="money total" Text="{Binding EnemyTotalCountText}"/>
+            </Grid>
+        </Border>
+        <!-- Not folded together on type: two runs that each saw the same enemy keep their own row
+             and their own first/last window. -->
+        <ItemsControl x:Name="EnemyList" ItemsSource="{Binding EnemyRows}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:ActivityEnemyRowViewModel">
+                    <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                        <TextBlock Text="{Binding EnemyName}"/>
+                        <TextBlock Grid.Column="1" Classes="hint" Margin="0"
+                                   VerticalAlignment="Center" Text="{Binding WindowText}"/>
+                        <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding CountText}"/>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock x:Name="EnemiesEmpty" Classes="hint" TextWrapping="Wrap"
+                   IsVisible="{Binding EnemiesEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding EnemiesEmptyText}"/>
+    </StackPanel>
+</UserControl>

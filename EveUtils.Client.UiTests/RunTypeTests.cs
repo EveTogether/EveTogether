@@ -118,8 +118,8 @@ public sealed class RunTypeTests
     {
         var model = new ActivityWindowViewModel(ActivityKind.Mission, _Unused());
 
-        Assert.Equal("Mission run", model.SignatureTypeText);
-        Assert.Equal(MaterialIconKind.ClipboardTextOutline, model.TypeIcon);
+        Assert.Equal("Mission run", model.Activity().SignatureTypeText);
+        Assert.Equal(MaterialIconKind.ClipboardTextOutline, model.Activity().TypeIcon);
     }
 
     [Fact]
@@ -127,8 +127,8 @@ public sealed class RunTypeTests
     {
         var model = new ActivityWindowViewModel(ActivityKind.Site, _Unused()) { SignatureGroup = "Relic Site" };
 
-        Assert.Equal("Relic Site", model.SignatureTypeText);
-        Assert.Equal(MaterialIconKind.DiamondStone, model.TypeIcon);
+        Assert.Equal("Relic Site", model.Activity().SignatureTypeText);
+        Assert.Equal(MaterialIconKind.DiamondStone, model.Activity().TypeIcon);
     }
 
     /// <summary>A manual start, or a site the scanner never named a group for, reads "Site" — never "not known
@@ -139,7 +139,7 @@ public sealed class RunTypeTests
     {
         var model = new ActivityWindowViewModel(ActivityKind.Site, _Unused());
 
-        Assert.Equal("Site", model.SignatureTypeText);
+        Assert.Equal("Site", model.Activity().SignatureTypeText);
     }
 
     private static IServiceProvider _Unused() => new ServiceCollection().BuildServiceProvider();

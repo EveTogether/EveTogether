@@ -7,6 +7,7 @@ using UiDispatcher = Avalonia.Threading.Dispatcher;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
@@ -40,7 +41,7 @@ public sealed class ActivityKindTests
         foreach (ActivityKind kind in Enum.GetValues<ActivityKind>())
         {
             ActivityWindowViewModel window = await harness.OpenAsync(kind);
-            Assert.NotEqual(ActivityWindowViewModel.UnknownKindHeader, window.HeaderTitle);
+            Assert.NotEqual(RunTypeCatalogue.NewerBuildKind.WindowTitle, window.HeaderTitle);
         }
     }
 
@@ -88,9 +89,9 @@ public sealed class ActivityKindTests
         using var harness = await ActivityWindowHarness.CreateAsync();
         ActivityWindowViewModel window = await harness.OpenAsync(ActivityKind.Mission);
 
-        Assert.DoesNotContain(RunLootStrategy.FullClear, window.LootStrategies);
-        Assert.DoesNotContain(RunLootStrategy.CherryPicked, window.LootStrategies);
-        Assert.Empty(window.LootStrategyChoices);
-        Assert.False(window.IsLootStrategyShown);
+        Assert.DoesNotContain(RunLootStrategy.FullClear, window.Activity().LootStrategies);
+        Assert.DoesNotContain(RunLootStrategy.CherryPicked, window.Activity().LootStrategies);
+        Assert.Empty(window.Activity().LootStrategyChoices);
+        Assert.False(window.Activity().IsLootStrategyShown);
     }
 }

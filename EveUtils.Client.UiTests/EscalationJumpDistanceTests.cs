@@ -44,7 +44,7 @@ public sealed class EscalationJumpDistanceTests
             dialog.RegisterCommand.Execute(null);
             return Task.FromResult(true);
         };
-        await model.RegisterEscalationCommand.ExecuteAsync(null);
+        await model.Activity().RegisterEscalationCommand.ExecuteAsync(null);
         await model.SaveRunCommand.ExecuteAsync(null);
 
         var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
@@ -56,16 +56,16 @@ public sealed class EscalationJumpDistanceTests
             esi: new FakeRouteEsiClient([30000001, 1, 2, 3, 4, 5, 30003867]),
             locations: new FakeLocationClient(30000001));
         await reachable.LoadAsync();
-        Assert.Equal("6 jumps from here", reachable.EscalationJumpsText);
-        Assert.Null(reachable.EscalationJumpsEmptyText);
+        Assert.Equal("6 jumps from here", reachable.Escalation().EscalationJumpsText);
+        Assert.Null(reachable.Escalation().EscalationJumpsEmptyText);
 
         // ESI unreachable: the line must say so — not fall silent (which reads as "no destination") and not show a
         // bare/zero count (which reads as a measurement that came out at nothing).
         var unreachable = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
             esi: new ThrowingEsiClient(), locations: new FakeLocationClient(30000001));
         await unreachable.LoadAsync();
-        Assert.Null(unreachable.EscalationJumpsText);
-        Assert.NotNull(unreachable.EscalationJumpsEmptyText);
+        Assert.Null(unreachable.Escalation().EscalationJumpsText);
+        Assert.NotNull(unreachable.Escalation().EscalationJumpsEmptyText);
     }
 
     private sealed class FakeRouteEsiClient(int[] route) : IEsiClient

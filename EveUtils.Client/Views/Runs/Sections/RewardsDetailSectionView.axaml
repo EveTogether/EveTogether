@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.RewardsDetailSectionView"
+             x:DataType="vs:RewardsDetailSectionViewModel">
+    <StackPanel>
+        <!-- One row per form and never one total: the key list keeps growing, and LP and
+             Evermarks have no rate to convert into ISK against. -->
+        <ItemsControl x:Name="RewardList" ItemsSource="{Binding RewardRows}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:ActivityRewardRowViewModel">
+                    <Grid Classes="kv" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                        <TextBlock Text="{Binding Label}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding ValueText}"/>
+                        <TextBlock Grid.Column="2" Classes="hint" Margin="0"
+                                   VerticalAlignment="Center" IsVisible="{Binding HasNote}"
+                                   Text="{Binding NoteText}"/>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   IsVisible="{Binding RewardsEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding RewardsEmptyText}"/>
+    </StackPanel>
+</UserControl>
