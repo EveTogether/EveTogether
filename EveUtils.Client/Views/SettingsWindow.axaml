@@ -202,6 +202,11 @@
                                    Text="Everything else — a password, a link, part of a conversation — is dropped the moment it is read. It is not stored, not kept in a buffer for later, never written to the log window or a log file, and never attached to an error report. No clipboard text leaves your machine: the local API server never sees it either."/>
                         <TextBlock x:Name="ClipboardConsumersBlock" FontSize="10" Opacity="0.75" TextWrapping="Wrap"
                                    Margin="0,4,0,0"/>
+                        <!-- ET-264: on by default (today's behaviour). Off, the copy still opens the run window
+                             prepared — name, rewards, type filled in — and the pilot presses START himself once he
+                             is on location. Abyssal starts on jump-in (ET-246) and has no toggle here. -->
+                        <CheckBox x:Name="AutoStartMissionsBox" Content="Start automatically when copied — missions" Margin="0,6,0,0"/>
+                        <CheckBox x:Name="AutoStartSitesBox" Content="Start automatically when copied — combat sites"/>
                     </StackPanel>
                 </StackPanel>
 

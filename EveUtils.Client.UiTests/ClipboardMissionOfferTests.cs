@@ -17,6 +17,7 @@ using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde.Dtos;
+using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -254,6 +255,26 @@ public sealed class ClipboardMissionOfferTests
         Assert.Contains(env.Toasts.Toasts, t => t.Title == "Agent not recognised");
     }
 
+    // ET-264: "Start automatically when copied" off for missions — the copy still opens the window, prepared with
+    // the agent, level and rewards the SDE and the clipboard gave it, but nothing is stored until the pilot presses
+    // START himself.
+    [AvaloniaFact]
+    public async Task WhenAutoStartIsOff_ACopiedMissionOpensThePreparedWindow_WithoutStarting()
+    {
+        using var env = await Env.StartAsync();
+        env.Sde.AddAgent(AralinJick);
+        await env.AddCharacterAsync();
+        await env.Services.GetRequiredService<ISettingRepository>()
+            .UpsertAsync(ClipboardMissionOffer.AutoStartSettingKey, "false");
+
+        env.Copy(MeasuredMissionBlock);
+        ActivityWindowViewModel opened = await WaitForActivityWindowAsync(env);
+
+        Assert.False(opened.StartsOnArrival);
+        Assert.Equal(3019407, opened.MissionAgentId);
+        Assert.Null(await env.RunningMissionAsync());
+    }
+
     /// <summary>Polls without blocking the UI-thread synchronization context the headless tests run on — an
     /// <c>ActivityWindowHarness.WaitUntil</c>-style synchronous condition would have to block on this same async
     /// database read, which deadlocks under that context instead of yielding to it.</summary>
@@ -270,6 +291,23 @@ public sealed class ClipboardMissionOfferTests
         }
 
         throw new Xunit.Sdk.XunitException("no mission run started within the timeout");
+    }
+
+    /// <summary>Same polling shape as <see cref="WaitForRunningMissionAsync"/>, for the "opened but not started" case
+    /// where there is no run row to poll for yet.</summary>
+    private static async Task<ActivityWindowViewModel> WaitForActivityWindowAsync(Env env, int timeoutMs = 5000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            Dispatcher.UIThread.RunJobs();
+            if (env.Dialogs.ActivityWindow?.DataContext is ActivityWindowViewModel viewModel)
+                return viewModel;
+
+            await Task.Delay(25);
+        }
+
+        throw new Xunit.Sdk.XunitException("no activity window opened within the timeout");
     }
 
     private static string _Fixture(string name)

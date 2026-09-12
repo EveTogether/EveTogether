@@ -13,6 +13,7 @@ using EveUtils.Shared.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -426,6 +427,42 @@ public sealed class ClipboardSignatureOfferTests
         Assert.Single(env.Dialogs.ShownActivityWindows);
     }
 
+    // ET-264 AC-1/AC-2: the old rule held the guard until something else was copied, so a DISCARD followed by
+    // copying the exact same site again did nothing — this is the tegenproef that it now ages out on its own. Three
+    // seconds (DuplicateNotificationWindow) is comfortably shorter than the time a DISCARD confirmation takes to
+    // click through, so a copy after that gap is a fresh request rather than the clipboard watch's own double-fire.
+    [AvaloniaFact]
+    public async Task ACopyRepeatedAfterTheDuplicateWindowElapses_StartsASecondRun()
+    {
+        var clock = new MutableTimeProvider(DateTimeOffset.UtcNow);
+        using var env = await Env.StartAsync(services => services.AddSingleton<TimeProvider>(clock));
+        env.Sde.AddSite(Site(1263, "Haunted Yard", archetype: "Combat Sites", archetypeId: 24));
+        const string text = "AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU";
+
+        env.Copy(text);
+        clock.Now += TimeSpan.FromSeconds(4);
+        env.Copy(text);
+
+        Assert.Equal(2, env.Dialogs.ShownActivityWindows.Count);
+    }
+
+    // ET-264: "Start automatically when copied" off for sites — the copy still opens the window, prepared with what
+    // the clipboard said, but the pilot presses START himself.
+    [AvaloniaFact]
+    public async Task WhenAutoStartIsOff_ACopiedSiteOpensThePreparedWindow_WithoutStarting()
+    {
+        using var env = await Env.StartAsync();
+        env.Sde.AddSite(Site(1263, "Haunted Yard", archetype: "Combat Sites", archetypeId: 24));
+        await env.Services.GetRequiredService<ISettingRepository>()
+            .UpsertAsync(ClipboardSignatureOffer.AutoStartSettingKey, "false");
+
+        env.Copy("AAA-001\tCosmic Signature\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU");
+
+        var opened = Assert.Single(env.Dialogs.ShownActivityWindows);
+        Assert.Equal("Haunted Yard", opened.SignatureName);
+        Assert.False(opened.StartsOnArrival);
+    }
+
     // ── The ACTIVITY section, filled from the catalogue ─────────────────────────────────────────────
 
     [AvaloniaFact]
@@ -544,5 +581,13 @@ public sealed class ClipboardSignatureOfferTests
         public string? CharacterAtForegroundWindow() => character;
 
         public ForegroundWindowSnapshot DescribeForegroundWindow() => ForegroundWindowSnapshot.Unknown;
+    }
+
+    // ET-264: a settable clock so a test can move past DuplicateNotificationWindow without a real sleep.
+    private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = now;
+
+        public override DateTimeOffset GetUtcNow() => Now;
     }
 }

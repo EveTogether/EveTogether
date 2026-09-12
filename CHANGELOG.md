@@ -13,6 +13,15 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Discarding a run (or closing the run window without one) and copying the exact same mission or site again now
+  starts a run again**, instead of doing nothing until you copied something else first.
+- **A new setting, "Start automatically when copied", for missions and for combat sites separately** (Settings →
+  Privacy & Sharing). On by default: copying starts the run right away, as before. Turned off, the copy still opens
+  the run window prepared — name, rewards and type filled in — and you press START yourself once you're on
+  location. An abyssal filament still starts on jump-in either way.
+- **The runs overview's month bar is easier to read**: there is now a gap before the ▶ button matching the one
+  after ◀, and the activity count and net ISK stand out more — bigger, bolder, and in the normal text colour
+  instead of dimmed, with the ISK figure the most prominent of the two. The day headers below are unchanged.
 - **A restricted site's allowed ships are now shown grouped by ship group, not as a wall of loose hull names.**
   ACTIVITY's SHIPS row reads "Cruisers (T1 only)" for a homefront whose individually-named allow-list is exactly
   every published Tech I hull of that group, "Cruisers (except Slasher)" when only a couple of hulls are carved out

@@ -105,6 +105,21 @@
                 <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
+
+            <!-- The month bar's own total (ET-266) — bolder and bigger than the plain .sectionsummary the day bands
+                 below keep using, so the two never look like the same kind of text. ISK carries .isk on top for the
+                 heavier weight; the day bands are untouched. -->
+            <Style Selector="TextBlock.monthfigure">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="12.5"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.monthfigure.isk">
+                <Setter Property="FontSize" Value="15"/>
+                <Setter Property="FontWeight" Value="Bold"/>
+            </Style>
         </DockPanel.Styles>
 
         <!-- The narrowest a running-card may get. A MINIMUM, not a size: FillGridPanel divides whatever is left
@@ -281,8 +296,15 @@
                         Command="{Binding PreviousMonthCommand}" ToolTip.Tip="Previous month"/>
                 <TextBlock Grid.Column="1" Classes="panel-title" FontSize="12" Margin="10,0"
                            VerticalAlignment="Center" Text="{Binding MonthHeaderText}"/>
-                <TextBlock Grid.Column="2" Classes="sectionsummary" VerticalAlignment="Center"
-                           Text="{Binding SelectedTab.MonthSummaryText}"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="0,0,10,0"
+                            HorizontalAlignment="Right">
+                    <TextBlock Classes="monthfigure" VerticalAlignment="Center"
+                               Text="{Binding SelectedTab.MonthActivitiesText}"/>
+                    <TextBlock Classes="monthfigure" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextDimBrush}" FontWeight="Normal" Text="&#x00B7;"/>
+                    <TextBlock Classes="monthfigure isk" VerticalAlignment="Center"
+                               Text="{Binding SelectedTab.MonthNetText}"/>
+                </StackPanel>
                 <Button Grid.Column="3" Classes="rowaction" Content="&#x25B6;" MinWidth="30"
                         Command="{Binding NextMonthCommand}" ToolTip.Tip="Next month"/>
             </Grid>

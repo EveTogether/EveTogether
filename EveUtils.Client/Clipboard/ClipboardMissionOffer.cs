@@ -16,16 +16,23 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
+using EveUtils.Shared.Modules.Settings.Entities;
+using EveUtils.Shared.Modules.Settings.Repositories;
 
 namespace EveUtils.Client.Clipboard;
 
 /// <summary>A copied mission Objectives block starts its run outright, the same way one fully-scanned combat site
 /// does (ET-158) — no card, and no keyboard taken from EVE. The agent name is the only resolving key (ET-172
 /// sub 1/4): it is never parsed from the location line, because the agent name alone is already a sufficient
-/// key into the SDE.</summary>
+/// key into the SDE. Starting outright is itself an opt-out (<see cref="AutoStartSettingKey"/>, ET-264): with it
+/// off the window still opens prepared — name, rewards, level filled in — and the pilot presses START himself.</summary>
 public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
 {
     public const string FeatureName = "Mission detection";
+
+    /// <summary>"false" opens the window prepared instead of starting it outright (ET-264). Default on: unset or
+    /// "true" keeps today's behaviour.</summary>
+    public const string AutoStartSettingKey = "clipboard.mission.auto-start";
 
     private readonly IToastService _toasts;
     private readonly ISdeAccessor _sde;
@@ -36,8 +43,17 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
     private readonly IServiceProvider _services;
     private readonly Lock _gate = new();
     private readonly IDisposable _subscription;
+    private readonly TimeProvider _clock;
 
     private string? _openFingerprint;
+    private DateTimeOffset _openFingerprintAtUtc;
+
+    // Same window as ClipboardSignatureOffer, and for the same reason (ET-264): this only has to outlast the two
+    // change notifications one real copy can fire, not the minutes a pilot spends on DISCARD's own confirmation
+    // dialog. Bounding it in time — instead of the old "until something else is copied" — is what lets copying the
+    // same mission text again after a DISCARD start a run again, without this offer having to be told the window
+    // closed.
+    private static readonly TimeSpan DuplicateNotificationWindow = TimeSpan.FromSeconds(3);
 
     public ClipboardMissionOffer(ClipboardWatchService clipboardWatch, IToastService toasts, ISdeAccessor sde,
         IDialogService dialogs, IServiceProvider services)
@@ -46,6 +62,7 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
         _sde = sde;
         _dialogs = dialogs;
         _services = services;
+        _clock = services.GetService<TimeProvider>() ?? TimeProvider.System;
         _subscription = clipboardWatch.Subscribe(FeatureName, OnCapture);
     }
 
@@ -57,14 +74,17 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
             return;
 
         var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(capture.Text)));
+        var now = _clock.GetUtcNow();
         lock (_gate)
         {
-            // Same suppress rule as ClipboardSignatureOffer: an identical re-copy is ignored until something else is
-            // copied, so the clipboard watch firing twice for one copy cannot start a second run.
-            if (_openFingerprint == fingerprint)
+            // Same suppress rule as ClipboardSignatureOffer: an identical re-copy within DuplicateNotificationWindow
+            // is ignored, so the clipboard watch firing twice for one copy cannot start a second run — but a re-copy
+            // later than that (a DISCARD, then copying the same mission again) is a fresh request.
+            if (_openFingerprint == fingerprint && now - _openFingerprintAtUtc < DuplicateNotificationWindow)
                 return;
 
             _openFingerprint = fingerprint;
+            _openFingerprintAtUtc = now;
         }
 
         if (ClipboardMissionParser.Parse(capture.Text) is { } mission)
@@ -73,6 +93,19 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
 
     private void StartRun(ClipboardMissionCapture mission, string? copiedByCharacter) =>
         _ = _StartRunAsync(mission, copiedByCharacter);
+
+    /// <summary>ET-264: "Start automatically when copied", per kind, in the existing settings window. Default on
+    /// (today's behaviour) — only an explicit "false" prepares the window instead of starting it.</summary>
+    private async Task<bool> _StartsAutomaticallyAsync()
+    {
+        if (_services.GetService<ISettingRepository>() is not { } settings)
+            return true;
+
+        foreach (ClientSetting setting in await settings.ListAsync())
+            if (setting.Key == AutoStartSettingKey)
+                return !string.Equals(setting.Value, "false", StringComparison.OrdinalIgnoreCase);
+        return true;
+    }
 
     private async Task _StartRunAsync(ClipboardMissionCapture mission, string? copiedByCharacter)
     {
@@ -87,7 +120,7 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
 
             Character? pilot = candidates is [{ } only] ? only : null;
             List<Character> additional = [];
-            var startsOnArrival = true;
+            var startsOnArrival = await _StartsAutomaticallyAsync();
 
             bool answeredAlready = _dialogs.ActivityWindowPilot is not null;
             if (pilot is null && candidates.Count > 1 && !answeredAlready)
@@ -113,7 +146,7 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
                         .Select(id => candidates.FirstOrDefault(character => character.EsiCharacterId == id))
                         .Where(character => character is not null)
                         .Select(character => character!)];
-                startsOnArrival = pilot is not null;
+                startsOnArrival = startsOnArrival && pilot is not null;
             }
 
             // The agent name is the sole resolving key (ET-172 sub 1) — no letter of the location line is ever

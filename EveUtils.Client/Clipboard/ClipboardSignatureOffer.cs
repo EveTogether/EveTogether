@@ -15,6 +15,8 @@ using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
+using EveUtils.Shared.Modules.Settings.Entities;
+using EveUtils.Shared.Modules.Settings.Repositories;
 
 namespace EveUtils.Client.Clipboard;
 
@@ -22,10 +24,16 @@ namespace EveUtils.Client.Clipboard;
 /// the exception: that starts its run outright, without a card and without taking the keyboard (ET-158, widened
 /// past combat-only by ET-177). The catalogue only enriches what is shown — it never gates whether the run starts
 /// (ET-178): Data Site, Relic Site and Wormhole are never in it at all, and that is not a reason to stay silent.
-/// A wormhole is the one thing kept out, and on its SDE type id rather than on that absence — see <see cref="IsWormhole"/>.</summary>
+/// A wormhole is the one thing kept out, and on its SDE type id rather than on that absence — see <see cref="IsWormhole"/>.
+/// Starting outright is itself an opt-out (<see cref="AutoStartSettingKey"/>, ET-264): with it off the window still
+/// opens prepared — name, rewards and type filled in — and the pilot presses START himself.</summary>
 public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
 {
     public const string FeatureName = "Signature detection";
+
+    /// <summary>"false" opens the window prepared instead of starting it outright (ET-264). Default on: unset or
+    /// "true" keeps today's behaviour.</summary>
+    public const string AutoStartSettingKey = "clipboard.signature.auto-start";
 
     private readonly IToastService _toasts;
     private readonly ISdeAccessor _sde;
@@ -36,8 +44,17 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
     private readonly IServiceProvider _services;
     private readonly Lock _gate = new();
     private readonly IDisposable _subscription;
+    private readonly TimeProvider _clock;
 
     private string? _openFingerprint;
+    private DateTimeOffset _openFingerprintAtUtc;
+
+    // ET-264: bounds the "one copy, two notifications" guard below in time instead of holding it until something
+    // else is copied. That old rule never let go of a run-starting copy at all (CloseOffer only ever cleared the
+    // card path, never this one) — so a DISCARD followed by copying the exact same site again did nothing. Three
+    // seconds is comfortably past the two notifications one real clipboard change can fire, and comfortably short of
+    // the time a DISCARD's own confirmation dialog takes to click through.
+    private static readonly TimeSpan DuplicateNotificationWindow = TimeSpan.FromSeconds(3);
 
     public ClipboardSignatureOffer(ClipboardWatchService clipboardWatch, IToastService toasts, ISdeAccessor sde,
         IDialogService dialogs, IServiceProvider services)
@@ -46,6 +63,7 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         _sde = sde;
         _dialogs = dialogs;
         _services = services;
+        _clock = services.GetService<TimeProvider>() ?? TimeProvider.System;
         _subscription = clipboardWatch.Subscribe(FeatureName, OnCapture);
     }
 
@@ -57,14 +75,17 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
             return;
 
         var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(capture.Text)));
+        var now = _clock.GetUtcNow();
         lock (_gate)
         {
-            // Same suppress-while-open rule as ClipboardFitImportOffer: only while this exact copy's own card is
-            // still up, so a fresh copy of the same signatures after the card is gone is a new question again.
-            if (_openFingerprint == fingerprint)
+            // Suppress-while-recent rule (ET-264): only within DuplicateNotificationWindow, so a fresh copy of the
+            // same signatures after that — the card is long gone, or the run was DISCARDed — is a new question
+            // again rather than silence.
+            if (_openFingerprint == fingerprint && now - _openFingerprintAtUtc < DuplicateNotificationWindow)
                 return;
 
             _openFingerprint = fingerprint;
+            _openFingerprintAtUtc = now;
         }
 
         var rows = ClipboardSignatureParser.Parse(capture.Text);
@@ -85,13 +106,28 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
             [new ToastAction("Close", () => CloseOffer(fingerprint))], () => CloseOffer(fingerprint), FeatureName);
     }
 
-    // _openFingerprint is deliberately left standing here, unlike the card path: it is what stops a second change
-    // notification for the same copy from starting a second run. ponytail: an identical re-copy is therefore ignored
-    // until something else is copied — drop the guard on a window-closed signal if that ever bites.
+    // _openFingerprint is left standing here too, unlike the card path's own CloseOffer: it is what stops a second
+    // change notification for the same copy from starting a second run. It ages out on its own after
+    // DuplicateNotificationWindow (ET-264) rather than staying forever — the ponytail note this used to carry ("drop
+    // the guard on a window-closed signal if that ever bites") did bite, once a pilot discarded a run and copied the
+    // exact same site again.
     //
     // The clipboard watch calls this on the UI thread, and the answer is awaited before anything is shown, so the
     // task is loose rather than fire-and-forget in spirit: everything it can throw is caught inside.
     private void StartRun(ClipboardSignatureRow row, string? copiedByCharacter) => _ = _StartRunAsync(row, copiedByCharacter);
+
+    /// <summary>ET-264: "Start automatically when copied", per kind, in the existing settings window. Default on
+    /// (today's behaviour) — only an explicit "false" prepares the window instead of starting it.</summary>
+    private async Task<bool> _StartsAutomaticallyAsync()
+    {
+        if (_services.GetService<ISettingRepository>() is not { } settings)
+            return true;
+
+        foreach (ClientSetting setting in await settings.ListAsync())
+            if (setting.Key == AutoStartSettingKey)
+                return !string.Equals(setting.Value, "false", StringComparison.OrdinalIgnoreCase);
+        return true;
+    }
 
     /// <summary>
     /// Ask whose run this is BEFORE the window opens, then hand the answer over. With two clients up the run window
@@ -121,7 +157,7 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
 
             Character? pilot = candidates is [{ } only] ? only : null;
             List<Character> additional = [];
-            var startsOnArrival = true;
+            var startsOnArrival = await _StartsAutomaticallyAsync();
 
             // A window already up that knows its pilot has been asked this once, and copying a site is not a reason
             // to ask again: the answer would be the same, and the asking is a modal dialog taking the keyboard off
@@ -164,7 +200,7 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
 
                 // Dismissed is not "throw the copy away": the window still comes up on the site he copied, it just
                 // does not start itself. START is the way back to this same question over the same candidate set.
-                startsOnArrival = pilot is not null;
+                startsOnArrival = startsOnArrival && pilot is not null;
             }
 
             var window = new ActivityWindowViewModel(ActivityKind.Site, _services)
