@@ -22,6 +22,20 @@ taken from the matching `## vX.Y.Z` section below.
   per-window wiring, kept working regardless, which is why a run could show 118 correct bounty payouts and zero
   enemies. Now every participant discovered in a run's group — not only the one the window was pointed at — gets its
   own collector the moment the window learns about them.
+- **Solo runs no longer get warned about a fleet that isn't there.** Before, starting any run put "no other member
+  has reported in yet" in the title bar even when flying alone, and a run started while merely a member of a
+  long-forgotten personal fleet — never started, never joined by anyone else — said "'Local HF' has not been
+  started, so this run is not shared" every time. Now the run window only mentions a fleet when there is one to
+  mention: the "not shared" notice only fires for a forming fleet somebody else is actually signed up to, and the
+  header chip only reports on fleet members once a real member has actually reported in. A pilot who forgot to
+  start a fleet they are genuinely flying with — or who is in several started fleets at once — still gets told,
+  unchanged.
+- **SAVE while a run is still going.** Before, ending and saving a run always took two clicks — STOP, then SAVE —
+  even when there was nothing left to check. Now a SAVE button sits in the run controls the whole time a run is
+  going, between STOP and DISCARD, and stops the run at the moment it is clicked before saving it in the same step.
+  STOP is unchanged for anyone who wants to check the time or the loot first. Saving now also shows a clear "Saving
+  this run…" indicator in the window itself, with every control disabled until it is done, so a slow save (a
+  five-character group can take several seconds) is never mistaken for nothing happening.
 - **RESUME now catches up what EVE wrote to the gamelog while the app was closed.** Before, resuming a run after a
   crash or a closed app (the RESUME button in UNFINISHED, or the startup notice offering the same choice) picked the
   clock back up but left a gap: any bounty, mining or enemies from the time nothing was watching the gamelog were
@@ -69,6 +83,14 @@ taken from the matching `## vX.Y.Z` section below.
   loot now has its own checkbox under Settings → Privacy & Sharing and in each fleet's SHARING dialog, off by
   default like bounty. Everyone on the run, and the server, need this version for the items to arrive; with an older
   server or fleetmate the items simply don't travel and the ISK figures behave as before.
+- **Mining now shares the same way loot and bounty do.** Before, mining only ever showed on the machine of the pilot
+  who mined it, so an FC could never see what the fleet as a whole pulled out of a site. Now MINING in the run window
+  adds a "fleet mined" line for whoever on the run shares it, and — on a Metaliminal Meteoroid homefront, whose
+  5,000-unit asteroid is a known amount — a "remaining" line as well; an ordinary mining fleet just sees the total. A
+  member mining shows as evidence for the run's attendance the same way bounty already does. Mining has its own
+  checkbox under Settings → Privacy & Sharing and in each fleet's SHARING dialog, and its own button on the run
+  window's SHARING strip, off by default like loot and bounty; the fleet's own total is a lower bound, said on
+  screen, since a pilot not sharing or not on EVE Together is missing from it.
 - **Fleet runs now publish themselves, and your fleetmates' runs come in by themselves.** Before, nothing reached the
   server until someone pressed PUBLISH, and nothing came back until you pressed it again — so whoever published first
   never saw the other pilot's run, name or loot without a second press. Now a run you fly in a fleet on a coupled

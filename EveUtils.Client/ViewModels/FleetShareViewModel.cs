@@ -21,6 +21,7 @@ public sealed partial class FleetShareViewModel : ObservableObject
         (MetricKind.Dps, "Live combat data (DPS, neut, cap)"),
         (MetricKind.Bounty, "Bounty earnings"),
         (MetricKind.Loot, "Loot (items and value)"),
+        (MetricKind.MiningYield, "Mining (units mined)"),
         (MetricKind.Location, "Location"),
         (MetricKind.Presence, "Online/offline status"),
     ];

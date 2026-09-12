@@ -1160,7 +1160,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             shares.IsShared(MetricKind.Location), shares.IsShared(MetricKind.Bounty), shares.IsShared(MetricKind.Dps),
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
             localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow,
-            autoPublishFleetRuns, shares.IsShared(MetricKind.Loot));
+            autoPublishFleetRuns, shares.IsShared(MetricKind.Loot), shares.IsShared(MetricKind.MiningYield));
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,
@@ -1205,6 +1205,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 MetricShareSnapshot.KeyFor(MetricKind.Bounty), result.ShareBounty ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(
                 MetricShareSnapshot.KeyFor(MetricKind.Loot), result.ShareLoot ? "true" : "false"));
+            await dispatcher.Send(new SetSettingCommand(
+                MetricShareSnapshot.KeyFor(MetricKind.MiningYield), result.ShareMining ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(
                 MetricShareSnapshot.CombatShareKey, result.ShareCombat ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(

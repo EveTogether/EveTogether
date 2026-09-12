@@ -10,6 +10,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Settings.Commands;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,8 +19,9 @@ using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 namespace EveUtils.Client.ViewModels.Activity;
 
 /// <summary>
-/// What a run window offers the fleet of the shared run it flies (ET-242): two toggles on its face — loot and bounty,
-/// for this run only — and the loot itself, sent as each own character's <see cref="RunShareUpdate"/>.
+/// What a run window offers the fleet of the shared run it flies (ET-242, mining added by ET-234): three toggles on
+/// its face — loot, bounty and mining, for this run only — and the loot and mining figures themselves, sent as each
+/// own character's <see cref="RunShareUpdate"/>.
 ///
 /// Whether a figure is shared is not decided here but by <see cref="MetricShareSnapshot"/>, the same answer the metric
 /// publisher gates the ISK figures on: the run's own choice, then the fleet's override, and on a shared run without
@@ -42,7 +44,7 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
     // A second read of the settings within the same second tells nothing the first did not; a pressed toggle reads again.
     private static readonly TimeSpan SettingsReadInterval = TimeSpan.FromSeconds(1);
 
-    private static readonly MetricKind[] RunScopedKinds = [MetricKind.Loot, MetricKind.Bounty];
+    private static readonly MetricKind[] RunScopedKinds = [MetricKind.Loot, MetricKind.Bounty, MetricKind.MiningYield];
 
     private readonly Dictionary<int, SentShare> _sent = [];
     private readonly Dictionary<int, DateTime> _changedSince = [];
@@ -69,28 +71,56 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
     [NotifyPropertyChangedFor(nameof(SharingText))]
     private bool _isSharingBounty;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MiningToggleText))]
+    [NotifyPropertyChangedFor(nameof(SharingText))]
+    private bool _isSharingMining;
+
     // The state in words on the button itself, not in its colour alone: an Amarr accent and the resting ink are close.
     public string LootToggleText => IsSharingLoot ? "loot: shared" : "loot: not shared";
 
     public string BountyToggleText => IsSharingBounty ? "bounty: shared" : "bounty: not shared";
 
-    public string SharingText => (IsSharingLoot, IsSharingBounty) switch
+    public string MiningToggleText => IsSharingMining ? "mining: shared" : "mining: not shared";
+
+    /// <summary>Built from whichever of the three are on and off (ET-234 made this a third dimension a fixed switch
+    /// could no longer cover) — "Your X and Y … go to the fleet; your Z does not," with the grammar bent to however
+    /// many names sit on each side.</summary>
+    public string SharingText
     {
-        (true, true) => "Your loot and bounty on this run go to the fleet. Click one to stop sharing it.",
-        (true, false) => "Your loot on this run goes to the fleet; your bounty does not.",
-        (false, true) => "Your bounty on this run goes to the fleet; your loot does not.",
-        _ => "Nothing of your loot or bounty on this run goes to the fleet."
-    };
+        get
+        {
+            (bool IsShared, string Name)[] toggles =
+            [
+                (IsSharingLoot, "loot"), (IsSharingBounty, "bounty"), (IsSharingMining, "mining")
+            ];
+            string[] shared = [.. toggles.Where(toggle => toggle.IsShared).Select(toggle => toggle.Name)];
+            string[] withheld = [.. toggles.Where(toggle => !toggle.IsShared).Select(toggle => toggle.Name)];
+
+            if (withheld.Length == 0)
+                return "Your loot, bounty and mining on this run go to the fleet. Click one to stop sharing it.";
+            if (shared.Length == 0)
+                return "Nothing of your loot, bounty or mining on this run goes to the fleet.";
+
+            return $"Your {_Join(shared)} on this run {(shared.Length == 1 ? "goes" : "go")} to the fleet; " +
+                   $"your {_Join(withheld)} {(withheld.Length == 1 ? "does" : "do")} not.";
+        }
+    }
+
+    private static string _Join(string[] words) => words.Length <= 1 ? words[0] : string.Join(" and ", words);
 
     /// <summary>
     /// One tick of the window's clock. <paramref name="runCharacters"/> are the characters with a run in this group as
     /// the window knows them — its own and every participant — of which only this client's own characters in the
-    /// fleet count; a group mate's run published to this client is theirs to share.
+    /// fleet count; a group mate's run published to this client is theirs to share. <paramref name="participants"/> is
+    /// where each own character's mined units and residue (ET-234) are read from, the run window's own
+    /// <c>RunMiningEntry</c> rows.
     /// </summary>
     public Task SyncAsync(DateTime nowUtc, long? fleetId, string? groupCode, bool isRunOpen,
-        IReadOnlyCollection<int> runCharacters, ActivityLootViewModel? loot)
+        IReadOnlyCollection<int> runCharacters, ActivityLootViewModel? loot,
+        IReadOnlyCollection<RunParticipantViewModel>? participants = null)
     {
-        _facts = new SyncFacts(nowUtc, fleetId, groupCode, isRunOpen, runCharacters, loot);
+        _facts = new SyncFacts(nowUtc, fleetId, groupCode, isRunOpen, runCharacters, loot, participants ?? []);
         return _SyncOrOweAsync(readSettings: false);
     }
 
@@ -120,6 +150,9 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
 
     [RelayCommand]
     private Task ToggleBountyAsync() => _ChooseAsync(MetricKind.Bounty, !IsSharingBounty);
+
+    [RelayCommand]
+    private Task ToggleMiningAsync() => _ChooseAsync(MetricKind.MiningYield, !IsSharingMining);
 
     private async Task _ChooseAsync(MetricKind kind, bool isShared)
     {
@@ -193,16 +226,18 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
         MetricShareSnapshot share = _share;
         IsSharingLoot = characters.Any(character => share.IsShared(fleetId, character, MetricKind.Loot));
         IsSharingBounty = characters.Any(character => share.IsShared(fleetId, character, MetricKind.Bounty));
+        IsSharingMining = characters.Any(character => share.IsShared(fleetId, character, MetricKind.MiningYield));
 
         foreach (int character in characters)
-            await _OfferAsync(nowUtc, fleetId, groupCode, character, share, facts.Loot);
+            await _OfferAsync(nowUtc, fleetId, groupCode, character, share, facts.Loot, facts.Participants);
     }
 
     private async Task _OfferAsync(DateTime nowUtc, long fleetId, string groupCode, int character,
-        MetricShareSnapshot share, ActivityLootViewModel? loot)
+        MetricShareSnapshot share, ActivityLootViewModel? loot, IReadOnlyCollection<RunParticipantViewModel> participants)
     {
         bool sharesLoot = share.IsShared(fleetId, character, MetricKind.Loot);
         bool sharesBounty = share.IsShared(fleetId, character, MetricKind.Bounty);
+        bool sharesMining = share.IsShared(fleetId, character, MetricKind.MiningYield);
         ActivityLootCharacterViewModel[] blocks = sharesLoot && loot is not null
             ? [.. loot.Characters.Where(block => block.CharacterId == character)]
             : [];
@@ -216,12 +251,24 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
             .OrderBy(line => line.TypeId)
             .ThenBy(line => line.Kind)];
         int captures = blocks.Sum(block => block.Loot.Captures.Count(capture => !capture.IsExcluded));
-        SentShare current = new(sharesLoot, sharesBounty, captures, lines, nowUtc);
+
+        // The pilot's own mining totals for this run, own ore lines summed (ET-234) — 0 while not sharing, the same
+        // convention SharesLoot's empty Loot list follows.
+        int minedUnits = 0, residueUnits = 0;
+        if (sharesMining)
+            foreach (RunMiningOreDto entry in participants.Where(p => p.CharacterId == character).SelectMany(p => p.MiningEntries))
+            {
+                minedUnits += entry.Units;
+                residueUnits += entry.ResidueUnits;
+            }
+
+        SentShare current = new(sharesLoot, sharesBounty, captures, lines, sharesMining, minedUnits, residueUnits, nowUtc);
 
         SentShare? sent = _sent.GetValueOrDefault(character);
         // Taking something back is never held for a burst: from this moment the others see nothing more of it.
-        bool isWithdrawn = sent is not null && (sent.SharesLoot && !sharesLoot || sent.SharesBounty && !sharesBounty);
-        bool isChanged = sent is null ? sharesLoot || sharesBounty : !sent.SaysTheSameAs(current);
+        bool isWithdrawn = sent is not null
+            && (sent.SharesLoot && !sharesLoot || sent.SharesBounty && !sharesBounty || sent.SharesMining && !sharesMining);
+        bool isChanged = sent is null ? sharesLoot || sharesBounty || sharesMining : !sent.SaysTheSameAs(current);
         if (!isChanged)
             _changedSince.Remove(character);
 
@@ -235,7 +282,8 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
         // switching off into old news it ignores.
         _lastUnixMs = Math.Max(new DateTimeOffset(nowUtc, TimeSpan.Zero).ToUnixTimeMilliseconds(), _lastUnixMs + 1);
         await eventBus.PublishAsync(new FleetRunShareEvent(new RunShareUpdate(
-                fleetId, groupCode, _lastUnixMs, sharesLoot, sharesBounty, captures, lines), character),
+                fleetId, groupCode, _lastUnixMs, sharesLoot, sharesBounty, captures, lines,
+                sharesMining, minedUnits, residueUnits), character),
             EventTarget.Remote);
     }
 
@@ -249,7 +297,7 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
     }
 
     private static bool _IsResendDue(SentShare? sent, SentShare current, DateTime nowUtc) =>
-        sent is not null && (current.SharesLoot || current.SharesBounty)
+        sent is not null && (current.SharesLoot || current.SharesBounty || current.SharesMining)
                          && (nowUtc - sent.SentAtUtc >= ResendInterval || nowUtc < sent.SentAtUtc);
 
     /// <summary>Puts exactly these characters on the run in <see cref="SharedFleetRuns"/>, and takes off whoever this
@@ -292,13 +340,15 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
     }
 
     private sealed record SyncFacts(
-        DateTime NowUtc,
-        long? FleetId, string? GroupCode, bool IsRunOpen, IReadOnlyCollection<int> RunCharacters, ActivityLootViewModel? Loot);
+        DateTime NowUtc, long? FleetId, string? GroupCode, bool IsRunOpen, IReadOnlyCollection<int> RunCharacters,
+        ActivityLootViewModel? Loot, IReadOnlyCollection<RunParticipantViewModel> Participants);
 
-    private sealed record SentShare(bool SharesLoot, bool SharesBounty, int CaptureCount, RunShareLootLine[] Lines, DateTime SentAtUtc)
+    private sealed record SentShare(bool SharesLoot, bool SharesBounty, int CaptureCount, RunShareLootLine[] Lines,
+        bool SharesMining, int MinedUnits, int ResidueUnits, DateTime SentAtUtc)
     {
         public bool SaysTheSameAs(SentShare other) =>
             SharesLoot == other.SharesLoot && SharesBounty == other.SharesBounty && CaptureCount == other.CaptureCount
-            && Lines.SequenceEqual(other.Lines);
+            && Lines.SequenceEqual(other.Lines) && SharesMining == other.SharesMining
+            && MinedUnits == other.MinedUnits && ResidueUnits == other.ResidueUnits;
     }
 }

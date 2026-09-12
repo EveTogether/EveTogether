@@ -35,4 +35,14 @@ public static class HomefrontCatalogue
     /// — the per-run refinement ET-236's design left for ET-228: a mining homefront's catalogue row claims MINING
     /// besides the six sections every site already has.</summary>
     public static bool IsMiningKind(string kind) => kind is "Metaliminal Meteoroid" or "Abyssal Artifact Recovery";
+
+    /// <summary>The one mining kind whose site capacity is a fixed, known number: a Metaliminal Meteoroid is always a
+    /// single 5,000-unit asteroid (domain/homefronts.md §2 and §6.1, CCP 23.02 — measured against seven real sites,
+    /// mined units plus residue add up to exactly 5,000 every time). Abyssal Artifact Recovery mines 9 waves of 12
+    /// asteroids each, not one comparably simple figure, so it is left out here — ET-234 shows AAR a fleet total with
+    /// no "remaining" line, the same as an ordinary mining fleet with no known capacity at all.</summary>
+    public static IReadOnlyDictionary<string, int> CapacityUnitsByKind { get; } = new Dictionary<string, int>
+    {
+        ["Metaliminal Meteoroid"] = 5000
+    };
 }
