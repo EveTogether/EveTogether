@@ -1,0 +1,22 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.MiningWindowSectionView"
+             x:DataType="vs:MiningWindowSectionViewModel">
+    <StackPanel>
+        <!-- General for any mining, not only a homefront's — one row per character per ore, the BOUNTY/ENEMIES shape. -->
+        <ItemsControl ItemsSource="{Binding Rows}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:ActivityMiningRowViewModel">
+                    <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                        <TextBlock Text="{Binding CharacterText}"/>
+                        <TextBlock Grid.Column="1" Classes="hint" Text="{Binding OreText}"/>
+                        <TextBlock Grid.Column="2" Classes="hint" Text="{Binding UnitsText}"/>
+                        <TextBlock Grid.Column="3" Classes="money" Text="{Binding ValueText}"/>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+</UserControl>

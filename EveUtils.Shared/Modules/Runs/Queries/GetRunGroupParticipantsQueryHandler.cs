@@ -25,7 +25,9 @@ internal sealed class GetRunGroupParticipantsQueryHandler(IDbContextFactory<Clie
                           && (string.IsNullOrEmpty(query.GroupCode) ? run.Id == query.RunId : run.GroupCode == query.GroupCode))
             .OrderBy(run => run.CharacterId)
             .Select(run => new RunGroupParticipantDto(run.Id, run.CharacterId, run.IsParticipant, run.IsPayoutEligible,
-                run.BountyEntries.Sum(entry => entry.Isk)))
+                run.BountyEntries.Sum(entry => entry.Isk),
+                run.MiningEntries.Select(entry => new RunMiningOreDto(entry.OreType, entry.Units, entry.CriticalUnits, entry.ResidueUnits))
+                    .ToList()))
             .ToListAsync(cancellationToken);
         return Result<IReadOnlyList<RunGroupParticipantDto>>.Success(participants);
     }

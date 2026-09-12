@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
+using EveUtils.Shared.Modules.Runs.Dtos;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
@@ -14,7 +15,8 @@ namespace EveUtils.Client.ViewModels.Runs;
 public sealed partial class RunParticipantViewModel : ObservableObject
 {
     public RunParticipantViewModel(Guid runId, int characterId, string characterName,
-        bool isParticipant = true, bool isPayoutEligible = true, decimal bountyIsk = 0m)
+        bool isParticipant = true, bool isPayoutEligible = true, decimal bountyIsk = 0m,
+        IReadOnlyList<RunMiningOreDto>? miningEntries = null)
     {
         RunId = runId;
         CharacterId = characterId;
@@ -22,6 +24,7 @@ public sealed partial class RunParticipantViewModel : ObservableObject
         _isParticipant = isParticipant;
         _isPayoutEligible = isPayoutEligible;
         _bountyIsk = bountyIsk;
+        _miningEntries = miningEntries ?? [];
     }
 
     public Guid RunId { get; }
@@ -45,6 +48,11 @@ public sealed partial class RunParticipantViewModel : ObservableObject
     /// figure a saved activity already counts.</summary>
     [ObservableProperty]
     private decimal _bountyIsk;
+
+    /// <summary>This run's own <c>RunMiningEntry</c> rows (ET-229), refreshed alongside <see cref="BountyIsk"/> —
+    /// general for any mining, never only a homefront's.</summary>
+    [ObservableProperty]
+    private IReadOnlyList<RunMiningOreDto> _miningEntries;
 
     /// <summary>Null until there is a figure to divide; zero is never used to mean "not known".</summary>
     [ObservableProperty]

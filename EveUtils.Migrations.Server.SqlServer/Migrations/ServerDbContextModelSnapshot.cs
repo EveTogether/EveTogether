@@ -1013,6 +1013,42 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                     b.ToTable("RunLootEntry");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunMiningEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CriticalUnits")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("FirstObservedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("LastObservedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("OreType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("ResidueUnits")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Units")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId", "OreType")
+                        .IsUnique();
+
+                    b.ToTable("RunMiningEntry");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunParameter", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1459,6 +1495,17 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                     b.Navigation("RunLootCapture");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunMiningEntry", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", "Run")
+                        .WithMany("MiningEntries")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunParameter", b =>
                 {
                     b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", "Run")
@@ -1511,6 +1558,8 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                     b.Navigation("EnemyObservations");
 
                     b.Navigation("LootCaptures");
+
+                    b.Navigation("MiningEntries");
 
                     b.Navigation("Parameters");
                 });

@@ -13,6 +13,14 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Mining now shows up on the run, per character and per ore.** A dedicated mining run shows it live in the run
+  window; any other activity — a combat, data, relic, gas or wormhole site — shows it on the saved activity's
+  detail screen once it's clear there is something to show. Units mined, critical strikes and residue are all
+  shown, with a total value alongside; before, mining only ever added to your character's lifetime total and left
+  no trace on the run itself. This works for any mining — a homefront, an ore anomaly, a belt, or a plain mining
+  fleet — not only for homefronts. Mutanite is valued at its fixed NPC buy price, shown as such; every other ore is
+  priced the same way loot already is. Mining now also counts toward TOTAL ISK. Fixes a long-standing gamelog bug
+  along the way: the "residue" line from an almost-depleted asteroid was being silently dropped instead of counted.
 - **On a run you fly together with a fleet, you now see each other's loot live — who found what, and what it is
   worth — under LOOT in the run window.** Before, a fleetmate's loot never reached you during the run: loot sharing
   could not be switched on anywhere, and even when it went out it was only an ISK figure, never the items. Now every

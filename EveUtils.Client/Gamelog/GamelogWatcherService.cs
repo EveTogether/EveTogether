@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using EveUtils.Shared.Cqrs;
+using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Gamelog.Reading;
 using EveUtils.Shared.Modules.Settings.Queries;
@@ -36,6 +37,9 @@ public sealed class GamelogWatcherService : ISingletonService
     private readonly Channel<Parsed> _events = Channel.CreateUnbounded<Parsed>(new UnboundedChannelOptions { SingleReader = true });
     private readonly Lock _gate = new();
     private readonly HashSet<string> _observed = new(StringComparer.OrdinalIgnoreCase);
+
+    // Read and written only from PumpAsync, which drains _events on a single reader, so this needs no lock of its own.
+    private readonly MiningResidueCorrelator _miningResidue = new();
 
     private GameLogWatcher? _watcher;
     private Task? _pump;
@@ -143,7 +147,13 @@ public sealed class GamelogWatcherService : ISingletonService
                             await _gamelog.AddBountyAsync(item.Character, b);
                             break;
                         case MiningEvent m:
+                            _miningResidue.Observe(item.Character, m.OreType);
                             await _gamelog.AddMiningAsync(item.Character, m);
+                            break;
+                        case MiningResidueEvent r:
+                            if (_miningResidue.OreFor(item.Character) is { } lastOre)
+                                await _gamelog.AddMiningAsync(item.Character,
+                                    new MiningEvent(r.Timestamp, Units: 0, lastOre, IsCritical: false, LostResidue: r.Units));
                             break;
                         case RemoteRepEvent r:
                             _gamelog.AddRemoteRep(item.Character, r.Outgoing, r.Amount, r.Timestamp);

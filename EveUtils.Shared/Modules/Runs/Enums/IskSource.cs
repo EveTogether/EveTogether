@@ -7,5 +7,6 @@ public enum IskSource
     Bounty = 0,
     Loot = 1,
     Rewards = 2,
-    Consumables = 3
+    Consumables = 3,
+    Mining = 4
 }

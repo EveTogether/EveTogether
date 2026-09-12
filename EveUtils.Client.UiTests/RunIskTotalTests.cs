@@ -479,13 +479,16 @@ public sealed class RunIskTotalTests
 
     private static RunIskFacts _Facts(decimal bounty = 0m, decimal? lootNet = null, bool hasLoot = false,
         IReadOnlyList<RunIskParameter>? parameters = null, DateTime? stoppedAtUtc = null,
-        decimal? consumableIskCost = null, bool hasConsumables = false) => new()
+        decimal? consumableIskCost = null, bool hasConsumables = false,
+        decimal? miningIskValue = null, bool hasMining = false) => new()
     {
         BountyIsk = bounty,
         LootIskNet = lootNet,
         HasLoot = hasLoot || lootNet is not null,
         ConsumableIskCost = consumableIskCost,
         HasConsumables = hasConsumables || consumableIskCost is not null,
+        MiningIskValue = miningIskValue,
+        HasMining = hasMining || miningIskValue is not null,
         Parameters = parameters ?? [],
         StoppedAtUtc = stoppedAtUtc
     };

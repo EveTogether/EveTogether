@@ -111,4 +111,5 @@ public sealed class Run
     public ICollection<RunBountyEntry> BountyEntries { get; } = [];
     public ICollection<RunEnemyObservation> EnemyObservations { get; } = [];
     public ICollection<RunParameter> Parameters { get; } = [];
+    public ICollection<RunMiningEntry> MiningEntries { get; } = [];
 }

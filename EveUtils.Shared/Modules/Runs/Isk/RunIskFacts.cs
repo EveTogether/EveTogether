@@ -24,6 +24,13 @@ public sealed record RunIskFacts
     /// yet" from "nothing to charge".</summary>
     public required bool HasConsumables { get; init; }
 
+    /// <summary>Priced mining, valued through the price source — Mutanite at its fixed NPC price, everything else at
+    /// the market's (ET-229). Null when there is mining but nothing on it can be priced yet.</summary>
+    public required decimal? MiningIskValue { get; init; }
+
+    /// <summary>Whether there is mining at all, priced or not — what tells "not priced yet" from "nothing mined".</summary>
+    public required bool HasMining { get; init; }
+
     public required IReadOnlyList<RunIskParameter> Parameters { get; init; }
 
     /// <summary>When the run stopped — the moment a mission's bonus is judged at. Null while it is still going.</summary>

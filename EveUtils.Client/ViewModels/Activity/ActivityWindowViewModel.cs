@@ -2263,6 +2263,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                     existing.IsParticipant = dto.IsParticipant;
                     existing.IsPayoutEligible = dto.IsPayoutEligible;
                     existing.BountyIsk = dto.BountyIsk;
+                    existing.MiningEntries = dto.MiningEntries;
                     continue;
                 }
 
@@ -2272,7 +2273,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 int characterId = checked((int)dto.CharacterId);
                 string name = await _NameOfAsync(characterId) ?? $"Char {characterId}";
                 Participants.Add(new RunParticipantViewModel(
-                    dto.RunId, characterId, name, dto.IsParticipant, dto.IsPayoutEligible, dto.BountyIsk));
+                    dto.RunId, characterId, name, dto.IsParticipant, dto.IsPayoutEligible, dto.BountyIsk, dto.MiningEntries));
             }
 
             foreach (RunParticipantViewModel gone in Participants
@@ -3282,6 +3283,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         List<RunIskParameter> parameters = [.. PendingParameters.Select(parameter => new RunIskParameter(
             parameter.ParameterKey, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))];
         var consumables = _sections.GetValueOrDefault(RunSectionId.Consumables) as ConsumablesWindowSectionViewModel;
+        var mining = _sections.GetValueOrDefault(RunSectionId.Mining) as MiningWindowSectionViewModel;
 
         List<RunIskFacts> runs = isGroup
             ? [.. Participants.Select(participant =>
@@ -3297,6 +3299,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                     RunLootViewModel? loot = LootOverview?.Characters
                         .FirstOrDefault(character => character.RunId == participant.RunId)?.Loot;
                     (decimal? cost, bool has) = _ConsumableFacts(consumables, participant.RunId);
+                    (decimal? miningValue, bool hasMining) = mining?.FactsFor(participant.RunId) ?? (null, false);
                     return new RunIskFacts
                     {
                         BountyIsk = bountyIsk,
@@ -3304,20 +3307,24 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                         HasLoot = loot?.HasCaptures ?? false,
                         ConsumableIskCost = cost,
                         HasConsumables = has,
+                        MiningIskValue = miningValue,
+                        HasMining = hasMining,
                         Parameters = parameters,
                         StoppedAtUtc = EffectiveStopUtc
                     };
                 })]
-            : [_SoloRunIskFacts(consumables, parameters)];
+            : [_SoloRunIskFacts(consumables, mining, parameters)];
 
         IskBreakdown isk = IskContributors.Breakdown(runs, nowUtc);
         HasGroupTotalIsk = isk.HasFigure;
         GroupTotalIskText = IskFormat.Whole(isk.Total) + IskFormat.ExpectedPart(isk);
     }
 
-    private RunIskFacts _SoloRunIskFacts(ConsumablesWindowSectionViewModel? consumables, IReadOnlyList<RunIskParameter> parameters)
+    private RunIskFacts _SoloRunIskFacts(
+        ConsumablesWindowSectionViewModel? consumables, MiningWindowSectionViewModel? mining, IReadOnlyList<RunIskParameter> parameters)
     {
         (decimal? cost, bool has) = RunId is { } runId ? _ConsumableFacts(consumables, runId) : (null, false);
+        (decimal? miningValue, bool hasMining) = RunId is { } id ? mining?.FactsFor(id) ?? (null, false) : (null, false);
         return new RunIskFacts
         {
             BountyIsk = BountyIsk,
@@ -3325,6 +3332,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             HasLoot = RunLoot?.HasCaptures ?? false,
             ConsumableIskCost = cost,
             HasConsumables = has,
+            MiningIskValue = miningValue,
+            HasMining = hasMining,
             Parameters = parameters,
             StoppedAtUtc = EffectiveStopUtc
         };

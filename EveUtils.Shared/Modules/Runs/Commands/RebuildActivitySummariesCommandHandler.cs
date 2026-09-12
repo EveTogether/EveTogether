@@ -10,13 +10,14 @@ using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Runs.Tally;
+using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
 internal sealed class RebuildActivitySummariesCommandHandler(
-    IDbContextFactory<ClientDbContext> contextFactory, IMarketPriceRepository marketPrices, IEventBus eventBus)
+    IDbContextFactory<ClientDbContext> contextFactory, IMarketPriceRepository marketPrices, ISdeAccessor sde, IEventBus eventBus)
     : ICommandHandler<RebuildActivitySummariesCommand, Result<int>>
 {
     public async Task<Result<int>> Handle(RebuildActivitySummariesCommand command, CancellationToken cancellationToken = default)
@@ -47,6 +48,7 @@ internal sealed class RebuildActivitySummariesCommandHandler(
                 .ThenInclude(capture => capture.Entries)
             .Include(run => run.BountyEntries)
             .Include(run => run.EnemyObservations)
+            .Include(run => run.MiningEntries)
             .ToListAsync(cancellationToken);
         // Read on their own rather than as one more Include: a fourth sibling collection in the same join would repeat
         // every loot line once more per parameter of its run.
@@ -68,8 +70,17 @@ internal sealed class RebuildActivitySummariesCommandHandler(
             .Select(group => RunIskFactsReader.FilamentTypeId(group))
             .OfType<int>()
             .Distinct()];
+        // MINING prices through the same cache, keyed by each ore's own resolved type — by exact SDE name, never
+        // guessed (ET-229). Mutanite's fixed NPC price never needs the cache at all (MiningValuation), so it is not
+        // collected here; a market miss for it never happens because the price never comes from this dictionary.
+        List<int> oreTypeIds = sde.IsAvailable
+            ? [.. runs.SelectMany(run => run.MiningEntries)
+                .Select(entry => sde.TryGetTypeId(entry.OreType, out int typeId) ? (int?)typeId : null)
+                .OfType<int>()
+                .Distinct()]
+            : [];
         IReadOnlyDictionary<int, double> prices = await marketPrices.GetAveragePricesAsync(
-            [.. lootTypeIds.Concat(filamentTypeIds).Distinct()], cancellationToken);
+            [.. lootTypeIds.Concat(filamentTypeIds).Concat(oreTypeIds).Distinct()], cancellationToken);
 
         // Updated in place rather than deleted and re-added, so an activity keeps its summary id across rebuilds and a
         // screen that opened it by that id — the detail screen, an overview row — still finds it after a save or a
@@ -81,7 +92,7 @@ internal sealed class RebuildActivitySummariesCommandHandler(
             .ToDictionary(group => group.Key, group => group.First());
         foreach (IGrouping<string, Run> activity in runs.GroupBy(run => run.GroupCode ?? run.Id.ToString()))
         {
-            ActivitySummary built = _Build(activity.Key, activity.ToArray(), parametersByRun, prices);
+            ActivitySummary built = _Build(activity.Key, activity.ToArray(), parametersByRun, prices, sde);
             if (existing.Remove(activity.Key, out ActivitySummary? kept))
             {
                 built.Id = kept.Id;
@@ -107,7 +118,7 @@ internal sealed class RebuildActivitySummariesCommandHandler(
         new(SHA256.HashData(Encoding.UTF8.GetBytes($"activity-summary:{activityKey}")).AsSpan(0, 16));
 
     private static ActivitySummary _Build(string activityKey, IReadOnlyList<Run> runs,
-        ILookup<Guid, RunParameter> parametersByRun, IReadOnlyDictionary<int, double> prices)
+        ILookup<Guid, RunParameter> parametersByRun, IReadOnlyDictionary<int, double> prices, ISdeAccessor sde)
     {
         Run source = runs.OrderBy(run => run.StartedAtUtc).ThenBy(run => run.Id).First();
         DateTime startedAtUtc = runs.Min(run => run.StartedAtUtc);
@@ -120,7 +131,7 @@ internal sealed class RebuildActivitySummariesCommandHandler(
         // Per run, then added up over the activity by each contributor — the same breakdown the open run window and
         // UNFINISHED make, stored so every screen reads this one and none of them adds figures of its own (ET-256).
         IskBreakdown isk = IskContributors.Breakdown(
-            [.. runs.Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices))], DateTime.UtcNow);
+            [.. runs.Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices, sde))], DateTime.UtcNow);
         // Runs, for the PayoutEligibleCount column: how many eligible runs the activity holds.
         int payoutEligibleCount = runs.Count(run => run.IsPayoutEligible);
         // Distinct characters, for the expected payout: they differ because ET-130 lets one character hold more than
