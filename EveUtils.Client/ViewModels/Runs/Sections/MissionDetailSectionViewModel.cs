@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
@@ -51,6 +52,12 @@ public sealed partial class MissionDetailSectionViewModel(ISdeAccessor? sde) : R
 
     [ObservableProperty] private string _missionLocationText = string.Empty;
 
+    /// <summary>Shown only once there is somebody else in the group to distinguish it from — a solo mission's
+    /// reward is unambiguous without this line (ET-260).</summary>
+    [ObservableProperty] private bool _isRewardOwnerShown;
+
+    [ObservableProperty] private string _rewardOwnerText = string.Empty;
+
     public override bool HasContent => HasAgent || HasBonus || IsImportantMission || IsMissionLocationShown || RewardRows.Count > 0;
 
     public override void Apply(RunDetailSectionInput input)
@@ -84,13 +91,28 @@ public sealed partial class MissionDetailSectionViewModel(ISdeAccessor? sde) : R
             copy.BonusWindowSeconds, copy.ObservedAtUtc,
             detail.Runs.FirstOrDefault(run => run.RunId == copy.RunId)?.StoppedAtUtc ?? DateTime.UtcNow));
 
+        // ET-260: only the run of the character who actually accepted the mission carries these parameters now — the
+        // Distinct still guards a group saved before that fix (or before its one-time dedupe repaired it), where the
+        // identical line sat on every own toon's run and would otherwise read twice as much LP or ISK than the
+        // mission ever paid.
+        RunParameterDto[] rewardParameters = [.. detail.Parameters.Where(_IsRewardRow)
+            .DistinctBy(parameter => (parameter.ParameterKey, parameter.TypedValue, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))];
         RewardRows.Clear();
-        foreach (RunParameterDto parameter in detail.Parameters.Where(_IsRewardRow))
+        foreach (RunParameterDto parameter in rewardParameters)
             RewardRows.Add(new ActivityRewardRowViewModel(parameter));
 
         RewardsEmptyText = !HasAgent && !HasBonus && RewardRows.Count == 0
             ? "No reward was recorded for this mission."
             : null;
+
+        // Whichever run any of this mission's own parameters landed on is the character EVE actually paid — the
+        // same run for all of them, since ET-260's source fix (and its one-time dedupe of older activities) never
+        // splits one mission's parameters across more than one run in a group.
+        ActivityRunDetailDto? owner = detail.Parameters.Count > 0
+            ? detail.Runs.FirstOrDefault(run => run.RunId == detail.Parameters[0].RunId)
+            : null;
+        IsRewardOwnerShown = owner is not null && detail.Runs.Count > 1;
+        RewardOwnerText = owner is not null ? CharacterNameResolver.Resolve(owner.CharacterNameSnapshot, owner.CharacterId, input.NameOf) : string.Empty;
 
         List<string> parts = [];
         if (IsImportantMission)

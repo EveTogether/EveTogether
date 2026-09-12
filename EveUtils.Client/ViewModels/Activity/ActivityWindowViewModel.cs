@@ -400,6 +400,24 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     // moment it starts rather than waited for — a mission is not looted the way a site is (ET-174 AC-4).
     public IReadOnlyList<RunParameterInput> PendingParameters { get; set; } = [];
 
+    /// <summary>Which character in the group actually accepted the mission (ET-260) — the one whose clipboard copy
+    /// started this window (<c>ClipboardCapture.CopiedByCharacter</c>), set by <c>ClipboardMissionOffer</c>. Null for
+    /// every non-mission window, and for a solo mission, where there is nobody else to withhold
+    /// <see cref="PendingParameters"/> from. In EVE only the character who accepted a mission is ever paid for it —
+    /// the salvage alt on the same fleet gets nothing — so <see cref="_ParametersFor"/> is the one place that turns
+    /// this into which run actually gets written with the reward.</summary>
+    public int? MissionRewardOwnerCharacterId { get; set; }
+
+    /// <summary>The parameters one particular character's own <c>StartRunCommand</c> should carry: every own toon
+    /// under one <see cref="GroupCode"/> used to receive the identical <see cref="PendingParameters"/> list, so a
+    /// mission flown with two toons stored — and therefore showed — its ISK, bonus and LP twice (ET-260). Only
+    /// <see cref="MissionRewardOwnerCharacterId"/>'s own run keeps them; every other character's run starts with
+    /// none, exactly as EVE itself pays the reward to one character and not the other.</summary>
+    private IReadOnlyList<RunParameterInput> _ParametersFor(long characterId) =>
+        MissionRewardOwnerCharacterId is null || MissionRewardOwnerCharacterId == characterId
+            ? PendingParameters
+            : [];
+
     // ── The sections ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Bring <see cref="Sections"/> to what the run's type claims, plus (ET-228) any section that has come
@@ -1898,7 +1916,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 SiteTypeSource: _SiteTypeSource(),
                 AgentId: MissionAgentId,
                 MissionLevel: MissionLevel,
-                Parameters: PendingParameters,
+                Parameters: _ParametersFor(characterId),
                 // Announced to the fleet only if this window already knows them (ET-241) — SAVE is what actually
                 // persists them onto the run, through ActivityWindowSectionViewModel.AddToSave.
                 AbyssalTierIndex: TierIndex,
@@ -1970,7 +1988,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             SiteTypeSource: _SiteTypeSource(),
             AgentId: MissionAgentId,
             MissionLevel: MissionLevel,
-            Parameters: PendingParameters));
+            Parameters: _ParametersFor(characterId)));
 
         if (!started.IsSuccess)
         {

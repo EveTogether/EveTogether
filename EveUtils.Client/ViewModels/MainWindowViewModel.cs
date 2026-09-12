@@ -62,6 +62,7 @@ using EveUtils.Shared.Modules.Sde.Import;
 using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Dtos;
 using EveUtils.Shared.Modules.Settings.Queries;
+using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Ships.Commands;
 using EveUtils.Shared.Modules.Ships.Dtos;
 using EveUtils.Shared.Modules.Ships.Events;
@@ -2411,7 +2412,17 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         var progress = new SdeProgressViewModel();
         var importTask = importer.ImportAsync(progress); // reports into the popup; runs the build off-thread
         await _dialogs.ShowSdeUpdateAsync(progress);     // modal; closes itself when the VM signals done
-        await importTask;                                // observe the outcome (errors already surfaced in the popup)
+        SdeImportResult result = await importTask;       // observe the outcome (errors already surfaced in the popup)
+
+        // ET-261: Program.cs's own startup repair ran before this import ever had a chance to happen — on the first
+        // start after an SDE schema bump, ISdeAccessor.IsAvailable was still false at that point, so it repaired
+        // nothing. Now that a fresh store is in place, run it again so the fix lands this session instead of
+        // needing a second restart.
+        if (result.Error is null)
+        {
+            using var scope = _services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<IDispatcher>().Send(new RepairHomefrontSiteTypeIdsCommand());
+        }
     }
 
     /// <summary>A human label for the currently loaded SDE build, shown in Settings ("Not downloaded yet" if none).</summary>

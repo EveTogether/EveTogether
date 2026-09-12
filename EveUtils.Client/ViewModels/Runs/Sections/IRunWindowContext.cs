@@ -86,6 +86,11 @@ public interface IRunWindowContext : INotifyPropertyChanged
     /// the store, since nothing about a mission's reward changes after it was accepted.</summary>
     IReadOnlyList<RunParameterInput> PendingParameters { get; }
 
+    /// <summary>Which character in the group actually accepted this mission (ET-260) — null on a solo mission, where
+    /// there is nobody else to credit it against instead. The MISSION section shows this so a reward that is only
+    /// ever paid to one character in a multi-toon group does not read as unclaimed.</summary>
+    int? MissionRewardOwnerCharacterId { get; }
+
     // ── The pocket ─────────────────────────────────────────────────────────────────────────────────
     // Held by the window because its header shows them; set by the section that asks for them.
 

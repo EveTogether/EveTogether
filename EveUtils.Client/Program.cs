@@ -286,11 +286,22 @@ sealed class Program
 
             // One-time repair for runs started before ET-228 kept a homefront's dungeon id (Run.SiteTypeId always
             // came back as 0). Idempotent and cheap once repaired: a run whose id already matches its exact site
-            // name is left alone, so this is a no-op on every later startup.
+            // name is left alone, so this is a no-op on every later startup. On the first start after an SDE
+            // schema bump the SDE is not available yet at this point, so this call repairs nothing — MainWindowViewModel
+            // .RunSdeImportPopupAsync runs it again once that same session's SDE import finishes (ET-261).
             Result<int> repairedHomefronts = dispatcher
                 .Send(new RepairHomefrontSiteTypeIdsCommand()).GetAwaiter().GetResult();
             if (repairedHomefronts.IsSuccess && repairedHomefronts.Value > 0)
                 Console.Error.WriteLine($"[startup] repaired the homefront type of {repairedHomefronts.Value} run(s)");
+
+            // One-time repair for ET-260: a mission flown with more than one own toon wrote the same reward
+            // parameters onto every one of that group's runs, before the run window learned to write them onto only
+            // the character who actually accepted the mission. Idempotent: a group already down to one run with
+            // parameters is left alone, so this is a no-op on every later startup.
+            Result<int> dedupedMissionRewards = dispatcher
+                .Send(new DedupeMissionRewardParametersCommand()).GetAwaiter().GetResult();
+            if (dedupedMissionRewards.IsSuccess && dedupedMissionRewards.Value > 0)
+                Console.Error.WriteLine($"[startup] removed duplicated mission rewards from {dedupedMissionRewards.Value} run(s)");
         }
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
