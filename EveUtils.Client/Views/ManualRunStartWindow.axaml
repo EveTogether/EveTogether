@@ -1,6 +1,7 @@
 <v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EveUtils.Client.ViewModels.Runs"
+        xmlns:sde="using:EveUtils.Shared.Modules.Sde.Dtos"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="520"
@@ -51,11 +52,60 @@
                        Foreground="{DynamicResource TextAccentBrush}"/>
         </StackPanel>
 
-        <!-- A mission is named by a typed name, not a catalogue lookup (ET-255) — agent and level stay optional
-             and unasked, the SDE agent data this dialog has never had (ET-129). -->
+        <!-- A mission is named by a typed name, not a catalogue lookup (ET-255) — freely typed either way. Picking
+             a suggestion (ET-265, ET-173) only fills in the exact catalogue name; the SDE Mission table carries no
+             level of its own, so that still comes from the optional agent below, same as a clipboard-started
+             mission. -->
         <StackPanel Spacing="3" IsVisible="{Binding NeedsMissionName}">
             <TextBlock Classes="label" Text="MISSION NAME"/>
             <TextBox PlaceholderText="e.g. Worlds Collide" Text="{Binding MissionName}"/>
+            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" MaxHeight="120"
+                    IsVisible="{Binding HasMissionResults}">
+                <ListBox ItemsSource="{Binding MissionResults}" SelectedItem="{Binding SelectedMissionResult}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="sde:SdeMission">
+                            <TextBlock Text="{Binding Name}" FontSize="11"/>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+
+            <TextBlock Classes="label" Text="AGENT (OPTIONAL)" Margin="0,6,0,0"/>
+            <TextBox PlaceholderText="Exact agent name" Text="{Binding MissionAgentName}"/>
+
+            <TextBlock Classes="label" Text="REWARDS (OPTIONAL)" Margin="0,6,0,0"/>
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8" RowDefinitions="Auto,Auto" RowSpacing="6">
+                <StackPanel Grid.Row="0" Grid.Column="0" Spacing="2">
+                    <TextBlock Text="ISK" FontSize="11"/>
+                    <NumericUpDown Minimum="0" FormatString="0" Value="{Binding MissionIsk, Mode=TwoWay}"/>
+                </StackPanel>
+                <StackPanel Grid.Row="0" Grid.Column="1" Spacing="2">
+                    <TextBlock Text="LP" FontSize="11"/>
+                    <NumericUpDown Minimum="0" FormatString="0" Value="{Binding MissionLoyaltyPoints, Mode=TwoWay}"/>
+                </StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="0" Spacing="2">
+                    <TextBlock Text="Bonus ISK" FontSize="11"/>
+                    <NumericUpDown Minimum="0" FormatString="0" Value="{Binding MissionBonusIsk, Mode=TwoWay}"/>
+                </StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2">
+                    <!-- What remains right now, not the mission's own full window (ET-237, confirmed by Jithran):
+                         the timer counts down from this. -->
+                    <TextBlock Text="Bonus remaining" FontSize="11"/>
+                    <TimePicker SelectedTime="{Binding MissionBonusWindowRemaining}" HorizontalAlignment="Stretch"/>
+                </StackPanel>
+            </Grid>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,4,0,0">
+                <TextBox Grid.Column="0" PlaceholderText="Item (optional)" Text="{Binding MissionItemName}"/>
+                <NumericUpDown Grid.Column="1" Width="110" Minimum="0" FormatString="0"
+                               Value="{Binding MissionItemQuantity, Mode=TwoWay}"/>
+            </Grid>
+        </StackPanel>
+
+        <!-- Mining has no site behind it at all (ET-229, ET-265) — a belt or a system typed in is a courtesy, so
+             the field stays optional. -->
+        <StackPanel Spacing="3" IsVisible="{Binding HasOptionalLocationName}">
+            <TextBlock Classes="label" Text="LOCATION (OPTIONAL)"/>
+            <TextBox PlaceholderText="e.g. a belt or system name" Text="{Binding LocationName}"/>
         </StackPanel>
 
         <StackPanel Spacing="3" IsVisible="{Binding CanBackdate}">

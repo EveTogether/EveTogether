@@ -111,6 +111,13 @@ public interface ISdeAccessor
     /// unavailable or no mission carries that id.</summary>
     SdeMission? GetMission(int missionId);
 
+    /// <summary>Substring search over the mission catalogue (ET-173, ET-265), the same shape as
+    /// <see cref="SearchSites"/> for the manual-start dialog's mission-name autocomplete: case-insensitive, ordered
+    /// by name, empty query matches every mission. There is no locale-alias table on <c>Mission</c> the way
+    /// <c>Site</c>/<c>Agent</c> have (ET-173's import is name-and-keys-only), so this matches <c>nameEn</c> only.
+    /// Empty when the SDE is unavailable.</summary>
+    IReadOnlyList<SdeMission> SearchMissions(string? nameQuery = null);
+
     /// <summary>Exact-name solar system lookup (ET-127): the SDE's own <c>SolarSystem</c> table already carries
     /// name and security for all 8490 systems, so an escalation's typed destination resolves to an id and a
     /// security status without ever asking ESI. Case-insensitive; trims the input. Null when the SDE is

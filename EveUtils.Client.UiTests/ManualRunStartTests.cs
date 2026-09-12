@@ -144,17 +144,18 @@ public sealed class ManualRunStartTests
 
     // ── ET-255: every manually-startable catalogue type, not just Site and Abyssal ─────────────────────
 
-    /// <summary>AC-1: the picker's list is the catalogue's own answer, not a pair hand-kept here — Mission is in it
-    /// today because its row names a <see cref="ManualStartRequirement"/>, and nothing with no row naming one is
-    /// (Mining: reserved, ET-229 has given it no <see cref="ActivityKind"/> to resolve from yet).</summary>
+    /// <summary>AC-1: the picker's list is the catalogue's own answer, not a pair hand-kept here — Mission and
+    /// Mining are both in it because their rows name a <see cref="ManualStartRequirement"/> and (ET-265) both now
+    /// have an <see cref="ActivityKind"/> to resolve from.</summary>
     [AvaloniaFact]
-    public void ActivityKinds_IsTheCataloguesOwnList_SiteAbyssalAndMission()
+    public void ActivityKinds_IsTheCataloguesOwnList_SiteAbyssalMissionAndMining()
     {
         using var instance = CreateInstance();
         var vm = CreateViewModel(instance);
 
         Assert.Equal(RunTypeCatalogue.ManuallyStartableKinds, vm.ActivityKinds);
         Assert.Contains(ActivityKind.Mission, vm.ActivityKinds);
+        Assert.Contains(ActivityKind.Mining, vm.ActivityKinds);
     }
 
     /// <summary>AC-3: a mission asks for a typed name, not a catalogue site — the field the six-site check above
@@ -215,6 +216,169 @@ public sealed class ManualRunStartTests
         Assert.Equal(ActivityKind.Mission, run.ActivityKind);
         Assert.Equal("Worlds Collide", run.SiteName);
         Assert.Equal(SiteTypeSource.Mission, run.SiteTypeSource);
+    }
+
+    /// <summary>ET-265 measured this against a real mission's rewards on the run: ISK, LP and an item land as the
+    /// same <see cref="RunParameterKey"/> shapes a clipboard mission copy produces (ET-172), and a bonus with a
+    /// remaining window resolves to a deadline exactly <c>BonusWindowSeconds</c> after the moment START ran (ET-237:
+    /// the timer counts down from what remains, not from the mission's own accept-time window).</summary>
+    [AvaloniaFact]
+    public async Task MissionRewards_TypedByHand_LandAsTheSameRunParameterShapesAClipboardCopyProduces()
+    {
+        using var instance = CreateInstance(services =>
+            services.AddSingleton<ISdeAccessor>(new FakeSdeAccessor().AddSite(Site)
+                .Add(34, "Tritanium", 18, 4)));
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var vm = CreateViewModel(instance);
+        vm.SelectedActivityKind = ActivityKind.Mission;
+        vm.MissionName = "Worlds Collide";
+        vm.MissionIsk = 1_500_000m;
+        vm.MissionBonusIsk = 360_000m;
+        vm.MissionBonusWindowRemaining = TimeSpan.FromMinutes(76);
+        vm.MissionLoyaltyPoints = 4200m;
+        vm.MissionItemName = "Tritanium";
+        vm.MissionItemQuantity = 10m;
+        DateTime before = DateTime.UtcNow;
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.True(vm.Completed);
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(cancellationToken);
+        List<RunParameter> parameters = await db.Set<RunParameter>().ToListAsync(cancellationToken);
+        Assert.Equal(4, parameters.Count);
+
+        RunParameter isk = Assert.Single(parameters, p => p.ParameterKey == RunParameterKey.Isk);
+        Assert.Equal(1_500_000m, isk.Amount);
+
+        RunParameter lp = Assert.Single(parameters, p => p.ParameterKey == RunParameterKey.LoyaltyPoints);
+        Assert.Equal(4200m, lp.Amount);
+
+        RunParameter item = Assert.Single(parameters, p => p.ParameterKey == RunParameterKey.Item);
+        Assert.Equal(10m, item.Amount);
+        Assert.Equal(34, item.ItemTypeId);
+
+        RunParameter bonus = Assert.Single(parameters, p => p.ParameterKey == RunParameterKey.BonusIsk);
+        Assert.Equal(360_000m, bonus.Amount);
+        Assert.Equal(76 * 60, bonus.BonusWindowSeconds);
+        Assert.InRange(bonus.ObservedAtUtc, before, DateTime.UtcNow);
+    }
+
+    /// <summary>ET-265's counterproof: a bonus amount typed with no remaining window given is not stored half-filled
+    /// — the same "do not add a reward that cannot be judged" rule the section itself already relies on
+    /// (<see cref="RunParameterKey.BonusIsk"/> without a deadline could never say expired or not).</summary>
+    [AvaloniaFact]
+    public async Task ABonusAmount_WithNoRemainingWindowTyped_IsNotStored()
+    {
+        using var instance = CreateInstance();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var vm = CreateViewModel(instance);
+        vm.SelectedActivityKind = ActivityKind.Mission;
+        vm.MissionName = "Worlds Collide";
+        vm.MissionBonusIsk = 360_000m;
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(cancellationToken);
+        Assert.Empty(await db.Set<RunParameter>().ToListAsync(cancellationToken));
+    }
+
+    /// <summary>ET-260: a mission's reward is paid to one character in EVE, never duplicated across whoever else
+    /// rode along — the same rule <c>ClipboardMissionOffer</c> already applies via
+    /// <c>MissionRewardOwnerCharacterId</c>. The manual dialog reaches the same outcome more directly: the reward
+    /// parameters are only ever handed to the pilot's own <see cref="StartRunCommand"/>, so the alt's run starts
+    /// with none — while the agent and level, a fact about the run itself rather than a reward, land on both.</summary>
+    [AvaloniaFact]
+    public async Task MissionRewards_LandOnlyOnThePilotsOwnRun_NeverDuplicatedOntoAnAlt()
+    {
+        using var instance = CreateInstance(services =>
+            services.AddSingleton<ISdeAccessor>(new FakeSdeAccessor().AddSite(Site)
+                .AddAgent(new SdeAgent(3018841, "Sesildi Chert", 3, 1, "Agent", 1, false, 1000166, 60003466, 30000142, "Jita"))));
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var dialogs = new RecordingDialogService
+        {
+            OnPickCharacters = (_, options) =>
+                Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId)])
+        };
+        var vm = new ManualRunStartViewModel(
+            instance.Services.GetRequiredService<IDispatcher>(),
+            instance.Services.GetRequiredService<ISdeAccessor>(),
+            dialogs,
+            kind => new ActivityWindowViewModel(kind, instance.Services),
+            [new Character("Manual Pilot", 90000002), new Character("Manual Alt", 90000003)])
+        {
+            SelectedActivityKind = ActivityKind.Mission,
+            MissionName = "Worlds Collide",
+            MissionAgentName = "Sesildi Chert",
+            MissionIsk = 1_500_000m
+        };
+
+        await vm.PickCharactersCommand.ExecuteAsync(null);
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.True(vm.Completed);
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(cancellationToken);
+        Run pilotRun = await db.Set<Run>().SingleAsync(run => run.CharacterId == 90000002, cancellationToken);
+        Run altRun = await db.Set<Run>().SingleAsync(run => run.CharacterId == 90000003, cancellationToken);
+        Assert.Equal(3018841, pilotRun.AgentId);
+        Assert.Equal(3018841, altRun.AgentId);
+        Assert.Equal(3, pilotRun.MissionLevel);
+        Assert.Equal(3, altRun.MissionLevel);
+
+        List<RunParameter> parameters = await db.Set<RunParameter>().ToListAsync(cancellationToken);
+        RunParameter isk = Assert.Single(parameters);
+        Assert.Equal(pilotRun.Id, isk.RunId);
+    }
+
+    // ── ET-229, ET-265: Mining, startable through the catalogue's own None requirement ─────────────────
+
+    /// <summary>Measured (ET-265): the catalogue already marked Mining startable
+    /// (<see cref="ManualStartRequirement.None"/>) before this ticket — the gap was that no
+    /// <see cref="ActivityKind"/> resolved to it, so it never reached <see cref="ManualRunStartViewModel.ActivityKinds"/>
+    /// at all. Once it does, it asks for neither a site nor a typed name, and starts with characters alone.</summary>
+    [AvaloniaFact]
+    public async Task Mining_AsksForNeitherASiteNorATypedName_AndStartsWithNoLocationGiven()
+    {
+        using var instance = CreateInstance();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var vm = CreateViewModel(instance);
+        vm.SelectedActivityKind = ActivityKind.Mining;
+
+        Assert.True(vm.HasOptionalLocationName);
+        Assert.False(vm.NeedsSite);
+        Assert.False(vm.NeedsMissionName);
+        Assert.True(vm.StartCommand.CanExecute(null), "an optional field blocked START before anything was typed");
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.True(vm.Completed);
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(cancellationToken);
+        Run run = await db.Set<Run>().SingleAsync(cancellationToken);
+        Assert.Equal(ActivityKind.Mining, run.ActivityKind);
+        Assert.Null(run.SiteName);
+        Assert.Equal(SiteTypeSource.Uncatalogued, run.SiteTypeSource);
+    }
+
+    /// <summary>The optional belt/system name, typed rather than picked from a catalogue — Mining has no site
+    /// behind it at all (ET-229).</summary>
+    [AvaloniaFact]
+    public async Task Mining_WithALocationTyped_StoresItAsTheSiteName()
+    {
+        using var instance = CreateInstance();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var vm = CreateViewModel(instance);
+        vm.SelectedActivityKind = ActivityKind.Mining;
+        vm.LocationName = "Ashab VI - Asteroid Belt 1";
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(cancellationToken);
+        Run run = await db.Set<Run>().SingleAsync(cancellationToken);
+        Assert.Equal("Ashab VI - Asteroid Belt 1", run.SiteName);
     }
 
     /// <summary>AC-2: the kind picked last time is what is selected this time, the same "two clicks a run into two

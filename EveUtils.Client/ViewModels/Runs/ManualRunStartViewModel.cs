@@ -12,6 +12,7 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Commands;
+using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Grouping;
 using EveUtils.Shared.Modules.Sde;
@@ -28,10 +29,11 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// ActivityWindowViewModel uses; this is the second production caller, not a second run type.
 ///
 /// <see cref="ActivityKinds"/> and what each one asks for both come from <see cref="RunTypeCatalogue"/> (ET-255):
-/// a kind with no catalogue row naming <see cref="ManualStartRequirement"/> never appears here at all, which is how
-/// a mission stayed out before this ticket (its agent/level autocompletes need SDE data that is still not imported,
-/// ET-129 — the name alone needs none) and how Mining stays out today (ET-229 has not given it an
-/// <see cref="ActivityKind"/> to resolve from yet).
+/// a kind with no catalogue row naming <see cref="ManualStartRequirement"/> never appears here at all. Mission's
+/// name is autocompleted against the SDE (ET-173, ET-265) but stays freely typed either way, and Mining (ET-229)
+/// asks for nothing beyond character(s) and a moment — measured (ET-265): the catalogue already marked Mining
+/// startable (<see cref="ManualStartRequirement.None"/>) before this ticket, but <see cref="ActivityKind"/> had no
+/// member for it to resolve from, so it never reached <see cref="ActivityKinds"/> at all.
 ///
 /// An abyssal asks for nothing here: a pocket is not in the site catalogue, so requiring one left START grey for
 /// good, and the run it prepares does not begin running here — see <see cref="_PrepareAbyssalRun"/>.
@@ -165,6 +167,7 @@ public partial class ManualRunStartViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(IsAbyssal))]
     [NotifyPropertyChangedFor(nameof(NeedsSite))]
     [NotifyPropertyChangedFor(nameof(NeedsMissionName))]
+    [NotifyPropertyChangedFor(nameof(HasOptionalLocationName))]
     [NotifyPropertyChangedFor(nameof(CanBackdate))]
     [NotifyPropertyChangedFor(nameof(StartButtonText))]
     private ActivityKind _selectedActivityKind;
@@ -183,6 +186,12 @@ public partial class ManualRunStartViewModel : ViewModelBase
     /// <summary>Whether this kind is named by a typed name rather than a catalogue site (ET-255) — a mission today.</summary>
     public bool NeedsMissionName => _ManualStart == ManualStartRequirement.MissionName;
 
+    /// <summary>Whether this kind asks for nothing beyond character(s) and a moment (ET-229, ET-265) — Mining
+    /// today, the one row whose <see cref="RunTypeDefinition.ManualStart"/> is
+    /// <see cref="ManualStartRequirement.None"/>. Unlike a site or a mission, naming it is optional: a belt or a
+    /// system typed in is a courtesy, not something <see cref="CanStart"/> waits on.</summary>
+    public bool HasOptionalLocationName => _ManualStart == ManualStartRequirement.None;
+
     /// <summary>An abyssal run is not given a start time here — <see cref="_PrepareAbyssalRun"/> hands over a run
     /// that is not on the clock yet, so there is nothing for an earlier moment to move.</summary>
     public bool CanBackdate => !IsAbyssal;
@@ -193,7 +202,57 @@ public partial class ManualRunStartViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    [NotifyPropertyChangedFor(nameof(MissionResults))]
+    [NotifyPropertyChangedFor(nameof(HasMissionResults))]
     private string _missionName = string.Empty;
+
+    /// <summary>Substring matches against the SDE <c>Mission</c> table (2,892 rows, ET-173) as the pilot types
+    /// <see cref="MissionName"/> — the same live-search shape <see cref="SiteResults"/> gives the site picker
+    /// (ET-265). Unlike a site, picking a suggestion is a convenience, not a requirement: <see cref="MissionName"/>
+    /// stays a freely typed field either way, since a mission's own name has never needed a catalogue match to
+    /// start (ET-255).</summary>
+    public IReadOnlyList<SdeMission> MissionResults =>
+        string.IsNullOrWhiteSpace(MissionName) ? [] : _sde.SearchMissions(MissionName);
+
+    public bool HasMissionResults => MissionResults.Count > 0;
+
+    [ObservableProperty] private SdeMission? _selectedMissionResult;
+
+    /// <summary>Overwrites <see cref="MissionName"/> with the picked row's own name — the one thing a mission's
+    /// catalogue entry can fill in (ET-265 measured: <c>Mission</c> carries no level at all, that lives on the
+    /// agent who hands it out, and no player-facing "kind" survived ET-173's deliberately minimal import — only the
+    /// agent's own classification did, which is a different fact). Level comes from <see cref="MissionAgentName"/>
+    /// instead, exactly as it already does for a clipboard-started mission.</summary>
+    partial void OnSelectedMissionResultChanged(SdeMission? value)
+    {
+        if (value is not null)
+            MissionName = value.Name;
+    }
+
+    /// <summary>The agent behind the mission — optional (ET-265), resolved by exact name at START the same way
+    /// <c>ClipboardMissionOffer</c> already resolves one from a capture's "Report to" line. This is the only source
+    /// this dialog has for the mission's level: <see cref="MissionResults"/>' own catalogue rows carry none.</summary>
+    [ObservableProperty] private string _missionAgentName = string.Empty;
+
+    [ObservableProperty] private decimal? _missionIsk;
+
+    [ObservableProperty] private decimal? _missionBonusIsk;
+
+    /// <summary>How much of the bonus window is left as of right now (ET-237: the timer counts down from what
+    /// remains, not from the mission's own accept-time window) — stored as <c>ObservedAtUtc = now, BonusWindowSeconds
+    /// = this</c>, the same two fields the MISSION section already reads the deadline from.</summary>
+    [ObservableProperty] private TimeSpan? _missionBonusWindowRemaining;
+
+    [ObservableProperty] private decimal? _missionLoyaltyPoints;
+
+    [ObservableProperty] private string _missionItemName = string.Empty;
+
+    [ObservableProperty] private decimal? _missionItemQuantity;
+
+    /// <summary>Named by a belt or a system, typed in rather than picked from a catalogue (ET-229: mining has no
+    /// site behind it at all) — optional, unlike <see cref="MissionName"/> or a picked <see cref="SelectedSite"/>,
+    /// neither of which this dialog will start without.</summary>
+    [ObservableProperty] private string _locationName = string.Empty;
 
     // A half-filled site (or mission name) behind a field that is no longer on screen is how a hidden choice comes
     // back later: the kind decides what is asked, so changing it drops the answer to the question that is gone.
@@ -205,6 +264,14 @@ public partial class ManualRunStartViewModel : ViewModelBase
         SiteQuery = string.Empty;
         SelectedOption = null;
         MissionName = string.Empty;
+        MissionAgentName = string.Empty;
+        MissionIsk = null;
+        MissionBonusIsk = null;
+        MissionBonusWindowRemaining = null;
+        MissionLoyaltyPoints = null;
+        MissionItemName = string.Empty;
+        MissionItemQuantity = null;
+        LocationName = string.Empty;
         _ = _dispatcher.Send(new SetSettingCommand(LastKindSettingKey, value.ToString()));
     }
 
@@ -275,11 +342,12 @@ public partial class ManualRunStartViewModel : ViewModelBase
             return;
         }
 
-        // What names this run (ET-255): a catalogue site, same as before, or — for a mission — the typed name, with
-        // no dungeon id to give (0, the same sentinel RunRewardStorageTests' own mission rows use) and its own
-        // SiteTypeSource so SiteTypeId's id space reads correctly back (ET-137).
+        // What names this run (ET-255): a catalogue site, same as before, a mission's typed name, or — for Mining
+        // (ET-229, ET-265) — an optional belt/system typed in, with no catalogue behind it at all. Either of the
+        // last two gives no dungeon id (0, the same sentinel RunRewardStorageTests' own mission rows use), and its
+        // own SiteTypeSource so SiteTypeId's id space reads correctly back (ET-137).
         int siteTypeId;
-        string name;
+        string? name;
         SiteTypeSource siteTypeSource;
         if (NeedsMissionName)
         {
@@ -293,8 +361,22 @@ public partial class ManualRunStartViewModel : ViewModelBase
             name = site.Name;
             siteTypeSource = SiteTypeSource.Site;
         }
+        else if (HasOptionalLocationName)
+        {
+            siteTypeId = 0;
+            name = string.IsNullOrWhiteSpace(LocationName) ? null : LocationName.Trim();
+            siteTypeSource = SiteTypeSource.Uncatalogued;
+        }
         else
             return;
+
+        // The mission's own facts (ET-172, ET-265): an agent typed in is optional, and the only source this dialog
+        // has for the mission's level — MissionResults' own catalogue rows carry none (measured: the SDE Mission
+        // table is name-and-keys-only, ET-173). Null on every kind but Mission, same as the clipboard path.
+        SdeAgent? agent = NeedsMissionName && !string.IsNullOrWhiteSpace(MissionAgentName)
+            ? _sde.FindAgentByName(MissionAgentName)
+            : null;
+        IReadOnlyList<RunParameterInput> rewardParameters = NeedsMissionName ? _BuildMissionRewardParameters() : [];
 
         // "Earlier moment" types a past moment; without it the starttime is simply now. Either way this is the
         // only place StartedAtUtc is decided — nothing downstream corrects it (ET-163 AC-3: no measured start to
@@ -314,11 +396,16 @@ public partial class ManualRunStartViewModel : ViewModelBase
             startedAtUtc,
             siteTypeId,
             name,
-            SolarSystemId: null,
+            SolarSystemId: agent?.SolarSystemId,
             GroupCode: groupCode,
             SiteTypeSource: siteTypeSource,
             Origin: RunOrigin.Manual,
-            CharacterNameSnapshot: pilot.Name), cancellationToken);
+            CharacterNameSnapshot: pilot.Name,
+            AgentId: agent?.AgentId,
+            MissionLevel: agent?.Level,
+            // Only the pilot's own run carries the typed-in rewards (ET-260): in EVE a mission's reward is paid to
+            // one character, never duplicated across whoever else rode along.
+            Parameters: rewardParameters), cancellationToken);
 
         if (!result.IsSuccess)
         {
@@ -341,11 +428,13 @@ public partial class ManualRunStartViewModel : ViewModelBase
                 startedAtUtc,
                 siteTypeId,
                 name,
-                SolarSystemId: null,
+                SolarSystemId: agent?.SolarSystemId,
                 GroupCode: groupCode,
                 SiteTypeSource: siteTypeSource,
                 Origin: RunOrigin.Manual,
-                CharacterNameSnapshot: extra.Name), cancellationToken);
+                CharacterNameSnapshot: extra.Name,
+                AgentId: agent?.AgentId,
+                MissionLevel: agent?.Level), cancellationToken);
 
             if (!extraResult.IsSuccess)
                 _toasts?.Show("A character was not added to this run",
@@ -391,5 +480,59 @@ public partial class ManualRunStartViewModel : ViewModelBase
                     .Select(character => (character.EsiCharacterId!.Value, character.Name))]);
         CloseRequested?.Invoke();
         _dialogs.ShowActivityWindow(window);
+    }
+
+    /// <summary>The typed-in rewards, in the same <see cref="RunParameterInput"/> shapes a clipboard mission copy
+    /// produces (ET-172, ET-265) — so the MISSION section reads a hand-entered run exactly the way it reads one
+    /// <c>ClipboardMissionOffer</c> started. Each line is skipped rather than added half-filled: an amount typed
+    /// with nothing else missing (the bonus's own window) does not become a reward that cannot be judged.</summary>
+    private List<RunParameterInput> _BuildMissionRewardParameters()
+    {
+        DateTime now = DateTime.UtcNow;
+        var parameters = new List<RunParameterInput>();
+        if (MissionIsk is { } isk && isk > 0)
+            parameters.Add(new RunParameterInput
+            {
+                ParameterKey = RunParameterKey.Isk,
+                TypedValue = FormattableString.Invariant($"{isk} ISK"),
+                Amount = isk,
+                ObservedAtUtc = now
+            });
+
+        // The window is what remains right now (ET-237: the timer counts down from what is left, not from the
+        // mission's own accept-time length, confirmed by Jithran) — so ObservedAtUtc is this moment, and the
+        // deadline (ObservedAtUtc + BonusWindowSeconds) lands exactly on what was typed in.
+        if (MissionBonusIsk is { } bonus && bonus > 0 && MissionBonusWindowRemaining is { } remaining && remaining > TimeSpan.Zero)
+            parameters.Add(new RunParameterInput
+            {
+                ParameterKey = RunParameterKey.BonusIsk,
+                TypedValue = FormattableString.Invariant($"{bonus} ISK"),
+                Amount = bonus,
+                BonusWindowSeconds = (int)remaining.TotalSeconds,
+                ObservedAtUtc = now
+            });
+
+        if (MissionLoyaltyPoints is { } lp && lp > 0)
+            parameters.Add(new RunParameterInput
+            {
+                ParameterKey = RunParameterKey.LoyaltyPoints,
+                TypedValue = FormattableString.Invariant($"{lp} LP"),
+                Amount = lp,
+                ObservedAtUtc = now
+            });
+
+        if (!string.IsNullOrWhiteSpace(MissionItemName))
+        {
+            decimal quantity = MissionItemQuantity is { } typed && typed > 0 ? typed : 1;
+            parameters.Add(new RunParameterInput
+            {
+                ParameterKey = RunParameterKey.Item,
+                TypedValue = FormattableString.Invariant($"{quantity} x {MissionItemName}"),
+                Amount = quantity,
+                ItemTypeId = _sde.TryGetTypeId(MissionItemName, out int typeId) ? typeId : null,
+                ObservedAtUtc = now
+            });
+        }
+        return parameters;
     }
 }

@@ -13,6 +13,17 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Tools → Start run can now start a mission by hand, with autocomplete on the mission name and its rewards typed
+  in.** Typing the name searches the SDE's mission catalogue (2,892 missions) the same way the site picker already
+  searches sites; picking a suggestion fills in the exact name, and the name itself still starts the run when it
+  isn't picked at all. An agent is optional and, when it resolves, is the only source for the mission's level — the
+  mission catalogue itself carries no level or task kind of its own. ISK, bonus ISK (with how much of the bonus
+  window is left, not the mission's original length), LP and an optional item can all be entered by hand and land on
+  the run exactly as a clipboard-copied mission's rewards do — on the character actually running the mission only,
+  never duplicated onto an alt riding along.
+- **Tools → Start run can now start a mining run on its own** — solo, with several of your own characters, or as a
+  fleet-shared run. It needs no site: a belt or system name is an optional label rather than something to pick from
+  a catalogue.
 - **Discarding a run (or closing the run window without one) and copying the exact same mission or site again now
   starts a run again**, instead of doing nothing until you copied something else first.
 - **A new setting, "Start automatically when copied", for missions and for combat sites separately** (Settings →
