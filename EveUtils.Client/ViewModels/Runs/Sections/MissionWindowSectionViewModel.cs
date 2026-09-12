@@ -67,6 +67,16 @@ public sealed partial class MissionWindowSectionViewModel : RunWindowSection
     /// measured for it.</summary>
     public bool IsImportantMission { get; private set; }
 
+    // ── Who the reward belongs to (ET-260) ────────────────────────────────────────────────────────
+
+    /// <summary>Shown only once there is somebody else in the group to distinguish it from — a solo mission's
+    /// reward is unambiguous without this line.</summary>
+    public bool IsRewardOwnerShown => RewardOwnerText is not null;
+
+    public string? RewardOwnerText => Context.MissionRewardOwnerCharacterId is { } ownerId && Context.Participants.Count > 1
+        ? Context.Participants.FirstOrDefault(participant => participant.CharacterId == ownerId)?.CharacterName
+        : null;
+
     // ── The rewards ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Every reward line but the bonus, which gets its own countdown block below — LP, Evermarks, items and
@@ -107,6 +117,10 @@ public sealed partial class MissionWindowSectionViewModel : RunWindowSection
     public override void Refresh(DateTime nowUtc)
     {
         _SyncWithPendingParameters();
+        // Participants (and so who else is in the group) can change after this section last synced its parameters,
+        // so this is read fresh every tick rather than cached alongside them.
+        OnPropertyChanged(nameof(RewardOwnerText));
+        OnPropertyChanged(nameof(IsRewardOwnerShown));
         if (_bonusDeadlineUtc is not { } deadline)
             return;
 

@@ -21,6 +21,10 @@
             <TextBlock Text="MISSION LOCATION"/>
             <TextBlock Grid.Column="1" Text="{Binding MissionLocationText}"/>
         </Grid>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsRewardOwnerShown}">
+            <TextBlock Text="REWARD CREDITED TO"/>
+            <TextBlock Grid.Column="1" Text="{Binding RewardOwnerText}"/>
+        </Grid>
 
         <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasBonus}">
             <TextBlock Text="BONUS ISK"/>

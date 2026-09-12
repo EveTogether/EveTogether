@@ -132,6 +132,7 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
                 MissionSolarSystemId = agent?.SolarSystemId,
                 SolarSystem = agent?.SolarSystemName,
                 PendingParameters = _ToParameters(mission),
+                MissionRewardOwnerCharacterId = _ResolveRewardOwner(pilot, additional, copiedByCharacter)?.EsiCharacterId,
                 StartsOnArrival = startsOnArrival
             };
             if (pilot is { EsiCharacterId: { } characterId })
@@ -146,6 +147,21 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
         {
             _toasts.Show("Run not started", $"Could not open the run on {mission.AgentName}: {ex.Message}", ToastKind.Error);
         }
+    }
+
+    /// <summary>Only EVE ever pays a mission's reward to the character who accepted it (ET-260) — the one whose own
+    /// clipboard copy started this window. Falls back to the acting pilot when nobody's name matches
+    /// <paramref name="copiedByCharacter"/> (an unrecognised or missing capture header) or on a solo mission, where
+    /// there is only ever the one candidate anyway.</summary>
+    private static Character? _ResolveRewardOwner(Character? pilot, List<Character> additional, string? copiedByCharacter)
+    {
+        if (copiedByCharacter is null)
+            return pilot;
+
+        Character? copier = pilot is not null && string.Equals(pilot.Name, copiedByCharacter, StringComparison.OrdinalIgnoreCase)
+            ? pilot
+            : additional.FirstOrDefault(character => string.Equals(character.Name, copiedByCharacter, StringComparison.OrdinalIgnoreCase));
+        return copier ?? pilot;
     }
 
     /// <summary>The reward lines a mission's own clipboard capture already carries — never the loot found later, and

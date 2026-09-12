@@ -16,5 +16,12 @@ namespace EveUtils.Shared.Modules.Runs.Commands;
 /// name matches nothing, is left untouched. A repaired run that was already published is marked
 /// <see cref="Enums.RunSyncState.Outdated"/> (ET-215's own rule) so the correction reaches the server too, the next
 /// time the pilot publishes.
+///
+/// ET-261: also repairs a run recorded as <see cref="Enums.SiteTypeSource.Uncatalogued"/> — started before the
+/// catalogue (or the SDE build behind it) carried the site at all — and sets its source to
+/// <see cref="Enums.SiteTypeSource.Site"/> once an exact name proves it. Must run again once the SDE becomes
+/// available after a schema-version import (<c>MainWindowViewModel.RunSdeImportPopupAsync</c>): the startup call
+/// below returns 0 outright while <c>ISdeAccessor.IsAvailable</c> is still false, which it is for the whole first
+/// run after a bump — repairing nothing until the pilot restarts a second time otherwise.
 /// </summary>
 public sealed record RepairHomefrontSiteTypeIdsCommand : ICommand<Result<int>>;

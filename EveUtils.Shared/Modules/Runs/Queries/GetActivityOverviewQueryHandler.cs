@@ -105,8 +105,12 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
         // type id and count (ET-249) are CONSUMABLES' own cost, not a reward either.
         string? abyssalFilamentText =
             all.FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.AbyssalFilament)?.TypedValue;
+        // ET-260: every own toon's run under one mission group used to carry an identical copy of the same reward
+        // line (fixed at the source now, and swept once for activities saved before that fix) — Distinct still
+        // guards this chip against reading double for a group this repair has not reached yet.
         RunParameter[] rewards = [.. all.Where(parameter => parameter.ParameterKey is not (
-            RunParameterKey.AbyssalFilament or RunParameterKey.AbyssalFilamentTypeId or RunParameterKey.AbyssalFilamentCount))];
+            RunParameterKey.AbyssalFilament or RunParameterKey.AbyssalFilamentTypeId or RunParameterKey.AbyssalFilamentCount))
+            .DistinctBy(parameter => (parameter.ParameterKey, parameter.TypedValue, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))];
         return new ActivityOverviewRowDto(
             summary.Id, summary.GroupCode, summary.RunId, summary.ActivityKind, summary.SiteName,
             summary.SignatureGroupSnapshot, summary.SiteTypeId, summary.SolarSystemId,

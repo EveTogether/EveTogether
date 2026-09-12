@@ -13,6 +13,20 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **A mission flown with more than one own toon no longer counts its reward twice.** Before, every own toon in the
+  group — the shooter and a salvage alt riding along on the same fleet — was written with an identical copy of the
+  same ISK, bonus and LP reward, so the runs overview's reward chips, and the MISSION section on the saved detail
+  screen, both read double what the mission actually paid. Now only the character whose own clipboard copy accepted
+  the mission gets the reward; the MISSION section also says which character it belongs to. A one-time repair
+  corrects any mission group already saved with the duplicate, keeping the reward on whichever run has the most
+  bounty. A mission flown with a single character is unaffected.
+- **The homefront type repair now also reaches runs recorded before the site catalogue knew them, and runs a second
+  time after an EVE static data update.** Before, a run started while its homefront was not yet in the site
+  catalogue stayed an "ordinary site" forever, even once an exact name match became available — and on the very
+  first startup after a static-data update, the repair ran before that update had actually finished downloading, so
+  it fixed nothing until the app was restarted a second time. Now an exact homefront name repairs a run regardless
+  of which of those two states it was started in, and the repair also runs again once that same session's static
+  data update finishes.
 - **ENEMIES now keeps collecting for every character in an own-toon group after a run window is reopened or
   resumed.** Before, only the run a window was FRESHLY started or joined for ever got its own ENEMIES collector — a
   sibling character (ET-210's own-toon group) discovered later, because the window instead adopted an

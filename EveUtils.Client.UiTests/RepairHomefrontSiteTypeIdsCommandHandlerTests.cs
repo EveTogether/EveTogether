@@ -44,6 +44,27 @@ public sealed class RepairHomefrontSiteTypeIdsCommandHandlerTests
     }
 
     [AvaloniaFact]
+    public async Task UncatalougedSource_ExactNameMatch_RepairsIdAndSource()
+    {
+        // ET-261: a run started before the catalogue (or its SDE build) carried this homefront at all recorded
+        // SiteTypeSource.Uncatalogued rather than Site — an exact archetype-70 name is exactly as much proof for
+        // this run as for one already marked Site, so it repairs the same way.
+        using var instance = TestClientInstance.Create(services => services.AddSingleton<ISdeAccessor>(_SdeWithHomefront()));
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Guid runId = (await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc, 0,
+            HomefrontName, 30000142, SiteTypeSource: SiteTypeSource.Uncatalogued), cancellationToken)).Value;
+
+        Result<int> repaired = await dispatcher.Send(new RepairHomefrontSiteTypeIdsCommand(), cancellationToken);
+
+        Assert.True(repaired.IsSuccess);
+        Assert.Equal(1, repaired.Value);
+        Run stored = await _StoredAsync(instance, runId, cancellationToken);
+        Assert.Equal(HomefrontDungeonId, stored.SiteTypeId);
+        Assert.Equal(SiteTypeSource.Site, stored.SiteTypeSource);
+    }
+
+    [AvaloniaFact]
     public async Task NoExactMatch_LeavesTheRunUntouched()
     {
         using var instance = TestClientInstance.Create(services => services.AddSingleton<ISdeAccessor>(_SdeWithHomefront()));

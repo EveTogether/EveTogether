@@ -34,19 +34,25 @@ internal sealed class RepairHomefrontSiteTypeIdsCommandHandler(
         // collection like this into a SQL IN clause, which a dictionary's key view is not guaranteed to support.
         HashSet<string> homefrontNames = [.. dungeonIdByName.Keys];
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        // ET-261: Uncatalogued is not a competing guess, it is Site's own predecessor — a run started before this
+        // catalogue existed (or before the SDE build behind it carried the site) recorded "the pilot's clipboard
+        // named it, the catalogue just did not have it yet" (SiteTypeSource.cs's own doc on the value). An exact
+        // archetype-70 name match is exactly as much proof for one of those runs as for a fresh SiteTypeSource.Site
+        // run — so it repairs the same way, and its source is corrected to Site along with its id.
         List<Run> candidates = await db.Set<Run>()
-            .Where(run => run.SiteTypeSource == SiteTypeSource.Site && run.SiteName != null
-                && homefrontNames.Contains(run.SiteName!))
+            .Where(run => (run.SiteTypeSource == SiteTypeSource.Site || run.SiteTypeSource == SiteTypeSource.Uncatalogued)
+                && run.SiteName != null && homefrontNames.Contains(run.SiteName!))
             .ToListAsync(cancellationToken);
 
         List<Guid> repairedRunIds = [];
         foreach (Run run in candidates)
         {
             int correctId = dungeonIdByName[run.SiteName!];
-            if (run.SiteTypeId == correctId)
+            if (run.SiteTypeId == correctId && run.SiteTypeSource == SiteTypeSource.Site)
                 continue;
 
             run.SiteTypeId = correctId;
+            run.SiteTypeSource = SiteTypeSource.Site;
             // The same correction rule ET-215 gave a saved run's loot: the revision moves, and a published copy
             // turns Outdated rather than Pending, so the fix reaches the server only when the pilot next publishes.
             RunLootWrites.MarkCorrected(run);
