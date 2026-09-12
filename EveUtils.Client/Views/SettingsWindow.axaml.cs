@@ -47,6 +47,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private CheckBox _openFleetRunWindowBox = null!;
     private CheckBox? _autoPublishFleetRunsBox;
     private CheckBox _checkUpdatesOnStartupBox = null!, _watchClipboardBox = null!;
+    private CheckBox _autoStartMissionsBox = null!, _autoStartSitesBox = null!;
     private TextBlock _clipboardConsumersBlock = null!, _clipboardUnsupportedBlock = null!;
     private ComboBox _toastPositionBox = null!;
     private TextBox _localApiPortBox = null!;
@@ -85,7 +86,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     }
 
     public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null,
-        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false) : this()
+        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true) : this()
     {
         _detectedDefault = detectedDefault;
         _localApi = localApiServer;
@@ -102,6 +103,8 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _openFleetRunWindowBox = this.FindControl<CheckBox>("OpenFleetRunWindowBox")!;
         _checkUpdatesOnStartupBox = this.FindControl<CheckBox>("CheckUpdatesOnStartupBox")!;
         _watchClipboardBox = this.FindControl<CheckBox>("WatchClipboardBox")!;
+        _autoStartMissionsBox = this.FindControl<CheckBox>("AutoStartMissionsBox")!;
+        _autoStartSitesBox = this.FindControl<CheckBox>("AutoStartSitesBox")!;
         _clipboardConsumersBlock = this.FindControl<TextBlock>("ClipboardConsumersBlock")!;
         _clipboardUnsupportedBlock = this.FindControl<TextBlock>("ClipboardUnsupportedBlock")!;
         _enableLocalApiBox = this.FindControl<CheckBox>("EnableLocalApiBox")!;
@@ -144,6 +147,8 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         if (_autoPublishFleetRunsBox is not null)
             _autoPublishFleetRunsBox.IsChecked = autoPublishFleetRuns;
         _checkUpdatesOnStartupBox.IsChecked = checkUpdatesOnStartup;
+        _autoStartMissionsBox.IsChecked = autoStartMissions;
+        _autoStartSitesBox.IsChecked = autoStartSites;
         this.FindControl<TextBlock>("SdeVersionBlock")!.Text = sdeVersionLabel;
         this.FindControl<TextBlock>("DataFolderBlock")!.Text = Composition.ClientServices.DataDirectory();
         _toastPositionBox.SelectedIndex = (int)toastPosition;
@@ -465,6 +470,8 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         var autoPublishFleetRuns = _autoPublishFleetRunsBox?.IsChecked ?? true;
         var shareLoot = _shareLootBox?.IsChecked ?? false;
         var shareMining = _shareMiningBox?.IsChecked ?? false;
-        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining);
+        var autoStartMissions = _autoStartMissionsBox.IsChecked ?? true;
+        var autoStartSites = _autoStartSitesBox.IsChecked ?? true;
+        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites);
     }
 }

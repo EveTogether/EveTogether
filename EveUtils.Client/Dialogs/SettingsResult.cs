@@ -22,4 +22,6 @@ public sealed record SettingsResult(
     bool OpenFleetRunWindowImmediately = false,
     bool AutoPublishFleetRuns = true,
     bool ShareLoot = false,
-    bool ShareMining = false);
+    bool ShareMining = false,
+    bool AutoStartMissions = true,
+    bool AutoStartSites = true);

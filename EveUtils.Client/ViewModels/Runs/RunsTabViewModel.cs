@@ -30,12 +30,16 @@ public sealed partial class RunsTabViewModel(string header, string? serverAddres
 
     /// <summary>The viewed month's own total (ET-233): the same formula every day band below sums its own rows
     /// with, over every row this tab holds regardless of which days are folded — a month is always complete, and so
-    /// is its total.</summary>
-    [ObservableProperty] private string _monthSummaryText = string.Empty;
+    /// is its total. Split in two (ET-266) so the month bar can give the ISK figure more weight than the activity
+    /// count, unlike the day band below which keeps both in one string.</summary>
+    [ObservableProperty] private string _monthActivitiesText = string.Empty;
+
+    [ObservableProperty] private string _monthNetText = string.Empty;
 
     public void UpdateMonthSummary()
     {
         List<ActivityOverviewRowViewModel> rows = [.. Days.SelectMany(day => day.Rows)];
-        MonthSummaryText = $"{RunsActivitySummaryText.ActivitiesCount(rows.Count)} this month · {RunsActivitySummaryText.NetFor(rows)}";
+        MonthActivitiesText = $"{RunsActivitySummaryText.ActivitiesCount(rows.Count)} this month";
+        MonthNetText = RunsActivitySummaryText.NetFor(rows);
     }
 }
