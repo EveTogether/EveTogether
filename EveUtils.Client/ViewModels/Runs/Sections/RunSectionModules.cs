@@ -34,6 +34,11 @@ public static class RunSectionModules
         new(RunSectionId.Activity,
             context => new ActivityWindowSectionViewModel(context),
             services => new ActivityDetailSectionViewModel(services.Sde)),
+        // Straight under ACTIVITY, where the money of a homefront is decided (ET-230, mockup pin 4). No ISK source of
+        // its own yet: the fixed payout per ticked character is ET-231's contributor, which reads N and the tick.
+        new(RunSectionId.Homefront,
+            context => new HomefrontWindowSectionViewModel(context),
+            services => new HomefrontDetailSectionViewModel(services)),
         new(RunSectionId.Mission,
             context => new MissionWindowSectionViewModel(context),
             services => new MissionDetailSectionViewModel(services.Sde),

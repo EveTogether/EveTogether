@@ -51,6 +51,24 @@ internal sealed class GetActivityDetailQueryHandler(IDbContextFactory<ClientDbCo
         List<RunMiningEntry> miningEntries = await db.Set<RunMiningEntry>()
             .AsNoTracking().Where(entry => runIds.Contains(entry.RunId)).ToListAsync(cancellationToken);
 
+        // Every run of the group carries the same attendance decision (ET-230); the newest one is the one that counts,
+        // and only its list is read.
+        RunAttendanceDecision? attendance = null;
+        if (runs.Where(run => run.AttendanceSetAtUtc.HasValue).MaxBy(run => run.AttendanceSetAtUtc) is { } decided)
+        {
+            foreach (RunAttendanceEntry entry in await db.Set<RunAttendanceEntry>()
+                         .AsNoTracking().Where(entry => entry.RunId == decided.Id).ToListAsync(cancellationToken))
+                decided.AttendanceEntries.Add(entry);
+            attendance = RunAttendanceDecision.Of(decided);
+        }
+
+        long? fleetId = summary.GroupCode is null
+            ? null
+            : await db.Set<RunGroupOrigin>().AsNoTracking()
+                .Where(origin => origin.GroupCode == summary.GroupCode)
+                .Select(origin => (long?)origin.FleetId)
+                .FirstOrDefaultAsync(cancellationToken);
+
         return Result<ActivityDetailDto>.Success(new ActivityDetailDto(
             summary.Id, summary.GroupCode, summary.ActivityKind, summary.SiteName, summary.SignatureGroupSnapshot,
             summary.SiteTypeId, summary.SolarSystemId,
@@ -70,7 +88,8 @@ internal sealed class GetActivityDetailQueryHandler(IDbContextFactory<ClientDbCo
                     parameter.Amount, parameter.ItemTypeId, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))],
             [.. miningEntries.OrderByDescending(entry => entry.Units)
                 .Select(entry => new RunMiningEntryDto(entry.RunId, entry.OreType, entry.Units, entry.CriticalUnits, entry.ResidueUnits))],
-            StoredIskBreakdown.Read(summary.IskContributions)));
+            StoredIskBreakdown.Read(summary.IskContributions),
+            attendance, fleetId));
     }
 
     private static ActivityRunDetailDto _ToRunDto(Run run, IEnumerable<RunLootCapture> lootCaptures) => new(
@@ -78,5 +97,5 @@ internal sealed class GetActivityDetailQueryHandler(IDbContextFactory<ClientDbCo
         run.StartedAtUtc, run.StoppedAtUtc, run.TimesCorrectedAtUtc,
         run.AgentId, run.MissionLevel, run.Signature, run.FitNameSnapshot,
         [.. lootCaptures.OrderBy(capture => capture.CapturedAtUtc).Select(RunLootCaptureMapper.ToDto)],
-        run.SyncState, run.CharacterNameSnapshot);
+        run.SyncState, run.CharacterNameSnapshot, run.InSiteAtCompletion, run.FleetSizeAtStop);
 }

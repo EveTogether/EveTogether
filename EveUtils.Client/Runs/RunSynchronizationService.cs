@@ -104,5 +104,7 @@ public sealed class RunSynchronizationService(
         .Include(run => run.LootCaptures).ThenInclude(capture => capture.Entries)
         .Include(run => run.BountyEntries)
         .Include(run => run.EnemyObservations)
-        .Include(run => run.Parameters);
+        .Include(run => run.Parameters)
+        .Include(run => run.MiningEntries)
+        .Include(run => run.AttendanceEntries);
 }

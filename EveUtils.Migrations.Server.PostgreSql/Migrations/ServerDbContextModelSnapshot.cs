@@ -781,6 +781,21 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.Property<int?>("AgentId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("AttendanceCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("AttendanceNotOnRosterCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("AttendanceSetAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("AttendanceSetByCharacterId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("AttendanceSource")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("AutoSavedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -802,6 +817,9 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<int?>("FleetSizeAtStop")
+                        .HasColumnType("integer");
+
                     b.Property<string>("FormerGroupCode")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
@@ -809,6 +827,9 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.Property<string>("GroupCode")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<bool?>("InSiteAtCompletion")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsParticipant")
                         .HasColumnType("boolean");
@@ -885,6 +906,42 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.HasIndex("GroupCode", "CharacterId");
 
                     b.ToTable("Run");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunAttendanceEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("CharacterId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("CharacterName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<bool>("IsExternal")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsInSite")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Reason")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("ReasonAmount")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId", "CharacterId")
+                        .IsUnique();
+
+                    b.ToTable("RunAttendanceEntry");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunBountyEntry", b =>
@@ -1451,6 +1508,17 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunAttendanceEntry", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", "Run")
+                        .WithMany("AttendanceEntries")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunBountyEntry", b =>
                 {
                     b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", "Run")
@@ -1553,6 +1621,8 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.Run", b =>
                 {
+                    b.Navigation("AttendanceEntries");
+
                     b.Navigation("BountyEntries");
 
                     b.Navigation("EnemyObservations");

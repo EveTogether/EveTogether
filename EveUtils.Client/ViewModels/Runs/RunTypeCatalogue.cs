@@ -54,6 +54,11 @@ public sealed record RunTypeDefinition
     /// stated twice, so the two cannot drift apart.</summary>
     public bool Escalates => DetailSections.Contains(RunSectionId.Escalation);
 
+    /// <summary>A type whose run pays a fixed amount per character counted in the site, decided on an attendance list
+    /// (ET-230) — a homefront. Derived from the section that holds the list, the same way <see cref="Escalates"/> is,
+    /// so the two cannot drift apart.</summary>
+    public bool PaysPerCharacterInSite => WindowSections.Contains(RunSectionId.Homefront);
+
     /// <summary>Each pilot's clock starts on their own way in and stops on their own way out, so a shared run of this
     /// type lasts from the first pilot in to the last one out and the commander's STOP ends only the commander's own
     /// leg (ET-243, ET-246). Derived from the space: an abyssal pocket is the one place whose entry and exit this app
@@ -226,9 +231,13 @@ public static class RunTypeCatalogue
         // which is never reliably caught as "Homefront Operations …" in practice. The base row below is a combat
         // homefront's own shape (ENEMIES/BOUNTY, same as any site); For(ActivityKind, string?, int) refines it with
         // the kind's own name and, for a mining kind (Metaliminal Meteoroid, Abyssal Artifact Recovery), MINING —
-        // the per-run refinement ET-236's design left for this ticket. ET-230 still owns a homefront's own
-        // attendance/payout sections, which this row does not attempt.
-        [RunTypeId.Homefront] = _Site(RunTypeId.Homefront, "Homefront", MaterialIconKind.Castle),
+        // the per-run refinement ET-236's design left for this ticket. Every kind has HOMEFRONT (ET-230), straight
+        // under ACTIVITY: the payout is per character counted in the site, whatever the site is flown as.
+        [RunTypeId.Homefront] = _Site(RunTypeId.Homefront, "Homefront", MaterialIconKind.Castle) with
+        {
+            WindowSections = [RunSectionId.Activity, RunSectionId.Homefront, .. StandardWindow.Skip(1)],
+            DetailSections = [RunSectionId.Activity, RunSectionId.Homefront, .. SiteDetail.Skip(1)]
+        },
         [RunTypeId.Abyssal] = new()
         {
             Id = RunTypeId.Abyssal,

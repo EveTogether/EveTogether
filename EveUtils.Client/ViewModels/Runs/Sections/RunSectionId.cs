@@ -16,5 +16,8 @@ public enum RunSectionId
     Loot,
     Escalation,
     Consumables,
-    Mining
+    Mining,
+
+    /// <summary>A homefront's attendance list — who was in the site at completion (ET-230).</summary>
+    Homefront
 }

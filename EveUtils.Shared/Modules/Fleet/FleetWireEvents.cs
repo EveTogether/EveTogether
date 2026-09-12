@@ -93,6 +93,15 @@ public sealed class FleetWireEvents : IWireEventCatalog
             return new FleetRunGroupAbyssalUpdatedEvent(payload, characterId);
         });
 
+        // The commander's list of who was in a homefront's site at completion (ET-230); each member applies it to its
+        // own runs under the group code.
+        registry.Register("fleet.run-attendance", (payloadJson, characterId) =>
+        {
+            var payload = JsonSerializer.Deserialize<RunGroupAttendance>(payloadJson)
+                          ?? throw new InvalidOperationException("Invalid fleet.run-attendance payload.");
+            return new FleetRunAttendanceEvent(payload, characterId);
+        });
+
         registry.Register("fleet.run-discarded", (payloadJson, characterId) =>
         {
             var payload = JsonSerializer.Deserialize<RunGroupDiscard>(payloadJson)

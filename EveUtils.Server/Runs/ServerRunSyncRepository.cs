@@ -41,6 +41,8 @@ internal sealed class ServerRunSyncRepository(IDbContextFactory<ServerDbContext>
             .Include(run => run.BountyEntries)
             .Include(run => run.EnemyObservations)
             .Include(run => run.Parameters)
+            .Include(run => run.MiningEntries)
+            .Include(run => run.AttendanceEntries)
             .ToListAsync(cancellationToken);
     }
 

@@ -1,0 +1,138 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:va="using:EveUtils.Client.ViewModels.Runs.Attendance"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.HomefrontDetailSectionView"
+             x:DataType="vs:HomefrontDetailSectionViewModel">
+    <UserControl.Styles>
+        <Style Selector="Border.localtag">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="4,0,4,1"/>
+            <Setter Property="Margin" Value="6,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.localtag TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="FontSize" Value="9"/>
+        </Style>
+        <Style Selector="Border.localbar">
+            <Setter Property="Width" Value="2"/>
+            <Setter Property="Margin" Value="0,2,6,2"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.localbar.on">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.reason">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="FontSize" Value="9.5"/>
+        </Style>
+        <Style Selector="TextBlock.reason.noevidence">
+            <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.presence">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+        </Style>
+        <Style Selector="TextBlock.presence.online">
+            <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.setby">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="Margin" Value="8,0,0,0"/>
+        </Style>
+        <Style Selector="Border.tick">
+            <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,1,6,2"/>
+            <Setter Property="MinWidth" Value="84"/>
+        </Style>
+        <Style Selector="Border.tick TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.tick.insite">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel>
+        <TextBlock x:Name="HomefrontEmpty" Classes="hint" TextWrapping="Wrap"
+                   IsVisible="{Binding EmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding EmptyText}"/>
+
+        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+            <TextBlock Text="IN SITE (N)"/>
+            <StackPanel Grid.Column="1">
+                <TextBlock x:Name="InSite" Text="{Binding InSiteText}"/>
+                <TextBlock Classes="hint" Margin="0" IsVisible="{Binding DecidedByText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           Text="{Binding DecidedByText}"/>
+            </StackPanel>
+        </Grid>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+            <TextBlock Text="FLEET AT STOP"/>
+            <TextBlock Grid.Column="1" x:Name="FleetAtStop" Text="{Binding FleetAtStopText}"/>
+        </Grid>
+
+        <ItemsControl x:Name="AttendanceList" ItemsSource="{Binding Rows}" Margin="0,6,0,0">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="va:AttendanceRowViewModel">
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,3">
+                        <Border Classes="localbar" Classes.on="{Binding IsLocal}"/>
+                        <StackPanel Grid.Column="1">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextBrightBrush}"
+                                           VerticalAlignment="Center"/>
+                                <Border Classes="localtag" IsVisible="{Binding IsLocal}">
+                                    <TextBlock Text="Local"/>
+                                </Border>
+                            </StackPanel>
+                            <!-- Wraps rather than running under the tick when the reason and "set by" are both long. -->
+                            <WrapPanel>
+                                <TextBlock Classes="presence" Classes.online="{Binding IsOnline}"
+                                           IsVisible="{Binding IsPresenceShown}" Text="{Binding PresenceText}"/>
+                                <TextBlock Classes="reason" Classes.noevidence="{Binding IsWithoutEvidence}"
+                                           Text="{Binding ReasonText}"/>
+                                <TextBlock Classes="setby" IsVisible="{Binding IsSetByHand}" Text="{Binding SetByText}"/>
+                            </WrapPanel>
+                        </StackPanel>
+                        <CheckBox Grid.Column="2" VerticalAlignment="Center" Content="in site"
+                                  IsVisible="{Binding IsEditable}" IsChecked="{Binding IsInSite, Mode=TwoWay}"/>
+                        <Border Grid.Column="2" Classes="tick" Classes.insite="{Binding IsInSite}"
+                                VerticalAlignment="Center" IsVisible="{Binding !IsEditable}">
+                            <TextBlock Text="{Binding TickText}"/>
+                        </Border>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0" IsVisible="{Binding IsEditing}">
+            <TextBlock Text="+ pilots not on the roster" VerticalAlignment="Center"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                <TextBlock Text="{Binding NotOnRosterCount}" VerticalAlignment="Center" MinWidth="18" TextAlignment="Right"/>
+                <Button Content="▲" Padding="6,0" Command="{Binding IncreaseNotOnRosterCommand}"/>
+                <Button Content="▼" Padding="6,0" Command="{Binding DecreaseNotOnRosterCommand}"/>
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   IsVisible="{Binding PresenceCaption, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding PresenceCaption}"/>
+
+        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+            <Button x:Name="EditAttendance" Content="change who was in site" IsVisible="{Binding IsEditOffered}"
+                    Command="{Binding EditCommand}"/>
+            <Button x:Name="SaveAttendance" Content="SAVE LIST" IsVisible="{Binding IsEditing}"
+                    Command="{Binding SaveEditCommand}"/>
+            <Button Content="CANCEL" IsVisible="{Binding IsEditing}" Command="{Binding CancelEditCommand}"/>
+        </StackPanel>
+        <TextBlock Classes="hint" TextWrapping="Wrap" IsVisible="{Binding IsEditing}" Text="{Binding EditExplanation}"/>
+        <TextBlock Classes="hint" Foreground="{StaticResource RedBrush}" TextWrapping="Wrap"
+                   IsVisible="{Binding EditError, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding EditError}"/>
+    </StackPanel>
+</UserControl>

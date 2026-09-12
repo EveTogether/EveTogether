@@ -72,12 +72,14 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     /// confirmation — the same "no service, no action" rule every other optional dependency here already follows.</param>
     /// <param name="runChanges">Keeps this screen current with what happens to its activity anywhere else (ET-222).
     /// Null leaves it showing what it read, as it did before.</param>
+    /// <param name="services">The app's services, for the live fleet view HOMEFRONT shows beside a saved list (ET-230).
+    /// Null shows the list without it.</param>
     public ActivityDetailViewModel(CqrsDispatcher dispatcher, Guid activitySummaryId,
         IAppraisalProvider? appraisal = null, Func<long, string>? nameOf = null,
         IEsiClient? esi = null, IEsiLocationClient? locations = null, ISdeAccessor? sde = null,
         ICharacterPortraitProvider? portraits = null, ITypeImageProvider? images = null,
         IReadOnlySet<long>? ownCharacterIds = null, Func<Task>? republish = null, IDialogService? dialogs = null,
-        RunChangeFeed? runChanges = null)
+        RunChangeFeed? runChanges = null, IServiceProvider? services = null)
     {
         _dispatcher = dispatcher;
         _activitySummaryId = activitySummaryId;
@@ -85,10 +87,10 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         _ownCharacterIds = ownCharacterIds;
         _republish = republish;
         _dialogs = dialogs;
-        var services = new RunDetailSectionServices(dispatcher, appraisal, nameOf, esi, locations, sde, portraits,
-            images, ownCharacterIds);
+        var sectionServices = new RunDetailSectionServices(dispatcher, appraisal, nameOf, esi, locations, sde, portraits,
+            images, ownCharacterIds, services);
         _sections = [.. RunSectionModules.All
-            .Select(module => module.CreateForDetail?.Invoke(services))
+            .Select(module => module.CreateForDetail?.Invoke(sectionServices))
             .OfType<RunDetailSection>()];
         foreach (RunDetailSection section in _sections)
             section.ActivityCorrected += () => _ = _ReloadAfterCorrectionAsync();

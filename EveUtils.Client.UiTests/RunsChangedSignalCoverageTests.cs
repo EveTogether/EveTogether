@@ -218,6 +218,34 @@ public sealed class RunsChangedSignalCoverageTests
         {
             Guid runId = await _StartAsync(dispatcher, cancellationToken);
             return new Act(() => dispatcher.Send(new SetRunPayoutEligibilityCommand(runId, false), cancellationToken), runId);
+        },
+
+        // ET-260's one-time repair, which arrived without a scenario of its own: a mission reward copied onto two runs
+        // of one group, one of them taken off and the group's activity rebuilt.
+        [typeof(DedupeMissionRewardParametersCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            foreach (long characterId in new[] { Pilot, Pilot + 1 })
+            {
+                Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Mission, StartedAtUtc,
+                    4022, "Some Mission", 30000142, GroupCode, SiteTypeSource: SiteTypeSource.Mission), cancellationToken);
+                await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+                    [], [], [],
+                    [new RunParameterInput { ParameterKey = RunParameterKey.Isk, TypedValue = "1000000", Amount = 1_000_000m, ObservedAtUtc = StartedAtUtc }]),
+                    cancellationToken);
+            }
+
+            return new Act(async () => await dispatcher.Send(new DedupeMissionRewardParametersCommand(), cancellationToken),
+                GroupCode: GroupCode);
+        },
+
+        [typeof(SetRunAttendanceCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            await _StartAsync(dispatcher, cancellationToken, GroupCode);
+            RunAttendanceDecision decision = new(
+                [new RunAttendanceEntryInput { CharacterId = Pilot, IsInSite = true, Reason = AttendanceReason.DamageDealt }],
+                0, AttendanceSource.FleetCommander, Pilot, StartedAtUtc.AddMinutes(5));
+            return new Act(async () => await dispatcher.Send(new SetRunAttendanceCommand(decision, [Pilot], GroupCode),
+                cancellationToken), GroupCode: GroupCode);
         }
     };
 

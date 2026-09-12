@@ -29,12 +29,16 @@ public sealed class ActivityRunRowViewModel(ActivityRunDetailDto run, Func<long,
         : "measured";
 
     /// <summary>Both facts said out loud, because the interesting row is the one where they disagree — the hauler
-    /// who flew the site and takes no share (ET-105).</summary>
-    public string StandingText { get; } = (run.IsParticipant, run.IsPayoutEligible) switch
+    /// who flew the site and takes no share (ET-105). Once a homefront's attendance is decided (ET-230) the first half
+    /// says only "in the group": whether they were in the site is HOMEFRONT's to say, and "flew it" beside its "not in
+    /// site" would contradict it. An undecided run reads exactly as before.</summary>
+    public string StandingText { get; } = (run.InSiteAtCompletion is not null, run.IsParticipant, run.IsPayoutEligible) switch
     {
-        (true, true) => "flew it · takes a share",
-        (true, false) => "flew it · no share",
-        (false, true) => "did not fly it · takes a share",
-        (false, false) => "did not fly it · no share"
+        (true, _, true) => "in the group · takes a share",
+        (true, _, false) => "in the group · no share",
+        (false, true, true) => "flew it · takes a share",
+        (false, true, false) => "flew it · no share",
+        (false, false, true) => "did not fly it · takes a share",
+        (false, false, false) => "did not fly it · no share"
     };
 }
