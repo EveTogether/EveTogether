@@ -18,5 +18,9 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
+        <TextBlock x:Name="FleetMinedBlock" Classes="hint" TextWrapping="Wrap" Text="{Binding FleetMinedText}"
+                   IsVisible="{Binding FleetMinedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        <TextBlock x:Name="RemainingBlock" Classes="hint" TextWrapping="Wrap" Text="{Binding RemainingText}"
+                   IsVisible="{Binding RemainingText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
     </StackPanel>
 </UserControl>

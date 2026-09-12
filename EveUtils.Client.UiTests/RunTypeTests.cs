@@ -151,6 +151,19 @@ public sealed class RunTypeTests
         Assert.Contains(RunSectionId.Mining, site.DetailSections);
     }
 
+    /// <summary>ET-234: a Metaliminal Meteoroid's single 5,000-unit asteroid is the one homefront capacity MINING's
+    /// "remaining" line can subtract against. AAR's 9 waves of 12 asteroids is not a comparably simple figure, so it
+    /// carries none — the fleet still sees a total, just no "remaining".</summary>
+    [Theory]
+    [InlineData(10312, 5000)]
+    [InlineData(10346, null)]
+    public void For_ForAMiningHomefront_CarriesSiteMiningCapacity_OnlyForMetaliminal(int dungeonId, int? expectedCapacity)
+    {
+        RunTypeDefinition site = RunTypeCatalogue.For(ActivityKind.Site, null, siteTypeId: dungeonId);
+
+        Assert.Equal(expectedCapacity, site.SiteMiningCapacityUnits);
+    }
+
     // ── The run window's own TYPE text (ET-226 widened scope) ──────────────────────────────────────────
 
     /// <summary>

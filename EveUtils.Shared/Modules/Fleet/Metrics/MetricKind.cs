@@ -2,15 +2,23 @@ namespace EveUtils.Shared.Modules.Fleet.Metrics;
 
 /// <summary>
 /// What a fleet activity sample measures. Deliberately broad and open-for-extension: new kinds
-/// (salvage, reps, …) can be added without a protocol change. v1 actively produces <see cref="Dps"/> and
-/// <see cref="DpsIn"/>; the rest are reserved examples whose semantics are already declared in
-/// <see cref="FleetMetricCatalog"/>.
+/// (salvage, reps, …) can be added without a protocol change.
 /// </summary>
 public enum MetricKind
 {
     /// <summary>Damage dealt per second (the outgoing DPS series of a member's live graph).</summary>
     Dps = 0,
+
+    /// <summary>Running total of units mined this run, sourced from the gamelog (<c>RunMiningEntry</c>, ET-229) —
+    /// crit included, residue not. A Cumulative rollup, same shape as <see cref="Bounty"/> and <see cref="Loot"/>,
+    /// and opt-IN for the same reason: what a pilot mined is theirs to offer (ET-234).
+    ///
+    /// The figure itself is a single scalar, so it is the one MINING already shows for this run — the fleet's own
+    /// "fleet mined" and "remaining" lines need the residue split too, which travels on <c>RunShareUpdate</c>
+    /// instead. This kind's job is a quick per-character total for a member's own row, and a nonzero value counting
+    /// as evidence a member mined at all (ET-230's later preselection reads it, never built here).</summary>
     MiningYield = 1,
+
     Bounty = 2,
     Location = 3,
 

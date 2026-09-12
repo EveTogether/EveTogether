@@ -11,22 +11,26 @@ namespace EveUtils.Client.Fleet;
 /// A character may override the global default for a single fleet (e.g. "never share my location globally, but do in
 /// this one op"). The effective decision is the per-(fleet, character, kind) override if set, else the global default.
 ///
-/// On a shared fleet run (<paramref name="sharedRuns"/>, ET-242) loot and bounty go one step further: the run's own
-/// choice first, then the fleet's override, and without either of them shared — the run window says so on its face and
-/// takes one click to turn off. The global opt-in is never consulted there, and never changed anywhere else.
+/// On a shared fleet run (<paramref name="sharedRuns"/>, ET-242, mining added by ET-234) loot, bounty and mining go one
+/// step further: the run's own choice first, then the fleet's override, and without either of them shared — the run
+/// window says so on its face and takes one click to turn off. The global opt-in is never consulted there, and never
+/// changed anywhere else.
 /// </summary>
 public sealed class MetricShareSnapshot(
     IReadOnlyDictionary<string, string> values,
     IReadOnlyDictionary<(long FleetId, int CharacterId), string>? sharedRuns = null)
 {
     /// <summary>Personal metrics that are opt-IN (off until explicitly enabled): location (privacy) and what a pilot
-    /// made — bounty and loot. A new kind inherits "shared", so ISK has to be named here or it goes out by
-    /// default, which is the opposite of how this client already treats the bounty figure beside it.</summary>
+    /// made — bounty, loot and mining (ET-234, the same reasoning as loot: what a pilot mined is theirs to offer). A
+    /// new kind inherits "shared", so ISK has to be named here or it goes out by default, which is the opposite of
+    /// how this client already treats the bounty figure beside it.</summary>
     public static bool IsOptIn(MetricKind kind) =>
-        kind is MetricKind.Location or MetricKind.Bounty or MetricKind.Loot;
+        kind is MetricKind.Location or MetricKind.Bounty or MetricKind.Loot or MetricKind.MiningYield;
 
-    /// <summary>What a pilot made on a run, and so what a shared run decides for itself (ET-242).</summary>
-    public static bool IsRunScoped(MetricKind kind) => kind is MetricKind.Loot or MetricKind.Bounty;
+    /// <summary>What a pilot made on a run, and so what a shared run decides for itself (ET-242, mining by
+    /// ET-234).</summary>
+    public static bool IsRunScoped(MetricKind kind) =>
+        kind is MetricKind.Loot or MetricKind.Bounty or MetricKind.MiningYield;
 
     /// <summary>The global default for a metric kind (the baseline for all fleets/characters).</summary>
     public bool IsShared(MetricKind kind)

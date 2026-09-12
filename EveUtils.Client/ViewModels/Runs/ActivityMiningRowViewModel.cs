@@ -17,6 +17,14 @@ public sealed class ActivityMiningRowViewModel(
     /// <summary>The raw figure <see cref="ValueText"/> is built from, for a caller that sums rather than displays.</summary>
     public decimal? Value { get; } = value;
 
+    /// <summary>The raw units <see cref="UnitsText"/> is built from (crit included), for a caller that sums rather
+    /// than displays — the fleet's own "fleet mined" line (ET-234).</summary>
+    public int Units { get; } = units;
+
+    /// <summary>The raw residue <see cref="ResidueText"/> is built from, for the same reason as <see cref="Units"/> —
+    /// the fleet's own "remaining" line, when the site's capacity is known (ET-234).</summary>
+    public int ResidueUnits { get; } = residueUnits;
+
     public string CharacterText { get; } = nameOf?.Invoke(characterId) ?? $"character {characterId}";
 
     public string OreText { get; } = oreType;

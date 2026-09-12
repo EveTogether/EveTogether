@@ -1674,8 +1674,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _ = _RefreshRunCharactersAsync();
         _ = _RefreshParticipantsAsync();
         _ShareRunLootWithFleet();
+        _ShareRunMiningWithFleet();
         _ = FleetSharing.SyncAsync(nowUtc, FleetId, GroupCode,
-            RunState is ActivityRunState.Running or ActivityRunState.Stopped, _RunCharacterIds(), LootOverview);
+            RunState is ActivityRunState.Running or ActivityRunState.Stopped, _RunCharacterIds(), LootOverview,
+            Participants);
     }
 
     /// <summary>Every character with a run in this group as the window knows it: the participants, and its own pilot
@@ -1738,6 +1740,22 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
 
         source.SetLootIsk(characterId, RunState is ActivityRunState.NotStarted ? null : RunLoot?.NetIsk);
+    }
+
+    /// <summary>Offer what this run has mined to the fleet (ET-234), the same way <see cref="_ShareRunLootWithFleet"/>
+    /// does for loot: <see cref="MetricKind.MiningYield"/>'s producer only ever hands the metric source a figure, and
+    /// whether it leaves the machine is the publisher's share gate, where mining is opt-IN like loot and bounty.</summary>
+    private void _ShareRunMiningWithFleet()
+    {
+        if (_ActingCharacterId() is not { } characterId
+            || _services.GetService<RunMiningMetricSource>() is not { } source)
+            return;
+
+        var mining = _sections.GetValueOrDefault(RunSectionId.Mining) as MiningWindowSectionViewModel;
+        int? units = RunState is ActivityRunState.NotStarted || mining is null || RunId is not { } runId
+            ? null
+            : mining.UnitsFor(runId);
+        source.SetMinedUnits(characterId, units);
     }
 
     /// <summary>The button. Creating the stored run is the whole of it — without that row there is no run for the

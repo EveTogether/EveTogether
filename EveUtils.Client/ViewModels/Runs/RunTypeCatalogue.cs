@@ -65,6 +65,12 @@ public sealed record RunTypeDefinition
     /// (<c>IsAbyssal</c>, <c>NeedsSite</c>): what a manual start needs is this type's own fact, the same way every
     /// other thing a type means already lives here rather than on the window that happens to ask.</summary>
     public ManualStartRequirement? ManualStart { get; init; }
+
+    /// <summary>The site's own known mining capacity in units — only a Metaliminal Meteoroid's single 5,000-unit
+    /// asteroid, today (ET-234, <see cref="HomefrontCatalogue.CapacityUnitsByKind"/>). Null everywhere else,
+    /// including AAR and an ordinary mining fleet: MINING then shows the fleet's total with no "remaining" line,
+    /// since there is no fixed figure to subtract it from.</summary>
+    public int? SiteMiningCapacityUnits { get; init; }
 }
 
 /// <summary>What the manual run-start dialog needs to ask before <see cref="StartRunCommand"/> can fire, per
@@ -309,7 +315,10 @@ public static class RunTypeCatalogue
             {
                 Name = name,
                 WindowSections = [.. baseType.WindowSections, RunSectionId.Mining],
-                DetailSections = [.. baseType.DetailSections, RunSectionId.Mining]
+                DetailSections = [.. baseType.DetailSections, RunSectionId.Mining],
+                SiteMiningCapacityUnits = HomefrontCatalogue.CapacityUnitsByKind.TryGetValue(kind, out int capacity)
+                    ? capacity
+                    : null
             }
             : baseType with { Name = name };
     }
