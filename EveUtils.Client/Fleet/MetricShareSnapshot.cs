@@ -10,14 +10,23 @@ namespace EveUtils.Client.Fleet;
 ///
 /// A character may override the global default for a single fleet (e.g. "never share my location globally, but do in
 /// this one op"). The effective decision is the per-(fleet, character, kind) override if set, else the global default.
+///
+/// On a shared fleet run (<paramref name="sharedRuns"/>, ET-242) loot and bounty go one step further: the run's own
+/// choice first, then the fleet's override, and without either of them shared — the run window says so on its face and
+/// takes one click to turn off. The global opt-in is never consulted there, and never changed anywhere else.
 /// </summary>
-public sealed class MetricShareSnapshot(IReadOnlyDictionary<string, string> values)
+public sealed class MetricShareSnapshot(
+    IReadOnlyDictionary<string, string> values,
+    IReadOnlyDictionary<(long FleetId, int CharacterId), string>? sharedRuns = null)
 {
     /// <summary>Personal metrics that are opt-IN (off until explicitly enabled): location (privacy) and what a pilot
     /// made — bounty and loot. A new kind inherits "shared", so ISK has to be named here or it goes out by
     /// default, which is the opposite of how this client already treats the bounty figure beside it.</summary>
     public static bool IsOptIn(MetricKind kind) =>
         kind is MetricKind.Location or MetricKind.Bounty or MetricKind.Loot;
+
+    /// <summary>What a pilot made on a run, and so what a shared run decides for itself (ET-242).</summary>
+    public static bool IsRunScoped(MetricKind kind) => kind is MetricKind.Loot or MetricKind.Bounty;
 
     /// <summary>The global default for a metric kind (the baseline for all fleets/characters).</summary>
     public bool IsShared(MetricKind kind)
@@ -32,27 +41,26 @@ public sealed class MetricShareSnapshot(IReadOnlyDictionary<string, string> valu
         return !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>The effective decision for a character in a specific fleet: a per-fleet override wins over the global
-    /// default; absent an override the global default applies (a new fleet inherits your baseline).</summary>
+    /// <summary>The effective decision for a character in a specific fleet: on a shared run the run's own choice for
+    /// loot and bounty, then a per-fleet override, then — on that run — shared, elsewhere the global default (a new
+    /// fleet inherits your baseline).</summary>
     public bool IsShared(long fleetId, int characterId, MetricKind kind)
     {
-        var value = values.GetValueOrDefault(OverrideKeyFor(fleetId, characterId, kind));
-        if (string.Equals(value, "true", StringComparison.OrdinalIgnoreCase))
-            return true;
-        if (string.Equals(value, "false", StringComparison.OrdinalIgnoreCase))
-            return false;
+        bool? fleetChoice = _Choice(OverrideKeyFor(fleetId, characterId, kind));
+        if (IsRunScoped(kind) && sharedRuns?.GetValueOrDefault((fleetId, characterId)) is { } groupCode)
+            return _Choice(RunKeyFor(groupCode, kind)) ?? fleetChoice ?? true;
 
-        return IsShared(kind); // no override → follow the global default
+        return fleetChoice ?? IsShared(kind);
     }
 
     /// <summary>The current override choice for the per-fleet dialog: 0 = inherit (no override), 1 = share, 2 = don't share.</summary>
-    public int OverrideChoiceIndex(long fleetId, int characterId, MetricKind kind)
-    {
-        var value = values.GetValueOrDefault(OverrideKeyFor(fleetId, characterId, kind));
-        if (string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)) return 1;
-        if (string.Equals(value, "false", StringComparison.OrdinalIgnoreCase)) return 2;
-        return 0;
-    }
+    public int OverrideChoiceIndex(long fleetId, int characterId, MetricKind kind) =>
+        _Choice(OverrideKeyFor(fleetId, characterId, kind)) switch
+        {
+            true => 1,
+            false => 2,
+            null => 0
+        };
 
     /// <summary>The single share key for all live combat lines (DPS out/in, neut, cap, …): one "share my live
     /// combat data" toggle gates every combat metric instead of a per-line checkbox.</summary>
@@ -79,4 +87,16 @@ public sealed class MetricShareSnapshot(IReadOnlyDictionary<string, string> valu
     public static string OverrideKeyFor(long fleetId, int characterId, MetricKind kind) =>
         $"fleet.{fleetId}.{characterId}.share." +
         (kind == MetricKind.Location ? "location" : IsCombat(kind) ? "combat" : kind.ToString().ToLowerInvariant());
+
+    /// <summary>The per-run key for loot or bounty (ET-242), one for every own character on the run: the run window's
+    /// toggle is the run's, not a character's. Absent = the fleet's override, then shared.</summary>
+    public static string RunKeyFor(string groupCode, MetricKind kind) =>
+        $"fleet.run.{groupCode}.share.{kind.ToString().ToLowerInvariant()}";
+
+    private bool? _Choice(string key) => values.GetValueOrDefault(key) switch
+    {
+        { } value when string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) => true,
+        { } value when string.Equals(value, "false", StringComparison.OrdinalIgnoreCase) => false,
+        _ => null
+    };
 }

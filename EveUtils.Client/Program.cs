@@ -213,6 +213,8 @@ sealed class Program
         _ = Services.GetRequiredService<EveUtils.Client.Fleet.FleetRunGroupCodeCoordinator>();
         // Up before any run window, so the fleet's clock knows who went in before this pilot's window opened (ET-243).
         _ = Services.GetRequiredService<EveUtils.Client.Fleet.FleetRunLegs>();
+        // Likewise for what the others share of the run (ET-242): their loot is there when this pilot's window opens.
+        _ = Services.GetRequiredService<EveUtils.Client.Fleet.FleetRunShares>();
 
         // Brings the run window up on every member's screen when the FC starts — without taking focus (ET-105).
         _ = Services.GetRequiredService<EveUtils.Client.Runs.FleetRunWindowPresenter>();

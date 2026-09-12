@@ -536,6 +536,26 @@
                                Classes.waiting="{Binding IsWaitingForFleet}" Text="{Binding FleetClockText}"/>
                 </Grid>
 
+                <!-- What this pilot offers the fleet of this run (ET-242): on a shared run loot and bounty go out unless
+                     switched off here, so it is said on the window's face, in words, with the switch one click away —
+                     not in a section that may be folded shut. -->
+                <StackPanel x:Name="FleetSharingStrip" Spacing="2" IsVisible="{Binding FleetSharing.IsShown}">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                        <TextBlock Classes="label" VerticalAlignment="Center" Text="SHARING"/>
+                        <WrapPanel Grid.Column="1">
+                            <Button x:Name="ShareLootButton" Classes="pick" Classes.on="{Binding FleetSharing.IsSharingLoot}"
+                                    Content="{Binding FleetSharing.LootToggleText}"
+                                    Command="{Binding FleetSharing.ToggleLootCommand}"
+                                    ToolTip.Tip="Share my loot with the fleet on this run: every item that counts, as it comes in."/>
+                            <Button x:Name="ShareBountyButton" Classes="pick" Classes.on="{Binding FleetSharing.IsSharingBounty}"
+                                    Content="{Binding FleetSharing.BountyToggleText}"
+                                    Command="{Binding FleetSharing.ToggleBountyCommand}"
+                                    ToolTip.Tip="Share my bounty with the fleet on this run."/>
+                        </WrapPanel>
+                    </Grid>
+                    <TextBlock x:Name="FleetSharingText" Classes="hint" Margin="0" Text="{Binding FleetSharing.SharingText}"/>
+                </StackPanel>
+
                 <!-- Armed (ET-246): a pocket's run starts by itself on the way in, said while the window waits for it.
                      START under it is still the way to start it by hand. -->
                 <Border x:Name="ArmedBanner" Classes="armed" Classes.off="{Binding !IsArmed}"
