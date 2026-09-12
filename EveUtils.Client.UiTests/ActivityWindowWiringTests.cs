@@ -140,6 +140,35 @@ public class ActivityWindowWiringTests
     }
 
     /// <summary>
+    /// ET-268: Jithran's own report, its actual mechanism — a Raid: Hall of Sacrifice started from the clipboard
+    /// with five own characters read TYPE "Site", not Homefront, on four of the five. Measured in his database: the
+    /// pilot's row carried SiteTypeId 10347 and SiteTypeSource.Site, exactly as
+    /// <see cref="Start_RecordsTheDungeonIdWhenExactlyOneSiteMatches"/> already proves for the one window that
+    /// copied the signature; the four other toons' own windows — each its own <see cref="ActivityWindowViewModel"/>,
+    /// joining the commander's start via <see cref="ActivityWindowViewModel.JoinFleetRun"/> rather than copying
+    /// anything themselves — carried 0 and Uncatalogued. <see cref="RunGroupCodeStart.SignatureGroupSnapshot"/>
+    /// already made this same trip for the scanner-group text (ET-239); <see cref="RunGroupCodeStart.SiteTypeId"/>
+    /// never did, so a joining member's own <c>MatchedSites</c> — always empty, since only the commander's window
+    /// ever had the signature copied into it — read as an ordinary, uncatalogued site instead.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task JoinFleetRun_CarriesOverTheCommandersDungeonId()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+
+        model.JoinFleetRun(new RunGroupCodeStart(4242, ActivityKind.Site, "HF-7QK2", DateTime.UtcNow,
+            IsFleetCommander: true, SiteName: "Raid: Hall of Sacrifice", SignatureGroupSnapshot: "Combat Site",
+            SiteTypeId: 10347));
+        await ActivityWindowHarness.WaitUntil(() => model.RunId is not null);
+
+        Run joined = await _RunAsync(harness, model.RunId!.Value);
+        Assert.Equal(10347, joined.SiteTypeId);
+        Assert.Equal(SiteTypeSource.Site, joined.SiteTypeSource);
+        Assert.Equal("Homefront · Raid", model.RunType.Name);
+    }
+
+    /// <summary>
     /// ET-228: the run window's own version of the detail screen's ET-162 rule ("an unclaimed section with real
     /// content still shows") — a Combat Site does not claim MINING, but someone mining on it should not have to
     /// wait for SAVE to see it. Red against the pre-fix code: <c>_SyncSectionsToType</c> only ever asked

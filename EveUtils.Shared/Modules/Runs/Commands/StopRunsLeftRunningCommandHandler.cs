@@ -46,6 +46,6 @@ internal sealed class StopRunsLeftRunningCommandHandler(IDbContextFactory<Client
             await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         return Result<IReadOnlyList<StoppedRunDto>>.Success([.. running.Select(run =>
             new StoppedRunDto(run.Id, run.CharacterId, run.ActivityKind, run.SiteName, run.SignatureGroupSnapshot,
-                run.StoppedAtUtc!.Value))]);
+                run.StoppedAtUtc!.Value, run.SiteTypeId))]);
     }
 }

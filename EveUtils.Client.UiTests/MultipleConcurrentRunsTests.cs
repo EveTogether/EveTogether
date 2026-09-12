@@ -350,6 +350,38 @@ public class MultipleConcurrentRunsTests
         Assert.Equal("6 enemies", viewModel.Enemies().EnemyTotalCountText);
     }
 
+    /// <summary>
+    /// ET-268: Jithran's own report, reproduced end to end — a Raid: Hall of Sacrifice started on several own
+    /// characters must keep reading Homefront once the column switches to a sibling and back, not fall back to
+    /// "Site" the way it did in his own database. <c>_SwitchToRunAsync</c> clears <c>MatchedSites</c> on every
+    /// switch on purpose (a fresh copy must get a fresh match, not the previous column's) — RunType has to read the
+    /// switched-to run's own stored dungeon id instead, or a switch throws away the very fact that made it Homefront.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task SwitchingTheColumn_KeepsReadingHomefront_NotSite()
+    {
+        using var harness = await _TwoCharacters();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        await model.ApplySignatureAsync("AAA-001", "Combat Site", "Raid: Hall of Sacrifice",
+            [new SdeSite(10347, "Raid: Hall of Sacrifice", 70, "Homefront Operations", null, null, null, null, false, [])]);
+        harness.Dialogs.OnPickCharacters = (_, options) =>
+            Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId)]);
+
+        await model.StartRunCommand.ExecuteAsync(null);
+        await ActivityWindowHarness.WaitUntil(() => model.Participants.Count == 2);
+        Assert.Equal("Homefront · Raid", model.RunType.Name);
+
+        RunCharacterRowViewModel second = model.RunCharacters.Single(row => row.CharacterId == 90000002);
+        model.SelectRunCharacterCommand.Execute(second);
+        await ActivityWindowHarness.WaitUntil(() => model.RunId == second.RunId);
+        Assert.Equal("Homefront · Raid", model.RunType.Name);
+
+        RunCharacterRowViewModel first = model.RunCharacters.Single(row => row.CharacterId == ActivityWindowHarness.CharacterId);
+        model.SelectRunCharacterCommand.Execute(first);
+        await ActivityWindowHarness.WaitUntil(() => model.RunId == first.RunId);
+        Assert.Equal("Homefront · Raid", model.RunType.Name);
+    }
+
     // ── The live window's own running total covers the group, not just the viewed character (ET-210 review, round 4 follow-up) ──
 
     /// <summary>

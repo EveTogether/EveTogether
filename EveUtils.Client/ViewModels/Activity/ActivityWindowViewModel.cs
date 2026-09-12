@@ -134,6 +134,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private int? _commanderNameId;
     private string? _commanderName;
 
+    // The run's own stored dungeon id (ET-228, ET-268) — separate from MatchedSites, which is only ever "what the
+    // last copy matched" and is deliberately cleared on adopt, switch and a fresh copy (a new copy must get a new
+    // match). Read by RunType so TYPE keeps reading Homefront off the run itself once one exists; null before START,
+    // when there is no run of this window's own yet and MatchedSites is still the only fact there is.
+    private int? _runSiteTypeId;
+    // What id space that dungeon id came from (ET-228) — set only where a new row is actually written (START and
+    // every additional character sharing it): adopt and switch attach to a row the store already has rather than
+    // writing one, so neither needs it.
+    private SiteTypeSource? _runSiteTypeSource;
+
     /// <summary>Every section this window has built, kept for as long as the window lives rather than as long as its
     /// type claims it — a type change mid-run hides a section, it does not throw its state away.</summary>
     private readonly Dictionary<RunSectionId, RunWindowSection> _sections = [];
@@ -198,8 +208,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     /// <summary>What this run is, from the one catalogue every run screen reads (ET-226). Unlike <see cref="Kind"/> it
     /// can change mid-run: a site started without a scanner group gets one when the run it adopts carries it, and a
-    /// homefront's own kind (ET-228) settles the moment a copied name resolves to exactly one dungeon.</summary>
-    public RunTypeDefinition RunType => RunTypeCatalogue.For(Kind, SignatureGroup, _SiteTypeId());
+    /// homefront's own kind (ET-228) settles the moment a copied name resolves to exactly one dungeon.
+    ///
+    /// Reads the run's own stored dungeon id once one exists (<see cref="_runSiteTypeId"/>, ET-268) rather than
+    /// <see cref="_SiteTypeId()"/> alone: MatchedSites is cleared on adopt and on a column switch, and without this a
+    /// homefront read back "Site" the moment either happened, even though the run itself never stopped being one.
+    /// Falls back to the live match for a fresh copy that has not started a run of its own yet.</summary>
+    public RunTypeDefinition RunType => RunTypeCatalogue.For(Kind, SignatureGroup, _runSiteTypeId ?? _SiteTypeId());
 
     /// <summary>The sections the run's type has, in the order <see cref="RunSectionModules"/> gives them — what the
     /// window draws under its clock.</summary>
@@ -1018,6 +1033,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         }
 
         RunId = run.Id;
+        // The dungeon id this run was actually stored with (ET-268) — read unconditionally, regardless of which
+        // branch above ran, since every one of them adopts the same row and RunType must keep reading it once
+        // MatchedSites is cleared just below.
+        _runSiteTypeId = run.SiteTypeId;
         AnchorUtc = run.StartedAtUtc;
         // A window resuming a specific stopped run (ET-254, _targetRunId) comes up exactly as if its own pilot had
         // pressed STOP and reopened it: paused, not ticking. StartRunAsync's own "RunId is not null && RunState is
@@ -1263,6 +1282,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // Same rule, same reason (ET-239): a member who already copied their own signature keeps the type it
         // resolved to; only a member with none reads the commander's.
         SignatureGroup ??= start.SignatureGroupSnapshot;
+        // Same rule again, for the other half of TYPE (ET-268): this member has no MatchedSites of its own — it
+        // never copied the signature — so without this a homefront read "Site" on every window but the commander's,
+        // even though SignatureGroup just above already carried the same run's scanner text over correctly.
+        _runSiteTypeId ??= start.SiteTypeId;
         // Unlike the two lines above, this is never "only where empty" (ET-241): the commander's own answer always
         // wins over whatever this member's window already picked up from its own remembered settings — an unrelated
         // abyssal's leftover tier and weather, which reads as established when it is really just a stale default
@@ -1665,6 +1688,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         SignatureId = run.Signature;
         SignatureGroup = run.SignatureGroupSnapshot;
         SignatureName = run.SiteName;
+        // The dungeon id THIS run was stored with (ET-268) — read before MatchedSites is cleared just below, or the
+        // column would read back "Site" for a homefront the moment it switched, same bug as adopt used to have.
+        _runSiteTypeId = run.SiteTypeId;
         MatchedSites = [];
         // _enemyObservations is deliberately left standing (ET-210 review finding, 2026-09-09, third round):
         // clearing it here used to be the bug, not the fix. It used to be reset on every switch, on the reasoning
@@ -1897,9 +1923,18 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // sibling started in the same breath has no fleet-metric location sample of its own yet to resolve from.
         int? solarSystemId = _ResolveSolarSystemId();
         (string? fitContentHash, string? fitNameSnapshot) = await _ResolveFitAsync(characterId);
+        // Read once, from this window's own MatchedSites, and kept (ET-268) rather than re-read per character:
+        // _SendAdditionalStartRunCommandAsync used to call _SiteTypeId()/_SiteTypeSource() itself, a second read of
+        // the same live match that a sibling's own start has no business repeating — every character sharing this
+        // site is the same site, and only the acting character's own copy ever resolved it. "??=", not "=": a
+        // member joining a run the fleet commander already announced (JoinFleetRun) already carried the commander's
+        // own dungeon id over before this ever runs, and this window's own MatchedSites — it never had a signature
+        // copied into it — would otherwise overwrite that correct fact with 0.
+        _runSiteTypeId ??= _SiteTypeId();
+        _runSiteTypeSource ??= _runSiteTypeId is > 0 ? SiteTypeSource.Site : _SiteTypeSource();
         Result<Guid> started = await dispatcher.Send(
             new StartRunCommand(characterId, Kind, startedAtUtc,
-                SiteTypeId: _SiteTypeId(),
+                SiteTypeId: _runSiteTypeId.Value,
                 SiteName: SignatureName,
                 SolarSystemId: solarSystemId,
                 GroupCode: GroupCode,
@@ -1919,7 +1954,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 Origin: EveUtils.Shared.Modules.Runs.Enums.RunOrigin.Clipboard,
                 // Every non-mission caller leaves AgentId/MissionLevel/Parameters at their defaults (null, null,
                 // empty) — only ClipboardMissionOffer ever sets them (ET-172 sub 4).
-                SiteTypeSource: _SiteTypeSource(),
+                SiteTypeSource: _runSiteTypeSource.Value,
                 AgentId: MissionAgentId,
                 MissionLevel: MissionLevel,
                 Parameters: _ParametersFor(characterId),
@@ -1968,7 +2003,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     /// <summary>Start a run for a character riding along on this window's own start (ET-210) — same site, same
     /// group code, never the fleet commander (only the acting character ever is). Best-effort: one extra character
-    /// failing to register is reported and does not undo the run this window itself already has.</summary>
+    /// failing to register is reported and does not undo the run this window itself already has.
+    ///
+    /// Reads <see cref="_runSiteTypeId"/>/<see cref="_runSiteTypeSource"/> rather than calling
+    /// <see cref="_SiteTypeId"/>/<see cref="_SiteTypeSource"/> itself (ET-268): every character sharing this site
+    /// shares the one match the acting character's own copy resolved, at START, and a second read of MatchedSites —
+    /// by now cleared on some callers, unset on others — used to hand a homefront's own siblings SiteTypeId 0 and
+    /// SiteTypeSource.Uncatalogued instead of the pilot's own 10347 and Site. Falls back to a fresh read only for a
+    /// caller reached before this window ever stored a run of its own (defensive; every known caller runs after).
+    /// </summary>
     private async Task _SendAdditionalStartRunCommandAsync(
         CqrsDispatcher dispatcher, long characterId, string characterName, DateTime startedAtUtc, int? solarSystemId)
     {
@@ -1978,7 +2021,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // fit was visible and shared live, because nothing here ever asked for it).
         (string? fitContentHash, string? fitNameSnapshot) = await _ResolveFitAsync(checked((int)characterId));
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, Kind, startedAtUtc,
-            SiteTypeId: _SiteTypeId(),
+            SiteTypeId: _runSiteTypeId ?? _SiteTypeId(),
             SiteName: SignatureName,
             SolarSystemId: solarSystemId,
             GroupCode: GroupCode,
@@ -1991,7 +2034,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             SignatureGroupSnapshot: SignatureGroup,
             SolarSystemName: SolarSystem,
             Origin: EveUtils.Shared.Modules.Runs.Enums.RunOrigin.Clipboard,
-            SiteTypeSource: _SiteTypeSource(),
+            SiteTypeSource: _runSiteTypeSource ?? _SiteTypeSource(),
             AgentId: MissionAgentId,
             MissionLevel: MissionLevel,
             Parameters: _ParametersFor(characterId)));

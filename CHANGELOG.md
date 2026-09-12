@@ -13,6 +13,10 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: a Homefront run started with several of your own characters, or joined by a fleet mate, now shows TYPE
+  "Homefront" everywhere** — the run window, the runs overview, and after a restart — instead of the plain "Site"
+  every toon but the one that copied the signature used to read. Switching the run window's character column no
+  longer loses Homefront either.
 - **Tools → Start run can now start a mission by hand, with autocomplete on the mission name and its rewards typed
   in.** Typing the name searches the SDE's mission catalogue (2,892 missions) the same way the site picker already
   searches sites; picking a suggestion fills in the exact name, and the name itself still starts the run when it

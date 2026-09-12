@@ -22,7 +22,7 @@ internal sealed class GetRunningRunsQueryHandler(IDbContextFactory<ClientDbConte
             .Where(run => run.State == RunState.Running && !run.DeletedAtUtc.HasValue)
             .Select(run => new RunningRunDto(
                 run.Id, run.CharacterId, run.ActivityKind, run.StartedAtUtc, run.GroupCode, run.SiteName, run.Signature,
-                run.SignatureGroupSnapshot))
+                run.SignatureGroupSnapshot, run.SiteTypeId))
             .ToListAsync(cancellationToken);
         return Result<IReadOnlyList<RunningRunDto>>.Success(runs);
     }
