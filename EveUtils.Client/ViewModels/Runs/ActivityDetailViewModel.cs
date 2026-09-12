@@ -472,11 +472,11 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     /// live roster lookup the constructor was handed, then to the bare id — the exact chain this screen always used
     /// before a name could be stored at all, so an activity saved before this column existed reads unchanged.</summary>
     private string _ResolveName(ActivityDetailDto detail, long characterId) =>
-        detail.Runs.Where(run => run.CharacterId == characterId)
-            .Select(run => run.CharacterNameSnapshot)
-            .FirstOrDefault(name => !string.IsNullOrEmpty(name))
-        ?? _nameOf?.Invoke(characterId)
-        ?? $"character {characterId}";
+        CharacterNameResolver.Resolve(
+            detail.Runs.Where(run => run.CharacterId == characterId)
+                .Select(run => run.CharacterNameSnapshot)
+                .FirstOrDefault(name => !string.IsNullOrEmpty(name)),
+            characterId, _nameOf);
 
     // The summary's own breakdown, the one the runs overview row showed on the way here (ET-256). Never a zero for a
     // figure nobody offered: an activity where no source has a figure has nothing to show, the same rule every other

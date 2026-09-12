@@ -522,12 +522,10 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     }
 
     /// <summary>This character's own bounty for the run currently going in this fleet — the same figure
-    /// <see cref="Sample"/> publishes, read directly. What a run's SAVE uses to give a character who is not the
-    /// acting one in an activity window their own bounty line (ET-210 review finding, 2026-09-09): that window never
-    /// watches a sibling's gamelog, so without this a saved group activity carried only the acting character's
-    /// bounty and the other participants' showed none at all — one payout total rather than the detail an observed
-    /// line gives, but the group's sum is what SAVE, and the activity summary that sums every run in the group, need
-    /// to be right.</summary>
+    /// <see cref="Sample"/> publishes, read directly and synchronously (unlike <see cref="RunParticipantViewModel.BountyIsk"/>,
+    /// which only catches up on the next async participants refresh). A real, multi-machine fleet's own window
+    /// still reads this per participant (ET-257): a fleet mate's bounty never lands in this machine's own
+    /// <c>RunBountyEntry</c> table, since nothing here watches their gamelog.</summary>
     public long GetFleetRunBounty(long fleetId, int characterId) => _fleetRunBounty.GetValueOrDefault((fleetId, characterId));
 
     // Attribute a kill's bounty to every fleet this character is participating in right now, so the fleet meter counts

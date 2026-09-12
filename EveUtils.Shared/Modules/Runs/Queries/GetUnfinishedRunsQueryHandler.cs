@@ -42,9 +42,15 @@ internal sealed class GetUnfinishedRunsQueryHandler(
             .SelectMany(capture => capture.Entries)
             .Select(entry => entry.ItemTypeId)
             .Distinct()];
-        IReadOnlyDictionary<int, double> prices = lootTypeIds.Count == 0
+        // CONSUMABLES prices through the same cache, keyed by each run's own resolved filament type (ET-249).
+        List<int> filamentTypeIds = [.. runs
+            .Select(run => RunIskFactsReader.FilamentTypeId(run.Parameters))
+            .OfType<int>()
+            .Distinct()];
+        List<int> priceTypeIds = [.. lootTypeIds.Concat(filamentTypeIds).Distinct()];
+        IReadOnlyDictionary<int, double> prices = priceTypeIds.Count == 0
             ? new Dictionary<int, double>()
-            : await marketPrices.GetAveragePricesAsync(lootTypeIds, cancellationToken);
+            : await marketPrices.GetAveragePricesAsync(priceTypeIds, cancellationToken);
 
         List<UnfinishedRunDto> dtos = [.. runs.Select(run =>
         {

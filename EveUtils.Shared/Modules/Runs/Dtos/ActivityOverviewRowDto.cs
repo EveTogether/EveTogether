@@ -14,6 +14,11 @@ public sealed record ActivityRewardDto(RunParameterKey ParameterKey, decimal? Am
 /// the automatic publish of a fleet run (ET-245).</summary>
 public sealed record ActivityServerSyncDto(string ServerAddress, bool IsPending, bool IsOutdated = false);
 
+/// <summary>One character who flew it, with whatever their own run recorded about them at start time (ET-212). The
+/// snapshot travels here so the overview's crew line can use the same snapshot-first precedence the expanded row
+/// already uses (ET-247), instead of a live-roster lookup that only knows this machine's own characters.</summary>
+public sealed record ActivityCrewMemberDto(long CharacterId, string? CharacterNameSnapshot);
+
 /// <summary>One row of the activity overview — <c>ActivitySummary</c> read back as-is, since it already groups on
 /// <c>GroupCode ?? RunId</c> ("one row per activity"). A solo run and a six-pilot fleet both land here through the
 /// same shape; nothing above distinguishes them.</summary>
@@ -31,9 +36,10 @@ public sealed record ActivityOverviewRowDto(
     int DurationSeconds,
     int RunsIncluded,
     int ParticipantCount,
-    /// <summary>Who flew it, distinct — so one row can name its crew without the reader having to open it. The
-    /// summary keeps no participant list of its own; these are the member runs' own character ids.</summary>
-    IReadOnlyList<long> CharacterIds,
+    /// <summary>Who flew it, distinct by character — so one row can name its crew without the reader having to open
+    /// it. The summary keeps no participant list of its own; these are the member runs' own character ids and
+    /// name snapshots.</summary>
+    IReadOnlyList<ActivityCrewMemberDto> Crew,
     IReadOnlyList<ActivityRewardDto> Rewards,
     /// <summary>What the gamelog's bounty lines paid out, summed over the activity's runs. Not a member of
     /// <see cref="Rewards"/>: those are a mission's <em>stated</em> reward forms, this is money that arrived.</summary>

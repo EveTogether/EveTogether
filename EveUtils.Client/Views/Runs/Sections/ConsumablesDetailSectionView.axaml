@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.ConsumablesDetailSectionView"
+             x:DataType="vs:ConsumablesDetailSectionViewModel">
+    <StackPanel>
+        <ItemsControl x:Name="ConsumableList" ItemsSource="{Binding Rows}" IsVisible="{Binding HasConsumables}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:ActivityConsumableRowViewModel">
+                    <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <TextBlock Text="{Binding CharacterText}"/>
+                        <TextBlock Grid.Column="1" Classes="hint" Text="{Binding CountText}"/>
+                        <TextBlock Grid.Column="2" Classes="money" Text="{Binding ValueText}"/>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Border Classes="totals" IsVisible="{Binding HasConsumables}">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="label" Text="TOTAL" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Classes="money total" Text="{Binding CostText}"/>
+            </Grid>
+        </Border>
+        <TextBlock x:Name="ConsumablesEmpty" Classes="hint" TextWrapping="Wrap"
+                   IsVisible="{Binding EmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding EmptyText}"/>
+    </StackPanel>
+</UserControl>

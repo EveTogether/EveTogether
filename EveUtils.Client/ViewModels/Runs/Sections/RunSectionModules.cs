@@ -45,6 +45,10 @@ public static class RunSectionModules
             context => new LootWindowSectionViewModel(context),
             services => new LootDetailSectionViewModel(services),
             IskSource.Loot),
+        new(RunSectionId.Consumables,
+            context => new ConsumablesWindowSectionViewModel(context),
+            _ => new ConsumablesDetailSectionViewModel(),
+            IskSource.Consumables),
         new(RunSectionId.Escalation, null, services => new EscalationDetailSectionViewModel(services))
     ];
 }

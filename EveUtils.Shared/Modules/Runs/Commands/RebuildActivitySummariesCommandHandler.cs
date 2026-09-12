@@ -63,7 +63,13 @@ internal sealed class RebuildActivitySummariesCommandHandler(
             .SelectMany(capture => capture.Entries)
             .Select(entry => entry.ItemTypeId)
             .Distinct()];
-        IReadOnlyDictionary<int, double> prices = await marketPrices.GetAveragePricesAsync(lootTypeIds, cancellationToken);
+        // CONSUMABLES prices through the same cache, keyed by each run's own resolved filament type (ET-249).
+        List<int> filamentTypeIds = [.. parametersByRun
+            .Select(group => RunIskFactsReader.FilamentTypeId(group))
+            .OfType<int>()
+            .Distinct()];
+        IReadOnlyDictionary<int, double> prices = await marketPrices.GetAveragePricesAsync(
+            [.. lootTypeIds.Concat(filamentTypeIds).Distinct()], cancellationToken);
 
         // Updated in place rather than deleted and re-added, so an activity keeps its summary id across rebuilds and a
         // screen that opened it by that id — the detail screen, an overview row — still finds it after a save or a
