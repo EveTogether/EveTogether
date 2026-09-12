@@ -683,7 +683,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             _dialogs,
             kind => new ActivityWindowViewModel(kind, _services),
             characters,
-            toasts: _services.GetService<IToastService>()));
+            toasts: _services.GetService<IToastService>(),
+            fleetParticipation: _services.GetService<IFleetParticipation>()));
     }
 
     /// <summary>Open the FITS fit-browser window: the Local library plus a tab per coupled server, each a

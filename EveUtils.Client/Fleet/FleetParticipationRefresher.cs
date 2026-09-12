@@ -86,7 +86,8 @@ public sealed class FleetParticipationRefresher(
                 List<FleetParticipant> answered = [];
                 foreach (FleetInfo fleet in fleets.Where(fleet => Participates(fleet.State, fleet.Activation)))
                     answered.Add(new FleetParticipant(session.CharacterId, fleet.Id, ClientOnly: false,
-                        await _CommanderOfAsync(server, fleet.Id, session.CharacterId, cancellationToken), server));
+                        await _CommanderOfAsync(server, fleet.Id, session.CharacterId, cancellationToken), server,
+                        fleet.Name));
 
                 _Remember(server, session.CharacterId, [.. answered]);
                 participants.AddRange(answered);
@@ -134,7 +135,8 @@ public sealed class FleetParticipationRefresher(
                 .FirstOrDefault(member => member.Role == FleetRole.FleetCommander)?.CharacterId ?? ownerId;
 
             participants.AddRange((members.Count > 0 ? members : [ownerId])
-                .Select(characterId => new FleetParticipant(characterId, fleet.Id, ClientOnly: true, commander)));
+                .Select(characterId => new FleetParticipant(
+                    characterId, fleet.Id, ClientOnly: true, commander, ServerAddress: null, fleet.Name)));
         }
     }
 

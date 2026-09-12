@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Messaging;
 using EveUtils.Client.Notifications;
@@ -643,7 +644,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
                 await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
             await _dialogs.ShowManualRunStartAsync(new ManualRunStartViewModel(_dispatcher, sde, _dialogs,
                 kind => new ActivityWindowViewModel(kind, _services), characters,
-                preselectedCharacter: lane.Character, toasts: _services.GetService<IToastService>()));
+                preselectedCharacter: lane.Character, toasts: _services.GetService<IToastService>(),
+                fleetParticipation: _services.GetService<IFleetParticipation>()));
         }
     }
 

@@ -21,9 +21,15 @@ taken from the matching `## vX.Y.Z` section below.
   window is left, not the mission's original length), LP and an optional item can all be entered by hand and land on
   the run exactly as a clipboard-copied mission's rewards do — on the character actually running the mission only,
   never duplicated onto an alt riding along.
-- **Tools → Start run can now start a mining run on its own** — solo, with several of your own characters, or as a
-  fleet-shared run. It needs no site: a belt or system name is an optional label rather than something to pick from
-  a catalogue.
+- **Tools → Start run can now start a mining run on its own** — solo, or with several of your own characters. It
+  needs no site: a belt or system name is an optional label rather than something to pick from a catalogue.
+- **Tools → Start run now offers a FLEET choice — "Solo / own characters" or "With fleet &lt;name&gt;" — whenever
+  the starting pilot is actually in a started fleet**, for any manually started run (site, mission, mining). Picking
+  a fleet is what a fleet mate on another machine needs to be offered the same run, and to see a mining run's yield
+  shared across everyone in it; picking it does not make you that fleet's commander — only its own roster decides
+  that, exactly as it already does for a run started from a copied site or mission. With more than one fleet running
+  at once, every one is offered by name rather than guessed at. Solo and starting with your own characters behave
+  exactly as before.
 - **Discarding a run (or closing the run window without one) and copying the exact same mission or site again now
   starts a run again**, instead of doing nothing until you copied something else first.
 - **A new setting, "Start automatically when copied", for missions and for combat sites separately** (Settings →

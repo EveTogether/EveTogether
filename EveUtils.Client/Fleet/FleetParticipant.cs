@@ -13,5 +13,9 @@ namespace EveUtils.Client.Fleet;
 /// <param name="ServerAddress">The server the fleet lives on, null for a client-only fleet. A fleet id is only unique
 /// per server, so this is what lets a fleet run be published to its own fleet's server rather than to a guess
 /// (ET-245).</param>
+/// <param name="FleetName">The fleet's own name, for a "With fleet &lt;name&gt;" choice (ET-267) — carried along from
+/// whichever listing this participant came from rather than looked up again, since both the server's
+/// <c>FleetInfo</c> and a client-only <c>Fleet</c> row already name themselves at the point this record is built.</param>
 public readonly record struct FleetParticipant(
-    int CharacterId, long FleetId, bool ClientOnly, int? FleetCommanderCharacterId = null, string? ServerAddress = null);
+    int CharacterId, long FleetId, bool ClientOnly, int? FleetCommanderCharacterId = null, string? ServerAddress = null,
+    string? FleetName = null);
