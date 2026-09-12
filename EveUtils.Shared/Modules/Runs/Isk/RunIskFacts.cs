@@ -7,6 +7,10 @@ namespace EveUtils.Shared.Modules.Runs.Isk;
 /// </summary>
 public sealed record RunIskFacts
 {
+    /// <summary>Whose run this is — what lets a contributor count a fact that is per character once per character
+    /// (ET-274), however many runs a group shows for one.</summary>
+    public required long CharacterId { get; init; }
+
     /// <summary>What the gamelog's bounty lines paid out.</summary>
     public required decimal BountyIsk { get; init; }
 

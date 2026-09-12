@@ -25,6 +25,20 @@ internal sealed class SetRunAttendanceCommandHandler(
             return Result<int>.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
                 "The number of pilots not on the roster cannot be negative.", "Runs"));
 
+        try
+        {
+            return await _WriteAsync(command, byGroup, cancellationToken);
+        }
+        catch (DbUpdateException) when (byGroup)
+        {
+            // A start filed one of the characters this list backfills between the read and the write (I7, ET-274): the
+            // index let that one through, and the list is written again over the runs as they now are.
+            return await _WriteAsync(command, byGroup, cancellationToken);
+        }
+    }
+
+    private async Task<Result<int>> _WriteAsync(SetRunAttendanceCommand command, bool byGroup, CancellationToken cancellationToken)
+    {
         long[] own = [.. command.OwnCharacterIds];
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
         List<Run> runs = await db.Set<Run>()
@@ -41,9 +55,7 @@ internal sealed class SetRunAttendanceCommandHandler(
         // An outcome already stored is never erased by a list that carries none (RunAttendanceDecision.KeepingOutcomeOf).
         RunAttendanceDecision decision = command.Decision.KeepingOutcomeOf(runs
             .Where(run => run.HomefrontOutcome is not null || run.HomefrontCompletedWaveCount is not null)
-            .MaxBy(run => run.AttendanceSetAtUtc) is { } decided
-                ? RunAttendanceDecision.Of(decided)
-                : null);
+            .MaxBy(run => run.AttendanceSetAtUtc));
 
         // An own character ticked in the site (ET-269) but with no run of its own here: the pilot started this
         // homefront for one toon only, or a multi-pick missed one, and only found out who was really in the site once
@@ -104,6 +116,9 @@ internal sealed class SetRunAttendanceCommandHandler(
 
         Run template = runs.OrderBy(run => run.StartedAtUtc).First();
         HashSet<long> present = [.. runs.Select(run => run.CharacterId)];
+        (HomefrontOutcome? outcome, int? waves) = template.SiteTypeSource is SiteTypeSource.Site
+            ? HomefrontCatalogue.DefaultOutcomeFor(template.SiteTypeId)
+            : (null, null);
         List<Run> created = [];
         foreach (RunAttendanceEntryInput entry in decision.Entries)
         {
@@ -132,6 +147,8 @@ internal sealed class SetRunAttendanceCommandHandler(
                 SignatureGroupSnapshot = template.SignatureGroupSnapshot,
                 Origin = template.Origin,
                 FleetSizeAtStop = template.FleetSizeAtStop,
+                HomefrontOutcome = outcome,
+                HomefrontCompletedWaveCount = waves,
                 SyncState = RunSyncState.Local,
                 Revision = 1
             };

@@ -20,8 +20,19 @@ internal sealed class RestoreRunsInGroupCommandHandler(
                 "A restore needs the group it applies to.", "Runs"));
 
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        List<Run> group = await db.Set<Run>().AsNoTracking()
+            .Where(run => run.GroupCode == command.GroupCode)
+            .ToListAsync(cancellationToken);
+        // One run per character comes back (I7, ET-274): the one deleted last, which is the one the activity's delete
+        // took — a copy folded into it earlier was deleted before that and stays so — and none for a character that
+        // has a run in the group again.
+        HashSet<long> live = [.. group.Where(run => run.DeletedAtUtc is null).Select(run => run.CharacterId)];
+        Guid[] restored = [.. group
+            .Where(run => run.DeletedAtUtc is not null && !live.Contains(run.CharacterId))
+            .GroupBy(run => run.CharacterId)
+            .Select(character => character.OrderByDescending(run => run.DeletedAtUtc).ThenBy(run => run.Id).First().Id)];
         int changed = await db.Set<Run>()
-            .Where(run => run.GroupCode == command.GroupCode && run.DeletedAtUtc.HasValue)
+            .Where(run => restored.Contains(run.Id))
             .ExecuteUpdateAsync(properties => properties
                 .SetProperty(run => run.DeletedAtUtc, (DateTime?)null)
                 .SetProperty(run => run.Revision, run => run.Revision + 1), cancellationToken);

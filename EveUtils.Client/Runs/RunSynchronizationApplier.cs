@@ -43,19 +43,41 @@ public sealed class RunSynchronizationApplier(
                 })
                 .ToListAsync(cancellationToken))
             .ToDictionary(run => run.Id);
+        // I7 (ET-274): one live run per character per group, here as everywhere. Which run each (group, character)
+        // pulled here already has — a group mate's run from an earlier pull, or this pilot's own — so a server copy that
+        // holds a second one (an older client published both halves of a doubled start) never files it beside the first.
+        string[] groupCodes = [.. payloads.Select(payload => payload.Run.GroupCode).OfType<string>().Distinct()];
+        Dictionary<(string GroupCode, long CharacterId), Guid> holders = (await db.Set<Run>().AsNoTracking()
+                .Where(run => run.GroupCode != null && groupCodes.Contains(run.GroupCode) && !run.DeletedAtUtc.HasValue)
+                .Select(run => new { GroupCode = run.GroupCode ?? string.Empty, run.CharacterId, run.Id })
+                .ToListAsync(cancellationToken))
+            .ToDictionary(run => (run.GroupCode, run.CharacterId), run => run.Id);
         List<Run> applied = [];
-        foreach (RunWirePayload payload in payloads)
+        // Tombstones first, so a deleted copy has left its place before a live one is weighed against it; then the
+        // oldest id first, the same run every client keeps when a server holds two.
+        foreach (RunWirePayload payload in payloads.OrderBy(payload => payload.Run.DeletedAtUtc is null).ThenBy(payload => payload.Run.Id))
         {
             Run run = payload.Run.ToEntity();
             if (protectedRunIds.Contains(run.Id) || pushedRunIds.Contains(run.Id))
                 continue;
 
-            applied.Add(run);
             if (run.DeletedAtUtc is not null)
             {
+                applied.Add(run);
                 await db.Set<Run>().Where(candidate => candidate.Id == run.Id).ExecuteDeleteAsync(cancellationToken);
+                if (run.GroupCode is { } deletedFrom && holders.GetValueOrDefault((deletedFrom, run.CharacterId)) == run.Id)
+                    holders.Remove((deletedFrom, run.CharacterId));
                 continue;
             }
+
+            if (run.GroupCode is { } groupCode)
+            {
+                if (holders.TryGetValue((groupCode, run.CharacterId), out Guid holder) && holder != run.Id)
+                    continue;
+                holders[(groupCode, run.CharacterId)] = run.Id;
+            }
+
+            applied.Add(run);
 
             if (run is { HomefrontOutcome: null, HomefrontCompletedWaveCount: null }
                 && storedOutcomes.TryGetValue(run.Id, out var kept))

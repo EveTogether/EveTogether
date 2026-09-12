@@ -49,6 +49,10 @@ public sealed class HomefrontDetailOutcomeAndBackfillTests
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
         int[] own = [Jithran, Abnoba, HotSprockets, ColdSprockets, Noahmarr];
         Guid[] runs = await Task.WhenAll(own.Select(id => _StartAsync(dispatcher, id, "HF-KQWB")));
+        // Started before a new homefront run began Completed (ET-274), as HF-KQWB was.
+        await using (ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync())
+            await db.Set<Run>().Where(run => run.GroupCode == "HF-KQWB").ExecuteUpdateAsync(properties =>
+                properties.SetProperty(run => run.HomefrontOutcome, (HomefrontOutcome?)null));
 
         // The window's own attendance decision, undecided outcome — exactly HF-KQWB's own measured state.
         RunAttendanceDecision decision = new(

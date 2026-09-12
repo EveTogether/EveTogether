@@ -20,7 +20,7 @@ internal sealed partial class LinkRunToGroupCodeCommandHandler(IDbContextFactory
                 "A group code must use the format HF-7QK2.", "Runs"));
 
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        Run? run = await db.Set<Run>().FirstOrDefaultAsync(candidate => candidate.Id == command.RunId, cancellationToken);
+        Run? run = await db.Set<Run>().WithEverything().FirstOrDefaultAsync(candidate => candidate.Id == command.RunId, cancellationToken);
         if (run is null)
             return Result.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound,
                 "The run no longer exists.", "Runs"));
@@ -31,6 +31,18 @@ internal sealed partial class LinkRunToGroupCodeCommandHandler(IDbContextFactory
 
         if (run.GroupCode != command.GroupCode)
         {
+            // I7 (ET-274): the character may already have a run in the group it joins — the commander's list backfilled
+            // one while this run was still under a code of its own. That run is folded into this one, the run the pilot
+            // is actually flying, rather than standing beside it as a second.
+            if (await db.Set<Run>().WithEverything().FirstOrDefaultAsync(candidate => candidate.GroupCode == command.GroupCode
+                        && candidate.CharacterId == run.CharacterId && !candidate.DeletedAtUtc.HasValue, cancellationToken)
+                    is { } already)
+            {
+                OneRunPerCharacter.Merge(db, run, already, DateTime.UtcNow);
+                // The fold is two writes: the one it replaces leaves the group before this one takes its place in it.
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
             run.GroupCode = command.GroupCode;
             run.Revision++;
         }

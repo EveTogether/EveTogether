@@ -13,6 +13,14 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: a homefront flown on several of your own characters no longer counts every alt twice.** Starting a site
+  on five of your characters in your own fleet could file two runs for each alt — nine runs for five characters — so
+  TOTAL ISK read 135,000,000 where HOMEFRONT itself showed 5 × 15,000,000, the alts' bounty went unrecorded during
+  the site, and the header named every alt twice. Each character now has exactly one run per activity, whichever way
+  it joins, the payout counts once per character, and a new homefront starts on Completed however it was started.
+  Activities already doubled are merged into one run per character the first time you start this version — nothing
+  a character earned is lost or counted twice — and added up again, so they read 75,000,000 plus bounty everywhere.
+  The alts' bounty is read back from their own game logs at the same start, when those logs are on this computer.
 - **Changed: a homefront no longer offers to register an escalation, and drops LOOT STRATEGY.** A homefront can
   never escalate and is flown out completely rather than raided for part of it, so the ESCALATION section and the
   "register escalation" link are gone from every homefront kind, live and on the saved detail screen, and so is the

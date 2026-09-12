@@ -100,8 +100,10 @@ public sealed class HomefrontOutcomeTests
         Assert.False(correctedRun.HomefrontOutcomeFromGameLog);
     }
 
+    /// <summary>A run started before ET-274 carries no outcome of its own (a new one starts Completed); a list without
+    /// one leaves it undecided, with no table version to stamp.</summary>
     [AvaloniaFact]
-    public async Task SetRunAttendanceCommand_WithoutOutcome_StampsNoTableVersion()
+    public async Task SetRunAttendanceCommand_WithoutOutcome_OnARunWithoutOne_StampsNoTableVersion()
     {
         using var instance = TestClientInstance.Create();
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
@@ -109,14 +111,16 @@ public sealed class HomefrontOutcomeTests
 
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(Jithran, ActivityKind.Site, StartedAtUtc,
             HallOfSacrifice, "Raid: Hall of Sacrifice", 30000142), cancellationToken);
+        await using ClientDbContext db = await instance.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        await db.Set<Run>().Where(candidate => candidate.Id == started.Value).ExecuteUpdateAsync(properties =>
+            properties.SetProperty(candidate => candidate.HomefrontOutcome, (HomefrontOutcome?)null), cancellationToken);
         RunAttendanceDecision decision = new(
             [new RunAttendanceEntryInput { CharacterId = Jithran, IsInSite = true, Reason = AttendanceReason.DamageDealt }],
             0, AttendanceSource.Pilot, Jithran, StartedAtUtc.AddMinutes(20));
 
         await dispatcher.Send(new SetRunAttendanceCommand(decision, [Jithran], RunId: started.Value), cancellationToken);
 
-        await using ClientDbContext db = await instance.Services
-            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
         Run run = await db.Set<Run>().SingleAsync(candidate => candidate.Id == started.Value, cancellationToken);
 
         Assert.Null(run.HomefrontOutcome);

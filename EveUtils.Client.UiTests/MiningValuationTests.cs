@@ -103,6 +103,7 @@ public sealed class MiningValuationTests
 
     private static RunIskFacts _Facts(decimal? miningIskValue, bool hasMining) => new()
     {
+        CharacterId = 1,
         BountyIsk = 0m,
         LootIskNet = null,
         HasLoot = false,

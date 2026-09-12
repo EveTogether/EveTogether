@@ -56,7 +56,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     public static readonly TimeSpan ResendInterval = TimeSpan.FromSeconds(30);
 
     /// <summary>What an Abyssal Artifact Recovery site pays for when it goes the way it normally does: all of it.</summary>
-    public const int AllAarWaves = 9;
+    public const int AllAarWaves = HomefrontCatalogue.AarWaveCount;
 
     private static readonly TimeSpan RosterReadInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan StoredReadInterval = TimeSpan.FromSeconds(5);

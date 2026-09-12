@@ -92,6 +92,7 @@ public sealed class ConsumablesTests
 
     private static RunIskFacts _Facts(decimal? cost, bool hasConsumables) => new()
     {
+        CharacterId = 1,
         BountyIsk = 0m,
         LootIskNet = null,
         HasLoot = false,
