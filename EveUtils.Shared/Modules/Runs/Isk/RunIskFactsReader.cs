@@ -1,16 +1,17 @@
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Tally;
+using EveUtils.Shared.Modules.Sde;
 
 namespace EveUtils.Shared.Modules.Runs.Isk;
 
 /// <summary>A stored run's facts, read the same way for a saved activity (<c>RebuildActivitySummariesCommandHandler</c>)
 /// and an unfinished run (<c>GetUnfinishedRunsQueryHandler</c>). The run must come with its loot captures and their
-/// entries and its bounty entries loaded; its parameters are handed in, since a caller reading many runs at once reads
-/// those apart.</summary>
+/// entries, its bounty entries and its mining entries loaded; its parameters are handed in, since a caller reading
+/// many runs at once reads those apart.</summary>
 internal static class RunIskFactsReader
 {
-    public static RunIskFacts From(Run run, IEnumerable<RunParameter> parameters, IReadOnlyDictionary<int, double> prices)
+    public static RunIskFacts From(Run run, IEnumerable<RunParameter> parameters, IReadOnlyDictionary<int, double> prices, ISdeAccessor sde)
     {
         RunParameter[] all = [.. parameters];
         IReadOnlyList<LootTallyLine> loot = LootTally.Count(Tally(run));
@@ -28,10 +29,30 @@ internal static class RunIskFactsReader
             HasLoot = loot.Count > 0,
             ConsumableIskCost = consumableCost,
             HasConsumables = filamentCount is > 0,
+            MiningIskValue = MiningValue(run.MiningEntries, sde, prices),
+            HasMining = run.MiningEntries.Count > 0,
             Parameters = [.. all.Select(parameter => new RunIskParameter(
                 parameter.ParameterKey, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))],
             StoppedAtUtc = run.StoppedAtUtc
         };
+    }
+
+    /// <summary>Priced mining, ore by ore (ET-229): the resolved by-exact-SDE-name type id decides the price
+    /// (<see cref="MiningValuation"/>), residue never counts (depleted, never collected, no ISK value), and a
+    /// critical cycle's units are not added twice — they are already inside <see cref="RunMiningEntry.Units"/>.
+    /// Null only when nothing on the run could be priced, the same "not priced yet, not zero" rule loot follows.</summary>
+    public static decimal? MiningValue(IEnumerable<RunMiningEntry> entries, ISdeAccessor sde, IReadOnlyDictionary<int, double> prices)
+    {
+        decimal[] values = [.. entries
+            .Where(entry => sde.IsAvailable && sde.TryGetTypeId(entry.OreType, out _))
+            .Select(entry =>
+            {
+                sde.TryGetTypeId(entry.OreType, out int typeId);
+                return (Entry: entry, Price: MiningValuation.UnitPrice(sde, typeId, prices));
+            })
+            .Where(resolved => resolved.Price is not null)
+            .Select(resolved => resolved.Price!.Value * resolved.Entry.Units)];
+        return values.Length == 0 ? null : values.Sum();
     }
 
     /// <summary>The resolved filament type a run's CONSUMABLES was saved against (ET-249), so a caller pricing many

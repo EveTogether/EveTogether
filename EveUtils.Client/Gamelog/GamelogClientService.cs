@@ -542,7 +542,11 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
                 _fleetRunBounty.AddOrUpdate((participant.FleetId, characterId), isk, (_, previous) => previous + isk);
     }
 
-    /// <summary>Record a mining cycle; mined units per ore persisted across restarts.</summary>
+    /// <summary>Record a mining cycle; mined units per ore persisted across restarts (the lifetime total, unchanged
+    /// by ET-229). Also hangs a <see cref="RunMiningEntry"/> straight on whichever run is running now for this
+    /// character, the same live-capture pattern <see cref="AddBountyAsync"/> already follows for bounty (ET-219) —
+    /// aggregated per ore on the run rather than one row per cycle, since a site is on the order of a hundred cycles
+    /// per character.</summary>
     public async Task AddMiningAsync(string characterName, MiningEvent mining)
     {
         var name = Resolve(characterName);
@@ -550,6 +554,14 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         Metrics(name).RecordMining(mining);
         MetricsChanged?.Invoke();
         await PersistAsync(name);
+
+        long? characterId = _idByName.TryGetValue(name, out var id) ? id : null;
+        using (var scope = _services.CreateScope())
+        {
+            var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
+            await dispatcher.Send(new AddRunMiningEntryCommand(
+                characterId, mining.Timestamp, mining.OreType, mining.Units, mining.IsCritical, mining.LostResidue));
+        }
     }
 
     /// <summary>Record a remote rep (logi → you / you → fleetmate); session-only. Feeds the directional cumulative

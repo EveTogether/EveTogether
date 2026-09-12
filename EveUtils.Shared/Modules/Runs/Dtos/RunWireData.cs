@@ -53,6 +53,7 @@ public sealed class RunWireData
     public required IReadOnlyList<RunBountyEntryInput> BountyEntries { get; init; }
     public required IReadOnlyList<RunEnemyObservationInput> EnemyObservations { get; init; }
     public required IReadOnlyList<RunParameterInput> Parameters { get; init; }
+    public required IReadOnlyList<RunMiningEntryInput> MiningEntries { get; init; }
 
     public static RunWireData FromEntity(Run run) => new()
     {
@@ -119,6 +120,15 @@ public sealed class RunWireData
             ItemTypeId = parameter.ItemTypeId,
             BonusWindowSeconds = parameter.BonusWindowSeconds,
             ObservedAtUtc = parameter.ObservedAtUtc
+        }).ToList(),
+        MiningEntries = run.MiningEntries.Select(entry => new RunMiningEntryInput
+        {
+            OreType = entry.OreType,
+            Units = entry.Units,
+            CriticalUnits = entry.CriticalUnits,
+            ResidueUnits = entry.ResidueUnits,
+            FirstObservedAtUtc = entry.FirstObservedAtUtc,
+            LastObservedAtUtc = entry.LastObservedAtUtc
         }).ToList()
     };
 
@@ -206,6 +216,18 @@ public sealed class RunWireData
                 ItemTypeId = parameter.ItemTypeId,
                 BonusWindowSeconds = parameter.BonusWindowSeconds,
                 ObservedAtUtc = parameter.ObservedAtUtc
+            });
+        foreach (RunMiningEntryInput entry in MiningEntries)
+            run.MiningEntries.Add(new RunMiningEntry
+            {
+                Id = Guid.CreateVersion7(),
+                RunId = run.Id,
+                OreType = entry.OreType,
+                Units = entry.Units,
+                CriticalUnits = entry.CriticalUnits,
+                ResidueUnits = entry.ResidueUnits,
+                FirstObservedAtUtc = entry.FirstObservedAtUtc,
+                LastObservedAtUtc = entry.LastObservedAtUtc
             });
         return run;
     }

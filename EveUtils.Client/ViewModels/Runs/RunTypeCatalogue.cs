@@ -116,10 +116,13 @@ public static class RunTypeCatalogue
     // or relic site keeps ENEMIES and BOUNTY even though it usually has neither: it can still have rats, and both
     // sections already say what they have not seen (the ET-236 choice, rather than one that appears only once
     // something comes in).
+    // MINING stands on every site kind for the same reason BOUNTY and ENEMIES do: a data or relic site usually has
+    // none, but the section already says so rather than appearing only once something comes in — and mining is
+    // general to begin with (ET-229), never assumed to be a homefront's.
     private static readonly IReadOnlyList<RunSectionId> StandardWindow =
     [
         RunSectionId.Activity, RunSectionId.Enemies, RunSectionId.Fit, RunSectionId.Fleet, RunSectionId.Bounty,
-        RunSectionId.Loot
+        RunSectionId.Loot, RunSectionId.Mining
     ];
 
     // An abyssal pocket has no NPC bounty at all (ET-241, Jithran flying one with Raymond, 2026-09-11) — unlike a
@@ -135,7 +138,7 @@ public static class RunTypeCatalogue
     private static readonly IReadOnlyList<RunSectionId> SiteDetail =
     [
         RunSectionId.Activity, RunSectionId.Enemies, RunSectionId.Fleet, RunSectionId.Bounty, RunSectionId.Loot,
-        RunSectionId.Escalation
+        RunSectionId.Mining, RunSectionId.Escalation
     ];
 
     private static RunTypeDefinition _Site(RunTypeId id, string name, MaterialIconKind icon,
@@ -194,11 +197,9 @@ public static class RunTypeCatalogue
             // gap (ET-129) that kept the mission path out of this dialog entirely before this ticket.
             ManualStart = ManualStartRequirement.MissionName
         },
-        // Nothing resolves to Mining yet (ET-229 adds its detection and its MINING section); until then it carries
-        // only what every run has. ManualStart is declared anyway (AGENTS.md §1, "reserve ≠ build"): Tools → Start
-        // run only ever offers a kind RunTypeResolver can actually produce, and no ActivityKind resolves to Mining
-        // yet, so this row stays invisible there until ET-229 gives it one — at which point it needs no further
-        // change here to appear.
+        // Nothing resolves to Mining yet (ET-228/ET-226 own that detection) — a manual "Start run" is the one way
+        // this row is reached today. ET-229 gives it its own MINING section, general for any mining, not only a
+        // homefront's.
         [RunTypeId.Mining] = new()
         {
             Id = RunTypeId.Mining,
@@ -206,8 +207,8 @@ public static class RunTypeCatalogue
             Icon = MaterialIconKind.Pickaxe,
             WindowTitle = "MINING RUN",
             Noun = "a mining run",
-            WindowSections = [RunSectionId.Activity, RunSectionId.Fleet],
-            DetailSections = [RunSectionId.Activity, RunSectionId.Fleet],
+            WindowSections = [RunSectionId.Activity, RunSectionId.Fleet, RunSectionId.Mining],
+            DetailSections = [RunSectionId.Activity, RunSectionId.Fleet, RunSectionId.Mining],
             ManualStart = ManualStartRequirement.None
         },
         // Nothing resolves to Homefront yet (ET-228). A homefront is flown as a site today and reads as one, so it

@@ -13,6 +13,13 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Mining now shows up on the run, per character and per ore** — in the run window while it's going, and on the
+  saved activity's detail screen afterwards. Units mined, critical strikes and residue are all shown, with a total
+  value alongside; before, mining only ever added to your character's lifetime total and left no trace on the run
+  itself. This works for any mining — a homefront, an ore anomaly, a belt, or a plain mining fleet — not only for
+  homefronts. Mutanite is valued at its fixed NPC buy price, shown as such; every other ore is priced the same way
+  loot already is. Mining now also counts toward TOTAL ISK. Fixes a long-standing gamelog bug along the way: the
+  "residue" line from an almost-depleted asteroid was being silently dropped instead of counted.
 - **Several of your own characters flying one activity together, without a fleet, now all count toward TOTAL ISK
   in the run window.** Only the character the window happened to be showing had their bounty counted live; the
   others' payouts were missing until you saved, when the detail screen already added them up correctly. The BOUNTY

@@ -5,6 +5,10 @@ namespace EveUtils.Shared.Modules.Runs.Dtos;
 
 public sealed record RunBountyEntryDto(Guid RunId, DateTime OccurredAtUtc, decimal Isk);
 
+/// <summary>One ore's aggregated mining on one run (ET-229) — no timestamps: the detail screen shows quantities and
+/// value only (Jithran, 2026-09-11), the activity already runs from a start to a stop time.</summary>
+public sealed record RunMiningEntryDto(Guid RunId, string OreType, int Units, int CriticalUnits, int ResidueUnits);
+
 /// <summary>One sighting of one enemy type on one run. Deliberately not merged across runs by
 /// <see cref="EnemyTypeId"/>: two participants in the same activity can each carry their own row for the same type,
 /// with their own first/last window, and folding those into one would silently overwrite whichever sighting lost
@@ -60,5 +64,6 @@ public sealed record ActivityDetailDto(
     IReadOnlyList<RunBountyEntryDto> BountyEntries,
     IReadOnlyList<RunEnemyObservationDto> EnemyObservations,
     IReadOnlyList<RunParameterDto> Parameters,
+    IReadOnlyList<RunMiningEntryDto> MiningEntries,
     // TOTAL ISK and each source's share of it (ET-256), stored with the summary like the loot figures above.
     IskBreakdown Isk);

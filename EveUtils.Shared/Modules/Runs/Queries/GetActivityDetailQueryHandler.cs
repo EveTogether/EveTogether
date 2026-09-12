@@ -48,6 +48,8 @@ internal sealed class GetActivityDetailQueryHandler(IDbContextFactory<ClientDbCo
             .AsNoTracking().Where(observation => runIds.Contains(observation.RunId)).ToListAsync(cancellationToken);
         List<RunParameter> parameters = await db.Set<RunParameter>()
             .AsNoTracking().Where(parameter => runIds.Contains(parameter.RunId)).ToListAsync(cancellationToken);
+        List<RunMiningEntry> miningEntries = await db.Set<RunMiningEntry>()
+            .AsNoTracking().Where(entry => runIds.Contains(entry.RunId)).ToListAsync(cancellationToken);
 
         return Result<ActivityDetailDto>.Success(new ActivityDetailDto(
             summary.Id, summary.GroupCode, summary.ActivityKind, summary.SiteName, summary.SignatureGroupSnapshot,
@@ -66,6 +68,8 @@ internal sealed class GetActivityDetailQueryHandler(IDbContextFactory<ClientDbCo
             [.. parameters.OrderBy(parameter => parameter.ParameterKey).ThenBy(parameter => parameter.ObservedAtUtc)
                 .Select(parameter => new RunParameterDto(parameter.RunId, parameter.ParameterKey, parameter.TypedValue,
                     parameter.Amount, parameter.ItemTypeId, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))],
+            [.. miningEntries.OrderByDescending(entry => entry.Units)
+                .Select(entry => new RunMiningEntryDto(entry.RunId, entry.OreType, entry.Units, entry.CriticalUnits, entry.ResidueUnits))],
             StoredIskBreakdown.Read(summary.IskContributions)));
     }
 

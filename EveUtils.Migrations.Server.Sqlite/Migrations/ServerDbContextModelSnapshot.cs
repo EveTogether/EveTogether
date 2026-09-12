@@ -974,6 +974,42 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.ToTable("RunLootEntry");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunMiningEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CriticalUnits")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("FirstObservedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("LastObservedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OreType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ResidueUnits")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Units")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId", "OreType")
+                        .IsUnique();
+
+                    b.ToTable("RunMiningEntry");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunParameter", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1408,6 +1444,17 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.Navigation("RunLootCapture");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunMiningEntry", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", "Run")
+                        .WithMany("MiningEntries")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunParameter", b =>
                 {
                     b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", "Run")
@@ -1460,6 +1507,8 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.Navigation("EnemyObservations");
 
                     b.Navigation("LootCaptures");
+
+                    b.Navigation("MiningEntries");
 
                     b.Navigation("Parameters");
                 });

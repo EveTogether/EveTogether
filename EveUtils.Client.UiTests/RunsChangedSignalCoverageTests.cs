@@ -151,6 +151,14 @@ public sealed class RunsChangedSignalCoverageTests
                 cancellationToken), runId);
         },
 
+        [typeof(AddRunMiningEntryCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            Guid runId = await _StartAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(
+                new AddRunMiningEntryCommand(Pilot, StartedAtUtc.AddMinutes(2), "Amperum Mutanite", 13, false, 0),
+                cancellationToken), runId);
+        },
+
         [typeof(AddRunLootCaptureCommand)] = async (dispatcher, cancellationToken) =>
         {
             Guid runId = await _StartAsync(dispatcher, cancellationToken);

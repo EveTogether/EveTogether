@@ -14,6 +14,7 @@ public static class RunsModule
         modelBuilder.ApplyConfiguration(new RunBountyEntryConfiguration());
         modelBuilder.ApplyConfiguration(new RunEnemyObservationConfiguration());
         modelBuilder.ApplyConfiguration(new RunParameterConfiguration());
+        modelBuilder.ApplyConfiguration(new RunMiningEntryConfiguration());
         modelBuilder.ApplyConfiguration(new ActivitySummaryConfiguration());
         // Client-only, never synced (ET-182): where a group code came from is this client's own observation, not a
         // fact the fleet's other members need to agree on.
@@ -28,6 +29,7 @@ public static class RunsModule
         modelBuilder.ApplyConfiguration(new RunBountyEntryConfiguration());
         modelBuilder.ApplyConfiguration(new RunEnemyObservationConfiguration());
         modelBuilder.ApplyConfiguration(new RunParameterConfiguration());
+        modelBuilder.ApplyConfiguration(new RunMiningEntryConfiguration());
     }
 
     public static IServiceCollection AddRunsModule(this IServiceCollection services)

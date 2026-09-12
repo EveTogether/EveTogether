@@ -96,6 +96,8 @@ public sealed class ConsumablesTests
         HasLoot = false,
         ConsumableIskCost = cost,
         HasConsumables = hasConsumables,
+        MiningIskValue = null,
+        HasMining = false,
         Parameters = [],
         StoppedAtUtc = null
     };

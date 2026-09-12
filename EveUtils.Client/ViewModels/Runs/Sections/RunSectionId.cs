@@ -15,5 +15,6 @@ public enum RunSectionId
     Bounty,
     Loot,
     Escalation,
-    Consumables
+    Consumables,
+    Mining
 }

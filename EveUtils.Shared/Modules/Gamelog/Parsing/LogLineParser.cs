@@ -41,11 +41,17 @@ public static partial class LogLineParser
     // 0xff7fffff. Any other colour on an "energy neutralized" line is treated as outgoing (only these two are emitted).
     private const string IncomingNeutColor = "ffe57f7f";
 
-    [GeneratedRegex(@"^You mined (?<units>\d+) units of (?<ore>.+?)(?: with a lost residue of (?<residue>\d+) units)?$")]
+    [GeneratedRegex(@"^You mined (?<units>\d+) units of (?<ore>.+)$")]
     private static partial Regex Mined();
 
     [GeneratedRegex(@"^Critical mining success! You mined an additional (?<units>\d+) units of (?<ore>.+)$")]
     private static partial Regex CriticalMined();
+
+    // The real residue line (ET-229, measured against Jithran's own 2026-06-14 and 2026-08-28/29 gamelogs): its own
+    // line in the (mining) category, carrying no ore name at all. The form the old regex above expected inline
+    // ("with a lost residue of N units") never occurs in a real log file.
+    [GeneratedRegex(@"^Additional (?<units>\d+) units depleted from asteroid as residue$")]
+    private static partial Regex MiningResidue();
 
     [GeneratedRegex(@"^Jumping from .+? to (?<sys>.+)$")]
     private static partial Regex Jumping();
@@ -227,19 +233,19 @@ public static partial class LogLineParser
         }
 
         var mined = Mined().Match(body);
-        if (!mined.Success)
+        if (mined.Success)
+            return new MiningEvent(
+                timestamp,
+                int.Parse(mined.Groups["units"].Value, CultureInfo.InvariantCulture),
+                mined.Groups["ore"].Value.Trim(),
+                IsCritical: false,
+                LostResidue: 0);
+
+        var residue = MiningResidue().Match(body);
+        if (!residue.Success)
             return null;
 
-        var residue = mined.Groups["residue"].Success
-            ? int.Parse(mined.Groups["residue"].Value, CultureInfo.InvariantCulture)
-            : 0;
-
-        return new MiningEvent(
-            timestamp,
-            int.Parse(mined.Groups["units"].Value, CultureInfo.InvariantCulture),
-            mined.Groups["ore"].Value.Trim(),
-            IsCritical: false,
-            residue);
+        return new MiningResidueEvent(timestamp, int.Parse(residue.Groups["units"].Value, CultureInfo.InvariantCulture));
     }
 
     private static bool TryParseQuality(string text, out HitQuality quality)

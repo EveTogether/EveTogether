@@ -7,13 +7,14 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
+using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Queries;
 
 [ClientOnly]
 internal sealed class GetUnfinishedRunsQueryHandler(
-    IDbContextFactory<ClientDbContext> contextFactory, IMarketPriceRepository marketPrices)
+    IDbContextFactory<ClientDbContext> contextFactory, IMarketPriceRepository marketPrices, ISdeAccessor sde)
     : IQueryHandler<GetUnfinishedRunsQuery, Result<IReadOnlyList<UnfinishedRunDto>>>
 {
     public async Task<Result<IReadOnlyList<UnfinishedRunDto>>> Handle(
@@ -25,9 +26,10 @@ internal sealed class GetUnfinishedRunsQueryHandler(
             .Where(run => run.State == RunState.Stopped && !run.DeletedAtUtc.HasValue)
             // What ET-217's TOTAL ISK is built from: captured loot (persisted live, unlike bounty — see
             // UnfinishedRunDto.TotalIsk), the reward parameters a mission carried from the moment it started, and
-            // bounty entries for whenever a future run persists them before SAVE too.
+            // bounty and mining entries for whenever a future run persists them before SAVE too.
             .Include(run => run.LootCaptures).ThenInclude(capture => capture.Entries)
             .Include(run => run.BountyEntries)
+            .Include(run => run.MiningEntries)
             .Include(run => run.Parameters)
             // On the stop where there is one, on the start otherwise: a row without a stop stamp would sort as the
             // oldest thing on screen no matter when it was flown.
@@ -47,7 +49,15 @@ internal sealed class GetUnfinishedRunsQueryHandler(
             .Select(run => RunIskFactsReader.FilamentTypeId(run.Parameters))
             .OfType<int>()
             .Distinct()];
-        List<int> priceTypeIds = [.. lootTypeIds.Concat(filamentTypeIds).Distinct()];
+        // MINING prices through the same cache, keyed by each ore's own resolved type (ET-229) — Mutanite's fixed
+        // NPC price never needs it (MiningValuation).
+        List<int> oreTypeIds = sde.IsAvailable
+            ? [.. runs.SelectMany(run => run.MiningEntries)
+                .Select(entry => sde.TryGetTypeId(entry.OreType, out int typeId) ? (int?)typeId : null)
+                .OfType<int>()
+                .Distinct()]
+            : [];
+        List<int> priceTypeIds = [.. lootTypeIds.Concat(filamentTypeIds).Concat(oreTypeIds).Distinct()];
         IReadOnlyDictionary<int, double> prices = priceTypeIds.Count == 0
             ? new Dictionary<int, double>()
             : await marketPrices.GetAveragePricesAsync(priceTypeIds, cancellationToken);
@@ -68,9 +78,9 @@ internal sealed class GetUnfinishedRunsQueryHandler(
     // and a merged figure would not match what either button actually commits or discards.
     // Unknown only when loot is the sole reason nothing can be said: bounty and rewards are read straight off storage,
     // never priced, so either one being there already makes the total a real (if possibly loot-incomplete) figure.
-    private static (decimal Total, bool Unknown) _TotalIsk(Run run, IReadOnlyDictionary<int, double> prices)
+    private (decimal Total, bool Unknown) _TotalIsk(Run run, IReadOnlyDictionary<int, double> prices)
     {
-        IskBreakdown isk = IskContributors.Breakdown([RunIskFactsReader.From(run, run.Parameters, prices)], DateTime.UtcNow);
+        IskBreakdown isk = IskContributors.Breakdown([RunIskFactsReader.From(run, run.Parameters, prices, sde)], DateTime.UtcNow);
         return (isk.Total, isk.IsUnvalued);
     }
 }

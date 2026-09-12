@@ -1,0 +1,31 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.MiningDetailSectionView"
+             x:DataType="vs:MiningDetailSectionViewModel">
+    <StackPanel>
+        <!-- One row per character per ore, the same shape BOUNTY already gives (ET-229). -->
+        <ItemsControl x:Name="MiningList" ItemsSource="{Binding Rows}" IsVisible="{Binding HasMining}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:ActivityMiningRowViewModel">
+                    <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                        <TextBlock Text="{Binding CharacterText}"/>
+                        <TextBlock Grid.Column="1" Classes="hint" Text="{Binding OreText}"/>
+                        <TextBlock Grid.Column="2" Classes="hint" Text="{Binding UnitsText}"/>
+                        <TextBlock Grid.Column="3" Classes="money" Text="{Binding ValueText}"/>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Border Classes="totals" IsVisible="{Binding HasMining}">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="label" Text="TOTAL" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Classes="money total" Text="{Binding MiningText}"/>
+            </Grid>
+        </Border>
+        <TextBlock x:Name="MiningEmpty" Classes="hint" TextWrapping="Wrap"
+                   IsVisible="{Binding EmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding EmptyText}"/>
+    </StackPanel>
+</UserControl>
