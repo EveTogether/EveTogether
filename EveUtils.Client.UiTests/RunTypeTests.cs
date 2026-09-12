@@ -164,6 +164,21 @@ public sealed class RunTypeTests
         Assert.Equal(expectedCapacity, site.SiteMiningCapacityUnits);
     }
 
+    /// <summary>ET-273 (Jithran): a homefront can never escalate and is flown out completely, so it has no
+    /// ESCALATION section and no LOOT STRATEGY row — for every homefront kind, combat and mining alike, including
+    /// after ET-228's per-kind refinement.</summary>
+    [Theory]
+    [InlineData(10347)] // Raid: Hall of Sacrifice (combat)
+    [InlineData(10312)] // Metaliminal Meteoroid (mining)
+    public void For_ForAnyHomefrontKind_NeverEscalates_AndHasNoLootStrategy(int dungeonId)
+    {
+        RunTypeDefinition homefront = RunTypeCatalogue.For(ActivityKind.Site, null, siteTypeId: dungeonId);
+
+        Assert.False(homefront.Escalates);
+        Assert.DoesNotContain(RunSectionId.Escalation, homefront.DetailSections);
+        Assert.Empty(homefront.LootStrategies);
+    }
+
     // ── The run window's own TYPE text (ET-226 widened scope) ──────────────────────────────────────────
 
     /// <summary>

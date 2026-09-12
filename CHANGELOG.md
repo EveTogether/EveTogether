@@ -13,6 +13,10 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Changed: a homefront no longer offers to register an escalation, and drops LOOT STRATEGY.** A homefront can
+  never escalate and is flown out completely rather than raided for part of it, so the ESCALATION section and the
+  "register escalation" link are gone from every homefront kind, live and on the saved detail screen, and so is the
+  blitzed/cherry-picked/cleared/full-clear row — an ordinary site keeps all of them.
 - **Changed: a homefront is tracked by flying it — copy, fly, STOP.** The outcome is now one switch (Completed /
   Failed / Unknown) that starts at Completed and sits in the run window from the first second, and everyone in your
   fleet starts in the site — other pilots too, who count for the payout's N but never for your own total. STOP stores
