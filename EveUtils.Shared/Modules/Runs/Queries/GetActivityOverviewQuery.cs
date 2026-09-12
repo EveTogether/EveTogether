@@ -7,11 +7,15 @@ namespace EveUtils.Shared.Modules.Runs.Queries;
 /// <summary>One row per activity, newest first — reads <c>ActivitySummary</c> as it stands rather than re-deriving
 /// the grouping from <c>Run</c>, since the summary already is "one row per activity" (<c>GroupCode ?? RunId</c>).
 /// Only saved, non-deleted activities show up here, because that is all <c>ActivitySummary</c> ever holds; a
-/// running run needs its own band elsewhere (ET-160).</summary>
+/// running run needs its own band elsewhere (ET-160).
+///
+/// No paging: the runs overview pages by month instead (ET-233) — <see cref="FromUtc"/>/<see cref="ToUtc"/> bound
+/// the read to whichever one is on screen, which keeps the row count to what a month actually holds rather than a
+/// fixed count that used to cut a busy day in half.</summary>
 public sealed record GetActivityOverviewQuery(
-    int Page = 0,
-    int PageSize = 50,
     DateTime? FromUtc = null,
+    /// <summary>Exclusive: an activity started exactly at this instant is not included. Lets a caller pass the
+    /// start of the next period without shifting it back by a tick.</summary>
     DateTime? ToUtc = null,
     /// <summary>Only activities this character actually flew a run in — not just any activity in the window.</summary>
     long? CharacterId = null,
