@@ -3,6 +3,7 @@ using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Imaging;
+using EveUtils.Shared.Modules.Runs.Dtos;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
@@ -25,9 +26,31 @@ public sealed partial class ActivityLootViewModel : ObservableObject
         _createLoot = createLoot;
         _portraits = portraits;
         Characters.CollectionChanged += (_, _) => _RefreshFigures();
+        FleetCharacters.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasFleetCharacters));
+            OnPropertyChanged(nameof(FleetSummaryText));
+        };
     }
 
     public ObservableCollection<ActivityLootCharacterViewModel> Characters { get; } = [];
+
+    /// <summary>
+    /// What fleet members share live from their own runs (ET-242), one block per pilot, under the group's own. Only the
+    /// run window fills it. Never part of any figure here: those are this run's own, the same set TOTAL ISK counts, and
+    /// a member's run joins them the moment it is published to this client and read from the store instead.
+    /// </summary>
+    public ObservableCollection<ActivityLootCharacterViewModel> FleetCharacters { get; } = [];
+
+    public bool HasFleetCharacters => FleetCharacters.Count > 0;
+
+    public string FleetSummaryText => FleetCharacters.Count == 1
+        ? "SHARED LIVE BY THE FLEET · 1 PILOT"
+        : $"SHARED LIVE BY THE FLEET · {FleetCharacters.Count} PILOTS";
+
+    public string FleetNoteText =>
+        "What other pilots on this run share from their own, as it comes in, valued here the same way. Not in the totals "
+        + "above: those count this run's own characters.";
 
     /// <summary>A correction made in one of the blocks landed. Raised after the block has already re-read itself, so
     /// whoever listens re-reads only what lies outside the section (a saved activity's TOTAL ISK and summary).</summary>
@@ -109,6 +132,31 @@ public sealed partial class ActivityLootViewModel : ObservableObject
             gone.Loot.PropertyChanged -= _OnBlockChanged;
             Characters.Remove(gone);
         }
+    }
+
+    /// <summary>A fleet member's live share, in their block — made on first sight and reloaded in place after that, so
+    /// the list does not jump while it is being read.</summary>
+    public async Task ShowSharedAsync(long characterId, string characterName, IReadOnlyList<RunLootEntryDto> counted,
+        int captureCount, DateTime sharedAtUtc)
+    {
+        if (FleetCharacters.FirstOrDefault(block => block.CharacterId == characterId) is not { } block)
+        {
+            block = new ActivityLootCharacterViewModel(Guid.Empty, characterId, characterName, _createLoot(), isSharedByFleet: true);
+            FleetCharacters.Add(block);
+            if (_portraits is not null)
+                _ = block.LoadPortraitAsync(_portraits);
+        }
+
+        block.SharedCaptureCount = captureCount;
+        await block.Loot.LoadSharedAsync(counted, sharedAtUtc);
+    }
+
+    /// <summary>Drops the live block of every pilot no longer sharing — switched off, gone, or now read from the
+    /// store as a run of the group.</summary>
+    public void KeepShared(IReadOnlyCollection<long> characterIds)
+    {
+        foreach (ActivityLootCharacterViewModel gone in FleetCharacters.Where(block => !characterIds.Contains(block.CharacterId)).ToList())
+            FleetCharacters.Remove(gone);
     }
 
     /// <summary>Largest contribution first, the order BOUNTY and ENEMIES use. Done once by the owner when the blocks

@@ -13,6 +13,16 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **On a run you fly together with a fleet, you now see each other's loot live — who found what, and what it is
+  worth — under LOOT in the run window.** Before, a fleetmate's loot never reached you during the run: loot sharing
+  could not be switched on anywhere, and even when it went out it was only an ISK figure, never the items. Now every
+  other pilot on the run gets their own block under your group's, with their items valued the same way yours are,
+  updated as they copy their loot; it stays out of your own totals. On such a run your loot and bounty are shared
+  unless you say otherwise: the top of the run window shows SHARING with a loot and a bounty button, and one click
+  stops sharing that for this run — the others' screens drop it at once. Outside a shared fleet run nothing changes:
+  loot now has its own checkbox under Settings → Privacy & Sharing and in each fleet's SHARING dialog, off by
+  default like bounty. Everyone on the run, and the server, need this version for the items to arrive; with an older
+  server or fleetmate the items simply don't travel and the ISK figures behave as before.
 - **Fleet runs now publish themselves, and your fleetmates' runs come in by themselves.** Before, nothing reached the
   server until someone pressed PUBLISH, and nothing came back until you pressed it again — so whoever published first
   never saw the other pilot's run, name or loot without a second press. Now a run you fly in a fleet on a coupled

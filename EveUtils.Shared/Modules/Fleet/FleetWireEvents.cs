@@ -37,6 +37,15 @@ public sealed class FleetWireEvents : IWireEventCatalog
             return new FleetMetricEvent(payload, characterId);
         });
 
+        // What a pilot shares of their own fleet run (ET-242): the loot that counts on it, and whether loot and bounty
+        // are offered at all. Fleet-scoped and rerouted exactly like fleet.metric.
+        registry.Register("fleet.run-share", (payloadJson, characterId) =>
+        {
+            var payload = JsonSerializer.Deserialize<RunShareUpdate>(payloadJson)
+                          ?? throw new InvalidOperationException("Invalid fleet.run-share payload.");
+            return new FleetRunShareEvent(payload, characterId);
+        });
+
         registry.Register("fleet.run-group", (payloadJson, characterId) =>
         {
             var payload = JsonSerializer.Deserialize<RunGroupCodeStart>(payloadJson)
