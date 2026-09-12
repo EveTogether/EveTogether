@@ -116,13 +116,15 @@ public static class RunTypeCatalogue
     // or relic site keeps ENEMIES and BOUNTY even though it usually has neither: it can still have rats, and both
     // sections already say what they have not seen (the ET-236 choice, rather than one that appears only once
     // something comes in).
-    // MINING stands on every site kind for the same reason BOUNTY and ENEMIES do: a data or relic site usually has
-    // none, but the section already says so rather than appearing only once something comes in — and mining is
-    // general to begin with (ET-229), never assumed to be a homefront's.
+    //
+    // MINING is deliberately NOT here (ET-229): unlike BOUNTY/ENEMIES, a combat/data/relic/gas/wormhole run showing
+    // an empty MINING block every time would be clutter nobody asked for. It stands only on RunTypeId.Mining's own
+    // WindowSections below. ET-228's per-run refinement is the seam for a homefront or any other site kind to claim
+    // it live once there is a reason to (mining actually happening on it) — not built here.
     private static readonly IReadOnlyList<RunSectionId> StandardWindow =
     [
         RunSectionId.Activity, RunSectionId.Enemies, RunSectionId.Fit, RunSectionId.Fleet, RunSectionId.Bounty,
-        RunSectionId.Loot, RunSectionId.Mining
+        RunSectionId.Loot
     ];
 
     // An abyssal pocket has no NPC bounty at all (ET-241, Jithran flying one with Raymond, 2026-09-11) — unlike a
@@ -135,10 +137,13 @@ public static class RunTypeCatalogue
         RunSectionId.Consumables
     ];
 
+    // MINING is not claimed here either (ET-229) — the detail screen's own ET-162 rule already shows an unclaimed
+    // section when it HasContent, so a combat/data/relic/gas/wormhole activity where someone did mine still shows
+    // MINING after the fact, and one where nobody did shows nothing at all. Only RunTypeId.Mining claims it outright.
     private static readonly IReadOnlyList<RunSectionId> SiteDetail =
     [
         RunSectionId.Activity, RunSectionId.Enemies, RunSectionId.Fleet, RunSectionId.Bounty, RunSectionId.Loot,
-        RunSectionId.Mining, RunSectionId.Escalation
+        RunSectionId.Escalation
     ];
 
     private static RunTypeDefinition _Site(RunTypeId id, string name, MaterialIconKind icon,
