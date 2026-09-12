@@ -86,7 +86,7 @@ public sealed class FleetParticipationRefresher(
                 List<FleetParticipant> answered = [];
                 foreach (FleetInfo fleet in fleets.Where(fleet => Participates(fleet.State, fleet.Activation)))
                     answered.Add(new FleetParticipant(session.CharacterId, fleet.Id, ClientOnly: false,
-                        await _CommanderOfAsync(server, fleet.Id, session.CharacterId, cancellationToken)));
+                        await _CommanderOfAsync(server, fleet.Id, session.CharacterId, cancellationToken), server));
 
                 _Remember(server, session.CharacterId, [.. answered]);
                 participants.AddRange(answered);

@@ -13,6 +13,18 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fleet runs now publish themselves, and your fleetmates' runs come in by themselves.** Before, nothing reached the
+  server until someone pressed PUBLISH, and nothing came back until you pressed it again — so whoever published first
+  never saw the other pilot's run, name or loot without a second press. Now a run you fly in a fleet on a coupled
+  server goes to that fleet's own server the moment you save it (and when the app saves it for you a day later), and
+  again whenever you correct it afterwards; the server lets everyone else in that run know, and their app pulls it in
+  straight away, so each of you sees the combined run with both names and both hauls within moments. The overview
+  says where each activity stands — publishing…, published to &lt;server&gt;, queued for &lt;server&gt; while you're
+  offline, or failed with a RETRY button — and anything still waiting goes as soon as the connection is back. Solo
+  runs, and runs in a fleet that lives only on your computer, still wait for PUBLISH, and a run is never sent to a
+  server other than its fleet's own. Settings → FLEET RUNS turns it off if you'd rather publish every run yourself.
+  The server needs updating too for fleetmates' runs to arrive by themselves; with an older server your own runs
+  still publish on save, and the others' arrive the next time you publish or reconnect.
 - **Several of your own characters flying one activity together, without a fleet, now all count toward TOTAL ISK
   in the run window.** Only the character the window happened to be showing had their bounty counted live; the
   others' payouts were missing until you saved, when the detail screen already added them up correctly. The BOUNTY

@@ -54,6 +54,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private readonly DispatcherTimer? _clock;
     private readonly RunsFleetFilter? _fleetFilter;
     private readonly IDisposable? _runChangesSubscription;
+    private readonly FleetRunAutoPublisher? _autoPublisher;
     private bool _canPublish;
 
     /// <summary>Set once per load when <see cref="_fleetFilter"/> is active and turned up nothing: whether that
@@ -97,6 +98,9 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         // next command or event was always one more pairing nobody remembered. The feed hands the change over on the
         // UI thread and folds a burst of payouts into one read, so all that is left here is what to read again.
         _runChangesSubscription = services.GetService<RunChangeFeed>()?.Subscribe(_RefreshAsync);
+        // Where a fleet run's automatic publish stands (ET-245) — announced through the same feed, so no second
+        // subscription: only read here when a row is built.
+        _autoPublisher = services.GetService<FleetRunAutoPublisher>();
 
         if (!runClock)
             return;
@@ -253,7 +257,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         IReadOnlyDictionary<Guid, ActivityOverviewRowViewModel> shownRows, RunChangeBatch? changed, List<Task> subRunReads)
     {
         shownRows.TryGetValue(row.ActivitySummaryId, out ActivityOverviewRowViewModel? shown);
-        if (shown is not null && shown.IsShowing(row, _canPublish))
+        RunPublishProgress? progress = _autoPublisher?.ProgressFor(row.GroupCode);
+        if (shown is not null && shown.IsShowing(row, _canPublish, progress))
         {
             if (shown.IsExpanded && (changed is null || changed.Concerns(row.RunId is { } runId ? [runId] : [], row.GroupCode)))
                 subRunReads.Add(_LoadSubRunsAsync(shown));
@@ -261,7 +266,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         }
 
         var fresh = new ActivityOverviewRowViewModel(row, _NameOf, _LoadSubRunsAsync, _OpenDetailAsync,
-            _canPublish ? _PublishAsync : null);
+            _canPublish ? _PublishAsync : null, _ServerNameOf, progress, _RetryPublishAsync);
         if (shown is not null)
             subRunReads.Add(fresh.ContinueFromAsync(shown));
         return fresh;
@@ -495,6 +500,15 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
         return (true, string.Empty);
     }
+
+    /// <summary>RETRY on a row whose automatic publish failed (ET-245). No confirmation, unlike PUBLISH: the setting that
+    /// published it without asking is the pilot's answer already, and the row reports the outcome itself.</summary>
+    private Task _RetryPublishAsync(ActivityOverviewRowViewModel row) =>
+        row.GroupCode is { } groupCode && _autoPublisher is { } publisher ? publisher.RetryAsync(groupCode) : Task.CompletedTask;
+
+    /// <summary>A server by the name its tab carries, so a row and the tab it is filed under say the same thing.</summary>
+    private string _ServerNameOf(string serverAddress) =>
+        Tabs.FirstOrDefault(tab => tab.ServerAddress == serverAddress)?.Header ?? serverAddress;
 
     private async Task<string?> _SelectServerAsync(
         IReadOnlyList<string> servers, IServerRegistry? registry, ActivityOverviewRowViewModel row)

@@ -43,4 +43,15 @@ internal sealed class ServerRunSyncRepository(IDbContextFactory<ServerDbContext>
             .Include(run => run.Parameters)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<long>> ListGroupHoldersAsync(string groupCode, CancellationToken cancellationToken = default)
+    {
+        await using ServerDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Set<Run>()
+            .AsNoTracking()
+            .Where(run => run.GroupCode == groupCode && !run.DeletedAtUtc.HasValue)
+            .Select(run => run.CharacterId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+    }
 }
