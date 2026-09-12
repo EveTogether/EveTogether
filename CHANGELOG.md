@@ -13,6 +13,28 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: a homefront's outcome and payout, unstuck.** HOMEFRONT's OUTCOME can now be set or corrected from the
+  saved activity's detail screen, not only at STOP in the run window — a homefront reviewed after the fact (like
+  Jithran's own HF-KQWB) can still be marked Completed, and "if completed" per-row figures turn into the real
+  amount, and TOTAL ISK the moment it is. Fixed a real bug in the same area: correcting who was in the site from the
+  detail screen used to silently wipe the outcome back to "not decided" (and, sent to fleet mates, wipe theirs too)
+  — a correction now only ever changes the list, never the outcome beside it.
+- **Changed: a homefront's fixed payout counts the moment the site reads Completed, never "expected" or "part
+  expected."** There is no wallet scope to confirm it against and never will be, so waiting on a confirmation that
+  can never arrive made no sense — "Confirm all as expected" and the per-row "confirm" button are gone; typing a
+  different amount, because something else really arrived, is still there. The run window, the detail screen and the
+  runs overview all stop saying "expected" anywhere a homefront payout appears.
+- **Fixed: TOTAL ISK in the run window flickering between the homefront payout and a bounty-only figure** after
+  picking an outcome by hand — two readers disagreed about the number until the database caught up with the pick.
+  There is now exactly one reader: HOMEFRONT's own live decision, the moment it changes.
+- **Fixed: an own character deliberately put into a run now defaults to being in the site**, instead of always
+  defaulting out for lack of measured evidence — a hauler's own gamelog rarely proves anything about the inside of
+  the site it hauls for. An external pilot, or another fleet member's own toon, still defaults out: nothing here can
+  vouch for them either way.
+- **Fixed: an own character ticked into a homefront's site now always has a run of its own counted in TOTAL ISK**,
+  even when the homefront was started for one toon only and the others were ticked in afterwards (Jithran's own
+  HF-V7MB: one run, five own characters ticked in) — a run is cloned for each one, from the group's own site and
+  times, the moment the tick is decided.
 - **Fixed: a Homefront run started with several of your own characters, or joined by a fleet mate, now shows TYPE
   "Homefront" everywhere** — the run window, the runs overview, and after a restart — instead of the plain "Site"
   every toon but the one that copied the signature used to read. Switching the run window's character column no

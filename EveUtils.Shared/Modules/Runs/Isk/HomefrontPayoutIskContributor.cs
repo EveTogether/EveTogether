@@ -3,13 +3,13 @@ using EveUtils.Shared.Modules.Runs.Enums;
 namespace EveUtils.Shared.Modules.Runs.Isk;
 
 /// <summary>
-/// A homefront's fixed payout while it is still owed rather than paid (ET-231): the curve's own figure for a ticked
-/// character, counted as <see cref="IskCertainty.Expected"/> so TOTAL ISK says a part of it is owed rather than
-/// arrived (<see cref="IskBreakdown.HasExpectedPart"/>).
+/// A homefront's fixed payout, counted the moment the site reads Completed (ET-269) — never "expected until
+/// confirmed": there is no wallet scope to check it against and never will be, so the table's own figure for a
+/// ticked character counts as <see cref="IskCertainty.Measured"/> straight away, the same as a measured bounty line.
 ///
-/// A run the pilot has confirmed or typed an actual amount for already carries a
-/// <see cref="RunParameterKey.FixedPayout"/> row, which <see cref="RewardIskContributor"/> counts as
-/// <see cref="IskCertainty.Measured"/> — this contributor skips exactly that run, so the two never both count it.
+/// A pilot who typed a different figure because something else really arrived already carries a
+/// <see cref="RunParameterKey.FixedPayout"/> row for that run, which <see cref="RewardIskContributor"/> counts
+/// instead — this contributor skips exactly that run, so the two never both count it.
 /// </summary>
 internal sealed class HomefrontPayoutIskContributor : IIskContributor
 {
@@ -24,12 +24,12 @@ internal sealed class HomefrontPayoutIskContributor : IIskContributor
             if (run.HomefrontExpectedPayoutIsk is not { } expected)
                 continue;
             if (run.Parameters.Any(parameter => parameter.Key == RunParameterKey.FixedPayout))
-                continue; // Already confirmed — RewardIskContributor counts this run's payout as measured instead.
+                continue; // A typed correction on this run — RewardIskContributor counts that instead.
 
             sum += expected;
             any = true;
         }
 
-        return any ? new IskContribution(Source, sum, IskCertainty.Expected) : null;
+        return any ? new IskContribution(Source, sum, IskCertainty.Measured) : null;
     }
 }

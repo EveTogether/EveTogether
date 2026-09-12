@@ -3542,6 +3542,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             parameter.ParameterKey, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))];
         var consumables = _sections.GetValueOrDefault(RunSectionId.Consumables) as ConsumablesWindowSectionViewModel;
         var mining = _sections.GetValueOrDefault(RunSectionId.Mining) as MiningWindowSectionViewModel;
+        // The one thing a homefront's own payout is read from (ET-269): HOMEFRONT's own live decision, drawn
+        // in memory the same tick it changes. Participants' InSiteAtCompletion/AttendanceCount/HomefrontOutcome are a
+        // DB mirror refreshed on its own asynchronous schedule (_RefreshParticipantsAsync) — reading that instead let
+        // TOTAL ISK alternate between the two after a manual SetOutcome, one tick showing what HOMEFRONT had just
+        // decided, the next tick showing the mirror not yet caught up with it.
+        RunAttendanceDecision? homefrontDecision =
+            (_sections.GetValueOrDefault(RunSectionId.Homefront) as HomefrontWindowSectionViewModel)?.LiveDecision;
 
         List<RunIskFacts> runs = isGroup
             ? [.. Participants.Select(participant =>
@@ -3558,6 +3565,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                         .FirstOrDefault(character => character.RunId == participant.RunId)?.Loot;
                     (decimal? cost, bool has) = _ConsumableFacts(consumables, participant.RunId);
                     (decimal? miningValue, bool hasMining) = mining?.FactsFor(participant.RunId) ?? (null, false);
+                    (bool? isInSite, int? attendanceCount, HomefrontOutcome? outcome, int? waves) =
+                        _HomefrontFacts(homefrontDecision, participant.CharacterId, participant);
                     return new RunIskFacts
                     {
                         BountyIsk = bountyIsk,
@@ -3569,23 +3578,24 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                         HasMining = hasMining,
                         Parameters = parameters,
                         StoppedAtUtc = EffectiveStopUtc,
-                        HomefrontExpectedPayoutIsk = _HomefrontExpectedPayout(participant.InSiteAtCompletion,
-                            participant.AttendanceCount, participant.HomefrontOutcome, participant.HomefrontCompletedWaveCount)
+                        HomefrontExpectedPayoutIsk = _HomefrontExpectedPayout(isInSite, attendanceCount, outcome, waves)
                     };
                 })]
-            : [_SoloRunIskFacts(consumables, mining, parameters)];
+            : [_SoloRunIskFacts(consumables, mining, parameters, homefrontDecision)];
 
         IskBreakdown isk = IskContributors.Breakdown(runs, nowUtc);
         HasGroupTotalIsk = isk.HasFigure;
         GroupTotalIskText = IskFormat.Whole(isk.Total) + IskFormat.ExpectedPart(isk);
     }
 
-    private RunIskFacts _SoloRunIskFacts(
-        ConsumablesWindowSectionViewModel? consumables, MiningWindowSectionViewModel? mining, IReadOnlyList<RunIskParameter> parameters)
+    private RunIskFacts _SoloRunIskFacts(ConsumablesWindowSectionViewModel? consumables, MiningWindowSectionViewModel? mining,
+        IReadOnlyList<RunIskParameter> parameters, RunAttendanceDecision? homefrontDecision)
     {
         (decimal? cost, bool has) = RunId is { } runId ? _ConsumableFacts(consumables, runId) : (null, false);
         (decimal? miningValue, bool hasMining) = RunId is { } id ? mining?.FactsFor(id) ?? (null, false) : (null, false);
         RunParticipantViewModel? own = RunId is { } ownId ? Participants.FirstOrDefault(p => p.RunId == ownId) : null;
+        (bool? isInSite, int? attendanceCount, HomefrontOutcome? outcome, int? waves) =
+            _HomefrontFacts(homefrontDecision, own?.CharacterId, own);
         return new RunIskFacts
         {
             BountyIsk = BountyIsk,
@@ -3597,10 +3607,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             HasMining = hasMining,
             Parameters = parameters,
             StoppedAtUtc = EffectiveStopUtc,
-            HomefrontExpectedPayoutIsk = _HomefrontExpectedPayout(
-                own?.InSiteAtCompletion, own?.AttendanceCount, own?.HomefrontOutcome, own?.HomefrontCompletedWaveCount)
+            HomefrontExpectedPayoutIsk = _HomefrontExpectedPayout(isInSite, attendanceCount, outcome, waves)
         };
     }
+
+    /// <summary>The attendance facts one character's homefront payout is computed from — HOMEFRONT's own live
+    /// decision when there is one (ET-269: the single source _RefreshGroupTotalIsk reads, never the asynchronously
+    /// refreshed <see cref="Participants"/> mirror of it), falling back to that mirror only when no such decision
+    /// exists yet (a member's window before its first read, or a run type with no HOMEFRONT section at all).</summary>
+    private static (bool? IsInSite, int? AttendanceCount, HomefrontOutcome? Outcome, int? CompletedWaveCount) _HomefrontFacts(
+        RunAttendanceDecision? liveDecision, long? characterId, RunParticipantViewModel? fallback) =>
+        liveDecision is { } decision
+            ? (characterId is { } id ? decision.Entries.FirstOrDefault(entry => entry.CharacterId == id)?.IsInSite : null,
+                decision.InSiteCount, decision.Outcome, decision.CompletedWaveCount)
+            : (fallback?.InSiteAtCompletion, fallback?.AttendanceCount, fallback?.HomefrontOutcome, fallback?.HomefrontCompletedWaveCount);
 
     /// <summary>What the curve owes this participant's own character right now (ET-231) — read off
     /// <see cref="RunType"/>'s own resolved kind and the same attendance facts the HOMEFRONT section itself just

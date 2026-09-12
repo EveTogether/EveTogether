@@ -104,15 +104,16 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         HasPublishFailure = publishProgress is { Phase: RunPublishPhase.Failed } && !IsOnServer;
         PublishFailureText = HasPublishFailure ? publishProgress?.Message : null;
         SyncText = _SyncText(row.ServerSyncStates, publishProgress, serverNameOf ?? (address => address));
-        // A homefront's payout while it is still owed (ET-231) has no RunParameter row yet, so it is not among
-        // row.Rewards — read off the same Isk breakdown NetText already uses instead of a second computation here.
-        // Once every character has confirmed, HomefrontPayoutIskContributor contributes nothing and this chip stops
-        // appearing; the FixedPayout chip from row.Rewards below carries the confirmed figure from then on.
+        // A homefront's payout, once the site reads Completed, counts straight away and has no RunParameter row of
+        // its own unless the pilot typed a different figure (ET-269: there is no wallet to confirm it against) — so
+        // it is not among row.Rewards, and is read off the same Isk breakdown NetText already uses instead of a
+        // second computation here. Once a pilot types a correction, HomefrontPayoutIskContributor contributes
+        // nothing for that run and the FixedPayout chip from row.Rewards below carries the typed figure instead.
         IEnumerable<ActivityRewardChipViewModel> chips = row.Rewards
             .OrderBy(reward => (int)reward.ParameterKey)
             .Select(reward => new ActivityRewardChipViewModel(reward.ParameterKey, reward.Amount));
         if (row.Isk.Of(IskSource.HomefrontPayout) is { } homefrontPayout)
-            chips = chips.Append(new ActivityRewardChipViewModel(RunParameterKey.FixedPayout, homefrontPayout.Amount, isExpected: true));
+            chips = chips.Append(new ActivityRewardChipViewModel(RunParameterKey.FixedPayout, homefrontPayout.Amount));
         Chips = [.. chips];
     }
 

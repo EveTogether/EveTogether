@@ -39,8 +39,10 @@ namespace EveUtils.Client.UiTests;
 /// ET-230: who was in a homefront's site when it completed. The app proposes from evidence, one person decides — the
 /// fleet commander, or the pilot without a fleet — and every client writes the commander's list onto its own runs only,
 /// so N is the same on every member's machine. Jithran's own example throughout: he flies Jithran (damage/reps),
-/// Abnoba Auscent (remote capacitor) and Noahmarr (the hauler outside the site); another member flies three toons in
-/// the site. N = 5.
+/// Abnoba Auscent (remote capacitor) and Noahmarr (the hauler, no evidence tracker catches — an own character, so
+/// defaulted in per ET-269); another member flies three toons in the site. Some tests below hand-author a decision
+/// with the hauler ticked out by choice — that is still a valid, explicit correction; only the proposal's own
+/// unmeasured default changed.
 /// </summary>
 public sealed class HomefrontAttendanceTests
 {
@@ -58,11 +60,12 @@ public sealed class HomefrontAttendanceTests
 
     // ── The proposal ────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Evidence proposes, by EVE's own thresholds; nothing to go on is unticked and says so — the hauler, and
-    /// an external pilot from whom no evidence can arrive. Counter-proof: drop the 1,000 threshold and Noahmarr's single
-    /// 999-damage volley ticks him.</summary>
+    /// <summary>Evidence proposes, by EVE's own thresholds; an own character with nothing to go on still defaults in
+    /// — deliberately put into the run (ET-269) — but is still marked for a look, since it is a guess and not a
+    /// measurement. Anyone else with nothing to go on, own fleet roster or external, stays out. Counter-proof: drop
+    /// the 1,000 threshold and Noahmarr's single 999-damage volley ticks him for a measured reason instead.</summary>
     [Fact]
-    public void TheProposal_TicksWhoInteractedWithTheSite_AndLeavesTheHaulerAndTheExternalUnticked()
+    public void TheProposal_TicksWhoInteractedWithTheSite_AndDefaultsAnUninstrumentedOwnCharacterIn()
     {
         AttendanceEvidenceCollector evidence = new();
         evidence.SetWindow(StartedAtUtc, null);
@@ -78,10 +81,12 @@ public sealed class HomefrontAttendanceTests
 
         Assert.Equal(new AttendanceProposalLine(Jithran, true, AttendanceReason.DamageDealt, 1_200_000), _Line(lines, Jithran));
         Assert.Equal(new AttendanceProposalLine(Abnoba, true, AttendanceReason.RemoteCapacitor, 142_000), _Line(lines, Abnoba));
-        Assert.Equal(new AttendanceProposalLine(Noahmarr, false, AttendanceReason.NoActivityLogged, null), _Line(lines, Noahmarr));
+        // Below the 1,000 threshold reads as no evidence at all — but Noahmarr is local, so he still defaults in.
+        Assert.Equal(new AttendanceProposalLine(Noahmarr, true, AttendanceReason.NoActivityLogged, null), _Line(lines, Noahmarr));
         Assert.Equal(new AttendanceProposalLine(Ysolde, true, AttendanceReason.FleetActivity, null), _Line(lines, Ysolde));
         // Before START is not this run.
         Assert.False(_Line(lines, Tamsin).IsInSite);
+        // Not this client's own, so no default in — nothing here can vouch for them either way.
         Assert.False(_Line(lines, Corvin).IsInSite);
         Assert.Equal("no activity logged", AttendanceRowViewModel.Describe(AttendanceReason.NoActivityLogged, null, isLocal: true, isExternal: false));
         Assert.Equal("no evidence can arrive — tick if in site",
@@ -295,7 +300,9 @@ public sealed class HomefrontAttendanceTests
 
         RunAttendanceDecision? forSite2 = await _BaseAsync(dispatcher, "HF-SITE2");
         IReadOnlyList<AttendanceProposalLine> site2 = AttendanceProposal.Propose(_SixCandidates(), _ => null, forSite2);
-        Assert.Equal([Jithran, Abnoba, Ysolde, Brannoc, Tamsin],
+        // Noahmarr carried over as "not in site" with a plain reason, never SetByHand, so nothing here still stands
+        // for him — he falls to the proposal's own default, and being own, defaults in (ET-269).
+        Assert.Equal([Jithran, Abnoba, Noahmarr, Ysolde, Brannoc, Tamsin],
             site2.Where(line => line.IsInSite).Select(line => line.CharacterId).Order().Select(id => (int)id));
 
         // The commander takes Brannoc out on site 2, by hand.
@@ -310,7 +317,7 @@ public sealed class HomefrontAttendanceTests
 
         IReadOnlyList<AttendanceProposalLine> site3 = AttendanceProposal.Propose(_SixCandidates(), _ => null,
             await _BaseAsync(dispatcher, "HF-SITE3"));
-        Assert.Equal([Jithran, Abnoba, Ysolde, Tamsin],
+        Assert.Equal([Jithran, Abnoba, Noahmarr, Ysolde, Tamsin],
             site3.Where(line => line.IsInSite).Select(line => line.CharacterId).Order().Select(id => (int)id));
         Assert.All(site3.Where(line => line.IsInSite), line => Assert.Equal(AttendanceReason.SameAsLastSite, line.Reason));
     }
@@ -318,13 +325,14 @@ public sealed class HomefrontAttendanceTests
     // ── The run window ──────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Jithran's example end to end, over the fake server wire. The commander's window proposes Noahmarr out with "no
-    /// activity logged", writes the list on his own run and sends it; the member's client writes it on hers, and her
-    /// window shows it read-only without being reopened. N = 5 on both machines, with the same source and time. A
-    /// member who connected after the first send gets the list from the commander's resend.
+    /// Jithran's example end to end, over the fake server wire. The commander's window proposes Noahmarr (the hauler,
+    /// own character, no evidence tracker catches) in by default (ET-269), writes the list on his own run and sends
+    /// it; the member's client writes it on hers, and her window shows it read-only without being reopened. N = 6 on
+    /// both machines, with the same source and time. A member who connected after the first send gets the list from
+    /// the commander's resend.
     /// </summary>
     [AvaloniaFact]
-    public async Task JithransHomefront_TheHaulerIsProposedOut_AndNIsFiveOnBothMachines()
+    public async Task JithransHomefront_TheHaulerDefaultsIn_AndNIsSixOnBothMachines()
     {
         RunGroupCodeStart start = new(FleetId, ActivityKind.Site, GroupCode, DateTime.UtcNow.AddMinutes(-2), IsFleetCommander: true);
         using Machine fc = await Machine.CreateAsync(Jithran, (Jithran, "Jithran"), (Abnoba, "Abnoba Auscent"), (Noahmarr, "Noahmarr"));
@@ -344,22 +352,22 @@ public sealed class HomefrontAttendanceTests
         foreach (int other in new[] { Ysolde, Brannoc, Tamsin })
             await fcBus.PublishAsync(new FleetMetricEvent(new MetricSample(other, FleetId, MetricKind.Dps, 350,
                 DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()), other), EventTarget.Local);
-        await fc.TickUntilAsync(commander, () => fc.Wire.Sent.OfType<FleetRunAttendanceEvent>().Any(_IsJithransList));
+        await fc.TickUntilAsync(commander, () => fc.Wire.Sent.OfType<FleetRunAttendanceEvent>().Any(_IsEveryoneInSite));
 
         Assert.True(commander.CanDecide);
         Assert.Equal(6, commander.Rows.Count);
         AttendanceRowViewModel hauler = commander.Rows.Single(row => row.CharacterId == Noahmarr);
-        Assert.False(hauler.IsInSite);
+        Assert.True(hauler.IsInSite);
         Assert.True(hauler.IsWithoutEvidence);
         Assert.Equal("no activity logged", hauler.ReasonText);
         Assert.Equal(["Abnoba Auscent", "Jithran", "Noahmarr"],
             commander.Rows.Where(row => row.IsLocal).Select(row => row.Name));
-        Assert.Equal("6 in fleet · 5 in site", commander.CountText);
+        Assert.Equal("6 in fleet · 6 in site", commander.CountText);
         FleetRunAttendanceEvent sent = fc.Wire.Sent.OfType<FleetRunAttendanceEvent>().Last();
         Assert.Equal(Jithran, sent.CharacterId);
-        Assert.Equal([Noahmarr], sent.Data.Characters.Where(line => !line.IsInSite).Select(line => line.CharacterId));
+        Assert.DoesNotContain(sent.Data.Characters, line => !line.IsInSite);
         Run fcRun = await _RunAsync(fc.Instance, fc.Window.RunId ?? Guid.Empty);
-        Assert.Equal((true, 5, AttendanceSource.FleetCommander), (fcRun.InSiteAtCompletion, fcRun.AttendanceCount ?? 0, fcRun.AttendanceSource ?? default));
+        Assert.Equal((true, 6, AttendanceSource.FleetCommander), (fcRun.InSiteAtCompletion, fcRun.AttendanceCount ?? 0, fcRun.AttendanceSource ?? default));
 
         // The member was not connected for that first send: nothing on her run, and her window waits, never guessing.
         using HomefrontWindowSectionViewModel reader = new(member.Window);
@@ -375,12 +383,12 @@ public sealed class HomefrontAttendanceTests
         await member.TickUntilAsync(reader, () => reader.Rows.Count == 6 && reader.NoticeText is null);
 
         Run memberRun = await _RunAsync(member.Instance, member.Window.RunId ?? Guid.Empty);
-        Assert.Equal((true, 5, (long?)Jithran, fcRun.AttendanceSetAtUtc),
+        Assert.Equal((true, 6, (long?)Jithran, fcRun.AttendanceSetAtUtc),
             (memberRun.InSiteAtCompletion, memberRun.AttendanceCount ?? 0, memberRun.AttendanceSetByCharacterId, memberRun.AttendanceSetAtUtc));
         Assert.False(reader.CanDecide);
         Assert.All(reader.Rows, row => Assert.False(row.IsEditable));
-        Assert.False(reader.Rows.Single(row => row.CharacterId == Noahmarr).IsInSite);
-        Assert.Equal("6 in fleet · 5 in site", reader.CountText);
+        Assert.True(reader.Rows.Single(row => row.CharacterId == Noahmarr).IsInSite);
+        Assert.Equal("6 in fleet · 6 in site", reader.CountText);
     }
 
     /// <summary>AC-3: flown without a fleet the pilot decides for their own run — nobody else's list to wait for, and
@@ -414,14 +422,16 @@ public sealed class HomefrontAttendanceTests
         Run proposed = await TickUntilAsync(run => run.AttendanceSource is not null);
         Assert.True(section.CanDecide);
         Assert.Equal("you", section.DecidedByText);
-        Assert.Equal((AttendanceSource.Pilot, (long?)ActivityWindowHarness.CharacterId, false),
-            (proposed.AttendanceSource ?? default, proposed.AttendanceSetByCharacterId, proposed.InSiteAtCompletion ?? true));
+        // Own, deliberately flying this solo run, so the proposal defaults them in (ET-269) — no evidence needed.
+        Assert.Equal((AttendanceSource.Pilot, (long?)ActivityWindowHarness.CharacterId, true),
+            (proposed.AttendanceSource ?? default, proposed.AttendanceSetByCharacterId, proposed.InSiteAtCompletion ?? false));
 
-        section.Rows.Single(row => row.CharacterId == ActivityWindowHarness.CharacterId).IsInSite = true;
-        Run ticked = await TickUntilAsync(run => run.InSiteAtCompletion == true);
+        // Solo does not mean unable to say otherwise: the pilot's own tick still goes over the proposal's default.
+        section.Rows.Single(row => row.CharacterId == ActivityWindowHarness.CharacterId).IsInSite = false;
+        Run ticked = await TickUntilAsync(run => run.InSiteAtCompletion == false);
 
-        Assert.True(ticked.InSiteAtCompletion);
-        Assert.Equal(1, ticked.AttendanceCount);
+        Assert.False(ticked.InSiteAtCompletion);
+        Assert.Equal(0, ticked.AttendanceCount);
         Assert.Equal(AttendanceReason.SetByHand, Assert.Single(ticked.AttendanceEntries).Reason);
     }
 
@@ -462,8 +472,8 @@ public sealed class HomefrontAttendanceTests
         _Decision((Jithran, true), (Abnoba, true), (Noahmarr, false), (Ysolde, true), (Brannoc, true), (Tamsin, true))
             with { SetAtUtc = setAtUtc };
 
-    private static bool _IsJithransList(FleetRunAttendanceEvent sent) =>
-        sent.Data.Characters.Count(line => line.IsInSite) + sent.Data.NotOnRosterCount == 5;
+    private static bool _IsEveryoneInSite(FleetRunAttendanceEvent sent) =>
+        sent.Data.Characters.Count(line => line.IsInSite) + sent.Data.NotOnRosterCount == 6;
 
     private static RunGroupAttendance _Message(RunAttendanceDecision decision) => new(FleetId, GroupCode,
         new DateTimeOffset(decision.SetAtUtc, TimeSpan.Zero).ToUnixTimeMilliseconds(), decision.Entries, decision.NotOnRosterCount);
