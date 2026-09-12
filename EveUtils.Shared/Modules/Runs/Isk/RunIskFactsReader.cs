@@ -12,19 +12,38 @@ internal static class RunIskFactsReader
 {
     public static RunIskFacts From(Run run, IEnumerable<RunParameter> parameters, IReadOnlyDictionary<int, double> prices)
     {
+        RunParameter[] all = [.. parameters];
         IReadOnlyList<LootTallyLine> loot = LootTally.Count(Tally(run));
         decimal? gained = KnownLootValue(loot, LootKind.Gained, prices);
         decimal? lost = KnownLootValue(loot, LootKind.Lost, prices);
+        int? filamentCount = _ParsedInt(all, RunParameterKey.AbyssalFilamentCount);
+        decimal? consumableCost = filamentCount is > 0 && FilamentTypeId(all) is { } typeId
+            && prices.TryGetValue(typeId, out double price)
+            ? (decimal)price * filamentCount.Value
+            : null;
         return new RunIskFacts
         {
             BountyIsk = run.BountyEntries.Sum(entry => entry.Isk),
             LootIskNet = gained is null && lost is null ? null : gained.GetValueOrDefault() - lost.GetValueOrDefault(),
             HasLoot = loot.Count > 0,
-            Parameters = [.. parameters.Select(parameter => new RunIskParameter(
+            ConsumableIskCost = consumableCost,
+            HasConsumables = filamentCount is > 0,
+            Parameters = [.. all.Select(parameter => new RunIskParameter(
                 parameter.ParameterKey, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))],
             StoppedAtUtc = run.StoppedAtUtc
         };
     }
+
+    /// <summary>The resolved filament type a run's CONSUMABLES was saved against (ET-249), so a caller pricing many
+    /// runs at once can collect it into the same type-id set loot pricing already builds.</summary>
+    public static int? FilamentTypeId(IEnumerable<RunParameter> parameters) =>
+        _ParsedInt(parameters, RunParameterKey.AbyssalFilamentTypeId);
+
+    private static int? _ParsedInt(IEnumerable<RunParameter> parameters, RunParameterKey key) =>
+        parameters.FirstOrDefault(parameter => parameter.ParameterKey == key)?.TypedValue is { } value
+        && int.TryParse(value, out int parsed)
+            ? parsed
+            : null;
 
     // Counted per run, not per activity: a starting cargo hold belongs to the run it was pasted on, and two grouped
     // runs each have their own. The rule itself is LootTally's, shared with the open window.

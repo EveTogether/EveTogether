@@ -2161,6 +2161,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 {
                     existing.IsParticipant = dto.IsParticipant;
                     existing.IsPayoutEligible = dto.IsPayoutEligible;
+                    existing.BountyIsk = dto.BountyIsk;
                     continue;
                 }
 
@@ -2169,7 +2170,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 // because Run predates that convention, not because a real id needs the extra room.
                 int characterId = checked((int)dto.CharacterId);
                 string name = await _NameOfAsync(characterId) ?? $"Char {characterId}";
-                Participants.Add(new RunParticipantViewModel(dto.RunId, characterId, name, dto.IsParticipant, dto.IsPayoutEligible));
+                Participants.Add(new RunParticipantViewModel(
+                    dto.RunId, characterId, name, dto.IsParticipant, dto.IsPayoutEligible, dto.BountyIsk));
             }
 
             foreach (RunParticipantViewModel gone in Participants
@@ -3109,37 +3111,87 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// registry the saved detail screen, the runs overview and UNFINISHED read (ET-256), so what each source counts —
     /// a mission's bonus judged at STOP, never its stated Bounty line — is decided there and nowhere here.
     ///
-    /// Bounty is summed per participant through <see cref="GamelogClientService.GetFleetRunBounty"/> — the same
-    /// switch-independent source SAVE already uses for a group — rather than the acting character's own
-    /// <see cref="BountyIsk"/>, which only ever holds whichever character the column was showing while it came in.
-    /// A solo run (nothing to switch away from) keeps using <see cref="BountyIsk"/>, since there is no group to sum.
+    /// Bounty is summed per participant through <see cref="GamelogClientService.GetFleetRunBounty"/> when a real
+    /// fleet is involved — the same switch-independent, synchronous source SAVE already uses for a group — rather
+    /// than the acting character's own <see cref="BountyIsk"/>, which only ever holds whichever character the
+    /// column was showing while it came in. An own-toon group with no fleet at all (ET-257) has no fleet tally to
+    /// read, so it falls back to each participant's own <see cref="RunParticipantViewModel.BountyIsk"/> — this run's
+    /// own <c>RunBountyEntry</c> total (ET-219), refreshed alongside the rest of <see cref="Participants"/>. A solo
+    /// run (nothing to switch away from) keeps using <see cref="BountyIsk"/>, since there is no group to sum.
     ///
     /// Loot is summed the same way, per participant, through <see cref="LootOverview"/>'s blocks (ET-211, ET-215) —
     /// now that a capture is attributed to the character whose client actually copied it, a group's total is the sum
     /// of every participant's own run, not whichever one <see cref="RunLoot"/> happens to be showing. A solo run has
     /// nothing to sum but its own <see cref="RunLoot"/>.
+    ///
+    /// One <see cref="RunIskFacts"/> per participant, not one pre-summed record for the group: the same shape
+    /// <see cref="RunIskFactsReader"/> hands the registry for a saved activity, so the mission-reward line every own
+    /// toon's run carries a copy of is deduplicated by <see cref="RewardIskContributor"/> exactly as it already is
+    /// there, instead of a second, window-only summing rule.
     /// </summary>
     private void _RefreshGroupTotalIsk(DateTime nowUtc)
     {
         bool isGroup = Participants.Count > 1;
-        long bountyIsk = isGroup && FleetId is { } fleetId && _gamelog is not null
-            ? Participants.Sum(participant => _gamelog.GetFleetRunBounty(fleetId, participant.CharacterId))
-            : BountyIsk;
+        List<RunIskParameter> parameters = [.. PendingParameters.Select(parameter => new RunIskParameter(
+            parameter.ParameterKey, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))];
+        var consumables = _sections.GetValueOrDefault(RunSectionId.Consumables) as ConsumablesWindowSectionViewModel;
 
-        IskBreakdown isk = IskContributors.Breakdown(
-        [
-            new RunIskFacts
-            {
-                BountyIsk = bountyIsk,
-                LootIskNet = isGroup ? LootOverview?.NetIsk : RunLoot?.NetIsk,
-                HasLoot = (isGroup ? LootOverview?.HasCaptures : RunLoot?.HasCaptures) ?? false,
-                Parameters = [.. PendingParameters.Select(parameter => new RunIskParameter(
-                    parameter.ParameterKey, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))],
-                StoppedAtUtc = EffectiveStopUtc
-            }
-        ], nowUtc);
+        List<RunIskFacts> runs = isGroup
+            ? [.. Participants.Select(participant =>
+                {
+                    // A real fleet's own bounty comes from GamelogClientService's per-fleet tally (synchronous,
+                    // and the only place a fleet mate's own bounty ever lands, since their gamelog is never this
+                    // machine's own to watch). An own-toon group with no fleet at all (ET-257) has no such tally —
+                    // every toon's own bounty already lives in its own run's RunBountyEntry rows (ET-219), read back
+                    // through Participants' own cache instead.
+                    decimal bountyIsk = FleetId is { } fleetId && _gamelog is not null
+                        ? _gamelog.GetFleetRunBounty(fleetId, participant.CharacterId)
+                        : participant.BountyIsk;
+                    RunLootViewModel? loot = LootOverview?.Characters
+                        .FirstOrDefault(character => character.RunId == participant.RunId)?.Loot;
+                    (decimal? cost, bool has) = _ConsumableFacts(consumables, participant.RunId);
+                    return new RunIskFacts
+                    {
+                        BountyIsk = bountyIsk,
+                        LootIskNet = loot?.NetIsk,
+                        HasLoot = loot?.HasCaptures ?? false,
+                        ConsumableIskCost = cost,
+                        HasConsumables = has,
+                        Parameters = parameters,
+                        StoppedAtUtc = EffectiveStopUtc
+                    };
+                })]
+            : [_SoloRunIskFacts(consumables, parameters)];
+
+        IskBreakdown isk = IskContributors.Breakdown(runs, nowUtc);
         HasGroupTotalIsk = isk.HasFigure;
         GroupTotalIskText = IskFormat.Whole(isk.Total) + IskFormat.ExpectedPart(isk);
+    }
+
+    private RunIskFacts _SoloRunIskFacts(ConsumablesWindowSectionViewModel? consumables, IReadOnlyList<RunIskParameter> parameters)
+    {
+        (decimal? cost, bool has) = RunId is { } runId ? _ConsumableFacts(consumables, runId) : (null, false);
+        return new RunIskFacts
+        {
+            BountyIsk = BountyIsk,
+            LootIskNet = RunLoot?.NetIsk,
+            HasLoot = RunLoot?.HasCaptures ?? false,
+            ConsumableIskCost = cost,
+            HasConsumables = has,
+            Parameters = parameters,
+            StoppedAtUtc = EffectiveStopUtc
+        };
+    }
+
+    /// <summary>What CONSUMABLES has for one run — its own confirmed count, priced against the section's shared
+    /// filament unit price (ET-249). No section built yet (a non-abyssal run) reads the same as no count confirmed.</summary>
+    private static (decimal? Cost, bool Has) _ConsumableFacts(ConsumablesWindowSectionViewModel? consumables, Guid runId)
+    {
+        ConsumableRowViewModel? row = consumables?.Rows.FirstOrDefault(r => r.RunId == runId);
+        if (row?.Count is not { } count)
+            return (null, false);
+
+        return (consumables!.UnitPrice is { } price ? count * price : null, true);
     }
 
     // The signature arrives after construction, from the object initialiser the toast opens the window with — so the

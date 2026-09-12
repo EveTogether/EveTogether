@@ -13,6 +13,22 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Several of your own characters flying one activity together, without a fleet, now all count toward TOTAL ISK
+  in the run window.** Only the character the window happened to be showing had their bounty counted live; the
+  others' payouts were missing until you saved, when the detail screen already added them up correctly. The BOUNTY
+  section in the run window now also lists each character's own share, the way the detail screen already does.
+  Nothing changes for a run flown in an actual EVE fleet.
+- **Abyssal runs now have their own CONSUMABLES section**, in the run window and on the saved detail screen, for
+  the filament that opened the pocket. The filament type comes from the pocket's own tier and weather; how many you
+  needed is filled in from your ship's hull class where that is known — for now only a destroyer, which needs two —
+  and is always yours to correct, for instance if someone went in without one. Its cost is priced the same way
+  loot is, and is subtracted from TOTAL ISK rather than shown apart from it. In a fleet, or flying several of your
+  own characters together, each pilot's own count and cost are shown separately.
+- **The runs overview's short line now names a fleet mate the same way the line under it does.** A pilot this
+  machine never linked showed as "character 883434905" on the short line while the row underneath, once opened,
+  already read their real name. Both now use the same name, in the same order: the name recorded on the run, then
+  a locally known name, then the bare id only as a last resort. An abyssal run with no known tier or weather no
+  longer reads "Abyssal Abyssal" on that same line.
 - **Every screen now shows the same total ISK for a run.** The runs overview and its day total used to add up only
   bounty and loot, so a mission showed a few million less there than on its own detail screen — its ISK reward and
   bonus were left out. The overview, the day total, the detail screen, the run window, UNFINISHED and "ISK today" on

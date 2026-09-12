@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.ConsumablesWindowSectionView"
+             x:DataType="vs:ConsumablesWindowSectionViewModel">
+    <StackPanel>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+            <TextBlock Text="FILAMENT"/>
+            <TextBlock Grid.Column="1" Text="{Binding FilamentName, TargetNullValue='not set yet'}"/>
+        </Grid>
+        <!-- One row per participant (own toon or fleet member, ET-249): the count is a proposal from their fit's
+             hull class, editable — someone who went in without a filament sets theirs to 0. -->
+        <ItemsControl ItemsSource="{Binding Rows}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:ConsumableRowViewModel">
+                    <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <TextBlock Text="{Binding CharacterText}"/>
+                        <NumericUpDown Grid.Column="1" Classes="count" Width="88" Minimum="0" Maximum="99"
+                                       Increment="1" FormatString="0" Value="{Binding Count, Mode=TwoWay}"/>
+                        <TextBlock Grid.Column="2" Classes="money" Text="{Binding ValueText}"/>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+</UserControl>

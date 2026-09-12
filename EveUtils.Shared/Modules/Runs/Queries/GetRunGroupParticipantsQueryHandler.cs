@@ -24,7 +24,8 @@ internal sealed class GetRunGroupParticipantsQueryHandler(IDbContextFactory<Clie
                           // other solo run whose group code happened to be blank rather than null.
                           && (string.IsNullOrEmpty(query.GroupCode) ? run.Id == query.RunId : run.GroupCode == query.GroupCode))
             .OrderBy(run => run.CharacterId)
-            .Select(run => new RunGroupParticipantDto(run.Id, run.CharacterId, run.IsParticipant, run.IsPayoutEligible))
+            .Select(run => new RunGroupParticipantDto(run.Id, run.CharacterId, run.IsParticipant, run.IsPayoutEligible,
+                run.BountyEntries.Sum(entry => entry.Isk)))
             .ToListAsync(cancellationToken);
         return Result<IReadOnlyList<RunGroupParticipantDto>>.Success(participants);
     }

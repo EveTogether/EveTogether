@@ -16,6 +16,14 @@ public sealed record RunIskFacts
     /// <summary>Whether there is loot at all, priced or not — what tells "not priced yet" from "nothing".</summary>
     public required bool HasLoot { get; init; }
 
+    /// <summary>What CONSUMABLES charges the run — a positive cost, contributed as negative ISK (ET-249). Null when
+    /// there is a confirmed count but no price for its filament type yet.</summary>
+    public required decimal? ConsumableIskCost { get; init; }
+
+    /// <summary>Whether a filament count was ever confirmed for this run, priced or not — what tells "not priced
+    /// yet" from "nothing to charge".</summary>
+    public required bool HasConsumables { get; init; }
+
     public required IReadOnlyList<RunIskParameter> Parameters { get; init; }
 
     /// <summary>When the run stopped — the moment a mission's bonus is judged at. Null while it is still going.</summary>

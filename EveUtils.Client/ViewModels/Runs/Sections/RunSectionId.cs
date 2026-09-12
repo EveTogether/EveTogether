@@ -14,5 +14,6 @@ public enum RunSectionId
     Fleet,
     Bounty,
     Loot,
-    Escalation
+    Escalation,
+    Consumables
 }

@@ -117,6 +117,30 @@ public sealed class AbyssalFilamentTests
         Assert.Equal("Agitated Dark", detail.Activity().SiteText);
     }
 
+    /// <summary>ET-247: an abyssal with no recorded filament falls back to the type's own name ("Abyssal") for both
+    /// <see cref="ActivityOverviewRowViewModel.SiteText"/> and its kind — the one-line overview row concatenates
+    /// them, which used to read "Abyssal Abyssal". Counter-proof: reading <c>KindText</c> as the type's name
+    /// unconditionally, instead of suppressing it when it repeats <c>SiteText</c>, goes red here.</summary>
+    [AvaloniaFact]
+    public async Task OverviewRow_NeverDoublesTheAbyssalNoun_WhenNoFilamentWasEverRecorded()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        DateTime startedAtUtc = new(2026, 9, 11, 20, 0, 0, DateTimeKind.Utc);
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Abyssal,
+            startedAtUtc, 0, null, null));
+        await dispatcher.Send(new SaveRunCommand(started.Value, startedAtUtc.AddMinutes(20),
+            startedAtUtc.AddMinutes(21), [], [], [], []));
+        ActivityOverviewRowDto row = Assert.Single((await dispatcher.Query(new GetActivityOverviewQuery())).Value!);
+        Assert.Null(row.AbyssalFilamentText);
+
+        var overviewRow = new ActivityOverviewRowViewModel(
+            row, _ => "?", _ => Task.CompletedTask, _ => Task.CompletedTask);
+
+        Assert.Equal("Abyssal", overviewRow.SiteText);
+        Assert.Equal(string.Empty, overviewRow.KindText);
+    }
+
     // ── ET-248: MISSION never leaks onto an abyssal's detail screen ────────────────────────────────────
 
     /// <summary>

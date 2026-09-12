@@ -20,6 +20,7 @@ public sealed class FakeSdeAccessor : ISdeAccessor
 
     private readonly Dictionary<int, Entry> _types = new();
     private readonly Dictionary<int, int> _groupCategory = new();
+    private readonly Dictionary<int, string> _groupNames = new();
     private readonly Dictionary<string, int> _byName = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<int, List<SdeDogmaAttribute>> _attrs = new();
     private readonly List<SdeSite> _sites = [];
@@ -30,11 +31,13 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     public bool IsAvailable { get; private set; } = true;
     public SdeVersion? Version => new(1, DateTimeOffset.UnixEpoch);
 
-    public FakeSdeAccessor Add(int typeId, string name, int groupId, int categoryId, SdeSlotType slot = SdeSlotType.None, bool isTurret = false, double volume = 0, bool isMutated = false)
+    public FakeSdeAccessor Add(int typeId, string name, int groupId, int categoryId, SdeSlotType slot = SdeSlotType.None, bool isTurret = false, double volume = 0, bool isMutated = false, string? groupName = null)
     {
         _types[typeId] = new Entry(typeId, name, groupId, slot, isTurret, volume, isMutated);
         _groupCategory[groupId] = categoryId;
         _byName[name] = typeId;
+        if (groupName is not null)
+            _groupNames[groupId] = groupName;
         return this;
     }
 
@@ -128,7 +131,9 @@ public sealed class FakeSdeAccessor : ISdeAccessor
             .ToList();
 
     public SdeGroup? GetGroup(int groupId) =>
-        _groupCategory.TryGetValue(groupId, out var cat) ? new SdeGroup(groupId, cat, "", true) : null;
+        _groupCategory.TryGetValue(groupId, out var cat)
+            ? new SdeGroup(groupId, cat, _groupNames.GetValueOrDefault(groupId, ""), true)
+            : null;
 
     public IReadOnlyList<SdeGroup> GetGroupsByCategory(int categoryId) =>
         _groupCategory.Where(kv => kv.Value == categoryId)

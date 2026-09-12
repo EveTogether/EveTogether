@@ -13,7 +13,8 @@ public static class IskContributors
     [
         new BountyIskContributor(),
         new LootIskContributor(),
-        new RewardIskContributor()
+        new RewardIskContributor(),
+        new ConsumableIskContributor()
     ];
 
     /// <summary>Which sources a stored breakdown was built by. A summary built by another set is out of date and is

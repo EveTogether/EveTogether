@@ -96,10 +96,12 @@ public static class RunTypeCatalogue
 
     // An abyssal pocket has no NPC bounty at all (ET-241, Jithran flying one with Raymond, 2026-09-11) — unlike a
     // data or relic site, which merely usually has none, this is never a gap BOUNTY could one day fill, so the
-    // section itself is dropped rather than kept around showing nothing.
+    // section itself is dropped rather than kept around showing nothing. CONSUMABLES (ET-249) is the filament that
+    // opened it, which only an abyssal pocket ever spends.
     private static readonly IReadOnlyList<RunSectionId> AbyssalWindow =
     [
-        RunSectionId.Activity, RunSectionId.Enemies, RunSectionId.Fit, RunSectionId.Fleet, RunSectionId.Loot
+        RunSectionId.Activity, RunSectionId.Enemies, RunSectionId.Fit, RunSectionId.Fleet, RunSectionId.Loot,
+        RunSectionId.Consumables
     ];
 
     private static readonly IReadOnlyList<RunSectionId> SiteDetail =
@@ -176,7 +178,11 @@ public static class RunTypeCatalogue
             WindowTitle = "ABYSSAL RUN",
             Noun = "an abyssal pocket",
             WindowSections = AbyssalWindow,
-            DetailSections = [RunSectionId.Activity, RunSectionId.Enemies, RunSectionId.Fleet, RunSectionId.Loot],
+            DetailSections =
+            [
+                RunSectionId.Activity, RunSectionId.Enemies, RunSectionId.Fleet, RunSectionId.Loot,
+                RunSectionId.Consumables
+            ],
             Space = RunSpace.AbyssalPocket,
             LootStrategies = AbyssalLootStrategies
         }

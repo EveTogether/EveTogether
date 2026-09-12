@@ -54,5 +54,16 @@ public enum RunParameterKey
     /// "0.6 Aphend" parses down to "Aphend") — never a reward. This is the mission's own target, not the pilot's
     /// own system at run start (<c>Run.SolarSystemId</c>); shown only where the SDE recognises the name exactly
     /// (ET-253).</summary>
-    MissionLocation
+    MissionLocation,
+
+    /// <summary>The abyssal filament CONSUMABLES resolved to spend, as an SDE type id (ET-249) — resolved once at
+    /// SAVE from the pocket's own stored tier and weather (<see cref="AbyssalFilament"/>) and never re-looked-up,
+    /// the same "captured once" rule every other snapshot in this enum follows. Absent when the tier or weather was
+    /// never set, or the SDE has no type by that exact name — never a guessed type id.</summary>
+    AbyssalFilamentTypeId,
+
+    /// <summary>How many filaments CONSUMABLES charges the run for (ET-249) — a proposal from the fit's hull class,
+    /// left for the pilot to change, and never a reward. Absent when nothing was ever confirmed (no fit known, no
+    /// hull-class rule for it), so a run with no known count is silent rather than costed at zero.</summary>
+    AbyssalFilamentCount
 }

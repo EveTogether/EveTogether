@@ -56,7 +56,10 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
             : type.Space is RunSpace.AbyssalPocket
                 ? AbyssalFilamentName.From(row.AbyssalFilamentText)
                 : "Unnamed site";
-        KindText = type.Name;
+        // An abyssal with no known filament falls back to the type's own name for both SiteText and KindText
+        // ("Abyssal"), which this one line would otherwise concatenate into "Abyssal Abyssal". The site name alone
+        // already says everything the kind would, so suppress the second, dimmed copy.
+        KindText = SiteText == type.Name ? string.Empty : type.Name;
         TypeIcon = type.Icon;
         DurationText = Duration.ToString(@"hh\:mm\:ss");
         // The activity's own TOTAL ISK, the one the detail screen shows — never a sum of this row's own choosing:
@@ -66,9 +69,12 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         NetText = NetIsk is { } net
             ? (net < 0 ? string.Empty : "+") + IskFormat.Compact(net) + " ISK" + IskFormat.ExpectedPart(row.Isk)
             : string.Empty;
-        CrewText = row.CharacterIds.Count == 0
+        // Snapshot first, then the live roster, then the bare id (ET-212, ET-247) — the exact chain the expanded
+        // row already follows, so this line and that one can never name the same pilot two different ways.
+        CrewText = row.Crew.Count == 0
             ? $"{row.ParticipantCount} pilots"
-            : string.Join(" · ", row.CharacterIds.Select(nameOf));
+            : string.Join(" · ", row.Crew.Select(member =>
+                CharacterNameResolver.Resolve(member.CharacterNameSnapshot, member.CharacterId, nameOf)));
         EnemiesText = row.EnemyTypeCount > 0
             ? $"{row.EnemyTypeCount} enemy types"
             // "Counted", not "recorded": only hand-counted enemies are stored, so a zero here is nobody typing a
@@ -182,7 +188,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     public bool IsShowing(ActivityOverviewRowDto row, bool canPublish) =>
         CanPublish == canPublish
         && _WithoutLists(_source) == _WithoutLists(row)
-        && _source.CharacterIds.SequenceEqual(row.CharacterIds)
+        && _source.Crew.SequenceEqual(row.Crew)
         && _source.Rewards.SequenceEqual(row.Rewards)
         && _source.ServerSyncStates.SequenceEqual(row.ServerSyncStates);
 
@@ -199,7 +205,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 
     private static ActivityOverviewRowDto _WithoutLists(ActivityOverviewRowDto row) => row with
     {
-        CharacterIds = Array.Empty<long>(),
+        Crew = Array.Empty<ActivityCrewMemberDto>(),
         Rewards = Array.Empty<ActivityRewardDto>(),
         ServerSyncStates = Array.Empty<ActivityServerSyncDto>()
     };
