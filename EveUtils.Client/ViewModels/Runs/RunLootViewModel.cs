@@ -323,6 +323,22 @@ public sealed partial class RunLootViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Loot another pilot shares from their own run while it goes (ET-242), already counted on their machine: shown as
+    /// the one list it is, valued here by type id like every other line. Nothing of it is this machine's to correct,
+    /// and there is no run here to read it back from.
+    /// </summary>
+    public Task LoadSharedAsync(IReadOnlyList<RunLootEntryDto> counted, DateTime sharedAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        RunId = null;
+        IsReadOnly = true;
+        return LoadAsync(counted.Count == 0
+            ? []
+            : [new RunLootCaptureDto(Guid.Empty, sharedAtUtc, IsExcluded: false, ContentHash: null,
+                LootCaptureSource.Clipboard, LootCaptureRole.Snapshot, counted)], cancellationToken);
+    }
+
+    /// <summary>
     /// <see cref="LoadAsync"/>, unless the pilot is in the middle of correcting this block — the list open to be
     /// written by hand, or a change still being stored. Then the read waits, and the block reads itself from the
     /// store the moment that ends (ET-222): a sync, or a correction from a second window, must never swap the

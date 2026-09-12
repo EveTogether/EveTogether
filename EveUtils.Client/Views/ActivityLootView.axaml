@@ -18,6 +18,193 @@
              at its default fill over a bright backdrop TextDim falls to 3.8:1 where this holds 5.5:1. Faction-free,
              like the dim ink it stands in for. -->
         <SolidColorBrush x:Key="LootMetaBrush" Color="#FFA89C88"/>
+        <!-- One character's block, for the group's own runs and for what a fleet member shares live (ET-242) alike:
+             the same component in both lists, so the two cannot drift into two looks of one thing. -->
+        <DataTemplate x:Key="CharacterBlock" DataType="vr:ActivityLootCharacterViewModel">
+            <StackPanel Margin="0,0,0,12">
+                <!-- ── Who, what it came to, and the way to correct it, all on one line ── -->
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8" Margin="2,4">
+                    <Panel Width="20" Height="23" VerticalAlignment="Center">
+                        <Panel.Clip>
+                            <PathGeometry Figures="M10,0 L20,5.75 L20,17.25 L10,23 L0,17.25 L0,5.75 Z"/>
+                        </Panel.Clip>
+                        <Border Background="{DynamicResource AccentSoftBrush}" IsVisible="{Binding !HasPortrait}">
+                            <TextBlock Text="{Binding Initial}" FontSize="10" FontWeight="Bold"
+                                       Foreground="{DynamicResource AccentBrightBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Image Source="{Binding Portrait}" Stretch="UniformToFill" IsVisible="{Binding HasPortrait}"/>
+                    </Panel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock Classes="charname" Text="{Binding CharacterText}"/>
+                        <Border Classes="chip dim" IsVisible="{Binding IsReadOnlyChipShown}"
+                                ToolTip.Tip="This run came in from a server; only its own pilot can correct it.">
+                            <TextBlock Text="read-only"/>
+                        </Border>
+                        <Border Classes="chip ok" IsVisible="{Binding IsSharedByFleet}"
+                                ToolTip.Tip="Shared by this pilot from their own run while it goes. Only they can correct it, and it goes the moment they stop sharing.">
+                            <TextBlock Text="{Binding SharedText}"/>
+                        </Border>
+                    </StackPanel>
+                    <Button Grid.Column="2" Classes="rewrite" Content="✎  REWRITE LOOT BY HAND"
+                            IsVisible="{Binding Loot.CanOfferLootEdit}"
+                            IsEnabled="{Binding Loot.CanEditLoot}"
+                            Command="{Binding Loot.BeginLootEditCommand}"
+                            ToolTip.Tip="Replace this character's loot with a list you type or paste. The captures it replaces stay below, excluded."/>
+                    <TextBlock Grid.Column="3" Classes="subtotal" Text="{Binding SubtotalText}"/>
+                </Grid>
+
+                <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,4" IsVisible="{Binding !Loot.HasCaptures}"
+                           Text="{Binding EmptyText}"/>
+
+                <!-- ── Rewrite by hand ── opens where it was asked for, in place of the table it replaces:
+                     what is in the box is what this character's loot becomes. -->
+                <StackPanel Spacing="4" Margin="0,2,0,6" IsVisible="{Binding Loot.IsEditingLoot}">
+                    <TextBox AcceptsReturn="True" MinHeight="90" TextWrapping="NoWrap"
+                             FontFamily="{StaticResource MonoFont}"
+                             PlaceholderText="Name, tab, quantity — one row per line."
+                             Text="{Binding Loot.LootText, Mode=TwoWay}"/>
+                    <TextBlock Classes="note" FontStyle="Normal" Text="{Binding Loot.LootTextRefusal}"
+                               IsVisible="{Binding Loot.LootTextRefusal, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Classes="rewrite" Content="{Binding Loot.FinishLootEditText}"
+                                IsEnabled="{Binding Loot.CanFinishLootEdit}"
+                                Command="{Binding Loot.FinishLootEditCommand}"/>
+                        <Button Classes="small ghost" Content="cancel" VerticalAlignment="Center"
+                                IsEnabled="{Binding !Loot.IsBusy}"
+                                Command="{Binding Loot.CancelLootEditCommand}"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- ── The items it is made of ── one row per kind, most valuable first; what was left out
+                     follows on rows of its own, struck through and badged, never folded into a row that
+                     counts. -->
+                <ItemsControl ItemsSource="{Binding Loot.ItemRows}" IsVisible="{Binding !Loot.IsEditingLoot}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vr:ActivityLootLineViewModel">
+                            <Border Classes="itemrow" Classes.alt="{Binding IsAlternate}"
+                                    Classes.top="{Binding IsTopValue}" Classes.excluded="{Binding IsExcluded}">
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
+                                    <Border Classes="icontile">
+                                        <Panel>
+                                            <TextBlock Text="{Binding Initial}" FontSize="10" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource AccentBrightBrush}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       IsVisible="{Binding !HasIcon}"/>
+                                            <Image Source="{Binding Icon}" IsVisible="{Binding HasIcon}"/>
+                                        </Panel>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                                VerticalAlignment="Center" ClipToBounds="True">
+                                        <TextBlock Classes="itemname" Text="{Binding Name}"/>
+                                        <TextBlock Classes="meta" Text="{Binding CaptureCountText}"
+                                                   IsVisible="{Binding CaptureCountText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                        <Border Classes="badge excluded" IsVisible="{Binding IsExcluded}">
+                                            <TextBlock Text="EXCLUDED"/>
+                                        </Border>
+                                        <Border Classes="badge" IsVisible="{Binding IsLost}">
+                                            <TextBlock Text="SPENT"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Classes="money" MinWidth="44" Text="{Binding QuantityText}"/>
+                                    <TextBlock Grid.Column="3" Classes="money" MinWidth="104" Text="{Binding AmountText}"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- ── Every capture behind the subtotal ── folded until asked for. -->
+                <ToggleButton Classes="disclosure" IsVisible="{Binding IsCapturesDisclosureShown}"
+                              IsChecked="{Binding IsCapturesShown, Mode=TwoWay}">
+                    <Panel>
+                        <Rectangle/>
+                        <TextBlock Margin="6,5">
+                            <Run FontSize="9" Text="{Binding DisclosureChevron}"/>
+                            <Run Text=" "/>
+                            <Run Text="{Binding DisclosureText}"/>
+                            <Run Text=" "/>
+                            <Run Foreground="{StaticResource LootMetaBrush}" Text="{Binding DisclosureExcludedText}"/>
+                        </TextBlock>
+                    </Panel>
+                </ToggleButton>
+                <Border Classes="capturestrip" IsVisible="{Binding IsCapturesShown}">
+                    <ItemsControl ItemsSource="{Binding Loot.Captures}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vr:RunLootCaptureRowViewModel">
+                                <Border Classes="capture" Classes.excluded="{Binding IsExcluded}">
+                                    <StackPanel Spacing="2">
+                                        <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6" Margin="0,0,0,2">
+                                            <TextBlock Classes="capnum" Text="{Binding NumberDisplay}"/>
+                                            <TextBlock Grid.Column="1" Classes="meta" Text="{Binding CapturedAtText}"/>
+                                            <WrapPanel Grid.Column="2" VerticalAlignment="Center">
+                                                <Border Classes="badge" Margin="0,0,6,0">
+                                                    <TextBlock Text="{Binding SourceText}"/>
+                                                </Border>
+                                                <Border Classes="badge role" Margin="0,0,6,0">
+                                                    <TextBlock Text="{Binding RoleText}"/>
+                                                </Border>
+                                                <Border Classes="badge excluded" Margin="0,0,6,0"
+                                                        IsVisible="{Binding IsExcludedBadgeShown}">
+                                                    <TextBlock Text="EXCLUDED"/>
+                                                </Border>
+                                                <Border Classes="badge repeat" Margin="0,0,6,0"
+                                                        IsVisible="{Binding RepeatBadgeText, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                                    <TextBlock Text="{Binding RepeatBadgeText}"/>
+                                                </Border>
+                                            </WrapPanel>
+                                            <TextBlock Grid.Column="3" Classes="money capsub" Text="{Binding SubtotalAmountText}"/>
+                                        </Grid>
+                                        <ItemsControl ItemsSource="{Binding Lines}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="vr:ActivityLootLineViewModel">
+                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,1">
+                                                        <TextBlock Classes="capline" Text="{Binding NameWithQuantityText}"/>
+                                                        <TextBlock Grid.Column="1" Classes="capvalue" Text="{Binding AmountText}"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <TextBlock Classes="note" FontStyle="Normal" Text="ADDED BELOW THE LIST"
+                                                   IsVisible="{Binding IsAddedAfterEdit}"/>
+                                        <!-- Its state in words beside the switch that changes it, and for a capture
+                                             that is out, the named way back in. -->
+                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                            <Button Classes="switch" Classes.on="{Binding !IsExcluded}"
+                                                    IsEnabled="{Binding $parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.CanCorrect}"
+                                                    Command="{Binding $parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.ToggleCaptureExcludedCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip.Tip="Count this capture, or leave it out of every total.">
+                                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                                    <Border Classes="track">
+                                                        <Ellipse/>
+                                                    </Border>
+                                                    <TextBlock Text="{Binding StateText}"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Classes="small" Content="{Binding ReincludeText}"
+                                                    IsVisible="{Binding IsExcluded}"
+                                                    IsEnabled="{Binding $parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.CanCorrect}"
+                                                    Command="{Binding $parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.ReincludeCaptureCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+
+                <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,0" Text="{Binding Loot.ManualListCaption}"
+                           IsVisible="{Binding Loot.ManualListCaption, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,0" Text="{Binding Loot.AddedAfterEditNote}"
+                           IsVisible="{Binding Loot.AddedAfterEditNote, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,0" Text="{Binding Loot.RunStatusMessage}"
+                           IsVisible="{Binding Loot.RunStatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,0" IsVisible="{Binding Loot.IsBusy}"
+                           Text="Saving the change and counting the totals again…"/>
+            </StackPanel>
+        </DataTemplate>
     </UserControl.Resources>
 
     <UserControl.Styles>
@@ -360,191 +547,7 @@
             </Border>
         </StackPanel>
 
-        <ItemsControl ItemsSource="{Binding Characters}">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="vr:ActivityLootCharacterViewModel">
-                    <StackPanel Margin="0,0,0,12">
-                        <!-- ── Who, what it came to, and the way to correct it, all on one line ── -->
-                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8" Margin="2,4">
-                            <Panel Width="20" Height="23" VerticalAlignment="Center">
-                                <Panel.Clip>
-                                    <PathGeometry Figures="M10,0 L20,5.75 L20,17.25 L10,23 L0,17.25 L0,5.75 Z"/>
-                                </Panel.Clip>
-                                <Border Background="{DynamicResource AccentSoftBrush}" IsVisible="{Binding !HasPortrait}">
-                                    <TextBlock Text="{Binding Initial}" FontSize="10" FontWeight="Bold"
-                                               Foreground="{DynamicResource AccentBrightBrush}"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                                <Image Source="{Binding Portrait}" Stretch="UniformToFill" IsVisible="{Binding HasPortrait}"/>
-                            </Panel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <TextBlock Classes="charname" Text="{Binding CharacterText}"/>
-                                <Border Classes="chip dim" IsVisible="{Binding Loot.IsReadOnly}"
-                                        ToolTip.Tip="This run came in from a server; only its own pilot can correct it.">
-                                    <TextBlock Text="read-only"/>
-                                </Border>
-                            </StackPanel>
-                            <Button Grid.Column="2" Classes="rewrite" Content="✎  REWRITE LOOT BY HAND"
-                                    IsVisible="{Binding Loot.CanOfferLootEdit}"
-                                    IsEnabled="{Binding Loot.CanEditLoot}"
-                                    Command="{Binding Loot.BeginLootEditCommand}"
-                                    ToolTip.Tip="Replace this character's loot with a list you type or paste. The captures it replaces stay below, excluded."/>
-                            <TextBlock Grid.Column="3" Classes="subtotal" Text="{Binding SubtotalText}"/>
-                        </Grid>
-
-                        <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,4" IsVisible="{Binding !Loot.HasCaptures}"
-                                   Text="{Binding EmptyText}"/>
-
-                        <!-- ── Rewrite by hand ── opens where it was asked for, in place of the table it replaces:
-                             what is in the box is what this character's loot becomes. -->
-                        <StackPanel Spacing="4" Margin="0,2,0,6" IsVisible="{Binding Loot.IsEditingLoot}">
-                            <TextBox AcceptsReturn="True" MinHeight="90" TextWrapping="NoWrap"
-                                     FontFamily="{StaticResource MonoFont}"
-                                     PlaceholderText="Name, tab, quantity — one row per line."
-                                     Text="{Binding Loot.LootText, Mode=TwoWay}"/>
-                            <TextBlock Classes="note" FontStyle="Normal" Text="{Binding Loot.LootTextRefusal}"
-                                       IsVisible="{Binding Loot.LootTextRefusal, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button Classes="rewrite" Content="{Binding Loot.FinishLootEditText}"
-                                        IsEnabled="{Binding Loot.CanFinishLootEdit}"
-                                        Command="{Binding Loot.FinishLootEditCommand}"/>
-                                <Button Classes="small ghost" Content="cancel" VerticalAlignment="Center"
-                                        IsEnabled="{Binding !Loot.IsBusy}"
-                                        Command="{Binding Loot.CancelLootEditCommand}"/>
-                            </StackPanel>
-                        </StackPanel>
-
-                        <!-- ── The items it is made of ── one row per kind, most valuable first; what was left out
-                             follows on rows of its own, struck through and badged, never folded into a row that
-                             counts. -->
-                        <ItemsControl ItemsSource="{Binding Loot.ItemRows}" IsVisible="{Binding !Loot.IsEditingLoot}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="vr:ActivityLootLineViewModel">
-                                    <Border Classes="itemrow" Classes.alt="{Binding IsAlternate}"
-                                            Classes.top="{Binding IsTopValue}" Classes.excluded="{Binding IsExcluded}">
-                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
-                                            <Border Classes="icontile">
-                                                <Panel>
-                                                    <TextBlock Text="{Binding Initial}" FontSize="10" FontWeight="SemiBold"
-                                                               Foreground="{DynamicResource AccentBrightBrush}"
-                                                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                               IsVisible="{Binding !HasIcon}"/>
-                                                    <Image Source="{Binding Icon}" IsVisible="{Binding HasIcon}"/>
-                                                </Panel>
-                                            </Border>
-                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
-                                                        VerticalAlignment="Center" ClipToBounds="True">
-                                                <TextBlock Classes="itemname" Text="{Binding Name}"/>
-                                                <TextBlock Classes="meta" Text="{Binding CaptureCountText}"
-                                                           IsVisible="{Binding CaptureCountText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                                                <Border Classes="badge excluded" IsVisible="{Binding IsExcluded}">
-                                                    <TextBlock Text="EXCLUDED"/>
-                                                </Border>
-                                                <Border Classes="badge" IsVisible="{Binding IsLost}">
-                                                    <TextBlock Text="SPENT"/>
-                                                </Border>
-                                            </StackPanel>
-                                            <TextBlock Grid.Column="2" Classes="money" MinWidth="44" Text="{Binding QuantityText}"/>
-                                            <TextBlock Grid.Column="3" Classes="money" MinWidth="104" Text="{Binding AmountText}"/>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <!-- ── Every capture behind the subtotal ── folded until asked for. -->
-                        <ToggleButton Classes="disclosure" IsVisible="{Binding Loot.HasCaptures}"
-                                      IsChecked="{Binding IsCapturesShown, Mode=TwoWay}">
-                            <Panel>
-                                <Rectangle/>
-                                <TextBlock Margin="6,5">
-                                    <Run FontSize="9" Text="{Binding DisclosureChevron}"/>
-                                    <Run Text=" "/>
-                                    <Run Text="{Binding DisclosureText}"/>
-                                    <Run Text=" "/>
-                                    <Run Foreground="{StaticResource LootMetaBrush}" Text="{Binding DisclosureExcludedText}"/>
-                                </TextBlock>
-                            </Panel>
-                        </ToggleButton>
-                        <Border Classes="capturestrip" IsVisible="{Binding IsCapturesShown}">
-                            <ItemsControl ItemsSource="{Binding Loot.Captures}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="vr:RunLootCaptureRowViewModel">
-                                        <Border Classes="capture" Classes.excluded="{Binding IsExcluded}">
-                                            <StackPanel Spacing="2">
-                                                <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6" Margin="0,0,0,2">
-                                                    <TextBlock Classes="capnum" Text="{Binding NumberDisplay}"/>
-                                                    <TextBlock Grid.Column="1" Classes="meta" Text="{Binding CapturedAtText}"/>
-                                                    <WrapPanel Grid.Column="2" VerticalAlignment="Center">
-                                                        <Border Classes="badge" Margin="0,0,6,0">
-                                                            <TextBlock Text="{Binding SourceText}"/>
-                                                        </Border>
-                                                        <Border Classes="badge role" Margin="0,0,6,0">
-                                                            <TextBlock Text="{Binding RoleText}"/>
-                                                        </Border>
-                                                        <Border Classes="badge excluded" Margin="0,0,6,0"
-                                                                IsVisible="{Binding IsExcludedBadgeShown}">
-                                                            <TextBlock Text="EXCLUDED"/>
-                                                        </Border>
-                                                        <Border Classes="badge repeat" Margin="0,0,6,0"
-                                                                IsVisible="{Binding RepeatBadgeText, Converter={x:Static ObjectConverters.IsNotNull}}">
-                                                            <TextBlock Text="{Binding RepeatBadgeText}"/>
-                                                        </Border>
-                                                    </WrapPanel>
-                                                    <TextBlock Grid.Column="3" Classes="money capsub" Text="{Binding SubtotalAmountText}"/>
-                                                </Grid>
-                                                <ItemsControl ItemsSource="{Binding Lines}">
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate DataType="vr:ActivityLootLineViewModel">
-                                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,1">
-                                                                <TextBlock Classes="capline" Text="{Binding NameWithQuantityText}"/>
-                                                                <TextBlock Grid.Column="1" Classes="capvalue" Text="{Binding AmountText}"/>
-                                                            </Grid>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                                <TextBlock Classes="note" FontStyle="Normal" Text="ADDED BELOW THE LIST"
-                                                           IsVisible="{Binding IsAddedAfterEdit}"/>
-                                                <!-- Its state in words beside the switch that changes it, and for a capture
-                                                     that is out, the named way back in. -->
-                                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
-                                                    <Button Classes="switch" Classes.on="{Binding !IsExcluded}"
-                                                            IsEnabled="{Binding $parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.CanCorrect}"
-                                                            Command="{Binding $parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.ToggleCaptureExcludedCommand}"
-                                                            CommandParameter="{Binding}"
-                                                            ToolTip.Tip="Count this capture, or leave it out of every total.">
-                                                        <StackPanel Orientation="Horizontal" Spacing="5">
-                                                            <Border Classes="track">
-                                                                <Ellipse/>
-                                                            </Border>
-                                                            <TextBlock Text="{Binding StateText}"/>
-                                                        </StackPanel>
-                                                    </Button>
-                                                    <Button Classes="small" Content="{Binding ReincludeText}"
-                                                            IsVisible="{Binding IsExcluded}"
-                                                            IsEnabled="{Binding $parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.CanCorrect}"
-                                                            Command="{Binding $parent[ItemsControl].((vr:ActivityLootCharacterViewModel)DataContext).Loot.ReincludeCaptureCommand}"
-                                                            CommandParameter="{Binding}"/>
-                                                </StackPanel>
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </Border>
-
-                        <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,0" Text="{Binding Loot.ManualListCaption}"
-                                   IsVisible="{Binding Loot.ManualListCaption, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                        <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,0" Text="{Binding Loot.AddedAfterEditNote}"
-                                   IsVisible="{Binding Loot.AddedAfterEditNote, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                        <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,0" Text="{Binding Loot.RunStatusMessage}"
-                                   IsVisible="{Binding Loot.RunStatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                        <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,0" IsVisible="{Binding Loot.IsBusy}"
-                                   Text="Saving the change and counting the totals again…"/>
-                    </StackPanel>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <ItemsControl ItemsSource="{Binding Characters}" ItemTemplate="{StaticResource CharacterBlock}"/>
 
         <!-- Under everything: what the whole group brought in. -->
         <Border Classes="grouptotal" IsVisible="{Binding HasCaptures}">
@@ -555,5 +558,16 @@
                            VerticalAlignment="Center" Text="{Binding NetIskDisplay}"/>
             </Grid>
         </Border>
+
+        <!-- ET-242: what the other pilots on this run share from their own, live — the same block, read-only, and
+             below the group total on purpose: none of it is in that figure. -->
+        <StackPanel IsVisible="{Binding HasFleetCharacters}" Margin="0,14,0,0">
+            <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="0,0,0,6" Margin="0,0,0,4">
+                <TextBlock Foreground="{StaticResource LootMetaBrush}" FontSize="11" LetterSpacing="0.5"
+                           Text="{Binding FleetSummaryText}"/>
+            </Border>
+            <TextBlock Classes="note" Margin="0,0,0,8" Text="{Binding FleetNoteText}"/>
+            <ItemsControl ItemsSource="{Binding FleetCharacters}" ItemTemplate="{StaticResource CharacterBlock}"/>
+        </StackPanel>
     </StackPanel>
 </UserControl>

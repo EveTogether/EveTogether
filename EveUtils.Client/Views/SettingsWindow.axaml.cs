@@ -41,6 +41,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private TextBox _gamelogDirBox = null!;
     private TextBlock _hintBlock = null!;
     private CheckBox _shareLocationBox = null!, _shareBountyBox = null!, _shareCombatBox = null!;
+    private CheckBox? _shareLootBox;
     private CheckBox _loadTypeImagesBox = null!, _openFitDetailAfterImportBox = null!, _enableLocalApiBox = null!;
     private CheckBox _openFleetRunWindowBox = null!;
     private CheckBox? _autoPublishFleetRunsBox;
@@ -83,7 +84,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     }
 
     public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null,
-        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true) : this()
+        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false) : this()
     {
         _detectedDefault = detectedDefault;
         _localApi = localApiServer;
@@ -128,6 +129,9 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
 
         _shareLocationBox.IsChecked = shareLocation;
         _shareBountyBox.IsChecked = shareBounty;
+        _shareLootBox = this.FindControl<CheckBox>("ShareLootBox");
+        if (_shareLootBox is not null)
+            _shareLootBox.IsChecked = shareLoot;
         _shareCombatBox.IsChecked = shareCombat;
         _loadTypeImagesBox.IsChecked = loadTypeImages;
         _openFitDetailAfterImportBox.IsChecked = openFitDetailAfterImport;
@@ -455,6 +459,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
             : LocalApi.LocalApiServer.DefaultPort;
         var checkUpdatesOnStartup = _checkUpdatesOnStartupBox.IsChecked ?? true;
         var autoPublishFleetRuns = _autoPublishFleetRunsBox?.IsChecked ?? true;
-        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns);
+        var shareLoot = _shareLootBox?.IsChecked ?? false;
+        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot);
     }
 }

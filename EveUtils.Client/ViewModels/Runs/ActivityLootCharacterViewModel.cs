@@ -16,11 +16,15 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// </summary>
 public sealed partial class ActivityLootCharacterViewModel : ObservableObject
 {
-    public ActivityLootCharacterViewModel(Guid runId, long characterId, string characterName, RunLootViewModel loot)
+    /// <param name="isSharedByFleet">A fleet member's loot as they share it live (ET-242) rather than a run in this
+    /// client's store: <paramref name="runId"/> is then <see cref="Guid.Empty"/>, and the block is read-only.</param>
+    public ActivityLootCharacterViewModel(Guid runId, long characterId, string characterName, RunLootViewModel loot,
+        bool isSharedByFleet = false)
     {
         RunId = runId;
         CharacterId = characterId;
         CharacterText = characterName;
+        IsSharedByFleet = isSharedByFleet;
         Loot = loot;
         Loot.RunId = runId;
         Loot.PropertyChanged += _OnLootChanged;
@@ -34,6 +38,23 @@ public sealed partial class ActivityLootCharacterViewModel : ObservableObject
     public string CharacterText { get; }
 
     public RunLootViewModel Loot { get; }
+
+    public bool IsSharedByFleet { get; }
+
+    /// <summary>How many captures the sharing pilot's list was counted from — theirs to show, since their captures
+    /// themselves never leave their machine.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SharedText))]
+    private int _sharedCaptureCount;
+
+    public string SharedText => SharedCaptureCount == 1 ? "live · 1 capture" : $"live · {SharedCaptureCount} captures";
+
+    /// <summary>A run of this client's own that came in from a server — the chip a fleet member's live share does not
+    /// carry, since it says something else about where it came from.</summary>
+    public bool IsReadOnlyChipShown => Loot.IsReadOnly && !IsSharedByFleet;
+
+    /// <summary>A live share is counted on the pilot's own machine; there are no captures here to open.</summary>
+    public bool IsCapturesDisclosureShown => Loot.HasCaptures && !IsSharedByFleet;
 
     public string Initial => string.IsNullOrEmpty(CharacterText) ? "?" : CharacterText[..1].ToUpperInvariant();
 
@@ -72,9 +93,11 @@ public sealed partial class ActivityLootCharacterViewModel : ObservableObject
     /// <summary>Why the block has nothing under its name, rather than an empty table that looks like a failed load. A
     /// run from before loot was filed per character (ET-211) carries all of it on one of the group's runs, and the
     /// others simply have none — shown as none, never shared out after the fact.</summary>
-    public string EmptyText => Loot.IsReadOnly
-        ? "No loot was copied on this character's run."
-        : "No loot was copied on this character's run. Rewrite it by hand to give it some.";
+    public string EmptyText => IsSharedByFleet
+        ? "Sharing, and nothing looted on their run yet."
+        : Loot.IsReadOnly
+            ? "No loot was copied on this character's run."
+            : "No loot was copied on this character's run. Rewrite it by hand to give it some.";
 
     public async Task LoadPortraitAsync(ICharacterPortraitProvider portraits)
     {
@@ -89,6 +112,11 @@ public sealed partial class ActivityLootCharacterViewModel : ObservableObject
         else if (e.PropertyName is nameof(RunLootViewModel.ExcludedCount))
             OnPropertyChanged(nameof(DisclosureExcludedText));
         else if (e.PropertyName is nameof(RunLootViewModel.IsReadOnly))
+        {
             OnPropertyChanged(nameof(EmptyText));
+            OnPropertyChanged(nameof(IsReadOnlyChipShown));
+        }
+        else if (e.PropertyName is nameof(RunLootViewModel.HasCaptures))
+            OnPropertyChanged(nameof(IsCapturesDisclosureShown));
     }
 }

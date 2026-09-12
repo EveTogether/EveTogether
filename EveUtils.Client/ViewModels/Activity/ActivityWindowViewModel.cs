@@ -117,6 +117,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     // are three separate opt-ins: the common member shares one of them and not the others.
     private readonly Dictionary<int, (decimal? Loot, decimal? Bounty)> _fleetIsk = [];
 
+    // What each of the others says they still offer of this run (ET-242): a figure they took back comes off their row.
+    private readonly FleetRunShares? _fleetShares;
+
     private DispatcherTimer? _timer;
     private bool _isManualRun;
     // The discard this window ordered comes back to it on the bus. Without this the commander's own window would
@@ -178,6 +181,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             : null;
         if (LootOverview is not null)
             LootOverview.PropertyChanged += (_, _) => _RefreshSummaries();
+        FleetSharing = new RunFleetSharingViewModel(services);
+        _fleetShares = services.GetService<FleetRunShares>();
+        if (_fleetShares is not null)
+            _fleetShares.Changed += _OnFleetShareChanged;
 
         _SyncSectionsToType();
         Refresh(DateTime.UtcNow);
@@ -212,6 +219,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// activity's detail screen shows. Each participant's block is their own run's loot, whichever character the
     /// column happens to show, which is also what the live TOTAL ISK sums for a group (ET-211).</summary>
     public ActivityLootViewModel? LootOverview { get; }
+
+    /// <summary>The two toggles on a shared fleet run's face — this pilot's loot and bounty, for this run only — and
+    /// the loot that goes out while they are on (ET-242).</summary>
+    public RunFleetSharingViewModel FleetSharing { get; }
 
     /// <summary>Only for what is genuinely the abyss's own: the 20-minute deadline, the tier and weather, the
     /// per-member anchors. Never for "and everything else is a site" — that is what this window used to do.</summary>
@@ -1571,7 +1582,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _ = _RefreshRunCharactersAsync();
         _ = _RefreshParticipantsAsync();
         _ShareRunLootWithFleet();
+        _ = FleetSharing.SyncAsync(nowUtc, FleetId, GroupCode,
+            RunState is ActivityRunState.Running or ActivityRunState.Stopped, _RunCharacterIds(), LootOverview);
     }
+
+    /// <summary>Every character with a run in this group as the window knows it: the participants, and its own pilot
+    /// before the store has named any.</summary>
+    private int[] _RunCharacterIds() => _ActingCharacterId() is { } acting
+        ? [.. Participants.Select(participant => participant.CharacterId).Append(acting).Distinct()]
+        : [.. Participants.Select(participant => participant.CharacterId)];
 
     private DateTime? _lastAliveWrittenAtUtc;
 
@@ -2664,6 +2683,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
+                // A sample still under way when its pilot took the figure back is not put up again (ET-242).
+                if (_IsWithheld(sample.CharacterId, sample.Kind))
+                    return;
+
                 (decimal? Loot, decimal? Bounty) held = _fleetIsk.GetValueOrDefault(sample.CharacterId);
                 _fleetIsk[sample.CharacterId] = sample.Kind == MetricKind.Loot
                     ? held with { Loot = (decimal)sample.Value }
@@ -2684,6 +2707,43 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             ApplyFleetEnvelope([.. _fleetLocations.Values], DateTime.UtcNow);
         });
     }
+
+    /// <summary>Whether a pilot said they no longer offer this figure of this run. A pilot who never said anything — an
+    /// older client — is taken at the metric stream's word, as before.</summary>
+    private bool _IsWithheld(int characterId, MetricKind kind) =>
+        GroupCode is { } groupCode && _fleetShares?.Of(groupCode, characterId) is { } share
+                                   && (kind is MetricKind.Loot ? !share.SharesLoot : !share.SharesBounty);
+
+    /// <summary>
+    /// One of the others changed what they offer of this run (ET-242). Switching a figure off means the others see
+    /// nothing more of it from that moment, so the one already standing on their FLEET row comes down with it rather
+    /// than waiting for a sample that is no longer going to come.
+    /// </summary>
+    private void _OnFleetShareChanged(string groupCode) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+    {
+        if (groupCode != GroupCode)
+            return;
+
+        bool isChanged = false;
+        foreach (int characterId in _fleetIsk.Keys.ToList())
+        {
+            (decimal? Loot, decimal? Bounty) held = _fleetIsk[characterId];
+            (decimal? Loot, decimal? Bounty) kept = (
+                _IsWithheld(characterId, MetricKind.Loot) ? null : held.Loot,
+                _IsWithheld(characterId, MetricKind.Bounty) ? null : held.Bounty);
+            if (kept == held)
+                continue;
+
+            isChanged = true;
+            if (kept is (null, null))
+                _fleetIsk.Remove(characterId);
+            else
+                _fleetIsk[characterId] = kept;
+        }
+
+        if (isChanged)
+            ApplyFleetEnvelope([.. _fleetLocations.Values], DateTime.UtcNow);
+    });
 
     public void ApplyFleetEnvelope(IReadOnlyList<MetricSample> samples, DateTime receivedUtc)
     {
@@ -3026,6 +3086,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _fleetRunPreparedSubscription?.Dispose();
         _fleetPilotStoppedSubscription?.Dispose();
         _fleetPilotResumedSubscription?.Dispose();
+        if (_fleetShares is not null)
+            _fleetShares.Changed -= _OnFleetShareChanged;
+        // A closed window shows no toggle, so it may not keep its characters on the run the toggles were about.
+        FleetSharing.Release(forget: false);
         _timer?.Stop();
         _timer = null;
     }
@@ -3045,6 +3109,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         foreach (RunWindowSection section in _AllSections())
             section.OnRunClosed();
+        FleetSharing.Release(forget: true);
         _ownLegsPending.Clear();
         _ownLegWasInside.Clear();
         _RefreshSummaries();

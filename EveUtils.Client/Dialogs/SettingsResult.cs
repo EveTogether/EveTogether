@@ -6,9 +6,9 @@ namespace EveUtils.Client.Dialogs;
 
 /// <summary>
 /// The values returned by the settings dialog: the gamelog directory the watcher tails and the global
-/// fleet-sharing defaults — location (opt-IN) plus <see cref="ShareCombat"/> (opt-OUT: one toggle for all live
-/// combat data — DPS out/in, neut, cap). These are the baseline for every fleet; a per-fleet override can still change
-/// them per fleet. Null = cancelled. <see cref="ReimportSde"/> is set when the user pressed "Re-download &amp; re-import"
+/// fleet-sharing defaults — location, bounty and <see cref="ShareLoot"/> (opt-IN) plus <see cref="ShareCombat"/>
+/// (opt-OUT: one toggle for all live combat data — DPS out/in, neut, cap). These are the baseline for every fleet; a
+/// per-fleet override can still change them per fleet, and a shared fleet run its own loot and bounty (ET-242). Null = cancelled. <see cref="ReimportSde"/> is set when the user pressed "Re-download &amp; re-import"
 /// in the SDE section — the caller saves the other settings and then runs a forced SDE import (fallback/debug).
 /// </summary>
 public sealed record SettingsResult(
@@ -18,4 +18,5 @@ public sealed record SettingsResult(
     bool EnableLocalApi = false, int LocalApiPort = LocalApiServer.DefaultPort,
     bool CheckUpdatesOnStartup = true,
     bool OpenFleetRunWindowImmediately = false,
-    bool AutoPublishFleetRuns = true);
+    bool AutoPublishFleetRuns = true,
+    bool ShareLoot = false);
