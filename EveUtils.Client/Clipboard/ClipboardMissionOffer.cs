@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using EveUtils.Client.Dialogs;
 using Microsoft.Extensions.DependencyInjection;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Runs;
@@ -132,12 +133,24 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
                     : candidates.FirstOrDefault(character =>
                         string.Equals(character.Name, copiedByCharacter, StringComparison.OrdinalIgnoreCase))?.EsiCharacterId;
 
+                // ET-270: see ClipboardSignatureOffer's own copy of this question for why — same rule, same key
+                // format (OwnCharacterPickMemory), so a group started off a copied mission and one started off a
+                // copied signature restore from the same memory.
+                ISettingRepository? settings = _services.GetService<ISettingRepository>();
+                IReadOnlyList<FleetParticipant> participation = _services.GetService<IFleetParticipation>()?.Current ?? [];
+                long? anchorFleetId = OwnCharacterPickMemory.FleetIdFor(preselectedCharacterId, participation);
+                IReadOnlyCollection<int>? fleetCharacterIds =
+                    OwnCharacterPickMemory.FleetCharacterIdsFor(preselectedCharacterId, participation);
+                IReadOnlyList<int>? preselected = await OwnCharacterPickMemory.ResolvePreselectionAsync(settings,
+                    preselectedCharacterId, [.. flying.Select(character => character.EsiCharacterId!.Value)],
+                    fleetCharacterIds, anchorFleetId);
+
                 // Multi-select (ET-210): see ClipboardSignatureOffer's own copy of this question for why.
                 IReadOnlyList<int>? picked = await _dialogs.PickCharactersAsync("Whose run is this?",
                     [.. candidates.Select(character => new CharacterPickOption(
                         character.EsiCharacterId!.Value, character.Name,
                         flying.Contains(character) ? "EVE client running" : "local character", Enabled: true))],
-                    preselectedCharacterId is { } preselectedId ? [preselectedId] : null);
+                    preselected);
                 pilot = picked is { Count: > 0 }
                     ? candidates.FirstOrDefault(character => character.EsiCharacterId == picked[0])
                     : null;
@@ -146,6 +159,10 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
                         .Select(id => candidates.FirstOrDefault(character => character.EsiCharacterId == id))
                         .Where(character => character is not null)
                         .Select(character => character!)];
+
+                if (settings is not null && picked is { Count: > 0 })
+                    await OwnCharacterPickMemory.SaveAsync(settings, picked, fleetCharacterIds, anchorFleetId);
+
                 startsOnArrival = startsOnArrival && pilot is not null;
             }
 

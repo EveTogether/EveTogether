@@ -13,6 +13,11 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: the own-character multi-pick at the start of a run no longer forgets everyone but the pilot after a
+  restart.** A copied signature or mission that asks "Whose run is this?" now defaults to every one of your own
+  characters in your active fleet, not only the one who copied it — unticking one is remembered for that fleet's
+  next site. Flying solo, it instead brings back your last full pick. Either way, a character who has since logged
+  out is never ticked silently. Tools → Start run's own multi-pick works the same way and shares the same memory.
 - **Fixed: a homefront's outcome and payout, unstuck.** HOMEFRONT's OUTCOME can now be set or corrected from the
   saved activity's detail screen, not only at STOP in the run window — a homefront reviewed after the fact (like
   Jithran's own HF-KQWB) can still be marked Completed, and "if completed" per-row figures turn into the real

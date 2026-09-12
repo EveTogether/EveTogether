@@ -5,6 +5,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Runs;
@@ -237,6 +238,148 @@ public sealed class ClipboardSignatureOfferTests
         await ActivityWindowHarness.WaitUntil(() => env.Dialogs.LastPrompt is not null);
 
         Assert.Equal([90000002], env.Dialogs.LastPreselectedCharacterIds);
+    }
+
+    // ── ET-270 — the own-character multi-pick is remembered, fleet-first ────────────────────────────
+
+    // A second, distinct fully-scanned line — same recognised site, different signature id — so a second Copy()
+    // in the same test raises a fresh question instead of tripping the "same copy twice" duplicate guard.
+    private const string SecondMeasuredHomefrontLine =
+        "IMM-761\tCosmic Anomaly\tHomefront Operation Site - Combat Site\tSuspicious Signal: Secure the Intel\t100,0%\t0,50 AU";
+
+    // Jithran, scope change on ET-270: "als ik in een fleet zit ga ik er vanuit dat fleetmembers meedoen." Three of
+    // this client's own characters share a fleet; only one of them copied the signature, but all three start
+    // ticked — not just the copier, and not gated on any remembered pick at all.
+    [AvaloniaFact]
+    public async Task PilotInAnActiveFleet_TicksEveryOwnFleetCharacter_NotOnlyTheCopier()
+    {
+        using var env = await Env.StartAsync(
+            services => services.AddSingleton<ILocalCharacterPresence>(
+                new ActivityWindowHarness.StubPresence(inGame: true, 90000001, 90000002, 90000003)),
+            copiedByCharacter: "First Pilot");
+        var registry = env.Services.GetRequiredService<ICharacterRegistry>();
+        await registry.AddOrUpdateAsync(new Character("First Pilot", 90000001));
+        await registry.AddOrUpdateAsync(new Character("Second Pilot", 90000002));
+        await registry.AddOrUpdateAsync(new Character("Third Pilot", 90000003));
+        env.Services.GetRequiredService<IFleetParticipation>().Set([
+            new FleetParticipant(90000001, 500, ClientOnly: true),
+            new FleetParticipant(90000002, 500, ClientOnly: true),
+            new FleetParticipant(90000003, 500, ClientOnly: true)
+        ]);
+        env.Sde.AddSite(Site(1264, "Suspicious Signal: Secure the Intel", archetype: "Homefront Operations", archetypeId: 70));
+
+        env.Copy(MeasuredHomefrontLine);
+        await ActivityWindowHarness.WaitUntil(() => env.Dialogs.LastPrompt is not null);
+
+        Assert.Equal([90000001, 90000002, 90000003], env.Dialogs.LastPreselectedCharacterIds);
+    }
+
+    // Jithran: "misschien zou ik iemand kunnen uitvinken die niet meedoet maar dat is meer de uitzondering dan de
+    // regel" — unticking one fleet mate is remembered for that same fleet's next site, not forgotten the moment
+    // the picker closes.
+    [AvaloniaFact]
+    public async Task UntickingAFleetMemberOnce_ExcludesThemFromTheSameFleetsNextDefault()
+    {
+        using var env = await Env.StartAsync(
+            services => services.AddSingleton<ILocalCharacterPresence>(
+                new ActivityWindowHarness.StubPresence(inGame: true, 90000001, 90000002, 90000003)),
+            copiedByCharacter: "First Pilot");
+        var registry = env.Services.GetRequiredService<ICharacterRegistry>();
+        await registry.AddOrUpdateAsync(new Character("First Pilot", 90000001));
+        await registry.AddOrUpdateAsync(new Character("Second Pilot", 90000002));
+        await registry.AddOrUpdateAsync(new Character("Third Pilot", 90000003));
+        env.Services.GetRequiredService<IFleetParticipation>().Set([
+            new FleetParticipant(90000001, 500, ClientOnly: true),
+            new FleetParticipant(90000002, 500, ClientOnly: true),
+            new FleetParticipant(90000003, 500, ClientOnly: true)
+        ]);
+        env.Sde.AddSite(Site(1264, "Suspicious Signal: Secure the Intel", archetype: "Homefront Operations", archetypeId: 70));
+
+        // First site: the pilot unticks the third character by hand.
+        env.Dialogs.OnPickCharacters = (_, _) => Task.FromResult<IReadOnlyList<int>?>([90000001, 90000002]);
+        env.Copy(MeasuredHomefrontLine);
+        await ActivityWindowHarness.WaitUntil(() => env.Dialogs.ShownActivityWindows.Count > 0);
+
+        // Second site, same fleet: the third character starts unticked again, on its own — no re-asking needed.
+        env.Copy(SecondMeasuredHomefrontLine);
+        await ActivityWindowHarness.WaitUntil(() => env.Dialogs.ShownActivityWindows.Count > 1);
+
+        Assert.Equal([90000001, 90000002], env.Dialogs.LastPreselectedCharacterIds);
+    }
+
+    // ET-270 AC-1: five own characters started a site together; the client restarts (same settings database, a
+    // new Env on the same InstanceName — the pattern ActivityWindowWiringTests' own restart test uses); a new
+    // signature is copied and the same five come back ticked, not just the pilot who happened to copy it.
+    [AvaloniaFact]
+    public async Task APreviousPick_SurvivesARestart_AndReappliesToANewSignature()
+    {
+        string instanceName = "uitest-et270-" + Guid.NewGuid().ToString("N");
+        int[] fiveOwnToons = [90000001, 90000002, 90000003, 90000004, 90000005];
+
+        using (var before = await Env.StartAsync(
+            services => services.AddSingleton<ILocalCharacterPresence>(
+                new ActivityWindowHarness.StubPresence(inGame: true, fiveOwnToons)),
+            copiedByCharacter: "Pilot 1", instanceName: instanceName))
+        {
+            var registry = before.Services.GetRequiredService<ICharacterRegistry>();
+            foreach (int id in fiveOwnToons)
+                await registry.AddOrUpdateAsync(new Character($"Pilot {id - 90000000}", id));
+            before.Sde.AddSite(Site(1264, "Suspicious Signal: Secure the Intel", archetype: "Homefront Operations", archetypeId: 70));
+            before.Dialogs.OnPickCharacters = (_, _) => Task.FromResult<IReadOnlyList<int>?>(fiveOwnToons);
+
+            before.Copy(MeasuredHomefrontLine);
+            await ActivityWindowHarness.WaitUntil(() => before.Dialogs.ShownActivityWindows.Count > 0);
+            before.KeepDataOnDispose = true;
+        } // "the client restarts" — no fleet involved, so this exercises the no-fleet, per-character memory fallback
+
+        using var after = await Env.StartAsync(
+            services => services.AddSingleton<ILocalCharacterPresence>(
+                new ActivityWindowHarness.StubPresence(inGame: true, fiveOwnToons)),
+            copiedByCharacter: "Pilot 1", instanceName: instanceName);
+        after.Sde.AddSite(Site(1264, "Suspicious Signal: Secure the Intel", archetype: "Homefront Operations", archetypeId: 70));
+
+        after.Copy(SecondMeasuredHomefrontLine);
+        await ActivityWindowHarness.WaitUntil(() => after.Dialogs.LastPrompt is not null);
+
+        Assert.Equal(fiveOwnToons, after.Dialogs.LastPreselectedCharacterIds);
+    }
+
+    // ET-270 AC-2: same restart as above, but one of the five toons never logged back in — it must stay unticked,
+    // never come back silently included just because it was part of the remembered team.
+    [AvaloniaFact]
+    public async Task ACharacterLoggedOutSinceThePreviousPick_StaysUntickedAfterARestart()
+    {
+        string instanceName = "uitest-et270-" + Guid.NewGuid().ToString("N");
+        int[] fiveOwnToons = [90000001, 90000002, 90000003, 90000004, 90000005];
+
+        using (var before = await Env.StartAsync(
+            services => services.AddSingleton<ILocalCharacterPresence>(
+                new ActivityWindowHarness.StubPresence(inGame: true, fiveOwnToons)),
+            copiedByCharacter: "Pilot 1", instanceName: instanceName))
+        {
+            var registry = before.Services.GetRequiredService<ICharacterRegistry>();
+            foreach (int id in fiveOwnToons)
+                await registry.AddOrUpdateAsync(new Character($"Pilot {id - 90000000}", id));
+            before.Sde.AddSite(Site(1264, "Suspicious Signal: Secure the Intel", archetype: "Homefront Operations", archetypeId: 70));
+            before.Dialogs.OnPickCharacters = (_, _) => Task.FromResult<IReadOnlyList<int>?>(fiveOwnToons);
+
+            before.Copy(MeasuredHomefrontLine);
+            await ActivityWindowHarness.WaitUntil(() => before.Dialogs.ShownActivityWindows.Count > 0);
+            before.KeepDataOnDispose = true;
+        }
+
+        // Restart: only four of the five are logged in this time — the fifth (90000005) stays behind.
+        int[] fourStillFlying = [90000001, 90000002, 90000003, 90000004];
+        using var after = await Env.StartAsync(
+            services => services.AddSingleton<ILocalCharacterPresence>(
+                new ActivityWindowHarness.StubPresence(inGame: true, fourStillFlying)),
+            copiedByCharacter: "Pilot 1", instanceName: instanceName);
+        after.Sde.AddSite(Site(1264, "Suspicious Signal: Secure the Intel", archetype: "Homefront Operations", archetypeId: 70));
+
+        after.Copy(SecondMeasuredHomefrontLine);
+        await ActivityWindowHarness.WaitUntil(() => after.Dialogs.LastPrompt is not null);
+
+        Assert.Equal(fourStillFlying, after.Dialogs.LastPreselectedCharacterIds);
     }
 
     [AvaloniaFact]
@@ -508,6 +651,20 @@ public sealed class ClipboardSignatureOfferTests
 
         public IServiceProvider Services => _instance.Services;
 
+        /// <summary>The scratch instance this ran on (ET-270) — hand it back to <see cref="StartAsync"/> as
+        /// <c>instanceName</c>, with <see cref="KeepDataOnDispose"/> set, to model a restart on the same settings
+        /// database, the same pattern <c>ActivityWindowWiringTests.AfterRestartingTheApplication_...</c> uses.</summary>
+        public string InstanceName => _instance.InstanceName;
+
+        /// <summary>Set before disposing to leave the scratch database behind for a following <see cref="Env"/> that
+        /// reuses <see cref="InstanceName"/> — otherwise <see cref="TestClientInstance"/> deletes it, same as a real
+        /// uninstall rather than a restart.</summary>
+        public bool KeepDataOnDispose
+        {
+            get => _instance.KeepDataOnDispose;
+            set => _instance.KeepDataOnDispose = value;
+        }
+
         private Env(TestClientInstance instance, ClipboardWatchService watch, FakeClipboardChangeSource source)
         {
             _instance = instance;
@@ -517,10 +674,10 @@ public sealed class ClipboardSignatureOfferTests
         }
 
         public static async Task<Env> StartAsync(Action<IServiceCollection>? configure = null,
-            string? copiedByCharacter = null)
+            string? copiedByCharacter = null, string? instanceName = null)
         {
             var source = new FakeClipboardChangeSource();
-            var instance = TestClientInstance.Create(configure);
+            var instance = TestClientInstance.Create(configure, instanceName);
             var watch = new ClipboardWatchService(new RecordingDialogService(), instance.Services,
                 NullLogger<ClipboardWatchService>.Instance, source, new FakeForegroundReader(copiedByCharacter));
             var env = new Env(instance, watch, source);

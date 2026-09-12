@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using EveUtils.Client.Dialogs;
 using Microsoft.Extensions.DependencyInjection;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Runs;
@@ -181,6 +182,20 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
                     : candidates.FirstOrDefault(character =>
                         string.Equals(character.Name, copiedByCharacter, StringComparison.OrdinalIgnoreCase))?.EsiCharacterId;
 
+                // ET-270: fleet-first default — every one of this client's own characters sharing the anchor's
+                // active fleet is ticked (minus any this same fleet had unticked last site), and only when the
+                // anchor is not in a fleet at all does this fall back to that anchor's own last remembered pick.
+                // See OwnCharacterPickMemory for the full priority; a client restart or a toon that has since
+                // logged out must never come back ticked on its own.
+                ISettingRepository? settings = _services.GetService<ISettingRepository>();
+                IReadOnlyList<FleetParticipant> participation = _services.GetService<IFleetParticipation>()?.Current ?? [];
+                long? anchorFleetId = OwnCharacterPickMemory.FleetIdFor(preselectedCharacterId, participation);
+                IReadOnlyCollection<int>? fleetCharacterIds =
+                    OwnCharacterPickMemory.FleetCharacterIdsFor(preselectedCharacterId, participation);
+                IReadOnlyList<int>? preselected = await OwnCharacterPickMemory.ResolvePreselectionAsync(settings,
+                    preselectedCharacterId, [.. flying.Select(character => character.EsiCharacterId!.Value)],
+                    fleetCharacterIds, anchorFleetId);
+
                 // Multi-select (ET-210): flying this site on several of these candidates at once is as real a case
                 // as flying it on one. The first ticked box is the pilot the window is for; the rest ride along as
                 // their own run under the same group code once the window has one to share.
@@ -188,7 +203,7 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
                     [.. candidates.Select(character => new CharacterPickOption(
                         character.EsiCharacterId!.Value, character.Name,
                         flying.Contains(character) ? "EVE client running" : "local character", Enabled: true))],
-                    preselectedCharacterId is { } preselectedId ? [preselectedId] : null);
+                    preselected);
                 pilot = picked is { Count: > 0 }
                     ? candidates.FirstOrDefault(character => character.EsiCharacterId == picked[0])
                     : null;
@@ -197,6 +212,12 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
                         .Select(id => candidates.FirstOrDefault(character => character.EsiCharacterId == id))
                         .Where(character => character is not null)
                         .Select(character => character!)];
+
+                // ET-270: remember this exact pick — the fleet's own exclusions if there is a fleet, and every
+                // picked character's own last-full-pick row regardless — so the next start, whoever's client
+                // copies it, restores the same team instead of only the pilot.
+                if (settings is not null && picked is { Count: > 0 })
+                    await OwnCharacterPickMemory.SaveAsync(settings, picked, fleetCharacterIds, anchorFleetId);
 
                 // Dismissed is not "throw the copy away": the window still comes up on the site he copied, it just
                 // does not start itself. START is the way back to this same question over the same candidate set.
