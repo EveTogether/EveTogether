@@ -13,6 +13,14 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **RESUME now catches up what EVE wrote to the gamelog while the app was closed.** Before, resuming a run after a
+  crash or a closed app (the RESUME button in UNFINISHED, or the startup notice offering the same choice) picked the
+  clock back up but left a gap: any bounty, mining or enemies from the time nothing was watching the gamelog were
+  simply gone, because the watcher only ever tails forward from where it started. Now, on that same RESUME, the
+  character's gamelog is read once from the run's last confirmed-alive moment up to the resume — across a new
+  gamelog file too, since EVE starts one per session — and applied to the resumed run exactly once, with a toast
+  ("Caught up 3 bounty payouts, ... from while the app was closed") saying what it found. The live tail itself is
+  never touched and the DPS graph never shows a historical peak; a run nobody resumes gets nothing read in.
 - **Homefronts are now recognised as homefronts, with their own kind.** Before, running a Raid, a Metaliminal
   Meteoroid or any of CCP's other 22 homefront dungeons threw away which one it was — the run window discarded the
   match it already had, so a saved homefront read back as an ordinary combat or ore site. Now the run window, the
