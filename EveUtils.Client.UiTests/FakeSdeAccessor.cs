@@ -16,7 +16,7 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public sealed class FakeSdeAccessor : ISdeAccessor
 {
-    private sealed record Entry(int TypeId, string Name, int GroupId, SdeSlotType Slot, bool IsTurret, double Volume, bool IsMutated = false);
+    private sealed record Entry(int TypeId, string Name, int GroupId, SdeSlotType Slot, bool IsTurret, double Volume, bool IsMutated = false, int? MetaGroupId = null);
 
     private readonly Dictionary<int, Entry> _types = new();
     private readonly Dictionary<int, int> _groupCategory = new();
@@ -31,9 +31,9 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     public bool IsAvailable { get; private set; } = true;
     public SdeVersion? Version => new(1, DateTimeOffset.UnixEpoch);
 
-    public FakeSdeAccessor Add(int typeId, string name, int groupId, int categoryId, SdeSlotType slot = SdeSlotType.None, bool isTurret = false, double volume = 0, bool isMutated = false, string? groupName = null)
+    public FakeSdeAccessor Add(int typeId, string name, int groupId, int categoryId, SdeSlotType slot = SdeSlotType.None, bool isTurret = false, double volume = 0, bool isMutated = false, string? groupName = null, int? metaGroupId = null)
     {
-        _types[typeId] = new Entry(typeId, name, groupId, slot, isTurret, volume, isMutated);
+        _types[typeId] = new Entry(typeId, name, groupId, slot, isTurret, volume, isMutated, metaGroupId);
         _groupCategory[groupId] = categoryId;
         _byName[name] = typeId;
         if (groupName is not null)
@@ -134,6 +134,12 @@ public sealed class FakeSdeAccessor : ISdeAccessor
         _groupCategory.TryGetValue(groupId, out var cat)
             ? new SdeGroup(groupId, cat, _groupNames.GetValueOrDefault(groupId, ""), true)
             : null;
+
+    // Same "null or 1 is Tech I" rule as SqliteSdeAccessor (ET-263) — a fixture type added without a metaGroupId
+    // is Tech I by default, matching a real SDE build's own Rifter/Merlin/Punisher rows.
+    public IReadOnlySet<int> GetTechIHullTypeIds(int groupId) =>
+        _types.Values.Where(e => e.GroupId == groupId && e.MetaGroupId is null or 1)
+            .Select(e => e.TypeId).ToHashSet();
 
     public IReadOnlyList<SdeGroup> GetGroupsByCategory(int categoryId) =>
         _groupCategory.Where(kv => kv.Value == categoryId)

@@ -1155,27 +1155,42 @@ public class ActivityWindowTests
         Assert.Equal("Limited Sleeper Cache — ship-restricted", model.Activity().SignatureSiteText);
     }
 
-    /// <summary>ET-232 AC-2: a homefront's T1-only cruisers come back among the allowed hulls even though the whole
-    /// Cruiser group is not in the allow-list — includedTypeIDs, not includedGroupIDs, is what names them.</summary>
+    /// <summary>ET-263: a homefront's T1-only cruisers (here: three fixture frigates standing in for the group) come
+    /// back grouped under the group's own name once the SDE can resolve it, refined to "(T1 only)" because the
+    /// included set is exactly that group's published Tech I census — never the loose includedTypeIDs names ET-232
+    /// first showed.</summary>
     [Fact]
-    public void IndividuallyIncludedHulls_AppearAlongsideTheAllowedGroups()
+    public void IndividuallyIncludedHulls_AreGroupedAndFlaggedTechIOnly()
     {
-        var model = _Site(_Entry("Raid: Hall of Sacrifice",
-            groups: [new SdeGroup(25, 6, "Frigate", true)],
-            includedTypes: [new SdeNamedType(621, "Rifter"), new SdeNamedType(630, "Merlin")]));
+        var services = new ServiceCollection();
+        services.AddSingleton<ISdeAccessor>(new FakeSdeAccessor()
+            .Add(621, "Rifter", 25, categoryId: 6, groupName: "Frigate")
+            .Add(630, "Merlin", 25, categoryId: 6, groupName: "Frigate")
+            .Add(640, "Punisher", 25, categoryId: 6, groupName: "Frigate"));
+        var model = new ActivityWindowViewModel(ActivityKind.Site, services.BuildServiceProvider())
+        {
+            SignatureGroup = "Combat Site",
+            SignatureName = "Raid: Hall of Sacrifice",
+            MatchedSites = [_Entry("Raid: Hall of Sacrifice", includedTypes:
+            [
+                new SdeShipHull(621, "Rifter", 25), new SdeShipHull(630, "Merlin", 25), new SdeShipHull(640, "Punisher", 25)
+            ])]
+        };
 
         Assert.True(model.Activity().HasShipRestriction);
-        Assert.Equal("Frigate, Merlin, Rifter", model.Activity().ShipRestrictionText);
+        Assert.Equal("Frigate (T1 only)", model.Activity().ShipRestrictionText);
+        Assert.Null(model.Activity().ShipRestrictionTooltip);
     }
 
     /// <summary>ET-232 AC-2: an excluded hull is never shown as allowed, even when it was individually included by
-    /// another type list referenced by the same site — the exclude always wins.</summary>
+    /// another type list referenced by the same site — the exclude always wins. No <see cref="ISdeAccessor"/>
+    /// registered here, so this also covers the fallback to the loose hull name ET-232 first showed.</summary>
     [Fact]
     public void AnIndividuallyExcludedHull_IsNeverShownAsAllowed()
     {
         var model = _Site(_Entry("Raid: Hall of Sacrifice",
-            includedTypes: [new SdeNamedType(621, "Rifter"), new SdeNamedType(640, "Punisher")],
-            excludedTypes: [new SdeNamedType(640, "Punisher")]));
+            includedTypes: [new SdeShipHull(621, "Rifter", 25), new SdeShipHull(640, "Punisher", 25)],
+            excludedTypes: [new SdeShipHull(640, "Punisher", 25)]));
 
         Assert.Equal("Rifter", model.Activity().ShipRestrictionText);
         Assert.DoesNotContain("Punisher", model.Activity().ShipRestrictionText);
@@ -1274,8 +1289,8 @@ public class ActivityWindowTests
         };
 
     private static SdeSite _Entry(string name, int? ded = null, bool restricted = false,
-        IReadOnlyList<SdeGroup>? groups = null, IReadOnlyList<SdeNamedType>? includedTypes = null,
-        IReadOnlyList<SdeNamedType>? excludedTypes = null, string? gameplayDescription = null) =>
+        IReadOnlyList<SdeGroup>? groups = null, IReadOnlyList<SdeShipHull>? includedTypes = null,
+        IReadOnlyList<SdeShipHull>? excludedTypes = null, string? gameplayDescription = null) =>
         new(1263, name, null, null, null, null, null, ded,
             restricted || groups is not null || includedTypes is not null, groups ?? [], gameplayDescription,
             includedTypes, excludedTypes);

@@ -20,9 +20,10 @@ namespace EveUtils.Shared.Modules.Sde.Dtos;
 /// <paramref name="Description"/>, which is CCP's own flavour text. Null when the site carries none (most sites).
 /// </param>
 /// <param name="IncludedShipTypes">
-/// Individual ship types the site allows beyond <paramref name="AllowedShipGroups"/> (ET-232) — the refinement a
-/// group alone cannot express, e.g. a homefront's T1-only cruisers are 16 named types, not the whole Cruiser group.
-/// Empty when the site's allow-list needs no individual hulls, which is most restricted sites.
+/// Individual ship types the site allows beyond <paramref name="AllowedShipGroups"/> (ET-232), each carrying its own
+/// ship group (ET-263) — the refinement a group alone cannot express, e.g. a homefront's T1-only cruisers are 16
+/// named types, not the whole Cruiser group. Empty when the site's allow-list needs no individual hulls, which is
+/// most restricted sites.
 /// </param>
 /// <param name="ExcludedShipTypes">
 /// Individual ship types explicitly turned away even where <paramref name="AllowedShipGroups"/> or
@@ -41,9 +42,9 @@ public sealed record SdeSite(
     bool IsShipRestricted,
     IReadOnlyList<SdeGroup> AllowedShipGroups,
     string? GameplayDescription = null,
-    IReadOnlyList<SdeNamedType>? IncludedShipTypes = null,
-    IReadOnlyList<SdeNamedType>? ExcludedShipTypes = null)
+    IReadOnlyList<SdeShipHull>? IncludedShipTypes = null,
+    IReadOnlyList<SdeShipHull>? ExcludedShipTypes = null)
 {
-    public IReadOnlyList<SdeNamedType> IncludedShipTypes { get; init; } = IncludedShipTypes ?? [];
-    public IReadOnlyList<SdeNamedType> ExcludedShipTypes { get; init; } = ExcludedShipTypes ?? [];
+    public IReadOnlyList<SdeShipHull> IncludedShipTypes { get; init; } = IncludedShipTypes ?? [];
+    public IReadOnlyList<SdeShipHull> ExcludedShipTypes { get; init; } = ExcludedShipTypes ?? [];
 }

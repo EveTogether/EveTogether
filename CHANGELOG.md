@@ -13,6 +13,15 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **A restricted site's allowed ships are now shown grouped by ship group, not as a wall of loose hull names.**
+  ACTIVITY's SHIPS row reads "Cruisers (T1 only)" for a homefront whose individually-named allow-list is exactly
+  every published Tech I hull of that group, "Cruisers (except Slasher)" when only a couple of hulls are carved out
+  of an otherwise-whole group, or the honest "Cruisers (some hulls only)" when neither can be said concisely — the
+  actual hull names are then a hover away rather than crowding the row itself. An excluded hull is still never shown
+  as allowed. The row now stands inline instead of behind a "which ships may enter?" link, since a grouped label is
+  short enough not to need one.
+- **CONSUMABLES now proposes a filament count for a frigate (3) and a cruiser (1), not only a destroyer (2).**
+  Source: Jithran, 2026-09-12 — the SDE does not carry this either, the same finding ET-249 made for the destroyer.
 - **Homefronts have a HOMEFRONT section: who was in the site when it completed.** A homefront pays a fixed amount
   to every character counted in the site, and how much depends on how many were counted — not on the fleet's size.
   The run window now lists every character on the fleet's roster in one flat list, your own characters marked

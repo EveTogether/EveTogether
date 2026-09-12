@@ -10,12 +10,13 @@ namespace EveUtils.Client.ViewModels.Activity;
 public static class AbyssalConsumables
 {
     /// <summary>Filaments needed per hull class, keyed by the SDE's own ship-group name. Source: Jithran, ET-249
-    /// (2026-09-11) — a destroyer needs 2. Frigate and cruiser are deliberately absent: nobody has measured the
-    /// SDE's own filament-access requirement for them yet, and ET-249's own instruction is never to guess one — a
-    /// hull class not in this table proposes no count at all.</summary>
+    /// (2026-09-11) for the destroyer, and ET-263 (2026-09-12) for the frigate and cruiser — the SDE does not carry
+    /// this either, checked at ET-249. A hull class not in this table proposes no count at all.</summary>
     private static readonly IReadOnlyDictionary<string, int> CountByHullClass = new Dictionary<string, int>
     {
-        ["Destroyer"] = 2
+        ["Frigate"] = 3,
+        ["Destroyer"] = 2,
+        ["Cruiser"] = 1
     };
 
     /// <summary>The filament count a hull class is known to need, or null when nobody has measured it yet.</summary>

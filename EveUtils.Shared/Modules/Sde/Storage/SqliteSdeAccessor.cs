@@ -575,15 +575,15 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
         // The group and type names live in InvGroup/Type, so resolve them once for the whole result rather than
         // per row.
         var groupNames = ReadGroups(connection, rows.SelectMany(r => r.GroupIds).ToHashSet());
-        var typeNames = ReadTypeNames(connection,
+        var hulls = ReadShipHulls(connection,
             rows.SelectMany(r => r.IncludedTypeIds).Concat(rows.SelectMany(r => r.ExcludedTypeIds)).ToHashSet());
         return [.. rows.Select(r => r.Site with
         {
             AllowedShipGroups = r.GroupIds.Length == 0
                 ? []
                 : [.. r.GroupIds.Select(groupNames.GetValueOrDefault).OfType<SdeGroup>()],
-            IncludedShipTypes = [.. r.IncludedTypeIds.Select(typeNames.GetValueOrDefault).OfType<SdeNamedType>()],
-            ExcludedShipTypes = [.. r.ExcludedTypeIds.Select(typeNames.GetValueOrDefault).OfType<SdeNamedType>()]
+            IncludedShipTypes = [.. r.IncludedTypeIds.Select(hulls.GetValueOrDefault).OfType<SdeShipHull>()],
+            ExcludedShipTypes = [.. r.ExcludedTypeIds.Select(hulls.GetValueOrDefault).OfType<SdeShipHull>()]
         })];
     }
 
@@ -605,19 +605,43 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
         return result;
     }
 
-    /// <summary>Names for <c>includedTypeIdsJson</c>/<c>excludedTypeIdsJson</c> (ET-232), the same "resolve once for
-    /// the whole result" shape <see cref="ReadGroups"/> already uses for ship groups.</summary>
-    private static Dictionary<int, SdeNamedType> ReadTypeNames(SqliteConnection connection, HashSet<int> typeIds)
+    /// <summary>Names and ship groups for <c>includedTypeIdsJson</c>/<c>excludedTypeIdsJson</c> (ET-232), the same
+    /// "resolve once for the whole result" shape <see cref="ReadGroups"/> already uses for ship groups. The group id
+    /// travels with each hull (ET-263) so a caller can bucket a homefront's individually named cruisers under
+    /// "Cruisers" rather than listing them loose.</summary>
+    private static Dictionary<int, SdeShipHull> ReadShipHulls(SqliteConnection connection, HashSet<int> typeIds)
     {
-        var result = new Dictionary<int, SdeNamedType>();
+        var result = new Dictionary<int, SdeShipHull>();
         if (typeIds.Count == 0)
             return result;
         using var command = connection.CreateCommand();
         // Same reasoning as ReadGroups: these ids come from the store's own JSON column, not user input.
-        command.CommandText = "SELECT typeId, nameEn FROM Type WHERE typeId IN (" + string.Join(",", typeIds) + ");";
+        command.CommandText = "SELECT typeId, nameEn, groupId FROM Type WHERE typeId IN (" + string.Join(",", typeIds) + ");";
         using var reader = command.ExecuteReader();
         while (reader.Read())
-            result[reader.GetInt32(0)] = new SdeNamedType(reader.GetInt32(0), reader.GetString(1));
+            result[reader.GetInt32(0)] = new SdeShipHull(reader.GetInt32(0), reader.GetString(1), reader.GetInt32(2));
+        return result;
+    }
+
+    /// <summary>Every published Tech I hull's type id in a ship group (ET-263) — metaGroupId is either absent or
+    /// explicitly 1 for a Tech I item depending on the SDE build (measured against the site-catalogue fixture,
+    /// which carries no metaGroupID at all for its Rifter/Merlin/Punisher rows), and neither convention is ever used
+    /// for a Tech II/III, faction, storyline, officer or deadspace hull — so both together are a conclusive census
+    /// regardless of which convention the running build uses. Used to test whether a site's included-hull allow-list
+    /// amounts to exactly "every Tech I hull in this group".</summary>
+    public IReadOnlySet<int> GetTechIHullTypeIds(int shipGroupId)
+    {
+        using var connection = Open();
+        if (connection is null)
+            return new HashSet<int>();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT typeId FROM Type WHERE groupId = $groupId AND published = 1 AND (metaGroupId IS NULL OR metaGroupId = 1);";
+        command.Parameters.AddWithValue("$groupId", shipGroupId);
+        var result = new HashSet<int>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+            result.Add(reader.GetInt32(0));
         return result;
     }
 

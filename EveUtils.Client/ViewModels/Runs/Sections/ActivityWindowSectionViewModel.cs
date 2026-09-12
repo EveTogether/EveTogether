@@ -166,29 +166,24 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
             ? $"{name} — {common}"
             : name;
 
-    /// <summary>The hulls the site lets in, when every match names the same ones — the one fact here that can turn
-    /// you away at the gate, so it is stated before you warp rather than discovered after. Null when there is
-    /// nothing to add over <see cref="SignatureSiteText"/>, which already carries "ship-restricted" itself.</summary>
-    public string? ShipRestrictionText =>
-        Context.MatchedSites.Select(_ShipRule).Distinct().ToList() is [{ } only] ? only : null;
+    /// <summary>The hulls the site lets in, grouped by ship group and refined where the SDE's own
+    /// includedTypeIds/excludedTypeIds narrow a group beyond its plain name (ET-263) — "Cruisers (T1 only)" when the
+    /// allow-list is exactly every published Tech I hull of that group, "Cruisers (except Slasher)" when only a
+    /// couple of hulls are carved out of an otherwise-whole group, or the honest "Cruisers (some hulls only)" when
+    /// neither can be said concisely (see <see cref="ShipRestrictionTooltip"/> for the hull names then). Falls back
+    /// to the loose hull names ET-232 originally showed when the SDE cannot resolve a group's own name or Tech I
+    /// census — never a guessed label. Shown only when every match agrees, the same rule <see cref="SignatureSiteText"/>
+    /// follows. Null when there is nothing to add over that text, which already carries "ship-restricted" itself.</summary>
+    public string? ShipRestrictionText => _ShipRestrictionSummary?.Text;
+
+    /// <summary>The hull names behind a "(some hulls only)" or "(except …)" group, for the hover — a plain group name
+    /// or a "(T1 only)" one needs no tooltip because the label already says everything there is to say.</summary>
+    public string? ShipRestrictionTooltip => _ShipRestrictionSummary?.Tooltip;
 
     public bool HasShipRestriction => ShipRestrictionText is not null;
 
-    /// <summary>
-    /// The hull list behind the site line, on demand. It used to stand inline in this section, where a site like
-    /// Blood Lookout ran to thirty-odd names over five lines and pushed LOCATION and LOOT STRATEGY off the bottom
-    /// (Raymond, 2026-09-02). The site line still says <c>ship-restricted</c> itself, so the fact of the restriction
-    /// never depended on this list being visible.
-    /// </summary>
-    [RelayCommand]
-    private async Task ShowShipRestrictionAsync()
-    {
-        if (ShipRestrictionText is not { } hulls)
-            return;
-
-        await Context.Services.GetRequiredService<IDialogService>()
-            .ShowMessageAsync("Ships allowed at this site", hulls);
-    }
+    private (string Text, string? Tooltip)? _ShipRestrictionSummary =>
+        Context.MatchedSites.Select(_ShipRestriction).Distinct().ToList() is [{ } only] ? only : null;
 
     /// <summary>What the SDE's own <c>gameplayDescription</c> says about this site (ET-232) — recommended fleet
     /// size, expected time, roles, wherever the catalogue carries one (chiefly homefronts). Shown only when every
@@ -200,9 +195,9 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
 
     public bool HasGameplayDescription => GameplayDescriptionText is not null;
 
-    /// <summary>The gameplay text behind its own link, the same on-demand shape <see cref="ShowShipRestrictionAsync"/>
-    /// already uses — a homefront's own text runs to a paragraph or more (fleet size, timer, roles), which crowds
-    /// the section exactly as the hull list once did.</summary>
+    /// <summary>The gameplay text behind its own link, on demand — a homefront's own text runs to a paragraph or
+    /// more (fleet size, timer, roles), which would crowd the section the way the hull list once did before ET-263
+    /// grouped it short enough to stand inline.</summary>
     [RelayCommand]
     private async Task ShowGameplayDescriptionAsync()
     {
@@ -397,6 +392,7 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
             case nameof(IRunWindowContext.MatchedSites):
                 OnPropertyChanged(nameof(SignatureSiteText));
                 OnPropertyChanged(nameof(ShipRestrictionText));
+                OnPropertyChanged(nameof(ShipRestrictionTooltip));
                 OnPropertyChanged(nameof(HasShipRestriction));
                 break;
             case nameof(IRunWindowContext.SignatureId):
@@ -496,29 +492,94 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
     private string? _ShortDemand() =>
         SdeSiteDescription.DescribeCommon(Context.MatchedSites) is { Length: > 0 } common ? common : null;
 
-    /// <summary>The hulls a site names, or null when it names none. A restricted site whose allow-list resolves to
-    /// no groups and no individual hulls says nothing here and stays "ship-restricted" on the site line — reading it
-    /// as "anything goes" is the one mistake here that costs a ship.
+    /// <summary>The hulls a site names, grouped and refined (ET-263), or null when it names none. A restricted site
+    /// whose allow-list resolves to no groups and no individual hulls says nothing here and stays "ship-restricted"
+    /// on the site line — reading it as "anything goes" is the one mistake here that costs a ship.
     ///
     /// Individually included hulls (ET-232) are the refinement a group alone cannot express — a homefront's T1-only
     /// cruisers are 16 named types, not the whole Cruiser group, so they never show up in
-    /// <see cref="SdeSite.AllowedShipGroups"/> at all. An individually excluded hull is dropped from that list
-    /// unconditionally, even one that would otherwise pass through an allowed group: it is never shown as allowed
-    /// (ET-232 AC-2), and an include without a matching exclude simply widens what the groups already say.</summary>
-    private static string? _ShipRule(SdeSite site)
+    /// <see cref="SdeSite.AllowedShipGroups"/> at all. Bucketed under that group's own name once the SDE can resolve
+    /// it, and labelled "(T1 only)" exactly when the bucket equals <see cref="ISdeAccessor.GetTechIHullTypeIds"/> for
+    /// that group — never for a smaller or a mixed-tech subset, which reads as the honest "(some hulls only)"
+    /// instead, hull names attached for <see cref="ShipRestrictionTooltip"/>. A group already named in full
+    /// (<see cref="SdeSite.AllowedShipGroups"/>) is never also expanded into its individual included hulls: they can
+    /// only narrow it further via an exclude. An individually excluded hull is dropped unconditionally, even one
+    /// that would otherwise pass through an allowed group: it is never shown as allowed (ET-232 AC-2). A handful of
+    /// exclusions off an otherwise-whole group reads as "(except …)"; more than that falls back to "(some hulls
+    /// only)" with the exclusions themselves as the tooltip, since the SDE gives no cheaper way to say what remains.
+    ///
+    /// Without a working <see cref="ISdeAccessor"/> — the SDE unavailable, or a group id it does not recognise —
+    /// this falls back to <see cref="SdeSite.IncludedShipTypes"/>' loose hull names exactly as ET-232 first showed
+    /// them, rather than fabricate a group label it cannot back up.</summary>
+    private (string Text, string? Tooltip)? _ShipRestriction(SdeSite site)
     {
         if (!site.IsShipRestricted)
             return null;
 
-        HashSet<int> excludedTypeIds = [.. site.ExcludedShipTypes.Select(type => type.TypeId)];
-        string[] names =
+        ISdeAccessor? sde = Context.Services.GetService<ISdeAccessor>();
+        HashSet<int> namedGroupIds = [.. site.AllowedShipGroups.Select(group => group.GroupId)];
+        HashSet<int> excludedTypeIds = [.. site.ExcludedShipTypes.Select(hull => hull.TypeId)];
+        List<SdeShipHull> otherIncluded =
         [
-            .. site.AllowedShipGroups.Select(group => group.Name)
-                .Concat(site.IncludedShipTypes.Where(type => !excludedTypeIds.Contains(type.TypeId)).Select(type => type.Name))
-                .Distinct()
-                .Order()
+            .. site.IncludedShipTypes.Where(hull =>
+                !excludedTypeIds.Contains(hull.TypeId) && !namedGroupIds.Contains(hull.GroupId))
         ];
-        return names.Length == 0 ? null : string.Join(", ", names);
+
+        var labels = new List<string>();
+        var tooltips = new List<string>();
+
+        foreach (SdeGroup group in site.AllowedShipGroups)
+        {
+            List<string> excludedHere =
+            [
+                .. site.ExcludedShipTypes.Where(hull => hull.GroupId == group.GroupId)
+                    .Select(hull => hull.Name).Order(StringComparer.Ordinal)
+            ];
+            // "Only a few" (Jithran, ET-263) is a judgement call with nothing in the ticket to measure it against —
+            // three names still reads as a label, a fourth would not.
+            labels.Add(excludedHere.Count switch
+            {
+                0 => group.Name,
+                <= 3 => $"{group.Name} (except {string.Join(", ", excludedHere)})",
+                _ => $"{group.Name} (some hulls only)"
+            });
+            if (excludedHere.Count > 3)
+                tooltips.Add($"{group.Name}: all except {string.Join(", ", excludedHere)}");
+        }
+
+        if (sde is { IsAvailable: true } && otherIncluded.Count > 0)
+        {
+            foreach (IGrouping<int, SdeShipHull> byGroup in otherIncluded.GroupBy(hull => hull.GroupId))
+            {
+                List<string> hullNames = [.. byGroup.Select(hull => hull.Name).Order(StringComparer.Ordinal)];
+                if (sde.GetGroup(byGroup.Key) is not { } group)
+                {
+                    // A group id the SDE no longer recognises: name the hulls rather than a label we cannot back up.
+                    labels.AddRange(hullNames);
+                    continue;
+                }
+
+                HashSet<int> includedIds = [.. byGroup.Select(hull => hull.TypeId)];
+                IReadOnlySet<int> techICensus = sde.GetTechIHullTypeIds(byGroup.Key);
+                if (techICensus.Count > 0 && includedIds.SetEquals(techICensus))
+                    labels.Add($"{group.Name} (T1 only)");
+                else
+                {
+                    labels.Add($"{group.Name} (some hulls only)");
+                    tooltips.Add($"{group.Name}: {string.Join(", ", hullNames)}");
+                }
+            }
+        }
+        else
+        {
+            labels.AddRange(otherIncluded.Select(hull => hull.Name).Order(StringComparer.Ordinal));
+        }
+
+        if (labels.Count == 0)
+            return null;
+
+        labels.Sort(StringComparer.Ordinal);
+        return (string.Join(", ", labels), tooltips.Count == 0 ? null : string.Join("; ", tooltips));
     }
 
     /// <summary>The resist penalty is rolled per site rather than fixed per tier, so the window shows the band it
