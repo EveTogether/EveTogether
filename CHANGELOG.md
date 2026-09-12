@@ -13,6 +13,15 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **ENEMIES now keeps collecting for every character in an own-toon group after a run window is reopened or
+  resumed.** Before, only the run a window was FRESHLY started or joined for ever got its own ENEMIES collector — a
+  sibling character (ET-210's own-toon group) discovered later, because the window instead adopted an
+  already-running group (RESUME after a crash or closed app, ET-254/258, or simply reopening a run window that was
+  closed while the group kept going), never had one created for them at all. Their own combat then had nowhere to
+  go for the rest of that window's life, live or on SAVE — while bounty and loot, which never depended on this
+  per-window wiring, kept working regardless, which is why a run could show 118 correct bounty payouts and zero
+  enemies. Now every participant discovered in a run's group — not only the one the window was pointed at — gets its
+  own collector the moment the window learns about them.
 - **RESUME now catches up what EVE wrote to the gamelog while the app was closed.** Before, resuming a run after a
   crash or a closed app (the RESUME button in UNFINISHED, or the startup notice offering the same choice) picked the
   clock back up but left a gap: any bounty, mining or enemies from the time nothing was watching the gamelog were

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
@@ -10,6 +11,7 @@ using EveUtils.Client.Gamelog;
 using EveUtils.Client.Platform;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Shared.Data;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fittings.Entities;
@@ -19,10 +21,12 @@ using EveUtils.Shared.Modules.Market.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using IDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
@@ -646,6 +650,95 @@ public class MultipleConcurrentRunsTests
         Result<ActivityDetailDto> detail = await dispatcher.Query(new GetActivityDetailQuery(row.ActivitySummaryId));
         Assert.True(detail.IsSuccess);
         Assert.Equal(30004079, detail.Value!.SolarSystemId);
+    }
+
+    // ── Reopening a window on an already-running own-toon group must not lose a sibling's ENEMIES (ET-259) ──
+
+    /// <summary>
+    /// Counter-proof, red against the pre-fix code: Jithran ran an own-toon-group mission (Angel Extravaganza,
+    /// 2026-09-12, group HF-WR43, two of his own characters) that read "no enemies seen yet" LIVE for the whole
+    /// 50 minutes he watched it, and saved with zero <c>RunEnemyObservation</c> rows despite 118 bounty payouts
+    /// landing correctly on the same run. Measured cause: the acting character's own <c>OnRunStarted</c>, and a
+    /// sibling just started this tick's own <c>OnCharacterRunStarted</c> (<c>_SendAdditionalStartRunCommandAsync</c>),
+    /// both create that character's ENEMIES collector — but a window that instead ADOPTS an already-running group
+    /// (RESUME after a crash, ET-254/258, or simply reopening a run window that was closed while the group kept
+    /// going) only ever adopts the ONE run it is pointed at. A sibling <c>_RefreshParticipantsAsync</c> discovers
+    /// afterwards never had <c>OnCharacterRunStarted</c> called for them at all, so every hit on their own gamelog
+    /// had nowhere to go for the rest of that window's life — bounty and loot never depended on this per-window
+    /// wiring and kept working, which is exactly why only ENEMIES went quiet.
+    ///
+    /// The combat lines below are copied byte for byte from Jithran's own gamelog
+    /// (C:\Users\info\Documents\EVE\logs\Gamelogs\20260911_225312_90250177.txt, lines 1844-1846 — Angel
+    /// Extravaganza), fed through the real <see cref="GamelogWatcherService"/>, not a cleaned-up fixture.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ReopeningOnAnAlreadyRunningOwnToonGroup_StillCollectsTheSiblingsEnemies()
+    {
+        const int siblingId = 90250177;
+        const string siblingName = "Jithran";
+
+        using var harness = await ActivityWindowHarness.CreateAsync(configure: services =>
+        {
+            services.AddSingleton<ILocalCharacterPresence>(new ActivityWindowHarness.StubPresence(
+                inGame: true, ActivityWindowHarness.CharacterId, siblingId));
+            services.AddSingleton<ISdeAccessor>(new FakeSdeAccessor()
+                .Add(24007, "Gistatis Tribunus", 900, 11)
+                .Add(16561, "Angel Viper", 900, 11));
+        });
+        await harness.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character(siblingName, siblingId));
+
+        // Jithran's own real gamelog file: created the evening before the mission and still growing when it
+        // started — an already-tracked file (GameLogWatcher.Baseline), not the brand-new one every other test
+        // in this suite writes after the watcher starts.
+        string logPath = Path.Combine(harness.GamelogDirectory, "20260911_225312_90250177.txt");
+        await File.WriteAllTextAsync(logPath,
+            "------------------------------------------------------------\n"
+            + $"  Gamelog\n  Listener: {siblingName}\n  Session Started: 2026.09.11 22:53:12\n"
+            + "------------------------------------------------------------\n"
+            + "[ 2026.09.11 22:53:15 ] (hint) Attempting to join a channel\n");
+        var watcher = harness.Services.GetRequiredService<GamelogWatcherService>();
+        await watcher.StartAsync();
+        await Task.Delay(150);
+
+        ActivityWindowViewModel first = await harness.OpenAsync(ActivityKind.Mission);
+        first.UseCharacter(ActivityWindowHarness.CharacterId, ActivityWindowHarness.CharacterName);
+        first.UseAdditionalCharacters([(siblingId, siblingName)]);
+        await first.StartRunCommand.ExecuteAsync(null);
+        await ActivityWindowHarness.WaitUntil(() => first.RunState == ActivityRunState.Running
+            && first.Participants.Any(row => row.CharacterId == siblingId));
+        Guid siblingRunId = first.Participants.Single(row => row.CharacterId == siblingId).RunId;
+        first.Dispose();
+
+        // A second window, opened fresh on the run the acting character (Abnoba, standing in for
+        // ActivityWindowHarness's own pilot) already has going — exactly what RESUME, or simply reopening a
+        // closed run window, both do.
+        ActivityWindowViewModel second = await harness.OpenAsync(ActivityKind.Mission);
+        second.UseCharacter(ActivityWindowHarness.CharacterId, ActivityWindowHarness.CharacterName);
+        await second.StartRunCommand.ExecuteAsync(null);
+        await ActivityWindowHarness.WaitUntil(() => second.RunState == ActivityRunState.Running
+            && second.Participants.Any(row => row.CharacterId == siblingId));
+
+        await File.AppendAllTextAsync(logPath,
+            "[ 2026.09.12 08:20:41 ] (combat) <color=0xff00ffff><b>975</b> <color=0x77ffffff><font size=10>to</font> <b><color=0xffffffff>Gistatis Tribunus</b><font size=10><color=0x77ffffff> - Mega Pulse Laser II - Hits\n"
+            + "[ 2026.09.12 08:20:42 ] (combat) <color=0xffcc0000><b>39</b> <color=0x77ffffff><font size=10>from</font> <b><color=0xffffffff>Angel Viper</b><font size=10><color=0x77ffffff> - Nova Light Missile - Hits\n"
+            + "[ 2026.09.12 08:20:45 ] (bounty) <font size=12><b><color=0xff00aa00>146,250 ISK</b><color=0x77ffffff> added to next bounty payout\n");
+        await ActivityWindowHarness.WaitUntil(() =>
+            second.Participants.SingleOrDefault(row => row.CharacterId == siblingId)?.BountyIsk > 0);
+
+        second.StopRun(DateTime.UtcNow);
+        await ActivityWindowHarness.WaitUntil(() => second.RunState == ActivityRunState.Stopped);
+        await second.SaveRunCommand.ExecuteAsync(null);
+
+        await using ClientDbContext db = await harness.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(TestContext.Current.CancellationToken);
+        List<RunEnemyObservation> observations = await db.Set<RunEnemyObservation>()
+            .Where(row => row.RunId == siblingRunId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2, observations.Count);
+        Assert.Contains(observations, o => o.EnemyName == "Gistatis Tribunus");
+        Assert.Contains(observations, o => o.EnemyName == "Angel Viper");
     }
 
     private static ShipFitDetectionReading _Observed(ShipFitCandidate selected) =>
