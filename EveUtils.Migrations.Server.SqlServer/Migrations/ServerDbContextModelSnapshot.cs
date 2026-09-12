@@ -834,6 +834,9 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                     b.Property<int?>("HomefrontOutcome")
                         .HasColumnType("int");
 
+                    b.Property<bool>("HomefrontOutcomeFromGameLog")
+                        .HasColumnType("bit");
+
                     b.Property<string>("HomefrontPayoutTableVersion")
                         .HasColumnType("nvarchar(max)");
 

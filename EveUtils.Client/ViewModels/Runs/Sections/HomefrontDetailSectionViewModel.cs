@@ -307,6 +307,7 @@ public sealed partial class HomefrontDetailSectionViewModel(RunDetailSectionServ
         {
             (true, _, { } waves) => $"{waves} of 9 waves paid",
             (true, _, null) => "not decided",
+            (false, HomefrontOutcome.Completed, _) when decision?.OutcomeFromGameLog == true => "completed · from the game log",
             (false, HomefrontOutcome.Completed, _) => "completed",
             (false, HomefrontOutcome.Failed, _) => "failed",
             (false, HomefrontOutcome.Unknown, _) => "unknown",

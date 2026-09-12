@@ -113,8 +113,19 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     /// list proposes from; a character with no known id raises nothing, as with <see cref="CombatObserved"/>.</summary>
     public event Action<int, SiteContribution, int, DateTime>? ContributionObserved;
 
+    /// <summary>Character id and the gamelog line's own time when a Metaliminal Meteoroid's asteroid ran dry
+    /// (ET-262) — the one hard local signal a site completed. A character with no known id raises nothing, as with
+    /// <see cref="ContributionObserved"/>.</summary>
+    public event Action<int, DateTime>? HomefrontCompletionObserved;
+
     // The notify line EVE writes for a wreck salvaged (domain/homefronts.md §8).
     private const string SalvageSuccessPrefix = "You successfully salvage";
+
+    // The notify line EVE writes when a Metaliminal Meteoroid's single asteroid runs dry (ET-262, measured against
+    // Jithran's own 2026-08-28/29 gamelogs, domain/homefronts.md §6.1) — the one hard local signal a site completed.
+    // The mining module leading it varies ("Miner II", "Mining Drone II", "Modulated Strip Miner II", …), so only
+    // this fixed tail is matched.
+    private const string PaleShadowSuffix = "a pale shadow of its former glory.";
 
     public GamelogClientService(IServiceProvider services, IEventBus eventBus, ICharacterRegistry? registry = null,
         EveClientPresenceService? presence = null)
@@ -679,6 +690,8 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         Metrics(name).RecordNotify(at, message);
         if (message.StartsWith(SalvageSuccessPrefix, StringComparison.OrdinalIgnoreCase))
             RaiseContribution(name, SiteContribution.Salvage, 1, at);
+        if (message.EndsWith(PaleShadowSuffix, StringComparison.OrdinalIgnoreCase) && _idByName.TryGetValue(name, out var characterId))
+            HomefrontCompletionObserved?.Invoke(characterId, at);
         MetricsChanged?.Invoke();
     }
 

@@ -107,6 +107,12 @@ public sealed class Run
     /// see <see cref="HomefrontCompletedWaveCount"/>.</summary>
     public HomefrontOutcome? HomefrontOutcome { get; set; }
 
+    /// <summary>Whether <see cref="HomefrontOutcome"/> was set by the Metaliminal Meteoroid "pale shadow" gamelog line
+    /// (ET-262) rather than by hand — the one hard local signal a site completed. False on every run before this
+    /// column, on every non-Metaliminal homefront, and once the pilot or fleet commander picks an outcome by hand
+    /// over it: the tag never survives a manual choice, even a coincidentally identical one.</summary>
+    public bool HomefrontOutcomeFromGameLog { get; set; }
+
     /// <summary>Abyssal Artifact Recovery's own outcome (ET-231): how many of its 9 waves paid out, 0-9, instead of
     /// <see cref="HomefrontOutcome"/> — a site that fails part-way keeps whatever waves it already cleared, so
     /// completed/failed cannot say what AAR needs said. Null on every non-AAR run and on an AAR run nobody has

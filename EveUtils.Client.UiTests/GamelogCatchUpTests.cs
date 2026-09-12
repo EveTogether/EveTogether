@@ -8,11 +8,13 @@ using Avalonia.Headless.XUnit;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Sde.Dtos;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -29,6 +31,11 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public sealed class GamelogCatchUpTests
 {
+    // The dungeon id alone resolves TYPE (RunTypeCatalogue.For, ET-228) — same rule FleetRunMiningSharingTests uses.
+    private static readonly SdeSite MetaliminalSite = new(10312, "Metaliminal Meteoroid: Amarr Mining", ArchetypeId: 70,
+        ArchetypeName: null, FactionId: null, FactionName: null, Description: null, DedRating: null,
+        IsShipRestricted: false, AllowedShipGroups: []);
+
     private static string _Timestamp(DateTime atUtc) => atUtc.ToString("yyyy.MM.dd HH:mm:ss");
 
     private static string _BountyLine(DateTime atUtc, string isk) =>
@@ -181,6 +188,77 @@ public sealed class GamelogCatchUpTests
 
         Assert.Equal(67_500m, await _BountyTotalAsync(harness, runId));
         model.Dispose();
+    }
+
+    /// <summary>
+    /// ET-262: the "pale shadow" line is a notify line, which the live tail already routed to
+    /// <see cref="GamelogClientService.AddNotify"/> — but the catch-up switch in
+    /// <c>ActivityWindowViewModel._CatchUpGamelogAsync</c> had no <c>NotifyEvent</c> case at all, so a site that
+    /// completed while the app was closed never set its outcome once RESUME caught the rest up. Real fixture line
+    /// (Documents\EVE\logs\Gamelogs\20260829_075933_90250177.txt:641).
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ResumingACrashedRun_CatchesUpThePaleShadowLine_AndSetsTheOutcome()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        IDispatcher dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        ActivityWindowViewModel first = await harness.OpenAsync();
+        first.MatchedSites = [MetaliminalSite];
+        await harness.StartWatchingAsync();
+        await first.StartRunCommand.ExecuteAsync(null);
+        Guid runId = first.RunId!.Value;
+
+        DateTime lastAliveUtc = DateTime.UtcNow;
+        await dispatcher.Send(new TouchRunAliveCommand(runId, lastAliveUtc), cancellationToken);
+
+        harness.Services.GetRequiredService<GamelogWatcherService>().Stop();
+        first.Dispose();
+
+        string sameSessionFile = Path.Combine(harness.GamelogDirectory, "20300101_120000_90000001.txt");
+        await File.AppendAllTextAsync(sameSessionFile,
+            $"[ {_Timestamp(lastAliveUtc.AddSeconds(1))} ] (notify) Miner II deactivates as it finds the resource "
+            + "it was harvesting a pale shadow of its former glory.\n",
+            cancellationToken);
+
+        await Task.Delay(1500, cancellationToken);
+
+        await dispatcher.Send(new StopRunsLeftRunningCommand(DateTime.UtcNow), cancellationToken);
+        await harness.Services.GetRequiredService<GamelogWatcherService>().RestartAsync(cancellationToken);
+
+        ActivityWindowViewModel resumed = new(ActivityKind.Site, harness.Services);
+        resumed.MatchedSites = [MetaliminalSite];
+        resumed.UseCharacter(ActivityWindowHarness.CharacterId, ActivityWindowHarness.CharacterName);
+        resumed.ResumeRun(runId);
+        // Subscribed before LoadAsync, the way the real window's own section is already standing before RESUME's
+        // catch-up read runs inside it — a section built afterwards would miss the event outright.
+        using HomefrontWindowSectionViewModel section = new(resumed);
+        await resumed.LoadAsync();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        DateTime clock = DateTime.UtcNow;
+        for (int tick = 0; tick < 30; tick++)
+        {
+            clock = clock.AddSeconds(1);
+            resumed.Refresh(clock);
+            section.Refresh(clock);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            await Task.Delay(20, cancellationToken);
+        }
+
+        Run run = await _RunAsync(harness, runId);
+        Assert.Equal(HomefrontOutcome.Completed, run.HomefrontOutcome);
+        Assert.True(run.HomefrontOutcomeFromGameLog);
+
+        resumed.Dispose();
+    }
+
+    private static async Task<Run> _RunAsync(ActivityWindowHarness harness, Guid runId)
+    {
+        await using ClientDbContext db = await harness.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        return await db.Set<Run>().AsNoTracking().SingleAsync(candidate => candidate.Id == runId);
     }
 
     private static async Task<decimal> _BountyTotalAsync(ActivityWindowHarness harness, Guid runId)

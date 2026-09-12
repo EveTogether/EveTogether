@@ -83,13 +83,22 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     private int? _fleetSizeAtStop;
     private DateTime _nowUtc = DateTime.UtcNow;
 
+    // The Metaliminal Meteoroid "pale shadow" line (ET-262), guarded like _heard: the gamelog watcher's pump thread
+    // writes it, this window's own tick reads it. Latched rather than cleared once applied — a site has one asteroid,
+    // so a second sighting (a different mining module's own copy of the line, or a stray re-fire) only ever confirms
+    // what already stands.
+    private (int CharacterId, DateTime AtUtc)? _paleShadow;
+
     public HomefrontWindowSectionViewModel(IRunWindowContext context)
         : base(context, RunSectionId.Homefront, "HOMEFRONT")
     {
         IsExpanded = true;
         _gamelog = context.Services.GetService<GamelogClientService>();
         if (_gamelog is not null)
+        {
             _gamelog.ContributionObserved += _OnContribution;
+            _gamelog.HomefrontCompletionObserved += _OnHomefrontCompletion;
+        }
         _attendance = context.Services.GetService<FleetRunAttendance>();
         if (_attendance is not null)
             _attendance.Applied += _OnAttendanceApplied;
@@ -139,6 +148,12 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     [NotifyPropertyChangedFor(nameof(OutcomeText))]
     private HomefrontOutcome? _outcome;
 
+    /// <summary>Whether <see cref="Outcome"/> came from the Metaliminal Meteoroid "pale shadow" gamelog line (ET-262)
+    /// rather than a manual pick — cleared the moment <see cref="SetOutcome"/> is used, even to the same value.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(OutcomeText))]
+    private bool _outcomeIsFromGameLog;
+
     /// <summary>AAR's own outcome: how many of its 9 waves paid out.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DecreaseWaveCommand))]
@@ -153,6 +168,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     /// buttons that set it.</summary>
     public string OutcomeText => Outcome switch
     {
+        HomefrontOutcome.Completed when OutcomeIsFromGameLog => "completed · from the game log",
         HomefrontOutcome.Completed => "completed",
         HomefrontOutcome.Failed => "failed",
         HomefrontOutcome.Unknown => "unknown",
@@ -166,6 +182,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             return;
 
         Outcome = outcome;
+        OutcomeIsFromGameLog = false;
         _changedSinceUtc ??= _nowUtc;
         _Rebuild(_nowUtc);
     }
@@ -210,6 +227,8 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     {
         _isClosed = false;
         _isStoredStale = true;
+        lock (_gate)
+            _paleShadow = null;
     }
 
     public override void OnRunClosed() => _isClosed = true;
@@ -231,7 +250,10 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     public override void Dispose()
     {
         if (_gamelog is not null)
+        {
             _gamelog.ContributionObserved -= _OnContribution;
+            _gamelog.HomefrontCompletionObserved -= _OnHomefrontCompletion;
+        }
         if (_attendance is not null)
             _attendance.Applied -= _OnAttendanceApplied;
         _metricSubscription?.Dispose();
@@ -303,10 +325,13 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             _isStandingTaken = true;
             NotOnRosterCount = _stored?.NotOnRosterCount ?? NotOnRosterCount;
             Outcome = _stored?.Outcome ?? Outcome;
+            OutcomeIsFromGameLog = _stored?.OutcomeFromGameLog ?? OutcomeIsFromGameLog;
             CompletedWaveCount = _stored?.CompletedWaveCount ?? CompletedWaveCount;
         }
         else if (!CanDecide)
             _isStandingTaken = false;
+
+        _ApplyGameLogOutcomeIfDue(nowUtc);
 
         IReadOnlyList<AttendanceCandidate> candidates = _Candidates(role);
         string? commanderName = _CommanderId() is { } commander ? _NameOf(commander) : null;
@@ -322,6 +347,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             shownDecision = stored;
             _ShowDecision(candidates, stored, commanderName);
             Outcome = stored.Outcome;
+            OutcomeIsFromGameLog = stored.OutcomeFromGameLog;
             CompletedWaveCount = stored.CompletedWaveCount ?? 0;
         }
         else
@@ -420,7 +446,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             : Context.ActingCharacterId ?? Context.RunCharacterId ?? 0;
         return new RunAttendanceDecision(entries, NotOnRosterCount,
             role is Role.Commander ? AttendanceSource.FleetCommander : AttendanceSource.Pilot, setBy, nowUtc,
-            IsAar ? null : Outcome, IsAar ? CompletedWaveCount : null);
+            IsAar ? null : Outcome, IsAar ? CompletedWaveCount : null, !IsAar && OutcomeIsFromGameLog);
     }
 
     private void _ShowDecision(IReadOnlyList<AttendanceCandidate> candidates, RunAttendanceDecision decision, string? commanderName)
@@ -775,8 +801,40 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
 
         await eventBus.PublishAsync(new FleetRunAttendanceEvent(new RunGroupAttendance(
                 fleetId, groupCode, RunGroupAttendance.ToUnixMs(decision.SetAtUtc), decision.Entries,
-                decision.NotOnRosterCount, decision.Outcome, decision.CompletedWaveCount), commander),
+                decision.NotOnRosterCount, decision.Outcome, decision.CompletedWaveCount, decision.OutcomeFromGameLog), commander),
             EventTarget.Remote);
+    }
+
+    // ── The pale shadow line (ET-262) ──────────────────────────────────────────────────────────────────
+
+    /// <summary>The gamelog watcher's pump thread (or, on RESUME, ET-258's catch-up read) saw a Metaliminal
+    /// Meteoroid's asteroid run dry. Only latched here — applied on the next tick, on this window's own thread, the
+    /// same split <see cref="_OnFleetMetric"/> already uses for <see cref="_heard"/>.</summary>
+    private void _OnHomefrontCompletion(int characterId, DateTime atUtc)
+    {
+        lock (_gate)
+            _paleShadow = (characterId, atUtc);
+    }
+
+    /// <summary>Sets <see cref="Outcome"/> to completed the first time this run's own gamelog shows the pale shadow
+    /// line, and only then: nothing here may decide for anyone, override a manual pick (including "failed" or
+    /// "unknown"), or fire for a kind other than Metaliminal Meteoroid, whose asteroid is the only site this line
+    /// means anything for.</summary>
+    private void _ApplyGameLogOutcomeIfDue(DateTime nowUtc)
+    {
+        if (!CanDecide || Outcome is not null || Context.RunType.HomefrontKind != "Metaliminal Meteoroid")
+            return;
+
+        (int CharacterId, DateTime AtUtc)? paleShadow;
+        lock (_gate)
+            paleShadow = _paleShadow;
+        if (paleShadow is not { } observed || !_own.Contains(observed.CharacterId) || Context.EffectiveStartUtc is not { } start
+            || observed.AtUtc < start || (Context.EffectiveStopUtc is { } stop && observed.AtUtc > stop))
+            return;
+
+        Outcome = HomefrontOutcome.Completed;
+        OutcomeIsFromGameLog = true;
+        _changedSinceUtc ??= nowUtc;
     }
 
     // ── Evidence ────────────────────────────────────────────────────────────────────────────────────

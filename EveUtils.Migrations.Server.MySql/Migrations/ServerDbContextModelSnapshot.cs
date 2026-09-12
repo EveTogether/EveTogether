@@ -834,6 +834,9 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.Property<int?>("HomefrontOutcome")
                         .HasColumnType("int");
 
+                    b.Property<bool>("HomefrontOutcomeFromGameLog")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<string>("HomefrontPayoutTableVersion")
                         .HasColumnType("longtext");
 

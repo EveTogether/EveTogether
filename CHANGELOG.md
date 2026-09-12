@@ -39,6 +39,10 @@ taken from the matching `## vX.Y.Z` section below.
   versions can never silently disagree about the same site. Nothing about this ever reads, derives or asks for wallet
   access. Only the 19 Mar 2026 table is built in; a homefront flown before that date shows no expected payout at all,
   since no measured table exists yet for what CCP paid before it, rather than pricing an old site off today's numbers.
+- **A Metaliminal Meteoroid now marks itself completed on its own.** The moment the site's asteroid runs dry, HOMEFRONT
+  reads "completed · from the game log" — the fleet commander or pilot can still change it by hand, and doing so
+  replaces the automatic tag outright. Every other homefront kind still asks. This is caught up too if it happened
+  while the app was closed: resuming a run picks it up the same way it already catches up bounty, mining and enemies.
 - **Mining now travels with a fleet run when it is published.** A fleetmate's mining was left out of what their run
   sent to the server, so a synced group showed only your own ore.
 - **A mission flown with more than one own toon no longer counts its reward twice.** Before, every own toon in the

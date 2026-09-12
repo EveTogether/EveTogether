@@ -62,7 +62,7 @@ public sealed class FleetRunAttendance : ISingletonService, IDisposable
     public static RunAttendanceDecision ToDecision(RunGroupAttendance attendance, int commanderCharacterId) => new(
         attendance.Characters, attendance.NotOnRosterCount, AttendanceSource.FleetCommander, commanderCharacterId,
         DateTimeOffset.FromUnixTimeMilliseconds(attendance.UnixMs).UtcDateTime,
-        attendance.Outcome, attendance.CompletedWaveCount);
+        attendance.Outcome, attendance.CompletedWaveCount, attendance.OutcomeFromGameLog);
 
     private async Task _OnAttendanceAsync(FleetRunAttendanceEvent integrationEvent, CancellationToken cancellationToken)
     {

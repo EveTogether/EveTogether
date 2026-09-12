@@ -63,6 +63,43 @@ public sealed class HomefrontOutcomeTests
         Assert.Equal(HomefrontOutcome.Completed, roundTripped?.Outcome);
     }
 
+    /// <summary>ET-262: the flag that says an outcome came from the pale-shadow gamelog line, not a manual pick,
+    /// round-trips through the same bundled decision the FC/pilot writes by hand.</summary>
+    [AvaloniaFact]
+    public async Task SetRunAttendanceCommand_WithGameLogOutcome_RoundTripsTheFlag()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        // Dungeon id for "Metaliminal Meteoroid: Amarr Mining" — the one kind the pale-shadow line means anything for.
+        const int metaliminal = 10312;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(Jithran, ActivityKind.Site, StartedAtUtc,
+            metaliminal, "Metaliminal Meteoroid: Amarr Mining", 30000142), cancellationToken);
+        RunAttendanceDecision decision = new(
+            [new RunAttendanceEntryInput { CharacterId = Jithran, IsInSite = true, Reason = AttendanceReason.Mined }],
+            0, AttendanceSource.Pilot, Jithran, StartedAtUtc.AddMinutes(20),
+            Outcome: HomefrontOutcome.Completed, OutcomeFromGameLog: true);
+
+        await dispatcher.Send(new SetRunAttendanceCommand(decision, [Jithran], RunId: started.Value), cancellationToken);
+
+        await using ClientDbContext db = await instance.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        Run run = await db.Set<Run>().SingleAsync(candidate => candidate.Id == started.Value, cancellationToken);
+
+        Assert.Equal(HomefrontOutcome.Completed, run.HomefrontOutcome);
+        Assert.True(run.HomefrontOutcomeFromGameLog);
+
+        RunAttendanceDecision? roundTripped = RunAttendanceDecision.Of(run);
+        Assert.True(roundTripped?.OutcomeFromGameLog);
+
+        // A manual correction afterwards clears the tag, even to the same value — it is no longer what the gamelog said.
+        RunAttendanceDecision corrected = decision with { SetAtUtc = StartedAtUtc.AddMinutes(21), OutcomeFromGameLog = false };
+        await dispatcher.Send(new SetRunAttendanceCommand(corrected, [Jithran], RunId: started.Value), cancellationToken);
+        Run correctedRun = await db.Set<Run>().AsNoTracking().SingleAsync(candidate => candidate.Id == started.Value, cancellationToken);
+        Assert.False(correctedRun.HomefrontOutcomeFromGameLog);
+    }
+
     [AvaloniaFact]
     public async Task SetRunAttendanceCommand_WithoutOutcome_StampsNoTableVersion()
     {
