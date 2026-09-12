@@ -44,9 +44,13 @@ public sealed record ActivityDetailDto(
     string? GroupCode,
     ActivityKind ActivityKind,
     string? SiteName,
-    // The scanner's own group text for this site (ET-226) — the source RunTypeResolver turns into the TYPE this
-    // screen, the run window and the runs overview all show the same way.
+    // The scanner's own group text for this site (ET-226) — one of the two sources RunTypeResolver turns into the
+    // TYPE this screen, the run window and the runs overview all show the same way.
     string? SignatureGroupSnapshot,
+    // The dungeon id a single catalogue match resolved to at start (ET-228) — 0 on every run started before this
+    // ticket, on a manual mission (its own id space, SiteTypeSource.Mission), or on a site whose copied name never
+    // matched exactly one dungeon. RunTypeResolver reads it together with SignatureGroupSnapshot above.
+    int SiteTypeId,
     int? SolarSystemId,
     DateTime StartedAtUtc,
     DateTime? StoppedAtUtc,

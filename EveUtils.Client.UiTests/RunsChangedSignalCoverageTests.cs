@@ -47,7 +47,16 @@ public sealed class RunsChangedSignalCoverageTests
         // know where a fleet run goes. It never touches a run, and the publisher itself sends it from inside its own
         // handling of RunsChangedEvent, so a signal here would only hand that handler its own write back.
         [typeof(RecordRunGroupServerCommand)] = "writes which server a group's fleet lives on, read by the automatic "
-            + "publisher alone and shown nowhere; it changes no run"
+            + "publisher alone and shown nowhere; it changes no run",
+        // ET-228: its only effect is matching a run's SiteName against the SDE's own archetype-70 site names, and
+        // this harness's TestClientInstance.Create() below carries no SDE catalogue at all — every scenario shares
+        // one instance with no per-scenario override, so there is no fixture strong enough to make this command do
+        // anything here. It does change what a screen shows (TYPE) and does publish RunsChangedEvent through the
+        // RebuildActivitySummariesCommand it delegates to once repaired — proven directly, against a FakeSdeAccessor
+        // seeded with the site it must find, in RepairHomefrontSiteTypeIdsCommandHandlerTests instead.
+        [typeof(RepairHomefrontSiteTypeIdsCommand)] = "needs the SDE's own archetype-70 site catalogue to do "
+            + "anything, which this shared harness has no way to seed per scenario; its signal is proven in "
+            + "RepairHomefrontSiteTypeIdsCommandHandlerTests against a FakeSdeAccessor instead"
     };
 
     /// <summary>For every other command: real state to run it against, and the run (or group) it has to name.</summary>

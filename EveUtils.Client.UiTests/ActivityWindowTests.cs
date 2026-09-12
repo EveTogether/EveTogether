@@ -59,9 +59,9 @@ public class ActivityWindowTests
     // ── AC-1 — every section says something, open or shut ───────────────────────────────────────────
 
     [Theory]
-    // An abyssal pocket has no NPC bounty at all, so it has five sections rather than a site's six — no BOUNTY to
-    // stand shut and silent (ET-241).
-    [InlineData(ActivityKind.Abyssal, 5)]
+    // An abyssal pocket has no NPC bounty at all (ET-241) but does spend a filament CONSUMABLES shows (ET-249) —
+    // still six sections, one traded for the other rather than simply one fewer than a site's own six.
+    [InlineData(ActivityKind.Abyssal, 6)]
     [InlineData(ActivityKind.Site, 6)]
     public void EmptyRun_EverySectionSummary_SaysSomething(ActivityKind kind, int expectedSectionCount)
     {
@@ -1152,6 +1152,52 @@ public class ActivityWindowTests
         Assert.Equal("Limited Sleeper Cache — ship-restricted", model.Activity().SignatureSiteText);
     }
 
+    /// <summary>ET-232 AC-2: a homefront's T1-only cruisers come back among the allowed hulls even though the whole
+    /// Cruiser group is not in the allow-list — includedTypeIDs, not includedGroupIDs, is what names them.</summary>
+    [Fact]
+    public void IndividuallyIncludedHulls_AppearAlongsideTheAllowedGroups()
+    {
+        var model = _Site(_Entry("Raid: Hall of Sacrifice",
+            groups: [new SdeGroup(25, 6, "Frigate", true)],
+            includedTypes: [new SdeNamedType(621, "Rifter"), new SdeNamedType(630, "Merlin")]));
+
+        Assert.True(model.Activity().HasShipRestriction);
+        Assert.Equal("Frigate, Merlin, Rifter", model.Activity().ShipRestrictionText);
+    }
+
+    /// <summary>ET-232 AC-2: an excluded hull is never shown as allowed, even when it was individually included by
+    /// another type list referenced by the same site — the exclude always wins.</summary>
+    [Fact]
+    public void AnIndividuallyExcludedHull_IsNeverShownAsAllowed()
+    {
+        var model = _Site(_Entry("Raid: Hall of Sacrifice",
+            includedTypes: [new SdeNamedType(621, "Rifter"), new SdeNamedType(640, "Punisher")],
+            excludedTypes: [new SdeNamedType(640, "Punisher")]));
+
+        Assert.Equal("Rifter", model.Activity().ShipRestrictionText);
+        Assert.DoesNotContain("Punisher", model.Activity().ShipRestrictionText);
+    }
+
+    // ── ET-232: the SDE's own gameplayDescription, behind its own on-demand link ───────────────────────
+
+    [Fact]
+    public void AGameplayDescription_IsShownBehindItsOwnLink()
+    {
+        var model = _Site(_Entry("Raid: Hall of Sacrifice", gameplayDescription: "Bring 5 pilots."));
+
+        Assert.True(model.Activity().HasGameplayDescription);
+        Assert.Equal("Bring 5 pilots.", model.Activity().GameplayDescriptionText);
+    }
+
+    [Fact]
+    public void NoGameplayDescription_ShowsNoLink()
+    {
+        var model = _Site(_Entry("Haunted Yard"));
+
+        Assert.False(model.Activity().HasGameplayDescription);
+        Assert.Null(model.Activity().GameplayDescriptionText);
+    }
+
     [Fact]
     public void SeveralCatalogueEntriesSharingAName_ShowWhatTheyShare_AndSayNothingAboutTheCatalogue()
     {
@@ -1225,8 +1271,11 @@ public class ActivityWindowTests
         };
 
     private static SdeSite _Entry(string name, int? ded = null, bool restricted = false,
-        IReadOnlyList<SdeGroup>? groups = null) =>
-        new(1263, name, null, null, null, null, null, ded, restricted || groups is not null, groups ?? []);
+        IReadOnlyList<SdeGroup>? groups = null, IReadOnlyList<SdeNamedType>? includedTypes = null,
+        IReadOnlyList<SdeNamedType>? excludedTypes = null, string? gameplayDescription = null) =>
+        new(1263, name, null, null, null, null, null, ded,
+            restricted || groups is not null || includedTypes is not null, groups ?? [], gameplayDescription,
+            includedTypes, excludedTypes);
 
     private static IServiceProvider _Unused() => new ServiceCollection().BuildServiceProvider();
 

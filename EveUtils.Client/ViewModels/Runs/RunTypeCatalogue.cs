@@ -216,8 +216,12 @@ public static class RunTypeCatalogue
             DetailSections = [RunSectionId.Activity, RunSectionId.Fleet, RunSectionId.Mining],
             ManualStart = ManualStartRequirement.None
         },
-        // Nothing resolves to Homefront yet (ET-228). A homefront is flown as a site today and reads as one, so it
-        // keeps a site's sections until ET-230 gives it its own.
+        // Resolved from the dungeon id alone (ET-228, HomefrontCatalogue) — never from a copied signature's group,
+        // which is never reliably caught as "Homefront Operations …" in practice. The base row below is a combat
+        // homefront's own shape (ENEMIES/BOUNTY, same as any site); For(ActivityKind, string?, int) refines it with
+        // the kind's own name and, for a mining kind (Metaliminal Meteoroid, Abyssal Artifact Recovery), MINING —
+        // the per-run refinement ET-236's design left for this ticket. ET-230 still owns a homefront's own
+        // attendance/payout sections, which this row does not attempt.
         [RunTypeId.Homefront] = _Site(RunTypeId.Homefront, "Homefront", MaterialIconKind.Castle),
         [RunTypeId.Abyssal] = new()
         {
@@ -275,8 +279,38 @@ public static class RunTypeCatalogue
     public static RunTypeDefinition For(RunTypeId id) =>
         Definitions.TryGetValue(id, out RunTypeDefinition? definition) ? definition : Definitions[RunTypeId.Unknown];
 
-    /// <summary>The type of a run as it is carried — its kind and the scanner group it was copied with — which is how
-    /// both run screens ask.</summary>
-    public static RunTypeDefinition For(ActivityKind kind, string? signatureGroup) =>
-        Enum.IsDefined(kind) ? For(RunTypeResolver.Resolve(kind, signatureGroup)) : NewerBuildKind;
+    /// <summary>The type of a run as it is carried — its kind, the scanner group it was copied with, and (for a site)
+    /// the dungeon id a single catalogue match resolved to — which is how every run screen asks (ET-226, ET-228).
+    /// <paramref name="siteTypeId"/> defaults to "no site id known", so a caller that has not been updated for
+    /// ET-228 (a mission, an abyssal, or a screen this ticket left alone) resolves exactly as before.</summary>
+    public static RunTypeDefinition For(ActivityKind kind, string? signatureGroup, int siteTypeId = 0)
+    {
+        if (!Enum.IsDefined(kind))
+            return NewerBuildKind;
+
+        RunTypeId id = RunTypeResolver.Resolve(kind, signatureGroup, siteTypeId);
+        RunTypeDefinition definition = For(id);
+        return id == RunTypeId.Homefront
+            && HomefrontCatalogue.KindByDungeonId.TryGetValue(siteTypeId, out string? homefrontKind)
+                ? _RefineHomefront(definition, homefrontKind)
+                : definition;
+    }
+
+    /// <summary>The per-run refinement ET-236's design left for ET-228: one <see cref="RunTypeId.Homefront"/> row
+    /// covers nine kinds, and only the mining ones (Metaliminal Meteoroid, Abyssal Artifact Recovery) claim MINING
+    /// besides the ENEMIES/BOUNTY every homefront already has from its base site row. The kind is folded into Name
+    /// here — the one place TYPE is read on every screen — rather than each screen naming it beside "Homefront" on
+    /// its own.</summary>
+    private static RunTypeDefinition _RefineHomefront(RunTypeDefinition baseType, string kind)
+    {
+        string name = $"Homefront · {kind}";
+        return HomefrontCatalogue.IsMiningKind(kind)
+            ? baseType with
+            {
+                Name = name,
+                WindowSections = [.. baseType.WindowSections, RunSectionId.Mining],
+                DetailSections = [.. baseType.DetailSections, RunSectionId.Mining]
+            }
+            : baseType with { Name = name };
+    }
 }

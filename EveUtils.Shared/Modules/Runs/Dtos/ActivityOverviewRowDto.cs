@@ -28,9 +28,12 @@ public sealed record ActivityOverviewRowDto(
     Guid? RunId,
     ActivityKind ActivityKind,
     string? SiteName,
-    // The scanner's own group text for this site (ET-226) — resolved into the TYPE this row shows via
-    // RunTypeResolver, the same way the run window and the detail screen do.
+    // The scanner's own group text for this site (ET-226) — one of the two facts RunTypeResolver turns into the
+    // TYPE this row shows, the same way the run window and the detail screen do.
     string? SignatureGroupSnapshot,
+    // The dungeon id a single catalogue match resolved to at start (ET-228) — see ActivityDetailDto's own copy of
+    // this field for what 0 means here.
+    int SiteTypeId,
     int? SolarSystemId,
     DateTime StartedAtUtc,
     int DurationSeconds,

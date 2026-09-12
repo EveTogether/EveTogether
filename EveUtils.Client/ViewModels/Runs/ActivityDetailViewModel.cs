@@ -427,7 +427,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
 
     private RunDetailSectionInput _Apply(ActivityDetailDto detail)
     {
-        RunTypeDefinition type = RunTypeCatalogue.For(detail.ActivityKind, detail.SignatureGroupSnapshot);
+        RunTypeDefinition type = RunTypeCatalogue.For(detail.ActivityKind, detail.SignatureGroupSnapshot, detail.SiteTypeId);
         var input = new RunDetailSectionInput(detail, type, id => _ResolveName(detail, id));
         _ApplyHeader(detail, type);
         foreach (RunDetailSection section in _sections)

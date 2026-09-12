@@ -8,6 +8,7 @@ using EveUtils.Client.Esi;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Runs;
 using EveUtils.Client.Dialogs;
@@ -24,6 +25,7 @@ using EveUtils.Shared.Data;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Sde.Dtos;
 using LootCaptureSource = EveUtils.Shared.Modules.Runs.Enums.LootCaptureSource;
 using LootKind = EveUtils.Shared.Modules.Runs.Enums.LootKind;
 using StoredRunState = EveUtils.Shared.Modules.Runs.Enums.RunState;
@@ -96,6 +98,74 @@ public class ActivityWindowWiringTests
         var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
         Result<RunningRunDto> running = await dispatcher.Query(new GetRunningRunQuery());
         Assert.Equal("Data Site", running.Value!.SignatureGroupSnapshot);
+    }
+
+    /// <summary>
+    /// ET-228: the dungeon id a copied signature resolved to now survives onto the run — before this ticket, both
+    /// START paths in <c>ActivityWindowViewModel</c> wrote <c>SiteTypeId: 0</c> outright even with the catalogue
+    /// match already sitting in <c>MatchedSites</c>. Red against the pre-fix code: the match was there and the
+    /// stored run still read 0.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Start_RecordsTheDungeonIdWhenExactlyOneSiteMatches()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        await model.ApplySignatureAsync("AAA-001", "Combat Site", "Raid: Hall of Sacrifice",
+            [new SdeSite(10347, "Raid: Hall of Sacrifice", 70, "Homefront Operations", null, null, null, null, false, [])]);
+
+        await model.StartRunCommand.ExecuteAsync(null);
+
+        Run left = await _RunAsync(harness, model.RunId!.Value);
+        Assert.Equal(10347, left.SiteTypeId);
+    }
+
+    /// <summary>Never a guess (ET-228 AC-1): a copied name matching more than one catalogue dungeon leaves the id at
+    /// 0, the same honest "not known" an unmatched site already reads, rather than picking either one.</summary>
+    [AvaloniaFact]
+    public async Task Start_NeverGuesses_WhenMoreThanOneSiteMatches()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        await model.ApplySignatureAsync("AAA-001", "Combat Site", "Local Sansha Production Installation",
+        [
+            new SdeSite(1001, "Local Sansha Production Installation", 1, null, null, null, null, null, false, []),
+            new SdeSite(1002, "Local Sansha Production Installation", 1, null, null, null, null, null, false, [])
+        ]);
+
+        await model.StartRunCommand.ExecuteAsync(null);
+
+        Run left = await _RunAsync(harness, model.RunId!.Value);
+        Assert.Equal(0, left.SiteTypeId);
+    }
+
+    /// <summary>
+    /// ET-228: the run window's own version of the detail screen's ET-162 rule ("an unclaimed section with real
+    /// content still shows") — a Combat Site does not claim MINING, but someone mining on it should not have to
+    /// wait for SAVE to see it. Red against the pre-fix code: <c>_SyncSectionsToType</c> only ever asked
+    /// <c>RunType.WindowSections</c>, so MINING never appeared on this run no matter how much came in.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Mining_AppearsLiveOnACombatSite_OnceSomeoneMines()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        model.SignatureGroup = "Combat Site";
+        model.SignatureId = "AAA-001";
+        model.SignatureName = "Sansha Hideaway";
+        await model.StartRunCommand.ExecuteAsync(null);
+        Assert.Throws<InvalidOperationException>(() => model.Mining());
+
+        await harness.Services.GetRequiredService<IDispatcher>().Send(new RunCommands.AddRunMiningEntryCommand(
+            ActivityWindowHarness.CharacterId, DateTime.UtcNow, "Amperum Mutanite", 13, false, 0));
+
+        await ActivityWindowHarness.WaitUntil(() =>
+        {
+            model.Refresh(DateTime.UtcNow);
+            return model.Sections.OfType<MiningWindowSectionViewModel>().Any();
+        });
+
+        Assert.NotEmpty(model.Mining().Rows);
     }
 
     /// <summary>

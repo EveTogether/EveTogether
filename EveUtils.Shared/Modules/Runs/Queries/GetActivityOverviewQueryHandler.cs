@@ -109,7 +109,7 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             RunParameterKey.AbyssalFilament or RunParameterKey.AbyssalFilamentTypeId or RunParameterKey.AbyssalFilamentCount))];
         return new ActivityOverviewRowDto(
             summary.Id, summary.GroupCode, summary.RunId, summary.ActivityKind, summary.SiteName,
-            summary.SignatureGroupSnapshot, summary.SolarSystemId,
+            summary.SignatureGroupSnapshot, summary.SiteTypeId, summary.SolarSystemId,
             summary.StartedAtUtc, summary.DurationSeconds, summary.RunsIncluded, summary.ParticipantCount,
             [.. crew.GroupBy(member => member.CharacterId)
                 .Select(group => new ActivityCrewMemberDto(

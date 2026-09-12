@@ -232,7 +232,7 @@ public sealed class RunIskTotalTests
             new IskContribution((IskSource)99, 500_000m, IskCertainty.Expected)
         ]);
         var row = new ActivityOverviewRowViewModel(
-            new ActivityOverviewRowDto(Guid.NewGuid(), null, Guid.NewGuid(), ActivityKind.Site, "Homefront", null, null,
+            new ActivityOverviewRowDto(Guid.NewGuid(), null, Guid.NewGuid(), ActivityKind.Site, "Homefront", null, 0, null,
                 DateTime.UtcNow, 600, 1, 1, [], [], 1_000_000m, null, 0, false, false, [], isk),
             id => $"character {id}", _ => Task.CompletedTask, _ => Task.CompletedTask);
 
