@@ -67,6 +67,13 @@ public sealed class EnemiesWindowSectionViewModel : RunWindowSection
     /// enemies from the same instant its bounty and loot start counting (ET-210 review finding, round 4).</summary>
     public override void OnCharacterRunStarted(int characterId) => _Ensure(characterId);
 
+    /// <summary>One sighting from the gamelog catch-up read (ET-258), applied straight to this character's own
+    /// collector — the same effect <see cref="_OnCombatObserved"/> has live, without going through
+    /// <see cref="GamelogClientService.CombatObserved"/>, which only fires from <c>AddHitAsync</c>: the DPS-feeding
+    /// path a bounded historical read must never call.</summary>
+    internal void RecordCatchUpSighting(int characterId, string target, DateTime observedAtUtc) =>
+        _collectors.GetValueOrDefault(characterId)?.Record(characterId, target, observedAtUtc);
+
     /// <summary>Let go of every character's list — the whole group's, since STOP, SAVE and DISCARD act on the whole
     /// group (ET-210).</summary>
     public override void OnRunClosed()
