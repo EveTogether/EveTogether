@@ -2424,6 +2424,17 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 string name = await _NameOfAsync(characterId) ?? $"Char {characterId}";
                 Participants.Add(new RunParticipantViewModel(
                     dto.RunId, characterId, name, dto.IsParticipant, dto.IsPayoutEligible, dto.BountyIsk, dto.MiningEntries));
+
+                // A character this window did not itself just start (ET-259): the acting character's own
+                // OnRunStarted already ensured its collector, and a sibling just started this tick already got
+                // OnCharacterRunStarted from _SendAdditionalStartRunCommandAsync — but a window that ADOPTS an
+                // already-running group (RESUME, ET-254/258, or simply reopening a closed run window) only ever
+                // adopts the ONE run it was pointed at, never the rest of the group, so a sibling discovered here
+                // for the first time had no collector at all and every hit on their own gamelog had nowhere to go,
+                // even though bounty and loot never depended on this per-window wiring and kept working. Idempotent
+                // per section (RunEnemyObservationCollector._Ensure no-ops for a character it already knows).
+                foreach (RunWindowSection section in _AllSections())
+                    section.OnCharacterRunStarted(characterId);
             }
 
             foreach (RunParticipantViewModel gone in Participants
