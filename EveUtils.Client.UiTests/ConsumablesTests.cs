@@ -99,7 +99,8 @@ public sealed class ConsumablesTests
         MiningIskValue = null,
         HasMining = false,
         Parameters = [],
-        StoppedAtUtc = null
+        StoppedAtUtc = null,
+        HomefrontExpectedPayoutIsk = null
     };
 
     // ── The catalogue claims it only for an abyssal ────────────────────────────────────────────────────

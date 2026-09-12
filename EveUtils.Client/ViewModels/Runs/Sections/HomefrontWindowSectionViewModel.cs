@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Formatting;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs.Attendance;
@@ -13,6 +14,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -124,6 +126,67 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
 
     /// <summary>Said when the list started from the previous homefront of this fleet (Jithran, 2026-09-11).</summary>
     [ObservableProperty] private string? _lastSiteText;
+
+    // ── The outcome and the payout (ET-231) ─────────────────────────────────────────────────────────
+
+    /// <summary>Abyssal Artifact Recovery has no completed/failed/unknown of its own — it pays per wave, and a site
+    /// that fails part-way keeps whatever waves it already cleared. Every other homefront picks an outcome instead.</summary>
+    public bool IsAar => Context.RunType.HomefrontKind == "Abyssal Artifact Recovery";
+
+    /// <summary>How the site ended — null while nobody has said. Editable only while <see cref="CanDecide"/>; a member
+    /// reads whatever the commander last set.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(OutcomeText))]
+    private HomefrontOutcome? _outcome;
+
+    /// <summary>AAR's own outcome: how many of its 9 waves paid out.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DecreaseWaveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(IncreaseWaveCommand))]
+    private int _completedWaveCount;
+
+    /// <summary>"15,000,000 ISK each", "if completed: 15,000,000 ISK each", or "N beyond the table" — the fixed
+    /// payout at the current N, read straight off <see cref="HomefrontPayoutTable"/>.</summary>
+    [ObservableProperty] private string _payoutSummaryText = string.Empty;
+
+    /// <summary>"completed", "failed" or "unknown" — <see cref="Outcome"/> in words, lower case to match the
+    /// buttons that set it.</summary>
+    public string OutcomeText => Outcome switch
+    {
+        HomefrontOutcome.Completed => "completed",
+        HomefrontOutcome.Failed => "failed",
+        HomefrontOutcome.Unknown => "unknown",
+        _ => "not decided"
+    };
+
+    [RelayCommand]
+    private void SetOutcome(HomefrontOutcome outcome)
+    {
+        if (!CanDecide)
+            return;
+
+        Outcome = outcome;
+        _changedSinceUtc ??= _nowUtc;
+        _Rebuild(_nowUtc);
+    }
+
+    [RelayCommand]
+    private void IncreaseWave() => _SetWaveCount(CompletedWaveCount + 1);
+
+    [RelayCommand(CanExecute = nameof(_CanDecreaseWave))]
+    private void DecreaseWave() => _SetWaveCount(CompletedWaveCount - 1);
+
+    private bool _CanDecreaseWave() => CompletedWaveCount > 0;
+
+    private void _SetWaveCount(int count)
+    {
+        if (!CanDecide || count is < 0 or > 9)
+            return;
+
+        CompletedWaveCount = count;
+        _changedSinceUtc ??= _nowUtc;
+        _Rebuild(_nowUtc);
+    }
 
     public override void Refresh(DateTime nowUtc)
     {
@@ -239,22 +302,65 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             _standing = _stored;
             _isStandingTaken = true;
             NotOnRosterCount = _stored?.NotOnRosterCount ?? NotOnRosterCount;
+            Outcome = _stored?.Outcome ?? Outcome;
+            CompletedWaveCount = _stored?.CompletedWaveCount ?? CompletedWaveCount;
         }
         else if (!CanDecide)
             _isStandingTaken = false;
 
         IReadOnlyList<AttendanceCandidate> candidates = _Candidates(role);
         string? commanderName = _CommanderId() is { } commander ? _NameOf(commander) : null;
+        RunAttendanceDecision? shownDecision;
 
         if (CanDecide)
-            _ShowDecision(candidates, _CurrentDecision(candidates, role, nowUtc), commanderName: null);
+        {
+            shownDecision = _CurrentDecision(candidates, role, nowUtc);
+            _ShowDecision(candidates, shownDecision, commanderName: null);
+        }
         else if (_stored is { } stored)
+        {
+            shownDecision = stored;
             _ShowDecision(candidates, stored, commanderName);
+            Outcome = stored.Outcome;
+            CompletedWaveCount = stored.CompletedWaveCount ?? 0;
+        }
         else
+        {
+            shownDecision = null;
             _ShowWaiting(candidates);
+        }
 
+        _ShowPayout(shownDecision);
         _Describe(role, commanderName);
         RefreshSummary();
+    }
+
+    /// <summary>The fixed payout at the current N (ET-231), on the HOMEFRONT header and on every row. Read straight
+    /// off <see cref="HomefrontPayoutTable"/> — never a second computation of the same figure.</summary>
+    private void _ShowPayout(RunAttendanceDecision? decision)
+    {
+        string? kind = Context.RunType.HomefrontKind;
+        int? n = decision?.InSiteCount;
+        DateTime atUtc = Context.EffectiveStopUtc ?? _nowUtc;
+        (decimal Amount, string Version, DateTime EffectiveFromUtc)? table = IsAar ? null : HomefrontPayoutTable.TryGetTableAmount(kind, n, atUtc);
+        (decimal Amount, string Version, DateTime EffectiveFromUtc)? expected = HomefrontPayoutTable.TryGetExpected(
+            kind, true, n, Outcome, CompletedWaveCount, atUtc);
+
+        PayoutSummaryText = (IsAar, table, expected) switch
+        {
+            (true, _, { } aar) => $"{IskFormat.Whole(aar.Amount)} so far",
+            (true, _, null) => n is null ? string.Empty : "0 waves paid so far",
+            (false, _, { } completed) => $"{IskFormat.Whole(completed.Amount)} each",
+            (false, { } t, null) => $"if completed: {IskFormat.Whole(t.Amount)} each",
+            _ => n is null ? string.Empty : "N beyond the table"
+        };
+
+        foreach (AttendanceRowViewModel row in Rows)
+        {
+            decimal? rowTable = row.IsInSite ? table?.Amount : null;
+            decimal? rowExpected = row.IsInSite ? expected?.Amount : null;
+            row.ShowPayout(rowTable, rowExpected, confirmedPayoutIsk: null);
+        }
     }
 
     private IReadOnlyList<AttendanceCandidate> _Candidates(Role role)
@@ -313,7 +419,8 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             ? commander
             : Context.ActingCharacterId ?? Context.RunCharacterId ?? 0;
         return new RunAttendanceDecision(entries, NotOnRosterCount,
-            role is Role.Commander ? AttendanceSource.FleetCommander : AttendanceSource.Pilot, setBy, nowUtc);
+            role is Role.Commander ? AttendanceSource.FleetCommander : AttendanceSource.Pilot, setBy, nowUtc,
+            IsAar ? null : Outcome, IsAar ? CompletedWaveCount : null);
     }
 
     private void _ShowDecision(IReadOnlyList<AttendanceCandidate> candidates, RunAttendanceDecision decision, string? commanderName)
@@ -668,7 +775,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
 
         await eventBus.PublishAsync(new FleetRunAttendanceEvent(new RunGroupAttendance(
                 fleetId, groupCode, RunGroupAttendance.ToUnixMs(decision.SetAtUtc), decision.Entries,
-                decision.NotOnRosterCount), commander),
+                decision.NotOnRosterCount, decision.Outcome, decision.CompletedWaveCount), commander),
             EventTarget.Remote);
     }
 

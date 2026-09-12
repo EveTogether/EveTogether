@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
@@ -74,6 +75,17 @@ public sealed partial class RunParticipantViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StandingText))]
     private bool? _inSiteAtCompletion;
+
+    /// <summary>N (ET-231) — the same on every run of the group, carried per run like <see cref="InSiteAtCompletion"/>
+    /// since this is a flat list of runs and not a separate group-level fact.</summary>
+    [ObservableProperty] private int? _attendanceCount;
+
+    /// <summary>How the homefront ended (ET-231) — null while nobody has said, and not used for Abyssal Artifact
+    /// Recovery (see <see cref="HomefrontCompletedWaveCount"/>).</summary>
+    [ObservableProperty] private HomefrontOutcome? _homefrontOutcome;
+
+    /// <summary>Abyssal Artifact Recovery's own outcome (ET-231): how many of its 9 waves paid out.</summary>
+    [ObservableProperty] private int? _homefrontCompletedWaveCount;
 
     /// <summary>Both flags said out loud, because the interesting row is the one where they disagree.</summary>
     public string StandingText => Describe(IsParticipant, IsPayoutEligible, InSiteAtCompletion);

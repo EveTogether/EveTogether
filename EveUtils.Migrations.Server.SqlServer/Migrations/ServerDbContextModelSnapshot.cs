@@ -828,6 +828,15 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<int?>("HomefrontCompletedWaveCount")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("HomefrontOutcome")
+                        .HasColumnType("int");
+
+                    b.Property<string>("HomefrontPayoutTableVersion")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool?>("InSiteAtCompletion")
                         .HasColumnType("bit");
 

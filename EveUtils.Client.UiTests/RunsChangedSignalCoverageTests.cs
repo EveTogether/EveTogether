@@ -246,6 +246,12 @@ public sealed class RunsChangedSignalCoverageTests
                 0, AttendanceSource.FleetCommander, Pilot, StartedAtUtc.AddMinutes(5));
             return new Act(async () => await dispatcher.Send(new SetRunAttendanceCommand(decision, [Pilot], GroupCode),
                 cancellationToken), GroupCode: GroupCode);
+        },
+
+        [typeof(SetHomefrontPayoutCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            Guid runId = await _StartAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new SetHomefrontPayoutCommand(runId, 15_000_000m), cancellationToken), runId);
         }
     };
 

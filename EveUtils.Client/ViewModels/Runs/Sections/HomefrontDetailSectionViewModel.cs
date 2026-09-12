@@ -7,10 +7,12 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Formatting;
 using EveUtils.Client.ViewModels.Runs.Attendance;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
+using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -66,6 +68,48 @@ public sealed partial class HomefrontDetailSectionViewModel(RunDetailSectionServ
     private int _notOnRosterCount;
 
     [ObservableProperty] private string? _editError;
+
+    // ── The outcome and the payout (ET-231) ─────────────────────────────────────────────────────────
+
+    /// <summary>"completed", "failed", "unknown", or, for Abyssal Artifact Recovery, "N of 9 waves paid" — read-only
+    /// here: the outcome is decided in the run window at STOP, not corrected from this screen.</summary>
+    [ObservableProperty] private string _outcomeText = string.Empty;
+
+    /// <summary>"Raid · 5-pilot table, valid from 19 Mar 2026" — which <see cref="HomefrontPayoutTable"/> entry this
+    /// activity's own runs were priced against, read straight off the stored column
+    /// (<c>Run.HomefrontPayoutTableVersion</c>) rather than recomputed here, so two clients on two app versions
+    /// never silently disagree about the same site.</summary>
+    [ObservableProperty] private string? _payoutTableVersionText;
+
+    /// <summary>"15,000,000 ISK each" or "N beyond the table" — the fixed payout at N, once the site is decided.</summary>
+    [ObservableProperty] private string _payoutSummaryText = string.Empty;
+
+    [RelayCommand]
+    private async Task ConfirmAllAsExpectedAsync()
+    {
+        foreach (AttendanceRowViewModel row in Rows.Where(row => row.CanActOnPayout).ToList())
+            if (row.ExpectedPayoutIsk is { } amount)
+                await _SetPayoutAsync(row, amount);
+    }
+
+    private void _OnConfirmPayout(AttendanceRowViewModel row)
+    {
+        if (row.ExpectedPayoutIsk is { } amount)
+            _ = _SetPayoutAsync(row, amount);
+    }
+
+    private void _OnEnterPayout(AttendanceRowViewModel row, decimal amount) => _ = _SetPayoutAsync(row, amount);
+
+    private async Task _SetPayoutAsync(AttendanceRowViewModel row, decimal amount)
+    {
+        if (_input is not { } input
+            || input.Detail.Runs.FirstOrDefault(run => run.CharacterId == row.CharacterId) is not { } ownRun)
+            return;
+
+        Result written = await services.Dispatcher.Send(new SetHomefrontPayoutCommand(ownRun.RunId, amount));
+        if (written.IsSuccess)
+            RaiseActivityCorrected();
+    }
 
     public string EditExplanation =>
         "Changing who was in the site sends the list to every member again; runs already published are marked as " +
@@ -197,6 +241,9 @@ public sealed partial class HomefrontDetailSectionViewModel(RunDetailSectionServ
             PresenceCaption = null;
             EmptyText = "Nobody decided who was in the site when this homefront completed.";
             HeaderSummary = "not decided";
+            OutcomeText = "not decided";
+            PayoutTableVersionText = null;
+            PayoutSummaryText = string.Empty;
             return;
         }
 
@@ -209,7 +256,7 @@ public sealed partial class HomefrontDetailSectionViewModel(RunDetailSectionServ
         {
             bool isLocal = own.Contains(entry.CharacterId);
             AttendanceRowViewModel row = new(entry.CharacterId, _NameOf(entry, input), isLocal, entry.IsExternal,
-                changed => _edits[changed.CharacterId] = changed.IsInSite);
+                changed => _edits[changed.CharacterId] = changed.IsInSite, _OnConfirmPayout, _OnEnterPayout);
             bool isInSite = _edits.TryGetValue(entry.CharacterId, out bool edited) ? edited : entry.IsInSite;
             row.Show(isInSite, entry.Reason, entry.ReasonAmount, false,
                 entry.Reason is AttendanceReason.SetByHand && decision is not null ? _DeciderName(decision, input) : null);
@@ -240,7 +287,65 @@ public sealed partial class HomefrontDetailSectionViewModel(RunDetailSectionServ
               $"was there at {stoppedAtUtc.ToLocalTime():HH:mm}."
             : null;
         HeaderSummary = fleetAtStop is { } fleet ? $"{fleet} in fleet · {inSite} in site" : $"{inSite} in site";
+        _ShowPayout(input, detail, decision, rows, inSite);
     }
+
+    /// <summary>The fixed payout at N (ET-231), on the section header and on every row — read straight off
+    /// <see cref="HomefrontPayoutTable"/>, never recomputed differently on two screens.</summary>
+    private void _ShowPayout(RunDetailSectionInput input, ActivityDetailDto detail, RunAttendanceDecision? decision,
+        IReadOnlyList<AttendanceRowViewModel> rows, int inSite)
+    {
+        string? kind = input.RunType.HomefrontKind;
+        bool isAar = kind == "Abyssal Artifact Recovery";
+        DateTime atUtc = detail.StoppedAtUtc ?? DateTime.UtcNow;
+        (decimal Amount, string Version, DateTime EffectiveFromUtc)? table =
+            isAar ? null : HomefrontPayoutTable.TryGetTableAmount(kind, inSite, atUtc);
+        (decimal Amount, string Version, DateTime EffectiveFromUtc)? expected = HomefrontPayoutTable.TryGetExpected(
+            kind, true, inSite, decision?.Outcome, decision?.CompletedWaveCount, atUtc);
+
+        OutcomeText = (isAar, decision?.Outcome, decision?.CompletedWaveCount) switch
+        {
+            (true, _, { } waves) => $"{waves} of 9 waves paid",
+            (true, _, null) => "not decided",
+            (false, HomefrontOutcome.Completed, _) => "completed",
+            (false, HomefrontOutcome.Failed, _) => "failed",
+            (false, HomefrontOutcome.Unknown, _) => "unknown",
+            _ => "not decided"
+        };
+        string? storedVersion = detail.Runs.Select(run => run.HomefrontPayoutTableVersion).FirstOrDefault(v => v is not null);
+        DateTime? effectiveFromUtc = table?.EffectiveFromUtc ?? expected?.EffectiveFromUtc;
+        PayoutTableVersionText = kind is not null && storedVersion is not null && effectiveFromUtc is { } from
+            && HomefrontPayoutTable.CurveFor(kind) is { } curve
+            ? $"{kind} · {_CurveLabel(curve)} table, valid from {from:d MMM yyyy}"
+            : null;
+        PayoutSummaryText = (isAar, table, expected) switch
+        {
+            (true, _, { } aar) => $"{IskFormat.Whole(aar.Amount)} so far",
+            (false, _, { } completed) => $"{IskFormat.Whole(completed.Amount)} each",
+            (false, { } t, null) => $"if completed: {IskFormat.Whole(t.Amount)} each",
+            _ => string.Empty
+        };
+
+        foreach (AttendanceRowViewModel row in rows)
+        {
+            decimal? confirmed = detail.Runs.FirstOrDefault(run => run.CharacterId == row.CharacterId) is { } ownRun
+                ? detail.Parameters
+                    .Where(parameter => parameter.RunId == ownRun.RunId && parameter.ParameterKey == RunParameterKey.FixedPayout)
+                    .Select(parameter => parameter.Amount)
+                    .FirstOrDefault()
+                : null;
+            row.ShowPayout(row.IsInSite ? table?.Amount : null, row.IsInSite ? expected?.Amount : null, confirmed);
+        }
+    }
+
+    private static string _CurveLabel(HomefrontCurve curve) => curve switch
+    {
+        HomefrontCurve.FivePerson => "5-pilot",
+        HomefrontCurve.ThreePerson => "3-pilot",
+        HomefrontCurve.Metaliminal => "Metaliminal",
+        HomefrontCurve.Aar => "AAR",
+        _ => "unknown"
+    };
 
     /// <summary>The list as decided; while editing an undecided activity, this client's own characters to start from.</summary>
     private static IEnumerable<RunAttendanceEntryInput> _EntriesToShow(ActivityDetailDto detail, RunAttendanceDecision? decision,

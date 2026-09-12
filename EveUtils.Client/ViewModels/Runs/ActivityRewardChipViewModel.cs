@@ -14,7 +14,7 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// on it would take the whole row down and a silent <c>default</c> would drop a reward the pilot really earned —
 /// both are what ET-161 AC-3 forbids, and both are what a closed <c>switch</c> over a growing enum ends up doing.
 /// </summary>
-public sealed class ActivityRewardChipViewModel(RunParameterKey key, decimal? amount)
+public sealed class ActivityRewardChipViewModel(RunParameterKey key, decimal? amount, bool isExpected = false)
 {
     /// <summary>Whether the key came from outside what this screen was taught. Drives the chip's tint, so an
     /// unnamed form is visibly set apart instead of passing for a known one.</summary>
@@ -22,8 +22,13 @@ public sealed class ActivityRewardChipViewModel(RunParameterKey key, decimal? am
 
     public bool IsKnownKind => !IsUnknownKind;
 
+    /// <summary>A homefront's fixed payout before the pilot confirms or types what arrived (ET-231) — the table's own
+    /// figure, not a measurement. Never true once a <see cref="RunParameterKey.FixedPayout"/> row exists: that chip
+    /// is built from the confirmed amount instead.</summary>
+    public bool IsExpected { get; } = isExpected;
+
     public string Text { get; } = amount is { } value
-        ? $"{_Figure(key, value)} {_Label(key)}"
+        ? $"{_Figure(key, value)} {_Label(key)}" + (isExpected ? " (expected)" : string.Empty)
         : _Label(key);
 
     private static string _Label(RunParameterKey key) => key switch

@@ -828,6 +828,15 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<int?>("HomefrontCompletedWaveCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("HomefrontOutcome")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("HomefrontPayoutTableVersion")
+                        .HasColumnType("text");
+
                     b.Property<bool?>("InSiteAtCompletion")
                         .HasColumnType("boolean");
 

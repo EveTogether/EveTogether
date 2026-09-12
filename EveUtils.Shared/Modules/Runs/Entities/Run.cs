@@ -101,6 +101,24 @@ public sealed class Run
     /// on a solo run and on every run before this column.</summary>
     public int? FleetSizeAtStop { get; set; }
 
+    /// <summary>How the homefront ended, said by the pilot or the fleet commander at STOP (ET-231) — the same one who
+    /// decides <see cref="AttendanceSource"/>, on the same bundled decision. Null while nobody has said, which is
+    /// every run before this column and every run that is not a homefront. Not used for Abyssal Artifact Recovery:
+    /// see <see cref="HomefrontCompletedWaveCount"/>.</summary>
+    public HomefrontOutcome? HomefrontOutcome { get; set; }
+
+    /// <summary>Abyssal Artifact Recovery's own outcome (ET-231): how many of its 9 waves paid out, 0-9, instead of
+    /// <see cref="HomefrontOutcome"/> — a site that fails part-way keeps whatever waves it already cleared, so
+    /// completed/failed cannot say what AAR needs said. Null on every non-AAR run and on an AAR run nobody has
+    /// decided this for yet.</summary>
+    public int? HomefrontCompletedWaveCount { get; set; }
+
+    /// <summary>Which entry of <c>HomefrontPayoutTable</c> this run's own expected payout was last computed against
+    /// (ET-231) — CCP has changed the table three times, so two clients on two app versions must never silently
+    /// disagree about the same site's figure. Set alongside <see cref="AttendanceSetAtUtc"/> whenever a figure
+    /// becomes computable; null while nothing is, and on every run before this column.</summary>
+    public string? HomefrontPayoutTableVersion { get; set; }
+
     public string? FitContentHash { get; set; }
     public string? FitNameSnapshot { get; set; }
 

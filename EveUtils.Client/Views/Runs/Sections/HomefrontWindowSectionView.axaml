@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:va="using:EveUtils.Client.ViewModels.Runs.Attendance"
              xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             xmlns:re="using:EveUtils.Shared.Modules.Runs.Enums"
              x:Class="EveUtils.Client.Views.Runs.Sections.HomefrontWindowSectionView"
              x:DataType="vs:HomefrontWindowSectionViewModel">
     <UserControl.Styles>
@@ -113,6 +114,8 @@
                                            Text="{Binding ReasonText}"/>
                                 <TextBlock Classes="setby" IsVisible="{Binding IsSetByHand}" Text="{Binding SetByText}"/>
                             </WrapPanel>
+                            <TextBlock Classes="hint" Margin="0" IsVisible="{Binding PayoutText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                       Text="{Binding PayoutText}"/>
                         </StackPanel>
                         <CheckBox Grid.Column="2" VerticalAlignment="Center" Content="in site"
                                   IsVisible="{Binding IsEditable}" IsChecked="{Binding IsInSite, Mode=TwoWay}"/>
@@ -144,10 +147,34 @@
             </StackPanel>
         </Grid>
 
+        <!-- OUTCOME: completed/failed/unknown, or — for AAR, which pays per wave — how many of 9 waves paid (ET-231). -->
+        <Grid ColumnDefinitions="Auto,*" Margin="0,8,0,0" IsVisible="{Binding !IsAar}">
+            <TextBlock Text="OUTCOME" VerticalAlignment="Center"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" IsVisible="{Binding CanDecide}">
+                <Button Content="completed" Command="{Binding SetOutcomeCommand}" CommandParameter="{x:Static re:HomefrontOutcome.Completed}"/>
+                <Button Content="failed" Command="{Binding SetOutcomeCommand}" CommandParameter="{x:Static re:HomefrontOutcome.Failed}"/>
+                <Button Content="unknown" Command="{Binding SetOutcomeCommand}" CommandParameter="{x:Static re:HomefrontOutcome.Unknown}"/>
+            </StackPanel>
+            <TextBlock Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" IsVisible="{Binding !CanDecide}"
+                       Foreground="{StaticResource TextBrightBrush}" Text="{Binding OutcomeText}"/>
+        </Grid>
+        <Grid ColumnDefinitions="Auto,*" Margin="0,8,0,0" IsVisible="{Binding IsAar}">
+            <TextBlock Text="WAVES PAID" VerticalAlignment="Center"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right">
+                <TextBlock Text="{Binding CompletedWaveCount}" VerticalAlignment="Center"
+                           Foreground="{StaticResource TextBrightBrush}" MinWidth="18" TextAlignment="Right"/>
+                <TextBlock Text="/ 9" VerticalAlignment="Center" Classes="hint" Margin="0"/>
+                <Button Content="▲" Padding="6,0" IsVisible="{Binding CanDecide}" Command="{Binding IncreaseWaveCommand}"/>
+                <Button Content="▼" Padding="6,0" IsVisible="{Binding CanDecide}" Command="{Binding DecreaseWaveCommand}"/>
+            </StackPanel>
+        </Grid>
+
         <Border Classes="totals" Margin="0,8,0,0">
             <StackPanel>
                 <TextBlock x:Name="CountStrip" Classes="strip" Text="{Binding CountText}"/>
                 <TextBlock Classes="hint" Margin="0" Text="{Binding BreakdownText}"/>
+                <TextBlock Classes="hint" Margin="0" IsVisible="{Binding PayoutSummaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           Text="{Binding PayoutSummaryText}"/>
             </StackPanel>
         </Border>
 

@@ -812,6 +812,15 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("HomefrontCompletedWaveCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("HomefrontOutcome")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("HomefrontPayoutTableVersion")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool?>("InSiteAtCompletion")
                         .HasColumnType("INTEGER");
 

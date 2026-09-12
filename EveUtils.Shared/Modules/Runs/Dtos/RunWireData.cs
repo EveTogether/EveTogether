@@ -50,6 +50,12 @@ public sealed class RunWireData
     public int? FleetSizeAtStop { get; init; }
     public IReadOnlyList<RunAttendanceEntryInput> AttendanceEntries { get; init; } = [];
 
+    // How the homefront ended (ET-231), travelling whole for the same reason as the attendance decision above: a
+    // member offline when it was corrected still adopts it from the commander's own runs on the next pull.
+    public HomefrontOutcome? HomefrontOutcome { get; init; }
+    public int? HomefrontCompletedWaveCount { get; init; }
+    public string? HomefrontPayoutTableVersion { get; init; }
+
     public string? FitContentHash { get; init; }
     public string? FitNameSnapshot { get; init; }
 
@@ -109,6 +115,9 @@ public sealed class RunWireData
             Reason = entry.Reason,
             ReasonAmount = entry.ReasonAmount
         }).ToList(),
+        HomefrontOutcome = run.HomefrontOutcome,
+        HomefrontCompletedWaveCount = run.HomefrontCompletedWaveCount,
+        HomefrontPayoutTableVersion = run.HomefrontPayoutTableVersion,
         FitContentHash = run.FitContentHash,
         FitNameSnapshot = run.FitNameSnapshot,
         CharacterNameSnapshot = run.CharacterNameSnapshot,
@@ -195,6 +204,9 @@ public sealed class RunWireData
             AttendanceSetByCharacterId = AttendanceSetByCharacterId,
             AttendanceSetAtUtc = AttendanceSetAtUtc,
             FleetSizeAtStop = FleetSizeAtStop,
+            HomefrontOutcome = HomefrontOutcome,
+            HomefrontCompletedWaveCount = HomefrontCompletedWaveCount,
+            HomefrontPayoutTableVersion = HomefrontPayoutTableVersion,
             FitContentHash = FitContentHash,
             FitNameSnapshot = FitNameSnapshot,
             CharacterNameSnapshot = CharacterNameSnapshot,

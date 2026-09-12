@@ -12,6 +12,7 @@ using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Isk;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
@@ -103,9 +104,16 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         HasPublishFailure = publishProgress is { Phase: RunPublishPhase.Failed } && !IsOnServer;
         PublishFailureText = HasPublishFailure ? publishProgress?.Message : null;
         SyncText = _SyncText(row.ServerSyncStates, publishProgress, serverNameOf ?? (address => address));
-        Chips = [.. row.Rewards
+        // A homefront's payout while it is still owed (ET-231) has no RunParameter row yet, so it is not among
+        // row.Rewards — read off the same Isk breakdown NetText already uses instead of a second computation here.
+        // Once every character has confirmed, HomefrontPayoutIskContributor contributes nothing and this chip stops
+        // appearing; the FixedPayout chip from row.Rewards below carries the confirmed figure from then on.
+        IEnumerable<ActivityRewardChipViewModel> chips = row.Rewards
             .OrderBy(reward => (int)reward.ParameterKey)
-            .Select(reward => new ActivityRewardChipViewModel(reward.ParameterKey, reward.Amount))];
+            .Select(reward => new ActivityRewardChipViewModel(reward.ParameterKey, reward.Amount));
+        if (row.Isk.Of(IskSource.HomefrontPayout) is { } homefrontPayout)
+            chips = chips.Append(new ActivityRewardChipViewModel(RunParameterKey.FixedPayout, homefrontPayout.Amount, isExpected: true));
+        Chips = [.. chips];
     }
 
     public Guid ActivitySummaryId { get; }

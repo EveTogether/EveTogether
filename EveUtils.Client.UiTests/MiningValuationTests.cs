@@ -111,6 +111,7 @@ public sealed class MiningValuationTests
         MiningIskValue = miningIskValue,
         HasMining = hasMining,
         Parameters = [],
-        StoppedAtUtc = null
+        StoppedAtUtc = null,
+        HomefrontExpectedPayoutIsk = null
     };
 }

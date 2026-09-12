@@ -1,5 +1,6 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -14,16 +15,22 @@ namespace EveUtils.Client.ViewModels.Runs.Attendance;
 public sealed partial class AttendanceRowViewModel : ObservableObject
 {
     private readonly Action<AttendanceRowViewModel>? _onTicked;
+    private readonly Action<AttendanceRowViewModel>? _onConfirmPayout;
+    private readonly Action<AttendanceRowViewModel, decimal>? _onEnterPayout;
     private bool _isApplying;
 
     public AttendanceRowViewModel(long characterId, string name, bool isLocal, bool isExternal,
-        Action<AttendanceRowViewModel>? onTicked = null)
+        Action<AttendanceRowViewModel>? onTicked = null,
+        Action<AttendanceRowViewModel>? onConfirmPayout = null,
+        Action<AttendanceRowViewModel, decimal>? onEnterPayout = null)
     {
         CharacterId = characterId;
         _name = name;
         IsLocal = isLocal;
         IsExternal = isExternal;
         _onTicked = onTicked;
+        _onConfirmPayout = onConfirmPayout;
+        _onEnterPayout = onEnterPayout;
     }
 
     public long CharacterId { get; }
@@ -38,6 +45,10 @@ public sealed partial class AttendanceRowViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TickText))]
+    [NotifyPropertyChangedFor(nameof(PayoutText))]
+    [NotifyPropertyChangedFor(nameof(CanActOnPayout))]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmPayoutCommand))]
+    [NotifyCanExecuteChangedFor(nameof(EnterPayoutCommand))]
     private bool _isInSite;
 
     /// <summary>Only for the one who decides; everyone else reads the list without being able to change it.</summary>
@@ -69,6 +80,57 @@ public sealed partial class AttendanceRowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsOnline))]
     [NotifyPropertyChangedFor(nameof(IsPresenceShown))]
     private FleetMemberPresenceState? _presence;
+
+    // ── The payout (ET-231) ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>What the table pays at the current N, with no regard for outcome — the "if completed" preview
+    /// figure. Null while N is not known, the site is not a homefront, or N is beyond the table.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PayoutText))]
+    private decimal? _tablePayoutIsk;
+
+    /// <summary>The figure that actually counts towards TOTAL ISK right now — only once the site reads
+    /// <c>Completed</c> (or, for AAR, has paid waves). Null until then.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PayoutText))]
+    [NotifyPropertyChangedFor(nameof(CanActOnPayout))]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmPayoutCommand))]
+    [NotifyCanExecuteChangedFor(nameof(EnterPayoutCommand))]
+    private decimal? _expectedPayoutIsk;
+
+    /// <summary>What the pilot said actually arrived — confirmed from <see cref="ExpectedPayoutIsk"/> or typed by
+    /// hand. Null until they say.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PayoutText))]
+    [NotifyPropertyChangedFor(nameof(CanActOnPayout))]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmPayoutCommand))]
+    [NotifyCanExecuteChangedFor(nameof(EnterPayoutCommand))]
+    private decimal? _confirmedPayoutIsk;
+
+    /// <summary>Only this client's own, ticked, priced and not yet confirmed row offers a way to act on it — a
+    /// group-mate's payout is confirmed on their own client, never this one.</summary>
+    public bool CanActOnPayout => IsLocal && IsInSite && ExpectedPayoutIsk is not null && ConfirmedPayoutIsk is null;
+
+    [ObservableProperty] private string _typedPayoutText = string.Empty;
+
+    public string PayoutText => (IsInSite, ConfirmedPayoutIsk, ExpectedPayoutIsk, TablePayoutIsk) switch
+    {
+        (false, _, _, _) => string.Empty,
+        (true, { } confirmed, _, _) => $"{IskFormat.Whole(confirmed)} confirmed",
+        (true, null, { } expected, _) => $"{IskFormat.Whole(expected)} expected",
+        (true, null, null, { } table) => $"if completed: {IskFormat.Whole(table)}",
+        _ => "if completed"
+    };
+
+    [RelayCommand(CanExecute = nameof(CanActOnPayout))]
+    private void ConfirmPayout() => _onConfirmPayout?.Invoke(this);
+
+    [RelayCommand(CanExecute = nameof(CanActOnPayout))]
+    private void EnterPayout()
+    {
+        if (decimal.TryParse(TypedPayoutText, out decimal amount) && amount >= 0)
+            _onEnterPayout?.Invoke(this, amount);
+    }
 
     public string TickText => IsInSite ? "in site" : "not in site";
 
@@ -114,6 +176,15 @@ public sealed partial class AttendanceRowViewModel : ObservableObject
         {
             _isApplying = false;
         }
+    }
+
+    /// <summary>Set the row's payout figures (ET-231) — independent of <see cref="Show"/>, since the payout is
+    /// recomputed on its own clock (N, outcome, prices) rather than alongside every tick.</summary>
+    public void ShowPayout(decimal? tablePayoutIsk, decimal? expectedPayoutIsk, decimal? confirmedPayoutIsk)
+    {
+        TablePayoutIsk = tablePayoutIsk;
+        ExpectedPayoutIsk = expectedPayoutIsk;
+        ConfirmedPayoutIsk = confirmedPayoutIsk;
     }
 
     partial void OnIsInSiteChanged(bool value)

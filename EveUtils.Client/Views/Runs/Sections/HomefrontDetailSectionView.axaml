@@ -76,6 +76,18 @@
             <TextBlock Text="FLEET AT STOP"/>
             <TextBlock Grid.Column="1" x:Name="FleetAtStop" Text="{Binding FleetAtStopText}"/>
         </Grid>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+            <TextBlock Text="OUTCOME"/>
+            <TextBlock Grid.Column="1" x:Name="Outcome" Text="{Binding OutcomeText}"/>
+        </Grid>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding PayoutTableVersionText, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock Text="PAYOUT TABLE"/>
+            <StackPanel Grid.Column="1">
+                <TextBlock Text="{Binding PayoutTableVersionText}"/>
+                <TextBlock Classes="hint" Margin="0" IsVisible="{Binding PayoutSummaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           Text="{Binding PayoutSummaryText}"/>
+            </StackPanel>
+        </Grid>
 
         <ItemsControl x:Name="AttendanceList" ItemsSource="{Binding Rows}" Margin="0,6,0,0">
             <ItemsControl.ItemTemplate>
@@ -98,6 +110,14 @@
                                            Text="{Binding ReasonText}"/>
                                 <TextBlock Classes="setby" IsVisible="{Binding IsSetByHand}" Text="{Binding SetByText}"/>
                             </WrapPanel>
+                            <TextBlock Classes="hint" Margin="0" IsVisible="{Binding PayoutText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                       Text="{Binding PayoutText}"/>
+                            <!-- Only this client's own, ticked, priced and not yet confirmed row offers a way to act. -->
+                            <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,2,0,0" IsVisible="{Binding CanActOnPayout}">
+                                <Button Content="confirm" Padding="6,0" Command="{Binding ConfirmPayoutCommand}"/>
+                                <TextBox Text="{Binding TypedPayoutText}" Width="110" PlaceholderText="enter actual ISK"/>
+                                <Button Content="enter" Padding="6,0" Command="{Binding EnterPayoutCommand}"/>
+                            </StackPanel>
                         </StackPanel>
                         <CheckBox Grid.Column="2" VerticalAlignment="Center" Content="in site"
                                   IsVisible="{Binding IsEditable}" IsChecked="{Binding IsInSite, Mode=TwoWay}"/>
@@ -109,6 +129,10 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
+
+        <Button Content="CONFIRM ALL AS EXPECTED" Margin="0,6,0,0" Command="{Binding ConfirmAllAsExpectedCommand}"/>
+        <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0,4,0,0"
+                   Text="Expected = the fixed table for this site at N, not a measurement. Only you know what arrived: confirm it, or type the amount you received. Eve Together never reads your wallet."/>
 
         <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0" IsVisible="{Binding IsEditing}">
             <TextBlock Text="+ pilots not on the roster" VerticalAlignment="Center"/>

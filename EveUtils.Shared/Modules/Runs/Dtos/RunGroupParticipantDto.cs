@@ -1,3 +1,5 @@
+using EveUtils.Shared.Modules.Runs.Enums;
+
 namespace EveUtils.Shared.Modules.Runs.Dtos;
 
 /// <summary>One ore's aggregated mining, scoped to whichever participant it is read alongside (ET-229) — no RunId of
@@ -11,7 +13,11 @@ public sealed record RunMiningOreDto(string OreType, int Units, int CriticalUnit
 /// <see cref="BountyIsk"/> is this run's own <c>RunBountyEntry</c> total (ET-219), read regardless of run state —
 /// the live window asks this before there is a fleet, or any save, to sum a group's bounty against (ET-257).
 /// <see cref="MiningEntries"/> is the same run's own <c>RunMiningEntry</c> rows (ET-229), read the same way.
-/// <see cref="InSiteAtCompletion"/> is the homefront attendance tick (ET-230), null while nobody decided.</summary>
+/// <see cref="InSiteAtCompletion"/> is the homefront attendance tick (ET-230), null while nobody decided.
+/// <see cref="AttendanceCount"/>, <see cref="HomefrontOutcome"/> and <see cref="HomefrontCompletedWaveCount"/> are the
+/// same on every run of the group (ET-231) — carried per run anyway, the same as <see cref="InSiteAtCompletion"/>,
+/// since this is a flat list of runs and not a separate group-level fact.</summary>
 public sealed record RunGroupParticipantDto(
     Guid RunId, long CharacterId, bool IsParticipant, bool IsPayoutEligible, decimal BountyIsk,
-    IReadOnlyList<RunMiningOreDto> MiningEntries, bool? InSiteAtCompletion = null);
+    IReadOnlyList<RunMiningOreDto> MiningEntries, bool? InSiteAtCompletion = null, int? AttendanceCount = null,
+    HomefrontOutcome? HomefrontOutcome = null, int? HomefrontCompletedWaveCount = null);

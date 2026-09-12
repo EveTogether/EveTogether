@@ -15,7 +15,8 @@ public static class IskContributors
         new LootIskContributor(),
         new RewardIskContributor(),
         new ConsumableIskContributor(),
-        new MiningIskContributor()
+        new MiningIskContributor(),
+        new HomefrontPayoutIskContributor()
     ];
 
     /// <summary>Which sources a stored breakdown was built by. A summary built by another set is out of date and is

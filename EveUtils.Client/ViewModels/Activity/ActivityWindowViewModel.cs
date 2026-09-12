@@ -2433,6 +2433,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                     existing.BountyIsk = dto.BountyIsk;
                     existing.MiningEntries = dto.MiningEntries;
                     existing.InSiteAtCompletion = dto.InSiteAtCompletion;
+                    existing.AttendanceCount = dto.AttendanceCount;
+                    existing.HomefrontOutcome = dto.HomefrontOutcome;
+                    existing.HomefrontCompletedWaveCount = dto.HomefrontCompletedWaveCount;
                     continue;
                 }
 
@@ -2444,7 +2447,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 Participants.Add(new RunParticipantViewModel(
                     dto.RunId, characterId, name, dto.IsParticipant, dto.IsPayoutEligible, dto.BountyIsk, dto.MiningEntries)
                 {
-                    InSiteAtCompletion = dto.InSiteAtCompletion
+                    InSiteAtCompletion = dto.InSiteAtCompletion,
+                    AttendanceCount = dto.AttendanceCount,
+                    HomefrontOutcome = dto.HomefrontOutcome,
+                    HomefrontCompletedWaveCount = dto.HomefrontCompletedWaveCount
                 });
 
                 // A character this window did not itself just start (ET-259): the acting character's own
@@ -3513,7 +3519,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                         MiningIskValue = miningValue,
                         HasMining = hasMining,
                         Parameters = parameters,
-                        StoppedAtUtc = EffectiveStopUtc
+                        StoppedAtUtc = EffectiveStopUtc,
+                        HomefrontExpectedPayoutIsk = _HomefrontExpectedPayout(participant.InSiteAtCompletion,
+                            participant.AttendanceCount, participant.HomefrontOutcome, participant.HomefrontCompletedWaveCount)
                     };
                 })]
             : [_SoloRunIskFacts(consumables, mining, parameters)];
@@ -3528,6 +3536,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         (decimal? cost, bool has) = RunId is { } runId ? _ConsumableFacts(consumables, runId) : (null, false);
         (decimal? miningValue, bool hasMining) = RunId is { } id ? mining?.FactsFor(id) ?? (null, false) : (null, false);
+        RunParticipantViewModel? own = RunId is { } ownId ? Participants.FirstOrDefault(p => p.RunId == ownId) : null;
         return new RunIskFacts
         {
             BountyIsk = BountyIsk,
@@ -3538,9 +3547,21 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             MiningIskValue = miningValue,
             HasMining = hasMining,
             Parameters = parameters,
-            StoppedAtUtc = EffectiveStopUtc
+            StoppedAtUtc = EffectiveStopUtc,
+            HomefrontExpectedPayoutIsk = _HomefrontExpectedPayout(
+                own?.InSiteAtCompletion, own?.AttendanceCount, own?.HomefrontOutcome, own?.HomefrontCompletedWaveCount)
         };
     }
+
+    /// <summary>What the curve owes this participant's own character right now (ET-231) — read off
+    /// <see cref="RunType"/>'s own resolved kind and the same attendance facts the HOMEFRONT section itself just
+    /// wrote, the identical rule <c>RunIskFactsReader.HomefrontExpectedPayout</c> applies to a saved run.</summary>
+    private decimal? _HomefrontExpectedPayout(
+        bool? inSiteAtCompletion, int? attendanceCount, HomefrontOutcome? outcome, int? completedWaveCount) =>
+        HomefrontPayoutTable.TryGetExpected(RunType.HomefrontKind, inSiteAtCompletion, attendanceCount, outcome,
+            completedWaveCount, EffectiveStopUtc ?? DateTime.UtcNow) is { } expected
+            ? expected.Amount
+            : null;
 
     /// <summary>What CONSUMABLES has for one run — its own confirmed count, priced against the section's shared
     /// filament unit price (ET-249). No section built yet (a non-abyssal run) reads the same as no count confirmed.</summary>

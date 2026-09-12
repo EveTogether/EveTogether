@@ -87,6 +87,17 @@ internal sealed class SetRunAttendanceCommandHandler(IDbContextFactory<ClientDbC
         run.AttendanceSource = decision.Source;
         run.AttendanceSetByCharacterId = decision.SetByCharacterId;
         run.AttendanceSetAtUtc = decision.SetAtUtc;
+        run.HomefrontOutcome = decision.Outcome;
+        run.HomefrontCompletedWaveCount = decision.CompletedWaveCount;
+
+        // The table version this run's own expected figure is computed against (ET-231) — recorded so two clients on
+        // two app versions never silently disagree about the same site. Null, like the figure itself, until there is
+        // one to compute.
+        run.HomefrontPayoutTableVersion = HomefrontCatalogue.KindByDungeonId.TryGetValue(run.SiteTypeId, out string? kind)
+            && HomefrontPayoutTable.TryGetExpected(kind, run.InSiteAtCompletion, run.AttendanceCount,
+                run.HomefrontOutcome, run.HomefrontCompletedWaveCount, run.StoppedAtUtc ?? decision.SetAtUtc) is { } expected
+            ? expected.Version
+            : null;
 
         // ET-215's rule for a change after the fact: the revision moves, and a published copy is now behind the server
         // until it goes up again — which for a fleet run happens by itself (ET-245).

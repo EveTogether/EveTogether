@@ -38,7 +38,11 @@ public sealed record ActivityRunDetailDto(
     // The homefront attendance tick (ET-230) — null while nobody decided, which is every run before it.
     bool? InSiteAtCompletion = null,
     // How many characters were on the fleet's roster at STOP (ET-230) — a snapshot, never N.
-    int? FleetSizeAtStop = null);
+    int? FleetSizeAtStop = null,
+    // Which HomefrontPayoutTable entry this run's own expected figure was computed against (ET-231) — null until
+    // there is one to compute. Read as-is, never recomputed on this screen: two clients on two app versions must
+    // never silently disagree about the same site.
+    string? HomefrontPayoutTableVersion = null);
 
 /// <summary>One activity, fully expanded. The totals (<see cref="LootIskGained"/> etc.) are
 /// <c>ActivitySummary</c>'s own — already computed excluding excluded loot captures — rather than recomputed here,

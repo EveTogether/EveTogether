@@ -26,7 +26,19 @@ taken from the matching `## vX.Y.Z` section below.
   homefront in the same fleet ended with; evidence can add a tick to it, never take one away. The saved activity shows
   who was counted, who decided and when, and the fleet's size at STOP — and the one who decided can still change the
   list there, which reaches every member again, also one who only comes online later. Online/offline beside each name
-  is the live fleet view and is never stored. The payout itself follows in a later update.
+  is the live fleet view and is never stored.
+- **A homefront's payout: a fixed amount per ticked character, from a table by N — never from your wallet.** HOMEFRONT
+  now asks how the site ended: completed, failed or unknown, picked at STOP; Abyssal Artifact Recovery asks how many
+  of its 9 waves paid instead, since a site that fails part-way keeps whatever it already cleared. Once completed,
+  every character ticked "in site" shows the table's own fixed amount for N — Hall of Sacrifice at 5 pays 15,000,000
+  ISK each, at 4 it is 12,000,000, at 6 it is 11,250,000; Metaliminal Meteoroid at 5 pays 12,000,000 — read next to
+  the site's own kind and marked "expected" everywhere it appears: the row, the HOMEFRONT header, TOTAL ISK, and the
+  runs overview's PAYOUT chip. It stays expected until you say what actually arrived — confirm the table's own figure
+  in one click, or type what you received — one character at a time or all your own at once with "CONFIRM ALL AS
+  EXPECTED". The saved activity also names which table version it was priced against, so two clients on two app
+  versions can never silently disagree about the same site. Nothing about this ever reads, derives or asks for wallet
+  access. Only the 19 Mar 2026 table is built in; a homefront flown before that date shows no expected payout at all,
+  since no measured table exists yet for what CCP paid before it, rather than pricing an old site off today's numbers.
 - **Mining now travels with a fleet run when it is published.** A fleetmate's mining was left out of what their run
   sent to the server, so a synced group showed only your own ore.
 - **A mission flown with more than one own toon no longer counts its reward twice.** Before, every own toon in the
