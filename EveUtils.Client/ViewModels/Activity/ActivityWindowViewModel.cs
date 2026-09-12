@@ -907,7 +907,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // _AdoptCharacterAsync below learns the pilot FROM the row it adopts. The kind comparison is identity, kept on
         // purpose (ET-236): a window only ever takes over a run of the kind it was opened as.
         Result<RunningRunDto> running = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
-            .Query(new GetRunningRunQuery(_runCharacterId));
+            .Query(new GetRunningRunQuery(_runCharacterId, _targetRunId));
         if (!running.IsSuccess || running.Value is not { } run || run.ActivityKind != Kind)
             return false;
 
@@ -960,11 +960,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         RunId = run.Id;
         AnchorUtc = run.StartedAtUtc;
-        StoppedAtUtc = null;
+        // A window resuming a specific stopped run (ET-254, _targetRunId) comes up exactly as if its own pilot had
+        // pressed STOP and reopened it: paused, not ticking. StartRunAsync's own "RunId is not null && RunState is
+        // Stopped" branch is what actually resumes it — _StartOnArrivalAsync (via StartsOnArrival) is what this
+        // window is opened with to fire that branch the moment it loads, rather than leaving START for a second
+        // click. Every other caller of this method still only ever sees a Running run, so StoppedAtUtc stays null.
+        StoppedAtUtc = run.StoppedAtUtc;
         await _JoinStoredRunToFleetGroupAsync(scope, run);
         GroupCode ??= run.GroupCode;
         _isManualRun = true;
-        RunState = ActivityRunState.Running;
+        RunState = run.StoppedAtUtc is null ? ActivityRunState.Running : ActivityRunState.Stopped;
         await _AdoptCharacterAsync(checked((int)run.CharacterId));
         _OnRunWatched();
 
@@ -973,7 +978,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // otherwise it reads the agent as unstated and every reward as never recorded, even though the run itself
         // has carried them since the moment it started. Skipped on the way to a waiting copy just below: that
         // window is about to show a DIFFERENT mission's facts, not this retired run's.
-        if (Kind == ActivityKind.Mission && _pendingCopy is null)
+        if (RunType.HasAgent && _pendingCopy is null)
         {
             MissionAgentId = run.AgentId;
             MissionLevel = run.MissionLevel;
@@ -993,7 +998,44 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (_pendingCopy is not null)
             StopRun(DateTime.UtcNow);
 
+        // ET-254: a deliberate resume — RESUME in the UNFINISHED band, or the startup notice offering the same
+        // choice — picks the clock back up the moment this window has the row, rather than leaving START for a
+        // second click nobody asked this caller to make the pilot take. Every other caller of this method leaves
+        // _targetRunId null and never reaches here.
+        if (_targetRunId is not null && run.StoppedAtUtc is not null)
+        {
+            // Own toons (ET-210) resume as a group: _ResumeAdoptedRunAsync's own _SetStoredRunStoppedAsync loops
+            // over Participants to pick up every sibling sharing this GroupCode, own-toon ones included — but this
+            // window has never ticked before, so Participants is still empty unless asked for outright first. The
+            // window that already had this run open never had this problem: a pilot's own STOP/START is always
+            // asked on a window whose Participants an earlier tick already filled in.
+            await _RefreshParticipantsAsync();
+            await _ResumeAdoptedRunAsync(DateTime.UtcNow);
+        }
+
         return true;
+    }
+
+    /// <summary>The resume half of the STOP/START pause (Raymond, 2026-09-02: "stepping out of a site halfway and
+    /// pressing START again must cost you neither your enemies nor your loot"), shared by <see cref="StartRunAsync"/>'s
+    /// own button and <see cref="_AdoptRunningRunAsync"/>'s deliberate resume (ET-254) — the same pause, picked back
+    /// up by two different callers, neither of which may drift from the other.</summary>
+    private async Task _ResumeAdoptedRunAsync(DateTime nowUtc)
+    {
+        await _SetStoredRunStoppedAsync(null);
+        StoppedAtUtc = null;
+        CorrectedStopUtc = null;
+        RunState = ActivityRunState.Running;
+        _OnRunWatched();
+        // A run whose clock is per pilot (ET-243) has no group-wide resume — only this pilot's own leg is picked
+        // back up, and only their own announcement says so (ET-250): the old fleet.run-group would also read as
+        // this pilot's fresh start to FleetRunGroupCodeCoordinator, and fleet.run-group.pilot-stopped is read the
+        // other way around, so a resume needed a type of its own.
+        if (RunType.ClockPerPilot && _runCharacterId is { } own)
+            _AnnouncePilotResumeToFleet(own, nowUtc);
+        if (RunLoot is not null)
+            await RunLoot.RefreshAsync();
+        Refresh(nowUtc);
     }
 
     /// <summary>
@@ -1028,6 +1070,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _runCharacterId = characterId;
         _runCharacterName = characterName;
     }
+
+    /// <summary>The specific run <see cref="_AdoptRunningRunAsync"/> must adopt, Stopped included (ET-254) — set
+    /// before <see cref="LoadAsync"/> by a caller that already knows which row it wants: RESUME in the UNFINISHED
+    /// band, or the startup notice offering the same choice. Every other caller leaves this null and keeps today's
+    /// "the one run running for this pilot, or none" question — naming a row outright is for a caller that already
+    /// knows the answer, not a second way to ask the same one.</summary>
+    private Guid? _targetRunId;
+
+    /// <summary>Names the run this window is opened to resume. The moment <see cref="_AdoptRunningRunAsync"/> has
+    /// it, the clock is picked back up on its own — exactly as if this run's own pilot had pressed STOP and then
+    /// START again, because that is what RESUME is (the same pause <c>ClockHint</c> already describes for the
+    /// in-window case). <see cref="UseCharacter"/> is the caller's to call alongside this, same as every other
+    /// opener that already knows its pilot.</summary>
+    public void ResumeRun(Guid runId) => _targetRunId = runId;
 
     /// <summary>The pilot this window has been given or has settled on, so a hand-over to a window that is already
     /// up can carry it (<c>DialogService.ShowActivityWindow</c>). Without this the caller could ask before opening
@@ -1498,6 +1554,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// under the timer.</summary>
     public void Refresh(DateTime nowUtc)
     {
+        _WriteHeartbeatIfDue(nowUtc);
         _RefreshLocation(nowUtc);
         _RefreshOwnPilotLegs(nowUtc);
         _RefreshClock(nowUtc);
@@ -1514,6 +1571,44 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _ = _RefreshRunCharactersAsync();
         _ = _RefreshParticipantsAsync();
         _ShareRunLootWithFleet();
+    }
+
+    private DateTime? _lastAliveWrittenAtUtc;
+
+    private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Writes <see cref="Entities.Run.LastAliveAtUtc"/> about once a minute while this run is on the clock (ET-254)
+    /// — the one fact <c>StopRunsLeftRunningCommandHandler</c> can read, the next time the app starts, for when a
+    /// run left running by a process that quit or crashed actually ended. Without it that handler's own restart
+    /// moment was the only candidate, which for an app closed overnight read a run as twelve hours long.
+    ///
+    /// Throttled here rather than in the handler: the clock already ticks every second (<see cref="Refresh"/>), and
+    /// a write that fine-grained would be all cost for a precision nothing downstream uses — a stop time honest to
+    /// the minute is the whole of what this ticket asked for.
+    /// </summary>
+    private void _WriteHeartbeatIfDue(DateTime nowUtc)
+    {
+        if (RunId is not { } runId || RunState is not ActivityRunState.Running
+            || _services.GetService<CqrsDispatcher>() is null)
+            return;
+
+        // No write yet this run measures from AnchorUtc, not from now — the clock's own start, not the moment this
+        // method happens to be asked. Without that a run just started, adopted or resumed would write on its very
+        // next tick (elapsed since last write: zero, not "under a minute"), which is both an unneeded write and a
+        // race against whatever else that same start already touched this row for the same instant.
+        DateTime baseline = _lastAliveWrittenAtUtc ?? AnchorUtc ?? nowUtc;
+        if (nowUtc - baseline < HeartbeatInterval)
+            return;
+
+        _lastAliveWrittenAtUtc = nowUtc;
+        _ = _WriteHeartbeatAsync(runId, nowUtc);
+    }
+
+    private async Task _WriteHeartbeatAsync(Guid runId, DateTime atUtc)
+    {
+        using var scope = _services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new TouchRunAliveCommand(runId, atUtc));
     }
 
     /// <summary>
@@ -1550,20 +1645,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // where the run id is still known.
         if (RunId is not null && RunState is ActivityRunState.Stopped)
         {
-            await _SetStoredRunStoppedAsync(null);
-            StoppedAtUtc = null;
-            CorrectedStopUtc = null;
-            RunState = ActivityRunState.Running;
-            _OnRunWatched();
-            // A run whose clock is per pilot (ET-243) has no group-wide resume — only this pilot's own leg is picked
-            // back up, and only their own announcement says so (ET-250): the old fleet.run-group would also read as
-            // this pilot's fresh start to FleetRunGroupCodeCoordinator, and fleet.run-group.pilot-stopped is read the
-            // other way around, so a resume needed a type of its own.
-            if (RunType.ClockPerPilot && _runCharacterId is { } own)
-                _AnnouncePilotResumeToFleet(own, nowUtc);
-            if (RunLoot is not null)
-                await RunLoot.RefreshAsync();
-            Refresh(nowUtc);
+            await _ResumeAdoptedRunAsync(nowUtc);
             return;
         }
 

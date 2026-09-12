@@ -4,6 +4,7 @@ using System.Threading;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Commands;
+using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Fittings.Repositories;
 using Avalonia;
 using EveUtils.Client.Composition;
@@ -251,10 +252,15 @@ sealed class Program
         using (var scope = Services.CreateScope())
         {
             var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
-            Result<int> stopped = dispatcher
+            Result<IReadOnlyList<StoppedRunDto>> stopped = dispatcher
                 .Send(new StopRunsLeftRunningCommand(DateTime.UtcNow)).GetAwaiter().GetResult();
-            if (stopped.IsSuccess && stopped.Value > 0)
-                Console.Error.WriteLine($"[startup] stopped {stopped.Value} run(s) left running by a previous session");
+            if (stopped.IsSuccess && stopped.Value is { Count: > 0 } stoppedRuns)
+            {
+                Console.Error.WriteLine($"[startup] stopped {stoppedRuns.Count} run(s) left running by a previous session");
+                // Staged rather than shown here: there is no window yet for a toast to attach to (ET-254). The main
+                // window's own Opened handler asks for these once it exists.
+                Services.GetRequiredService<EveUtils.Client.Runs.StartupResumeNoticeService>().Stage(stoppedRuns);
+            }
 
             // And the ones stopped a day ago and never finished are committed as they stand (ET-179). After the line
             // above on purpose: a run this session's predecessor left going was stopped a moment ago, so it is the

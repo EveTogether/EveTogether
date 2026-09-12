@@ -1,10 +1,11 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Runs.Dtos;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 /// <summary>
-/// Bring to rest every run still on the clock from a previous process, and answer with how many there were.
+/// Bring to rest every run still on the clock from a previous process, and answer with which ones they were.
 ///
 /// A run outlives its window, and <see cref="SetRunStoppedCommand"/> only ever fires while the app is up: quit with
 /// one running — or lose the process — and the row stays <see cref="Enums.RunState.Running"/> with nobody left to
@@ -12,6 +13,8 @@ namespace EveUtils.Shared.Modules.Runs.Commands;
 /// that had started the previous morning, reading ELAPSED 1467:38.
 ///
 /// Sent once at startup, before any window exists to adopt one. Deliberately a stop and not a save or a discard:
-/// what became of that run is the pilot's call, and this only ends the thing that was falsely still running.
+/// what became of that run is the pilot's call, and this only ends the thing that was falsely still running. The
+/// stopped rows travel back (ET-254) so a caller once a window exists can offer each one back — Program.cs, where
+/// this is sent, runs before there is anywhere on screen to show that offer.
 /// </summary>
-public sealed record StopRunsLeftRunningCommand(DateTime StoppedAtUtc) : ICommand<Result<int>>;
+public sealed record StopRunsLeftRunningCommand(DateTime StoppedAtUtc) : ICommand<Result<IReadOnlyList<StoppedRunDto>>>;

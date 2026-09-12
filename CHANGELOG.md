@@ -13,6 +13,19 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **A run left running when EVE Together closed or crashed can now be resumed.** Before, a run like that could only
+  be saved as it stood or thrown away — there was no way back into it. A notice offers it back the moment the app is
+  open again: "EVE Together closed while &lt;run&gt; was running", with Resume (picks the clock back up from its
+  original start, with everything it already collected) or Keep stopped; it never takes the keyboard while you're
+  looking at EVE. The same run also shows up in UNFINISHED with a RESUME button alongside SAVE and DELETE, for
+  whenever you get to it. Its stop time is now honest, too — while a run is going, the app keeps a note of the last
+  moment it saw it going, so a run left open overnight is recorded as ending close to when you actually closed the
+  app, not the next time you opened it. An abyssal whose twenty-minute pocket has already collapsed offers no plain
+  Resume, since there is nothing left to step back into; several of your own characters flying together resume as
+  the group they were.
+- **Tools → Start run now offers every type that can be started by hand, not just Site and Abyssal** — a mission is
+  in the list too now, asking only for a typed name. Whichever type you picked last is remembered and pre-selected
+  the next time you open the dialog.
 - **Every screen now shows the same total ISK for a run.** The runs overview and its day total used to add up only
   bounty and loot, so a mission showed a few million less there than on its own detail screen — its ISK reward and
   bonus were left out. The overview, the day total, the detail screen, the run window, UNFINISHED and "ISK today" on

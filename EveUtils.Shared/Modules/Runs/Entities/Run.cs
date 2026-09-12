@@ -32,6 +32,15 @@ public sealed class Run
     /// indistinguishable from one somebody stood behind.</summary>
     public DateTime? AutoSavedAtUtc { get; set; }
 
+    /// <summary>The most recent moment this run was known to still be on the clock (ET-254) — written every minute
+    /// or so while <see cref="State"/> is <see cref="RunState.Running"/>, null otherwise. The only source
+    /// <see cref="Commands.StopRunsLeftRunningCommandHandler"/> has for when a run left running by a process that
+    /// quit or crashed actually ended: without it, that handler's own restart moment was the stop time, which for a
+    /// client closed overnight read the run as having lasted until the next morning. Client-local, like
+    /// <see cref="SyncState"/> beside it — what another process was doing moment to moment is not this one's to
+    /// carry, so it never appears in <see cref="Dtos.RunWireData"/>.</summary>
+    public DateTime? LastAliveAtUtc { get; set; }
+
     public DateTime? DeletedAtUtc { get; set; }
     public int SiteTypeId { get; set; }
 

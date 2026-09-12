@@ -8,14 +8,18 @@ using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Gamelog;
+using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Views;
+using EveUtils.Shared.Data;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ICqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
@@ -510,6 +514,112 @@ public sealed class RunsOverviewTests
 
         ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(presented.ViewModel.Tabs[0].Days).Rows);
         Assert.Equal("Homefront", row.SiteText);
+    }
+
+    /// <summary>ET-254 AC-1/AC-2: RESUME reopens the run window on exactly this row and picks the clock back up on
+    /// its own, with everything the run already had — the figures kept, not a new run started beside it. Confirmed
+    /// first, same as DELETE already is.</summary>
+    [AvaloniaFact]
+    public async Task UnfinishedRun_Resumed_OpensTheWindowAndPicksTheClockBackUp()
+    {
+        using var instance = TestClientInstance.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _StopSiteRunAsync(_Dispatcher(instance), 90000001, cancellationToken);
+        var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(true) };
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken, dialogs: dialogs);
+        UnfinishedRunViewModel run = Assert.Single(presented.ViewModel.UnfinishedRuns);
+        Guid runId = run.RunId;
+        DateTime startedAtUtc = run.StartedAtUtc;
+        Assert.True(run.CanResume);
+
+        await run.ResumeCommand.ExecuteAsync(null);
+
+        ActivityWindowViewModel opened = Assert.Single(dialogs.ShownActivityWindows);
+        await opened.LoadAsync();
+        Assert.Equal(runId, opened.RunId);
+        Assert.Equal(ActivityRunState.Running, opened.RunState);
+        Assert.Equal(startedAtUtc, opened.AnchorUtc);
+    }
+
+    /// <summary>Declining the confirmation opens no window and changes nothing — the same shape DELETE already has.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task UnfinishedRun_ResumeDeclined_OpensNoWindow()
+    {
+        using var instance = TestClientInstance.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _StopSiteRunAsync(_Dispatcher(instance), 90000001, cancellationToken);
+        var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(false) };
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken, dialogs: dialogs);
+        UnfinishedRunViewModel run = Assert.Single(presented.ViewModel.UnfinishedRuns);
+
+        await run.ResumeCommand.ExecuteAsync(null);
+
+        Assert.Empty(dialogs.ShownActivityWindows);
+        Assert.Single(presented.ViewModel.UnfinishedRuns);
+    }
+
+    /// <summary>ET-254 AC-5: an abyssal pocket collapses twenty minutes after the pilot's own entry
+    /// (<c>AbyssalSpace.RunLimit</c>) — a row older than that offers no plain RESUME, because there is nothing left
+    /// to step back into. Counter-proof: a site of the same age keeps RESUME, since it has no such clock.</summary>
+    [AvaloniaFact]
+    public async Task AnAbyssalUnfinishedRun_PastTheRunLimit_CannotResume()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        DateTime startedAtUtc = DateTime.UtcNow.AddMinutes(-25);
+        Result<Guid> started = await dispatcher.Send(
+            new StartRunCommand(90000001, ActivityKind.Abyssal, startedAtUtc, 0, null, null), cancellationToken);
+        await dispatcher.Send(new SetRunStoppedCommand(started.Value, startedAtUtc.AddMinutes(5)), cancellationToken);
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+        UnfinishedRunViewModel run = Assert.Single(presented.ViewModel.UnfinishedRuns);
+
+        Assert.False(run.CanResume);
+        Assert.False(run.ResumeCommand.CanExecute(null));
+    }
+
+    /// <summary>ET-254 valkuil: own toons (ET-210) resume as a group, not just the one row RESUME was pressed on —
+    /// the same "whole group" rule SAVE and DISCARD already hold for this shape. Counter-proof: skip
+    /// <c>_RefreshParticipantsAsync</c> before the resume fires (the window has never ticked before, so
+    /// <c>Participants</c> starts empty) and the sibling never moves, which is exactly the gap this test closes.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task UnfinishedRun_Resumed_ResumesOwnToonSiblingsToo()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        const string groupCode = "GRP-001";
+        DateTime startedAtUtc = DateTime.UtcNow.AddHours(-1);
+        Result<Guid> pilot = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, startedAtUtc,
+            1234, "Homefront", 30000142, groupCode), cancellationToken);
+        Result<Guid> alt = await dispatcher.Send(new StartRunCommand(90000002, ActivityKind.Site, startedAtUtc,
+            1234, "Homefront", 30000142, groupCode), cancellationToken);
+        DateTime stoppedAtUtc = DateTime.UtcNow.AddMinutes(-30);
+        await dispatcher.Send(new SetRunStoppedCommand(pilot.Value, stoppedAtUtc), cancellationToken);
+        await dispatcher.Send(new SetRunStoppedCommand(alt.Value, stoppedAtUtc), cancellationToken);
+        var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(true) };
+
+        // Two own toons sharing a group code are two rows in UNFINISHED, not one (GetUnfinishedRunsQuery has no
+        // notion of "group") — RESUME is pressed on the pilot's own row, same as the run window's own STOP/START.
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken, dialogs: dialogs);
+        UnfinishedRunViewModel run = presented.ViewModel.UnfinishedRuns.Single(row => row.RunId == pilot.Value);
+
+        await run.ResumeCommand.ExecuteAsync(null);
+
+        ActivityWindowViewModel opened = Assert.Single(dialogs.ShownActivityWindows);
+        await opened.LoadAsync();
+
+        await using ClientDbContext db = await instance.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        Run pilotRow = await db.Set<Run>().AsNoTracking().SingleAsync(r => r.Id == pilot.Value, cancellationToken);
+        Run altRow = await db.Set<Run>().AsNoTracking().SingleAsync(r => r.Id == alt.Value, cancellationToken);
+        Assert.Equal(RunState.Running, pilotRow.State);
+        Assert.Equal(RunState.Running, altRow.State);
     }
 
     /// <summary>ET-217 AC-1/AC-2: an unfinished row shows what its run earned so far, added up the exact same way

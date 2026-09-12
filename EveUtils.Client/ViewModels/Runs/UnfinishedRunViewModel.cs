@@ -2,8 +2,10 @@ using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Formatting;
+using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
@@ -12,20 +14,41 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// never a row between them: what is listed under a day is what was saved, and mixing the two would make a stopped
 /// run count towards an evening it was never committed to (ET-179 AC-3).
 ///
-/// SAVE and DELETE are the only two ways out, because <c>Stopped</c> is where these rows have been sitting: the run
-/// window that owned both is long gone, so there is nothing left to reopen them into.
+/// SAVE and DELETE were the only two ways out while <c>Stopped</c> meant the run window that owned the row was long
+/// gone — true for a run stopped on purpose, never true any more for one this app itself stopped at startup because
+/// the previous process quit or crashed with it still going (ET-254). RESUME reopens the run window on exactly that
+/// row and picks the clock back up, the same pause STOP/START already is inside an open window; it is hidden for an
+/// abyssal whose pocket has already collapsed (<see cref="CanResume"/>), where there is nothing left to step back
+/// into.
 /// </summary>
 public sealed partial class UnfinishedRunViewModel(
     UnfinishedRunDto run,
     string characterName,
     Func<UnfinishedRunViewModel, Task> save,
-    Func<UnfinishedRunViewModel, Task> delete) : ViewModelBase
+    Func<UnfinishedRunViewModel, Task> delete,
+    Func<UnfinishedRunViewModel, Task> resume) : ViewModelBase
 {
     private readonly UnfinishedRunDto _source = run;
 
     public Guid RunId { get; } = run.RunId;
 
+    public long CharacterId { get; } = run.CharacterId;
+
+    public ActivityKind ActivityKind { get; } = run.ActivityKind;
+
+    public DateTime StartedAtUtc { get; } = run.StartedAtUtc;
+
     public DateTime? StoppedAtUtc { get; } = run.StoppedAtUtc;
+
+    /// <summary>Whether RESUME may be offered at all (ET-254 AC-5). An abyssal pocket collapses
+    /// <see cref="AbyssalSpace.RunLimit"/> after the pilot's own entry — not after it was stopped, which for a run
+    /// this app only just stopped at startup are the same anchor anyway (<see cref="StartedAtUtc"/>) — so a row
+    /// older than that is one RESUME can no longer mean anything for: the ship and the pod are already gone.
+    /// Every other type has no such clock, so the pilot's own account decides instead.</summary>
+    public bool CanResume { get; } =
+        RunTypeCatalogue.For(RunTypeResolver.Resolve(run.ActivityKind, run.SignatureGroupSnapshot)).Space
+            is not RunSpace.AbyssalPocket
+        || DateTime.UtcNow - run.StartedAtUtc <= AbyssalSpace.RunLimit;
 
     public string CharacterText { get; } = characterName;
 
@@ -78,6 +101,9 @@ public sealed partial class UnfinishedRunViewModel(
 
     [RelayCommand]
     private Task DeleteAsync() => delete(this);
+
+    [RelayCommand(CanExecute = nameof(CanResume))]
+    private Task ResumeAsync() => resume(this);
 
     private static string _Elapsed(TimeSpan elapsed) =>
         $"{(int)elapsed.TotalHours}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
