@@ -1,4 +1,5 @@
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Isk;
 
 namespace EveUtils.Shared.Modules.Runs.Dtos;
 
@@ -46,6 +47,9 @@ public sealed record ActivityOverviewRowDto(
     /// <summary>The servers this activity's runs were queued for or pushed to, from the runs themselves. Empty on an
     /// activity that never left this machine.</summary>
     IReadOnlyList<ActivityServerSyncDto> ServerSyncStates,
+    /// <summary>The activity's TOTAL ISK and what each source added to it (ET-256) — the summary's stored breakdown,
+    /// the very one the detail screen shows, so the row and the screen it opens can never disagree.</summary>
+    IskBreakdown Isk,
     /// <summary>The abyssal pocket's own stored tier and weather (ET-241), raw as <c>RunParameterKey.AbyssalFilament</c>
     /// wrote it — null on every non-abyssal activity, and on an abyssal saved before this ticket. Not a member of
     /// <see cref="Rewards"/>: it names what the run was, it is not something the pilot earned. Read into a name (e.g.

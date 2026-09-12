@@ -5,6 +5,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Isk;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Queries;
@@ -109,6 +110,7 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             rewards.Any(reward => reward.ParameterKey == RunParameterKey.Escalation),
             hasAutoSavedRun,
             [.. serverSyncStates],
+            StoredIskBreakdown.Read(summary.IskContributions),
             abyssalFilamentText);
     }
 

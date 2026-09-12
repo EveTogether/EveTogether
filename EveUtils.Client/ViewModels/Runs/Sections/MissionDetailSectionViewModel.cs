@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Sde;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
@@ -17,8 +18,6 @@ namespace EveUtils.Client.ViewModels.Runs.Sections;
 /// </summary>
 public sealed partial class MissionDetailSectionViewModel(ISdeAccessor? sde) : RunDetailSection(RunSectionId.Mission, "MISSION")
 {
-    private decimal? _bonusAmount;
-
     public ObservableCollection<ActivityRewardRowViewModel> RewardRows { get; } = [];
 
     [ObservableProperty] private string? _rewardsEmptyText;
@@ -54,9 +53,6 @@ public sealed partial class MissionDetailSectionViewModel(ISdeAccessor? sde) : R
 
     public override bool HasContent => HasAgent || HasBonus || IsImportantMission || IsMissionLocationShown || RewardRows.Count > 0;
 
-    // The window section's own docstring explains why this only ever subtracts (ET-237).
-    public override decimal ExpiredBonusIsk => IsBonusExpired ? _bonusAmount ?? 0m : 0m;
-
     public override void Apply(RunDetailSectionInput input)
     {
         ActivityDetailDto detail = input.Detail;
@@ -77,12 +73,16 @@ public sealed partial class MissionDetailSectionViewModel(ISdeAccessor? sde) : R
         IsMissionLocationShown = resolvedMissionLocation is not null;
         MissionLocationText = resolvedMissionLocation ?? string.Empty;
 
-        RunParameterDto? bonus = detail.Parameters.FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.BonusIsk);
-        _bonusAmount = bonus?.Amount;
+        RunParameterDto[] bonuses = [.. detail.Parameters.Where(parameter => parameter.ParameterKey == RunParameterKey.BonusIsk)];
+        RunParameterDto? bonus = bonuses.FirstOrDefault();
         HasBonus = bonus is not null;
         BonusValueText = bonus?.Amount is { } amount ? $"{IskFormat.Number(amount)} ISK" : string.Empty;
-        IsBonusExpired = bonus is { BonusWindowSeconds: { } seconds }
-            && (detail.StoppedAtUtc ?? DateTime.UtcNow) >= bonus.ObservedAtUtc.AddSeconds(seconds);
+        // The rule and the moment TOTAL ISK's rewards contributor judges it by (ET-256): each copy at the stop of the
+        // run that carries it — every own toon's run of one mission carries one (ET-210) — and earned once any of
+        // them made it in time.
+        IsBonusExpired = bonuses.Length > 0 && bonuses.All(copy => MissionBonusDeadline.HasPassed(
+            copy.BonusWindowSeconds, copy.ObservedAtUtc,
+            detail.Runs.FirstOrDefault(run => run.RunId == copy.RunId)?.StoppedAtUtc ?? DateTime.UtcNow));
 
         RewardRows.Clear();
         foreach (RunParameterDto parameter in detail.Parameters.Where(_IsRewardRow))

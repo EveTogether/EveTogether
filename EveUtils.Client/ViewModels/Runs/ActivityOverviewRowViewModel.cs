@@ -59,13 +59,12 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         KindText = type.Name;
         TypeIcon = type.Icon;
         DurationText = Duration.ToString(@"hh\:mm\:ss");
-        // "Net" is what the activity brought in, which on a combat site is mostly bounty: leaving it out read a
-        // 1.26M ISK evening as its 6.8k of salvage (acceptatie 2026-09-04). Null only when neither half exists —
-        // a bounty of zero is "no payout came past", which is a figure, so it counts as known.
-        NetIsk = row.LootIskNet is null && row.BountyIsk == 0 ? null : (row.LootIskNet ?? 0) + row.BountyIsk;
+        // The activity's own TOTAL ISK, the one the detail screen shows — never a sum of this row's own choosing:
+        // adding bounty and loot here alone left a mission's rewards out of it (ET-256).
+        NetIsk = row.Isk.HasFigure ? row.Isk.Total : null;
         HasNet = NetIsk.HasValue;
         NetText = NetIsk is { } net
-            ? (net < 0 ? string.Empty : "+") + IskFormat.Compact(net) + " ISK"
+            ? (net < 0 ? string.Empty : "+") + IskFormat.Compact(net) + " ISK" + IskFormat.ExpectedPart(row.Isk)
             : string.Empty;
         CrewText = row.CharacterIds.Count == 0
             ? $"{row.ParticipantCount} pilots"

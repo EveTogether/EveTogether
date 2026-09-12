@@ -1,4 +1,5 @@
 using System.Globalization;
+using EveUtils.Shared.Modules.Runs.Isk;
 
 namespace EveUtils.Client.Formatting;
 
@@ -20,18 +21,10 @@ public static class IskFormat
     public static string Exact(double value) =>
         value <= 0 ? "— ISK" : value.ToString("N0", CultureInfo.InvariantCulture) + " ISK";
 
-    /// <summary>Like <see cref="Exact"/>, but a real, known zero reads "0 ISK" rather than the dash — for a readout
-    /// where "this earned nothing" has to say so plainly rather than read the same as "nothing is known here at
-    /// all" (ET-217 review: a run with no loot and no bounty showed a bare "ISK" with nothing beside it, easy to
-    /// mistake for a rendering glitch). The caller is the one who knows whether zero is a real answer or an unknown
-    /// one — this only ever renders the number it is given.</summary>
-    public static string ExactOrZero(double value) =>
-        value <= 0 ? "0 ISK" : value.ToString("N0", CultureInfo.InvariantCulture) + " ISK";
-
     /// <summary>The whole figure, grouped, with no unit — for a column under a header that already says ISK.
-    /// Sign and zero pass straight through: unlike <see cref="Exact"/> and <see cref="ExactOrZero"/>, this is for
-    /// a caller that already knows it has a real figure and never mistakes a negative or a zero for "unknown"
-    /// (ET-218: the ISK-form reward and loot totals can run negative when what was spent outweighs what came in).</summary>
+    /// Sign and zero pass straight through: unlike <see cref="Exact"/>, this is for a caller that already knows it has
+    /// a real figure and never mistakes a negative or a zero for "unknown" (ET-218: the ISK-form reward and loot
+    /// totals can run negative when what was spent outweighs what came in).</summary>
     public static string Number(decimal value) => value.ToString("N0", CultureInfo.InvariantCulture);
 
     /// <summary>Like <see cref="Number"/>, with the "ISK" unit.</summary>
@@ -39,8 +32,12 @@ public static class IskFormat
 
     /// <summary>"no price" for a figure nobody has, otherwise <see cref="Whole"/> — the null/priced distinction a
     /// valuation readout needs (RunLootViewModel, ActivityLootViewModel and the like), so a real, known zero still
-    /// reads "0 ISK" rather than looking unpriced, the same split ET-217 drew for <see cref="ExactOrZero"/>.</summary>
+    /// reads "0 ISK" rather than looking unpriced, the same split ET-217 drew for an unfinished run's total.</summary>
     public static string WholeOrNoPrice(decimal? value) => value is { } v ? Whole(v) : "no price";
+
+    /// <summary>What a TOTAL ISK readout adds when part of the total is owed rather than paid (ET-231) — so a figure
+    /// with a promise in it never passes for money that already arrived. Empty otherwise.</summary>
+    public static string ExpectedPart(IskBreakdown isk) => isk.HasExpectedPart ? " (part expected)" : string.Empty;
 
     /// <summary>Like <see cref="WholeOrNoPrice"/>, without the "ISK" suffix.</summary>
     public static string NumberOrNoPrice(decimal? value) => value is { } v ? Number(v) : "no price";

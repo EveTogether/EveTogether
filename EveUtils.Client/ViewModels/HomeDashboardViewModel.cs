@@ -244,7 +244,7 @@ public sealed partial class HomeDashboardViewModel : ObservableObject
     /// change once the answer comes back; nothing else in this file should know the boundary.</summary>
     private static DateTime IskTodayBoundaryUtc => DateTime.Now.Date.ToUniversalTime();
 
-    /// <summary>Reads today's bounty from storage (ET-195) instead of summing live trackers: a saved run counts
+    /// <summary>Reads today's TOTAL ISK from storage (ET-195, ET-256) instead of summing live trackers: a saved run counts
     /// whether or not its tracker is still around, and a tracker's own bounty is a lifetime total, not a per-run or
     /// per-day one, so it is never added here — folding it in without double-counting would need the dashboard to
     /// know which part of that lifetime figure belongs to a run not yet saved, which nothing here tracks.</summary>

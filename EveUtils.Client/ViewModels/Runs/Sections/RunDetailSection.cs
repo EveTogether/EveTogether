@@ -28,10 +28,6 @@ public abstract class RunDetailSection : ActivitySection
     /// <summary>Whether the activity has anything for this section, whatever its type claims.</summary>
     public virtual bool HasContent => false;
 
-    /// <summary>The window section's own docstring explains this (<see cref="RunWindowSection.ExpiredBonusIsk"/>):
-    /// what this section's reward data states that must not count towards TOTAL ISK any more.</summary>
-    public virtual decimal ExpiredBonusIsk => 0m;
-
     /// <summary>Raised when the section changed the stored activity itself — a loot correction — so the screen reads
     /// the figures it is built from again.</summary>
     public event Action? ActivityCorrected;

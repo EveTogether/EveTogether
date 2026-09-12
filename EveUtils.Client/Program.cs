@@ -263,6 +263,14 @@ sealed class Program
                 .Send(new SaveRunsLeftUnfinishedCommand(DateTime.UtcNow)).GetAwaiter().GetResult();
             if (autoSaved.IsSuccess && autoSaved.Value > 0)
                 Console.Error.WriteLine($"[startup] saved {autoSaved.Value} run(s) left unfinished for over a day");
+
+            // A saved activity whose TOTAL ISK was added up by another set of sources than this build registers —
+            // saved before ET-256 stored a total at all, or before a later source existed — is added up again once,
+            // so the runs overview and "ISK today" agree with the detail screen from the first look.
+            Result<int> rebuilt = dispatcher
+                .Send(new RebuildActivitySummariesCommand(OnlyWhenOutdated: true)).GetAwaiter().GetResult();
+            if (rebuilt.IsSuccess && rebuilt.Value > 0)
+                Console.Error.WriteLine($"[startup] added up the ISK of {rebuilt.Value} saved run(s) again");
         }
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
