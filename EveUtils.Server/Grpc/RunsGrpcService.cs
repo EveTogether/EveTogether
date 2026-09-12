@@ -5,6 +5,7 @@ using EveUtils.Server.Runs;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
+using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Runs.Repositories;
 using EveUtils.Shared.Modules.ServerAuth.Entities;
 using Grpc.Core;
@@ -12,7 +13,8 @@ using RunsGrpc = EveUtils.Grpc.Runs;
 
 namespace EveUtils.Server.Grpc;
 
-public sealed class RunsGrpcService(ServerSessionService sessions, IRunSyncRepository repository) : RunsGrpc.RunsBase
+public sealed class RunsGrpcService(ServerSessionService sessions, IRunSyncRepository repository, ConnectedClients connectedClients)
+    : RunsGrpc.RunsBase
 {
     private static readonly JsonSerializerOptions SerializerOptions = new() { ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles };
 
@@ -36,7 +38,32 @@ public sealed class RunsGrpcService(ServerSessionService sessions, IRunSyncRepos
         DateTime? pushedAtUtc = await repository.UpsertAsync(run, context.CancellationToken);
         if (pushedAtUtc is null)
             return new RunActionReply { Accepted = false, Message = "A newer run revision is already stored." };
+
+        await _NotifyGroupAsync(run, context.CancellationToken);
         return new RunActionReply { Accepted = true, Message = "Run synced.", LastPushedAtUtc = pushedAtUtc.Value.ToString("O") };
+    }
+
+    /// <summary>
+    /// Tells the group's other pilots a run of theirs changed here (ET-245), so their clients pull it instead of
+    /// waiting for their own next publish — without this, whoever published first never saw the other's run. Sent to
+    /// the characters holding a run in the group rather than to a fleet: the pull only answers those characters, and a
+    /// run is usually saved after its fleet has already been concluded. Live only; a client that was offline pulls
+    /// when it reconnects. The pusher is left out — its own client pulls right after this reply.
+    /// </summary>
+    private async Task _NotifyGroupAsync(Run run, CancellationToken cancellationToken)
+    {
+        if (run.GroupCode is not { } groupCode)
+            return;
+
+        IReadOnlyList<long> holders = await repository.ListGroupHoldersAsync(groupCode, cancellationToken);
+        int[] recipients = [.. holders
+            .Where(characterId => characterId != run.CharacterId && characterId is > 0 and <= int.MaxValue)
+            .Select(characterId => (int)characterId)];
+        if (recipients.Length == 0)
+            return;
+
+        EventEnvelope envelope = WireEnvelopeFactory.ToEnvelope(new RunGroupUpdatedEvent(new RunGroupUpdate(groupCode)));
+        await connectedClients.SendToCharactersAsync(recipients, envelope, cancellationToken);
     }
 
     public override async Task<PullRunsReply> PullRuns(PullRunsRequest request, ServerCallContext context)

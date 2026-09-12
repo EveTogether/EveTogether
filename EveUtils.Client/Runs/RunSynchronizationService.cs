@@ -17,15 +17,31 @@ public sealed class RunSynchronizationService(
     RunSynchronizationApplier applier,
     IEventBus eventBus) : IScopedService
 {
-    public async Task<(bool Accepted, string Message)> SynchronizeAsync(string serverAddress, long characterId,
-        CancellationToken cancellationToken = default)
+    public Task<(bool Accepted, string Message)> SynchronizeAsync(string serverAddress, long characterId,
+        CancellationToken cancellationToken = default) =>
+        _SynchronizeAsync(serverAddress, characterId, onlyGroupCodes: null, pushPending: true, cancellationToken);
+
+    /// <summary>The same exchange narrowed to <paramref name="groupCodes"/> (ET-245): only this character's runs queued
+    /// for this server in those groups are pushed, and only those groups are pulled. What the automatic publish and a
+    /// group mate's notice use, so neither ever carries along a run the pilot queued for another activity, nor reads
+    /// back the whole history on every save. <paramref name="pushPending"/> false only pulls.</summary>
+    public Task<(bool Accepted, string Message)> SynchronizeGroupsAsync(string serverAddress, long characterId,
+        IReadOnlyCollection<string> groupCodes, bool pushPending, CancellationToken cancellationToken = default) =>
+        groupCodes.Count == 0
+            ? Task.FromResult((true, "Nothing to synchronize."))
+            : _SynchronizeAsync(serverAddress, characterId, [.. groupCodes.Distinct()], pushPending, cancellationToken);
+
+    private async Task<(bool Accepted, string Message)> _SynchronizeAsync(string serverAddress, long characterId,
+        string[]? onlyGroupCodes, bool pushPending, CancellationToken cancellationToken)
     {
-        IReadOnlyList<Run> localRuns = await _LoadGroupRunsAsync(cancellationToken);
+        IReadOnlyList<Run> localRuns = await _LoadGroupRunsAsync(onlyGroupCodes, cancellationToken);
         string[] groupCodes = localRuns.Select(run => run.GroupCode).Where(groupCode => groupCode is not null).Cast<string>().Distinct().ToArray();
         DateTime waterline = localRuns.Where(run => run.LastPushedAtUtc.HasValue)
             .Select(run => run.LastPushedAtUtc.GetValueOrDefault()).DefaultIfEmpty(DateTime.UnixEpoch).Min();
 
-        IReadOnlyList<Run> pendingRuns = await _LoadPendingAsync(serverAddress, characterId, cancellationToken);
+        IReadOnlyList<Run> pendingRuns = pushPending
+            ? await _LoadPendingAsync(serverAddress, characterId, onlyGroupCodes, cancellationToken)
+            : [];
         var pushedRunIds = new HashSet<Guid>();
         foreach (Run run in pendingRuns)
         {
@@ -55,19 +71,24 @@ public sealed class RunSynchronizationService(
 
     /// <summary>Pending for THIS server, never pending as such: a run queued for another coupled server must not
     /// travel here because a sync happened to run first.</summary>
-    private async Task<IReadOnlyList<Run>> _LoadPendingAsync(string serverAddress, long characterId, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<Run>> _LoadPendingAsync(string serverAddress, long characterId,
+        string[]? onlyGroupCodes, CancellationToken cancellationToken)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        return await _IncludeGraph(db.Set<Run>().AsNoTracking().Where(run =>
-                run.CharacterId == characterId && run.SyncState == RunSyncState.Pending && run.SyncServerAddress == serverAddress))
-            .ToListAsync(cancellationToken);
+        IQueryable<Run> pending = db.Set<Run>().AsNoTracking().Where(run =>
+            run.CharacterId == characterId && run.SyncState == RunSyncState.Pending && run.SyncServerAddress == serverAddress);
+        if (onlyGroupCodes is not null)
+            pending = pending.Where(run => run.GroupCode != null && onlyGroupCodes.Contains(run.GroupCode));
+        return await _IncludeGraph(pending).ToListAsync(cancellationToken);
     }
 
-    private async Task<IReadOnlyList<Run>> _LoadGroupRunsAsync(CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<Run>> _LoadGroupRunsAsync(string[]? onlyGroupCodes, CancellationToken cancellationToken)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        return await db.Set<Run>().AsNoTracking().Where(run => run.GroupCode != null)
-            .ToListAsync(cancellationToken);
+        IQueryable<Run> grouped = db.Set<Run>().AsNoTracking().Where(run => run.GroupCode != null);
+        if (onlyGroupCodes is not null)
+            grouped = grouped.Where(run => run.GroupCode != null && onlyGroupCodes.Contains(run.GroupCode));
+        return await grouped.ToListAsync(cancellationToken);
     }
 
     private async Task _MarkSyncedAsync(Guid runId, string serverAddress, DateTime? lastPushedAtUtc, CancellationToken cancellationToken)

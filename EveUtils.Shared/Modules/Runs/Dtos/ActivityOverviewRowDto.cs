@@ -10,7 +10,8 @@ public sealed record ActivityRewardDto(RunParameterKey ParameterKey, decimal? Am
 
 /// <summary>Where one activity stands towards one server. <see cref="IsPending"/> is true while any of its runs is
 /// still queued for that server. <see cref="IsOutdated"/> is true when one of its runs had its loot corrected after
-/// it was published (ET-215) — that does NOT re-queue it: the server copy waits for the pilot to publish again.</summary>
+/// it was published (ET-215) — that does NOT re-queue it: the server copy waits for the pilot to publish again, or for
+/// the automatic publish of a fleet run (ET-245).</summary>
 public sealed record ActivityServerSyncDto(string ServerAddress, bool IsPending, bool IsOutdated = false);
 
 /// <summary>One character who flew it, with whatever their own run recorded about them at start time (ET-212). The

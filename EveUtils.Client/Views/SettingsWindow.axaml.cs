@@ -43,6 +43,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private CheckBox _shareLocationBox = null!, _shareBountyBox = null!, _shareCombatBox = null!;
     private CheckBox _loadTypeImagesBox = null!, _openFitDetailAfterImportBox = null!, _enableLocalApiBox = null!;
     private CheckBox _openFleetRunWindowBox = null!;
+    private CheckBox? _autoPublishFleetRunsBox;
     private CheckBox _checkUpdatesOnStartupBox = null!, _watchClipboardBox = null!;
     private TextBlock _clipboardConsumersBlock = null!, _clipboardUnsupportedBlock = null!;
     private ComboBox _toastPositionBox = null!;
@@ -82,7 +83,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     }
 
     public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null,
-        int initialCategory = 0, bool openFleetRunWindowImmediately = false) : this()
+        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true) : this()
     {
         _detectedDefault = detectedDefault;
         _localApi = localApiServer;
@@ -131,6 +132,9 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _loadTypeImagesBox.IsChecked = loadTypeImages;
         _openFitDetailAfterImportBox.IsChecked = openFitDetailAfterImport;
         _openFleetRunWindowBox.IsChecked = openFleetRunWindowImmediately;
+        _autoPublishFleetRunsBox = this.FindControl<CheckBox>("AutoPublishFleetRunsBox");
+        if (_autoPublishFleetRunsBox is not null)
+            _autoPublishFleetRunsBox.IsChecked = autoPublishFleetRuns;
         _checkUpdatesOnStartupBox.IsChecked = checkUpdatesOnStartup;
         this.FindControl<TextBlock>("SdeVersionBlock")!.Text = sdeVersionLabel;
         this.FindControl<TextBlock>("DataFolderBlock")!.Text = Composition.ClientServices.DataDirectory();
@@ -450,6 +454,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
             ? port
             : LocalApi.LocalApiServer.DefaultPort;
         var checkUpdatesOnStartup = _checkUpdatesOnStartupBox.IsChecked ?? true;
-        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately);
+        var autoPublishFleetRuns = _autoPublishFleetRunsBox?.IsChecked ?? true;
+        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns);
     }
 }

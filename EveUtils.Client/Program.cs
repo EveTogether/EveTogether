@@ -217,6 +217,10 @@ sealed class Program
         // Brings the run window up on every member's screen when the FC starts — without taking focus (ET-105).
         _ = Services.GetRequiredService<EveUtils.Client.Runs.FleetRunWindowPresenter>();
 
+        // Publishes a fleet run to its fleet's server on SAVE and pulls a group mate's the moment the server says it
+        // arrived (ET-245). Up before the startup auto-save below, so a fleet run that save commits is queued too.
+        _ = Services.GetRequiredService<EveUtils.Client.Runs.FleetRunAutoPublisher>();
+
         // Settle up the client-only fleets that were left running when this app was last closed (ET-167). Awaited
         // rather than fired off, and awaited BEFORE the publisher starts: the publisher's first tick stamps those
         // very fleets as seen, and a reckoning racing it would read the silence it was meant to measure as presence.

@@ -77,6 +77,7 @@ public static class ClientServices
         services.AddAutoServices(typeof(ClientServices).Assembly, ExecutionHost.Client); // host-only marker-tagged services
         services.AddSingleton<IWireEventCatalog, FleetWireEvents>(); // deserialize fleet invite events aimed at us
         services.AddSingleton<IWireEventCatalog, MessagingWireEvents>(); // deserialize message deliveries aimed at us
+        services.AddSingleton<IWireEventCatalog, RunsWireEvents>(); // a group mate's run landed on the server (ET-245)
         services.AddWireEvents();        // event-type registry for the remote bus
         services.AddClientDatabase(ClientDbConnectionString()); // per-instance SQLite (EVEUTILS_INSTANCE)
         services.AddSdeModule(DataDirectory()); // read-only SDE store (user-prompted import + progress popup)
