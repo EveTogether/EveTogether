@@ -903,25 +903,51 @@ public sealed class RunsOverviewTests
     }
 
     /// <summary>ET-199: the overview must not make him scroll through weeks of history to reach today. Counter-proof:
-    /// default every fresh <c>RunsDayViewModel</c> to expanded (the behaviour before this ticket) and the three-day-
-    /// old evening comes up open beside the current one.</summary>
+    /// default every fresh <c>RunsDayViewModel</c> to expanded (the behaviour before this ticket) and the other
+    /// evening comes up open beside the most recent one.</summary>
     [AvaloniaFact]
     public async Task Overview_OpensWithOnlyTheMostRecentDayExpanded()
     {
         using var instance = TestClientInstance.Create();
         ICqrsDispatcher dispatcher = _Dispatcher(instance);
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        // Both within the current month (ET-233 pages by month) but on different days — a day beyond it would be a
+        // different page, invisible on this screen by default.
         await _SaveSiteRunAsync(dispatcher, 90000001, groupCode: null, cancellationToken: cancellationToken,
-            startedAtUtc: StartedAtUtc.AddDays(-3));
+            startedAtUtc: StartedAtUtc.AddDays(3));
         await _SaveSiteRunAsync(dispatcher, 90000002, groupCode: null, cancellationToken: cancellationToken);
 
         Presented presented = await _PresentAsync(instance, 758, cancellationToken);
 
         Assert.Equal(2, presented.ViewModel.Tabs[0].Days.Count);
         RunsDayViewModel mostRecent = presented.ViewModel.Tabs[0].Days.MaxBy(day => day.Day)!;
-        RunsDayViewModel older = presented.ViewModel.Tabs[0].Days.Single(day => day.Day != mostRecent.Day);
+        RunsDayViewModel other = presented.ViewModel.Tabs[0].Days.Single(day => day.Day != mostRecent.Day);
         Assert.True(mostRecent.IsExpanded);
-        Assert.False(older.IsExpanded);
+        Assert.False(other.IsExpanded);
+    }
+
+    /// <summary>ET-233 valkuil: the month boundary follows local time, the same as the day grouping below it — a run
+    /// five minutes before local midnight on the month's first day belongs to the previous month and drops off the
+    /// default view; one five minutes after belongs to this one. Counter-proof: compute the boundary off
+    /// <c>DateTime.UtcNow</c>'s own month instead of the local one and this goes red whenever the local zone sits off
+    /// UTC by a nonzero offset — the same boundary <c>IskToday_ExcludesYesterday_IncludesToday</c> already pins for
+    /// the day.</summary>
+    [AvaloniaFact]
+    public async Task MonthBoundary_FollowsLocalTime_NotUtc()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        DateTime localMonthStartUtc = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1).ToUniversalTime();
+        await _SaveSiteRunAsync(dispatcher, 90000001, groupCode: null, cancellationToken: cancellationToken,
+            startedAtUtc: localMonthStartUtc.AddMinutes(-5));   // last evening of the month before
+        await _SaveSiteRunAsync(dispatcher, 90000002, groupCode: null, cancellationToken: cancellationToken,
+            startedAtUtc: localMonthStartUtc.AddMinutes(5));    // this month's first evening
+
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+
+        ActivityOverviewRowViewModel row = Assert.Single(presented.ViewModel.Tabs[0].Days.SelectMany(day => day.Rows));
+        Assert.True(row.StartedAtLocal >= new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1));
     }
 
     private static async Task<Presented> _PresentAsync(

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -61,6 +62,18 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// empty result is a real zero or an unknowable one (ET-185) — read by <see cref="_FillTab"/> so every tab's
     /// empty message says the same thing rather than each guessing from its own row count.</summary>
     private bool _fleetHistoryKnownEmpty;
+
+    /// <summary>The month on screen (ET-233), the first of that month at local midnight. Local, not UTC, because the
+    /// day bands below it already group by local day (ET-98) — a month that disagreed with its own days about where
+    /// midnight falls would put an activity in a band that says one date under a header that says another.
+    /// Untouched by a live refresh (<see cref="_RefreshAsync"/>): only <see cref="PreviousMonthAsync"/> and
+    /// <see cref="NextMonthAsync"/> move it, so a run landing in the current month while an older one is on screen
+    /// never pulls the reader back to it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MonthHeaderText))]
+    private DateTime _viewedMonthLocal = _MonthStart(DateTime.Now);
+
+    public string MonthHeaderText => ViewedMonthLocal.ToString("MMMM yyyy", CultureInfo.InvariantCulture).ToUpperInvariant();
 
     public RunsOverviewViewModel(CqrsDispatcher dispatcher, IDialogService dialogs, IServiceProvider services,
         IReadOnlyList<Character> characters, bool runClock = true, RunsFleetFilter? fleetFilter = null)
@@ -180,8 +193,9 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// <param name="changed">What moved, when this answers a change; null reads every open row's runs again.</param>
     private async Task _FillTabsAsync(RunChangeBatch? changed, CancellationToken cancellationToken)
     {
-        Result<IReadOnlyList<ActivityOverviewRowDto>> overview =
-            await _dispatcher.Query(new GetActivityOverviewQuery(FleetId: _fleetFilter?.FleetId), cancellationToken);
+        (DateTime fromUtc, DateTime toUtc) = _MonthRangeUtc(ViewedMonthLocal);
+        Result<IReadOnlyList<ActivityOverviewRowDto>> overview = await _dispatcher.Query(
+            new GetActivityOverviewQuery(fromUtc, toUtc, FleetId: _fleetFilter?.FleetId), cancellationToken);
         if (!overview.IsSuccess || overview.Value is null)
         {
             // What is on screen stays: a read that failed says nothing about what the days hold.
@@ -243,11 +257,16 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         // Opens on the most recent day only (ET-199), so he never has to scroll through weeks of history to reach
         // today; every older evening still says its piece collapsed, via RunsWindow's sectionsummary in the band
         // itself. A day already on screen keeps whatever the reader set for it — this default only ever reaches a
-        // day this tab is showing for the first time, the evening's first save included.
+        // day this tab is showing for the first time, the evening's first save included. Applies the same way when
+        // browsing to a different month: that month's own most recent day opens, not "today".
         if (days.MaxBy(day => day.Day) is { } latest && !shownDays.ContainsKey(latest.Day))
             latest.IsExpanded = true;
 
         tab.StatusMessage = tab.Days.Count > 0 ? null : _EmptyMessageFor(tab);
+        // The month total (ET-233): the same NetFor formula each day band already sums its own rows with, over
+        // every row this tab holds regardless of which days are folded — a month is always complete, so its total
+        // never depends on what the reader happens to have open.
+        tab.UpdateMonthSummary();
     }
 
     /// <summary>The row already on screen when it still says the same, a new one in its place when it does not. An
@@ -538,6 +557,27 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         StatusMessage = message;
         _services.GetService<IToastService>()?.Show(title, message, kind);
     }
+
+    [RelayCommand]
+    private Task PreviousMonthAsync() => _GoToMonthAsync(ViewedMonthLocal.AddMonths(-1));
+
+    [RelayCommand]
+    private Task NextMonthAsync() => _GoToMonthAsync(ViewedMonthLocal.AddMonths(1));
+
+    private Task _GoToMonthAsync(DateTime monthLocal)
+    {
+        ViewedMonthLocal = monthLocal;
+        return _FillTabsAsync(null, CancellationToken.None);
+    }
+
+    private static DateTime _MonthStart(DateTime local) => new(local.Year, local.Month, 1, 0, 0, 0, DateTimeKind.Local);
+
+    /// <summary>The month's bounds in UTC, from local midnight on its first day up to (exclusive) local midnight on
+    /// the first day of the next one — the same local-then-convert order <c>HomeDashboardViewModel</c>'s "ISK today"
+    /// boundary already uses for a day, so a run just after local midnight on the 1st never reads as the month
+    /// before it.</summary>
+    private static (DateTime FromUtc, DateTime ToUtcExclusive) _MonthRangeUtc(DateTime monthStartLocal) =>
+        (monthStartLocal.ToUniversalTime(), monthStartLocal.AddMonths(1).ToUniversalTime());
 
     private void _OnClockTick(object? sender, EventArgs e)
     {
