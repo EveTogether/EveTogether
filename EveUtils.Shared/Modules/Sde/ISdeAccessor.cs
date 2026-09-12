@@ -60,6 +60,12 @@ public interface ISdeAccessor
 
     SdeGroup? GetGroup(int groupId);
 
+    /// <summary>Every published Tech I hull's type id in a ship group (ET-263) — used to test whether a restricted
+    /// site's included-hull allow-list (<see cref="Dtos.SdeSite.IncludedShipTypes"/>) amounts to exactly "every
+    /// Tech I hull in this group" rather than an arbitrary subset that must be named instead. Empty when the SDE is
+    /// unavailable or the group has no published Tech I hull.</summary>
+    IReadOnlySet<int> GetTechIHullTypeIds(int shipGroupId);
+
     /// <summary>The published groups in a category, ordered by name: the skill-catalogue groups its skills under
     /// their group headers (category 16 = Skill).</summary>
     IReadOnlyList<SdeGroup> GetGroupsByCategory(int categoryId);

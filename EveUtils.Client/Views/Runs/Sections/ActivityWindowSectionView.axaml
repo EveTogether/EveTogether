@@ -37,16 +37,17 @@
                 <TextBlock Text="SITE"/>
                 <TextBlock Grid.Column="1" Text="{Binding SignatureSiteText}"/>
             </Grid>
-            <!-- The hull list is behind this, not in the section: thirty-odd names over five lines
-                 pushed LOCATION and LOOT STRATEGY off the bottom. The SITE line above still carries
+            <!-- ET-263: grouped by ship group ("Cruisers (T1 only)") rather than the thirty-odd loose
+                 hull names that used to push LOCATION and LOOT STRATEGY off the bottom (Raymond,
+                 2026-09-02) — short enough to stand in the row directly, hull names on the hover only
+                 where the label itself cannot say them concisely. The SITE line above still carries
                  "ship-restricted" itself, so the FACT of the restriction is never hidden — and it
-                 stays visible even for a restricted site whose allow-list resolves to nothing,
-                 which is exactly the case that has no list to open. -->
+                 stays visible even for a restricted site whose allow-list resolves to nothing, which
+                 is exactly the case that has nothing to show here. -->
             <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding HasShipRestriction}">
-                <TextBlock Text=""/>
-                <Button Grid.Column="1" Classes="link" Content="which ships may enter?"
-                        HorizontalAlignment="Left"
-                        Command="{Binding ShowShipRestrictionCommand}"/>
+                <TextBlock Text="SHIPS"/>
+                <TextBlock Grid.Column="1" Text="{Binding ShipRestrictionText}"
+                           ToolTip.Tip="{Binding ShipRestrictionTooltip}"/>
             </Grid>
             <!-- ET-232: the SDE's own gameplayDescription (fleet size, timer, roles), chiefly a homefront's —
                  behind its own link for the same reason the hull list is: it can run to a paragraph or more. -->

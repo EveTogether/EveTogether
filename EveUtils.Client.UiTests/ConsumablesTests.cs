@@ -23,17 +23,18 @@ namespace EveUtils.Client.UiTests;
 
 /// <summary>
 /// ET-249 — CONSUMABLES: an abyssal filament's cost, registered as a negative ISK contribution (ET-256) rather than
-/// a second formula anywhere. The hull-class count proposal is data, not a guess: only a destroyer (Jithran,
-/// 2026-09-11) has a confirmed rule, every other hull class proposes nothing until someone measures the SDE.
+/// a second formula anywhere. The hull-class count proposal is data, not a guess: frigate, destroyer and cruiser
+/// (Jithran, 2026-09-11 and ET-263 2026-09-12) have a confirmed rule, every other hull class proposes nothing until
+/// someone measures the SDE.
 /// </summary>
 public sealed class ConsumablesTests
 {
     // ── The hull-class rule is data, and only proposes what has been measured ─────────────────────────
 
     [Theory]
+    [InlineData("Frigate", 3)]
     [InlineData("Destroyer", 2)]
-    [InlineData("Frigate", null)]
-    [InlineData("Cruiser", null)]
+    [InlineData("Cruiser", 1)]
     [InlineData("Battlecruiser", null)]
     [InlineData(null, null)]
     public void ProposedCount_OnlyAnswersForAMeasuredHullClass(string? hullClass, int? expected) =>
