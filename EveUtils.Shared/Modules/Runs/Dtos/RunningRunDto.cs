@@ -25,4 +25,9 @@ public sealed record RunningRunDto(
     int? AgentId = null,
     int? MissionLevel = null,
     int? SolarSystemId = null,
-    IReadOnlyList<RunParameterDto>? Parameters = null);
+    IReadOnlyList<RunParameterDto>? Parameters = null,
+    /// <summary>Null while the run is still on the clock. Set when <see cref="Queries.GetRunningRunQuery.RunId"/>
+    /// named this row explicitly (ET-254) — the one case this DTO may carry a row that is not actually running, so a
+    /// window resuming a specific stopped run knows to come up paused rather than ticking, exactly as if its own
+    /// pilot had pressed STOP and reopened it.</summary>
+    DateTime? StoppedAtUtc = null);

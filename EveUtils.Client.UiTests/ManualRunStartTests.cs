@@ -9,6 +9,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using Microsoft.EntityFrameworkCore;
@@ -139,6 +140,115 @@ public sealed class ManualRunStartTests
         Assert.True(closed, "the dialog was left standing after its work was done");
         ActivityWindowViewModel opened = Assert.Single(dialogs.ShownActivityWindows);
         Assert.Equal(ActivityKind.Site, opened.Kind);
+    }
+
+    // ── ET-255: every manually-startable catalogue type, not just Site and Abyssal ─────────────────────
+
+    /// <summary>AC-1: the picker's list is the catalogue's own answer, not a pair hand-kept here — Mission is in it
+    /// today because its row names a <see cref="ManualStartRequirement"/>, and nothing with no row naming one is
+    /// (Mining: reserved, ET-229 has given it no <see cref="ActivityKind"/> to resolve from yet).</summary>
+    [AvaloniaFact]
+    public void ActivityKinds_IsTheCataloguesOwnList_SiteAbyssalAndMission()
+    {
+        using var instance = CreateInstance();
+        var vm = CreateViewModel(instance);
+
+        Assert.Equal(RunTypeCatalogue.ManuallyStartableKinds, vm.ActivityKinds);
+        Assert.Contains(ActivityKind.Mission, vm.ActivityKinds);
+    }
+
+    /// <summary>AC-3: a mission asks for a typed name, not a catalogue site — the field the six-site check above
+    /// used to keep this kind out entirely for lack of SDE agent data (ET-129), which a typed name needs none of.
+    /// </summary>
+    [AvaloniaFact]
+    public void AMissionKind_AsksForATypedName_NotASite_AndStaysBackdatable()
+    {
+        using var instance = CreateInstance();
+        var vm = CreateViewModel(instance);
+
+        vm.SelectedActivityKind = ActivityKind.Mission;
+
+        Assert.True(vm.NeedsMissionName);
+        Assert.False(vm.NeedsSite);
+        Assert.False(vm.IsAbyssal);
+        Assert.True(vm.CanBackdate, "a mission is not handed over standing by the way an abyssal is");
+        Assert.False(vm.StartCommand.CanExecute(null), "START armed itself with no name typed yet");
+
+        vm.MissionName = "Worlds Collide";
+        Assert.True(vm.StartCommand.CanExecute(null));
+    }
+
+    /// <summary>Counter-proof for the reset rule <c>OnSelectedActivityKindChanged</c> already applied to SITE: a
+    /// typed mission name left behind after switching away is how a hidden field's stale answer comes back later.
+    /// </summary>
+    [AvaloniaFact]
+    public void SwitchingAwayFromMission_DropsTheTypedName()
+    {
+        using var instance = CreateInstance();
+        var vm = CreateViewModel(instance);
+        vm.SelectedActivityKind = ActivityKind.Mission;
+        vm.MissionName = "Worlds Collide";
+
+        vm.SelectedActivityKind = ActivityKind.Site;
+
+        Assert.Equal(string.Empty, vm.MissionName);
+    }
+
+    /// <summary>AC-3, on the other side of START: a manually started mission reads back as a mission — the typed
+    /// name standing in for the site, no dungeon id, and the id space <see cref="SiteTypeSource.Mission"/> says so
+    /// (ET-137) — not a site named after whatever the pilot typed.</summary>
+    [AvaloniaFact]
+    public async Task StartingAMission_StoresItAsAMission_WithTheTypedNameAndNoSite()
+    {
+        using var instance = CreateInstance();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var vm = CreateViewModel(instance);
+        vm.SelectedActivityKind = ActivityKind.Mission;
+        vm.MissionName = "Worlds Collide";
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.True(vm.Completed);
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(cancellationToken);
+        Run run = await db.Set<Run>().SingleAsync(cancellationToken);
+        Assert.Equal(ActivityKind.Mission, run.ActivityKind);
+        Assert.Equal("Worlds Collide", run.SiteName);
+        Assert.Equal(SiteTypeSource.Mission, run.SiteTypeSource);
+    }
+
+    /// <summary>AC-2: the kind picked last time is what is selected this time, the same "two clicks a run into two
+    /// clicks an evening" <c>ActivityWindowSectionViewModel</c>'s own tier/weather memory already banks on. A fresh
+    /// view model stands for reopening the dialog — <see cref="ManualRunStartViewModel.LoadAsync"/> is the only
+    /// thing separating "just built" from "just reopened", same as <c>ActivityWindowViewModel.LoadAsync</c>.</summary>
+    [AvaloniaFact]
+    public async Task TheLastPickedKind_IsSelectedAgainTheNextTimeTheDialogOpens()
+    {
+        using var instance = CreateInstance();
+        var first = CreateViewModel(instance);
+        first.SelectedActivityKind = ActivityKind.Abyssal;
+
+        var second = CreateViewModel(instance);
+        Assert.Equal(ActivityKind.Site, second.SelectedActivityKind); // not restored until asked
+        await second.LoadAsync();
+
+        Assert.Equal(ActivityKind.Abyssal, second.SelectedActivityKind);
+    }
+
+    /// <summary>Counter-proof: a stored kind too old for this build to offer (here, simulated by a value outside
+    /// <see cref="ActivityKind"/> entirely) must not be handed to <see cref="ManualRunStartViewModel.SelectedActivityKind"/>
+    /// — today's default, Site, stands instead of a kind the picker cannot show.</summary>
+    [AvaloniaFact]
+    public async Task ALastPickedKind_ThisBuildNoLongerOffers_LeavesTheDefaultStanding()
+    {
+        using var instance = CreateInstance();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await dispatcher.Send(new SetSettingCommand(ManualRunStartViewModel.LastKindSettingKey, "99"));
+
+        var vm = CreateViewModel(instance);
+        await vm.LoadAsync();
+
+        Assert.Equal(ActivityKind.Site, vm.SelectedActivityKind);
     }
 
     // A caller that forgets Origin has to read as "we don't know" rather than silently become a claim about

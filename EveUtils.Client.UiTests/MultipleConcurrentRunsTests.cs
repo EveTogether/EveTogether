@@ -332,13 +332,16 @@ public class MultipleConcurrentRunsTests
         Assert.Equal(2, row.ParticipantCount);
         Assert.Equal(1_350_000m, row.BountyIsk); // not 675,000: the starter's own share must not be missing
 
+        // ET-212: the row reads the recorded CharacterNameSnapshot, not this live nameOf lookup — "Starter" here
+        // would never be shown, regardless of what this function answers for the starter's id.
         var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
             nameOf: id => id == ActivityWindowHarness.CharacterId ? "Starter" : "Second Pilot");
         await viewModel.LoadAsync();
 
         // Each character's own hand-typed count, kept over the switch and broken out per character with a total.
         Assert.Equal(2, viewModel.Enemies().EnemyCharacterRows.Count);
-        Assert.Contains(viewModel.Enemies().EnemyCharacterRows, r => r.CharacterText == "Starter" && r.CountText == "4 enemies");
+        Assert.Contains(viewModel.Enemies().EnemyCharacterRows,
+            r => r.CharacterText == ActivityWindowHarness.CharacterName && r.CountText == "4 enemies");
         Assert.Contains(viewModel.Enemies().EnemyCharacterRows, r => r.CharacterText == "Second Pilot" && r.CountText == "2 enemies");
         Assert.Equal("6 enemies", viewModel.Enemies().EnemyTotalCountText);
     }

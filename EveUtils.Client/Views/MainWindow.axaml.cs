@@ -197,6 +197,7 @@ public partial class MainWindow : Window
         // startup load chain, which can hang/fail on unrelated network steps.
         (DataContext as MainWindowViewModel)?.StartSdeUpdateCheck();
         (DataContext as MainWindowViewModel)?.StartUpdateCheck();
+        (DataContext as MainWindowViewModel)?.StartStartupResumeNotice();
     }
 
     // The module shell has two responsive axes — DockMode (docked host vs. floating narrow shell) and the

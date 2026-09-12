@@ -333,7 +333,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         UnfinishedRuns.ReconcileTo([.. (unfinished.Value ?? []).Select(run =>
             shown.TryGetValue(run.RunId, out UnfinishedRunViewModel? same) && same.IsShowing(run)
                 ? same
-                : new UnfinishedRunViewModel(run, _NameOf(run.CharacterId), _SaveUnfinishedRunAsync, _DeleteUnfinishedRunAsync))]);
+                : new UnfinishedRunViewModel(run, _NameOf(run.CharacterId), _SaveUnfinishedRunAsync,
+                    _DeleteUnfinishedRunAsync, _ResumeUnfinishedRunAsync))]);
         HasUnfinishedRuns = UnfinishedRuns.Count > 0;
     }
 
@@ -356,6 +357,35 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
         Result deleted = await _dispatcher.Send(new DeleteRunCommand(run.RunId, DateTime.UtcNow));
         await _AfterFinishingAsync(deleted, "The run could not be thrown away.");
+    }
+
+    /// <summary>
+    /// Reopens the run window on exactly this row and picks the clock back up (ET-254) — the same pause STOP/START
+    /// already is inside an open window, just pressed by a caller other than the pilot's own click. Confirmed first,
+    /// every time, with the honest stop time on the question: this row exists at all only because the app itself
+    /// stopped it (a crash, or the previous process quitting with it still going), and nobody pressed STOP meaning
+    /// to step away for good — but nobody should have yesterday's run dragged forward by a click either, so the
+    /// question says when it actually stopped rather than assuming either answer.
+    /// </summary>
+    private async Task _ResumeUnfinishedRunAsync(UnfinishedRunViewModel run)
+    {
+        string stoppedText = run.StoppedAtUtc is { } stoppedAtUtc
+            ? $"stopped {stoppedAtUtc.ToLocalTime():d MMM HH:mm}"
+            : "never recorded a stop";
+        if (!await _dialogs.ConfirmAsync("Resume this run?",
+                $"{run.SiteText} on {run.CharacterText} — {stoppedText}. Its clock continues from the original "
+                + "start, with everything it already collected.", "Resume"))
+            return;
+
+        ActivityWindowViewModel window = new(run.ActivityKind, _services);
+        // Named before the window loads (ET-221, the same reason ManualRunStartViewModel names its own pilot): this
+        // row's character is known outright, and asking again would be a question this command already answered.
+        window.UseCharacter(checked((int)run.CharacterId), run.CharacterText);
+        window.ResumeRun(run.RunId);
+        _dialogs.ShowActivityWindow(window);
+        // No refresh here: SetRunStoppedCommand (inside the window's own resume) publishes RunsChangedEvent, which
+        // RunChangeFeed already relays to this screen (ET-222) — the row drops out of UNFINISHED on its own the
+        // moment the resume actually lands, same as every other run-changing command this screen does not poll for.
     }
 
     /// <summary>The whole screen is read again rather than the row taken off the list: saving moves a run into the

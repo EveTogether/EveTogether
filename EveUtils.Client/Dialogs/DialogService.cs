@@ -520,6 +520,7 @@ public sealed class DialogService : IDialogService, ISingletonService
     public async Task ShowManualRunStartAsync(ManualRunStartViewModel viewModel)
     {
         if (_owner is null) return;
+        await viewModel.LoadAsync();
         await _Over(new ManualRunStartWindow(viewModel)).ShowDialog(_owner);
     }
 

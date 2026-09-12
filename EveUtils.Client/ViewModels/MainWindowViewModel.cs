@@ -2234,6 +2234,12 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// </summary>
     public void StartSdeUpdateCheck() => _ = RunSdeUpdateCheckResilientAsync();
 
+    /// <summary>Offers back whatever <c>StopRunsLeftRunningCommand</c> stopped at startup (ET-254) — the window's
+    /// Opened event drives this too, for the same reason as <see cref="StartSdeUpdateCheck"/>: a toast needs
+    /// somewhere on screen to attach to, which this process has none of before the window is shown.</summary>
+    public void StartStartupResumeNotice() =>
+        _services?.GetService<EveUtils.Client.Runs.StartupResumeNoticeService>()?.ShowPending();
+
     private async Task RunSdeUpdateCheckResilientAsync()
     {
         try

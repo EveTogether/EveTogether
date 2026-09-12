@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
@@ -143,4 +144,40 @@ public sealed class RunTypeTests
     }
 
     private static IServiceProvider _Unused() => new ServiceCollection().BuildServiceProvider();
+
+    // ── ET-255: every catalogue type is manually startable, or says why not ───────────────────────────
+
+    /// <summary>A row with no reason recorded below and no <see cref="ManualStartRequirement"/> of its own is a type
+    /// Tools → Start run silently cannot offer, with nobody having decided that on purpose — the guard ET-255 asked
+    /// for. Counter-proof: give <c>RunTypeId.Wormhole</c> a <c>ManualStart</c> without removing its entry below, or
+    /// take <c>RunTypeId.Homefront</c>'s entry out without giving the row a <c>ManualStart</c>, and this goes red
+    /// either way.</summary>
+    [Fact]
+    public void EveryCatalogueType_IsManuallyStartable_OrSaysWhyNot()
+    {
+        foreach ((RunTypeId id, RunTypeDefinition row) in RunTypeCatalogue.Rows)
+        {
+            bool recordedHere = NotManuallyStartable.ContainsKey(id);
+            Assert.True(row.ManualStart is not null || recordedHere,
+                $"{row.Name} has no ManualStart and no reason recorded in NotManuallyStartable below");
+            Assert.False(row.ManualStart is not null && recordedHere,
+                $"{row.Name} has a ManualStart now — drop it from NotManuallyStartable below");
+        }
+    }
+
+    /// <summary>Why each of these rows declares no <see cref="RunTypeDefinition.ManualStart"/> — the same shape
+    /// <c>RunSectionFrameworkTests.KeptOnPurpose</c> uses for the kind checks it allows. Not Mining: that row
+    /// does declare one (<see cref="ManualStartRequirement.None"/>), reserved for ET-229 even though no
+    /// <see cref="ActivityKind"/> resolves to it yet — it is manually startable in the catalogue's own terms, just
+    /// not reachable through any kind today, which is a different and narrower gap than these six.</summary>
+    private static readonly IReadOnlyDictionary<RunTypeId, string> NotManuallyStartable = new Dictionary<RunTypeId, string>
+    {
+        [RunTypeId.CombatSite] = "resolved only from a copied signature's scanner group, never from this dialog's own choice",
+        [RunTypeId.DataSite] = "resolved only from a copied signature's scanner group, never from this dialog's own choice",
+        [RunTypeId.RelicSite] = "resolved only from a copied signature's scanner group, never from this dialog's own choice",
+        [RunTypeId.GasSite] = "resolved only from a copied signature's scanner group, never from this dialog's own choice",
+        [RunTypeId.OreSite] = "resolved only from a copied signature's scanner group, never from this dialog's own choice",
+        [RunTypeId.Wormhole] = "resolved only from a copied signature's scanner group, never from this dialog's own choice",
+        [RunTypeId.Homefront] = "resolved only from a copied signature's archetype (ET-228), not yet built"
+    };
 }

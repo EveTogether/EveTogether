@@ -51,6 +51,13 @@
                        Foreground="{DynamicResource TextAccentBrush}"/>
         </StackPanel>
 
+        <!-- A mission is named by a typed name, not a catalogue lookup (ET-255) — agent and level stay optional
+             and unasked, the SDE agent data this dialog has never had (ET-129). -->
+        <StackPanel Spacing="3" IsVisible="{Binding NeedsMissionName}">
+            <TextBlock Classes="label" Text="MISSION NAME"/>
+            <TextBox PlaceholderText="e.g. Worlds Collide" Text="{Binding MissionName}"/>
+        </StackPanel>
+
         <StackPanel Spacing="3" IsVisible="{Binding CanBackdate}">
             <!-- No STARTTIME field on purpose: starting now means the starttime is now. BACKDATE is the one
                  exception, for a run typed in after the fact (ET-163) — so the toggle sits with the two time

@@ -35,7 +35,15 @@ public sealed class RunsChangedSignalCoverageTests
     /// <summary>Commands in the Runs module that change nothing a screen shows about a run, each with the reason. Empty
     /// today: every run command there changes something the runs screen, the dashboard or the detail screen reads.
     /// An entry here is a claim a reviewer has to agree with, not a way to make this test pass.</summary>
-    private static readonly IReadOnlyDictionary<Type, string> Exempt = new Dictionary<Type, string>();
+    private static readonly IReadOnlyDictionary<Type, string> Exempt = new Dictionary<Type, string>
+    {
+        // ET-254: writes Run.LastAliveAtUtc, a field no screen shows at all — it exists only for
+        // StopRunsLeftRunningCommandHandler to read back at the next startup. Publishing RunsChangedEvent for it
+        // would mean every screen showing runs redrawing once a minute, for every open run window, for a change
+        // none of them can display.
+        [typeof(TouchRunAliveCommand)] = "writes a field (LastAliveAtUtc) that exists only for the next startup's "
+            + "sweep to read, never shown on any screen — a signal for it would be a redraw nobody can see the point of"
+    };
 
     /// <summary>For every other command: real state to run it against, and the run (or group) it has to name.</summary>
     private static readonly IReadOnlyDictionary<Type, Arrange> Scenarios = new Dictionary<Type, Arrange>

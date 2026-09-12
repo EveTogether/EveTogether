@@ -243,7 +243,7 @@
                     <ItemsControl x:Name="UnfinishedList" ItemsSource="{Binding UnfinishedRuns}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="vr:UnfinishedRunViewModel">
-                                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="10" Margin="0,3">
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" Margin="0,3">
                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                         <TextBlock FontSize="11.5" TextTrimming="CharacterEllipsis"
                                                    Foreground="{StaticResource TextBrightBrush}"
@@ -253,9 +253,15 @@
                                     <TextBlock Grid.Column="1" Classes="rowfigure" Text="{Binding DurationText}"/>
                                     <TextBlock Grid.Column="2" Classes="rowfigure" Classes.dim="{Binding TotalIskUnknown}"
                                                Text="{Binding TotalIskText}"/>
+                                    <!-- Disabled rather than hidden for an abyssal whose pocket already collapsed
+                                         (ET-254 AC-5, CanResume): SAVE and DELETE still apply to it, so the row
+                                         keeps its usual shape instead of one button's absence shifting the rest. -->
                                     <Button Grid.Column="3" Classes="rowaction" MinWidth="62"
-                                            Content="SAVE" Command="{Binding SaveCommand}"/>
+                                            Content="RESUME" Command="{Binding ResumeCommand}"
+                                            ToolTip.Tip="Reopen the run window on this run and pick the clock back up"/>
                                     <Button Grid.Column="4" Classes="rowaction" MinWidth="62"
+                                            Content="SAVE" Command="{Binding SaveCommand}"/>
+                                    <Button Grid.Column="5" Classes="rowaction" MinWidth="62"
                                             Content="DELETE" Command="{Binding DeleteCommand}"/>
                                 </Grid>
                             </DataTemplate>

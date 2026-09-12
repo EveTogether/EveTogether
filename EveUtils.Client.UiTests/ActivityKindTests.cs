@@ -80,18 +80,18 @@ public sealed class ActivityKindTests
         Assert.Equal(ActivityKind.Mission, Assert.Single(dialogs.ShownActivityWindows).Kind);
     }
 
-    /// <summary>AC-4. "Full clear" and "cherry-picked" are a site's words and mean nothing on a mission, so a mission
-    /// is offered no list at all rather than one it half fits — and the row goes with it, because an empty question
-    /// reads as a window that failed to load.</summary>
+    /// <summary>AC-4, superseded by ET-237: a mission is offered the same four words a site is ("full clear" and
+    /// "cherry-picked" included) — <see cref="RunTypeCatalogue.SiteLootStrategies"/>, optional and with no
+    /// preselection, the same as a courier with nothing to blitz or clear. This used to assert the opposite
+    /// (no list at all); ET-237 deliberately gave missions the list.</summary>
     [AvaloniaFact]
-    public async Task AMissionWindow_IsOfferedNoLootStrategy()
+    public async Task AMissionWindow_IsOfferedTheSameFourLootStrategiesAsASite()
     {
         using var harness = await ActivityWindowHarness.CreateAsync();
         ActivityWindowViewModel window = await harness.OpenAsync(ActivityKind.Mission);
 
-        Assert.DoesNotContain(RunLootStrategy.FullClear, window.Activity().LootStrategies);
-        Assert.DoesNotContain(RunLootStrategy.CherryPicked, window.Activity().LootStrategies);
-        Assert.Empty(window.Activity().LootStrategyChoices);
-        Assert.False(window.Activity().IsLootStrategyShown);
+        Assert.Equal(RunTypeCatalogue.SiteLootStrategies, window.Activity().LootStrategies);
+        Assert.NotEmpty(window.Activity().LootStrategyChoices);
+        Assert.True(window.Activity().IsLootStrategyShown);
     }
 }
