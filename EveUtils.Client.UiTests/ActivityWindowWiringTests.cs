@@ -1392,6 +1392,41 @@ public class ActivityWindowWiringTests
         Assert.Equal(0, observation.Count);
     }
 
+    // ── SAVE while the run is still going (ET-225) ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// ET-225. Before this, SAVE was only ever reachable after STOP — clicking it while Running did nothing, because
+    /// <c>IsSaveButtonVisible</c> was <c>false</c> and the button was not even there to click. Red against that:
+    /// asserting the button showed while Running, or that one <c>SaveRunCommand</c> execute reached Saved without an
+    /// intervening STOP, both failed on the pre-fix code — the run stayed Running and nothing was ever persisted.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task SaveWhileRunning_StopsAtTheClickAndSavesInOneStep()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        await model.StartRunCommand.ExecuteAsync(null);
+        await ActivityWindowHarness.WaitUntil(() => model.RunId is not null);
+
+        Assert.Equal(ActivityRunState.Running, model.RunState);
+        Assert.True(model.IsSaveButtonVisible);
+
+        DateTime beforeClick = DateTime.UtcNow;
+        await model.SaveRunCommand.ExecuteAsync(null);
+
+        Assert.Equal(ActivityRunState.Saved, model.RunState);
+        Assert.NotNull(model.StoppedAtUtc);
+        Assert.True(model.StoppedAtUtc >= beforeClick, "the stop time should be the moment SAVE was clicked");
+
+        Guid runId = Assert.NotNull(model.RunId);
+        await using ClientDbContext db = await harness.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(TestContext.Current.CancellationToken);
+        StoredRunState stored = (await db.Set<Run>().SingleAsync(row => row.Id == runId,
+            TestContext.Current.CancellationToken)).State;
+        Assert.Equal(StoredRunState.Saved, stored);
+    }
+
     // ── The fleet reaches the window ────────────────────────────────────────────────────────────────
 
     [AvaloniaFact]
@@ -1403,6 +1438,28 @@ public class ActivityWindowWiringTests
         Assert.False(model.IsFleetShown);
         Assert.DoesNotContain("solo", model.Fleet().HeaderSummary, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("solo", model.FleetStatusText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// ET-224. The window's own <c>_RefreshParticipantsAsync</c> puts this run's one row into <see cref="Participants"/>
+    /// the moment a solo run starts — "just this run when it is flown alone" (ET-131) — which used to be read as "a
+    /// group with somebody in it" and turned the header chip on with "no other member has reported in yet" over a
+    /// pilot flying by themselves, and opened the FLEET section over an empty roster of one. Red against a version
+    /// with <c>Participants.Count &gt; 0</c> restored (both halves) and the small header chip still on
+    /// <c>IsFleetShown</c>.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ASoloRunOnceStarted_StillShowsNoFleetChip_AndNoFleetSection()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+
+        await model.StartRunCommand.ExecuteAsync(null);
+        await ActivityWindowHarness.WaitUntil(() => model.Participants.Count == 1);
+
+        Assert.False(model.IsFleetStatusShown);
+        Assert.False(model.IsFleetShown);
+        Assert.False(model.Fleet().IsShown);
     }
 
     [AvaloniaFact]
@@ -1459,7 +1516,8 @@ public class ActivityWindowWiringTests
         _AssertButtons(model, "not started", start: true, stop: false, save: false, discard: false);
 
         await model.StartRunCommand.ExecuteAsync(null);
-        _AssertButtons(model, "running", start: false, stop: true, save: false, discard: true);
+        // SAVE joins STOP and DISCARD while Running (ET-225).
+        _AssertButtons(model, "running", start: false, stop: true, save: true, discard: true);
 
         model.StopRun(DateTime.UtcNow);
         _AssertButtons(model, "stopped", start: true, stop: false, save: true, discard: true);

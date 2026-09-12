@@ -243,6 +243,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(IsKeepRunButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsDiscardButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsSaveButtonVisible))]
+    [NotifyPropertyChangedFor(nameof(SaveButtonTooltip))]
     [NotifyPropertyChangedFor(nameof(IsTimeCorrectionShown))]
     [NotifyPropertyChangedFor(nameof(RunOriginText))]
     private ActivityRunState _runState;
@@ -255,6 +256,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(IsStartButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsStopButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsDiscardButtonVisible))]
+    [NotifyPropertyChangedFor(nameof(IsSaveButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsCommandStatusShown))]
     [NotifyPropertyChangedFor(nameof(CommandStatusText))]
     // Unknown, not the four nulls this was built from: those land in From's solo branch, so a window that knows
@@ -282,6 +284,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <summary>The fleet this run belongs to, or null when the window was never told of one.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsFleetShown))]
+    [NotifyPropertyChangedFor(nameof(IsFleetStatusShown))]
     [NotifyPropertyChangedFor(nameof(HasFleetNotice))]
     private long? _fleetId;
 
@@ -680,8 +683,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     /// <summary>Saving is every member's own, never the FC's alone: each pilot commits their own part of the run.
     /// It hangs on the state and not on whether a run row exists yet — a stopped run with nowhere to save to is a
-    /// fault to report, not a button to hide.</summary>
-    public bool IsSaveButtonVisible => RunState == ActivityRunState.Stopped;
+    /// fault to report, not a button to hide.
+    ///
+    /// Also on while the run is still going (ET-225): SAVE then stops the clock at the moment it is clicked before
+    /// saving, one click doing what used to take STOP followed by SAVE. Gated the same way STOP itself is — this
+    /// is STOP's own authority, only followed all the way through — so the button that appears is the same one
+    /// that would otherwise have to be pressed first.</summary>
+    public bool IsSaveButtonVisible =>
+        RunState == ActivityRunState.Stopped || (RunState == ActivityRunState.Running && _MayTimeOwnLeg);
 
     /// <summary>Why the controls are absent, when they are. Silence would be indistinguishable from a bug, and an
     /// unknown fleet boss is a state worth naming rather than an empty corner (ET-65 AC-7's rule, applied here).</summary>
@@ -756,12 +765,24 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <summary>
     /// Whether there is a fleet to show at all. Nothing here may claim "solo": the window is never told the pilot
     /// is alone, it is only ever told about a fleet — by the commander's own start (which sets
-    /// <see cref="FleetId"/>) or by a member's sample arriving on the bus. Without either, the section is not
-    /// collapsed but gone, because an empty FLEET section reads as a measurement and it is not one.
+    /// <see cref="FleetId"/>), by a member's sample arriving on the bus, or by a second toon of this pilot's own
+    /// needing a place to manage payout (ET-210). Without any of those the section is not collapsed but gone,
+    /// because an empty FLEET section reads as a measurement and it is not one — and a run flown alone always has
+    /// exactly one participant, itself, which is not a second pilot to measure against (ET-224).
     /// </summary>
     public bool IsFleetShown =>
-        FleetId is not null || _fleetLocations.Count > 0 || _fleetIsk.Count > 0 || Participants.Count > 0
+        FleetId is not null || _fleetLocations.Count > 0 || _fleetIsk.Count > 0 || Participants.Count > 1
         || FleetMembers.Count > 0;
+
+    /// <summary>
+    /// Whether the small header chip has anything of an actual fleet to report. Deliberately narrower than
+    /// <see cref="IsFleetShown"/>: that one also opens for a group of this pilot's own toons (ET-210), which never
+    /// broadcasts a location sample to itself, so counting <see cref="Participants"/> here would have this chip
+    /// read "no other member has reported in yet" over a run nobody but this pilot is on — the ET-224 bug, in a
+    /// group of one own toon or five.
+    /// </summary>
+    public bool IsFleetStatusShown =>
+        FleetId is not null || _fleetLocations.Count > 0 || _fleetIsk.Count > 0 || FleetMembers.Count > 0;
 
     public string RunOriginText => RunState switch
     {
@@ -2270,10 +2291,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     }
 
     /// <summary>
-    /// The forming fleets for this run's character, from the same repository call this sweep already made — no
-    /// second call, just a different read of what came back (ET-201 AC-5). One forming fleet is
-    /// named; more than one is only ever counted, never narrowed to "the most likely one" by recency or headcount —
-    /// that guess is what PR #223 tried to ban and ET-201 exists to finish (AC-1/AC-2).
+    /// The forming fleets for this run's character that are actually worth naming, from the same repository call
+    /// this sweep already made — no second call, just a different read of what came back (ET-201 AC-5). One
+    /// forming fleet is named; more than one is only ever counted, never narrowed to "the most likely one" by
+    /// recency or headcount — that guess is what PR #223 tried to ban and ET-201 exists to finish (AC-1/AC-2).
+    ///
+    /// A forming fleet nobody else has signed up to is dropped before either of those: once started it would have
+    /// nobody to share this run with anyway, so flying it alone reads the same as flying with no fleet at all —
+    /// without this a stale personal fleet set up once and never touched again (Jithran's own "Local HF") nagged
+    /// every solo run it was still a member of (ET-224). Membership itself is not gated the way the metrics feed is
+    /// — ET-165's own "no broadcast before start" rule — so the roster is readable here at any activation.
     /// </summary>
     private async Task<(string? Name, int FormingCount)> _UnstartedFleetNameAsync()
     {
@@ -2281,9 +2308,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return (null, 0);
 
         using IServiceScope scope = _services.CreateScope();
-        IReadOnlyList<FleetEntity> fleets = await scope.ServiceProvider.GetRequiredService<IFleetRepository>()
-            .ListForParticipantAsync(characterId);
-        List<FleetEntity> forming = fleets.Where(fleet => fleet.Activation == FleetActivation.Forming).ToList();
+        IFleetRepository repository = scope.ServiceProvider.GetRequiredService<IFleetRepository>();
+        IReadOnlyList<FleetEntity> fleets = await repository.ListForParticipantAsync(characterId);
+        List<FleetEntity> forming = [];
+        foreach (FleetEntity fleet in fleets.Where(fleet => fleet.Activation == FleetActivation.Forming))
+        {
+            IReadOnlyList<FleetMember> members = await repository.ListMembersAsync(fleet.Id);
+            if (members.Any(member => member.CharacterId != characterId))
+                forming.Add(fleet);
+        }
+
         return forming switch
         {
             [{ } only] => (only.Name, 1),
@@ -2428,6 +2462,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public string SaveButtonText => IsSaving ? "SAVING…" : "SAVE";
 
+    /// <summary>The one thing a direct save costs that STOP-then-wait-then-SAVE does not (ET-225): loot is often
+    /// copied from the wreck a moment after the last kill, and <c>AddRunLootCaptureCommandHandler</c> still accepts
+    /// it on a <i>stopped</i> run (ET-211's <c>includeStopped: true</c>) — but not on a <i>saved</i> one, and this
+    /// button reaches Saved in the same click. Null once the run is already stopped: that buffer still exists there,
+    /// so this warning would be pointing at a risk this same button no longer carries.</summary>
+    public string? SaveButtonTooltip => RunState == ActivityRunState.Running
+        ? "Stops and saves this run right now. Loot copied a moment after this click will not be recorded — add it by hand on the saved activity if it lands late."
+        : null;
+
     private RunSaveDraft _SaveDraftFor(Guid runId, int? characterId, bool isActingRun)
     {
         var draft = new RunSaveDraft(runId, characterId, isActingRun);
@@ -2440,6 +2483,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// This member commits their own part of the run — every member's own button, never the FC's (ET-105). The
     /// enemy observations are converted here: ET-106 left that seam open so the run would have one lifecycle
     /// rather than two.
+    ///
+    /// Called on a still-running run too (ET-225): the clock is brought to rest at the moment of the click, the
+    /// same way <see cref="RequestCloseAsync"/> already does before its own save, before anything below reads
+    /// <see cref="EffectiveStopUtc"/> — one click doing what used to take STOP followed by a second click on SAVE.
     /// </summary>
     [RelayCommand]
     private async Task SaveRunAsync()
@@ -2450,6 +2497,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             _services.GetService<IToastService>()?.Show("Run not saved", RunNoticeText, ToastKind.Error);
             return;
         }
+
+        if (RunState is ActivityRunState.Running)
+            StopRun(DateTime.UtcNow);
 
         IsSaving = true;
         try
@@ -2790,6 +2840,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                     ? held with { Loot = (decimal)sample.Value }
                     : held with { Bounty = (decimal)sample.Value };
                 OnPropertyChanged(nameof(IsFleetShown));
+                OnPropertyChanged(nameof(IsFleetStatusShown));
                 ApplyFleetEnvelope([.. _fleetLocations.Values], DateTime.UtcNow);
             });
             return;
@@ -2802,6 +2853,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         {
             _fleetLocations[sample.CharacterId] = sample;
             OnPropertyChanged(nameof(IsFleetShown));
+            OnPropertyChanged(nameof(IsFleetStatusShown));
             ApplyFleetEnvelope([.. _fleetLocations.Values], DateTime.UtcNow);
         });
     }
@@ -2915,6 +2967,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             FleetMembers.Remove(gone);
 
         OnPropertyChanged(nameof(IsFleetShown));
+        OnPropertyChanged(nameof(IsFleetStatusShown));
         // The rows changed under the same collection; said as a change of it, for the sections that read it.
         OnPropertyChanged(nameof(FleetMembers));
     }

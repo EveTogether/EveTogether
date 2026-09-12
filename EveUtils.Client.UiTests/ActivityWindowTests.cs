@@ -567,9 +567,11 @@ public class ActivityWindowTests
 
     // ── The four buttons, against every state the run can be in ─────────────────────────────────────
 
+    // SAVE joins STOP and DISCARD while Running (ET-225): one click stops the clock at that moment and saves,
+    // gated the same way STOP itself is rather than opening a fourth authority to reason about.
     [Theory]
     [InlineData(ActivityRunState.NotStarted, true, false, false, false)]
-    [InlineData(ActivityRunState.Running, false, true, false, true)]
+    [InlineData(ActivityRunState.Running, false, true, true, true)]
     [InlineData(ActivityRunState.Stopped, true, false, true, true)]
     public void TheRunControls_ShowExactlyWhatTheStateAllows(ActivityRunState state,
         bool start, bool stop, bool save, bool discard)
@@ -1072,7 +1074,8 @@ public class ActivityWindowTests
         runningModel.StartManualRun(DateTime.UtcNow.AddMinutes(-6));
         var running = _Open(runningModel, expanded: true);
         Assert.NotNull(running.CaptureRenderedFrame());
-        _AssertButtons(running, start: false, stop: true, save: false, discard: true);
+        // SAVE joins STOP and DISCARD while Running (ET-225): the block still does not move, cell 2 no longer empty.
+        _AssertButtons(running, start: false, stop: true, save: true, discard: true);
         OverlayShots.Capture(running, "eveutils-activity-running");
         running.Close();
 

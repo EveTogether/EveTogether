@@ -419,7 +419,7 @@
                             ToolTip.Tip="Neither weather nor tier can be detected — set them in the ACTIVITY section">
                         <TextBlock Text="SET TIER + WEATHER"/>
                     </Border>
-                    <Border Classes="chip dim" IsVisible="{Binding IsFleetShown}">
+                    <Border Classes="chip dim" IsVisible="{Binding IsFleetStatusShown}">
                         <TextBlock Text="{Binding FleetStatusText}"/>
                     </Border>
                     <Border Classes="chip dim">
@@ -577,24 +577,38 @@
                      ends the run rather than steering it, and the last of those is destructive. -->
                 <Grid ColumnDefinitions="98,20,98,98" ColumnSpacing="6" HorizontalAlignment="Right">
                     <Button x:Name="StartRunButton" Grid.Column="0" Classes="pick run" Content="START"
-                            IsVisible="{Binding IsStartButtonVisible}" Command="{Binding StartRunCommand}"/>
+                            IsVisible="{Binding IsStartButtonVisible}" IsEnabled="{Binding !IsSaving}"
+                            Command="{Binding StartRunCommand}"/>
                     <Button x:Name="StopRunButton" Grid.Column="0" Classes="pick run" Content="STOP"
-                            IsVisible="{Binding IsStopButtonVisible}" Command="{Binding StopRunCommand}"/>
+                            IsVisible="{Binding IsStopButtonVisible}" IsEnabled="{Binding !IsSaving}"
+                            Command="{Binding StopRunCommand}"/>
                     <!-- The same cell again: a copy only ever waits on a stopped run, so START and STOP are both
                          off. The hint under the clock says what KEEP drops, which four letters cannot. -->
                     <Button x:Name="KeepRunButton" Grid.Column="0" Classes="pick run" Content="KEEP"
-                            IsVisible="{Binding IsKeepRunButtonVisible}" Command="{Binding KeepRunCommand}"/>
+                            IsVisible="{Binding IsKeepRunButtonVisible}" IsEnabled="{Binding !IsSaving}"
+                            Command="{Binding KeepRunCommand}"/>
                     <!-- SAVING… (ET-210 review finding, 2026-09-09): a group save can run several SaveRunCommands
                          in a row, and pressing this and seeing nothing happen for seconds is worse than a plain
                          wait — the button disables itself and says so, like SettingsBackupsViewModel.IsBusy does
-                         for its own long copy. -->
+                         for its own long copy. Also on while the run is still going (ET-225): one click stops the
+                         clock at that moment and saves — the tooltip says what a copy of loot made a moment later
+                         would miss. -->
                     <Button x:Name="SaveRunButton" Grid.Column="2" Classes="pick run" Content="{Binding SaveButtonText}"
                             IsVisible="{Binding IsSaveButtonVisible}" IsEnabled="{Binding !IsSaving}"
-                            Command="{Binding SaveRunCommand}"/>
+                            ToolTip.Tip="{Binding SaveButtonTooltip}" Command="{Binding SaveRunCommand}"/>
                     <!-- Discarding ends the run on every member's machine, so it confirms first (see the command). -->
                     <Button x:Name="DiscardRunButton" Grid.Column="3" Classes="pick run danger" Content="DISCARD"
-                            IsVisible="{Binding IsDiscardButtonVisible}" Command="{Binding DiscardRunCommand}"/>
+                            IsVisible="{Binding IsDiscardButtonVisible}" IsEnabled="{Binding !IsSaving}"
+                            Command="{Binding DiscardRunCommand}"/>
                 </Grid>
+                <!-- A save is not always instant (ET-210 review finding: a five-member group took five to six
+                     seconds) — shown in the window itself and not only on the button, so it is still noticed once
+                     the window has scrolled past the controls (ET-225). Every button above is disabled for the same
+                     stretch, so there is no second click to race it. -->
+                <StackPanel x:Name="SavingIndicator" Spacing="4" IsVisible="{Binding IsSaving}">
+                    <TextBlock Classes="hint" Margin="0" Text="Saving this run…"/>
+                    <ProgressBar IsIndeterminate="True" Height="4"/>
+                </StackPanel>
                 <!-- ══ Correcting the clock ══ (ET-98) manual START/STOP is the only source a site run has, so the
                      half-minute you were late pressing it is part of every stored duration until it is taken back
                      out. Only on a stopped run, and only before SAVE — after that the row is committed. -->
