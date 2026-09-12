@@ -4,8 +4,8 @@ namespace EveUtils.Shared.Modules.Runs.Dtos;
 
 /// <param name="StoppedAtUtc">Null when the clock was never brought to rest — a row that reached
 /// <see cref="Enums.RunState.Stopped"/> through a path that did not stamp it.</param>
-/// <param name="TotalIsk">This run's own earnings so far, added up the same way <c>TotalIskCalculator</c> adds up a
-/// saved activity's or a live window's (ET-217): bounty, priced loot net of what was lost, and ISK-shaped rewards.
+/// <param name="TotalIsk">This run's own earnings so far — the <c>IskContributors</c> breakdown every other TOTAL ISK
+/// is made of (ET-217, ET-256): bounty, priced loot net of what was lost, and ISK-shaped rewards.
 /// Bounty is written to storage as it is earned, not only at SAVE (ET-219), so this includes it for any run
 /// stopped since that fix shipped. A run left unfinished before then has no <c>RunBountyEntry</c> rows to read and
 /// reads zero here regardless of what it actually earned — that gap cannot be closed after the fact. Meaningless

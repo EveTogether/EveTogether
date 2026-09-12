@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
 
@@ -29,8 +30,8 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
 
     public override bool HasContent => _hasCaptures;
 
-    /// <summary>What the summary says about the loot. The figures in the header are the summary's own — the same
-    /// numbers the runs overview and TOTAL ISK are made of.</summary>
+    /// <summary>What the summary says about the loot. The figure in the header is this section's share of TOTAL ISK as
+    /// the registry counted it (ET-256) — the very number the runs overview and TOTAL ISK are made of.</summary>
     public override void Apply(RunDetailSectionInput input)
     {
         ActivityDetailDto detail = input.Detail;
@@ -40,8 +41,9 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
             ? null
             : "No loot capture was recorded for this activity — nothing was copied, so there is nothing to value.";
         // "no price" and not "0 ISK": a figure nobody has must not look like a figure that came out at zero (ET-65 AC-5).
+        decimal? net = detail.Isk.Of(IskSource.Loot) is { Certainty: not IskCertainty.Unknown } loot ? loot.Amount : null;
         HeaderSummary = captures.Length > 0
-            ? $"{IskFormat.WholeOrNoPrice(detail.LootIskNet)} · {captures.Length} captures · {captures.Count(capture => capture.IsExcluded)} excluded"
+            ? $"{IskFormat.WholeOrNoPrice(net)} · {captures.Length} captures · {captures.Count(capture => capture.IsExcluded)} excluded"
             : "nothing captured";
     }
 

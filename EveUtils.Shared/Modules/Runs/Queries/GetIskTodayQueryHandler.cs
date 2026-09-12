@@ -27,7 +27,9 @@ internal sealed class GetIskTodayQueryHandler(IDbContextFactory<ClientDbContext>
                 query.CharacterIds.Contains(run.CharacterId) && run.State == RunState.Saved && !run.DeletedAtUtc.HasValue
                 && ((summary.GroupCode != null && run.GroupCode == summary.GroupCode)
                     || (summary.RunId != null && run.Id == summary.RunId))))
-            .SumAsync(summary => (decimal?)summary.BountyIsk, cancellationToken);
+            // The same TOTAL ISK the runs overview and the detail screen show for each activity (ET-256), not its
+            // bounty alone — a mission's reward and an evening's loot are ISK earned today too.
+            .SumAsync(summary => summary.TotalIsk, cancellationToken);
 
         return Result<decimal>.Success(total ?? 0m);
     }

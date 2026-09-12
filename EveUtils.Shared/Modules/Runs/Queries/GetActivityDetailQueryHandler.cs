@@ -5,6 +5,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Isk;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Queries;
@@ -64,7 +65,8 @@ internal sealed class GetActivityDetailQueryHandler(IDbContextFactory<ClientDbCo
                     observation.EnemyName, observation.Count, observation.FirstObservedAtUtc, observation.LastObservedAtUtc))],
             [.. parameters.OrderBy(parameter => parameter.ParameterKey).ThenBy(parameter => parameter.ObservedAtUtc)
                 .Select(parameter => new RunParameterDto(parameter.RunId, parameter.ParameterKey, parameter.TypedValue,
-                    parameter.Amount, parameter.ItemTypeId, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))]));
+                    parameter.Amount, parameter.ItemTypeId, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))],
+            StoredIskBreakdown.Read(summary.IskContributions)));
     }
 
     private static ActivityRunDetailDto _ToRunDto(Run run, IEnumerable<RunLootCapture> lootCaptures) => new(

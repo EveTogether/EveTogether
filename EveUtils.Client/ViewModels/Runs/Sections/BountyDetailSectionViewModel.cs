@@ -5,6 +5,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
 
@@ -27,7 +28,8 @@ public sealed partial class BountyDetailSectionViewModel() : RunDetailSection(Ru
         // Not "0 ISK": BountyIsk is zero both when nothing was shot and when nothing was measured, and only the
         // absence of bounty rows tells those apart.
         HasBountyFigures = detail.BountyEntries.Count > 0;
-        BountyText = IskFormat.Whole(detail.BountyIsk);
+        // This section's share of TOTAL ISK as the registry counted it (ET-256), not a sum of its own.
+        BountyText = IskFormat.Whole(detail.Isk.Of(IskSource.Bounty)?.Amount ?? 0m);
         BountyEmptyText = HasBountyFigures
             ? null
             : "No bounty line came past in the game log for this activity.";

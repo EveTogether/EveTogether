@@ -106,13 +106,9 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     [ObservableProperty] private string _endText = string.Empty;
 
     /// <summary>Everything this activity earned, as prominent as <see cref="DurationText"/> (ET-210 review finding,
-    /// 2026-09-09: the total was there, split over three sections, and never once shown as one figure). What it
-    /// adds: <see cref="ActivityDetailDto.BountyIsk"/> (actual gamelog payouts), <see cref="ActivityDetailDto.LootIskNet"/>
-    /// when there is a priced figure to add, and every ISK-denominated reward form (<c>Isk</c>, <c>BonusIsk</c>,
-    /// <c>FixedPayout</c>, <c>Escrow</c>) — deliberately NOT <c>RunParameterKey.Bounty</c>, a mission's own stated
-    /// reward line, so a mission that also logged gamelog kills never counts the same ISK twice under two names.
-    /// LP and Evermarks have no ISK rate to convert against and are left out, the same rule the REWARDS section
-    /// already applies to them.</summary>
+    /// 2026-09-09: the total was there, split over three sections, and never once shown as one figure). The sum of
+    /// what every source contributed (<see cref="ActivityDetailDto.Isk"/>, ET-256) — what each source counts, and what
+    /// it leaves out, is that source's own contributor's to say.</summary>
     [ObservableProperty] private bool _hasTotalIsk;
     [ObservableProperty] private string _totalIskText = string.Empty;
 
@@ -441,7 +437,6 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         foreach (RunDetailSection section in _sections)
             section.Apply(input);
         _ApplySectionsPerType(type);
-        // After the sections: the total is built from the same figures they just settled.
         _ApplyTotalIsk(detail);
         CanDelete = _OwnRunIds(detail).Count > 0;
         return input;
@@ -483,20 +478,13 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         ?? _nameOf?.Invoke(characterId)
         ?? $"character {characterId}";
 
+    // The summary's own breakdown, the one the runs overview row showed on the way here (ET-256). Never a zero for a
+    // figure nobody offered: an activity where no source has a figure has nothing to show, the same rule every other
+    // figure on this screen follows.
     private void _ApplyTotalIsk(ActivityDetailDto detail)
     {
-        // The general reward sum, less whatever a section says has expired out of it — a mission's own bonus once
-        // its time window has passed (ET-237). Never a replacement for the sum: a type with no such rule subtracts
-        // nothing.
-        decimal rewardIsk = TotalIskCalculator.RewardIsk(
-            detail.Parameters.Select(parameter => (parameter.ParameterKey, parameter.Amount)))
-            - _sections.Sum(section => section.ExpiredBonusIsk);
-        decimal total = detail.BountyIsk + detail.LootIskNet.GetValueOrDefault() + rewardIsk;
-
-        // Never a zero for a figure nobody offered: an activity with no bounty, no priced loot and no ISK-form
-        // reward has nothing to show here, same rule every other figure on this screen follows.
-        HasTotalIsk = detail.BountyIsk > 0 || detail.LootIskNet is not null || rewardIsk > 0;
-        TotalIskText = IskFormat.Whole(total);
+        HasTotalIsk = detail.Isk.HasFigure;
+        TotalIskText = IskFormat.Whole(detail.Isk.Total) + IskFormat.ExpectedPart(detail.Isk);
     }
 
     /// <summary>

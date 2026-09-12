@@ -60,12 +60,6 @@ public abstract class RunWindowSection : ActivitySection, IDisposable
     {
     }
 
-    /// <summary>How much of this section's own ISK-shaped reward data must not count towards TOTAL ISK even though
-    /// it is still among the summed parameters — a mission's bonus once its time window has passed (ET-237). TOTAL
-    /// ISK stays the general reward sum every parameter feeds (<c>TotalIskCalculator.RewardIsk</c>); this is only
-    /// ever subtracted from it, never a replacement for it, so a type with no such rule needs no override.</summary>
-    public virtual decimal ExpiredBonusIsk => 0m;
-
     /// <summary>One of <see cref="Context"/>'s properties changed; re-announce whatever this section shows from it.</summary>
     protected virtual void OnContextChanged(string? propertyName)
     {

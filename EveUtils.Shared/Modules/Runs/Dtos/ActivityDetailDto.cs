@@ -1,4 +1,5 @@
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Isk;
 
 namespace EveUtils.Shared.Modules.Runs.Dtos;
 
@@ -58,4 +59,6 @@ public sealed record ActivityDetailDto(
     IReadOnlyList<ActivityRunDetailDto> Runs,
     IReadOnlyList<RunBountyEntryDto> BountyEntries,
     IReadOnlyList<RunEnemyObservationDto> EnemyObservations,
-    IReadOnlyList<RunParameterDto> Parameters);
+    IReadOnlyList<RunParameterDto> Parameters,
+    // TOTAL ISK and each source's share of it (ET-256), stored with the summary like the loot figures above.
+    IskBreakdown Isk);

@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Settings.Dtos;
 using Microsoft.Extensions.DependencyInjection;
@@ -98,18 +99,11 @@ public sealed partial class MissionWindowSectionViewModel : RunWindowSection
 
     [ObservableProperty] private string _bonusCountdownText = string.Empty;
 
-    // Once the bonus window has passed it drops out of TOTAL ISK rather than stay silently counted (ET-237) — this
-    // is the only figure this section removes; the plain ISK and the mission's own stated Bounty line keep counting
-    // (or not) exactly as TotalIskCalculator.RewardIsk already decided for every type.
-    public override decimal ExpiredBonusIsk => IsBonusExpired ? _bonusAmount ?? 0m : 0m;
-
     public override void Load(IReadOnlyList<SettingDto>? settings) => _SyncWithPendingParameters();
 
-    // The deadline is measured, not assumed (ET-237): the capture states a window "remaining" at the moment it was
-    // copied (EVE's own journal counts down), so the deadline is that copy moment plus the stated window — never a
-    // window counted from mission accept, which this run has no timestamp for anyway. Frozen at
-    // Context.EffectiveStopUtc once the run stops, so sitting on a stopped window past the deadline before SAVE
-    // cannot flip a bonus that was actually earned into an expired one.
+    // Judged by MissionBonusDeadline, the rule TOTAL ISK's rewards contributor judges the same bonus by (ET-256), and
+    // frozen at Context.EffectiveStopUtc once the run stops, so sitting on a stopped window past the deadline before
+    // SAVE cannot flip a bonus that was actually earned into an expired one.
     public override void Refresh(DateTime nowUtc)
     {
         _SyncWithPendingParameters();
@@ -152,7 +146,7 @@ public sealed partial class MissionWindowSectionViewModel : RunWindowSection
         if (bonus is not null)
         {
             _bonusAmount = bonus.Amount;
-            _bonusDeadlineUtc = bonus.BonusWindowSeconds is { } seconds ? bonus.ObservedAtUtc.AddSeconds(seconds) : null;
+            _bonusDeadlineUtc = MissionBonusDeadline.Of(bonus.BonusWindowSeconds, bonus.ObservedAtUtc);
         }
 
         foreach (RunParameterInput parameter in parameters.Where(parameter =>

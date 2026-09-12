@@ -17,6 +17,8 @@ public sealed class ActivitySummaryConfiguration : IEntityTypeConfiguration<Acti
         builder.Property(summary => summary.LootVolume).HasPrecision(18, 3);
         builder.Property(summary => summary.BountyIsk).HasPrecision(18, 2);
         builder.Property(summary => summary.ExpectedPayoutIsk).HasPrecision(18, 2);
+        builder.Property(summary => summary.TotalIsk).HasPrecision(18, 2);
+        builder.Property(summary => summary.IskSources).HasMaxLength(255);
         builder.HasIndex(summary => summary.GroupCode).IsUnique();
         builder.HasIndex(summary => summary.RunId).IsUnique();
     }

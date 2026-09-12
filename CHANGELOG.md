@@ -13,6 +13,14 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Every screen now shows the same total ISK for a run.** The runs overview and its day total used to add up only
+  bounty and loot, so a mission showed a few million less there than on its own detail screen — its ISK reward and
+  bonus were left out. The overview, the day total, the detail screen, the run window, UNFINISHED and "ISK today" on
+  the dashboard now all show one figure: everything the run earned, less what it lost. "ISK today" counts mission
+  rewards and loot as well now, not only bounty. A bonus that expired before you stopped the run counts nowhere; one
+  you made in time counts everywhere. A mission flown with several of your own characters counts its reward once, not
+  once per character. An unfinished run that lost more than it made now shows below zero instead of "0 ISK". Runs you
+  saved before this update are added up again once, the first time you start it.
 - **BONUS ISK on a mission now lines up under ISK and LOYALTY POINTS instead of crowding its label**, the same bug
   TYPE had before, when it was only fixed for that one row. Fixed structurally this time, for every key/value row in
   the run window and the activity detail screen, whatever the value turns out to be (a figure beside a countdown

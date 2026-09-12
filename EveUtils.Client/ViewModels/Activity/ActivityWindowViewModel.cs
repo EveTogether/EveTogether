@@ -34,6 +34,7 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Runs.Grouping;
+using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
@@ -1503,12 +1504,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _RefreshArmed();
         _RefreshFleetClock(nowUtc);
         _ = RefreshFleetCommandAsync(nowUtc);
-        // Before the total and the summaries: a section's own Refresh is what settles this tick's figures (a
-        // mission's bonus falling out of expiry, ET-237) — reading them first would sum and summarise last tick's
-        // answer instead of this one's.
+        // Before the summaries: a section's own Refresh is what settles this tick's readout (a mission's bonus
+        // falling out of expiry, ET-237) — summarising first would describe last tick's answer instead of this one's.
         foreach (RunWindowSection section in _AllSections())
             section.Refresh(nowUtc);
-        _RefreshGroupTotalIsk();
+        _RefreshGroupTotalIsk(nowUtc);
         _RefreshSummaries();
         _ = _RefreshActingCharacterAsync();
         _ = _RefreshRunCharactersAsync();
@@ -3105,12 +3105,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// The group's running total, clock-driven exactly like <see cref="_RefreshClock"/> — nothing here does a
     /// database or network round trip, so ticking every second costs no more than formatting a string does.
     ///
-    /// Sums the same three things the saved detail screen's TOTAL ISK does (<c>ActivityDetailViewModel._ApplyTotalIsk</c>):
-    /// bounty, captured loot net of what was lost, and <see cref="TotalIskCalculator.RewardIsk"/>'s own ISK-form
-    /// reward parameters (Isk, BonusIsk, FixedPayout, Escrow) — never the mission's own separate
-    /// <see cref="RunParameterKey.Bounty"/> line, which is a stated reward figure rather than an observed payout and
-    /// would double-count against the gamelog's own bounty. Less whatever a section's own
-    /// <see cref="RunWindowSection.ExpiredBonusIsk"/> says has expired out of that sum (ET-237).
+    /// The window only gathers what the run is made of so far; <see cref="IskContributors"/> adds it up, the same
+    /// registry the saved detail screen, the runs overview and UNFINISHED read (ET-256), so what each source counts —
+    /// a mission's bonus judged at STOP, never its stated Bounty line — is decided there and nowhere here.
     ///
     /// Bounty is summed per participant through <see cref="GamelogClientService.GetFleetRunBounty"/> — the same
     /// switch-independent source SAVE already uses for a group — rather than the acting character's own
@@ -3122,25 +3119,27 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// of every participant's own run, not whichever one <see cref="RunLoot"/> happens to be showing. A solo run has
     /// nothing to sum but its own <see cref="RunLoot"/>.
     /// </summary>
-    private void _RefreshGroupTotalIsk()
+    private void _RefreshGroupTotalIsk(DateTime nowUtc)
     {
         bool isGroup = Participants.Count > 1;
         long bountyIsk = isGroup && FleetId is { } fleetId && _gamelog is not null
             ? Participants.Sum(participant => _gamelog.GetFleetRunBounty(fleetId, participant.CharacterId))
             : BountyIsk;
 
-        decimal? lootIsk = isGroup ? LootOverview?.NetIsk : RunLoot?.NetIsk;
-
-        // The general reward sum, less whatever a section says has expired out of it — a mission's own bonus once
-        // its time window has passed (ET-237). Never a replacement for the sum: a type with no such rule subtracts
-        // nothing.
-        decimal rewardIsk = TotalIskCalculator.RewardIsk(
-            PendingParameters.Select(parameter => (parameter.ParameterKey, parameter.Amount)))
-            - _AllSections().Sum(section => section.ExpiredBonusIsk);
-
-        decimal total = bountyIsk + lootIsk.GetValueOrDefault() + rewardIsk;
-        HasGroupTotalIsk = bountyIsk > 0 || lootIsk is not null || rewardIsk > 0;
-        GroupTotalIskText = IskFormat.Whole(total);
+        IskBreakdown isk = IskContributors.Breakdown(
+        [
+            new RunIskFacts
+            {
+                BountyIsk = bountyIsk,
+                LootIskNet = isGroup ? LootOverview?.NetIsk : RunLoot?.NetIsk,
+                HasLoot = (isGroup ? LootOverview?.HasCaptures : RunLoot?.HasCaptures) ?? false,
+                Parameters = [.. PendingParameters.Select(parameter => new RunIskParameter(
+                    parameter.ParameterKey, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))],
+                StoppedAtUtc = EffectiveStopUtc
+            }
+        ], nowUtc);
+        HasGroupTotalIsk = isk.HasFigure;
+        GroupTotalIskText = IskFormat.Whole(isk.Total) + IskFormat.ExpectedPart(isk);
     }
 
     // The signature arrives after construction, from the object initialiser the toast opens the window with — so the

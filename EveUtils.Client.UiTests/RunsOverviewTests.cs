@@ -513,7 +513,7 @@ public sealed class RunsOverviewTests
     }
 
     /// <summary>ET-217 AC-1/AC-2: an unfinished row shows what its run earned so far, added up the exact same way
-    /// TotalIskCalculator adds up the run window's own TOTAL ISK and a saved activity's — an ISK-shaped mission
+    /// IskContributors adds up the run window's own TOTAL ISK and a saved activity's — an ISK-shaped mission
     /// reward parameter here, formatted through the same IskFormat the rest of the app uses. Counter-proof: read
     /// TotalIskText off a row built without wiring UnfinishedRunDto.TotalIsk through (the shape of this ticket before
     /// the fix) and this goes red on "0 ISK" instead of the reward's own amount.</summary>
@@ -539,7 +539,7 @@ public sealed class RunsOverviewTests
         Presented presented = await _PresentAsync(instance, 758, cancellationToken);
         UnfinishedRunViewModel run = Assert.Single(presented.ViewModel.UnfinishedRuns);
 
-        Assert.Equal(IskFormat.ExactOrZero(12_345_678d), run.TotalIskText);
+        Assert.Equal(IskFormat.Whole(12_345_678m), run.TotalIskText);
         Assert.False(run.TotalIskUnknown);
     }
 
@@ -567,7 +567,7 @@ public sealed class RunsOverviewTests
         Presented presented = await _PresentAsync(instance, 758, cancellationToken);
         UnfinishedRunViewModel run = Assert.Single(presented.ViewModel.UnfinishedRuns);
 
-        Assert.Equal(IskFormat.ExactOrZero(4_500_000d), run.TotalIskText);
+        Assert.Equal(IskFormat.Whole(4_500_000m), run.TotalIskText);
         Assert.False(run.TotalIskUnknown);
     }
 
