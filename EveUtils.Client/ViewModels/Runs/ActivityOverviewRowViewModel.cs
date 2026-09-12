@@ -13,6 +13,7 @@ using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
+using EveUtils.Shared.Modules.Sde;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
@@ -40,6 +41,8 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     /// <param name="serverNameOf">A server's name as its tab shows it; the bare address when null.</param>
     /// <param name="publishProgress">The automatic publish of this activity in flight, or the reason it last failed
     /// (ET-245).</param>
+    /// <param name="sde">Feeds <see cref="RunTypeCatalogue"/>'s ET-275 archetype fallback for a site with no recorded
+    /// scanner group; null skips it, reading TYPE exactly as before that ticket.</param>
     public ActivityOverviewRowViewModel(
         ActivityOverviewRowDto row,
         Func<long, string> nameOf,
@@ -48,7 +51,8 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         Func<ActivityOverviewRowViewModel, Task>? publish = null,
         Func<string, string>? serverNameOf = null,
         RunPublishProgress? publishProgress = null,
-        Func<ActivityOverviewRowViewModel, Task>? retryPublish = null)
+        Func<ActivityOverviewRowViewModel, Task>? retryPublish = null,
+        ISdeAccessor? sde = null)
     {
         _loadSubRuns = loadSubRuns;
         _openDetail = openDetail;
@@ -61,7 +65,8 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         StartedAtLocal = row.StartedAtUtc.ToLocalTime();
         Duration = TimeSpan.FromSeconds(row.DurationSeconds);
         TimeText = StartedAtLocal.ToString("HH:mm");
-        RunTypeDefinition type = RunTypeCatalogue.For(row.ActivityKind, row.SignatureGroupSnapshot, row.SiteTypeId);
+        RunTypeDefinition type = RunTypeCatalogue.For(row.ActivityKind, row.SignatureGroupSnapshot, row.SiteTypeId,
+            sde, row.SiteName);
         // An abyssal has no site at all — it never reads "Unnamed site" (ET-241), it reads what filament opened it,
         // or the type's own honest name while that is still unknown.
         SiteText = !string.IsNullOrWhiteSpace(row.SiteName)
@@ -279,6 +284,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     /// the per-run homefront refinement <c>For(kind, group, siteTypeId)</c> does, so a homefront read back plain
     /// "Homefront" here even where <paramref name="siteTypeId"/> was known and every other screen already said
     /// "Homefront · Raid".</summary>
-    public static string KindLabel(ActivityKind kind, string? signatureGroupSnapshot, int siteTypeId = 0) =>
-        RunTypeCatalogue.For(kind, signatureGroupSnapshot, siteTypeId).Name;
+    public static string KindLabel(ActivityKind kind, string? signatureGroupSnapshot, int siteTypeId = 0,
+        ISdeAccessor? sde = null, string? siteName = null) =>
+        RunTypeCatalogue.For(kind, signatureGroupSnapshot, siteTypeId, sde, siteName).Name;
 }

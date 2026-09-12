@@ -48,15 +48,16 @@ public sealed class RunsChangedSignalCoverageTests
         // handling of RunsChangedEvent, so a signal here would only hand that handler its own write back.
         [typeof(RecordRunGroupServerCommand)] = "writes which server a group's fleet lives on, read by the automatic "
             + "publisher alone and shown nowhere; it changes no run",
-        // ET-228: its only effect is matching a run's SiteName against the SDE's own archetype-70 site names, and
-        // this harness's TestClientInstance.Create() below carries no SDE catalogue at all — every scenario shares
-        // one instance with no per-scenario override, so there is no fixture strong enough to make this command do
-        // anything here. It does change what a screen shows (TYPE) and does publish RunsChangedEvent through the
-        // RebuildActivitySummariesCommand it delegates to once repaired — proven directly, against a FakeSdeAccessor
-        // seeded with the site it must find, in RepairHomefrontSiteTypeIdsCommandHandlerTests instead.
-        [typeof(RepairHomefrontSiteTypeIdsCommand)] = "needs the SDE's own archetype-70 site catalogue to do "
-            + "anything, which this shared harness has no way to seed per scenario; its signal is proven in "
-            + "RepairHomefrontSiteTypeIdsCommandHandlerTests against a FakeSdeAccessor instead",
+        // ET-228, widened to every archetype by ET-275: its only effect is matching a run's SiteName against the
+        // SDE's own site catalogue, and this harness's TestClientInstance.Create() below carries no SDE catalogue at
+        // all — every scenario shares one instance with no per-scenario override, so there is no fixture strong
+        // enough to make this command do anything here. It does change what a screen shows (TYPE) and does publish
+        // RunsChangedEvent through the RebuildActivitySummariesCommand it delegates to once repaired — proven
+        // directly, against a FakeSdeAccessor seeded with the site it must find, in
+        // RepairSiteTypeIdsCommandHandlerTests instead.
+        [typeof(RepairSiteTypeIdsCommand)] = "needs the SDE's own site catalogue to do anything, which this shared "
+            + "harness has no way to seed per scenario; its signal is proven in RepairSiteTypeIdsCommandHandlerTests "
+            + "against a FakeSdeAccessor instead",
         // ET-271: only ever writes a line a character's own gamelog file carries, which this shared harness has no
         // directory for; it publishes per run it added to, and HomefrontMoneyScenarioTests.S11 drives it end to end.
         [typeof(ImportRunBountyCommand)] = "needs a character's own gamelog file on disk to add anything, which this "
