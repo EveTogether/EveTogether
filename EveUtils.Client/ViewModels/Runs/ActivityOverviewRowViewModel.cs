@@ -60,7 +60,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         StartedAtLocal = row.StartedAtUtc.ToLocalTime();
         Duration = TimeSpan.FromSeconds(row.DurationSeconds);
         TimeText = StartedAtLocal.ToString("HH:mm");
-        RunTypeDefinition type = RunTypeCatalogue.For(RunTypeResolver.Resolve(row.ActivityKind, row.SignatureGroupSnapshot));
+        RunTypeDefinition type = RunTypeCatalogue.For(row.ActivityKind, row.SignatureGroupSnapshot, row.SiteTypeId);
         // An abyssal has no site at all — it never reads "Unnamed site" (ET-241), it reads what filament opened it,
         // or the type's own honest name while that is still unknown.
         SiteText = !string.IsNullOrWhiteSpace(row.SiteName)

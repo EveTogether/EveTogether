@@ -196,8 +196,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public ActivityKind Kind { get; }
 
     /// <summary>What this run is, from the one catalogue every run screen reads (ET-226). Unlike <see cref="Kind"/> it
-    /// can change mid-run: a site started without a scanner group gets one when the run it adopts carries it.</summary>
-    public RunTypeDefinition RunType => RunTypeCatalogue.For(Kind, SignatureGroup);
+    /// can change mid-run: a site started without a scanner group gets one when the run it adopts carries it, and a
+    /// homefront's own kind (ET-228) settles the moment a copied name resolves to exactly one dungeon.</summary>
+    public RunTypeDefinition RunType => RunTypeCatalogue.For(Kind, SignatureGroup, _SiteTypeId());
 
     /// <summary>The sections the run's type has, in the order <see cref="RunSectionModules"/> gives them — what the
     /// window draws under its clock.</summary>
@@ -369,7 +370,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <summary>What the site catalogue carries under <see cref="SignatureName"/> (ET-80). Empty is the ordinary
     /// case rather than a fault — the match is on the English name only, so a miss cannot prove the site is absent —
     /// and so is more than one, since 218 catalogue names are shared by 613 dungeons. Nothing below ever picks one.</summary>
-    [ObservableProperty] private IReadOnlyList<SdeSite> _matchedSites = [];
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RunType))]
+    private IReadOnlyList<SdeSite> _matchedSites = [];
 
     // Whether this window starts its run by itself once it has settled, instead of waiting for START. Set by the
     // clipboard signature offer (ET-158), which has no button to press.
@@ -395,15 +398,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     // ── The sections ────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Bring <see cref="Sections"/> to what the run's type claims. A section is built the first time a type
-    /// claims it and kept from then on; one the type no longer claims leaves the screen with its state intact, and the
-    /// ones that stay keep their instance — open or folded as the pilot left them.</summary>
+    /// <summary>Bring <see cref="Sections"/> to what the run's type claims, plus (ET-228) any section that has come
+    /// to have real content of its own regardless of type — the run window's own version of the detail screen's
+    /// ET-162 rule, so a combat/data/relic/gas/wormhole/homefront run where someone starts mining shows MINING while
+    /// it is still running rather than only after SAVE. A section is built the first time it is claimed this way and
+    /// kept from then on; one that stops being claimed leaves the screen with its state intact, and the ones that
+    /// stay keep their instance — open or folded as the pilot left them.</summary>
     private void _SyncSectionsToType()
     {
         List<RunWindowSection> claimed = [];
         foreach (RunSectionModule module in RunSectionModules.All)
         {
-            if (module.CreateForWindow is not { } create || !RunType.WindowSections.Contains(module.Id))
+            if (module.CreateForWindow is not { } create)
+                continue;
+            if (!RunType.WindowSections.Contains(module.Id) && module.HasLiveContent?.Invoke(this) != true)
                 continue;
 
             if (!_sections.TryGetValue(module.Id, out RunWindowSection? section))
@@ -1572,6 +1580,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _RefreshArmed();
         _RefreshFleetClock(nowUtc);
         _ = RefreshFleetCommandAsync(nowUtc);
+        // Live content (mining arriving on a type that does not claim MINING outright, ET-228) can only be seen
+        // once Participants has this tick's rows, so this runs here rather than only on a signature/site change.
+        _SyncSectionsToType();
         // Before the summaries: a section's own Refresh is what settles this tick's readout (a mission's bonus
         // falling out of expiry, ET-237) — summarising first would describe last tick's answer instead of this one's.
         foreach (RunWindowSection section in _AllSections())
@@ -1744,9 +1755,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         (string? fitContentHash, string? fitNameSnapshot) = await _ResolveFitAsync(characterId);
         Result<Guid> started = await dispatcher.Send(
             new StartRunCommand(characterId, Kind, startedAtUtc,
-                // No type id: a signature names a dungeon, and the catalogue's DungeonId is not the type id this
-                // column holds. The name travels instead.
-                SiteTypeId: 0,
+                SiteTypeId: _SiteTypeId(),
                 SiteName: SignatureName,
                 SolarSystemId: solarSystemId,
                 GroupCode: GroupCode,
@@ -1825,7 +1834,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // fit was visible and shared live, because nothing here ever asked for it).
         (string? fitContentHash, string? fitNameSnapshot) = await _ResolveFitAsync(checked((int)characterId));
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, Kind, startedAtUtc,
-            SiteTypeId: 0,
+            SiteTypeId: _SiteTypeId(),
             SiteName: SignatureName,
             SolarSystemId: solarSystemId,
             GroupCode: GroupCode,
@@ -1882,6 +1891,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         ActivityKind.Site when SignatureName is not null && MatchedSites.Count == 0 => SiteTypeSource.Uncatalogued,
         _ => SiteTypeSource.Site
     };
+
+    /// <summary>The dungeon id this run starts with (ET-228) — the one fact the two <c>StartRunCommand</c> calls
+    /// above used to throw away outright (<c>SiteTypeId: 0</c>), even though <see cref="MatchedSites"/> already had
+    /// it. Zero, the same "not known" value a run with no catalogue match always carried, when the copied name
+    /// matched more than one dungeon: guessing which one is worse than leaving it unknown (ET-228 AC-1). A mission
+    /// never calls this — <see cref="_SiteTypeSource"/> gives its id space instead — so the ambiguity a shared
+    /// English site name could cause a mission's own ids never arises here.</summary>
+    private int _SiteTypeId() => MatchedSites.Count == 1 ? MatchedSites[0].DungeonId : 0;
 
     /// <summary>What ET-101's own detection already knows for this specific character, turned into what
     /// <c>StartRunCommand</c> stores — <see cref="IShipFitDetectionService"/> answers per character, not only for
@@ -3354,7 +3371,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     // shut ACTIVITY header has to be worked out again then, not only on the next clock tick.
     partial void OnSignatureNameChanged(string? value) => _RefreshSummaries();
 
-    partial void OnMatchedSitesChanged(IReadOnlyList<SdeSite> value) => _RefreshSummaries();
+    partial void OnMatchedSitesChanged(IReadOnlyList<SdeSite> value)
+    {
+        // A single match settling (or un-settling, on a fresh copy) can move RunType onto or off Homefront (ET-228),
+        // which changes what Sections claims the same way a scanner group arriving does (OnSignatureGroupChanged).
+        _SyncSectionsToType();
+        _RefreshSummaries();
+    }
 
     private void _RefreshSummaries()
     {

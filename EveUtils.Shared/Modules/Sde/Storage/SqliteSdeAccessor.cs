@@ -505,7 +505,7 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
         command.CommandText =
             """
             SELECT dungeonId, nameEn, archetypeId, archetypeName, factionId, factionName, description, dedRating,
-                   shipGroupIdsJson
+                   shipGroupIdsJson, gameplayDescription, includedTypeIdsJson, excludedTypeIdsJson
             FROM Site
             WHERE ($pattern IS NULL OR nameEn LIKE $pattern ESCAPE '\')
               AND ($archetypeId IS NULL OR archetypeId = $archetypeId)
@@ -537,7 +537,7 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
         command.CommandText =
             """
             SELECT dungeonId, nameEn, archetypeId, archetypeName, factionId, factionName, description, dedRating,
-                   shipGroupIdsJson
+                   shipGroupIdsJson, gameplayDescription, includedTypeIdsJson, excludedTypeIdsJson
             FROM Site
             WHERE dungeonId IN (SELECT dungeonId FROM SiteNameAlias WHERE nameKey = $key)
             ORDER BY nameEn;
@@ -548,12 +548,14 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
 
     private static IReadOnlyList<SdeSite> ReadSites(SqliteConnection connection, SqliteCommand command)
     {
-        var rows = new List<(SdeSite Site, int[] GroupIds)>();
+        var rows = new List<(SdeSite Site, int[] GroupIds, int[] IncludedTypeIds, int[] ExcludedTypeIds)>();
         using (var reader = command.ExecuteReader())
         {
             while (reader.Read())
             {
                 var groupIds = reader.IsDBNull(8) ? null : JsonSerializer.Deserialize<int[]>(reader.GetString(8)) ?? [];
+                var includedTypeIds = reader.IsDBNull(10) ? [] : JsonSerializer.Deserialize<int[]>(reader.GetString(10)) ?? [];
+                var excludedTypeIds = reader.IsDBNull(11) ? [] : JsonSerializer.Deserialize<int[]>(reader.GetString(11)) ?? [];
                 rows.Add((new SdeSite(
                     reader.GetInt32(0),
                     reader.GetString(1),
@@ -564,15 +566,25 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
                     reader.IsDBNull(6) ? null : reader.GetString(6),
                     reader.IsDBNull(7) ? null : reader.GetInt32(7),
                     IsShipRestricted: groupIds is not null,
-                    AllowedShipGroups: []), groupIds ?? []));
+                    AllowedShipGroups: [],
+                    GameplayDescription: reader.IsDBNull(9) ? null : reader.GetString(9)),
+                    groupIds ?? [], includedTypeIds, excludedTypeIds));
             }
         }
 
-        // The group names live in InvGroup, so resolve them once for the whole result rather than per row.
-        var names = ReadGroups(connection, rows.SelectMany(r => r.GroupIds).ToHashSet());
-        return [.. rows.Select(r => r.GroupIds.Length == 0
-            ? r.Site
-            : r.Site with { AllowedShipGroups = [.. r.GroupIds.Select(names.GetValueOrDefault).OfType<SdeGroup>()] })];
+        // The group and type names live in InvGroup/Type, so resolve them once for the whole result rather than
+        // per row.
+        var groupNames = ReadGroups(connection, rows.SelectMany(r => r.GroupIds).ToHashSet());
+        var typeNames = ReadTypeNames(connection,
+            rows.SelectMany(r => r.IncludedTypeIds).Concat(rows.SelectMany(r => r.ExcludedTypeIds)).ToHashSet());
+        return [.. rows.Select(r => r.Site with
+        {
+            AllowedShipGroups = r.GroupIds.Length == 0
+                ? []
+                : [.. r.GroupIds.Select(groupNames.GetValueOrDefault).OfType<SdeGroup>()],
+            IncludedShipTypes = [.. r.IncludedTypeIds.Select(typeNames.GetValueOrDefault).OfType<SdeNamedType>()],
+            ExcludedShipTypes = [.. r.ExcludedTypeIds.Select(typeNames.GetValueOrDefault).OfType<SdeNamedType>()]
+        })];
     }
 
     private static Dictionary<int, SdeGroup> ReadGroups(SqliteConnection connection, HashSet<int> groupIds)
@@ -590,6 +602,22 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
         while (reader.Read())
             result[reader.GetInt32(0)] =
                 new SdeGroup(reader.GetInt32(0), reader.GetInt32(1), reader.GetString(2), reader.GetInt64(3) != 0);
+        return result;
+    }
+
+    /// <summary>Names for <c>includedTypeIdsJson</c>/<c>excludedTypeIdsJson</c> (ET-232), the same "resolve once for
+    /// the whole result" shape <see cref="ReadGroups"/> already uses for ship groups.</summary>
+    private static Dictionary<int, SdeNamedType> ReadTypeNames(SqliteConnection connection, HashSet<int> typeIds)
+    {
+        var result = new Dictionary<int, SdeNamedType>();
+        if (typeIds.Count == 0)
+            return result;
+        using var command = connection.CreateCommand();
+        // Same reasoning as ReadGroups: these ids come from the store's own JSON column, not user input.
+        command.CommandText = "SELECT typeId, nameEn FROM Type WHERE typeId IN (" + string.Join(",", typeIds) + ");";
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+            result[reader.GetInt32(0)] = new SdeNamedType(reader.GetInt32(0), reader.GetString(1));
         return result;
     }
 

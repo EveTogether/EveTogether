@@ -21,9 +21,11 @@ public static class SdeSchema
     /// non-English client resolves too (ET-79 AC-4); v6 added <c>SolarSystem</c>, <c>Agent</c>,
     /// <c>AgentNameAlias</c>, <c>Mission</c> and <c>EpicArcMission</c> — the mission side of the SDE (ET-173);
     /// v7 added <c>Type.metaGroupId</c> (mutated-type detection, ET-146 deel A) and
-    /// <c>MutaplasmidAttributeRange</c>/<c>MutaplasmidResultingType</c> (dynamicItemAttributes.jsonl, ET-146 deel D).
+    /// <c>MutaplasmidAttributeRange</c>/<c>MutaplasmidResultingType</c> (dynamicItemAttributes.jsonl, ET-146 deel D);
+    /// v8 added <c>Site.gameplayDescription</c> and the <c>Site.includedTypeIdsJson</c>/<c>excludedTypeIdsJson</c>
+    /// pair (ET-232) — the individual-hull refinement <c>shipGroupIdsJson</c> alone could not express.
     /// </summary>
-    public const int SchemaVersion = 7;
+    public const int SchemaVersion = 8;
 
     /// <summary>Schema-creating statements, run before the bulk load.</summary>
     public static readonly string[] CreateTables =
@@ -101,18 +103,26 @@ public static class SdeSchema
         // 27 factions are too small to earn their own tables and joins). Everything but the id and the name is
         // nullable because the empty case is the normal one: 1183 of 1409 sites carry no description, 77 no faction,
         // 45 no archetype title, 962 no ship restriction. shipGroupIdsJson distinguishes "no restriction" (NULL)
-        // from "restricted" (a JSON array of InvGroup ids, possibly empty — see TableWriters).
+        // from "restricted" (a JSON array of InvGroup ids, possibly empty — see TableWriters). gameplayDescription
+        // (ET-232) is a second, separate text field from the SDE's own gameplayDescription — recommended fleet size,
+        // expected time, roles — never merged into description, which is CCP's own flavour text. includedTypeIdsJson
+        // and excludedTypeIdsJson (ET-232) carry the individual-hull refinement the group-only shipGroupIdsJson
+        // cannot express (a homefront's "T1 cruisers only" is 16 specific types, not a group), NULL vs "[]" kept
+        // distinct the same way.
         """
         CREATE TABLE Site (
-            dungeonId        INTEGER PRIMARY KEY,
-            nameEn           TEXT NOT NULL,
-            archetypeId      INTEGER,
-            archetypeName    TEXT,
-            factionId        INTEGER,
-            factionName      TEXT,
-            description      TEXT,
-            dedRating        INTEGER,
-            shipGroupIdsJson TEXT
+            dungeonId          INTEGER PRIMARY KEY,
+            nameEn             TEXT NOT NULL,
+            archetypeId        INTEGER,
+            archetypeName      TEXT,
+            factionId          INTEGER,
+            factionName        TEXT,
+            description        TEXT,
+            gameplayDescription TEXT,
+            dedRating          INTEGER,
+            shipGroupIdsJson   TEXT,
+            includedTypeIdsJson TEXT,
+            excludedTypeIdsJson TEXT
         ) WITHOUT ROWID;
         """,
         // Locale-agnostic name import for sites, same idea as TypeNameAlias but carrying English too (locale "en"):

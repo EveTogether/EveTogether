@@ -13,6 +13,22 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Homefronts are now recognised as homefronts, with their own kind.** Before, running a Raid, a Metaliminal
+  Meteoroid or any of CCP's other 22 homefront dungeons threw away which one it was — the run window discarded the
+  match it already had, so a saved homefront read back as an ordinary combat or ore site. Now the run window, the
+  detail screen and the runs overview all show "Homefront" plus its kind (Raid, Metaliminal Meteoroid, …), and a
+  mining homefront (Metaliminal Meteoroid, Abyssal Artifact Recovery) gets its own MINING section the way a combat
+  homefront already gets ENEMIES and BOUNTY. The run window itself now also shows MINING live on any run, of any
+  kind, the moment someone starts mining on it — not only after SAVE. Never a guess: a copied site name matching more
+  than one dungeon still stores no id, exactly as an unmatched site always has. Existing runs with an exact homefront
+  name are repaired once at startup; a published run that gets corrected this way is marked for republishing rather
+  than silently updated on the server.
+- **The site catalogue now carries a site's own gameplay notes, and its ship restriction is complete.** The SDE's own
+  guidance for a site — recommended fleet size, expected time, roles — is now imported and shown behind a link next
+  to the site in the run window, the same way the allowed-ships list already is. The ship restriction itself used to
+  read only ship groups, so every 5-person homefront showed its T1 cruisers as forbidden even though CCP allows them
+  by individual hull; those hulls (and any other site's individually-listed ships) now show up correctly, and a
+  ship excluded by name is never shown as allowed. Existing installs re-import once to pick this up.
 - **Mining now shows up on the run, per character and per ore.** A dedicated mining run shows it live in the run
   window; any other activity — a combat, data, relic, gas or wormhole site — shows it on the saved activity's
   detail screen once it's clear there is something to show. Units mined, critical strikes and residue are all

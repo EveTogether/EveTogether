@@ -53,7 +53,7 @@ internal sealed class GetActivityDetailQueryHandler(IDbContextFactory<ClientDbCo
 
         return Result<ActivityDetailDto>.Success(new ActivityDetailDto(
             summary.Id, summary.GroupCode, summary.ActivityKind, summary.SiteName, summary.SignatureGroupSnapshot,
-            summary.SolarSystemId,
+            summary.SiteTypeId, summary.SolarSystemId,
             summary.StartedAtUtc, summary.StoppedAtUtc, summary.DurationSeconds,
             summary.LootIskGained, summary.LootIskLost, summary.LootIskNet, summary.BountyIsk, summary.ExpectedPayoutIsk,
             summary.ParticipantCount, summary.PayoutEligibleCount,

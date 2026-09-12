@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Enums;
 using Material.Icons;
@@ -50,6 +51,19 @@ public sealed class RunTypeTests
     [Fact]
     public void Resolve_ForAnAbyssal_ReturnsAbyssal() =>
         Assert.Equal(RunTypeId.Abyssal, RunTypeResolver.Resolve(ActivityKind.Abyssal, null));
+
+    /// <summary>ET-228: the dungeon id is the more specific fact, read ahead of the scanner group text — a homefront
+    /// resolves to its own type even though its scanner group (when caught at all) reads like an ordinary site.
+    /// 10347 is Raid: Hall of Sacrifice (domain/homefronts.md §2).</summary>
+    [Fact]
+    public void Resolve_ForASiteWithAHomefrontDungeonId_ReturnsHomefront_EvenWithACombatSiteGroup() =>
+        Assert.Equal(RunTypeId.Homefront, RunTypeResolver.Resolve(ActivityKind.Site, "Combat Site", siteTypeId: 10347));
+
+    /// <summary>0 is never a homefront id — the sentinel every unmatched site already carries — so an ordinary
+    /// Combat Site with no catalogue match still resolves by its scanner group, unaffected by ET-228's new arm.</summary>
+    [Fact]
+    public void Resolve_ForASiteWithNoHomefrontDungeonId_FallsBackToTheScannerGroup() =>
+        Assert.Equal(RunTypeId.CombatSite, RunTypeResolver.Resolve(ActivityKind.Site, "Combat Site", siteTypeId: 0));
 
     // ── RunTypeCatalogue: every declared type has a name and an icon ───────────────────────────────────
 
@@ -103,6 +117,38 @@ public sealed class RunTypeTests
         ];
 
         Assert.Equal(icons.Length, icons.ToHashSet().Count);
+    }
+
+    // ── ET-228: the per-run refinement ET-236's design left for a homefront's own kind ─────────────────
+
+    /// <summary>Archetype 70 gives "Homefront" plus the kind (ET-228 AC-2); the kind is read off the dungeon id, not
+    /// stored on the run. A combat homefront keeps the base row's ENEMIES/BOUNTY and claims no MINING it never
+    /// needed.</summary>
+    [Fact]
+    public void For_ForACombatHomefront_NamesItsKind_AndClaimsNoMining()
+    {
+        RunTypeDefinition raid = RunTypeCatalogue.For(ActivityKind.Site, "Combat Site", siteTypeId: 10347);
+
+        Assert.Equal("Homefront · Raid", raid.Name);
+        Assert.DoesNotContain(RunSectionId.Mining, raid.WindowSections);
+        Assert.DoesNotContain(RunSectionId.Mining, raid.DetailSections);
+        Assert.Contains(RunSectionId.Enemies, raid.WindowSections);
+        Assert.Contains(RunSectionId.Bounty, raid.WindowSections);
+    }
+
+    /// <summary>Metaliminal Meteoroid and Abyssal Artifact Recovery are mining homefronts (domain/homefronts.md §2)
+    /// — their catalogue row claims MINING outright, the way a combat homefront already claims ENEMIES/BOUNTY,
+    /// rather than waiting for the reactive ET-162 rule to notice mining after the fact.</summary>
+    [Theory]
+    [InlineData(10312, "Metaliminal Meteoroid")]
+    [InlineData(10346, "Abyssal Artifact Recovery")]
+    public void For_ForAMiningHomefront_NamesItsKind_AndClaimsMining(int dungeonId, string kind)
+    {
+        RunTypeDefinition site = RunTypeCatalogue.For(ActivityKind.Site, null, siteTypeId: dungeonId);
+
+        Assert.Equal($"Homefront · {kind}", site.Name);
+        Assert.Contains(RunSectionId.Mining, site.WindowSections);
+        Assert.Contains(RunSectionId.Mining, site.DetailSections);
     }
 
     // ── The run window's own TYPE text (ET-226 widened scope) ──────────────────────────────────────────
@@ -178,6 +224,8 @@ public sealed class RunTypeTests
         [RunTypeId.GasSite] = "resolved only from a copied signature's scanner group, never from this dialog's own choice",
         [RunTypeId.OreSite] = "resolved only from a copied signature's scanner group, never from this dialog's own choice",
         [RunTypeId.Wormhole] = "resolved only from a copied signature's scanner group, never from this dialog's own choice",
-        [RunTypeId.Homefront] = "resolved only from a copied signature's archetype (ET-228), not yet built"
+        [RunTypeId.Homefront] = "resolved only from a matched dungeon id (ET-228), never chosen directly — a "
+            + "homefront picked by name through Tools → Start run's own \"Site\" row (ManualStartRequirement.Site "
+            + "on RunTypeId.Unknown) already carries its dungeon id and resolves here on its own"
     };
 }

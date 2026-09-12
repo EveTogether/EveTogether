@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using EveUtils.Shared.Modules.Runs.Enums;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
@@ -8,11 +9,18 @@ namespace EveUtils.Client.ViewModels.Runs.Sections;
 /// found by the app's <c>ViewLocator</c> from the view model's name, so nothing else has to list it.</summary>
 /// <param name="IskSource">The share of TOTAL ISK this section shows (ET-256) — its contributor in
 /// <c>IskContributors</c> adds it up; the section never does. Null for a section that shows no ISK of the run's own.</param>
+/// <param name="HasLiveContent">ET-228's extension of the detail screen's own ET-162 rule ("an unclaimed section
+/// with real content still shows") to the run window: a type that does not claim this section still gets it, live,
+/// once this comes back true — a combat homefront where someone starts mining shows MINING mid-run instead of only
+/// after SAVE. Null for a section with no such reactive claim, which is every one but MINING today: ENEMIES/BOUNTY/
+/// LOOT are already claimed by every site type, and the rest are type-specific facts (FIT, CONSUMABLES, a mission's
+/// own section) nothing else could ever have content for.</param>
 public sealed record RunSectionModule(
     RunSectionId Id,
     Func<IRunWindowContext, RunWindowSection>? CreateForWindow,
     Func<RunDetailSectionServices, RunDetailSection>? CreateForDetail,
-    IskSource? IskSource = null);
+    IskSource? IskSource = null,
+    Func<IRunWindowContext, bool>? HasLiveContent = null);
 
 /// <summary>
 /// Every section module, in the order both screens draw them (ET-236). A run type only says which sections it has
@@ -48,7 +56,11 @@ public static class RunSectionModules
         new(RunSectionId.Mining,
             context => new MiningWindowSectionViewModel(context),
             services => new MiningDetailSectionViewModel(services),
-            IskSource.Mining),
+            IskSource.Mining,
+            // A combat/data/relic/gas/wormhole/homefront run where someone mined still shows it live, the same
+            // "after the fact" the detail screen already gives every type for MINING (ET-229, ET-236's ET-162
+            // rule) — extended here to the window itself rather than waiting for SAVE.
+            HasLiveContent: context => context.Participants.Any(participant => participant.MiningEntries.Count > 0)),
         new(RunSectionId.Consumables,
             context => new ConsumablesWindowSectionViewModel(context),
             _ => new ConsumablesDetailSectionViewModel(),

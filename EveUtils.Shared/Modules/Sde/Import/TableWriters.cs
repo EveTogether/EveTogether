@@ -40,6 +40,8 @@ internal sealed partial class TableWriters
     private readonly Dictionary<long, string> _archetypeNames = [];
     private readonly Dictionary<long, string> _factionNames = [];
     private readonly Dictionary<long, int[]> _shipGroupsByTypeList = [];
+    private readonly Dictionary<long, int[]> _includedShipTypesByTypeList = [];
+    private readonly Dictionary<long, int[]> _excludedShipTypesByTypeList = [];
     private readonly Dictionary<long, long> _solarSystemsByStation = [];
     private readonly Dictionary<long, string> _agentTypeNames = [];
 
@@ -77,10 +79,12 @@ internal sealed partial class TableWriters
             "INSERT INTO TypeNameAlias (typeId, nameKey, locale) VALUES ($typeId, $nameKey, $locale);",
             "$typeId", "$nameKey", "$locale");
         _site = Prepare(connection, transaction,
-            "INSERT INTO Site (dungeonId, nameEn, archetypeId, archetypeName, factionId, factionName, description, dedRating, shipGroupIdsJson) " +
-            "VALUES ($dungeonId, $nameEn, $archetypeId, $archetypeName, $factionId, $factionName, $description, $dedRating, $shipGroupIdsJson);",
+            "INSERT INTO Site (dungeonId, nameEn, archetypeId, archetypeName, factionId, factionName, description, " +
+            "gameplayDescription, dedRating, shipGroupIdsJson, includedTypeIdsJson, excludedTypeIdsJson) " +
+            "VALUES ($dungeonId, $nameEn, $archetypeId, $archetypeName, $factionId, $factionName, $description, " +
+            "$gameplayDescription, $dedRating, $shipGroupIdsJson, $includedTypeIdsJson, $excludedTypeIdsJson);",
             "$dungeonId", "$nameEn", "$archetypeId", "$archetypeName", "$factionId", "$factionName", "$description",
-            "$dedRating", "$shipGroupIdsJson");
+            "$gameplayDescription", "$dedRating", "$shipGroupIdsJson", "$includedTypeIdsJson", "$excludedTypeIdsJson");
         _siteAlias = Prepare(connection, transaction,
             "INSERT INTO SiteNameAlias (dungeonId, nameKey, locale) VALUES ($dungeonId, $nameKey, $locale);",
             "$dungeonId", "$nameKey", "$locale");
@@ -294,11 +298,22 @@ internal sealed partial class TableWriters
             _factionNames[Key(e)] = name;
     }
 
-    private void CollectTypeList(JsonElement e) => _shipGroupsByTypeList[Key(e)] = IntArray(e, "includedGroupIDs");
+    // includedTypeIDs/excludedTypeIDs (ET-232): the individual-hull refinement includedGroupIDs alone cannot express
+    // — a homefront's "T1 cruisers only" is 16 specific types, not the whole Cruiser group.
+    private void CollectTypeList(JsonElement e)
+    {
+        long key = Key(e);
+        _shipGroupsByTypeList[key] = IntArray(e, "includedGroupIDs");
+        _includedShipTypesByTypeList[key] = IntArray(e, "includedTypeIDs");
+        _excludedShipTypesByTypeList[key] = IntArray(e, "excludedTypeIDs");
+    }
 
     private void InsertSite(JsonElement e)
     {
         var description = StripHtml(EnName(e, "description"));
+        // A second, separate text (ET-232) — recommended fleet size, expected time, roles — never merged into
+        // description above, which is CCP's own flavour text for the site.
+        var gameplayDescription = StripHtml(EnName(e, "gameplayDescription"));
         var archetypeId = NullableInt(e, "archetypeID");
         var factionId = NullableInt(e, "factionID");
         var dungeonId = Key(e);
@@ -311,8 +326,11 @@ internal sealed partial class TableWriters
         _site.Parameters["$factionId"].Value = factionId;
         _site.Parameters["$factionName"].Value = Lookup(_factionNames, factionId);
         _site.Parameters["$description"].Value = description.Length > 0 ? description : DBNull.Value;
+        _site.Parameters["$gameplayDescription"].Value = gameplayDescription.Length > 0 ? gameplayDescription : DBNull.Value;
         _site.Parameters["$dedRating"].Value = DedRating(description);
         _site.Parameters["$shipGroupIdsJson"].Value = ShipGroupIdsJson(e);
+        _site.Parameters["$includedTypeIdsJson"].Value = _AggregateTypeListIds(e, _includedShipTypesByTypeList);
+        _site.Parameters["$excludedTypeIdsJson"].Value = _AggregateTypeListIds(e, _excludedShipTypesByTypeList);
         _site.ExecuteNonQuery();
         _WriteSiteNameAliases(dungeonId, e);
     }
@@ -345,23 +363,27 @@ internal sealed partial class TableWriters
     // empty: 6 of the 70 referenced type lists (touching 27 dungeons) express their allow-list as includedTypeIDs or
     // as a display-only description instead of ship groups. Keeping NULL and "[]" distinct stops those 27 restricted
     // sites from reading as unrestricted.
-    // ponytail: includedGroupIDs only — the 9 includedTypeIDs / 7 excludedTypeIDs refinements are a known ceiling;
-    // widen to full set algebra if a consumer needs per-hull precision.
-    private object ShipGroupIdsJson(JsonElement e)
+    private object ShipGroupIdsJson(JsonElement e) => _AggregateTypeListIds(e, _shipGroupsByTypeList);
+
+    // Shared with includedTypeIdsJson/excludedTypeIdsJson (ET-232): the same "is there an allowedShipsList at all"
+    // gate ShipGroupIdsJson uses, aggregating whichever of the three per-type-list dictionaries the caller asks for.
+    // NULL/"[]" carries the same meaning in all three: no allowedShipsList vs. one that resolves to nothing on this
+    // axis (a site restricted only by group, or only by individual hull, still reads correctly on both columns).
+    private static object _AggregateTypeListIds(JsonElement e, Dictionary<long, int[]> byTypeList)
     {
         if (!e.TryGetProperty("allowedShipsList", out var lists) || lists.ValueKind != JsonValueKind.Array)
             return DBNull.Value;
-        var groups = new SortedSet<int>();
+        var ids = new SortedSet<int>();
         var any = false;
         foreach (var list in lists.EnumerateArray())
         {
             if (list.ValueKind != JsonValueKind.Number)
                 continue;
             any = true;
-            if (_shipGroupsByTypeList.TryGetValue(list.GetInt64(), out var ids))
-                groups.UnionWith(ids);
+            if (byTypeList.TryGetValue(list.GetInt64(), out var found))
+                ids.UnionWith(found);
         }
-        return any ? "[" + string.Join(",", groups) + "]" : DBNull.Value;
+        return any ? "[" + string.Join(",", ids) + "]" : DBNull.Value;
     }
 
     private void InsertSolarSystem(JsonElement e)
