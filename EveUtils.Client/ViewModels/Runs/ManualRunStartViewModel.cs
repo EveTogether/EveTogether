@@ -6,12 +6,14 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Commands;
+using EveUtils.Shared.Modules.Runs.Control;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Grouping;
@@ -51,13 +53,23 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// window is opened on them, and every other picked character gets its own row filed under the same code,
 /// best-effort.
 /// </summary>
+/// <summary>One row of the fleet choice offered before START (ET-267): solo (<see cref="FleetId"/> null), or a fleet
+/// the pilot is actively in right now, named for the button.</summary>
+public sealed record FleetStartOption(long? FleetId, string Label);
+
 public partial class ManualRunStartViewModel : ViewModelBase
 {
     private readonly IDispatcher _dispatcher;
     private readonly ISdeAccessor _sde;
     private readonly IDialogService _dialogs;
     private readonly IToastService? _toasts;
+    private readonly IFleetParticipation? _fleetParticipation;
     private readonly Func<ActivityKind, ActivityWindowViewModel> _runWindowFor;
+
+    /// <summary>The always-first row of <see cref="FleetOptions"/>: no <see cref="StartRunCommand.FleetId"/>, exactly
+    /// today's behaviour. Its label doubles as "own characters" for a multi-pick, since neither ever announces
+    /// anything to a fleet.</summary>
+    private static readonly FleetStartOption SoloOption = new(null, "Solo / own characters");
 
     /// <param name="runWindowFor">Builds the run window this dialog hands over to. A delegate rather than the
     /// container: what that view model needs is its own business, and this one still says on its signature that a
@@ -66,23 +78,29 @@ public partial class ManualRunStartViewModel : ViewModelBase
     /// multi-select this app asks — opening from a character card starts that card's own character checked, never
     /// picked automatically. Null (Tools → Start run) leaves the first registered character as the starting point,
     /// same as before this dialog knew more than one.</param>
+    /// <param name="fleetParticipation">The same live membership set <c>ActivityWindowViewModel</c> reads its own
+    /// FleetId and commander from (ET-147/ET-152) — null in a test that never wires one, which leaves the pilot with
+    /// no fleet choice, same as before this ticket.</param>
     public ManualRunStartViewModel(IDispatcher dispatcher, ISdeAccessor sde, IDialogService dialogs,
         Func<ActivityKind, ActivityWindowViewModel> runWindowFor, IReadOnlyList<Character> characters,
-        Character? preselectedCharacter = null, IToastService? toasts = null)
+        Character? preselectedCharacter = null, IToastService? toasts = null,
+        IFleetParticipation? fleetParticipation = null)
     {
         _dispatcher = dispatcher;
         _sde = sde;
         _dialogs = dialogs;
         _toasts = toasts;
+        _fleetParticipation = fleetParticipation;
         _runWindowFor = runWindowFor;
         Characters = [.. characters.Where(character => character.EsiCharacterId is > 0)];
         Character? starting = Characters.FirstOrDefault(character => character.EsiCharacterId == preselectedCharacter?.EsiCharacterId)
             ?? Characters.FirstOrDefault();
-        SelectedCharacters = starting is null ? [] : [starting];
         // The field directly, not the property: the setter's own OnSelectedActivityKindChanged persists a choice
         // (ET-255), and this default is not one — LoadAsync overwrites it with the remembered kind, if any, the
         // moment it can ask, and must not lose a race against this constructor rewriting it back to Site first.
         _selectedActivityKind = ActivityKind.Site;
+        _selectedFleetOption = SoloOption;
+        SelectedCharacters = starting is null ? [] : [starting];
     }
 
     /// <summary>Where the last picked kind is remembered (ET-255) — under <c>ui.</c> with the other shell prefs
@@ -128,6 +146,43 @@ public partial class ManualRunStartViewModel : ViewModelBase
         _ => string.Join(" · ", SelectedCharacters.Select(character => character.Name))
     };
 
+    /// <summary>Every fleet the pilot (the first picked character) is actively in right now, <see cref="SoloOption"/>
+    /// always first — rebuilt whenever the pilot changes (ET-267). Sourced from <see cref="IFleetParticipation"/>,
+    /// the same live membership set <c>ActivityWindowViewModel</c> already reads its own FleetId and commander from
+    /// (ET-147/ET-152), so a fleet only appears here once it actually broadcasts (started, not merely forming).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFleetOptions))]
+    [NotifyPropertyChangedFor(nameof(ShowFleetChoice))]
+    private IReadOnlyList<FleetStartOption> _fleetOptions = [SoloOption];
+
+    /// <summary>Whether the pilot is in any fleet at all — the choice is offered only then (ET-267): flying nobody's
+    /// fleet leaves nothing to choose between, and today's solo/own-characters behaviour stands unannounced.</summary>
+    public bool HasFleetOptions => FleetOptions.Count > 1;
+
+    /// <summary>An abyssal's own START does not reach <see cref="StartRunCommand"/> at all — <see cref="_PrepareAbyssalRun"/>
+    /// hands over a run that has not started yet, and the window it opens on already resolves its own live fleet
+    /// membership the moment it does (ET-265). Offering a choice here that <see cref="StartAsync"/> never reads from
+    /// for that kind would be a control that looks like it does something and does not.</summary>
+    public bool ShowFleetChoice => HasFleetOptions && !IsAbyssal;
+
+    [ObservableProperty] private FleetStartOption _selectedFleetOption = SoloOption;
+
+    /// <summary>Rebuilds <see cref="FleetOptions"/> for whoever is now the pilot, and resets the choice to
+    /// <see cref="SoloOption"/> rather than carrying an old pick across — a fleet chosen for one pilot means nothing
+    /// for another, and picking is never guessed at (ET-201).</summary>
+    partial void OnSelectedCharactersChanged(IReadOnlyList<Character> value)
+    {
+        int? pilotId = value.Count > 0 ? value[0].EsiCharacterId : null;
+        List<FleetStartOption> options = [SoloOption];
+        if (pilotId is { } characterId)
+            options.AddRange((_fleetParticipation?.Current ?? [])
+                .Where(participant => participant.CharacterId == characterId)
+                .Select(participant => new FleetStartOption(
+                    participant.FleetId, $"With fleet {participant.FleetName ?? $"#{participant.FleetId}"}")));
+        FleetOptions = options;
+        SelectedFleetOption = SoloOption;
+    }
+
     /// <summary>Reopens the same multi-select every other ET-210 start path uses — no second picking UI invented for
     /// this dialog. Dismissed leaves the current picks untouched, same as everywhere else this dialog is asked.
     ///
@@ -170,6 +225,7 @@ public partial class ManualRunStartViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(HasOptionalLocationName))]
     [NotifyPropertyChangedFor(nameof(CanBackdate))]
     [NotifyPropertyChangedFor(nameof(StartButtonText))]
+    [NotifyPropertyChangedFor(nameof(ShowFleetChoice))]
     private ActivityKind _selectedActivityKind;
 
     /// <summary>What the selected kind's own catalogue row asks this dialog for (ET-255) — the one place that
@@ -390,6 +446,20 @@ public partial class ManualRunStartViewModel : ViewModelBase
         // code-less run (AC-3: one character picked is exactly today's behaviour).
         string? groupCode = additional.Count > 0 ? RunGroupCode.Create() : null;
 
+        // The one thing that turns this start into a shared, fleet-offered run (ET-267, ET-147, ET-152): the pilot's
+        // own explicit choice, never guessed at. Whether it makes this pilot the commander is not decided here —
+        // that is RunControlAuthority's job, off the same live membership ActivityWindowViewModel already reads its
+        // own FleetId/IsFleetCommander from — this dialog only ever answers "am I in that fleet's roster right now",
+        // never "am I the boss".
+        long? fleetId = SelectedFleetOption.FleetId;
+        int? fleetCommanderCharacterId = fleetId is { } lookupFleetId
+            ? (_fleetParticipation?.Current ?? [])
+                .FirstOrDefault(participant => participant.CharacterId == pilotCharacterId && participant.FleetId == lookupFleetId)
+                .FleetCommanderCharacterId
+            : null;
+        bool isFleetCommander = fleetId is not null
+            && RunControlAuthority.From(fleetId, fleetCommanderCharacterId, pilotCharacterId, groupCode: null).IsFleetCommander;
+
         Result<Guid> result = await _dispatcher.Send(new StartRunCommand(
             pilotCharacterId,
             SelectedActivityKind,
@@ -403,6 +473,8 @@ public partial class ManualRunStartViewModel : ViewModelBase
             CharacterNameSnapshot: pilot.Name,
             AgentId: agent?.AgentId,
             MissionLevel: agent?.Level,
+            FleetId: fleetId,
+            IsFleetCommander: isFleetCommander,
             // Only the pilot's own run carries the typed-in rewards (ET-260): in EVE a mission's reward is paid to
             // one character, never duplicated across whoever else rode along.
             Parameters: rewardParameters), cancellationToken);
@@ -416,7 +488,9 @@ public partial class ManualRunStartViewModel : ViewModelBase
 
         // Every other picked character gets its own row under the same code, filed as though it started on its
         // own — best-effort, same as ActivityWindowViewModel._SendAdditionalStartRunCommandAsync: one extra
-        // character failing to register is reported and does not undo the pilot's own run.
+        // character failing to register is reported and does not undo the pilot's own run. Never the fleet
+        // commander (only the acting character ever is, same rule ActivityWindowViewModel's own additional-character
+        // start uses) — but the same FleetId, so its run is filed the same way and shares in the same offer.
         foreach (Character extra in additional)
         {
             if (extra.EsiCharacterId is not { } extraId)
@@ -434,7 +508,9 @@ public partial class ManualRunStartViewModel : ViewModelBase
                 Origin: RunOrigin.Manual,
                 CharacterNameSnapshot: extra.Name,
                 AgentId: agent?.AgentId,
-                MissionLevel: agent?.Level), cancellationToken);
+                MissionLevel: agent?.Level,
+                FleetId: fleetId,
+                IsFleetCommander: false), cancellationToken);
 
             if (!extraResult.IsSuccess)
                 _toasts?.Show("A character was not added to this run",

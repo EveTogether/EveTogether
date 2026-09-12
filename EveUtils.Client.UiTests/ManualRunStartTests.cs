@@ -1,5 +1,6 @@
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.Esi;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Cqrs;
@@ -653,6 +654,188 @@ public sealed class ManualRunStartTests
         Assert.NotNull(groupCode);
         Run altRun = Assert.Single(runs, run => run.CharacterId == Alt);
         Assert.Equal(seenOutside, altRun.StartedAtUtc);
+    }
+
+    // ── ET-267: manual start offers a fleet choice, and lets the existing authority (ET-147/ET-152) decide
+    // commander vs member rather than assuming the picker's choice makes the pilot the boss ────────────────────
+
+    private const int FleetPilot = 90000002;
+    private const long FleetA = 501;
+    private const long FleetB = 502;
+
+    private static ManualRunStartViewModel CreateViewModelWithFleets(TestClientInstance instance,
+        IReadOnlyList<FleetParticipant> participants, RecordingDialogService? dialogs = null,
+        IReadOnlyList<Character>? characters = null)
+    {
+        instance.Services.GetRequiredService<IFleetParticipation>().Set(participants);
+        return new ManualRunStartViewModel(
+            instance.Services.GetRequiredService<IDispatcher>(),
+            instance.Services.GetRequiredService<ISdeAccessor>(),
+            dialogs ?? new RecordingDialogService(),
+            kind => new ActivityWindowViewModel(kind, instance.Services),
+            characters ?? [new Character("Manual Pilot", FleetPilot)],
+            toasts: null,
+            fleetParticipation: instance.Services.GetRequiredService<IFleetParticipation>())
+        { SelectedOption = new SdeSitePickerOption(Site, Site.Name) };
+    }
+
+    /// <summary>Solo and own-characters behaviour stands exactly as before when the pilot is in no fleet at all
+    /// (AC-3): nothing to choose between, so the choice is not offered.</summary>
+    [AvaloniaFact]
+    public void NoFleet_OffersNoChoice_AndStaysOnSolo()
+    {
+        using var instance = CreateInstance();
+        var vm = CreateViewModelWithFleets(instance, []);
+
+        Assert.False(vm.HasFleetOptions);
+        Assert.False(vm.ShowFleetChoice);
+        Assert.Null(vm.SelectedFleetOption.FleetId);
+    }
+
+    /// <summary>One started fleet is offered by name, sourced from the same live membership
+    /// <c>ActivityWindowViewModel</c> already reads its own FleetId from — not a second lookup invented here.</summary>
+    [AvaloniaFact]
+    public void OneStartedFleet_IsOfferedByName()
+    {
+        using var instance = CreateInstance();
+        var vm = CreateViewModelWithFleets(instance,
+            [new FleetParticipant(FleetPilot, FleetA, ClientOnly: true, FleetPilot, FleetName: "Homefront Ops")]);
+
+        Assert.True(vm.HasFleetOptions);
+        Assert.True(vm.ShowFleetChoice);
+        Assert.Equal(["Solo / own characters", "With fleet Homefront Ops"],
+            vm.FleetOptions.Select(option => option.Label));
+    }
+
+    /// <summary>More than one fleet in play is never guessed at (ET-201): every one gets its own named row, and the
+    /// pilot picks — the same rule the activity window's own unstarted-fleet notice already follows.</summary>
+    [AvaloniaFact]
+    public void TwoFleetsInPlay_OffersEachByName()
+    {
+        using var instance = CreateInstance();
+        var vm = CreateViewModelWithFleets(instance,
+        [
+            new FleetParticipant(FleetPilot, FleetA, ClientOnly: true, FleetPilot, FleetName: "Homefront Ops"),
+            new FleetParticipant(FleetPilot, FleetB, ClientOnly: true, 90000099, FleetName: "Mining Op")
+        ]);
+
+        Assert.Equal(["Solo / own characters", "With fleet Homefront Ops", "With fleet Mining Op"],
+            vm.FleetOptions.Select(option => option.Label));
+    }
+
+    /// <summary>
+    /// AC-2's own named pitfall: picking "With fleet" must not make the pilot the boss by itself. A site's group only
+    /// ever forms from the commander's own start (<c>RunGroupCodeArbiter</c>, unchanged by this ticket) — so a plain
+    /// member picking "With fleet" starts a run that carries the fleet id but mints no group, exactly as if
+    /// <c>ActivityWindowViewModel</c> had made the same call for the same pilot. Counter-proof: the fleet's actual
+    /// commander picking the same option mints one, and <c>RunGroupOrigin</c> records it against the chosen fleet.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PickingWithFleet_OnASite_LetsTheExistingAuthorityDecideCommanderVsMember(bool pilotIsCommander)
+    {
+        using var instance = CreateInstance();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        int commander = pilotIsCommander ? FleetPilot : 90000099;
+        var vm = CreateViewModelWithFleets(instance,
+            [new FleetParticipant(FleetPilot, FleetA, ClientOnly: true, commander, FleetName: "Homefront Ops")]);
+        vm.SelectedFleetOption = vm.FleetOptions.Single(option => option.FleetId == FleetA);
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.True(vm.Completed);
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(cancellationToken);
+        Run run = await db.Set<Run>().SingleAsync(cancellationToken);
+        if (pilotIsCommander)
+        {
+            Assert.NotNull(run.GroupCode);
+            RunGroupOrigin origin = await db.Set<RunGroupOrigin>().SingleAsync(cancellationToken);
+            Assert.Equal(FleetA, origin.FleetId);
+        }
+        else
+            Assert.Null(run.GroupCode);
+    }
+
+    /// <summary>ET-234: mining in a fleet has to be genuinely shared whether or not the pilot commands it — a site
+    /// is one shared pocket the commander alone opens, but mining is per pilot, so <c>RunGroupCodeArbiter</c> mints a
+    /// group for either a commander's or a member's "With fleet" start.</summary>
+    [AvaloniaTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PickingWithFleet_OnMining_AlwaysSharesTheFleet_RegardlessOfCommander(bool pilotIsCommander)
+    {
+        using var instance = CreateInstance();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        int commander = pilotIsCommander ? FleetPilot : 90000099;
+        var vm = CreateViewModelWithFleets(instance,
+            [new FleetParticipant(FleetPilot, FleetA, ClientOnly: true, commander, FleetName: "Mining Op")]);
+        vm.SelectedActivityKind = ActivityKind.Mining;
+        vm.SelectedFleetOption = vm.FleetOptions.Single(option => option.FleetId == FleetA);
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.True(vm.Completed);
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(cancellationToken);
+        Run run = await db.Set<Run>().SingleAsync(cancellationToken);
+        Assert.NotNull(run.GroupCode);
+        RunGroupOrigin origin = await db.Set<RunGroupOrigin>().SingleAsync(cancellationToken);
+        Assert.Equal(FleetA, origin.FleetId);
+    }
+
+    /// <summary>Every other picked character (ET-221) rides along under the same fleet offer as the pilot — one
+    /// shared group code, recorded against the same fleet — not a private arrangement between the pilot's own runs.</summary>
+    [AvaloniaFact]
+    public async Task AdditionalCharacter_SharesTheSameFleetOffer()
+    {
+        const int Alt = 90000003;
+        using var instance = CreateInstance();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var dialogs = new RecordingDialogService
+        {
+            OnPickCharacters = (_, options) =>
+                Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId)])
+        };
+        var vm = CreateViewModelWithFleets(instance,
+            [new FleetParticipant(FleetPilot, FleetA, ClientOnly: true, FleetPilot, FleetName: "Mining Op")],
+            dialogs, [new Character("Manual Pilot", FleetPilot), new Character("Manual Alt", Alt)]);
+        vm.SelectedActivityKind = ActivityKind.Mining;
+        await vm.PickCharactersCommand.ExecuteAsync(null);
+        vm.SelectedFleetOption = vm.FleetOptions.Single(option => option.FleetId == FleetA);
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(cancellationToken);
+        List<Run> runs = await db.Set<Run>().ToListAsync(cancellationToken);
+        Assert.Equal(2, runs.Count);
+        string? groupCode = Assert.Single(runs.Select(run => run.GroupCode).Distinct());
+        Assert.NotNull(groupCode);
+        RunGroupOrigin origin = await db.Set<RunGroupOrigin>()
+            .SingleAsync(o => o.GroupCode == groupCode, cancellationToken);
+        Assert.Equal(FleetA, origin.FleetId);
+    }
+
+    /// <summary>A fleet chosen for one pilot means nothing for another (ET-201: the window never guesses) — changing
+    /// who is starting the run rebuilds the choice for the new pilot and drops the old pick back to solo.</summary>
+    [AvaloniaFact]
+    public async Task ChangingThePilot_ResetsTheFleetChoice_AndRebuildsTheOptions()
+    {
+        const int Alt = 90000003;
+        using var instance = CreateInstance();
+        var dialogs = new RecordingDialogService { OnPickCharacters = (_, _) => Task.FromResult<IReadOnlyList<int>?>([Alt]) };
+        var vm = CreateViewModelWithFleets(instance,
+            [new FleetParticipant(FleetPilot, FleetA, ClientOnly: true, FleetPilot, FleetName: "Homefront Ops")],
+            dialogs, [new Character("Manual Pilot", FleetPilot), new Character("Manual Alt", Alt)]);
+        vm.SelectedFleetOption = vm.FleetOptions.Single(option => option.FleetId == FleetA);
+
+        await vm.PickCharactersCommand.ExecuteAsync(null);   // Alt, who is in no fleet, becomes the pilot
+
+        Assert.Equal(Alt, vm.SelectedCharacters[0].EsiCharacterId);
+        Assert.False(vm.HasFleetOptions, "the old pilot's fleet must not linger for a pilot who is in none");
+        Assert.Null(vm.SelectedFleetOption.FleetId);
     }
 
     /// <summary>Stands in for the ESI poll loop, per character, so a test can drive one toon's crossing without

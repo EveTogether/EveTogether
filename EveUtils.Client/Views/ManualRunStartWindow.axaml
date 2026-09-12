@@ -26,6 +26,20 @@
             </Button>
         </StackPanel>
 
+        <!-- Only shown once the pilot is actually in a fleet (ET-267) — solo and own-characters behaviour needs no
+             choice at all, and one that could never do anything would just be a control in the way. -->
+        <StackPanel Spacing="3" IsVisible="{Binding ShowFleetChoice}">
+            <TextBlock Classes="label" Text="FLEET"/>
+            <ComboBox ItemsSource="{Binding FleetOptions}" SelectedItem="{Binding SelectedFleetOption}"
+                      HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:FleetStartOption">
+                        <TextBlock Text="{Binding Label}"/>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+        </StackPanel>
+
         <StackPanel Spacing="3">
             <TextBlock Classes="label" Text="ACTIVITY"/>
             <ComboBox ItemsSource="{Binding ActivityKinds}" SelectedItem="{Binding SelectedActivityKind}"
