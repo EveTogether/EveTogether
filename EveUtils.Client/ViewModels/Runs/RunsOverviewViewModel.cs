@@ -14,6 +14,7 @@ using EveUtils.Client.Fleet;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Messaging;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Platform;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Identity;
@@ -645,7 +646,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             await _dialogs.ShowManualRunStartAsync(new ManualRunStartViewModel(_dispatcher, sde, _dialogs,
                 kind => new ActivityWindowViewModel(kind, _services), characters,
                 preselectedCharacter: lane.Character, toasts: _services.GetService<IToastService>(),
-                fleetParticipation: _services.GetService<IFleetParticipation>()));
+                fleetParticipation: _services.GetService<IFleetParticipation>(),
+                localPresence: _services.GetService<ILocalCharacterPresence>()));
         }
     }
 

@@ -8,6 +8,8 @@ using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Platform;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
@@ -64,7 +66,16 @@ public partial class ManualRunStartViewModel : ViewModelBase
     private readonly IDialogService _dialogs;
     private readonly IToastService? _toasts;
     private readonly IFleetParticipation? _fleetParticipation;
+    private readonly ILocalCharacterPresence? _localPresence;
     private readonly Func<ActivityKind, ActivityWindowViewModel> _runWindowFor;
+
+    /// <summary>The anchor <see cref="LoadAsync"/> keys the fleet-first default and the remembered pick on (ET-270,
+    /// see <see cref="EveUtils.Client.Runs.OwnCharacterPickMemory"/>) — null when this dialog was opened for a
+    /// specific character's own card, so <see cref="LoadAsync"/> leaves that card's single character standing
+    /// rather than silently ticking others alongside it (see <paramref name="preselectedCharacter"/> on the
+    /// constructor: a card's own START has never picked anyone automatically, and restoring a fleet or a remembered
+    /// team would be exactly that). Tools → Start run has no card to honour, so that entry gets the full default.</summary>
+    private readonly int? _restoreAnchorCharacterId;
 
     /// <summary>The always-first row of <see cref="FleetOptions"/>: no <see cref="StartRunCommand.FleetId"/>, exactly
     /// today's behaviour. Its label doubles as "own characters" for a multi-pick, since neither ever announces
@@ -81,20 +92,26 @@ public partial class ManualRunStartViewModel : ViewModelBase
     /// <param name="fleetParticipation">The same live membership set <c>ActivityWindowViewModel</c> reads its own
     /// FleetId and commander from (ET-147/ET-152) — null in a test that never wires one, which leaves the pilot with
     /// no fleet choice, same as before this ticket.</param>
+    /// <param name="localPresence">Who is logged in right now (ET-270) — the same "EVE client running" verdict the
+    /// clipboard multi-select's own hint text reads off, and what keeps a restored pick from silently ticking a
+    /// character who has since logged out. Null in a test that never wires one restores nothing, same as no
+    /// characters being flying at all.</param>
     public ManualRunStartViewModel(IDispatcher dispatcher, ISdeAccessor sde, IDialogService dialogs,
         Func<ActivityKind, ActivityWindowViewModel> runWindowFor, IReadOnlyList<Character> characters,
         Character? preselectedCharacter = null, IToastService? toasts = null,
-        IFleetParticipation? fleetParticipation = null)
+        IFleetParticipation? fleetParticipation = null, ILocalCharacterPresence? localPresence = null)
     {
         _dispatcher = dispatcher;
         _sde = sde;
         _dialogs = dialogs;
         _toasts = toasts;
         _fleetParticipation = fleetParticipation;
+        _localPresence = localPresence;
         _runWindowFor = runWindowFor;
         Characters = [.. characters.Where(character => character.EsiCharacterId is > 0)];
         Character? starting = Characters.FirstOrDefault(character => character.EsiCharacterId == preselectedCharacter?.EsiCharacterId)
             ?? Characters.FirstOrDefault();
+        _restoreAnchorCharacterId = preselectedCharacter is null ? starting?.EsiCharacterId : null;
         // The field directly, not the property: the setter's own OnSelectedActivityKindChanged persists a choice
         // (ET-255), and this default is not one — LoadAsync overwrites it with the remembered kind, if any, the
         // moment it can ask, and must not lose a race against this constructor rewriting it back to Site first.
@@ -124,6 +141,23 @@ public partial class ManualRunStartViewModel : ViewModelBase
             && Enum.TryParse(stored, out ActivityKind kind)
             && ActivityKinds.Contains(kind))
             SelectedActivityKind = kind;
+
+        // ET-270: same fleet-first priority as the clipboard offers (OwnCharacterPickMemory) — skipped outright
+        // when this dialog was opened for a specific character's own card (see _restoreAnchorCharacterId).
+        if (_restoreAnchorCharacterId is { } anchor)
+        {
+            IReadOnlyCollection<int> flying = [.. InGameCharacters.Among(Characters, _localPresence)
+                .Select(character => character.EsiCharacterId!.Value)];
+            IReadOnlyList<FleetParticipant> participation = _fleetParticipation?.Current ?? [];
+            long? fleetId = OwnCharacterPickMemory.FleetIdFor(anchor, participation);
+            IReadOnlyCollection<int>? fleetCharacterIds = OwnCharacterPickMemory.FleetCharacterIdsFor(anchor, participation);
+            IReadOnlyList<int>? restored = await OwnCharacterPickMemory.ResolvePreselectionAsync(
+                _dispatcher, anchor, flying, fleetCharacterIds, fleetId);
+            if (restored is { Count: > 0 })
+                SelectedCharacters = [.. restored
+                    .Select(id => Characters.FirstOrDefault(character => character.EsiCharacterId == id))
+                    .Where(character => character is not null)!];
+        }
     }
 
     public IReadOnlyList<Character> Characters { get; }
@@ -211,6 +245,14 @@ public partial class ManualRunStartViewModel : ViewModelBase
         SelectedCharacters = [.. picked
             .Select(id => Characters.FirstOrDefault(character => character.EsiCharacterId == id))
             .Where(character => character is not null)!];
+
+        // ET-270: remember this exact pick, same as the clipboard offers — the newly picked pilot's own fleet (if
+        // any) gets its exclusions updated, and every picked character's own last-full-pick row is kept fresh as
+        // the no-fleet fallback.
+        IReadOnlyList<FleetParticipant> participation = _fleetParticipation?.Current ?? [];
+        long? pilotFleetId = OwnCharacterPickMemory.FleetIdFor(picked[0], participation);
+        IReadOnlyCollection<int>? pilotFleetCharacterIds = OwnCharacterPickMemory.FleetCharacterIdsFor(picked[0], participation);
+        await OwnCharacterPickMemory.SaveAsync(_dispatcher, picked, pilotFleetCharacterIds, pilotFleetId);
     }
 
     /// <summary>Every kind this dialog may offer (ET-255) — the catalogue's own answer, not a list kept here that a

@@ -2,6 +2,7 @@ using Avalonia.Headless.XUnit;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Gamelog;
+using EveUtils.Client.Platform;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
@@ -836,6 +837,71 @@ public sealed class ManualRunStartTests
         Assert.Equal(Alt, vm.SelectedCharacters[0].EsiCharacterId);
         Assert.False(vm.HasFleetOptions, "the old pilot's fleet must not linger for a pilot who is in none");
         Assert.Null(vm.SelectedFleetOption.FleetId);
+    }
+
+    // ── ET-270: the multi-pick default is fleet-first, same mechanism as the clipboard offers
+    // (OwnCharacterPickMemory) — but never when this dialog opened for one character's own card ──────────────────
+
+    /// <summary>Tools → Start run (no card, so no <c>preselectedCharacter</c>): the pilot's own active fleet ticks
+    /// every one of this client's own characters sharing it, the same default <c>ClipboardSignatureOffer</c> now
+    /// applies before the picker is even opened.</summary>
+    [AvaloniaFact]
+    public async Task ToolsStartRun_WithThePilotInAFleet_TicksEveryOwnFleetCharacterByDefault()
+    {
+        const int Second = 90000003;
+        const int Third = 90000004;
+        using var instance = CreateInstance(services =>
+            services.AddSingleton<ILocalCharacterPresence>(
+                new ActivityWindowHarness.StubPresence(inGame: true, FleetPilot, Second, Third)));
+        instance.Services.GetRequiredService<IFleetParticipation>().Set([
+            new FleetParticipant(FleetPilot, FleetA, ClientOnly: true),
+            new FleetParticipant(Second, FleetA, ClientOnly: true),
+            new FleetParticipant(Third, FleetA, ClientOnly: true)
+        ]);
+        var vm = new ManualRunStartViewModel(
+            instance.Services.GetRequiredService<IDispatcher>(),
+            instance.Services.GetRequiredService<ISdeAccessor>(),
+            new RecordingDialogService(),
+            kind => new ActivityWindowViewModel(kind, instance.Services),
+            [new Character("Manual Pilot", FleetPilot), new Character("Manual Second", Second), new Character("Manual Third", Third)],
+            fleetParticipation: instance.Services.GetRequiredService<IFleetParticipation>(),
+            localPresence: instance.Services.GetRequiredService<ILocalCharacterPresence>())
+        { SelectedOption = new SdeSitePickerOption(Site, Site.Name) };
+
+        await vm.LoadAsync();
+
+        Assert.Equal([FleetPilot, Second, Third], vm.SelectedCharacters.Select(character => character.EsiCharacterId));
+    }
+
+    /// <summary>Opening from a specific character's own card has never picked anyone else automatically (ET-216) —
+    /// restoring a fleet's own default would be exactly that, so <see cref="ManualRunStartViewModel.LoadAsync"/>
+    /// leaves that card's single character standing even though the same fleet exists.</summary>
+    [AvaloniaFact]
+    public async Task OpenedFromACharactersOwnCard_NeverAutoExpandsToTheFleet()
+    {
+        const int Second = 90000003;
+        using var instance = CreateInstance(services =>
+            services.AddSingleton<ILocalCharacterPresence>(
+                new ActivityWindowHarness.StubPresence(inGame: true, FleetPilot, Second)));
+        instance.Services.GetRequiredService<IFleetParticipation>().Set([
+            new FleetParticipant(FleetPilot, FleetA, ClientOnly: true),
+            new FleetParticipant(Second, FleetA, ClientOnly: true)
+        ]);
+        var pilot = new Character("Manual Pilot", FleetPilot);
+        var vm = new ManualRunStartViewModel(
+            instance.Services.GetRequiredService<IDispatcher>(),
+            instance.Services.GetRequiredService<ISdeAccessor>(),
+            new RecordingDialogService(),
+            kind => new ActivityWindowViewModel(kind, instance.Services),
+            [pilot, new Character("Manual Second", Second)],
+            preselectedCharacter: pilot,
+            fleetParticipation: instance.Services.GetRequiredService<IFleetParticipation>(),
+            localPresence: instance.Services.GetRequiredService<ILocalCharacterPresence>())
+        { SelectedOption = new SdeSitePickerOption(Site, Site.Name) };
+
+        await vm.LoadAsync();
+
+        Assert.Equal([FleetPilot], vm.SelectedCharacters.Select(character => character.EsiCharacterId));
     }
 
     /// <summary>Stands in for the ESI poll loop, per character, so a test can drive one toon's crossing without
