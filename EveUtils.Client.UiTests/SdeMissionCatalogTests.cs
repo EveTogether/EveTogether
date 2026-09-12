@@ -182,6 +182,32 @@ public sealed class SdeMissionCatalogTests : IDisposable
         Assert.Null(mission!.ArcId);
     }
 
+    // ET-265: the manual-start dialog's mission-name autocomplete, the same substring/case-insensitive shape
+    // SearchSites already gives the site picker.
+    [Fact]
+    public void SearchMissions_MatchesASubstring_CaseInsensitively()
+    {
+        var results = Sde.SearchMissions("ships for");
+
+        SdeMission mission = Assert.Single(results);
+        Assert.Equal("Paragon Requests: Ships for Tips", mission.Name);
+        Assert.Equal(9001, mission.MissionId);
+        Assert.Equal(13341, mission.KillMissionDungeonId);
+    }
+
+    [Fact]
+    public void SearchMissions_WithNoQuery_ReturnsEveryMission()
+    {
+        Assert.Single(Sde.SearchMissions());
+        Assert.Single(Sde.SearchMissions(""));
+    }
+
+    [Fact]
+    public void SearchMissions_WithNoMatch_ReturnsEmpty()
+    {
+        Assert.Empty(Sde.SearchMissions("Nothing Like This"));
+    }
+
     public void Dispose()
     {
         try

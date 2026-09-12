@@ -10,8 +10,9 @@ namespace EveUtils.Shared.Modules.Runs;
 /// and never re-derived afterwards (the same reasoning as <c>FitNameSnapshot</c> and <c>CharacterNameSnapshot</c>,
 /// ET-212), or the dungeon id a single catalogue match resolved to (<see cref="Entities.Run.SiteTypeId"/>, ET-228).
 ///
-/// Mining without a site (ET-229) is not resolved here yet: it needs a source this ticket does not add (a belt with
-/// no site at all). Its <see cref="RunTypeId"/> member exists so that ticket adds one arm, not a second resolver.
+/// Mining without a site (ET-229, ET-265) resolves straight from <see cref="ActivityKind.Mining"/>, the same way
+/// Mission and Abyssal do — nothing yet detects it live, so the manual-start dialog is the only caller that reaches
+/// this arm today.
 ///
 /// Homefront (ET-228) is resolved from <paramref name="siteTypeId"/> below rather than the scanner's own group
 /// text: that text is never caught as "Homefront Operations …" in practice (ET-226 measured it, ET-177's own vague
@@ -27,6 +28,7 @@ public static class RunTypeResolver
         {
             ActivityKind.Mission => RunTypeId.Mission,
             ActivityKind.Abyssal => RunTypeId.Abyssal,
+            ActivityKind.Mining => RunTypeId.Mining,
             ActivityKind.Site => _ResolveSite(signatureGroupSnapshot, siteTypeId),
             _ => RunTypeId.Unknown
         };

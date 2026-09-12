@@ -226,9 +226,8 @@ public sealed class RunTypeTests
 
     /// <summary>Why each of these rows declares no <see cref="RunTypeDefinition.ManualStart"/> — the same shape
     /// <c>RunSectionFrameworkTests.KeptOnPurpose</c> uses for the kind checks it allows. Not Mining: that row
-    /// does declare one (<see cref="ManualStartRequirement.None"/>), reserved for ET-229 even though no
-    /// <see cref="ActivityKind"/> resolves to it yet — it is manually startable in the catalogue's own terms, just
-    /// not reachable through any kind today, which is a different and narrower gap than these six.</summary>
+    /// declares one (<see cref="ManualStartRequirement.None"/>) and, since ET-265 gave it its own
+    /// <see cref="ActivityKind"/>, is reachable through <c>ManualRunStartViewModel</c> too.</summary>
     private static readonly IReadOnlyDictionary<RunTypeId, string> NotManuallyStartable = new Dictionary<RunTypeId, string>
     {
         [RunTypeId.CombatSite] = "resolved only from a copied signature's scanner group, never from this dialog's own choice",

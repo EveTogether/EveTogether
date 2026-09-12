@@ -24,6 +24,7 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     private readonly Dictionary<string, int> _byName = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<int, List<SdeDogmaAttribute>> _attrs = new();
     private readonly List<SdeSite> _sites = [];
+    private readonly List<SdeMission> _missions = [];
     private readonly Dictionary<int, SdeAgent> _agents = new();
     private readonly Dictionary<string, SdeAgent> _agentsByName = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, SdeSolarSystem> _solarSystemsByName = new(StringComparer.OrdinalIgnoreCase);
@@ -65,6 +66,12 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     {
         _agents[agent.AgentId] = agent;
         _agentsByName[agent.Name] = agent;
+        return this;
+    }
+
+    public FakeSdeAccessor AddMission(SdeMission mission)
+    {
+        _missions.Add(mission);
         return this;
     }
 
@@ -166,8 +173,12 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     public SdeAgent? GetAgent(int agentId) => _agents.TryGetValue(agentId, out var agent) ? agent : null;
     public SdeAgent? FindAgentByName(string name) => _agentsByName.TryGetValue(name, out var agent) ? agent : null;
 
-    // No mission fixtures here — nothing under test today reads them through this fake.
-    public SdeMission? GetMission(int missionId) => null;
+    public SdeMission? GetMission(int missionId) => _missions.FirstOrDefault(mission => mission.MissionId == missionId);
+
+    public IReadOnlyList<SdeMission> SearchMissions(string? nameQuery = null) =>
+        string.IsNullOrWhiteSpace(nameQuery)
+            ? _missions
+            : _missions.Where(m => m.Name.Contains(nameQuery, StringComparison.OrdinalIgnoreCase)).ToList();
 
     public SdeSolarSystem? FindSolarSystemByName(string name) =>
         string.IsNullOrWhiteSpace(name) ? null : _solarSystemsByName.GetValueOrDefault(name.Trim());

@@ -762,5 +762,33 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
             reader.IsDBNull(4) ? null : reader.GetInt32(4));
     }
 
+    public IReadOnlyList<SdeMission> SearchMissions(string? nameQuery = null)
+    {
+        using var connection = Open();
+        if (connection is null)
+            return [];
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT m.missionId, m.nameEn, m.agentTypeId, m.killMissionDungeonId, e.arcId
+            FROM Mission m LEFT JOIN EpicArcMission e ON e.missionId = m.missionId
+            WHERE ($pattern IS NULL OR m.nameEn LIKE $pattern ESCAPE '\')
+            ORDER BY m.nameEn;
+            """;
+        command.Parameters.AddWithValue("$pattern", string.IsNullOrWhiteSpace(nameQuery)
+            ? DBNull.Value
+            : "%" + nameQuery.Replace("%", "\\%").Replace("_", "\\_") + "%");
+        var results = new List<SdeMission>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+            results.Add(new SdeMission(
+                reader.GetInt32(0),
+                reader.GetString(1),
+                reader.IsDBNull(2) ? null : reader.GetInt32(2),
+                reader.IsDBNull(3) ? null : reader.GetInt32(3),
+                reader.IsDBNull(4) ? null : reader.GetInt32(4)));
+        return results;
+    }
+
     internal static string NameKey(string name) => name.Trim().ToLowerInvariant();
 }

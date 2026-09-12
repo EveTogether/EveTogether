@@ -11,5 +11,9 @@ public enum ActivityKind
 {
     Abyssal,
     Site,
-    Mission
+    Mission,
+
+    /// <summary>A mining run with no site behind it at all (ET-229, ET-265) — the manual-start dialog is the only
+    /// caller that resolves to this today, since nothing yet detects a live mining activity on its own.</summary>
+    Mining
 }
