@@ -13,6 +13,14 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **RESUME now catches up what EVE wrote to the gamelog while the app was closed.** Before, resuming a run after a
+  crash or a closed app (the RESUME button in UNFINISHED, or the startup notice offering the same choice) picked the
+  clock back up but left a gap: any bounty, mining or enemies from the time nothing was watching the gamelog were
+  simply gone, because the watcher only ever tails forward from where it started. Now, on that same RESUME, the
+  character's gamelog is read once from the run's last confirmed-alive moment up to the resume — across a new
+  gamelog file too, since EVE starts one per session — and applied to the resumed run exactly once, with a toast
+  ("Caught up 3 bounty payouts, ... from while the app was closed") saying what it found. The live tail itself is
+  never touched and the DPS graph never shows a historical peak; a run nobody resumes gets nothing read in.
 - **The runs overview now pages by month instead of showing only the newest 50 activities.** Before, anything past
   the 50 most recent activities was simply invisible on screen, even though it was still in your database — a busy
   stretch could silently cut a day's own total in half. Now you see one month at a time, with previous/next buttons

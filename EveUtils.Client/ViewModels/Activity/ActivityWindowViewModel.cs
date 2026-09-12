@@ -38,6 +38,7 @@ using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
+using EveUtils.Shared.Modules.Gamelog.Reading;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Settings.Dtos;
 using EveUtils.Shared.Modules.Settings.Queries;
@@ -1021,10 +1022,90 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             // window that already had this run open never had this problem: a pilot's own STOP/START is always
             // asked on a window whose Participants an earlier tick already filled in.
             await _RefreshParticipantsAsync();
-            await _ResumeAdoptedRunAsync(DateTime.UtcNow);
+            DateTime resumedAtUtc = DateTime.UtcNow;
+            await _ResumeAdoptedRunAsync(resumedAtUtc);
+
+            // ET-258: what EVE wrote to this character's gamelog while the app was closed — lost until now, because
+            // GameLogWatcher.Start baselines every file to its current length rather than replaying history. Only
+            // for this deliberate resume: StartRunAsync's own STOP/START pause (the other _ResumeAdoptedRunAsync
+            // caller) never left the live tail's gap open in the first place.
+            await _CatchUpGamelogAsync(run.StoppedAtUtc.Value, resumedAtUtc);
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// ET-258: the bounty (ET-219), mining (ET-229) and enemies this character's own gamelog carries between
+    /// <paramref name="lastAliveUtc"/> — <see cref="Entities.Run.LastAliveAtUtc"/>, already the floor
+    /// <c>run.StoppedAtUtc</c> was set to when the crash was noticed
+    /// (<see cref="StopRunsLeftRunningCommandHandler"/>) — and <paramref name="resumedAtUtc"/>, applied once to the
+    /// run just resumed above. A bounded read beside <see cref="GamelogWatcherService"/>'s live tail, never through
+    /// it: nothing here touches a <c>GameLogWatcher</c> offset, and combat lines never reach
+    /// <see cref="GamelogClientService.AddHitAsync"/>, so the live DPS graph gets no historical peaks. A run nobody
+    /// named for resume (<see cref="_targetRunId"/> null) never calls this at all.
+    /// </summary>
+    private async Task _CatchUpGamelogAsync(DateTime lastAliveUtc, DateTime resumedAtUtc)
+    {
+        if (_runCharacterId is not { } characterId || _runCharacterName is not { } characterName || _gamelog is null)
+            return;
+
+        string? directory = _services.GetService<GamelogWatcherService>()?.CurrentDirectory;
+        if (string.IsNullOrWhiteSpace(directory))
+            return;
+
+        IReadOnlyList<GameLogEvent> events = GameLogCatchUpReader.Read(directory, characterName, lastAliveUtc, resumedAtUtc);
+        if (events.Count == 0)
+            return;
+
+        MiningResidueCorrelator residue = new();
+        int bountyCount = 0, miningCount = 0;
+        HashSet<string> enemies = new(StringComparer.OrdinalIgnoreCase);
+        EnemiesWindowSectionViewModel? enemiesSection = _sections.GetValueOrDefault(RunSectionId.Enemies) as EnemiesWindowSectionViewModel;
+
+        foreach (GameLogEvent gameEvent in events)
+        {
+            switch (gameEvent)
+            {
+                case BountyEvent bounty:
+                    await _gamelog.AddBountyAsync(characterName, bounty);
+                    bountyCount++;
+                    break;
+                case MiningEvent mining:
+                    residue.Observe(characterName, mining.OreType);
+                    await _gamelog.AddMiningAsync(characterName, mining);
+                    miningCount++;
+                    break;
+                case MiningResidueEvent residueLine when residue.OreFor(characterName) is { } ore:
+                    await _gamelog.AddMiningAsync(characterName,
+                        new MiningEvent(residueLine.Timestamp, Units: 0, ore, IsCritical: false, LostResidue: residueLine.Units));
+                    break;
+                case CombatEvent combat:
+                    // Only ENEMIES, straight onto this character's own collector: never AddHitAsync, which would
+                    // feed the live DPS tracker peaks it never actually saw (ET-258 AC-2).
+                    enemiesSection?.RecordCatchUpSighting(characterId, combat.Target, combat.Timestamp);
+                    enemies.Add(combat.Target);
+                    break;
+            }
+        }
+
+        // Bounty and mining both landed straight on the run's own DB rows above (the same commands the live tail
+        // uses); re-read them so Participants — and everything the window computes from it — reflects what was
+        // just caught up, the same as if the live tail had processed these lines as they came in.
+        await _RefreshParticipantsAsync();
+        Refresh(resumedAtUtc);
+
+        List<string> caughtUp = [];
+        if (bountyCount > 0)
+            caughtUp.Add($"{bountyCount} bounty payout{(bountyCount == 1 ? "" : "s")}");
+        if (miningCount > 0)
+            caughtUp.Add($"{miningCount} mining cycle{(miningCount == 1 ? "" : "s")}");
+        if (enemies.Count > 0)
+            caughtUp.Add($"{enemies.Count} enem{(enemies.Count == 1 ? "y" : "ies")} seen");
+
+        if (caughtUp.Count > 0)
+            _services.GetService<IToastService>()?.Show("Caught up",
+                $"Caught up {string.Join(", ", caughtUp)} from while the app was closed.", ToastKind.Information);
     }
 
     /// <summary>The resume half of the STOP/START pause (Raymond, 2026-09-02: "stepping out of a site halfway and
