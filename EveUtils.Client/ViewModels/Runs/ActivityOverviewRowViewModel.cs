@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Material.Icons;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
@@ -30,21 +31,32 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     private readonly Func<ActivityOverviewRowViewModel, Task> _loadSubRuns;
     private readonly Func<ActivityOverviewRowViewModel, Task> _openDetail;
     private readonly Func<ActivityOverviewRowViewModel, Task>? _publish;
+    private readonly Func<ActivityOverviewRowViewModel, Task>? _retryPublish;
     private readonly ActivityOverviewRowDto _source;
+    private readonly RunPublishProgress? _publishProgress;
     private bool _subRunsLoaded;
 
+    /// <param name="serverNameOf">A server's name as its tab shows it; the bare address when null.</param>
+    /// <param name="publishProgress">The automatic publish of this activity in flight, or the reason it last failed
+    /// (ET-245).</param>
     public ActivityOverviewRowViewModel(
         ActivityOverviewRowDto row,
         Func<long, string> nameOf,
         Func<ActivityOverviewRowViewModel, Task> loadSubRuns,
         Func<ActivityOverviewRowViewModel, Task> openDetail,
-        Func<ActivityOverviewRowViewModel, Task>? publish = null)
+        Func<ActivityOverviewRowViewModel, Task>? publish = null,
+        Func<string, string>? serverNameOf = null,
+        RunPublishProgress? publishProgress = null,
+        Func<ActivityOverviewRowViewModel, Task>? retryPublish = null)
     {
         _loadSubRuns = loadSubRuns;
         _openDetail = openDetail;
         _publish = publish;
+        _retryPublish = retryPublish;
         _source = row;
+        _publishProgress = publishProgress;
         ActivitySummaryId = row.ActivitySummaryId;
+        GroupCode = row.GroupCode;
         StartedAtLocal = row.StartedAtUtc.ToLocalTime();
         Duration = TimeSpan.FromSeconds(row.DurationSeconds);
         TimeText = StartedAtLocal.ToString("HH:mm");
@@ -80,12 +92,19 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         IsQueuedForServer = row.ServerSyncStates.Any(state => state.IsPending);
         IsBehindServer = !IsQueuedForServer && row.ServerSyncStates.Any(state => state.IsOutdated);
         IsOnServer = row.ServerSyncStates.Count > 0 && !IsQueuedForServer && !IsBehindServer;
+        // A failure the store has since overtaken — published after all, by hand or by a later attempt — is history,
+        // not a state, and must not keep saying "failed" on a row the server holds.
+        HasPublishFailure = publishProgress is { Phase: RunPublishPhase.Failed } && !IsOnServer;
+        PublishFailureText = HasPublishFailure ? publishProgress?.Message : null;
+        SyncText = _SyncText(row.ServerSyncStates, publishProgress, serverNameOf ?? (address => address));
         Chips = [.. row.Rewards
             .OrderBy(reward => (int)reward.ParameterKey)
             .Select(reward => new ActivityRewardChipViewModel(reward.ParameterKey, reward.Amount))];
     }
 
     public Guid ActivitySummaryId { get; }
+
+    public string? GroupCode { get; }
 
     /// <summary>The activity's own day, in the reader's zone — the day band groups on this, not on UTC.</summary>
     public DateTime StartedAtLocal { get; }
@@ -118,12 +137,43 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     public bool IsQueuedForServer { get; }
 
     /// <summary>Published, then its loot corrected here (ET-215). The server still holds the older figures and keeps
-    /// them until PUBLISH is pressed again — said on the row so the difference is never silent.</summary>
+    /// them until PUBLISH is pressed again, or a fleet run's automatic publish sends it (ET-245) — said on the row so
+    /// the difference is never silent.</summary>
     public bool IsBehindServer { get; }
 
-    public string SyncText => IsQueuedForServer ? "queued" : IsBehindServer ? "changed since published" : "published";
+    /// <summary>Where the activity stands towards its server, naming the server (ET-245): with fleet runs published by
+    /// themselves, "published" alone no longer says whether it went, or where.</summary>
+    public string SyncText { get; }
 
-    public bool HasSyncText => IsOnServer || IsQueuedForServer || IsBehindServer;
+    public bool HasSyncText => IsOnServer || IsQueuedForServer || IsBehindServer || _publishProgress is not null;
+
+    /// <summary>The last automatic publish of this activity failed, and nothing has put it on the server since. Never
+    /// silent: the row says so and offers RETRY, and the runs stay queued for the next start or reconnect.</summary>
+    public bool HasPublishFailure { get; }
+
+    /// <summary>What the server or the connection said, for the RETRY button's tooltip.</summary>
+    public string? PublishFailureText { get; }
+
+    [RelayCommand]
+    private async Task RetryPublishAsync()
+    {
+        if (_retryPublish is not null)
+            await _retryPublish(this);
+    }
+
+    private string _SyncText(IReadOnlyList<ActivityServerSyncDto> states, RunPublishProgress? progress,
+        Func<string, string> serverNameOf)
+    {
+        if (HasPublishFailure && progress is not null)
+            return $"publishing to {serverNameOf(progress.ServerAddress)} failed";
+        if (progress is { Phase: RunPublishPhase.Publishing })
+            return $"publishing to {serverNameOf(progress.ServerAddress)}…";
+        if (IsQueuedForServer)
+            return $"queued for {serverNameOf(states.First(state => state.IsPending).ServerAddress)}";
+        if (IsBehindServer)
+            return "changed since published";
+        return states.Count > 0 ? $"published to {serverNameOf(states[0].ServerAddress)}" : string.Empty;
+    }
 
     /// <summary>False when no server is coupled at all, which is also when the runs screen shows no server tab —
     /// the same rule the fit browser follows rather than offering an action with nowhere to go.</summary>
@@ -179,8 +229,9 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     /// instance on screen (ET-222). Record equality for every figure — a column added to the DTO later takes part
     /// without anyone having to list it here — and the three lists compared by content, which a record compares by
     /// reference.</summary>
-    public bool IsShowing(ActivityOverviewRowDto row, bool canPublish) =>
+    public bool IsShowing(ActivityOverviewRowDto row, bool canPublish, RunPublishProgress? publishProgress = null) =>
         CanPublish == canPublish
+        && _publishProgress == publishProgress
         && _WithoutLists(_source) == _WithoutLists(row)
         && _source.CharacterIds.SequenceEqual(row.CharacterIds)
         && _source.Rewards.SequenceEqual(row.Rewards)

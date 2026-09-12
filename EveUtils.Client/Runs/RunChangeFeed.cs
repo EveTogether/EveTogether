@@ -53,6 +53,11 @@ public sealed class RunChangeFeed(IEventBus eventBus, ILogger<RunChangeFeed> log
         return new Unsubscriber(this, listener);
     }
 
+    /// <summary>A change to what a screen shows about a group that is not a write — where its publish stands (ET-245).
+    /// Handed over through the same window and one-reload-at-a-time rule as a stored change, rather than on a second
+    /// path whose reload could interleave with this one's. Not on the bus: nothing about the run itself changed.</summary>
+    public void Announce(string groupCode) => _OnRunsChanged(new RunsChangedEvent(null, groupCode));
+
     private void _OnRunsChanged(RunsChangedEvent changed)
     {
         bool opensWindow;

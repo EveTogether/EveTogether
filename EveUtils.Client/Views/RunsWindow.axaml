@@ -305,11 +305,19 @@
                                                 <!-- Outside the row button, not inside it: the row opens the detail,
                                                      and a publish that fired because someone aimed for the detail is
                                                      exactly the click this data must not have. -->
-                                                <Button Grid.Column="2" Classes="rowaction" Content="PUBLISH"
-                                                        VerticalAlignment="Top" Margin="0,8,14,0"
-                                                        IsVisible="{Binding CanPublish}"
-                                                        Command="{Binding PublishCommand}"
-                                                        ToolTip.Tip="Send this activity's runs to a coupled server"/>
+                                                <StackPanel Grid.Column="2" VerticalAlignment="Top" Margin="0,8,14,0"
+                                                            Spacing="4">
+                                                    <Button Classes="rowaction" Content="PUBLISH"
+                                                            IsVisible="{Binding CanPublish}"
+                                                            Command="{Binding PublishCommand}"
+                                                            ToolTip.Tip="Send this activity's runs to a coupled server"/>
+                                                    <!-- Only after an automatic publish failed: it tries again without
+                                                         asking, as the save that queued it did. -->
+                                                    <Button Classes="rowaction" Content="RETRY"
+                                                            IsVisible="{Binding HasPublishFailure}"
+                                                            Command="{Binding RetryPublishCommand}"
+                                                            ToolTip.Tip="{Binding PublishFailureText}"/>
+                                                </StackPanel>
                                                 <Button Grid.Column="1" Classes="activityrow"
                                                         Command="{Binding OpenDetailCommand}">
                                                     <StackPanel Spacing="3">

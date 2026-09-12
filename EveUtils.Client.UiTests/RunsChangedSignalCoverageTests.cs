@@ -42,7 +42,12 @@ public sealed class RunsChangedSignalCoverageTests
         // would mean every screen showing runs redrawing once a minute, for every open run window, for a change
         // none of them can display.
         [typeof(TouchRunAliveCommand)] = "writes a field (LastAliveAtUtc) that exists only for the next startup's "
-            + "sweep to read, never shown on any screen — a signal for it would be a redraw nobody can see the point of"
+            + "sweep to read, never shown on any screen — a signal for it would be a redraw nobody can see the point of",
+        // ET-245: writes RunGroupOrigin.ServerAddress, which no screen shows — only FleetRunAutoPublisher reads it, to
+        // know where a fleet run goes. It never touches a run, and the publisher itself sends it from inside its own
+        // handling of RunsChangedEvent, so a signal here would only hand that handler its own write back.
+        [typeof(RecordRunGroupServerCommand)] = "writes which server a group's fleet lives on, read by the automatic "
+            + "publisher alone and shown nowhere; it changes no run"
     };
 
     /// <summary>For every other command: real state to run it against, and the run (or group) it has to name.</summary>

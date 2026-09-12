@@ -17,4 +17,5 @@ public sealed record SettingsResult(
     ToastPosition ToastPosition = ToastPosition.TopRight,
     bool EnableLocalApi = false, int LocalApiPort = LocalApiServer.DefaultPort,
     bool CheckUpdatesOnStartup = true,
-    bool OpenFleetRunWindowImmediately = false);
+    bool OpenFleetRunWindowImmediately = false,
+    bool AutoPublishFleetRuns = true);

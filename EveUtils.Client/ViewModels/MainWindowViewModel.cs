@@ -1133,6 +1133,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         int localApiPort;
         bool checkUpdatesOnStartup;
         bool openFleetRunWindow;
+        bool autoPublishFleetRuns;
         using (var scope = _services.CreateScope())
         {
             var settings = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Query(new GetSettingsQuery());
@@ -1149,6 +1150,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 ? lp : LocalApi.LocalApiServer.DefaultPort;
             checkUpdatesOnStartup = settings.FirstOrDefault(s => s.Key == CheckUpdatesOnStartupSettingKey)?.Value != "false"; // default on
             openFleetRunWindow = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Runs.FleetRunWindowPresenter.AutoOpenSettingKey)?.Value == "true"; // default off: a toast is offered instead
+            autoPublishFleetRuns = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Runs.FleetRunAutoPublisher.EnabledSettingKey)?.Value != "false"; // default on
         }
 
         var localApi = _services.GetService<LocalApi.ILocalApiServer>();
@@ -1157,7 +1159,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             current, GameLogLocations.Default(),
             shares.IsShared(MetricKind.Location), shares.IsShared(MetricKind.Bounty), shares.IsShared(MetricKind.Dps),
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
-            localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow);
+            localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow,
+            autoPublishFleetRuns);
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,
@@ -1216,6 +1219,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 CheckUpdatesOnStartupSettingKey, result.CheckUpdatesOnStartup ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(
                 EveUtils.Client.Runs.FleetRunWindowPresenter.AutoOpenSettingKey, result.OpenFleetRunWindowImmediately ? "true" : "false"));
+            await dispatcher.Send(new SetSettingCommand(
+                EveUtils.Client.Runs.FleetRunAutoPublisher.EnabledSettingKey, result.AutoPublishFleetRuns ? "true" : "false"));
         }
 
         // Apply the toast position live so the next toast uses it without a restart.

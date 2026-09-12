@@ -149,6 +149,9 @@
                         <CheckBox x:Name="OpenFleetRunWindowBox" Content="Open the run window straight away when the fleet commander starts"/>
                         <TextBlock Text="Off by default: the commander's start arrives as a toast naming the site and system, and the run window opens only when you accept it — opening it is joining, so ignoring the toast keeps you out of the group. Check this to have the window come up at once instead. It never takes the keyboard either way."
                                    FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                        <CheckBox x:Name="AutoPublishFleetRunsBox" Content="Publish fleet runs to the fleet's server automatically"/>
+                        <TextBlock Text="On by default. A run you fly in a fleet on a coupled server goes to that fleet's server the moment you save it, and again after you correct it — and your fleetmates' runs come in as soon as they save theirs. Solo runs, and runs in a fleet that lives only on this computer, still wait for PUBLISH. Uncheck to publish every run yourself."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
                     </StackPanel>
 
                     <StackPanel Spacing="3">

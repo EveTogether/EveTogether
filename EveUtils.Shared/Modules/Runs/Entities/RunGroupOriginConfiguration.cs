@@ -9,5 +9,6 @@ public sealed class RunGroupOriginConfiguration : IEntityTypeConfiguration<RunGr
     {
         builder.HasKey(origin => origin.GroupCode);
         builder.Property(origin => origin.GroupCode).HasMaxLength(64);
+        builder.Property(origin => origin.ServerAddress).HasMaxLength(255);
     }
 }
