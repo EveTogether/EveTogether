@@ -40,7 +40,7 @@ internal sealed class GetRunningRunQueryHandler(IDbContextFactory<ClientDbContex
 
         return Result<RunningRunDto>.Success(new RunningRunDto(
             run.Id, run.CharacterId, run.ActivityKind, run.StartedAtUtc, run.GroupCode, run.SiteName, run.Signature,
-            run.SignatureGroupSnapshot, run.AgentId, run.MissionLevel, run.SolarSystemId, parameters,
+            run.SignatureGroupSnapshot, run.SiteTypeId, run.AgentId, run.MissionLevel, run.SolarSystemId, parameters,
             run.StoppedAtUtc));
     }
 }

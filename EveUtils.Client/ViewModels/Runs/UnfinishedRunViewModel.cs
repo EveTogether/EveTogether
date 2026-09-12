@@ -46,7 +46,7 @@ public sealed partial class UnfinishedRunViewModel(
     /// older than that is one RESUME can no longer mean anything for: the ship and the pod are already gone.
     /// Every other type has no such clock, so the pilot's own account decides instead.</summary>
     public bool CanResume { get; } =
-        RunTypeCatalogue.For(RunTypeResolver.Resolve(run.ActivityKind, run.SignatureGroupSnapshot)).Space
+        RunTypeCatalogue.For(run.ActivityKind, run.SignatureGroupSnapshot, run.SiteTypeId).Space
             is not RunSpace.AbyssalPocket
         || DateTime.UtcNow - run.StartedAtUtc <= AbyssalSpace.RunLimit;
 
@@ -58,7 +58,7 @@ public sealed partial class UnfinishedRunViewModel(
     // name yet reads "Unnamed site" until it has one.
     public string SiteText { get; } = !string.IsNullOrWhiteSpace(run.SiteName)
         ? run.SiteName
-        : RunTypeCatalogue.For(RunTypeResolver.Resolve(run.ActivityKind, run.SignatureGroupSnapshot)).Space
+        : RunTypeCatalogue.For(run.ActivityKind, run.SignatureGroupSnapshot, run.SiteTypeId).Space
             is RunSpace.AbyssalPocket
             ? "Abyssal"
             : "Unnamed site";
@@ -70,7 +70,7 @@ public sealed partial class UnfinishedRunViewModel(
 
     /// <summary>When it was left, and what it was — the only two facts that tell one stale row from the next.</summary>
     public string StoppedText { get; } =
-        $"{ActivityOverviewRowViewModel.KindLabel(run.ActivityKind, run.SignatureGroupSnapshot)} · " + (run.StoppedAtUtc is { } stoppedAtUtc
+        $"{ActivityOverviewRowViewModel.KindLabel(run.ActivityKind, run.SignatureGroupSnapshot, run.SiteTypeId)} · " + (run.StoppedAtUtc is { } stoppedAtUtc
             ? $"stopped {stoppedAtUtc.ToLocalTime():d MMM HH:mm}"
             : $"started {run.StartedAtUtc.ToLocalTime():d MMM HH:mm}, never stopped");
 

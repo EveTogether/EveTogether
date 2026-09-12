@@ -4,7 +4,6 @@ using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Identity;
-using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -49,7 +48,7 @@ public sealed class StartupResumeNoticeService(IServiceProvider services) : ISin
     {
         string what = !string.IsNullOrWhiteSpace(run.SiteName)
             ? run.SiteName!
-            : RunTypeCatalogue.For(RunTypeResolver.Resolve(run.ActivityKind, run.SignatureGroupSnapshot)).Name;
+            : RunTypeCatalogue.For(run.ActivityKind, run.SignatureGroupSnapshot, run.SiteTypeId).Name;
         toasts.Show($"EVE Together closed while {what} was running",
             $"Stopped {run.StoppedAtUtc.ToLocalTime():d MMM HH:mm}, when this app last saw it going. "
             + "Resume picks the clock back up from its original start, with everything it already collected.",

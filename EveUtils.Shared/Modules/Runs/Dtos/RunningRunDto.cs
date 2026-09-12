@@ -16,6 +16,11 @@ public sealed record RunningRunDto(
     /// <summary>The scanner's own group text for this site (ET-226) — carried so a window resuming an already
     /// running run can still show the right TYPE, not just one freshly copying a signature.</summary>
     string? SignatureGroupSnapshot = null,
+    /// <summary>The dungeon id a single catalogue match resolved to at start (ET-228) — carried so a window
+    /// adopting this run, or switching its own column onto it, keeps reading a homefront off the run's own stored
+    /// fact (ET-268) rather than <c>MatchedSites</c>, which neither adopt nor switch has populated for this run.
+    /// 0 when the run never resolved one, same as a fresh, unmatched copy.</summary>
+    int SiteTypeId = 0,
     /// <summary>The mission facts a window used to forget the moment it was not the one that started the run
     /// (ET-252) — a second window, a restart, or the same mission copied again while one was already open all
     /// adopt this same row rather than being freshly told about it, and none of these four carried over: MISSION

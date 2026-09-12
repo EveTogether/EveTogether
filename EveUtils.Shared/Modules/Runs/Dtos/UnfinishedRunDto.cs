@@ -22,6 +22,9 @@ public sealed record UnfinishedRunDto(
     // The scanner's own group text for this site (ET-226) — resolved into the TYPE this row shows the same way
     // every other run-list row does.
     string? SignatureGroupSnapshot,
+    // The dungeon id a single catalogue match resolved to at start (ET-228) — the other fact TYPE reads (ET-268),
+    // so a homefront stopped and left unfinished reads Homefront here too, not just once it is saved.
+    int SiteTypeId,
     DateTime StartedAtUtc,
     DateTime? StoppedAtUtc,
     decimal TotalIsk,

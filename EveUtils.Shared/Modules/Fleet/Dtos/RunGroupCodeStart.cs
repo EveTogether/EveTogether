@@ -17,6 +17,11 @@ namespace EveUtils.Shared.Modules.Fleet.Dtos;
 /// member's own run resolves to the same TYPE the commander's does instead of the honest-but-poorer "Site" a member
 /// with no scan of their own would otherwise show (ET-239). Null on an older commander's client, which a member on
 /// this build reads the same as a manual start with no scan of its own.</param>
+/// <param name="SiteTypeId">The dungeon id the commander's own copy resolved to (ET-228), same reasoning and same
+/// gap as <see cref="SignatureGroupSnapshot"/> above (ET-268): a member joining this run never copied the signature
+/// themselves, so they have no <c>MatchedSites</c> of their own to resolve a homefront from, and read "Site" for a
+/// run the commander's own window already knew was Homefront. 0 on an older commander's client, same as an unmatched
+/// site already reads.</param>
 /// <param name="AbyssalTierIndex">The pocket's own tier, if the commander's window already knew it at START (ET-241)
 /// — never stored by this message, only announced, so a member's window shows the commander's real answer instead of
 /// falling back to whatever an unrelated abyssal last left in this member's own remembered settings (the ET-208
@@ -34,4 +39,5 @@ public sealed record RunGroupCodeStart(
     string? Signature = null,
     string? SignatureGroupSnapshot = null,
     int? AbyssalTierIndex = null,
-    string? AbyssalWeatherName = null);
+    string? AbyssalWeatherName = null,
+    int SiteTypeId = 0);

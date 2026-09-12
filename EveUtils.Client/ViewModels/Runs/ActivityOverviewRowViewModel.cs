@@ -271,7 +271,13 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 
     /// <summary>TYPE, from the same catalogue every other run list reads (ET-226) — "Data Site", "Mission run", …,
     /// never a bare kind name. Shared with <see cref="UnfinishedRunViewModel"/>, the only other reader of a run's
-    /// type outside this row itself.</summary>
-    public static string KindLabel(ActivityKind kind, string? signatureGroupSnapshot) =>
-        RunTypeCatalogue.For(RunTypeResolver.Resolve(kind, signatureGroupSnapshot)).Name;
+    /// type outside this row itself.
+    ///
+    /// Goes through <see cref="RunTypeCatalogue"/>'s own three-argument <c>For</c> directly rather than
+    /// <see cref="RunTypeResolver"/> plus the bare <c>For(RunTypeId)</c> this used to chain (ET-268): that pair skips
+    /// the per-run homefront refinement <c>For(kind, group, siteTypeId)</c> does, so a homefront read back plain
+    /// "Homefront" here even where <paramref name="siteTypeId"/> was known and every other screen already said
+    /// "Homefront · Raid".</summary>
+    public static string KindLabel(ActivityKind kind, string? signatureGroupSnapshot, int siteTypeId = 0) =>
+        RunTypeCatalogue.For(kind, signatureGroupSnapshot, siteTypeId).Name;
 }

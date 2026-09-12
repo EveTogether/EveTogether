@@ -14,4 +14,7 @@ public sealed record StoppedRunDto(
     ActivityKind ActivityKind,
     string? SiteName,
     string? SignatureGroupSnapshot,
-    DateTime StoppedAtUtc);
+    DateTime StoppedAtUtc,
+    // The dungeon id a single catalogue match resolved to at start (ET-228) — the other fact TYPE reads (ET-268),
+    // so the startup notice offers back "Homefront", not "Site", for a homefront the app stopped for the pilot.
+    int SiteTypeId = 0);
