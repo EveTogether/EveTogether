@@ -356,10 +356,23 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             _ShowWaiting(candidates);
         }
 
+        // The one thing _RefreshGroupTotalIsk reads for a homefront's payout (ET-269): the run window's own header
+        // used to read Participants' own mirror of this instead, refreshed by a separate, asynchronous DB round trip
+        // — so right after a manual SetOutcome the header alternated between this decision (drawn immediately, in
+        // memory) and the stale mirror (not yet caught up), and kept doing so as long as both readers disagreed
+        // about which was current. One property, written here, is the only decision the header may read.
+        LiveDecision = shownDecision;
+
         _ShowPayout(shownDecision);
         _Describe(role, commanderName);
         RefreshSummary();
     }
+
+    /// <summary>The decision exactly as this tick shows it — this client's own live pick while it decides, the
+    /// commander's stored list while it only reads one, or null while it is still waiting for either. The single
+    /// source <see cref="ActivityWindowViewModel"/>'s TOTAL ISK reads a homefront's outcome and N from, so the header
+    /// can never disagree with what HOMEFRONT itself is showing right now.</summary>
+    public RunAttendanceDecision? LiveDecision { get; private set; }
 
     /// <summary>The fixed payout at the current N (ET-231), on the HOMEFRONT header and on every row. Read straight
     /// off <see cref="HomefrontPayoutTable"/> — never a second computation of the same figure.</summary>
@@ -376,7 +389,8 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         {
             (true, _, { } aar) => $"{IskFormat.Whole(aar.Amount)} so far",
             (true, _, null) => n is null ? string.Empty : "0 waves paid so far",
-            (false, _, { } completed) => $"{IskFormat.Whole(completed.Amount)} each",
+            (false, _, { } completed) when n is { } count =>
+                $"Completed · {count} in site · {IskFormat.Whole(completed.Amount)} each · {IskFormat.Whole(completed.Amount * count)} total",
             (false, { } t, null) => $"if completed: {IskFormat.Whole(t.Amount)} each",
             _ => n is null ? string.Empty : "N beyond the table"
         };

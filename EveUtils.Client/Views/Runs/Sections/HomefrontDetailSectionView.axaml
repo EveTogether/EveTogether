@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:va="using:EveUtils.Client.ViewModels.Runs.Attendance"
              xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             xmlns:re="using:EveUtils.Shared.Modules.Runs.Enums"
              x:Class="EveUtils.Client.Views.Runs.Sections.HomefrontDetailSectionView"
              x:DataType="vs:HomefrontDetailSectionViewModel">
     <UserControl.Styles>
@@ -64,7 +65,30 @@
                    IsVisible="{Binding EmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
                    Text="{Binding EmptyText}"/>
 
-        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+        <!-- OUTCOME and the total come first (ET-269): what happened, and what it pays, before who was in it. -->
+        <Grid ColumnDefinitions="Auto,*" IsVisible="{Binding !IsAar}">
+            <TextBlock Text="OUTCOME" VerticalAlignment="Center"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right"
+                        IsVisible="{Binding CanDecideOutcome}">
+                <Button Content="completed" Command="{Binding SetOutcomeCommand}" CommandParameter="{x:Static re:HomefrontOutcome.Completed}"/>
+                <Button Content="failed" Command="{Binding SetOutcomeCommand}" CommandParameter="{x:Static re:HomefrontOutcome.Failed}"/>
+                <Button Content="unknown" Command="{Binding SetOutcomeCommand}" CommandParameter="{x:Static re:HomefrontOutcome.Unknown}"/>
+            </StackPanel>
+            <TextBlock Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" IsVisible="{Binding !CanDecideOutcome}"
+                       Foreground="{StaticResource TextBrightBrush}" Text="{Binding OutcomeText}"/>
+        </Grid>
+        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding IsAar}">
+            <TextBlock Text="OUTCOME"/>
+            <TextBlock Grid.Column="1" x:Name="Outcome" Text="{Binding OutcomeText}"/>
+        </Grid>
+        <TextBlock Classes="hint" Margin="0,2,0,0" TextWrapping="Wrap"
+                   IsVisible="{Binding PayoutSummaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                   Text="{Binding PayoutSummaryText}"/>
+        <TextBlock Classes="hint" Margin="0,2,0,0" TextWrapping="Wrap"
+                   IsVisible="{Binding PayoutTableVersionText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding PayoutTableVersionText}"/>
+
+        <Grid Classes="kv" ColumnDefinitions="Auto,*" Margin="0,8,0,0">
             <TextBlock Text="IN SITE (N)"/>
             <StackPanel Grid.Column="1">
                 <TextBlock x:Name="InSite" Text="{Binding InSiteText}"/>
@@ -75,18 +99,6 @@
         <Grid Classes="kv" ColumnDefinitions="Auto,*">
             <TextBlock Text="FLEET AT STOP"/>
             <TextBlock Grid.Column="1" x:Name="FleetAtStop" Text="{Binding FleetAtStopText}"/>
-        </Grid>
-        <Grid Classes="kv" ColumnDefinitions="Auto,*">
-            <TextBlock Text="OUTCOME"/>
-            <TextBlock Grid.Column="1" x:Name="Outcome" Text="{Binding OutcomeText}"/>
-        </Grid>
-        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding PayoutTableVersionText, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <TextBlock Text="PAYOUT TABLE"/>
-            <StackPanel Grid.Column="1">
-                <TextBlock Text="{Binding PayoutTableVersionText}"/>
-                <TextBlock Classes="hint" Margin="0" IsVisible="{Binding PayoutSummaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                           Text="{Binding PayoutSummaryText}"/>
-            </StackPanel>
         </Grid>
 
         <ItemsControl x:Name="AttendanceList" ItemsSource="{Binding Rows}" Margin="0,6,0,0">
@@ -112,11 +124,11 @@
                             </WrapPanel>
                             <TextBlock Classes="hint" Margin="0" IsVisible="{Binding PayoutText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                        Text="{Binding PayoutText}"/>
-                            <!-- Only this client's own, ticked, priced and not yet confirmed row offers a way to act. -->
+                            <!-- Only this client's own, ticked, priced row offers a way to type a correction (ET-269:
+                                 the figure already counts, there is nothing here to confirm). -->
                             <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,2,0,0" IsVisible="{Binding CanActOnPayout}">
-                                <Button Content="confirm" Padding="6,0" Command="{Binding ConfirmPayoutCommand}"/>
-                                <TextBox Text="{Binding TypedPayoutText}" Width="110" PlaceholderText="enter actual ISK"/>
-                                <Button Content="enter" Padding="6,0" Command="{Binding EnterPayoutCommand}"/>
+                                <TextBox Text="{Binding TypedPayoutText}" Width="110" PlaceholderText="type actual ISK"/>
+                                <Button Content="correct" Padding="6,0" Command="{Binding EnterPayoutCommand}"/>
                             </StackPanel>
                         </StackPanel>
                         <CheckBox Grid.Column="2" VerticalAlignment="Center" Content="in site"
@@ -130,9 +142,8 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <Button Content="CONFIRM ALL AS EXPECTED" Margin="0,6,0,0" Command="{Binding ConfirmAllAsExpectedCommand}"/>
         <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0,4,0,0"
-                   Text="Expected = the fixed table for this site at N, not a measurement. Only you know what arrived: confirm it, or type the amount you received. Eve Together never reads your wallet."/>
+                   Text="Each figure is the fixed table amount for this site at N — there is no wallet to confirm it against, so it counts as soon as the site reads Completed. Only you know if something different actually arrived: type it beside a row to correct it."/>
 
         <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0" IsVisible="{Binding IsEditing}">
             <TextBlock Text="+ pilots not on the roster" VerticalAlignment="Center"/>

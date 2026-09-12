@@ -6,14 +6,17 @@ using Xunit;
 namespace EveUtils.Client.UiTests;
 
 /// <summary>
-/// ET-231, ET-256: the homefront payout counts as <see cref="IskCertainty.Expected"/> until the pilot confirms it,
-/// and a run that already carries a confirmed <see cref="RunParameterKey.FixedPayout"/> row is never counted twice —
-/// once here as expected and again by <see cref="RewardIskContributor"/> as measured.
+/// ET-269 (overriding ET-231's "expected until confirmed"): a homefront's payout counts as
+/// <see cref="IskCertainty.Measured"/> the moment the site reads Completed — there is no wallet scope to verify it
+/// against and never will be, so it cannot stay "expected" waiting for a confirmation that can never arrive. A run
+/// the pilot typed a different figure for already carries a <see cref="RunParameterKey.FixedPayout"/> row and is
+/// skipped here, so it is never counted twice — once here at the table figure, once by
+/// <see cref="RewardIskContributor"/> at the typed one.
 /// </summary>
 public sealed class HomefrontPayoutIskContributorTests
 {
     [Fact]
-    public void Contribute_UnconfirmedExpectedPayout_CountsAsExpected()
+    public void Contribute_DefaultTablePayout_CountsAsMeasured()
     {
         RunIskFacts facts = _Facts(expected: 15_000_000m);
 
@@ -21,11 +24,11 @@ public sealed class HomefrontPayoutIskContributorTests
 
         Assert.NotNull(contribution);
         Assert.Equal(15_000_000m, contribution.Amount);
-        Assert.Equal(IskCertainty.Expected, contribution.Certainty);
+        Assert.Equal(IskCertainty.Measured, contribution.Certainty);
     }
 
     [Fact]
-    public void Contribute_AlreadyConfirmed_IsSkipped_SoItIsNeverCountedTwice()
+    public void Contribute_ATypedCorrection_IsSkipped_SoItIsNeverCountedTwice()
     {
         RunIskFacts facts = _Facts(expected: 15_000_000m,
             parameters: [new RunIskParameter(RunParameterKey.FixedPayout, 15_000_000m, null, DateTime.UtcNow)]);
@@ -36,17 +39,17 @@ public sealed class HomefrontPayoutIskContributorTests
     }
 
     [Fact]
-    public void Contribute_SumsAcrossRuns_ButOnlyTheUnconfirmedOnes()
+    public void Contribute_SumsAcrossRuns_ButOnlyTheOnesWithNoTypedCorrection()
     {
-        RunIskFacts confirmed = _Facts(expected: 15_000_000m,
+        RunIskFacts corrected = _Facts(expected: 15_000_000m,
             parameters: [new RunIskParameter(RunParameterKey.FixedPayout, 15_000_000m, null, DateTime.UtcNow)]);
-        RunIskFacts stillExpected = _Facts(expected: 15_000_000m);
+        RunIskFacts atTableFigure = _Facts(expected: 15_000_000m);
 
-        IskContribution? contribution = new HomefrontPayoutIskContributor().Contribute([confirmed, stillExpected], DateTime.UtcNow);
+        IskContribution? contribution = new HomefrontPayoutIskContributor().Contribute([corrected, atTableFigure], DateTime.UtcNow);
 
         Assert.NotNull(contribution);
         Assert.Equal(15_000_000m, contribution.Amount);
-        Assert.Equal(IskCertainty.Expected, contribution.Certainty);
+        Assert.Equal(IskCertainty.Measured, contribution.Certainty);
     }
 
     [Fact]

@@ -15,13 +15,11 @@ namespace EveUtils.Client.ViewModels.Runs.Attendance;
 public sealed partial class AttendanceRowViewModel : ObservableObject
 {
     private readonly Action<AttendanceRowViewModel>? _onTicked;
-    private readonly Action<AttendanceRowViewModel>? _onConfirmPayout;
     private readonly Action<AttendanceRowViewModel, decimal>? _onEnterPayout;
     private bool _isApplying;
 
     public AttendanceRowViewModel(long characterId, string name, bool isLocal, bool isExternal,
         Action<AttendanceRowViewModel>? onTicked = null,
-        Action<AttendanceRowViewModel>? onConfirmPayout = null,
         Action<AttendanceRowViewModel, decimal>? onEnterPayout = null)
     {
         CharacterId = characterId;
@@ -29,7 +27,6 @@ public sealed partial class AttendanceRowViewModel : ObservableObject
         IsLocal = isLocal;
         IsExternal = isExternal;
         _onTicked = onTicked;
-        _onConfirmPayout = onConfirmPayout;
         _onEnterPayout = onEnterPayout;
     }
 
@@ -47,7 +44,6 @@ public sealed partial class AttendanceRowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(TickText))]
     [NotifyPropertyChangedFor(nameof(PayoutText))]
     [NotifyPropertyChangedFor(nameof(CanActOnPayout))]
-    [NotifyCanExecuteChangedFor(nameof(ConfirmPayoutCommand))]
     [NotifyCanExecuteChangedFor(nameof(EnterPayoutCommand))]
     private bool _isInSite;
 
@@ -89,41 +85,36 @@ public sealed partial class AttendanceRowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(PayoutText))]
     private decimal? _tablePayoutIsk;
 
-    /// <summary>The figure that actually counts towards TOTAL ISK right now — only once the site reads
-    /// <c>Completed</c> (or, for AAR, has paid waves). Null until then.</summary>
+    /// <summary>The table's own figure at the current N — what counts towards TOTAL ISK right away once the site
+    /// reads <c>Completed</c> (ET-269: there is no wallet to wait on), or, for AAR, has paid waves. Null until then.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PayoutText))]
     [NotifyPropertyChangedFor(nameof(CanActOnPayout))]
-    [NotifyCanExecuteChangedFor(nameof(ConfirmPayoutCommand))]
     [NotifyCanExecuteChangedFor(nameof(EnterPayoutCommand))]
     private decimal? _expectedPayoutIsk;
 
-    /// <summary>What the pilot said actually arrived — confirmed from <see cref="ExpectedPayoutIsk"/> or typed by
-    /// hand. Null until they say.</summary>
+    /// <summary>What the pilot typed instead, because something else really arrived — a correction on top of
+    /// <see cref="ExpectedPayoutIsk"/>, never a step this figure needs before it counts. Null until they type one.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PayoutText))]
     [NotifyPropertyChangedFor(nameof(CanActOnPayout))]
-    [NotifyCanExecuteChangedFor(nameof(ConfirmPayoutCommand))]
     [NotifyCanExecuteChangedFor(nameof(EnterPayoutCommand))]
     private decimal? _confirmedPayoutIsk;
 
-    /// <summary>Only this client's own, ticked, priced and not yet confirmed row offers a way to act on it — a
-    /// group-mate's payout is confirmed on their own client, never this one.</summary>
-    public bool CanActOnPayout => IsLocal && IsInSite && ExpectedPayoutIsk is not null && ConfirmedPayoutIsk is null;
+    /// <summary>Only this client's own, ticked, priced row offers a way to type a correction — a group-mate's payout
+    /// is corrected on their own client, never this one.</summary>
+    public bool CanActOnPayout => IsLocal && IsInSite && ExpectedPayoutIsk is not null;
 
     [ObservableProperty] private string _typedPayoutText = string.Empty;
 
     public string PayoutText => (IsInSite, ConfirmedPayoutIsk, ExpectedPayoutIsk, TablePayoutIsk) switch
     {
         (false, _, _, _) => string.Empty,
-        (true, { } confirmed, _, _) => $"{IskFormat.Whole(confirmed)} confirmed",
-        (true, null, { } expected, _) => $"{IskFormat.Whole(expected)} expected",
+        (true, { } confirmed, _, _) => IskFormat.Whole(confirmed),
+        (true, null, { } expected, _) => IskFormat.Whole(expected),
         (true, null, null, { } table) => $"if completed: {IskFormat.Whole(table)}",
         _ => "if completed"
     };
-
-    [RelayCommand(CanExecute = nameof(CanActOnPayout))]
-    private void ConfirmPayout() => _onConfirmPayout?.Invoke(this);
 
     [RelayCommand(CanExecute = nameof(CanActOnPayout))]
     private void EnterPayout()

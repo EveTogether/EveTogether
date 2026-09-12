@@ -33,6 +33,13 @@ internal sealed class SetRunAttendanceCommandHandler(IDbContextFactory<ClientDbC
                           && (byGroup ? run.GroupCode == command.GroupCode : run.Id == command.RunId))
             .ToListAsync(cancellationToken);
 
+        // An own character ticked in the site (ET-269) but with no run of its own here: the pilot started this
+        // homefront for one toon only, or a multi-pick missed one, and only found out who was really in the site once
+        // the attendance was decided. A run of its own is the one thing that makes its own payout and loot ever reach
+        // TOTAL ISK — ticking it here cannot do that by itself.
+        if (byGroup && command.GroupCode is { } groupCode)
+            runs.AddRange(_BackfillMissingOwnRuns(db, runs, decision, own, groupCode));
+
         List<Run> changed = [.. runs.Where(run => _Takes(run, decision))];
         foreach (Run run in changed)
             _Apply(db, run, decision);
@@ -61,6 +68,56 @@ internal sealed class SetRunAttendanceCommandHandler(IDbContextFactory<ClientDbC
                || !stored.ListsTheSameAs(decision)
                || stored.Source != decision.Source
                || stored.SetByCharacterId != decision.SetByCharacterId;
+    }
+
+    /// <summary>A run of its own for every own character the decision ticks in the site, cloned from the group's own
+    /// earliest run — same site, same times, same origin — so a homefront started for one toon (or a multi-pick that
+    /// missed one) still counts every other own character's payout and loot once who was really there is known
+    /// (ET-269, Jithran's own HF-V7MB: one run, five own characters ticked in).</summary>
+    private static IReadOnlyList<Run> _BackfillMissingOwnRuns(
+        ClientDbContext db, IReadOnlyList<Run> runs, RunAttendanceDecision decision, long[] own, string groupCode)
+    {
+        if (runs.Count == 0)
+            return [];
+
+        Run template = runs.OrderBy(run => run.StartedAtUtc).First();
+        HashSet<long> present = [.. runs.Select(run => run.CharacterId)];
+        List<Run> created = [];
+        foreach (RunAttendanceEntryInput entry in decision.Entries)
+        {
+            if (!entry.IsInSite || !own.Contains(entry.CharacterId) || !present.Add(entry.CharacterId))
+                continue;
+
+            Run sibling = new()
+            {
+                Id = Guid.CreateVersion7(),
+                CharacterId = entry.CharacterId,
+                GroupCode = groupCode,
+                ActivityKind = template.ActivityKind,
+                State = template.State,
+                StartedAtUtc = template.StartedAtUtc,
+                StoppedAtUtc = template.StoppedAtUtc,
+                SavedAtUtc = template.SavedAtUtc,
+                SiteTypeId = template.SiteTypeId,
+                SiteTypeSource = template.SiteTypeSource,
+                SiteName = template.SiteName,
+                SolarSystemId = template.SolarSystemId,
+                Signature = template.Signature,
+                Role = RunRole.Member,
+                IsParticipant = true,
+                IsPayoutEligible = template.IsPayoutEligible,
+                CharacterNameSnapshot = entry.CharacterName,
+                SignatureGroupSnapshot = template.SignatureGroupSnapshot,
+                Origin = template.Origin,
+                FleetSizeAtStop = template.FleetSizeAtStop,
+                SyncState = RunSyncState.Local,
+                Revision = 1
+            };
+            db.Set<Run>().Add(sibling);
+            created.Add(sibling);
+        }
+
+        return created;
     }
 
     private static void _Apply(ClientDbContext db, Run run, RunAttendanceDecision decision)

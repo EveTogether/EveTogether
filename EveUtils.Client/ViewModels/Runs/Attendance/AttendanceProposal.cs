@@ -14,8 +14,10 @@ namespace EveUtils.Client.ViewModels.Runs.Attendance;
 /// picks the decision up where it was rather than starting it over from what this window happened to see.</item>
 /// <item>The list the previous homefront of the same fleet ended with (Jithran, 2026-09-11: a series keeps its list),
 /// with "same as last site" as the reason.</item>
-/// <item>Evidence from this run alone. No evidence is unticked — the hauler outside the site, and an external pilot,
-/// from whom no evidence can ever arrive.</item>
+/// <item>Evidence from this run alone. No evidence at all defaults an own character in — deliberately put into the
+/// run, they are assumed present until shown otherwise (Jithran, 2026-09-12: a hauler with no evidence tracker
+/// catches, such as delivering cargo, still counted as flying the site) — and defaults anyone else, external or not,
+/// unticked: nothing this client can vouch for.</item>
 /// </list>
 /// In the first two, evidence may add a tick, never take one away: a pilot who sat still on site 2 was still on site
 /// 1's list for a reason. A line set by hand in this run's list is not the proposal's to change at all.
@@ -47,7 +49,9 @@ public static class AttendanceProposal
                 (null, { IsInSite: false }, { } seen) =>
                     new AttendanceProposalLine(id, true, seen.Reason, seen.Amount, IsAddedToLastSite: true),
                 (_, _, { } seen) => new AttendanceProposalLine(id, true, seen.Reason, seen.Amount),
-                _ => new AttendanceProposalLine(id, false, AttendanceReason.NoActivityLogged, null)
+                // Nothing to go on at all: an own character deliberately put into the run is assumed present until
+                // shown otherwise (ET-269); anyone else — external or merely another pilot on the roster — is not.
+                _ => new AttendanceProposalLine(id, candidate.IsLocal, AttendanceReason.NoActivityLogged, null)
             });
         }
 
