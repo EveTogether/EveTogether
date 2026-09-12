@@ -219,20 +219,27 @@ public sealed class FleetRunLootSharingTests
         Assert.False(snapshot.IsShared(FleetId, JithranId, MetricKind.Location));
     }
 
-    /// <summary>A window on no shared run shows no toggle and puts nobody on one; closing a shared run's window takes
-    /// its pilot off it, so the next tick is back on the fleet and global choices.</summary>
+    /// <summary>A window on no run, in the same fleet, shows no toggle and puts nobody on a shared run; closing a shared
+    /// run's window takes its pilot off it, so the next tick is back on the fleet and global choices.</summary>
     [AvaloniaFact]
     public async Task OnlyAnOpenSharedRunWindow_PutsItsPilotOnTheSharedRun()
     {
+        using (TestClientInstance instance = TestClientInstance.Create())
+        {
+            instance.Services.GetRequiredService<IFleetParticipation>()
+                .Set([new FleetParticipant(JithranId, FleetId, ClientOnly: false)]);
+            using ActivityWindowViewModel idle = new(ActivityKind.Site, instance.Services);
+            await idle.LoadAsync();
+            idle.Refresh(DateTime.UtcNow);
+            await FleetOfTwo.RunJobsAsync();
+
+            Assert.False(idle.FleetSharing.IsShown);
+            Assert.Empty(instance.Services.GetRequiredService<SharedFleetRuns>().Current);
+        }
+
         using FleetOfTwo fleet = await FleetOfTwo.CreateAsync();
         SharedFleetRuns runs = fleet.Jithran.Instance.Services.GetRequiredService<SharedFleetRuns>();
         Assert.Equal(GroupCode, runs.Current.GetValueOrDefault((FleetId, JithranId)));
-
-        using ActivityWindowViewModel idle = new(ActivityKind.Site, fleet.Jithran.Instance.Services);
-        await idle.LoadAsync();
-        idle.Refresh(DateTime.UtcNow);
-        await FleetOfTwo.RunJobsAsync();
-        Assert.False(idle.FleetSharing.IsShown);
 
         fleet.Jithran.Window.Dispose();
         Assert.Empty(runs.Current);

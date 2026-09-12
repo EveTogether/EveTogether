@@ -52,6 +52,7 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
     private SyncFacts? _facts;
     private MetricShareSnapshot? _share;
     private DateTime _shareReadAtUtc;
+    private long _lastUnixMs;
     private bool _isSyncing;
     private bool _isSyncOwed;
 
@@ -230,22 +231,26 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
 
         _sent[character] = current;
         _changedSince.Remove(character);
+        // Never stamped earlier than the last one: a receiver keeps the newest, and a clock set back must not turn
+        // switching off into old news it ignores.
+        _lastUnixMs = Math.Max(new DateTimeOffset(nowUtc, TimeSpan.Zero).ToUnixTimeMilliseconds(), _lastUnixMs + 1);
         await eventBus.PublishAsync(new FleetRunShareEvent(new RunShareUpdate(
-                fleetId, groupCode, new DateTimeOffset(nowUtc, TimeSpan.Zero).ToUnixTimeMilliseconds(),
-                sharesLoot, sharesBounty, captures, lines), character),
+                fleetId, groupCode, _lastUnixMs, sharesLoot, sharesBounty, captures, lines), character),
             EventTarget.Remote);
     }
 
-    // A change waits out its burst, counted from the first tick that saw it.
+    // A change waits out its burst, counted from the first tick that saw it. A clock that went back since is no reason
+    // to hold it any longer.
     private bool _HasSettled(int character, DateTime nowUtc)
     {
         if (!_changedSince.TryGetValue(character, out DateTime since))
             _changedSince[character] = since = nowUtc;
-        return nowUtc - since >= BundleWindow;
+        return nowUtc - since >= BundleWindow || nowUtc < since;
     }
 
     private static bool _IsResendDue(SentShare? sent, SentShare current, DateTime nowUtc) =>
-        sent is not null && (current.SharesLoot || current.SharesBounty) && nowUtc - sent.SentAtUtc >= ResendInterval;
+        sent is not null && (current.SharesLoot || current.SharesBounty)
+                         && (nowUtc - sent.SentAtUtc >= ResendInterval || nowUtc < sent.SentAtUtc);
 
     /// <summary>Puts exactly these characters on the run in <see cref="SharedFleetRuns"/>, and takes off whoever this
     /// window had put there before and no longer flies it.</summary>
