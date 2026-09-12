@@ -51,15 +51,17 @@ public sealed record RunAttendanceDecision(
     /// rule that keeps an outcome, once somebody set it, from ever being erased (ET-271, HF-7TQB/HF-ESNB): a list
     /// without an outcome is a list that did not speak about it — a window still on its first read, a fleet member on
     /// an older client, a copy back from a server older than the column — never a pick of "not decided", which nothing
-    /// offers. Only another outcome replaces an outcome.
+    /// offers. Only another outcome replaces an outcome. Read off the run rather than off its list, so the Completed a
+    /// new homefront run starts with (ET-274) stands before any list was written.
     /// </summary>
-    public RunAttendanceDecision KeepingOutcomeOf(RunAttendanceDecision? standing) =>
-        Outcome is null && CompletedWaveCount is null && standing is { } kept
+    public RunAttendanceDecision KeepingOutcomeOf(Entities.Run? standing) =>
+        Outcome is null && CompletedWaveCount is null
+        && standing is { } kept && (kept.HomefrontOutcome is not null || kept.HomefrontCompletedWaveCount is not null)
             ? this with
             {
-                Outcome = kept.Outcome,
-                CompletedWaveCount = kept.CompletedWaveCount,
-                OutcomeFromGameLog = kept.OutcomeFromGameLog
+                Outcome = kept.HomefrontOutcome,
+                CompletedWaveCount = kept.HomefrontCompletedWaveCount,
+                OutcomeFromGameLog = kept.HomefrontOutcomeFromGameLog
             }
             : this;
 

@@ -16,6 +16,13 @@ internal sealed class RestoreRunCommandHandler(
     public async Task<Result> Handle(RestoreRunCommand command, CancellationToken cancellationToken = default)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        // A character has one run per group (I7, ET-274): one that has a run there again does not get this one back.
+        if (await db.Set<Run>().AsNoTracking().Where(run => run.Id == command.RunId && run.GroupCode != null)
+                .AnyAsync(run => db.Set<Run>().Any(other => other.GroupCode == run.GroupCode && other.CharacterId == run.CharacterId
+                                                            && other.Id != run.Id && !other.DeletedAtUtc.HasValue), cancellationToken))
+            return Result.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.Duplicate,
+                "This character already has a run in this activity, so this one cannot come back beside it.", "Runs"));
+
         int changed = await db.Set<Run>().Where(run => run.Id == command.RunId && run.DeletedAtUtc.HasValue)
             .ExecuteUpdateAsync(properties => properties
                 .SetProperty(run => run.DeletedAtUtc, (DateTime?)null)

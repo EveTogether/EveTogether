@@ -24,6 +24,7 @@ internal static class RunIskFactsReader
             : null;
         return new RunIskFacts
         {
+            CharacterId = run.CharacterId,
             BountyIsk = run.BountyEntries.Sum(entry => entry.Isk),
             LootIskNet = gained is null && lost is null ? null : gained.GetValueOrDefault() - lost.GetValueOrDefault(),
             HasLoot = loot.Count > 0,

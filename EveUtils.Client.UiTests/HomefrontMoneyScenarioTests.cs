@@ -1,13 +1,15 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Platform;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Runs.Attendance;
@@ -24,7 +26,10 @@ using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde.Dtos;
+using EveUtils.Shared.Modules.Settings.Commands;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -375,6 +380,164 @@ public sealed class HomefrontMoneyScenarioTests
         await group.AssertOneStoryAsync(HomefrontOutcome.Completed, n: 3, payout: 3 * ThreePilots);
     }
 
+    // ── One run per character (I7, ET-274) ────────────────────────────────────────────────────────────
+
+    /// <summary>S20, HF-DYB4: five toons in the pilot's own fleet, fleet runs opening by themselves, the siblings'
+    /// starts held while the window ticks and is handed a reload. Five runs, Completed without a click, 75,000,000.
+    /// Counter-proof: before ET-274 this reads nine runs and 135,000,000 — HOMEFRONT's first list backfilled the four
+    /// siblings, then their own starts filed four more.</summary>
+    [AvaloniaFact]
+    public async Task S20_AMultiPickStartRacingTheDefaultList_FilesOneRunPerCharacter_CompletedWithoutAClick()
+    {
+        using Group group = await Group.StartAsync(toons: 5, isStartRaced: true);
+
+        await group.AssertOneRunPerCharacterAsync(5);
+        Assert.Equal(HomefrontOutcome.Completed, group.Section.Outcome);
+        Assert.Equal(5, group.Window.Participants.Count);
+        await group.StopAndSaveAsync();
+
+        await group.AssertOneRunPerCharacterAsync(5);
+        await group.AssertOneStoryAsync(HomefrontOutcome.Completed, n: 5, payout: 5 * FivePilots);
+    }
+
+    /// <summary>S21: the same signature copied again mid-run — a second window opened on it the way the clipboard offer
+    /// opens one, with the same five picked, and a sibling's start sent again. Nothing new is filed.</summary>
+    [AvaloniaFact]
+    public async Task S21_ASecondCopyOfTheSameSignatureMidRun_FilesNothingNew()
+    {
+        using Group group = await Group.StartAsync(toons: 5, isRosterFleet: true);
+        Guid siblingRun = (await group.RunsAsync()).Single(run => run.CharacterId == group.Own[1]).Id;
+
+        using (ActivityWindowViewModel copy = new(ActivityKind.Site, group.Services)
+               {
+                   SignatureId = "AAA-001", SignatureGroup = "Combat Site", SignatureName = "Raid: Hall of Sacrifice",
+                   MatchedSites = [Raid], StartsOnArrival = true
+               })
+        {
+            copy.UseCharacter(ActivityWindowHarness.CharacterId, ActivityWindowHarness.CharacterName);
+            copy.UseAdditionalCharacters([.. group.Own.Skip(1).Select(id => (checked((int)id), $"Toon {id}"))]);
+            await copy.LoadAsync();
+            await group.SettleAsync();
+        }
+        Result<Guid> again = await group.Dispatcher.Send(new StartRunCommand(group.Own[1], ActivityKind.Site,
+            group.Clock, Raid.DungeonId, "Raid: Hall of Sacrifice", null, GroupCode: group.GroupCode));
+
+        Assert.Equal(siblingRun, again.Value);
+        await group.AssertOneRunPerCharacterAsync(5);
+        await group.StopAndSaveAsync();
+        await group.AssertOneStoryAsync(HomefrontOutcome.Completed, n: 5, payout: 5 * FivePilots);
+    }
+
+    /// <summary>S22: the client quits mid-run and comes back — the run left running is stopped at startup, RESUME picks
+    /// it up in a new window, HOMEFRONT writes its list again over the fleet's roster. Still five runs.</summary>
+    [AvaloniaFact]
+    public async Task S22_AClientRestartMidRun_ResumesTheSameFiveRuns()
+    {
+        using Group group = await Group.StartAsync(toons: 5, isRosterFleet: true);
+        group.Section.SetOutcomeCommand.Execute(HomefrontOutcome.Unknown);
+        await group.SettleAsync();
+
+        await group.Dispatcher.Send(new StopRunsLeftRunningCommand(group.Clock));
+        await group.ReopenWindowAsync();
+        await group.SettleAsync(ticks: 5);
+
+        await group.AssertOneRunPerCharacterAsync(5);
+        Assert.Equal(HomefrontOutcome.Unknown, group.Section.Outcome);
+        group.Section.SetOutcomeCommand.Execute(HomefrontOutcome.Completed);
+        await group.StopAndSaveAsync();
+        await group.AssertOneStoryAsync(HomefrontOutcome.Completed, n: 5, payout: 5 * FivePilots);
+    }
+
+    /// <summary>S23: a fleet mate joins while the backfill runs — the fifth toon was flying a run of its own (with a
+    /// bounty on it) when the pilot started four, HOMEFRONT's list backfilled it into the group, and then its own run
+    /// joined the group. The two fold into the one it was flying: one run, its bounty once, the payout once.</summary>
+    [AvaloniaFact]
+    public async Task S23_AFleetMateJoiningWhileTheBackfillRuns_FoldsIntoTheRunItWasFlying()
+    {
+        const int late = ActivityWindowHarness.CharacterId + 4;
+        using Group group = await Group.StartAsync(toons: 5, isRosterFleet: true, picked: 4);
+        // The roster read puts the fifth toon on the list; that change is written once the bundle window has passed.
+        await group.SettleAsync(ticks: 4);
+        Run backfilled = (await group.RunsAsync()).Single(run => run.CharacterId == late);
+        Guid ownRun = (await group.Dispatcher.Send(new StartRunCommand(late, ActivityKind.Site, group.Clock.AddMinutes(-2),
+            Raid.DungeonId, "Raid: Hall of Sacrifice", null))).Value;
+        // Its gamelog's line, on the run it was flying — written straight in, since with the backfilled copy beside it
+        // the live lookup cannot tell the two apart (the refusal that cost HF-DYB4's siblings their bounty).
+        await using (ClientDbContext db = await group.DbAsync())
+        {
+            db.Set<RunBountyEntry>().Add(new RunBountyEntry { Id = Guid.CreateVersion7(), RunId = ownRun, OccurredAtUtc = group.Clock, Isk = 270_000m });
+            await db.SaveChangesAsync();
+        }
+
+        Result linked = await group.Dispatcher.Send(new LinkRunToGroupCodeCommand(ownRun, group.GroupCode, group.Window.FleetId));
+
+        Assert.True(linked.IsSuccess);
+        await group.AssertOneRunPerCharacterAsync(5);
+        Run joined = (await group.RunsAsync(includeBounty: true)).Single(run => run.CharacterId == late);
+        Assert.Equal(ownRun, joined.Id);
+        Assert.Equal(270_000m, Assert.Single(joined.BountyEntries).Isk);
+        await using (ClientDbContext db = await group.DbAsync())
+            Assert.NotNull((await db.Set<Run>().AsNoTracking().SingleAsync(run => run.Id == backfilled.Id)).DeletedAtUtc);
+        await group.StopAndSaveAsync();
+        // The window's own bounty in a fleet is the gamelog's live tally, which a line written straight in never reached.
+        await group.AssertOneStoryAsync(HomefrontOutcome.Completed, n: 5, payout: 5 * FivePilots, bounty: 270_000m,
+            isWindowCompared: false);
+    }
+
+    /// <summary>S24: paths at once — two starts (two windows) and a list that backfills the same character, on three
+    /// threads, round after round. The index lets one row through and the others take it up; never two, and both
+    /// starts name the same run.</summary>
+    [AvaloniaFact]
+    public async Task S24_TwoStartsAndABackfillAtTheSameMoment_NeverFileTwoRuns()
+    {
+        using Group group = await Group.StartAsync(toons: 2);
+        RunAttendanceDecision stored = await group.StoredDecisionAsync();
+
+        for (int round = 0; round < 8; round++)
+        {
+            int racer = 90000100 + round;
+            await group.RegisterAsync(racer, $"Racer {round}");
+            RunAttendanceDecision withRacer = stored with
+            {
+                Entries = [.. stored.Entries, new RunAttendanceEntryInput { CharacterId = racer, CharacterName = $"Racer {round}", IsInSite = true, Reason = AttendanceReason.SetByHand }],
+                SetAtUtc = stored.SetAtUtc.AddSeconds(round + 1)
+            };
+            StartRunCommand racing = new(racer, ActivityKind.Site, group.Clock, Raid.DungeonId, "Raid: Hall of Sacrifice", null,
+                GroupCode: group.GroupCode);
+            Task<Result<Guid>> start = Task.Run(() => group.Dispatcher.Send(racing));
+            Task<Result<Guid>> secondStart = Task.Run(() => group.Dispatcher.Send(racing));
+            Task<Result<int>> list = Task.Run(() => group.Dispatcher.Send(new SetRunAttendanceCommand(withRacer, group.Own, group.GroupCode)));
+            await Task.WhenAll(start, secondStart, list);
+
+            Assert.Equal(start.Result.Value, secondStart.Result.Value);
+            Assert.True(list.Result.IsSuccess);
+            await group.AssertOneRunPerCharacterAsync(3 + round);
+        }
+    }
+
+    /// <summary>S25, the startup repair: a group stored before ET-274 with every sibling doubled (the HF-DYB4 shape —
+    /// the copies made later, the same bounty line on both, one line only a copy caught, the summary built over nine
+    /// runs). The migration folds it and the start's rebuild adds it up again: five runs, each line once, 75,000,000
+    /// plus the bounty — everywhere.</summary>
+    [AvaloniaFact]
+    public async Task S25_DuplicatesStoredBeforeTheIndex_AreFoldedAtStartup_AndAddUpOnce()
+    {
+        using Group group = await Group.StartAsync(toons: 5);
+        await group.StopAndSaveAsync();
+        List<Run> originals = await group.RunsAsync();
+
+        await group.StoreDuplicatesTheOldWayAsync();
+        await Assert.ThrowsAnyAsync<DbUpdateException>(() => group.StoreDuplicatesTheOldWayAsync(isIndexUp: true));
+        await group.Dispatcher.Send(new RebuildActivitySummariesCommand(OnlyWhenOutdated: true));
+
+        await group.AssertOneRunPerCharacterAsync(5);
+        Assert.Equal(originals.Select(run => run.Id).Order(), (await group.RunsAsync()).Select(run => run.Id).Order());
+        List<Run> folded = await group.RunsAsync(includeBounty: true);
+        Assert.Single(folded.Single(run => run.CharacterId == ActivityWindowHarness.CharacterId).BountyEntries);
+        Assert.Equal(67_500m, Assert.Single(folded.Single(run => run.CharacterId == group.Own[1]).BountyEntries).Isk);
+        await group.AssertOneStoryAsync(HomefrontOutcome.Completed, n: 5, payout: 5 * FivePilots, bounty: 84_375m + 67_500m);
+    }
+
     // ── The group ───────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>One pilot's machine flying a Raid: Hall of Sacrifice on <c>toons</c> own characters, every one ticked
@@ -406,28 +569,154 @@ public sealed class HomefrontMoneyScenarioTests
 
         public HomefrontWindowSectionViewModel Section => Window.Homefront();
 
-        public static async Task<Group> StartAsync(int toons, long? fleetId = null)
+        /// <param name="fleetId">A fleet this client only knows the commander of, with no roster to read.</param>
+        /// <param name="isRosterFleet">Jithran's own set-up instead (fleet 4, "Local Misc"): the pilot commands a
+        /// client-only fleet whose roster holds every toon — the roster HOMEFRONT's first list, and its backfill, work
+        /// from.</param>
+        /// <param name="picked">How many of the toons the multi-pick ticks; the rest are in the fleet, not in the start.</param>
+        /// <param name="isStartRaced">HF-DYB4 as it happened (ET-274): fleet runs open by themselves, and the siblings'
+        /// own starts wait while the window ticks and while the open window is handed a reload.</param>
+        public static async Task<Group> StartAsync(int toons, long? fleetId = null, bool isRosterFleet = false,
+            int? picked = null, bool isStartRaced = false)
         {
             int[] ids = [.. Enumerable.Range(0, toons).Select(index => ActivityWindowHarness.CharacterId + index)];
+            int[] pickedIds = [.. ids.Take(picked ?? toons)];
+            TaskCompletionSource siblingsMayStart = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (!isStartRaced)
+                siblingsMayStart.SetResult();
             ActivityWindowHarness harness = await ActivityWindowHarness.CreateAsync(configure: services =>
-                services.AddSingleton<ILocalCharacterPresence>(new ActivityWindowHarness.StubPresence(true, ids)));
+            {
+                services.AddSingleton<ILocalCharacterPresence>(new ActivityWindowHarness.StubPresence(true, ids));
+                services.AddTransient<ICommandHandler<StartRunCommand, Result<Guid>>>(provider => new SiblingsWaitFor(
+                    ActivatorUtilities.CreateInstance<StartRunCommandHandler>(provider), siblingsMayStart.Task));
+            });
             foreach (int id in ids.Skip(1))
                 await harness.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character($"Toon {id}", id));
             if (fleetId is { } fleet)
                 harness.Services.GetRequiredService<IFleetParticipation>().Set(
                     [.. ids.Select(id => new FleetParticipant(id, fleet, ClientOnly: true, ActivityWindowHarness.CharacterId))]);
+            if (isRosterFleet || isStartRaced)
+                await _CommandARosterFleetAsync(harness, ids);
+            if (isStartRaced)
+            {
+                await harness.Services.GetRequiredService<IDispatcher>().Send(
+                    new SetSettingCommand(FleetRunWindowPresenter.AutoOpenSettingKey, "true"));
+                _ = harness.Services.GetRequiredService<FleetRunWindowPresenter>();
+            }
 
             ActivityWindowViewModel window = await harness.OpenAsync();
             await window.ApplySignatureAsync("AAA-001", "Combat Site", "Raid: Hall of Sacrifice", [Raid]);
             harness.Dialogs.OnPickCharacters = (_, options) =>
-                Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId)]);
-            await window.StartRunCommand.ExecuteAsync(null);
-            await ActivityWindowHarness.WaitUntil(() => window.Participants.Count == toons, timeoutMs: 10_000);
-
+                Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId).Where(pickedIds.Contains)]);
             Group group = new(harness, window, [.. ids.Select(id => (long)id)]);
+            await group._StartAsync(siblingsMayStart);
+            await ActivityWindowHarness.WaitUntil(() => window.Participants.Count >= pickedIds.Length, timeoutMs: 10_000);
+
             await group.SettleAsync();
             await group.TickUntilAsync(() => group.Section.CanDecide && group.Section.Rows.Count(row => row.IsLocal) == toons);
             return group;
+        }
+
+        /// <summary>START as the window's own timer lives through it: a tick every quarter second, and a window the
+        /// presenter opens handed to this one as a reload (DialogService.ShowActivityWindow) — until the siblings may
+        /// start.</summary>
+        private async Task _StartAsync(TaskCompletionSource siblingsMayStart)
+        {
+            Task start = Window.StartRunCommand.ExecuteAsync(null);
+            int shown = _harness.Dialogs.ShownActivityWindows.Count;
+            for (int pump = 0; !start.IsCompleted && pump < 400; pump++)
+            {
+                if (pump == 40)
+                    siblingsMayStart.TrySetResult();
+                Clock = Clock.AddMilliseconds(250);
+                Window.Refresh(Clock);
+                if (_harness.Dialogs.ShownActivityWindows.Count > shown)
+                {
+                    shown = _harness.Dialogs.ShownActivityWindows.Count;
+                    _ = Window.LoadAsync();
+                }
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                await Task.Delay(5);
+            }
+            await start;
+        }
+
+        private static async Task _CommandARosterFleetAsync(ActivityWindowHarness harness, int[] ids)
+        {
+            ClientFleetService fleets = harness.Services.GetRequiredService<ClientFleetService>();
+            long fleetId = (await fleets.CreateLocalFleetAsync("Local Misc", null, ids[0])).Value;
+            Assert.True((await fleets.StartFleetAsync(fleetId, ids[0])).IsSuccess);
+            foreach (int id in ids.Skip(1))
+                Assert.True((await fleets.AddLocalCharacterAsync(fleetId, id, ids[0])).IsSuccess);
+            harness.Services.GetRequiredService<IFleetParticipation>().Set(
+                [.. ids.Select(id => new FleetParticipant(id, fleetId, ClientOnly: true, ids[0]))]);
+        }
+
+        /// <summary>A sibling's start held until the test lets it go — the 2.7 s HF-DYB4's siblings waited.</summary>
+        private sealed class SiblingsWaitFor(ICommandHandler<StartRunCommand, Result<Guid>> inner, Task mayStart)
+            : ICommandHandler<StartRunCommand, Result<Guid>>
+        {
+            public async Task<Result<Guid>> Handle(StartRunCommand command, CancellationToken cancellationToken = default)
+            {
+                if (command.CharacterId != ActivityWindowHarness.CharacterId)
+                    await mayStart;
+                return await inner.Handle(command, cancellationToken);
+            }
+        }
+
+        /// <summary>The HF-DYB4 shape as a build before ET-274 stored it: every run of the group doubled by a later copy
+        /// with the same list and enemies, the pilot's bounty line on both copies and one line only a sibling's copy
+        /// caught, and the summary added up over all of it by the older rules. Written under the migration before the
+        /// index, which then runs as a starting client runs it — or, with the index up, refused.</summary>
+        public async Task StoreDuplicatesTheOldWayAsync(bool isIndexUp = false)
+        {
+            await using (ClientDbContext db = await DbAsync())
+            {
+                if (!isIndexUp)
+                    await db.GetService<IMigrator>().MigrateAsync("20260912144246_AddHomefrontOutcomeSource");
+                List<Run> originals = await db.Set<Run>().AsNoTracking()
+                    .Include(run => run.AttendanceEntries).Include(run => run.EnemyObservations)
+                    .Where(run => run.GroupCode == GroupCode && run.DeletedAtUtc == null).ToListAsync();
+                DateTime lineAt = originals.Min(run => run.StartedAtUtc).AddMinutes(1);
+                foreach (Run original in originals)
+                {
+                    Run copy = new();
+                    db.Entry(copy).CurrentValues.SetValues(original);
+                    copy.Id = Guid.CreateVersion7();
+                    db.Set<Run>().Add(copy);
+                    foreach (RunAttendanceEntry entry in original.AttendanceEntries)
+                        db.Set<RunAttendanceEntry>().Add(new RunAttendanceEntry { Id = Guid.CreateVersion7(), RunId = copy.Id,
+                            CharacterId = entry.CharacterId, CharacterName = entry.CharacterName, IsInSite = entry.IsInSite,
+                            IsExternal = entry.IsExternal, Reason = entry.Reason, ReasonAmount = entry.ReasonAmount });
+                    foreach (RunEnemyObservation seen in original.EnemyObservations)
+                        db.Set<RunEnemyObservation>().Add(new RunEnemyObservation { Id = Guid.CreateVersion7(), RunId = copy.Id,
+                            EnemyTypeId = seen.EnemyTypeId, EnemyName = seen.EnemyName, Count = seen.Count,
+                            FirstObservedAtUtc = seen.FirstObservedAtUtc, LastObservedAtUtc = seen.LastObservedAtUtc });
+                    if (original.CharacterId == ActivityWindowHarness.CharacterId && !isIndexUp)
+                    {
+                        db.Set<RunBountyEntry>().Add(new RunBountyEntry { Id = Guid.CreateVersion7(), RunId = original.Id, OccurredAtUtc = lineAt, Isk = 84_375m });
+                        db.Set<RunBountyEntry>().Add(new RunBountyEntry { Id = Guid.CreateVersion7(), RunId = copy.Id, OccurredAtUtc = lineAt, Isk = 84_375m });
+                    }
+                    if (original.CharacterId == _own[1])
+                        db.Set<RunBountyEntry>().Add(new RunBountyEntry { Id = Guid.CreateVersion7(), RunId = copy.Id, OccurredAtUtc = lineAt, Isk = 67_500m });
+                }
+                await db.SaveChangesAsync();
+                await db.Set<ActivitySummary>().Where(summary => summary.GroupCode == GroupCode)
+                    .ExecuteUpdateAsync(properties => properties
+                        .SetProperty(summary => summary.TotalIsk, 135_000_000m)
+                        .SetProperty(summary => summary.IskSources, "Bounty,Loot,Rewards,Consumables,Mining,HomefrontPayout;r2"));
+            }
+
+            await using (ClientDbContext db = await DbAsync())
+                await db.Database.MigrateAsync();
+        }
+
+        /// <summary>How many live runs each character has in the group — one each, whatever path filed them (I7).</summary>
+        public async Task AssertOneRunPerCharacterAsync(int characters)
+        {
+            List<Run> runs = await RunsAsync();
+            Assert.Equal(characters, runs.Count);
+            Assert.Equal(characters, runs.Select(run => run.CharacterId).Distinct().Count());
         }
 
         public async Task RegisterAsync(int characterId, string name)

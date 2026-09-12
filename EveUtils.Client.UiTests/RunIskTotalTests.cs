@@ -487,6 +487,7 @@ public sealed class RunIskTotalTests
         decimal? miningIskValue = null, bool hasMining = false,
         decimal? homefrontExpectedPayoutIsk = null) => new()
     {
+        CharacterId = 1,
         BountyIsk = bounty,
         LootIskNet = lootNet,
         HasLoot = hasLoot || lootNet is not null,

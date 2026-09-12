@@ -1,3 +1,5 @@
+using EveUtils.Shared.Modules.Runs.Enums;
+
 namespace EveUtils.Shared.Modules.Runs;
 
 /// <summary>
@@ -30,6 +32,18 @@ public static class HomefrontCatalogue
     };
 
     public static bool IsHomefrontDungeonId(int dungeonId) => KindByDungeonId.ContainsKey(dungeonId);
+
+    /// <summary>What an Abyssal Artifact Recovery site pays for when it goes the way it normally does: every wave.</summary>
+    public const int AarWaveCount = 9;
+
+    /// <summary>How a homefront run starts out before anybody said otherwise (ET-271): the way a site normally goes —
+    /// Completed, or for Abyssal Artifact Recovery every wave paid. Written onto the run the moment it is made (ET-274),
+    /// whichever path makes it, so a run the window never decided for — a sibling, a fleet mate's — starts the same.
+    /// Nothing for a run that is not a homefront; a caller holds this to a site id, never a mission's.</summary>
+    public static (HomefrontOutcome? Outcome, int? CompletedWaveCount) DefaultOutcomeFor(int dungeonId) =>
+        KindByDungeonId.TryGetValue(dungeonId, out string? kind)
+            ? kind == "Abyssal Artifact Recovery" ? (null, AarWaveCount) : (HomefrontOutcome.Completed, null)
+            : (null, null);
 
     /// <summary>Whether a homefront kind is flown as mining rather than combat or salvage (domain/homefronts.md §2)
     /// — the per-run refinement ET-236's design left for ET-228: a mining homefront's catalogue row claims MINING

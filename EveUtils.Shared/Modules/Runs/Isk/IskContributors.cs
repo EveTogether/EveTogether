@@ -26,8 +26,10 @@ public static class IskContributors
 
     // Raised whenever stored summaries may be wrong without any source changing. 2 (ET-271): a typed homefront payout
     // moved from Rewards to HomefrontPayout, and an outcome, attendance or payout set after SAVE never rebuilt its
-    // summary before, so every activity saved until now is added up again once.
-    private const int Revision = 2;
+    // summary before, so every activity saved until now is added up again once. 3 (ET-274): a homefront payout counts
+    // once per character, and the startup fold of duplicate runs (HF-DYB4: nine runs for five characters) must reach
+    // the summaries built over them.
+    private const int Revision = 3;
 
     /// <param name="nowUtc">Stands in for the stop of a run that is still going.</param>
     public static IskBreakdown Breakdown(IReadOnlyList<RunIskFacts> runs, DateTime nowUtc) =>

@@ -1969,7 +1969,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
         }
 
-        RunId = started.Value;
+        Guid runId = started.Value;
         // The handler mints the group code when the window had none, and the command only ever gave the run id back
         // — so a commander's own window did not know the code of the run it had just started. With no code it fell
         // through RunControlAuthority's solo branch, and DISCARD, which only announces itself when it has one, never
@@ -1996,6 +1996,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             _additionalCharacters = [];
         }
 
+        // Only now does the window have a run (ET-274): with it the sections start deciding, and HOMEFRONT writes its
+        // first list at once (ET-271) — before every picked character's row existed, that list backfilled the siblings
+        // the lines above were still starting, and HF-DYB4 ended with nine runs for five characters.
+        RunId = runId;
         if (RunLoot is not null)
             await RunLoot.RefreshAsync();
         Refresh(DateTime.UtcNow);
@@ -3531,6 +3535,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         var homefront = _sections.GetValueOrDefault(RunSectionId.Homefront) as HomefrontWindowSectionViewModel;
         RunAttendanceDecision? homefrontDecision = homefront?.LiveDecision;
 
+        // The fleet tally is one per character, so it is read once per character (ET-274) — HF-DYB4's window counted it
+        // on each of a character's two runs.
+        HashSet<long> tallied = [];
         List<(long CharacterId, RunIskFacts Facts)> runs = isGroup
             ? [.. Participants.Select(participant =>
                 {
@@ -3540,7 +3547,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                     // every toon's own bounty already lives in its own run's RunBountyEntry rows (ET-219), read back
                     // through Participants' own cache instead.
                     decimal bountyIsk = FleetId is { } fleetId && _gamelog is not null
-                        ? _gamelog.GetFleetRunBounty(fleetId, participant.CharacterId)
+                        ? tallied.Add(participant.CharacterId) ? _gamelog.GetFleetRunBounty(fleetId, participant.CharacterId) : 0m
                         : participant.BountyIsk;
                     RunLootViewModel? loot = LootOverview?.Characters
                         .FirstOrDefault(character => character.RunId == participant.RunId)?.Loot;
@@ -3550,6 +3557,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                         _HomefrontFacts(homefrontDecision, participant.CharacterId, participant);
                     return ((long)participant.CharacterId, new RunIskFacts
                     {
+                        CharacterId = participant.CharacterId,
                         BountyIsk = bountyIsk,
                         LootIskNet = loot?.NetIsk,
                         HasLoot = loot?.HasCaptures ?? false,
@@ -3589,6 +3597,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             _HomefrontFacts(homefront?.LiveDecision, own?.CharacterId, own);
         return (characterId, new RunIskFacts
         {
+            CharacterId = characterId,
             BountyIsk = BountyIsk,
             LootIskNet = RunLoot?.NetIsk,
             HasLoot = RunLoot?.HasCaptures ?? false,

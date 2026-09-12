@@ -50,14 +50,18 @@ public sealed class HomefrontPayoutIskContributorTests
         Assert.Equal(0m, IskContributors.Breakdown([failed], DateTime.UtcNow).Total);
     }
 
+    /// <summary>ET-274: once per character — a second run of the same character (HF-DYB4 held nine runs for five)
+    /// never pays that character twice. Counter-proof: sum per run and this reads 44,000,000.</summary>
     [Fact]
-    public void Contribute_SumsAcrossRuns_TheTypedFigureWhereThereIsOne()
+    public void Contribute_SumsAcrossCharacters_TheTypedFigureWhereThereIsOne_AndEachCharacterOnce()
     {
-        RunIskFacts corrected = _Facts(expected: 15_000_000m,
+        RunIskFacts corrected = _Facts(expected: 15_000_000m, characterId: 1,
             parameters: [new RunIskParameter(RunParameterKey.FixedPayout, 14_000_000m, null, DateTime.UtcNow)]);
-        RunIskFacts atTableFigure = _Facts(expected: 15_000_000m);
+        RunIskFacts atTableFigure = _Facts(expected: 15_000_000m, characterId: 2);
+        RunIskFacts sameCharacterAgain = _Facts(expected: 15_000_000m, characterId: 2);
 
-        IskContribution? contribution = new HomefrontPayoutIskContributor().Contribute([corrected, atTableFigure], DateTime.UtcNow);
+        IskContribution? contribution = new HomefrontPayoutIskContributor()
+            .Contribute([corrected, atTableFigure, sameCharacterAgain], DateTime.UtcNow);
 
         Assert.NotNull(contribution);
         Assert.Equal(29_000_000m, contribution.Amount);
@@ -72,8 +76,10 @@ public sealed class HomefrontPayoutIskContributorTests
         Assert.Null(new HomefrontPayoutIskContributor().Contribute([facts], DateTime.UtcNow));
     }
 
-    private static RunIskFacts _Facts(decimal? expected, IReadOnlyList<RunIskParameter>? parameters = null) => new()
+    private static RunIskFacts _Facts(decimal? expected, IReadOnlyList<RunIskParameter>? parameters = null,
+        long characterId = 1) => new()
     {
+        CharacterId = characterId,
         BountyIsk = 0m,
         LootIskNet = null,
         HasLoot = false,

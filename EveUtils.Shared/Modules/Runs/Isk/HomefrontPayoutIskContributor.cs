@@ -11,6 +11,9 @@ namespace EveUtils.Shared.Modules.Runs.Isk;
 /// <see cref="RunParameterKey.FixedPayout"/> row for that run, and that figure counts instead of the table's — but only
 /// while the payout is owed at all (ET-271): a site set to Failed, or a character ticked out, pays nothing, typed
 /// figure or not.
+///
+/// EVE pays a character once per site, so the payout is counted once per character (ET-274): HF-DYB4 held nine runs
+/// for five characters and counted nine payouts — TOTAL ISK 135M where HOMEFRONT itself showed 5 × 15M.
 /// </summary>
 internal sealed class HomefrontPayoutIskContributor : IIskContributor
 {
@@ -18,18 +21,12 @@ internal sealed class HomefrontPayoutIskContributor : IIskContributor
 
     public IskContribution? Contribute(IReadOnlyList<RunIskFacts> runs, DateTime nowUtc)
     {
-        decimal sum = 0m;
-        bool any = false;
-        foreach (RunIskFacts run in runs)
-        {
-            if (run.HomefrontExpectedPayoutIsk is not { } expected)
-                continue;
-
-            sum += CorrectedPayout(run.Parameters) ?? expected;
-            any = true;
-        }
-
-        return any ? new IskContribution(Source, sum, IskCertainty.Measured) : null;
+        decimal[] perCharacter = [.. runs
+            .Where(run => run.HomefrontExpectedPayoutIsk is not null)
+            .GroupBy(run => run.CharacterId)
+            .Select(character => character.Select(run => CorrectedPayout(run.Parameters)).FirstOrDefault(typed => typed is not null)
+                                 ?? character.Max(run => run.HomefrontExpectedPayoutIsk ?? 0m))];
+        return perCharacter.Length > 0 ? new IskContribution(Source, perCharacter.Sum(), IskCertainty.Measured) : null;
     }
 
     /// <summary>The figure the pilot typed over the table's for this run, or null when they typed none.</summary>

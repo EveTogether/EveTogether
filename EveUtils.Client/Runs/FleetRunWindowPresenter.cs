@@ -54,9 +54,11 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
         _dialogs = dialogs;
         _services = services;
         _subscription = eventBus.Subscribe<FleetRunGroupCodeEvent>((integrationEvent, cancellationToken) =>
-            _OnCommanderOfferAsync(new Offer(integrationEvent.Data, IsPrepared: false), cancellationToken));
+            _OnCommanderOfferAsync(new Offer(integrationEvent.Data, IsPrepared: false), integrationEvent.CharacterId,
+                cancellationToken));
         _preparedSubscription = eventBus.Subscribe<FleetRunGroupPreparedEvent>((integrationEvent, cancellationToken) =>
-            _OnCommanderOfferAsync(new Offer(integrationEvent.Data, IsPrepared: true), cancellationToken));
+            _OnCommanderOfferAsync(new Offer(integrationEvent.Data, IsPrepared: true), integrationEvent.CharacterId,
+                cancellationToken));
         _discardSubscription = eventBus.Subscribe<FleetRunDiscardedEvent>(_OnFleetRunEndedAsync);
     }
 
@@ -67,10 +69,16 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
         _discardSubscription.Dispose();
     }
 
-    private async Task _OnCommanderOfferAsync(Offer offer, CancellationToken cancellationToken)
+    private async Task _OnCommanderOfferAsync(Offer offer, int? announcedBy, CancellationToken cancellationToken)
     {
         // Only the commander's start reaches everybody. A member's own start is their own business.
         if (!offer.Start.IsFleetCommander)
+            return;
+        // Nor is a start this client made itself an offer to it (ET-274): the announcement comes back on the local bus,
+        // and with auto-open on it built a second window that joined and adopted the commander's own run and was handed
+        // to the open one as a reload in the middle of its start — the Refresh that wrote HOMEFRONT's first list before
+        // the siblings existed (HF-DYB4) — and then lived on unseen, answering the fleet's events.
+        if (announcedBy is { } sender && await _IsOwnCharacterAsync(sender, cancellationToken))
             return;
 
         if (await _AutoOpensAsync(cancellationToken))
@@ -99,6 +107,10 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
             _services.GetService<IToastService>()?.Dismiss(_OfferKey(groupCode));
         return Task.CompletedTask;
     }
+
+    private async Task<bool> _IsOwnCharacterAsync(int characterId, CancellationToken cancellationToken) =>
+        _services.GetService<ICharacterRegistry>() is { } registry
+        && (await registry.GetAllAsync(cancellationToken)).Any(character => character.EsiCharacterId == characterId);
 
     private async Task<bool> _AutoOpensAsync(CancellationToken cancellationToken)
     {

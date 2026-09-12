@@ -230,11 +230,12 @@ public sealed class RunStorageTests
         Assert.Equal(100_000m, summary.ExpectedPayoutIsk);   // 200,000 split evenly over the two eligible runs
     }
 
-    /// <summary>Review fix on AC-4: one character can hold more than one payout-eligible run in the same activity
-    /// (ET-130), so the split must divide by eligible characters, not eligible runs — dividing by runs would halve
-    /// this character's share of their own two runs without anyone noticing.</summary>
+    /// <summary>Review fix on AC-4, and since ET-274 its other half: a character holds one run per activity (I7), so a
+    /// second start for a character whose run in it is already saved is refused and files nothing — the split stays
+    /// one share per character. Counter-proof: file the second run (as before ET-274) and the activity gains 300,000
+    /// over three runs.</summary>
     [AvaloniaFact]
-    public async Task Rebuild_SplitsExpectedPayoutAcrossEligibleCharacters_NotRuns()
+    public async Task Rebuild_ASecondStartForACharacterAlreadySaved_IsRefused_AndTheSplitStaysPerCharacter()
     {
         using var instance = TestClientInstance.Create();
         IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
@@ -242,11 +243,13 @@ public sealed class RunStorageTests
         await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
             [new LocalMarketPrice { TypeId = 34, AveragePrice = 100_000, AdjustedPrice = 100_000, UpdatedAt = DateTimeOffset.UtcNow }]);
 
-        async Task SaveEligibleRunAsync(long characterId)
+        async Task<Result> SaveEligibleRunAsync(long characterId)
         {
             Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site, StartedAtUtc,
                 1234, "Homefront", 30000142, "HF-7QK2"), cancellationToken);
-            await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+            if (!started.IsSuccess)
+                return started;
+            return await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
                 [new RunLootCaptureInput
                 {
                     CapturedAtUtc = StartedAtUtc.AddMinutes(10),
@@ -254,15 +257,16 @@ public sealed class RunStorageTests
                     Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = 1, LootKind = LootKind.Gained }]
                 }], [], [], []), cancellationToken);
         }
-        await SaveEligibleRunAsync(90000001);   // this character's second eligible run in the same activity
         await SaveEligibleRunAsync(90000001);
+        Result second = await SaveEligibleRunAsync(90000001);
         await SaveEligibleRunAsync(90000002);
 
+        Assert.Equal(MessageCodes.Duplicate, Assert.Single(second.Messages).Code);
         await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
         ActivitySummary summary = Assert.Single(await db.Set<ActivitySummary>().ToListAsync(cancellationToken));
-        Assert.Equal(300_000m, summary.LootIskGained);
-        Assert.Equal(3, summary.PayoutEligibleCount);   // three eligible runs...
-        Assert.Equal(150_000m, summary.ExpectedPayoutIsk);   // ...but 300,000 split over two eligible characters
+        Assert.Equal(200_000m, summary.LootIskGained);
+        Assert.Equal(2, summary.PayoutEligibleCount);
+        Assert.Equal(100_000m, summary.ExpectedPayoutIsk);
     }
 
     /// <summary>Review fix on AC-2/AC-3: <c>LootItemCount</c> already reads a missing quantity as zero pieces, so
@@ -527,6 +531,31 @@ public sealed class RunStorageTests
         await using ClientDbContext verification = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
         Assert.Empty(await verification.Set<Run>().ToListAsync(cancellationToken));
         Assert.Empty(await verification.Set<ActivitySummary>().ToListAsync(cancellationToken));
+    }
+
+    /// <summary>ET-274: a server that holds two runs of one group mate in one activity — an older client published both
+    /// halves of a doubled start — hands this client one: the older, the run every client keeps. Counter-proof: apply
+    /// both and the second breaks the one-run-per-character index, and with it the whole pull.</summary>
+    [AvaloniaFact]
+    public async Task ApplyPulledRuns_TwoRunsOfOneCharacterInOneActivity_StoresTheOlderOne()
+    {
+        using var instance = TestClientInstance.Create();
+        RunSynchronizationApplier applier = instance.Services.GetRequiredService<RunSynchronizationApplier>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Guid older = Guid.CreateVersion7(DateTimeOffset.UtcNow.AddSeconds(-3));
+        Guid newer = Guid.CreateVersion7();
+        RunWirePayload Pulled(Guid id) => new()
+        {
+            Run = RunWireData.FromEntity(new Run { Id = id, CharacterId = 90000077, GroupCode = "HF-7QK2", ActivityKind = ActivityKind.Site,
+                State = RunState.Saved, StartedAtUtc = StartedAtUtc, StoppedAtUtc = StartedAtUtc.AddMinutes(15), SavedAtUtc = StartedAtUtc.AddMinutes(16),
+                SiteTypeId = 1234, SiteName = "Homefront", Revision = 1 }),
+            SentAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+        };
+
+        await applier.ApplyAsync(ServerAddress, [Pulled(newer), Pulled(older)], new HashSet<Guid>(), cancellationToken);
+
+        await using ClientDbContext verification = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        Assert.Equal(older, Assert.Single(await verification.Set<Run>().ToListAsync(cancellationToken)).Id);
     }
 
     [AvaloniaFact]
