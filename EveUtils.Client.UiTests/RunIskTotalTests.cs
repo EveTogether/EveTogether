@@ -480,7 +480,8 @@ public sealed class RunIskTotalTests
     private static RunIskFacts _Facts(decimal bounty = 0m, decimal? lootNet = null, bool hasLoot = false,
         IReadOnlyList<RunIskParameter>? parameters = null, DateTime? stoppedAtUtc = null,
         decimal? consumableIskCost = null, bool hasConsumables = false,
-        decimal? miningIskValue = null, bool hasMining = false) => new()
+        decimal? miningIskValue = null, bool hasMining = false,
+        decimal? homefrontExpectedPayoutIsk = null) => new()
     {
         BountyIsk = bounty,
         LootIskNet = lootNet,
@@ -490,7 +491,8 @@ public sealed class RunIskTotalTests
         MiningIskValue = miningIskValue,
         HasMining = hasMining || miningIskValue is not null,
         Parameters = parameters ?? [],
-        StoppedAtUtc = stoppedAtUtc
+        StoppedAtUtc = stoppedAtUtc,
+        HomefrontExpectedPayoutIsk = homefrontExpectedPayoutIsk
     };
 
     /// <summary>The repository folder, found from the test binary rather than from a checkout path baked in here.</summary>

@@ -35,4 +35,12 @@ public sealed record RunIskFacts
 
     /// <summary>When the run stopped — the moment a mission's bonus is judged at. Null while it is still going.</summary>
     public required DateTime? StoppedAtUtc { get; init; }
+
+    /// <summary>What the fixed table owes this run's own character right now — the homefront payout table read
+    /// against this character's own tick, N and outcome (ET-231). Null on every non-homefront run, and on a homefront
+    /// run nothing is owed on yet (not ticked in, outcome not completed, N not known, or no table for the date).
+    /// Never what was confirmed — that already counts through <see cref="Parameters"/>' own
+    /// <c>RunParameterKey.FixedPayout</c> row, and <c>HomefrontPayoutIskContributor</c> is the one place the two are
+    /// told apart.</summary>
+    public required decimal? HomefrontExpectedPayoutIsk { get; init; }
 }

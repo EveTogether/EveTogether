@@ -59,6 +59,12 @@ public sealed record RunTypeDefinition
     /// so the two cannot drift apart.</summary>
     public bool PaysPerCharacterInSite => WindowSections.Contains(RunSectionId.Homefront);
 
+    /// <summary>The homefront kind this row was refined to (ET-228), e.g. "Raid" or "Metaliminal Meteoroid" — null on
+    /// every non-homefront type and on a homefront run whose dungeon id never resolved to exactly one kind. The one
+    /// fact <see cref="HomefrontPayoutTable.CurveFor"/> needs, so a screen never has to carry the raw dungeon id
+    /// around on its own just to price a payout (ET-231).</summary>
+    public string? HomefrontKind { get; init; }
+
     /// <summary>Each pilot's clock starts on their own way in and stops on their own way out, so a shared run of this
     /// type lasts from the first pilot in to the last one out and the commander's STOP ends only the commander's own
     /// leg (ET-243, ET-246). Derived from the space: an abyssal pocket is the one place whose entry and exit this app
@@ -323,12 +329,13 @@ public static class RunTypeCatalogue
             ? baseType with
             {
                 Name = name,
+                HomefrontKind = kind,
                 WindowSections = [.. baseType.WindowSections, RunSectionId.Mining],
                 DetailSections = [.. baseType.DetailSections, RunSectionId.Mining],
                 SiteMiningCapacityUnits = HomefrontCatalogue.CapacityUnitsByKind.TryGetValue(kind, out int capacity)
                     ? capacity
                     : null
             }
-            : baseType with { Name = name };
+            : baseType with { Name = name, HomefrontKind = kind };
     }
 }

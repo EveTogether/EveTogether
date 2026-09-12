@@ -828,6 +828,15 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)");
 
+                    b.Property<int?>("HomefrontCompletedWaveCount")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("HomefrontOutcome")
+                        .HasColumnType("int");
+
+                    b.Property<string>("HomefrontPayoutTableVersion")
+                        .HasColumnType("longtext");
+
                     b.Property<bool?>("InSiteAtCompletion")
                         .HasColumnType("tinyint(1)");
 

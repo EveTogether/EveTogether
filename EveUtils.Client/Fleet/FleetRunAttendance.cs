@@ -61,7 +61,8 @@ public sealed class FleetRunAttendance : ISingletonService, IDisposable
     /// commander wrote on their own runs and what a member writes on theirs cannot differ.</summary>
     public static RunAttendanceDecision ToDecision(RunGroupAttendance attendance, int commanderCharacterId) => new(
         attendance.Characters, attendance.NotOnRosterCount, AttendanceSource.FleetCommander, commanderCharacterId,
-        DateTimeOffset.FromUnixTimeMilliseconds(attendance.UnixMs).UtcDateTime);
+        DateTimeOffset.FromUnixTimeMilliseconds(attendance.UnixMs).UtcDateTime,
+        attendance.Outcome, attendance.CompletedWaveCount);
 
     private async Task _OnAttendanceAsync(FleetRunAttendanceEvent integrationEvent, CancellationToken cancellationToken)
     {

@@ -28,7 +28,7 @@ internal sealed class GetRunGroupParticipantsQueryHandler(IDbContextFactory<Clie
                 run.BountyEntries.Sum(entry => entry.Isk),
                 run.MiningEntries.Select(entry => new RunMiningOreDto(entry.OreType, entry.Units, entry.CriticalUnits, entry.ResidueUnits))
                     .ToList(),
-                run.InSiteAtCompletion))
+                run.InSiteAtCompletion, run.AttendanceCount, run.HomefrontOutcome, run.HomefrontCompletedWaveCount))
             .ToListAsync(cancellationToken);
         return Result<IReadOnlyList<RunGroupParticipantDto>>.Success(participants);
     }

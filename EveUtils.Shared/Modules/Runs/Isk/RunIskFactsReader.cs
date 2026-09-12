@@ -33,9 +33,20 @@ internal static class RunIskFactsReader
             HasMining = run.MiningEntries.Count > 0,
             Parameters = [.. all.Select(parameter => new RunIskParameter(
                 parameter.ParameterKey, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))],
-            StoppedAtUtc = run.StoppedAtUtc
+            StoppedAtUtc = run.StoppedAtUtc,
+            HomefrontExpectedPayoutIsk = HomefrontExpectedPayout(run)
         };
     }
+
+    /// <summary>What the curve owes this run's own character right now (ET-231), read the same way for a saved
+    /// activity and the open run window (<c>ActivityWindowViewModel</c> reads the identical fact off its own
+    /// participant rows, kept in step with the run's own columns).</summary>
+    public static decimal? HomefrontExpectedPayout(Run run) =>
+        HomefrontCatalogue.KindByDungeonId.TryGetValue(run.SiteTypeId, out string? kind)
+            && HomefrontPayoutTable.TryGetExpected(kind, run.InSiteAtCompletion, run.AttendanceCount,
+                run.HomefrontOutcome, run.HomefrontCompletedWaveCount, run.StoppedAtUtc ?? DateTime.UtcNow) is { } expected
+            ? expected.Amount
+            : null;
 
     /// <summary>Priced mining, ore by ore (ET-229): the resolved by-exact-SDE-name type id decides the price
     /// (<see cref="MiningValuation"/>), residue never counts (depleted, never collected, no ISK value), and a

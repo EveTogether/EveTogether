@@ -34,11 +34,13 @@ public static class RunSectionModules
         new(RunSectionId.Activity,
             context => new ActivityWindowSectionViewModel(context),
             services => new ActivityDetailSectionViewModel(services.Sde)),
-        // Straight under ACTIVITY, where the money of a homefront is decided (ET-230, mockup pin 4). No ISK source of
-        // its own yet: the fixed payout per ticked character is ET-231's contributor, which reads N and the tick.
+        // Straight under ACTIVITY, where the money of a homefront is decided (ET-230, mockup pin 4). The fixed
+        // payout per ticked character, before it is confirmed, is HomefrontPayoutIskContributor's own share (ET-231)
+        // — once confirmed it is a FixedPayout RunParameter instead, counted under Rewards on MISSION's module.
         new(RunSectionId.Homefront,
             context => new HomefrontWindowSectionViewModel(context),
-            services => new HomefrontDetailSectionViewModel(services)),
+            services => new HomefrontDetailSectionViewModel(services),
+            IskSource.HomefrontPayout),
         new(RunSectionId.Mission,
             context => new MissionWindowSectionViewModel(context),
             services => new MissionDetailSectionViewModel(services.Sde),
