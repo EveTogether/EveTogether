@@ -239,10 +239,19 @@ public static class RunTypeCatalogue
         // the kind's own name and, for a mining kind (Metaliminal Meteoroid, Abyssal Artifact Recovery), MINING —
         // the per-run refinement ET-236's design left for this ticket. Every kind has HOMEFRONT (ET-230), straight
         // under ACTIVITY: the payout is per character counted in the site, whatever the site is flown as.
+        // A homefront can never escalate — it is flown out completely rather than raided for a fraction of it — so
+        // it drops ESCALATION (and the window's "register escalation" link, derived from it) and LOOT STRATEGY
+        // (blitzed/cherry-picked read as leaving part of it unflown) that an ordinary site's own row carries
+        // (ET-273, Jithran).
         [RunTypeId.Homefront] = _Site(RunTypeId.Homefront, "Homefront", MaterialIconKind.Castle) with
         {
             WindowSections = [RunSectionId.Activity, RunSectionId.Homefront, .. StandardWindow.Skip(1)],
-            DetailSections = [RunSectionId.Activity, RunSectionId.Homefront, .. SiteDetail.Skip(1)]
+            DetailSections =
+            [
+                RunSectionId.Activity, RunSectionId.Homefront,
+                .. SiteDetail.Skip(1).Where(id => id != RunSectionId.Escalation)
+            ],
+            LootStrategies = []
         },
         [RunTypeId.Abyssal] = new()
         {
