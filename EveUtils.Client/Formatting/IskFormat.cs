@@ -39,6 +39,18 @@ public static class IskFormat
     /// with a promise in it never passes for money that already arrived. Empty otherwise.</summary>
     public static string ExpectedPart(IskBreakdown isk) => isk.HasExpectedPart ? " (part expected)" : string.Empty;
 
+    /// <summary>A whole ISK amount as a pilot types it — grouped the way <see cref="Number"/> writes it, grouped the
+    /// other way, or not at all, with or without "ISK". Every figure this reads is whole ISK, so any separator is
+    /// grouping; false for anything that is not a non-negative number.</summary>
+    public static bool TryParseWhole(string? text, out decimal amount)
+    {
+        amount = 0m;
+        string digits = new([.. (text ?? string.Empty).Replace("ISK", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Where(character => character is not (',' or '.' or ' ' or '\'' or ' '))]);
+        return digits.Length > 0 && digits.All(char.IsAsciiDigit)
+               && decimal.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out amount);
+    }
+
     /// <summary>Like <see cref="WholeOrNoPrice"/>, without the "ISK" suffix.</summary>
     public static string NumberOrNoPrice(decimal? value) => value is { } v ? Number(v) : "no price";
 

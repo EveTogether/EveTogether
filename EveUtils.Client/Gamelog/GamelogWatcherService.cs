@@ -28,7 +28,7 @@ namespace EveUtils.Client.Gamelog;
 public sealed class GamelogWatcherService : ISingletonService
 {
     /// <summary>Settings key for the user-configured gamelog directory.</summary>
-    public const string GamelogDirectorySettingKey = "gamelog.directory";
+    public const string GamelogDirectorySettingKey = GameLogLocations.DirectorySettingKey;
 
     private readonly GamelogClientService _gamelog;
     private readonly IServiceProvider _services;
@@ -91,8 +91,7 @@ public sealed class GamelogWatcherService : ISingletonService
         using var scope = _services.CreateScope();
         var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
         var settings = await dispatcher.Query(new GetSettingsQuery(), cancellationToken);
-        var saved = settings.FirstOrDefault(s => s.Key == GamelogDirectorySettingKey)?.Value;
-        return string.IsNullOrWhiteSpace(saved) ? GameLogLocations.Default() : saved;
+        return GameLogLocations.Resolve(settings.FirstOrDefault(s => s.Key == GamelogDirectorySettingKey)?.Value);
     }
 
     private void StartOn(string directory)

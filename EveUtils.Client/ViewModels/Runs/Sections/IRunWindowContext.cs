@@ -5,6 +5,7 @@ using System.ComponentModel;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Sde.Dtos;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
@@ -126,6 +127,15 @@ public interface IRunWindowContext : INotifyPropertyChanged
     RunLootViewModel? RunLoot { get; }
 
     ActivityLootViewModel? LootOverview { get; }
+
+    /// <summary>Each participant's own share of TOTAL ISK, by character (ET-272) — added up by the ISK registry from
+    /// the very facts TOTAL ISK is, on the same tick. Announced as a change of this property every time it is.</summary>
+    IReadOnlyDictionary<long, IskBreakdown> CharacterIsk { get; }
+
+    /// <summary>TOTAL ISK exactly as the header shows it.</summary>
+    string GroupTotalIskText { get; }
+
+    bool HasGroupTotalIsk { get; }
 
     /// <summary>Work the whole window out again, for a section that changed something the window shows.</summary>
     void Refresh(DateTime nowUtc);

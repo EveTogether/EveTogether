@@ -135,9 +135,10 @@ public sealed partial class MissionDetailSectionViewModel(ISdeAccessor? sde) : R
     // RunParameterKey lands and is not on it — exactly what happened to RunParameterKey.AbyssalFilament, which
     // showed up here as two "ABYSSAL FILAMENT 3|Dark" reward rows and, through HasContent below, put a MISSION
     // section on an abyssal's detail screen even though RunTypeCatalogue never claims one for that type. A key
-    // this list has not caught up with now starts out of the rewards rather than in them.
+    // this list has not caught up with now starts out of the rewards rather than in them. A FixedPayout is a homefront
+    // payout typed over the table's (ET-271): HOMEFRONT's to show, on its own row, never a mission's reward.
     private static bool _IsRewardRow(RunParameterDto parameter) =>
-        parameter.ParameterKey is RunParameterKey.Isk or RunParameterKey.Bounty or RunParameterKey.FixedPayout
+        parameter.ParameterKey is RunParameterKey.Isk or RunParameterKey.Bounty
             or RunParameterKey.Escrow or RunParameterKey.LoyaltyPoints or RunParameterKey.Evermarks
             or RunParameterKey.Item or RunParameterKey.Loot or RunParameterKey.Standings or RunParameterKey.Filament
             or RunParameterKey.Unknown;

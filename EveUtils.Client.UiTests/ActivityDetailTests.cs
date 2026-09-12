@@ -60,7 +60,7 @@ public sealed class ActivityDetailTests
             nameOf: id => id == 90000001 ? "RaymondKrah" : $"character {id}");
         await viewModel.LoadAsync(cancellationToken);
 
-        Assert.Equal("RaymondKrah", Assert.Single(viewModel.Fleet().RunRows).CharacterText);
+        Assert.Equal("RaymondKrah", Assert.Single(viewModel.Fleet().Rows).Name);
     }
 
     // ── LOCATION shows a name, not a bare id (ET-213) ───────────────────────────────────────────────
@@ -677,13 +677,13 @@ public sealed class ActivityDetailTests
         var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(true) };
         ActivityDetailViewModel viewModel = await _ViewModelAsync(instance, dispatcher, cancellationToken,
             ownCharacterIds: [90000001], dialogs: dialogs);
-        Assert.Equal("2 participants", viewModel.Fleet().ParticipantCountText);
+        Assert.Equal(2, viewModel.Fleet().Rows.Count);
 
         await viewModel.DeleteCommand.ExecuteAsync(null);
 
         Assert.False(viewModel.IsDeleted);
         Assert.False(viewModel.CanDelete);
-        Assert.Equal("1 participants", viewModel.Fleet().ParticipantCountText);
+        Assert.Equal(90000002, Assert.Single(viewModel.Fleet().Rows).CharacterId);
 
         await using ClientDbContext db = await instance.Services
             .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);

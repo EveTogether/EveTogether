@@ -330,7 +330,11 @@ public sealed class RunIskTotalTests
     private static readonly (string Section, string Reason)[] ShowsOthersIsk =
     [
         (nameof(FleetWindowSectionViewModel),
-            "what fleetmates share about their own runs over the fleet stream — their figures, not a share of this run's total")
+            "one row per character (ET-272): each character's share of every source, read off the registry's own "
+            + "breakdown, fleet mates' figures from the fleet stream, and TOTAL ISK itself — no source of its own"),
+        (nameof(FleetDetailSectionViewModel),
+            "the same row per character on the saved activity, from the registry's breakdown per character, and the "
+            + "stored TOTAL ISK — no source of its own")
     ];
 
     // What puts an ISK figure on screen: the ISK formatter, a view model's ISK readout, or a view binding one.

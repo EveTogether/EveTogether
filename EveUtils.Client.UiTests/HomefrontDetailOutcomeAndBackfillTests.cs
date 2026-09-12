@@ -40,9 +40,8 @@ public sealed class HomefrontDetailOutcomeAndBackfillTests
 
     /// <summary>HF-KQWB, after ET-269: a saved activity with five own runs and an undecided outcome can still be
     /// marked Completed from the detail screen, the payout counts at once (no "expected", ET-269 overriding ET-231),
-    /// and correcting who was in site afterwards never wipes the outcome back to "not decided" (the bug
-    /// <see cref="HomefrontDetailSectionViewModel.SaveEditAsync"/> had: it built a brand new decision with only the
-    /// list, defaulting Outcome to null).</summary>
+    /// and correcting who was in site afterwards never wipes the outcome back to "not decided" (the bug the detail
+    /// screen's old SAVE LIST had: it built a brand new decision with only the list, defaulting Outcome to null).</summary>
     [AvaloniaFact]
     public async Task ASavedActivityWithFiveOwnRuns_CanBeMarkedCompletedAfterwards_AndAnAttendanceCorrectionKeepsIt()
     {
@@ -64,24 +63,23 @@ public sealed class HomefrontDetailOutcomeAndBackfillTests
         Assert.Equal("not decided", section.OutcomeText);
         Assert.True(section.CanDecideOutcome);
 
+        // One click, and the stored total follows by itself (ET-271: a change after SAVE adds the summary up again).
         await section.SetOutcomeCommand.ExecuteAsync(HomefrontOutcome.Completed);
-        await dispatcher.Send(new RebuildActivitySummariesCommand());
 
         (section, _) = await _DetailAsync(instance, "HF-KQWB", own);
         Assert.Equal("completed", section.OutcomeText);
         Assert.Contains("75,000,000 ISK", section.PayoutSummaryText); // 5 × 15,000,000 — Raid's own N=5 figure.
         AttendanceRowViewModel jithranRow = section.Rows.Single(row => row.CharacterId == Jithran);
-        Assert.Equal("15,000,000 ISK", jithranRow.PayoutText); // never "expected"/"confirmed" (ET-269).
+        Assert.Equal("15,000,000", jithranRow.PayoutText); // never "expected"/"confirmed" (ET-269).
 
         IskBreakdown isk = (await _RowAsync(instance, "HF-KQWB")).Isk;
         Assert.Equal(IskCertainty.Measured, isk.Of(IskSource.HomefrontPayout)?.Certainty);
         Assert.Equal(75_000_000m, isk.Of(IskSource.HomefrontPayout)?.Amount);
 
-        // Now correct who was in the site — Noahmarr out — without touching the outcome at all.
-        section.EditCommand.Execute(null);
+        // Now correct who was in the site — Noahmarr out, one click on his row — without touching the outcome at all.
         section.Rows.Single(row => row.CharacterId == Noahmarr).IsInSite = false;
-        await section.SaveEditCommand.ExecuteAsync(null);
-        await dispatcher.Send(new RebuildActivitySummariesCommand());
+        for (int attempt = 0; attempt < 100 && (await _RowAsync(instance, "HF-KQWB")).Isk.Of(IskSource.HomefrontPayout)?.Amount != 48_000_000m; attempt++)
+            await Task.Delay(20);
 
         (section, _) = await _DetailAsync(instance, "HF-KQWB", own);
         Assert.Equal("completed", section.OutcomeText); // ET-269: the outcome survived the correction.

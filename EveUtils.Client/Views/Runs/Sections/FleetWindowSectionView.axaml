@@ -1,58 +1,74 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:va="using:EveUtils.Client.ViewModels.Activity"
              xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
              xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
              x:Class="EveUtils.Client.Views.Runs.Sections.FleetWindowSectionView"
              x:DataType="vs:FleetWindowSectionViewModel">
+    <UserControl.Styles>
+        <!-- The loot-split action is an exception (ET-272): it shows on the row under the pointer, and stays in view
+             only on a row already left out, where it is the way back. -->
+        <Style Selector="Button.shareaction">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="Grid.fleetrow:pointerover Button.shareaction.can, Button.shareaction.can.out">
+            <Setter Property="IsVisible" Value="True"/>
+        </Style>
+    </UserControl.Styles>
+
     <StackPanel>
-        <!-- Who this window has heard from, one row per shared location (ET-98). Not a roster: a
-             member who does not share their location is in the fleet and not in this list, which is
-             what the caption under it says rather than leaving the reader to count. -->
-        <ItemsControl x:Name="FleetMemberList" ItemsSource="{Binding FleetMembers}">
+        <!-- One row per character (ET-272): Local first, then fleet mates, each with what they made this run. -->
+        <ItemsControl x:Name="FleetRows" ItemsSource="{Binding Rows}">
             <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="va:ActivityFleetMemberViewModel">
-                    <Grid Classes="kv" ColumnDefinitions="*,Auto">
-                        <StackPanel>
-                            <TextBlock Text="{Binding Name}"/>
-                            <TextBlock Classes="hint" Margin="0" Text="{Binding IskText}"/>
+                <DataTemplate x:DataType="vr:FleetCharacterRowViewModel">
+                    <Grid Classes="fleetrow" ColumnDefinitions="Auto,*,Auto" Margin="0,3" Background="Transparent">
+                        <Border Classes="localbar" Classes.on="{Binding IsLocal}"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Classes="charname" Text="{Binding Name}"/>
+                                <Border Classes="localtag" IsVisible="{Binding IsLocal}">
+                                    <TextBlock Text="Local"/>
+                                </Border>
+                                <Border Classes="chip warn" Margin="6,0,0,0" IsVisible="{Binding IsLeftOutOfSplit}">
+                                    <TextBlock Text="no loot share"/>
+                                </Border>
+                                <!-- On the name's own line, so appearing under the pointer never moves the rows. -->
+                                <Button Classes="rowlink shareaction" Classes.out="{Binding IsLeftOutOfSplit}"
+                                        Classes.can="{Binding CanToggleShare}" Margin="8,0,0,0" VerticalAlignment="Center"
+                                        Content="{Binding ShareActionText}" Command="{Binding ToggleShareCommand}"/>
+                            </StackPanel>
+                            <TextBlock Classes="hint" Margin="0" IsVisible="{Binding SubText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                       Text="{Binding SubText}"/>
                         </StackPanel>
-                        <TextBlock Grid.Column="1" Classes="hint" Margin="0"
-                                   VerticalAlignment="Center" Text="{Binding LocationText}"/>
+                        <ItemsControl Grid.Column="2" ItemsSource="{Binding Figures}" VerticalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="12"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vr:FleetFigure">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Classes="figlabel" Text="{Binding Label}"/>
+                                        <TextBlock Classes="figvalue" Text="{Binding Value}" IsVisible="{Binding !IsQuiet}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </Grid>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
-        <!-- Directly under the names it adds up, and above the caption that says the list is not the
-             roster: a total standing anywhere else would have to explain what it covers. -->
-        <Grid x:Name="FleetTotalRow" Classes="kv" ColumnDefinitions="Auto,*"
-              IsVisible="{Binding IsFleetTotalShown}">
-            <TextBlock Text="fleet total"/>
-            <TextBlock Grid.Column="1" Margin="8,0,0,0" HorizontalAlignment="Right"
-                       VerticalAlignment="Center" Text="{Binding FleetTotalText}"/>
-        </Grid>
-        <TextBlock x:Name="FleetBasisText" Classes="hint" Margin="0" TextWrapping="Wrap"
-                   Text="{Binding FleetBasisText}"/>
-        <!-- Two columns because they are two facts: who flew the site, and who takes a share of it.
-             A pilot can be the first without the second — the hauler who fetched ore (ET-105). -->
-        <ItemsControl ItemsSource="{Binding Participants}">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vr:RunParticipantViewModel">
-                    <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto">
-                        <StackPanel>
-                            <TextBlock Text="{Binding CharacterName}"/>
-                            <TextBlock Classes="hint" Margin="0" Text="{Binding StandingText}"/>
-                        </StackPanel>
-                        <TextBlock Grid.Column="1" VerticalAlignment="Center"
-                                   Text="{Binding PayoutDisplay}"/>
-                        <CheckBox Grid.Column="2" Margin="8,0,0,0" Content="share"
-                                  IsChecked="{Binding IsPayoutEligible, Mode=TwoWay}"/>
-                    </Grid>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
-        <TextBlock Classes="hint" Margin="0" TextWrapping="Wrap"
-                   IsVisible="{Binding Participants.Count}"
-                   Text="{Binding PayoutExpectationLabel}"/>
+
+        <!-- TOTAL ISK itself, under the rows it is the sum of — the header's own text, never added up again here. -->
+        <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Margin="0,4,0,0" Padding="0,2,0,0"
+                IsVisible="{Binding IsTotalShown}">
+            <Grid x:Name="FleetTotalRow" Classes="kv" ColumnDefinitions="Auto,*">
+                <TextBlock Text="TOTAL" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="{Binding TotalText}"/>
+            </Grid>
+        </Border>
+        <TextBlock x:Name="FleetNote" Classes="hint" Margin="0,2,0,0"
+                   IsVisible="{Binding NoteText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding NoteText}"/>
     </StackPanel>
 </UserControl>

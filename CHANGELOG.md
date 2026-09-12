@@ -13,6 +13,24 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Changed: a homefront is tracked by flying it — copy, fly, STOP.** The outcome is now one switch (Completed /
+  Failed / Unknown) that starts at Completed and sits in the run window from the first second, and everyone in your
+  fleet starts in the site — other pilots too, who count for the payout's N but never for your own total. STOP stores
+  it as it stands, with no question after it: five of your own characters on a Hall of Sacrifice are 15,000,000 each
+  and 75,000,000 plus bounty, in the run window, the detail screen, the runs overview and the month bar alike. The
+  exceptions are one click each: Failed, a character who was not in the site, or — by clicking an amount — a
+  different figure that really arrived, which opens already filled in and saves on Enter. Homefronts saved before
+  this version keep "not decided" until you click Completed on them once.
+- **Changed: FLEET is one line per character.** Each of your own characters shows what it made — bounty, loot, ore,
+  a homefront's payout — never "loot not shared"; a fleet mate shows what their client shares, and "not shared" only
+  when they really withhold it. A total line under the list is the same figure as TOTAL ISK. The "share" checkbox is
+  gone: leaving someone out of the loot split, the hauler say, is one click on their row, and the others' part is
+  worked out on the spot.
+- **Fixed: a homefront's outcome could be lost at STOP, and totals could stay stale after a correction.** A pick is
+  now stored on every run of the group the moment it is made, an outcome once set can no longer be wiped by a later
+  list that carries none, and every change after SAVE — outcome, who was in the site, a typed amount, the loot split —
+  adds the activity up again straight away. Activities already saved are added up again once at the next start, and
+  a character added to a homefront after the fact now gets its bounty back from its own game log.
 - **Fixed: the own-character multi-pick at the start of a run no longer forgets everyone but the pilot after a
   restart.** A copied signature or mission that asks "Whose run is this?" now defaults to every one of your own
   characters in your active fleet, not only the one who copied it — unticking one is remembered for that fleet's

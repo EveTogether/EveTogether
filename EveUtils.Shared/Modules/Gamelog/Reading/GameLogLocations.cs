@@ -10,6 +10,9 @@ namespace EveUtils.Shared.Modules.Gamelog.Reading;
 /// </summary>
 public static class GameLogLocations
 {
+    /// <summary>The client setting a pilot overrides the directory with.</summary>
+    public const string DirectorySettingKey = "gamelog.directory";
+
     private const string EveSteamAppId = "8500";
     private static readonly string[] DocumentsTail = ["Documents", "EVE", "logs", "Gamelogs"];
 
@@ -19,6 +22,10 @@ public static class GameLogLocations
         var candidates = Candidates().ToList();
         return candidates.FirstOrDefault(Directory.Exists) ?? candidates[0];
     }
+
+    /// <summary>The directory the watcher tails: the pilot's own setting, or <see cref="Default"/> without one.</summary>
+    public static string Resolve(string? configured) =>
+        string.IsNullOrWhiteSpace(configured) ? Default() : configured;
 
     /// <summary>Candidate gamelog directories for the current OS, most-likely first.</summary>
     public static IEnumerable<string> Candidates()

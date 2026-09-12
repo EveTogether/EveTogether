@@ -6,5 +6,9 @@ namespace EveUtils.Client.Views.Runs.Sections;
 /// <summary>The detail screen's HOMEFRONT body (ET-230).</summary>
 public partial class HomefrontDetailSectionView : UserControl
 {
-    public HomefrontDetailSectionView() => AvaloniaXamlLoader.Load(this);
+    public HomefrontDetailSectionView()
+    {
+        AvaloniaXamlLoader.Load(this);
+        PayoutEditorKeys.Attach(this);
+    }
 }

@@ -878,4 +878,144 @@
         <Setter Property="Margin" Value="0,6,0,0"/>
     </Style>
 
+    <!-- ── One row per character (HOMEFRONT and FLEET, run window and detail screen alike, ET-271/272) ──
+         Here rather than in each section view: the four views draw the same row, and two copies of a style drift. -->
+    <!-- "Local" and the accent bar say which characters are this client's own — the one thing it knows. -->
+    <Style Selector="Border.localtag">
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="4,0,4,1"/>
+        <Setter Property="Margin" Value="6,0,0,0"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Border.localtag TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        <Setter Property="FontSize" Value="9"/>
+        <Setter Property="LetterSpacing" Value="1.2"/>
+    </Style>
+    <Style Selector="Border.localbar">
+        <Setter Property="Width" Value="2"/>
+        <Setter Property="Margin" Value="0,2,6,2"/>
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Border.localbar.on">
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    </Style>
+    <Style Selector="TextBlock.charname">
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+    <!-- What the evidence says, beside the name: a hint, never the decision itself. -->
+    <Style Selector="TextBlock.rowhint">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="FontSize" Value="9.5"/>
+        <Setter Property="Margin" Value="8,0,0,0"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+    <Style Selector="TextBlock.rowhint.warn">
+        <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+    </Style>
+    <!-- A figure on a row: the word dim, the number bright, so a line of three figures still reads at a glance. -->
+    <Style Selector="TextBlock.figlabel">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="FontSize" Value="9.5"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.figvalue">
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="Margin" Value="4,0,0,0"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- ── A switch of a few words (HOMEFRONT's outcome, ET-271) ── one lit, the rest quiet; clicking another moves
+         it. Joined into one bar, so it reads as one control with a position rather than as three buttons. -->
+    <Style Selector="Button.seg">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="10,3"/>
+        <Setter Property="Margin" Value="-1,0,0,0"/>
+        <Setter Property="FontSize" Value="10.5"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.seg:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+    <Style Selector="Button.seg.on /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+    <!-- Lit is said in weight too, not by a tint alone. -->
+    <Style Selector="Button.seg.on">
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="ZIndex" Value="1"/>
+    </Style>
+    <Style Selector="Button.seg.on.bad /template/ ContentPresenter">
+        <Setter Property="Background" Value="#33EF5A5A"/>
+        <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
+    </Style>
+
+    <!-- ── A figure that opens an editor when clicked (a homefront payout, ET-271) ── reads as the number it is, with
+         a dotted rule under it that says it can be clicked, rather than as a field waiting to be filled. -->
+    <Style Selector="Button.amount">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.amount:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+    </Style>
+    <!-- A typed figure stays marked as one: accent ink, so it is never mistaken for the table's own. -->
+    <Style Selector="Button.amount.corrected">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+    </Style>
+    <Style Selector="TextBox.amountedit">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Padding" Value="4,1"/>
+        <Setter Property="Width" Value="96"/>
+        <Setter Property="TextAlignment" Value="Right"/>
+    </Style>
+    <!-- Focused, the theme would paint the box near-white under light text; it stays the window's own dark. -->
+    <Style Selector="TextBox.amountedit:focus /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="#1AFFFFFF"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    </Style>
+    <Style Selector="TextBox.amountedit:focus">
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+    <!-- A quiet word that acts — "leave out of loot split" — shown on the row under the pointer only. -->
+    <Style Selector="Button.rowlink">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="FontSize" Value="9.5"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.rowlink:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="TextBlock.TextDecorations" Value="Underline"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+    </Style>
+
 </Styles>

@@ -4,6 +4,7 @@ using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
+using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Queries;
@@ -28,7 +29,9 @@ internal sealed class GetRunGroupParticipantsQueryHandler(IDbContextFactory<Clie
                 run.BountyEntries.Sum(entry => entry.Isk),
                 run.MiningEntries.Select(entry => new RunMiningOreDto(entry.OreType, entry.Units, entry.CriticalUnits, entry.ResidueUnits))
                     .ToList(),
-                run.InSiteAtCompletion, run.AttendanceCount, run.HomefrontOutcome, run.HomefrontCompletedWaveCount))
+                run.InSiteAtCompletion, run.AttendanceCount, run.HomefrontOutcome, run.HomefrontCompletedWaveCount,
+                run.Parameters.Where(parameter => parameter.ParameterKey == RunParameterKey.FixedPayout)
+                    .Select(parameter => parameter.Amount).FirstOrDefault()))
             .ToListAsync(cancellationToken);
         return Result<IReadOnlyList<RunGroupParticipantDto>>.Success(participants);
     }

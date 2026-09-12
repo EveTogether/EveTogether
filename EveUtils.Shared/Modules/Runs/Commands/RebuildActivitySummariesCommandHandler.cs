@@ -59,28 +59,8 @@ internal sealed class RebuildActivitySummariesCommandHandler(
 
         // Valuation always goes through ET's own type-id lookup (the LocalMarketPrice cache), never the clipboard's
         // own ISK column — the same rule RunLootViewModel._LoadPricesAsync follows for the running run.
-        List<int> lootTypeIds = [.. runs
-            .SelectMany(run => run.LootCaptures)
-            .Where(capture => !capture.IsExcluded)
-            .SelectMany(capture => capture.Entries)
-            .Select(entry => entry.ItemTypeId)
-            .Distinct()];
-        // CONSUMABLES prices through the same cache, keyed by each run's own resolved filament type (ET-249).
-        List<int> filamentTypeIds = [.. parametersByRun
-            .Select(group => RunIskFactsReader.FilamentTypeId(group))
-            .OfType<int>()
-            .Distinct()];
-        // MINING prices through the same cache, keyed by each ore's own resolved type — by exact SDE name, never
-        // guessed (ET-229). Mutanite's fixed NPC price never needs the cache at all (MiningValuation), so it is not
-        // collected here; a market miss for it never happens because the price never comes from this dictionary.
-        List<int> oreTypeIds = sde.IsAvailable
-            ? [.. runs.SelectMany(run => run.MiningEntries)
-                .Select(entry => sde.TryGetTypeId(entry.OreType, out int typeId) ? (int?)typeId : null)
-                .OfType<int>()
-                .Distinct()]
-            : [];
         IReadOnlyDictionary<int, double> prices = await marketPrices.GetAveragePricesAsync(
-            [.. lootTypeIds.Concat(filamentTypeIds).Concat(oreTypeIds).Distinct()], cancellationToken);
+            [.. RunIskFactsReader.PricedTypeIds(runs, parametersByRun.SelectMany(group => group), sde)], cancellationToken);
 
         // Updated in place rather than deleted and re-added, so an activity keeps its summary id across rebuilds and a
         // screen that opened it by that id — the detail screen, an overview row — still finds it after a save or a

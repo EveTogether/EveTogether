@@ -60,12 +60,11 @@ public sealed class HomefrontAttendanceTests
 
     // ── The proposal ────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Evidence proposes, by EVE's own thresholds; an own character with nothing to go on still defaults in
-    /// — deliberately put into the run (ET-269) — but is still marked for a look, since it is a guess and not a
-    /// measurement. Anyone else with nothing to go on, own fleet roster or external, stays out. Counter-proof: drop
-    /// the 1,000 threshold and Noahmarr's single 999-damage volley ticks him for a measured reason instead.</summary>
+    /// <summary>Everyone in the fleet is in the site (ET-271: "als ik in een fleet zit ga ik er vanuit dat fleetmembers
+    /// meedoen"), externals included; evidence only names why, by EVE's own thresholds. Counter-proof: drop the 1,000
+    /// threshold and Noahmarr's single 999-damage volley reads as a measured reason instead of none.</summary>
     [Fact]
-    public void TheProposal_TicksWhoInteractedWithTheSite_AndDefaultsAnUninstrumentedOwnCharacterIn()
+    public void TheProposal_PutsEveryoneInTheSite_AndEvidenceOnlyNamesWhy()
     {
         AttendanceEvidenceCollector evidence = new();
         evidence.SetWindow(StartedAtUtc, null);
@@ -81,25 +80,45 @@ public sealed class HomefrontAttendanceTests
 
         Assert.Equal(new AttendanceProposalLine(Jithran, true, AttendanceReason.DamageDealt, 1_200_000), _Line(lines, Jithran));
         Assert.Equal(new AttendanceProposalLine(Abnoba, true, AttendanceReason.RemoteCapacitor, 142_000), _Line(lines, Abnoba));
-        // Below the 1,000 threshold reads as no evidence at all — but Noahmarr is local, so he still defaults in.
+        // Below the 1,000 threshold reads as no evidence at all — and he is in the site anyway.
         Assert.Equal(new AttendanceProposalLine(Noahmarr, true, AttendanceReason.NoActivityLogged, null), _Line(lines, Noahmarr));
         Assert.Equal(new AttendanceProposalLine(Ysolde, true, AttendanceReason.FleetActivity, null), _Line(lines, Ysolde));
-        // Before START is not this run.
-        Assert.False(_Line(lines, Tamsin).IsInSite);
-        // Not this client's own, so no default in — nothing here can vouch for them either way.
-        Assert.False(_Line(lines, Corvin).IsInSite);
-        Assert.Equal("no activity logged", AttendanceRowViewModel.Describe(AttendanceReason.NoActivityLogged, null, isLocal: true, isExternal: false));
-        Assert.Equal("no evidence can arrive — tick if in site",
-            AttendanceRowViewModel.Describe(AttendanceReason.NoActivityLogged, null, isLocal: false, isExternal: true));
+        // Damage before START is not this run's evidence, yet Tamsin is in the fleet, so in the site.
+        Assert.Equal(new AttendanceProposalLine(Tamsin, true, AttendanceReason.NoActivityLogged, null), _Line(lines, Tamsin));
+        // An external counts for N like everyone else.
+        Assert.True(_Line(lines, Corvin).IsInSite);
+        // Nothing to go on is the normal case now, and says nothing.
+        Assert.Equal(string.Empty, AttendanceRowViewModel.Describe(AttendanceReason.NoActivityLogged, null));
     }
 
-    /// <summary>A series keeps its list (Jithran, 2026-09-11): whoever the last site ended with starts ticked, evidence
-    /// can add a tick and says so, and never takes one away; a character new to the fleet falls back to evidence.
-    /// Counter-proof: ignore the last site and Tamsin, idle this time, drops out.</summary>
+    /// <summary>The one thing that starts a character out of the site (ET-271): an own character this client sees logged
+    /// out. Counter-proof: ignore IsLoggedOut and the offline alt on the roster is ticked in — and backfilled a run.</summary>
     [Fact]
-    public void ASeries_StartsFromTheListTheLastSiteEndedWith_AndEvidenceOnlyEverAddsATick()
+    public void AnOwnCharacterSeenLoggedOut_StartsOutOfTheSite()
     {
-        RunAttendanceDecision lastSite = _Decision((Jithran, true), (Abnoba, true), (Noahmarr, false), (Tamsin, true));
+        AttendanceCandidate offline = new(Abnoba, "Abnoba Auscent", IsLocal: true, IsExternal: false, IsLoggedOut: true);
+
+        IReadOnlyList<AttendanceProposalLine> lines = AttendanceProposal.Propose([_Local(Jithran), offline], _ => null, lastSite: null);
+
+        Assert.True(_Line(lines, Jithran).IsInSite);
+        Assert.False(_Line(lines, Abnoba).IsInSite);
+    }
+
+    /// <summary>A series keeps its exceptions (ET-270, ET-271): whoever was taken out of the last site by hand starts
+    /// out again, evidence can put them back and says so, and never takes anyone out; everyone else is in. Counter-proof:
+    /// ignore the last site and Abnoba, taken out last time and idle now, comes back in.</summary>
+    [Fact]
+    public void ASeries_KeepsTheLastSitesExceptions_AndEvidenceOnlyEverAddsATick()
+    {
+        RunAttendanceDecision lastSite = _Decision((Jithran, true), (Abnoba, true), (Noahmarr, true), (Tamsin, true)) with
+        {
+            Entries =
+            [
+                .. _Decision((Jithran, true), (Tamsin, true)).Entries,
+                new RunAttendanceEntryInput { CharacterId = Noahmarr, IsInSite = false, Reason = AttendanceReason.SetByHand },
+                new RunAttendanceEntryInput { CharacterId = Abnoba, IsInSite = false, Reason = AttendanceReason.SetByHand }
+            ]
+        };
         AttendanceEvidenceCollector evidence = new();
         evidence.SetWindow(StartedAtUtc, null);
         evidence.Note(Noahmarr, SiteContribution.Damage, 1_100, StartedAtUtc.AddMinutes(1));
@@ -109,12 +128,14 @@ public sealed class HomefrontAttendanceTests
             [_Local(Jithran), _Local(Abnoba), _Local(Noahmarr), _Other(Tamsin), _Other(Ysolde), _Other(Brannoc)],
             id => evidence.Best(id), lastSite);
 
-        Assert.Equal(new AttendanceProposalLine(Jithran, true, AttendanceReason.SameAsLastSite, null), _Line(lines, Jithran));
-        Assert.Equal(new AttendanceProposalLine(Tamsin, true, AttendanceReason.SameAsLastSite, null), _Line(lines, Tamsin));
+        Assert.Equal(new AttendanceProposalLine(Jithran, true, AttendanceReason.NoActivityLogged, null), _Line(lines, Jithran));
+        Assert.Equal(new AttendanceProposalLine(Tamsin, true, AttendanceReason.NoActivityLogged, null), _Line(lines, Tamsin));
         Assert.Equal(new AttendanceProposalLine(Noahmarr, true, AttendanceReason.DamageDealt, 1_100, IsAddedToLastSite: true),
             _Line(lines, Noahmarr));
+        Assert.Equal(new AttendanceProposalLine(Abnoba, false, AttendanceReason.SameAsLastSite, null), _Line(lines, Abnoba));
         Assert.True(_Line(lines, Ysolde).IsInSite);
-        Assert.Equal(new AttendanceProposalLine(Brannoc, false, AttendanceReason.NoActivityLogged, null), _Line(lines, Brannoc));
+        // New to the fleet, nothing to go on: in the site like everyone else.
+        Assert.Equal(new AttendanceProposalLine(Brannoc, true, AttendanceReason.NoActivityLogged, null), _Line(lines, Brannoc));
     }
 
     /// <summary>A line the one who decided set by hand is not the proposal's to change: the commander who unticked
@@ -301,7 +322,7 @@ public sealed class HomefrontAttendanceTests
         RunAttendanceDecision? forSite2 = await _BaseAsync(dispatcher, "HF-SITE2");
         IReadOnlyList<AttendanceProposalLine> site2 = AttendanceProposal.Propose(_SixCandidates(), _ => null, forSite2);
         // Noahmarr carried over as "not in site" with a plain reason, never SetByHand, so nothing here still stands
-        // for him — he falls to the proposal's own default, and being own, defaults in (ET-269).
+        // for him — he falls to the proposal's own default: in the site (ET-271).
         Assert.Equal([Jithran, Abnoba, Noahmarr, Ysolde, Brannoc, Tamsin],
             site2.Where(line => line.IsInSite).Select(line => line.CharacterId).Order().Select(id => (int)id));
 
@@ -319,7 +340,8 @@ public sealed class HomefrontAttendanceTests
             await _BaseAsync(dispatcher, "HF-SITE3"));
         Assert.Equal([Jithran, Abnoba, Noahmarr, Ysolde, Tamsin],
             site3.Where(line => line.IsInSite).Select(line => line.CharacterId).Order().Select(id => (int)id));
-        Assert.All(site3.Where(line => line.IsInSite), line => Assert.Equal(AttendanceReason.SameAsLastSite, line.Reason));
+        // Only the exception carries over with a reason; in the site is the default and needs none.
+        Assert.Equal(new AttendanceProposalLine(Brannoc, false, AttendanceReason.SameAsLastSite, null), _Line(site3, Brannoc));
     }
 
     // ── The run window ──────────────────────────────────────────────────────────────────────────────
@@ -352,17 +374,19 @@ public sealed class HomefrontAttendanceTests
         foreach (int other in new[] { Ysolde, Brannoc, Tamsin })
             await fcBus.PublishAsync(new FleetMetricEvent(new MetricSample(other, FleetId, MetricKind.Dps, 350,
                 DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()), other), EventTarget.Local);
-        await fc.TickUntilAsync(commander, () => fc.Wire.Sent.OfType<FleetRunAttendanceEvent>().Any(_IsEveryoneInSite));
+        // The first list is stored at once (ET-271), before every name is looked up; the names follow on a later tick.
+        await fc.TickUntilAsync(commander, () => fc.Wire.Sent.OfType<FleetRunAttendanceEvent>().Any(_IsEveryoneInSite)
+                                                && commander.Rows.All(row => !row.Name.StartsWith("Char ", StringComparison.Ordinal)));
 
         Assert.True(commander.CanDecide);
         Assert.Equal(6, commander.Rows.Count);
         AttendanceRowViewModel hauler = commander.Rows.Single(row => row.CharacterId == Noahmarr);
         Assert.True(hauler.IsInSite);
-        Assert.True(hauler.IsWithoutEvidence);
-        Assert.Equal("no activity logged", hauler.ReasonText);
+        // Nothing to go on is the normal case (ET-271): no hint at all.
+        Assert.Equal(string.Empty, hauler.HintText);
         Assert.Equal(["Abnoba Auscent", "Jithran", "Noahmarr"],
             commander.Rows.Where(row => row.IsLocal).Select(row => row.Name));
-        Assert.Equal("6 in fleet · 6 in site", commander.CountText);
+        Assert.Equal("6 in site", commander.CountText);
         FleetRunAttendanceEvent sent = fc.Wire.Sent.OfType<FleetRunAttendanceEvent>().Last();
         Assert.Equal(Jithran, sent.CharacterId);
         Assert.DoesNotContain(sent.Data.Characters, line => !line.IsInSite);
@@ -380,15 +404,17 @@ public sealed class HomefrontAttendanceTests
         fc.Wire.Destinations.Add(member.Instance.Services);
         await fc.TickUntilAsync(commander, () => fc.Wire.Sent.OfType<FleetRunAttendanceEvent>().Count() > sentBefore,
             step: TimeSpan.FromSeconds(10));
-        await member.TickUntilAsync(reader, () => reader.Rows.Count == 6 && reader.NoticeText is null);
+        await member.TickUntilAsync(reader, () => reader.Rows.Count == 6 && reader.NoticeText?.StartsWith("Set by", StringComparison.Ordinal) == true);
 
+        // The commander's list as it stands now — the same instant on both machines.
         Run memberRun = await _RunAsync(member.Instance, member.Window.RunId ?? Guid.Empty);
+        fcRun = await _RunAsync(fc.Instance, fc.Window.RunId ?? Guid.Empty);
         Assert.Equal((true, 6, (long?)Jithran, fcRun.AttendanceSetAtUtc),
             (memberRun.InSiteAtCompletion, memberRun.AttendanceCount ?? 0, memberRun.AttendanceSetByCharacterId, memberRun.AttendanceSetAtUtc));
         Assert.False(reader.CanDecide);
         Assert.All(reader.Rows, row => Assert.False(row.IsEditable));
         Assert.True(reader.Rows.Single(row => row.CharacterId == Noahmarr).IsInSite);
-        Assert.Equal("6 in fleet · 6 in site", reader.CountText);
+        Assert.Equal("6 in site", reader.CountText);
     }
 
     /// <summary>AC-3: flown without a fleet the pilot decides for their own run — nobody else's list to wait for, and
@@ -421,7 +447,7 @@ public sealed class HomefrontAttendanceTests
 
         Run proposed = await TickUntilAsync(run => run.AttendanceSource is not null);
         Assert.True(section.CanDecide);
-        Assert.Equal("you", section.DecidedByText);
+        Assert.Null(section.NoticeText);
         // Own, deliberately flying this solo run, so the proposal defaults them in (ET-269) — no evidence needed.
         Assert.Equal((AttendanceSource.Pilot, (long?)ActivityWindowHarness.CharacterId, true),
             (proposed.AttendanceSource ?? default, proposed.AttendanceSetByCharacterId, proposed.InSiteAtCompletion ?? false));
@@ -433,16 +459,6 @@ public sealed class HomefrontAttendanceTests
         Assert.False(ticked.InSiteAtCompletion);
         Assert.Equal(0, ticked.AttendanceCount);
         Assert.Equal(AttendanceReason.SetByHand, Assert.Single(ticked.AttendanceEntries).Reason);
-    }
-
-    /// <summary>ET-105's hauler — a run in the group, no share — reads the same after this ticket as before it (AC-7).
-    /// Only once a homefront's attendance is decided does the first half stop claiming "flew the site".</summary>
-    [Fact]
-    public void AnUndecidedRun_ReadsExactlyAsBefore_AndADecidedOneNoLongerClaimsItFlewTheSite()
-    {
-        Assert.Equal("flew the site · no share", RunParticipantViewModel.Describe(true, false, null));
-        Assert.Equal("did not fly the site · takes a share", RunParticipantViewModel.Describe(false, true, null));
-        Assert.Equal("in the group · takes a share", RunParticipantViewModel.Describe(true, true, false));
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────
@@ -524,6 +540,20 @@ public sealed class HomefrontAttendanceTests
         instance.Services.GetRequiredService<IFleetParticipation>()
             .Set([new FleetParticipant(characterId, FleetId, ClientOnly: false, Jithran, ServerAddress)]);
 
+    private sealed class OnlyTheFlyingOneKnown(int flying) : ILocalCharacterPresence
+    {
+        public bool? IsInGame(int characterId, string? characterName) => characterId == flying ? true : null;
+
+        public bool? IsInGame(int characterId) => IsInGame(characterId, null);
+
+        public IDisposable Subscribe(Action handler) => new Unsubscribed();
+
+        private sealed class Unsubscribed : IDisposable
+        {
+            public void Dispose() { }
+        }
+    }
+
     /// <summary>One member's machine: its own characters, in the fleet with Jithran commanding, reading the roster of
     /// all six from a fake server, and one run window joined on the commander's start.</summary>
     private sealed class Machine : IDisposable
@@ -559,8 +589,10 @@ public sealed class HomefrontAttendanceTests
                 services.AddSingleton<IFleetTransportClient>(transport);
                 services.AddSingleton<IDialogService>(new RecordingDialogService());
                 services.AddSingleton<IToastService>(new RecordingToastService());
-                // Only the character flying this window is at the keyboard, so the window settles on it by itself.
-                services.AddSingleton<ILocalCharacterPresence>(new ActivityWindowHarness.StubPresence(true, flying));
+                // The character flying this window is at the keyboard, so the window settles on it by itself; of the
+                // other own characters this machine cannot tell — never "logged out", which would start them out of the
+                // site (ET-271, covered on its own by AnOwnCharacterSeenLoggedOut_StartsOutOfTheSite).
+                services.AddSingleton<ILocalCharacterPresence>(new OnlyTheFlyingOneKnown(flying));
                 services.AddSingleton<IExternalCharacterLookup>(new FakeExternalLookup
                 {
                     [Jithran] = "Jithran", [Abnoba] = "Abnoba Auscent", [Noahmarr] = "Noahmarr",

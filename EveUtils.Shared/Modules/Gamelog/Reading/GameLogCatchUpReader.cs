@@ -29,11 +29,18 @@ public static class GameLogCatchUpReader
     /// UTC values compared by value, never through <c>ToUniversalTime()</c>/<c>ToLocalTime()</c>, which would
     /// misread an unspecified-kind value as local time (the exact mistake ET-244 found and fixed elsewhere).
     /// </summary>
-    public static IReadOnlyList<GameLogEvent> Read(string directory, string characterName, DateTime sinceUtc, DateTime untilUtc)
+    public static IReadOnlyList<GameLogEvent> Read(string directory, string characterName, DateTime sinceUtc, DateTime untilUtc) =>
+        Read(directory, [characterName], sinceUtc, untilUtc).GetValueOrDefault(characterName) ?? [];
+
+    /// <summary>The same read for several characters at once, in one pass over the directory — keyed by the name as
+    /// asked, case-insensitively. A name nobody's gamelog carries is simply absent.</summary>
+    public static IReadOnlyDictionary<string, IReadOnlyList<GameLogEvent>> Read(
+        string directory, IReadOnlyCollection<string> characterNames, DateTime sinceUtc, DateTime untilUtc)
     {
-        List<GameLogEvent> events = [];
-        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
-            return events;
+        Dictionary<string, List<GameLogEvent>> events = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> wanted = new(characterNames, StringComparer.OrdinalIgnoreCase);
+        if (wanted.Count == 0 || string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+            return new Dictionary<string, IReadOnlyList<GameLogEvent>>();
 
         foreach (string path in Directory.EnumerateFiles(directory, "*.txt"))
         {
@@ -41,9 +48,17 @@ public static class GameLogCatchUpReader
                 continue;
 
             string text;
+            GameLogHeader? header;
             try
             {
                 using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                // The header first: most of a gamelog folder belongs to other characters or other days, and reading
+                // those to the end only to throw them away is what made a read over a whole folder slow.
+                header = GameLogHeader.TryRead(stream);
+                if (header is null || !wanted.Contains(header.CharacterName))
+                    continue;
+
+                stream.Position = 0;
                 using StreamReader reader = new(stream, Encoding.UTF8);
                 text = reader.ReadToEnd();
             }
@@ -52,11 +67,8 @@ public static class GameLogCatchUpReader
                 continue;
             }
 
-            using MemoryStream headerStream = new(Encoding.UTF8.GetBytes(text));
-            GameLogHeader? header = GameLogHeader.TryRead(headerStream);
-            if (header is null || !string.Equals(header.CharacterName, characterName, StringComparison.OrdinalIgnoreCase))
-                continue;
-
+            if (!events.TryGetValue(header.CharacterName, out List<GameLogEvent>? own))
+                events[header.CharacterName] = own = [];
             foreach (string line in text.Split('\n'))
             {
                 string trimmed = line.TrimEnd('\r');
@@ -67,10 +79,13 @@ public static class GameLogCatchUpReader
                     continue;
 
                 if (parsed.Timestamp > sinceUtc && parsed.Timestamp <= untilUtc)
-                    events.Add(parsed);
+                    own.Add(parsed);
             }
         }
 
-        return [.. events.OrderBy(e => e.Timestamp)];
+        return events.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<GameLogEvent>)[.. pair.Value.OrderBy(e => e.Timestamp)],
+            StringComparer.OrdinalIgnoreCase);
     }
 }

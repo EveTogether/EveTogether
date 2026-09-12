@@ -35,8 +35,8 @@ public static class RunSectionModules
             context => new ActivityWindowSectionViewModel(context),
             services => new ActivityDetailSectionViewModel(services.Sde)),
         // Straight under ACTIVITY, where the money of a homefront is decided (ET-230, mockup pin 4). The fixed
-        // payout per ticked character, before it is confirmed, is HomefrontPayoutIskContributor's own share (ET-231)
-        // — once confirmed it is a FixedPayout RunParameter instead, counted under Rewards on MISSION's module.
+        // payout per ticked character — the table's, or a FixedPayout typed over it (ET-271) — is
+        // HomefrontPayoutIskContributor's own share (ET-231).
         new(RunSectionId.Homefront,
             context => new HomefrontWindowSectionViewModel(context),
             services => new HomefrontDetailSectionViewModel(services),
@@ -51,7 +51,7 @@ public static class RunSectionModules
         new(RunSectionId.Fit, context => new FitWindowSectionViewModel(context), null),
         new(RunSectionId.Fleet,
             context => new FleetWindowSectionViewModel(context),
-            services => new FleetDetailSectionViewModel(services.NameOf)),
+            services => new FleetDetailSectionViewModel(services)),
         new(RunSectionId.Bounty,
             context => new BountyWindowSectionViewModel(context),
             _ => new BountyDetailSectionViewModel(),

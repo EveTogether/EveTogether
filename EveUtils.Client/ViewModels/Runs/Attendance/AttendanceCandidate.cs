@@ -5,4 +5,6 @@ namespace EveUtils.Client.ViewModels.Runs.Attendance;
 /// which characters belong to one player is not known and never guessed (Jithran, 2026-09-11).</summary>
 /// <param name="IsLocal">One of this client's own characters — the one thing a client knows for certain.</param>
 /// <param name="IsExternal">On the roster without an Eve Together client, so no evidence can ever arrive.</param>
-public sealed record AttendanceCandidate(long CharacterId, string Name, bool IsLocal, bool IsExternal);
+/// <param name="IsLoggedOut">One of this client's own characters that is not in the game right now — a fact this
+/// client sees for itself, and the one thing that starts a character out of the site (ET-271).</param>
+public sealed record AttendanceCandidate(long CharacterId, string Name, bool IsLocal, bool IsExternal, bool IsLoggedOut = false);

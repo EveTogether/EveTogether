@@ -2,16 +2,19 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
+using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Queries;
 
 [ClientOnly]
-internal sealed class GetActivityDetailQueryHandler(IDbContextFactory<ClientDbContext> contextFactory)
+internal sealed class GetActivityDetailQueryHandler(
+    IDbContextFactory<ClientDbContext> contextFactory, IMarketPriceRepository marketPrices, ISdeAccessor sde)
     : IQueryHandler<GetActivityDetailQuery, Result<ActivityDetailDto>>
 {
     public async Task<Result<ActivityDetailDto>> Handle(GetActivityDetailQuery query, CancellationToken cancellationToken = default)
@@ -69,6 +72,28 @@ internal sealed class GetActivityDetailQueryHandler(IDbContextFactory<ClientDbCo
                 .Select(origin => (long?)origin.FleetId)
                 .FirstOrDefaultAsync(cancellationToken);
 
+        // Each run's own share of TOTAL ISK (ET-272), for FLEET's row per character — by the same registry and the
+        // same pricing the stored summary was added up with, never a formula of this screen's own.
+        ILookup<Guid, RunBountyEntry> bountyByRun = bountyEntries.ToLookup(entry => entry.RunId);
+        ILookup<Guid, RunMiningEntry> miningByRun = miningEntries.ToLookup(entry => entry.RunId);
+        ILookup<Guid, RunParameter> parametersByRun = parameters.ToLookup(parameter => parameter.RunId);
+        foreach (Run run in runs)
+        {
+            foreach (RunLootCapture capture in lootByRun[run.Id])
+                run.LootCaptures.Add(capture);
+            foreach (RunBountyEntry entry in bountyByRun[run.Id])
+                run.BountyEntries.Add(entry);
+            foreach (RunMiningEntry entry in miningByRun[run.Id])
+                run.MiningEntries.Add(entry);
+        }
+        IReadOnlyDictionary<int, double> prices = await marketPrices.GetAveragePricesAsync(
+            [.. RunIskFactsReader.PricedTypeIds(runs, parameters, sde)], cancellationToken);
+        DateTime nowUtc = DateTime.UtcNow;
+        Dictionary<long, IskBreakdown> iskByCharacter = runs
+            .GroupBy(run => run.CharacterId)
+            .ToDictionary(character => character.Key, character => IskContributors.Breakdown(
+                [.. character.Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices, sde))], nowUtc));
+
         return Result<ActivityDetailDto>.Success(new ActivityDetailDto(
             summary.Id, summary.GroupCode, summary.ActivityKind, summary.SiteName, summary.SignatureGroupSnapshot,
             summary.SiteTypeId, summary.SolarSystemId,
@@ -89,7 +114,7 @@ internal sealed class GetActivityDetailQueryHandler(IDbContextFactory<ClientDbCo
             [.. miningEntries.OrderByDescending(entry => entry.Units)
                 .Select(entry => new RunMiningEntryDto(entry.RunId, entry.OreType, entry.Units, entry.CriticalUnits, entry.ResidueUnits))],
             StoredIskBreakdown.Read(summary.IskContributions),
-            attendance, fleetId));
+            attendance, fleetId, iskByCharacter));
     }
 
     private static ActivityRunDetailDto _ToRunDto(Run run, IEnumerable<RunLootCapture> lootCaptures) => new(

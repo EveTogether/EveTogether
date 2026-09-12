@@ -92,92 +92,24 @@ public sealed class HomefrontPayoutExclusionTests
         Assert.True(absent.IsPayoutEligible);
     }
 
-    // ── What the window shows ───────────────────────────────────────────────────────────────────────
+    // ── What FLEET shows (ET-272) ───────────────────────────────────────────────────────────────────
 
-    /// <summary>AC-3 on screen: the excluded pilot's amount is a zero somebody chose, and reads as one. A dash or a
-    /// blank would be the same pixels as "we have no figure", which is the confusion the criterion names.</summary>
-    [AvaloniaFact]
-    public void ExcludedParticipant_ReadsAsAChosenZeroRatherThanAMissingFigure()
+    /// <summary>The loot split is an exception, not a column: with everybody sharing there is nothing to say; the
+    /// hauler left out reads as such, and the others' part is worked out on the spot — never "no figure yet".
+    /// Counter-proof: count the left-out row among the sharers and each part drops to 80.</summary>
+    [Fact]
+    public void LeavingTheHaulerOutOfTheLootSplit_RecomputesTheOthersPart()
     {
-        RunParticipantViewModel hauler = _Participant("Hauler Bob", isPayoutEligible: false);
-        List<RunParticipantViewModel> participants =
-            [_Participant("Alpha"), _Participant("Bravo"), _Participant("Charlie"), _Participant("Delta"), hauler];
+        FleetCharacterRowViewModel[] rows = [_Row(1), _Row(2), _Row(3), _Row(4), _Row(5)];
 
-        RunPayoutSplit.Apply(participants, totalIsk: 400m);
+        Assert.Null(FleetCharacterRowViewModel.LootSplitText(rows, 400m));
 
-        Assert.Equal(0m, hauler.PayoutIsk);
-        Assert.Contains("0 ISK", hauler.PayoutDisplay);
-        Assert.Contains("excluded", hauler.PayoutDisplay, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("no figure", hauler.PayoutDisplay, StringComparison.OrdinalIgnoreCase);
+        rows[4].IsSharing = false;
 
-        // The hauler still flew the site, and the four who share say so out loud.
-        Assert.True(hauler.IsParticipant);
-        Assert.Contains("flew the site", hauler.StandingText);
-        Assert.Contains("no share", hauler.StandingText);
-        Assert.All(participants.Where(p => p.IsPayoutEligible), p => Assert.Equal(100m, p.PayoutIsk));
+        Assert.True(rows[4].IsLeftOutOfSplit);
+        Assert.Equal("Loot split: 100 ISK each · 4 sharing, 1 left out", FleetCharacterRowViewModel.LootSplitText(rows, 400m));
+        Assert.Equal("Loot split: no loot to split yet · 4 sharing, 1 left out", FleetCharacterRowViewModel.LootSplitText(rows, null));
     }
 
-    /// <summary>A participant with nothing to divide yet reads as "no figure", never as a zero — the mirror image of
-    /// the assertion above, and what stops the two states collapsing into one.</summary>
-    [AvaloniaFact]
-    public void IncludedParticipantWithoutATotal_ReadsAsNoFigureRatherThanZero()
-    {
-        RunParticipantViewModel pilot = _Participant("Alpha");
-
-        RunPayoutSplit.Apply([pilot], totalIsk: null);
-
-        Assert.Null(pilot.PayoutIsk);
-        Assert.DoesNotContain("0 ISK", pilot.PayoutDisplay);
-        Assert.Contains("no figure", pilot.PayoutDisplay, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>Re-including a pilot puts them back in the split rather than leaving them on the chosen zero.</summary>
-    [AvaloniaFact]
-    public void ReIncludingAPilot_PutsThemBackInTheSplit()
-    {
-        RunParticipantViewModel hauler = _Participant("Hauler Bob", isPayoutEligible: false);
-        List<RunParticipantViewModel> participants = [_Participant("Alpha"), hauler];
-        RunPayoutSplit.Apply(participants, 400m);
-        Assert.Equal(0m, hauler.PayoutIsk);
-
-        hauler.IsPayoutEligible = true;
-        RunPayoutSplit.Apply(participants, 400m);
-
-        Assert.Equal(200m, hauler.PayoutIsk);
-        Assert.Equal(200m, participants[0].PayoutIsk);
-    }
-
-    // ── What the window may not claim ───────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// The figure is an expectation, not a measurement. EVE pays every pilot who actually interacted, so an excluded
-    /// hauler who fires one shot is paid by EVE regardless of our bookkeeping — the label has to say so rather than
-    /// let the number imply otherwise.
-    /// </summary>
-    [AvaloniaFact]
-    public void ThePayoutLabel_CallsItselfAnExpectationAndNamesEvesOwnRule()
-    {
-        string label = RunPayoutSplit.ExpectationLabel;
-
-        Assert.Contains("not a measurement", label, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("wallet journal", label, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("1000 damage", label, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("twice the ideal fleet size", label, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("bookkeeping", label, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>Words that would turn the expectation into a claim about what actually arrived. "Received" is not on
-    /// this list on purpose: the label uses it to point at the wallet journal, which is the disclaimer rather than
-    /// the claim.</summary>
-    [AvaloniaTheory]
-    [InlineData("guaranteed")]
-    [InlineData("actual payout")]
-    [InlineData("will be paid")]
-    [InlineData("you earned")]
-    public void ThePayoutLabel_NeverClaimsTheFigureWasMeasured(string forbidden) =>
-        Assert.DoesNotContain(forbidden, RunPayoutSplit.ExpectationLabel, StringComparison.OrdinalIgnoreCase);
-
-    private static RunParticipantViewModel _Participant(string name, bool isPayoutEligible = true) =>
-        new(Guid.CreateVersion7(), name.GetHashCode(StringComparison.Ordinal), name,
-            isParticipant: true, isPayoutEligible);
+    private static FleetCharacterRowViewModel _Row(long characterId) => new(characterId) { IsLocal = true, CanToggleShare = true };
 }

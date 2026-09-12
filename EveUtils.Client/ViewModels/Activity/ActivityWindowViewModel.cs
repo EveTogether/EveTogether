@@ -2456,8 +2456,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <summary>
     /// Who has a run in this activity, on the definition <c>ActivitySummary.ParticipantCount</c> already uses
     /// (ET-131): the runs sharing this <see cref="GroupCode"/>, or just this run when it is flown alone. Rows are
-    /// kept and updated rather than rebuilt, the same as <see cref="_SyncFleetMembers"/>, so a payout toggle from
-    /// <see cref="SetPayoutEligibilityAsync"/> is not raced by the next tick's read of the same row.
+    /// kept and updated rather than rebuilt, the same as <see cref="_SyncFleetMembers"/>, so a loot-split toggle on
+    /// FLEET is not raced by the next tick's read of the same row.
     /// </summary>
     private async Task _RefreshParticipantsAsync()
     {
@@ -2485,6 +2485,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                     existing.AttendanceCount = dto.AttendanceCount;
                     existing.HomefrontOutcome = dto.HomefrontOutcome;
                     existing.HomefrontCompletedWaveCount = dto.HomefrontCompletedWaveCount;
+                    existing.FixedPayoutIsk = dto.FixedPayoutIsk;
                     continue;
                 }
 
@@ -2499,7 +2500,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                     InSiteAtCompletion = dto.InSiteAtCompletion,
                     AttendanceCount = dto.AttendanceCount,
                     HomefrontOutcome = dto.HomefrontOutcome,
-                    HomefrontCompletedWaveCount = dto.HomefrontCompletedWaveCount
+                    HomefrontCompletedWaveCount = dto.HomefrontCompletedWaveCount,
+                    FixedPayoutIsk = dto.FixedPayoutIsk
                 });
 
                 // A character this window did not itself just start (ET-259): the acting character's own
@@ -2524,39 +2526,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             // (ET-130 deel 3) — this is the only place Participants changes outside the constructor, so it is the
             // only place that has to say so.
             OnPropertyChanged(nameof(ActingCharacterText));
-            RecomputePayout();
         }
         finally
         {
             _isRefreshingParticipants = false;
         }
     }
-
-    /// <summary>
-    /// Take a character out of the ISK split, or put them back in. Never touches their participation: they flew the
-    /// site either way and their loot stays recorded (ET-105 AC-3).
-    /// </summary>
-    public async Task<bool> SetPayoutEligibilityAsync(RunParticipantViewModel participant, bool isPayoutEligible)
-    {
-        using var scope = _services.CreateScope();
-        Result result = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
-            .Send(new SetRunPayoutEligibilityCommand(participant.RunId, isPayoutEligible));
-        if (!result.IsSuccess)
-            return false;
-
-        participant.IsPayoutEligible = isPayoutEligible;
-        RecomputePayout();
-        return true;
-    }
-
-    /// <summary>Redivide the expected ISK over whoever still takes a share.</summary>
-    public void RecomputePayout() => RunPayoutSplit.Apply([.. Participants], TotalLootIsk);
-
-    /// <summary>What there is to divide, as far as the loot section knows. Null while nothing is priced — never 0,
-    /// which would read as "there was nothing" (ET-65 AC-5's rule).</summary>
-    [ObservableProperty] private decimal? _totalLootIsk;
-
-    partial void OnTotalLootIskChanged(decimal? value) => RecomputePayout();
 
     /// <summary>Set for the whole of <see cref="SaveRunAsync"/> — saving a group of five runs used to look like
     /// nothing was happening for five to six seconds (ET-210 review finding, 2026-09-09), because each of the five
@@ -2610,6 +2585,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         IsSaving = true;
         try
         {
+            // HOMEFRONT's outcome and list as they stand this moment, on every run of the group, before any row is
+            // committed or added up (ET-271) — a pick made a second before SAVE used to wait out a bundle window the
+            // save then closed on, and was lost.
+            foreach (RunWindowSection section in _AllSections())
+                await section.BeforeSaveAsync();
+
             DateTime nowUtc = DateTime.UtcNow;
             using var scope = _services.CreateScope();
             CqrsDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
@@ -3547,10 +3528,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // DB mirror refreshed on its own asynchronous schedule (_RefreshParticipantsAsync) — reading that instead let
         // TOTAL ISK alternate between the two after a manual SetOutcome, one tick showing what HOMEFRONT had just
         // decided, the next tick showing the mirror not yet caught up with it.
-        RunAttendanceDecision? homefrontDecision =
-            (_sections.GetValueOrDefault(RunSectionId.Homefront) as HomefrontWindowSectionViewModel)?.LiveDecision;
+        var homefront = _sections.GetValueOrDefault(RunSectionId.Homefront) as HomefrontWindowSectionViewModel;
+        RunAttendanceDecision? homefrontDecision = homefront?.LiveDecision;
 
-        List<RunIskFacts> runs = isGroup
+        List<(long CharacterId, RunIskFacts Facts)> runs = isGroup
             ? [.. Participants.Select(participant =>
                 {
                     // A real fleet's own bounty comes from GamelogClientService's per-fleet tally (synchronous,
@@ -3567,7 +3548,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                     (decimal? miningValue, bool hasMining) = mining?.FactsFor(participant.RunId) ?? (null, false);
                     (bool? isInSite, int? attendanceCount, HomefrontOutcome? outcome, int? waves) =
                         _HomefrontFacts(homefrontDecision, participant.CharacterId, participant);
-                    return new RunIskFacts
+                    return ((long)participant.CharacterId, new RunIskFacts
                     {
                         BountyIsk = bountyIsk,
                         LootIskNet = loot?.NetIsk,
@@ -3576,27 +3557,37 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                         HasConsumables = has,
                         MiningIskValue = miningValue,
                         HasMining = hasMining,
-                        Parameters = parameters,
+                        Parameters = _WithTypedPayout(parameters, homefront, participant.CharacterId),
                         StoppedAtUtc = EffectiveStopUtc,
                         HomefrontExpectedPayoutIsk = _HomefrontExpectedPayout(isInSite, attendanceCount, outcome, waves)
-                    };
+                    });
                 })]
-            : [_SoloRunIskFacts(consumables, mining, parameters, homefrontDecision)];
+            : [_SoloRunIskFacts(consumables, mining, parameters, homefront)];
 
-        IskBreakdown isk = IskContributors.Breakdown(runs, nowUtc);
+        IskBreakdown isk = IskContributors.Breakdown([.. runs.Select(run => run.Facts)], nowUtc);
         HasGroupTotalIsk = isk.HasFigure;
         GroupTotalIskText = IskFormat.Whole(isk.Total) + IskFormat.ExpectedPart(isk);
+        // Per character, from the very same facts: FLEET's rows (ET-272) can then never tell a different story than
+        // the total they sit above.
+        CharacterIsk = runs
+            .GroupBy(run => run.CharacterId)
+            .ToDictionary(character => character.Key,
+                character => IskContributors.Breakdown([.. character.Select(run => run.Facts)], nowUtc));
+        OnPropertyChanged(nameof(CharacterIsk));
     }
 
-    private RunIskFacts _SoloRunIskFacts(ConsumablesWindowSectionViewModel? consumables, MiningWindowSectionViewModel? mining,
-        IReadOnlyList<RunIskParameter> parameters, RunAttendanceDecision? homefrontDecision)
+    public IReadOnlyDictionary<long, IskBreakdown> CharacterIsk { get; private set; } = new Dictionary<long, IskBreakdown>();
+
+    private (long CharacterId, RunIskFacts Facts) _SoloRunIskFacts(ConsumablesWindowSectionViewModel? consumables,
+        MiningWindowSectionViewModel? mining, IReadOnlyList<RunIskParameter> parameters, HomefrontWindowSectionViewModel? homefront)
     {
         (decimal? cost, bool has) = RunId is { } runId ? _ConsumableFacts(consumables, runId) : (null, false);
         (decimal? miningValue, bool hasMining) = RunId is { } id ? mining?.FactsFor(id) ?? (null, false) : (null, false);
         RunParticipantViewModel? own = RunId is { } ownId ? Participants.FirstOrDefault(p => p.RunId == ownId) : null;
+        long characterId = own?.CharacterId ?? _runCharacterId ?? 0;
         (bool? isInSite, int? attendanceCount, HomefrontOutcome? outcome, int? waves) =
-            _HomefrontFacts(homefrontDecision, own?.CharacterId, own);
-        return new RunIskFacts
+            _HomefrontFacts(homefront?.LiveDecision, own?.CharacterId, own);
+        return (characterId, new RunIskFacts
         {
             BountyIsk = BountyIsk,
             LootIskNet = RunLoot?.NetIsk,
@@ -3605,11 +3596,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             HasConsumables = has,
             MiningIskValue = miningValue,
             HasMining = hasMining,
-            Parameters = parameters,
+            Parameters = _WithTypedPayout(parameters, homefront, characterId),
             StoppedAtUtc = EffectiveStopUtc,
             HomefrontExpectedPayoutIsk = _HomefrontExpectedPayout(isInSite, attendanceCount, outcome, waves)
-        };
+        });
     }
+
+    /// <summary>A homefront payout the pilot typed over the table's (ET-271), from HOMEFRONT itself — the same
+    /// in-memory-first rule as its live decision — added to this one run's reward lines, where the registry reads a
+    /// stored run's own.</summary>
+    private static IReadOnlyList<RunIskParameter> _WithTypedPayout(IReadOnlyList<RunIskParameter> parameters,
+        HomefrontWindowSectionViewModel? homefront, long characterId) =>
+        homefront?.CorrectionOf(characterId) is { } typed
+            ? [.. parameters, new RunIskParameter(RunParameterKey.FixedPayout, typed, null, DateTime.MinValue)]
+            : parameters;
 
     /// <summary>The attendance facts one character's homefront payout is computed from — HOMEFRONT's own live
     /// decision when there is one (ET-269: the single source _RefreshGroupTotalIsk reads, never the asynchronously

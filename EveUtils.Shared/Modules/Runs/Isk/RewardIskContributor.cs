@@ -3,10 +3,12 @@ using EveUtils.Shared.Modules.Runs.Enums;
 namespace EveUtils.Shared.Modules.Runs.Isk;
 
 /// <summary>
-/// The ISK-denominated reward lines a run carries — Isk, BonusIsk, FixedPayout, Escrow — on any type, not only a
-/// mission (ET-210). Never <see cref="RunParameterKey.Bounty"/>: that is a mission's own stated reward line, and the
-/// gamelog's bounty already counts the same money. LP and Evermarks have no ISK rate and count nothing. A bonus whose
-/// deadline had passed when its run stopped does not count (ET-237).
+/// The ISK-denominated reward lines a run carries — Isk, BonusIsk, Escrow — on any type, not only a mission (ET-210).
+/// Never <see cref="RunParameterKey.Bounty"/>: that is a mission's own stated reward line, and the gamelog's bounty
+/// already counts the same money. Never <see cref="RunParameterKey.FixedPayout"/> either: that is a homefront payout
+/// typed over the table's, which <see cref="HomefrontPayoutIskContributor"/> counts only while the payout is owed
+/// (ET-271). LP and Evermarks have no ISK rate and count nothing. A bonus whose deadline had passed when its run
+/// stopped does not count (ET-237).
 /// </summary>
 internal sealed class RewardIskContributor : IIskContributor
 {
@@ -26,8 +28,7 @@ internal sealed class RewardIskContributor : IIskContributor
     }
 
     private static bool _Counts(RunIskParameter parameter, DateTime judgedAtUtc) =>
-        parameter.Key is RunParameterKey.Isk or RunParameterKey.BonusIsk or RunParameterKey.FixedPayout
-            or RunParameterKey.Escrow
+        parameter.Key is RunParameterKey.Isk or RunParameterKey.BonusIsk or RunParameterKey.Escrow
         && parameter.Amount is not null
         && !(parameter.Key is RunParameterKey.BonusIsk
              && MissionBonusDeadline.HasPassed(parameter.BonusWindowSeconds, parameter.ObservedAtUtc, judgedAtUtc));

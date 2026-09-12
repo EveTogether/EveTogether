@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Formatting;
@@ -8,19 +9,23 @@ using EveUtils.Shared.Modules.Runs.Enums;
 namespace EveUtils.Client.ViewModels.Runs.Attendance;
 
 /// <summary>
-/// One character on a homefront's attendance list (ET-230), in the run window and on the detail screen alike: the
-/// tick for "in site at completion", why it stands where it stands, and the live presence beside it. Every state is
-/// said in words — ticked or not, why, online or not — so none of it rests on a colour alone.
+/// One character on a homefront's attendance list (ET-230), in the run window and on the detail screen alike: one line
+/// with the name, a hint of what the evidence says, what this character is paid, and the tick for "in site at
+/// completion". Every state is said in words — ticked or not, why, a typed amount — so none of it rests on a colour
+/// alone.
+///
+/// A different amount is an exception (ET-271): the figure is a link, and only clicking it opens the field, already
+/// holding the figure it replaces, so correcting 15,000,000 to 14,000,000 is a few keys and Enter.
 /// </summary>
 public sealed partial class AttendanceRowViewModel : ObservableObject
 {
     private readonly Action<AttendanceRowViewModel>? _onTicked;
-    private readonly Action<AttendanceRowViewModel, decimal>? _onEnterPayout;
+    private readonly Action<AttendanceRowViewModel, decimal?>? _onEnterPayout;
     private bool _isApplying;
 
     public AttendanceRowViewModel(long characterId, string name, bool isLocal, bool isExternal,
         Action<AttendanceRowViewModel>? onTicked = null,
-        Action<AttendanceRowViewModel, decimal>? onEnterPayout = null)
+        Action<AttendanceRowViewModel, decimal?>? onEnterPayout = null)
     {
         CharacterId = characterId;
         _name = name;
@@ -43,113 +48,154 @@ public sealed partial class AttendanceRowViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TickText))]
     [NotifyPropertyChangedFor(nameof(PayoutText))]
+    [NotifyPropertyChangedFor(nameof(IsPayoutShown))]
+    [NotifyPropertyChangedFor(nameof(IsTypedShown))]
     [NotifyPropertyChangedFor(nameof(CanActOnPayout))]
-    [NotifyCanExecuteChangedFor(nameof(EnterPayoutCommand))]
+    [NotifyPropertyChangedFor(nameof(IsPayoutReadOnly))]
+    [NotifyCanExecuteChangedFor(nameof(BeginPayoutEditCommand))]
     private bool _isInSite;
 
     /// <summary>Only for the one who decides; everyone else reads the list without being able to change it.</summary>
-    [ObservableProperty] private bool _isEditable;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanActOnPayout))]
+    [NotifyPropertyChangedFor(nameof(IsPayoutReadOnly))]
+    [NotifyCanExecuteChangedFor(nameof(BeginPayoutEditCommand))]
+    private bool _isEditable;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ReasonText))]
-    [NotifyPropertyChangedFor(nameof(IsWithoutEvidence))]
+    [NotifyPropertyChangedFor(nameof(HintText))]
     private AttendanceReason _reason;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ReasonText))]
+    [NotifyPropertyChangedFor(nameof(HintText))]
     private long? _reasonAmount;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ReasonText))]
+    [NotifyPropertyChangedFor(nameof(HintText))]
     private bool _isAddedToLastSite;
 
-    /// <summary>Who set this row against the proposal — "you", or the commander's name — or null when it stands as
-    /// proposed.</summary>
+    /// <summary>Who set this row against the proposal, as a reader who cannot change it sees it — the commander's
+    /// name — or null. The one who decides needs no "set by you" beside their own click.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSetByHand))]
     [NotifyPropertyChangedFor(nameof(SetByText))]
-    [NotifyPropertyChangedFor(nameof(IsWithoutEvidence))]
+    [NotifyPropertyChangedFor(nameof(HintText))]
     private string? _setBy;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PresenceText))]
-    [NotifyPropertyChangedFor(nameof(IsOnline))]
     [NotifyPropertyChangedFor(nameof(IsPresenceShown))]
+    [NotifyPropertyChangedFor(nameof(HintText))]
     private FleetMemberPresenceState? _presence;
 
-    // ── The payout (ET-231) ─────────────────────────────────────────────────────────────────────────
+    // ── The payout (ET-231, ET-271) ─────────────────────────────────────────────────────────────────
 
-    /// <summary>What the table pays at the current N, with no regard for outcome — the "if completed" preview
-    /// figure. Null while N is not known, the site is not a homefront, or N is beyond the table.</summary>
+    /// <summary>What the table pays at the current N, with no regard for outcome — what a correction starts from.
+    /// Null while N is not known, the site is not a homefront, or N is beyond the table.</summary>
+    [ObservableProperty] private decimal? _tablePayoutIsk;
+
+    /// <summary>The table's own figure at the current N, owed the moment the site reads Completed (ET-269: there is
+    /// no wallet to wait on) — or, for AAR, once it has paid waves. Null until then.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PayoutText))]
-    private decimal? _tablePayoutIsk;
-
-    /// <summary>The table's own figure at the current N — what counts towards TOTAL ISK right away once the site
-    /// reads <c>Completed</c> (ET-269: there is no wallet to wait on), or, for AAR, has paid waves. Null until then.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PayoutText))]
+    [NotifyPropertyChangedFor(nameof(IsPayoutShown))]
+    [NotifyPropertyChangedFor(nameof(IsTypedShown))]
     [NotifyPropertyChangedFor(nameof(CanActOnPayout))]
-    [NotifyCanExecuteChangedFor(nameof(EnterPayoutCommand))]
+    [NotifyPropertyChangedFor(nameof(IsPayoutReadOnly))]
+    [NotifyCanExecuteChangedFor(nameof(BeginPayoutEditCommand))]
     private decimal? _expectedPayoutIsk;
 
-    /// <summary>What the pilot typed instead, because something else really arrived — a correction on top of
-    /// <see cref="ExpectedPayoutIsk"/>, never a step this figure needs before it counts. Null until they type one.</summary>
+    /// <summary>What the pilot typed instead, because something else really arrived — counted in place of
+    /// <see cref="ExpectedPayoutIsk"/> while the payout is owed, never a step the figure needs. Null until typed.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PayoutText))]
+    [NotifyPropertyChangedFor(nameof(IsCorrected))]
+    [NotifyPropertyChangedFor(nameof(IsTypedShown))]
+    private decimal? _correctedPayoutIsk;
+
+    /// <summary>Whether this character has a run of its own here to write a typed figure onto — an own character
+    /// only on the roster has none until the list puts it in the site (ET-269).</summary>
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanActOnPayout))]
-    [NotifyCanExecuteChangedFor(nameof(EnterPayoutCommand))]
-    private decimal? _confirmedPayoutIsk;
+    [NotifyPropertyChangedFor(nameof(IsPayoutReadOnly))]
+    [NotifyCanExecuteChangedFor(nameof(BeginPayoutEditCommand))]
+    private bool _hasRun = true;
 
-    /// <summary>Only this client's own, ticked, priced row offers a way to type a correction — a group-mate's payout
-    /// is corrected on their own client, never this one.</summary>
-    public bool CanActOnPayout => IsLocal && IsInSite && ExpectedPayoutIsk is not null;
+    /// <summary>This client's own, ticked, owed row can take a correction — a group-mate's payout is corrected on
+    /// their own client, never this one.</summary>
+    public bool CanActOnPayout => IsEditable && HasRun && IsLocal && IsInSite && ExpectedPayoutIsk is not null;
 
-    [ObservableProperty] private string _typedPayoutText = string.Empty;
+    public bool IsPayoutShown => IsLocal && IsInSite && ExpectedPayoutIsk is not null;
 
-    public string PayoutText => (IsInSite, ConfirmedPayoutIsk, ExpectedPayoutIsk, TablePayoutIsk) switch
-    {
-        (false, _, _, _) => string.Empty,
-        (true, { } confirmed, _, _) => IskFormat.Whole(confirmed),
-        (true, null, { } expected, _) => IskFormat.Whole(expected),
-        (true, null, null, { } table) => $"if completed: {IskFormat.Whole(table)}",
-        _ => "if completed"
-    };
+    public bool IsPayoutReadOnly => IsPayoutShown && !CanActOnPayout;
+
+    public bool IsCorrected => CorrectedPayoutIsk is not null;
+
+    /// <summary>"typed" beside a figure that is on screen — never beside nothing, on a site that no longer pays.</summary>
+    public bool IsTypedShown => IsCorrected && IsPayoutShown;
+
+    public string PayoutText => CorrectedPayoutIsk is { } corrected
+        ? IskFormat.Number(corrected)
+        : ExpectedPayoutIsk is { } expected ? IskFormat.Number(expected) : string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPayoutLinkShown))]
+    private bool _isEditingPayout;
+
+    public bool IsPayoutLinkShown => !IsEditingPayout;
+
+    [ObservableProperty] private string _payoutEditText = string.Empty;
 
     [RelayCommand(CanExecute = nameof(CanActOnPayout))]
-    private void EnterPayout()
+    private void BeginPayoutEdit()
     {
-        if (decimal.TryParse(TypedPayoutText, out decimal amount) && amount >= 0)
-            _onEnterPayout?.Invoke(this, amount);
+        PayoutEditText = IskFormat.Number(CorrectedPayoutIsk ?? ExpectedPayoutIsk ?? 0m);
+        IsEditingPayout = true;
     }
+
+    /// <summary>Enter: the typed figure replaces the table's — or, typed back to the table's own, drops the
+    /// correction instead of marking an unchanged figure as corrected.</summary>
+    [RelayCommand]
+    private void CommitPayoutEdit()
+    {
+        if (!IskFormat.TryParseWhole(PayoutEditText, out decimal amount))
+            return;
+
+        IsEditingPayout = false;
+        decimal? correction = amount == TablePayoutIsk ? null : amount;
+        if (correction == CorrectedPayoutIsk)
+            return;
+
+        CorrectedPayoutIsk = correction;
+        _onEnterPayout?.Invoke(this, correction);
+    }
+
+    [RelayCommand]
+    private void CancelPayoutEdit() => IsEditingPayout = false;
 
     public string TickText => IsInSite ? "in site" : "not in site";
 
-    public string ReasonText => Describe(Reason, ReasonAmount, IsLocal, IsExternal) + (IsAddedToLastSite ? " — added" : string.Empty);
-
-    /// <summary>Nothing to go on and nobody has looked at it yet — the row the one who decides has to check, marked but
-    /// never greyed out: the hauler has to stay readable. Once set by hand it has been looked at.</summary>
-    public bool IsWithoutEvidence => Reason is AttendanceReason.NoActivityLogged && SetBy is null;
+    public string ReasonText => Describe(Reason, ReasonAmount) + (IsAddedToLastSite ? " — added" : string.Empty);
 
     public bool IsSetByHand => SetBy is not null;
 
     public string SetByText => SetBy is { } who ? $"set by {who}" : string.Empty;
 
-    /// <summary>Live, never stored: an external pilot says what they are, anyone else what the fleet sees right now,
-    /// and nothing at all when there is no fleet to ask.</summary>
+    /// <summary>Only what explains a tick: an external pilot says what they are, and a character this client knows to
+    /// be logged out says so — the reason it starts out of the site. Online is the normal case and says nothing.</summary>
     public string? PresenceText => IsExternal
-        ? "external · no Eve Together"
-        : Presence switch
-        {
-            FleetMemberPresenceState.Online => "● online",
-            FleetMemberPresenceState.Offline => "○ offline",
-            FleetMemberPresenceState.Unknown => "? unknown",
-            _ => null
-        };
-
-    public bool IsOnline => !IsExternal && Presence is FleetMemberPresenceState.Online;
+        ? "external"
+        : Presence is FleetMemberPresenceState.Offline ? "offline" : null;
 
     public bool IsPresenceShown => PresenceText is not null;
+
+    /// <summary>The hint beside the name, in one run of words — "offline", "1.2M damage", "set by Jithran" — or
+    /// nothing at all for a character simply in the site.</summary>
+    public string HintText => string.Join(" · ", new[] { PresenceText, ReasonText, SetByText }
+        .Where(part => !string.IsNullOrEmpty(part)));
 
     /// <summary>Set the row from a list without it counting as a tick somebody made.</summary>
     public void Show(bool isInSite, AttendanceReason reason, long? amount, bool isAddedToLastSite, string? setBy)
@@ -170,12 +216,12 @@ public sealed partial class AttendanceRowViewModel : ObservableObject
     }
 
     /// <summary>Set the row's payout figures (ET-231) — independent of <see cref="Show"/>, since the payout is
-    /// recomputed on its own clock (N, outcome, prices) rather than alongside every tick.</summary>
-    public void ShowPayout(decimal? tablePayoutIsk, decimal? expectedPayoutIsk, decimal? confirmedPayoutIsk)
+    /// recomputed on its own clock (N, outcome, a correction) rather than alongside every tick.</summary>
+    public void ShowPayout(decimal? tablePayoutIsk, decimal? expectedPayoutIsk, decimal? correctedPayoutIsk)
     {
         TablePayoutIsk = tablePayoutIsk;
         ExpectedPayoutIsk = expectedPayoutIsk;
-        ConfirmedPayoutIsk = confirmedPayoutIsk;
+        CorrectedPayoutIsk = correctedPayoutIsk;
     }
 
     partial void OnIsInSiteChanged(bool value)
@@ -185,21 +231,18 @@ public sealed partial class AttendanceRowViewModel : ObservableObject
     }
 
     /// <summary>Why a character stands where it stands, in words. Shared with the detail screen so both say it the
-    /// same way.</summary>
-    public static string Describe(AttendanceReason reason, long? amount, bool isLocal, bool isExternal) => reason switch
+    /// same way. Nothing at all for a line nobody has evidence about: in the site is the normal case (ET-271), and a
+    /// hint that says nothing is noise.</summary>
+    public static string Describe(AttendanceReason reason, long? amount) => reason switch
     {
-        AttendanceReason.DamageDealt => $"{_Figure(amount)} damage dealt",
-        AttendanceReason.RemoteRepair => $"remote repair {_Figure(amount)}",
-        AttendanceReason.RemoteCapacitor => $"remote capacitor {_Figure(amount)}",
+        AttendanceReason.DamageDealt => $"{_Figure(amount)} damage",
+        AttendanceReason.RemoteRepair => $"{_Figure(amount)} remote repair",
+        AttendanceReason.RemoteCapacitor => $"{_Figure(amount)} remote cap",
         AttendanceReason.Salvaged => amount == 1 ? "salvaged 1 wreck" : $"salvaged {_Figure(amount)} wrecks",
         AttendanceReason.Mined => $"mined {IskFormat.Number(amount ?? 0)} units",
-        AttendanceReason.FleetActivity => "had activity this run",
-        AttendanceReason.SameAsLastSite => "same as last site",
-        // Who set it is said beside this, by the row's own "set by".
-        AttendanceReason.SetByHand => string.Empty,
-        _ when isExternal => "no evidence can arrive — tick if in site",
-        _ when isLocal => "no activity logged",
-        _ => "no activity reported by its client"
+        AttendanceReason.FleetActivity => "active this run",
+        AttendanceReason.SameAsLastSite => "as last site",
+        _ => string.Empty
     };
 
     private static string _Figure(long? amount) => IskFormat.Compact(amount ?? 0);

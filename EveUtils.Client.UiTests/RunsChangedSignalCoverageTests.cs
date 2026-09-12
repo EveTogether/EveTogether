@@ -56,7 +56,13 @@ public sealed class RunsChangedSignalCoverageTests
         // seeded with the site it must find, in RepairHomefrontSiteTypeIdsCommandHandlerTests instead.
         [typeof(RepairHomefrontSiteTypeIdsCommand)] = "needs the SDE's own archetype-70 site catalogue to do "
             + "anything, which this shared harness has no way to seed per scenario; its signal is proven in "
-            + "RepairHomefrontSiteTypeIdsCommandHandlerTests against a FakeSdeAccessor instead"
+            + "RepairHomefrontSiteTypeIdsCommandHandlerTests against a FakeSdeAccessor instead",
+        // ET-271: only ever writes a line a character's own gamelog file carries, which this shared harness has no
+        // directory for; it publishes per run it added to, and HomefrontMoneyScenarioTests.S11 drives it end to end.
+        [typeof(ImportRunBountyCommand)] = "needs a character's own gamelog file on disk to add anything, which this "
+            + "shared harness has no directory for; proven end to end in HomefrontMoneyScenarioTests.S11",
+        [typeof(ImportMissingGroupBountyCommand)] = "writes no run of its own: it only picks the runs and hands them to "
+            + "ImportRunBountyCommand, whose own writes are the ones that signal"
     };
 
     /// <summary>For every other command: real state to run it against, and the run (or group) it has to name.</summary>

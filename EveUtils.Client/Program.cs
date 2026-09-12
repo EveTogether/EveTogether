@@ -304,6 +304,13 @@ sealed class Program
                 .Send(new DedupeMissionRewardParametersCommand()).GetAwaiter().GetResult();
             if (dedupedMissionRewards.IsSuccess && dedupedMissionRewards.Value > 0)
                 Console.Error.WriteLine($"[startup] removed duplicated mission rewards from {dedupedMissionRewards.Value} run(s)");
+
+            // ET-271: an own character's run added to a group after the site (ET-269) never had its bounty recorded,
+            // since a bounty line only lands on a running run. Read back from that character's gamelog, once per run.
+            Result<int> importedBounty = dispatcher
+                .Send(new ImportMissingGroupBountyCommand()).GetAwaiter().GetResult();
+            if (importedBounty.IsSuccess && importedBounty.Value > 0)
+                Console.Error.WriteLine($"[startup] read {importedBounty.Value} bounty line(s) back from the game log");
         }
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);

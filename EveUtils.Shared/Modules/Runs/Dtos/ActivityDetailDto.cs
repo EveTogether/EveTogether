@@ -83,4 +83,7 @@ public sealed record ActivityDetailDto(
     RunAttendanceDecision? Attendance = null,
     // The fleet this activity's group was minted for (RunGroupOrigin, ET-182) — null for a solo run or a group this
     // client never recorded an origin for. What lets HOMEFRONT ask that fleet's commander and roster (ET-230).
-    long? FleetId = null);
+    long? FleetId = null,
+    // Each character's own share of TOTAL ISK (ET-272), added up by the registry over that character's runs — what
+    // FLEET shows per row. Null only where no detail was read.
+    IReadOnlyDictionary<long, IskBreakdown>? IskByCharacter = null);

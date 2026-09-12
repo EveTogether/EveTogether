@@ -258,12 +258,12 @@ public sealed class RunsLiveRefreshTests
         ICqrsDispatcher dispatcher = _Dispatcher(instance);
         await _SaveAsync(dispatcher, Pilot, StartedAtUtc, groupCode: GroupCode);
         ActivityDetailViewModel detail = await _DetailThroughTheRowAsync(instance);
-        Assert.Single(detail.Fleet().RunRows);
+        Assert.Single(detail.Fleet().Rows);
 
         await _PullCrewmateRunAsync(instance, GroupCode);
-        await ActivityWindowHarness.WaitUntil(() => detail.Fleet().RunRows.Count == 2);
+        await ActivityWindowHarness.WaitUntil(() => detail.Fleet().Rows.Count == 2);
 
-        Assert.Equal(2, detail.Fleet().RunRows.Count);
+        Assert.Equal(2, detail.Fleet().Rows.Count);
     }
 
     /// <summary>An activity deleted from somewhere else — a second detail window, the runs screen — shows ET-214's

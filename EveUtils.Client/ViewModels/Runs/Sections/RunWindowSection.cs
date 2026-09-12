@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Modules.Settings.Dtos;
 
@@ -59,6 +60,10 @@ public abstract class RunWindowSection : ActivitySection, IDisposable
     public virtual void AddToSave(RunSaveDraft draft)
     {
     }
+
+    /// <summary>SAVE is about to commit the group: whatever this section writes on a clock of its own is written now,
+    /// as it stands, before a single row is saved or a total added up (ET-271: "STOP records it as it stands").</summary>
+    public virtual Task BeforeSaveAsync() => Task.CompletedTask;
 
     /// <summary>One of <see cref="Context"/>'s properties changed; re-announce whatever this section shows from it.</summary>
     protected virtual void OnContextChanged(string? propertyName)

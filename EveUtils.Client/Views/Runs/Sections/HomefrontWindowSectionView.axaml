@@ -3,123 +3,100 @@
              xmlns:va="using:EveUtils.Client.ViewModels.Runs.Attendance"
              xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
              xmlns:re="using:EveUtils.Shared.Modules.Runs.Enums"
+             xmlns:v="using:EveUtils.Client.Views"
              x:Class="EveUtils.Client.Views.Runs.Sections.HomefrontWindowSectionView"
              x:DataType="vs:HomefrontWindowSectionViewModel">
     <UserControl.Styles>
-        <!-- "Local" and the accent bar say which characters are this client's own — the one thing it knows. -->
-        <Style Selector="Border.localtag">
-            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="4,0,4,1"/>
-            <Setter Property="Margin" Value="6,0,0,0"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-        <Style Selector="Border.localtag TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
-            <Setter Property="FontSize" Value="9"/>
-            <Setter Property="LetterSpacing" Value="1.2"/>
-        </Style>
-        <Style Selector="Border.localbar">
-            <Setter Property="Width" Value="2"/>
-            <Setter Property="Margin" Value="0,2,6,2"/>
-            <Setter Property="Background" Value="Transparent"/>
-        </Style>
-        <Style Selector="Border.localbar.on">
-            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-        </Style>
-        <Style Selector="TextBlock.reason">
-            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
-            <Setter Property="FontSize" Value="9.5"/>
-            <Setter Property="TextWrapping" Value="Wrap"/>
-        </Style>
-        <!-- Nothing to go on: marked in amber, never greyed out — the one who decides has to read it. -->
-        <Style Selector="TextBlock.reason.noevidence">
-            <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
-        </Style>
-        <Style Selector="TextBlock.presence">
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-            <Setter Property="FontSize" Value="9.5"/>
-            <Setter Property="Margin" Value="0,0,8,0"/>
-        </Style>
-        <Style Selector="TextBlock.presence.online">
-            <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
-        </Style>
-        <Style Selector="TextBlock.setby">
-            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
-            <Setter Property="FontSize" Value="9.5"/>
-            <Setter Property="Margin" Value="8,0,0,0"/>
-        </Style>
         <!-- Read-only, but readable: a bright word in a bright border, not a checkbox dimmed to nothing. -->
         <Style Selector="Border.tick">
             <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="6,1,6,2"/>
-            <Setter Property="MinWidth" Value="84"/>
+            <Setter Property="MinWidth" Value="72"/>
+            <Setter Property="Margin" Value="10,0,0,0"/>
         </Style>
         <Style Selector="Border.tick TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="10.5"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
         </Style>
         <Style Selector="Border.tick.insite">
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
         </Style>
-        <Style Selector="TextBlock.strip">
+        <Style Selector="CheckBox.insite">
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Margin" Value="10,0,0,0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.summary">
             <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,6,0,4"/>
         </Style>
     </UserControl.Styles>
 
     <StackPanel>
-        <Grid Classes="kv" ColumnDefinitions="Auto,*">
-            <TextBlock Text="DECIDED BY"/>
-            <StackPanel Grid.Column="1">
-                <TextBlock x:Name="DecidedBy" Text="{Binding DecidedByText}"/>
-                <TextBlock Classes="hint" Margin="0" IsVisible="{Binding LastChangeText, Converter={x:Static ObjectConverters.IsNotNull}}"
-                           Text="{Binding LastChangeText}"/>
-            </StackPanel>
-        </Grid>
+        <!-- OUTCOME is one switch with a default (ET-271): Completed is lit from the start; another outcome is one
+             click. A reader who cannot change it sees the same switch, still. -->
+        <StackPanel x:Name="OutcomeSwitch" Orientation="Horizontal" Margin="1,4,0,0" IsVisible="{Binding !IsAar}"
+                    IsEnabled="{Binding CanDecide}">
+            <Button Classes="seg" Classes.on="{Binding IsCompleted}" Content="Completed"
+                    Command="{Binding SetOutcomeCommand}" CommandParameter="{x:Static re:HomefrontOutcome.Completed}"/>
+            <Button Classes="seg bad" Classes.on="{Binding IsFailed}" Content="Failed"
+                    Command="{Binding SetOutcomeCommand}" CommandParameter="{x:Static re:HomefrontOutcome.Failed}"/>
+            <Button Classes="seg" Classes.on="{Binding IsUnknown}" Content="Unknown"
+                    Command="{Binding SetOutcomeCommand}" CommandParameter="{x:Static re:HomefrontOutcome.Unknown}"/>
+        </StackPanel>
+        <!-- AAR pays per wave: how many of its nine paid, all of them unless somebody says otherwise. -->
+        <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,4,0,0" IsVisible="{Binding IsAar}">
+            <TextBlock Classes="figlabel" Text="waves paid"/>
+            <TextBlock Classes="figvalue" Text="{Binding CompletedWaveCount}"/>
+            <TextBlock Classes="figlabel" Text="of 9"/>
+            <Button Content="▲" Padding="6,0" Margin="6,0,0,0" IsVisible="{Binding CanDecide}" Command="{Binding IncreaseWaveCommand}"/>
+            <Button Content="▼" Padding="6,0" IsVisible="{Binding CanDecide}" Command="{Binding DecreaseWaveCommand}"/>
+        </StackPanel>
 
-        <TextBlock x:Name="Notice" Classes="hint" Foreground="{StaticResource WarnBrush}"
+        <TextBlock x:Name="PayoutSummary" Classes="summary" Text="{Binding PayoutSummaryText}"
+                   IsVisible="{Binding PayoutSummaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        <TextBlock x:Name="Notice" Classes="hint" Margin="0,0,0,4" Foreground="{StaticResource WarnBrush}"
                    IsVisible="{Binding NoticeText, Converter={x:Static ObjectConverters.IsNotNull}}"
                    Text="{Binding NoticeText}"/>
-        <TextBlock Classes="hint" IsVisible="{Binding LastSiteText, Converter={x:Static ObjectConverters.IsNotNull}}"
-                   Text="{Binding LastSiteText}"/>
 
-        <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,2">
-            <TextBlock Classes="hint" Margin="0" Text="CHARACTER · WHY PROPOSED"/>
-            <TextBlock Grid.Column="1" Classes="hint" Margin="0" Text="IN SITE AT COMPLETION"/>
-        </Grid>
-
-        <!-- One flat list, per character: own characters first with "Local", the rest A–Z (ET-230). -->
+        <!-- One line per character (ET-230, ET-271): Local first, then the rest A–Z; unticking is one click. -->
         <ItemsControl x:Name="AttendanceList" ItemsSource="{Binding Rows}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="va:AttendanceRowViewModel">
-                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,3">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,2">
                         <Border Classes="localbar" Classes.on="{Binding IsLocal}"/>
-                        <StackPanel Grid.Column="1">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextBrightBrush}"
-                                           FontSize="11.5" VerticalAlignment="Center"/>
-                                <Border Classes="localtag" IsVisible="{Binding IsLocal}">
-                                    <TextBlock Text="Local"/>
-                                </Border>
-                            </StackPanel>
-                            <!-- Wraps rather than running under the tick when the reason and "set by" are both long. -->
-                            <WrapPanel>
-                                <TextBlock Classes="presence" Classes.online="{Binding IsOnline}"
-                                           IsVisible="{Binding IsPresenceShown}" Text="{Binding PresenceText}"/>
-                                <TextBlock Classes="reason" Classes.noevidence="{Binding IsWithoutEvidence}"
-                                           Text="{Binding ReasonText}"/>
-                                <TextBlock Classes="setby" IsVisible="{Binding IsSetByHand}" Text="{Binding SetByText}"/>
-                            </WrapPanel>
-                            <TextBlock Classes="hint" Margin="0" IsVisible="{Binding PayoutText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                       Text="{Binding PayoutText}"/>
+                        <!-- The hint gives way first: trimmed, never pushed under the figure beside it. -->
+                        <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*" VerticalAlignment="Center">
+                            <TextBlock Classes="charname" Text="{Binding Name}"/>
+                            <Border Grid.Column="1" Classes="localtag" IsVisible="{Binding IsLocal}">
+                                <TextBlock Text="Local"/>
+                            </Border>
+                            <TextBlock Grid.Column="2" Classes="rowhint" Text="{Binding HintText}"/>
+                        </Grid>
+
+                        <!-- The payout: a figure that opens an editor holding it when clicked — never an empty field. -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Classes="figlabel" Text="typed" Margin="0,0,4,0" IsVisible="{Binding IsTypedShown}"/>
+                            <Panel IsVisible="{Binding CanActOnPayout}">
+                                <Button Classes="amount" Classes.corrected="{Binding IsCorrected}"
+                                        IsVisible="{Binding IsPayoutLinkShown}"
+                                        Content="{Binding PayoutText}" Command="{Binding BeginPayoutEditCommand}"
+                                        ToolTip.Tip="A different amount arrived? Click to type it."/>
+                                <!-- Enter keeps it, Escape or clicking away drops it (PayoutEditorKeys). -->
+                                <TextBox Classes="amountedit" IsVisible="{Binding IsEditingPayout}"
+                                         v:FocusWhenShown.IsEnabled="True" Text="{Binding PayoutEditText}"/>
+                            </Panel>
+                            <TextBlock Classes="figvalue" IsVisible="{Binding IsPayoutReadOnly}" Text="{Binding PayoutText}"/>
                         </StackPanel>
-                        <CheckBox Grid.Column="2" VerticalAlignment="Center" Content="in site"
+
+                        <CheckBox Grid.Column="3" Classes="insite" Content="in site"
                                   IsVisible="{Binding IsEditable}" IsChecked="{Binding IsInSite, Mode=TwoWay}"/>
-                        <Border Grid.Column="2" Classes="tick" Classes.insite="{Binding IsInSite}"
+                        <Border Grid.Column="3" Classes="tick" Classes.insite="{Binding IsInSite}"
                                 VerticalAlignment="Center" IsVisible="{Binding !IsEditable}">
                             <TextBlock Text="{Binding TickText}"/>
                         </Border>
@@ -128,58 +105,15 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <!-- Only for pilots on no roster at all: an external pilot is a row above and is ticked there. -->
-        <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
-            <StackPanel>
-                <TextBlock Text="+ pilots not on the roster" Foreground="{StaticResource TextBrightBrush}" FontSize="11.5"/>
-                <TextBlock Classes="hint" Margin="0"
-                           Text="In the site, but not in this fleet in Eve Together — not even as external."/>
-            </StackPanel>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="4">
-                <TextBlock x:Name="NotOnRoster" Text="{Binding NotOnRosterCount}" VerticalAlignment="Center"
-                           Foreground="{StaticResource TextBrightBrush}" MinWidth="18" TextAlignment="Right"/>
-                <Button Content="▲" Padding="6,0" IsVisible="{Binding CanDecide}"
-                        Command="{Binding IncreaseNotOnRosterCommand}"
-                        ToolTip.Tip="One more pilot in the site who is on no roster"/>
-                <Button Content="▼" Padding="6,0" IsVisible="{Binding CanDecide}"
-                        Command="{Binding DecreaseNotOnRosterCommand}"
-                        ToolTip.Tip="One pilot fewer"/>
-            </StackPanel>
-        </Grid>
-
-        <!-- OUTCOME: completed/failed/unknown, or — for AAR, which pays per wave — how many of 9 waves paid (ET-231). -->
-        <Grid ColumnDefinitions="Auto,*" Margin="0,8,0,0" IsVisible="{Binding !IsAar}">
-            <TextBlock Text="OUTCOME" VerticalAlignment="Center"/>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" IsVisible="{Binding CanDecide}">
-                <Button Content="completed" Command="{Binding SetOutcomeCommand}" CommandParameter="{x:Static re:HomefrontOutcome.Completed}"/>
-                <Button Content="failed" Command="{Binding SetOutcomeCommand}" CommandParameter="{x:Static re:HomefrontOutcome.Failed}"/>
-                <Button Content="unknown" Command="{Binding SetOutcomeCommand}" CommandParameter="{x:Static re:HomefrontOutcome.Unknown}"/>
-            </StackPanel>
-            <TextBlock Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" IsVisible="{Binding !CanDecide}"
-                       Foreground="{StaticResource TextBrightBrush}" Text="{Binding OutcomeText}"/>
-        </Grid>
-        <Grid ColumnDefinitions="Auto,*" Margin="0,8,0,0" IsVisible="{Binding IsAar}">
-            <TextBlock Text="WAVES PAID" VerticalAlignment="Center"/>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right">
-                <TextBlock Text="{Binding CompletedWaveCount}" VerticalAlignment="Center"
-                           Foreground="{StaticResource TextBrightBrush}" MinWidth="18" TextAlignment="Right"/>
-                <TextBlock Text="/ 9" VerticalAlignment="Center" Classes="hint" Margin="0"/>
-                <Button Content="▲" Padding="6,0" IsVisible="{Binding CanDecide}" Command="{Binding IncreaseWaveCommand}"/>
-                <Button Content="▼" Padding="6,0" IsVisible="{Binding CanDecide}" Command="{Binding DecreaseWaveCommand}"/>
-            </StackPanel>
-        </Grid>
-
-        <Border Classes="totals" Margin="0,8,0,0">
-            <StackPanel>
-                <TextBlock x:Name="CountStrip" Classes="strip" Text="{Binding CountText}"/>
-                <TextBlock Classes="hint" Margin="0" Text="{Binding BreakdownText}"/>
-                <TextBlock Classes="hint" Margin="0" IsVisible="{Binding PayoutSummaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                           Text="{Binding PayoutSummaryText}"/>
-            </StackPanel>
-        </Border>
-
-        <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding CaptionText}"/>
-        <TextBlock Classes="hint" TextWrapping="Wrap"
-                   Text="Online / offline is the live fleet view — nothing of it is stored."/>
+        <!-- A pilot in the site who is on no list at all counts for N too — rare, so one quiet line. -->
+        <StackPanel Orientation="Horizontal" Spacing="4" Margin="8,4,0,0">
+            <TextBlock Classes="figlabel" Text="+ others in site"
+                       ToolTip.Tip="Pilots in the site who are not in this fleet in Eve Together at all — they count for N."/>
+            <TextBlock x:Name="NotOnRoster" Classes="figvalue" Text="{Binding NotOnRosterCount}"/>
+            <Button Content="▲" Padding="6,0" Margin="6,0,0,0" IsVisible="{Binding CanDecide}"
+                    Command="{Binding IncreaseNotOnRosterCommand}" ToolTip.Tip="One more pilot in the site"/>
+            <Button Content="▼" Padding="6,0" IsVisible="{Binding CanDecide}"
+                    Command="{Binding DecreaseNotOnRosterCommand}" ToolTip.Tip="One pilot fewer"/>
+        </StackPanel>
     </StackPanel>
 </UserControl>
