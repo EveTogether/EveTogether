@@ -51,6 +51,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     private readonly IReadOnlySet<long>? _ownCharacterIds;
     private readonly Func<Task>? _republish;
     private readonly IDialogService? _dialogs;
+    private readonly ISdeAccessor? _sde;
 
     /// <summary>Every detail section there is, in screen order — built once, drawn when the type claims it or the
     /// activity has something for it.</summary>
@@ -87,6 +88,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         _ownCharacterIds = ownCharacterIds;
         _republish = republish;
         _dialogs = dialogs;
+        _sde = sde;
         var sectionServices = new RunDetailSectionServices(dispatcher, appraisal, nameOf, esi, locations, sde, portraits,
             images, ownCharacterIds, services);
         _sections = [.. RunSectionModules.All
@@ -429,7 +431,8 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
 
     private RunDetailSectionInput _Apply(ActivityDetailDto detail)
     {
-        RunTypeDefinition type = RunTypeCatalogue.For(detail.ActivityKind, detail.SignatureGroupSnapshot, detail.SiteTypeId);
+        RunTypeDefinition type = RunTypeCatalogue.For(detail.ActivityKind, detail.SignatureGroupSnapshot, detail.SiteTypeId,
+            _sde, detail.SiteName);
         var input = new RunDetailSectionInput(detail, type, id => _ResolveName(detail, id));
         _ApplyHeader(detail, type);
         foreach (RunDetailSection section in _sections)

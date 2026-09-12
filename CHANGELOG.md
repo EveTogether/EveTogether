@@ -13,6 +13,17 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: an older site run no longer shows the generic "Site" where it was in fact a Combat Site or an Ore Site.**
+  A site started before this app recorded the scanner's own group text (2–11 September) fell back to the plain "Site"
+  label and icon everywhere TYPE is shown — the runs overview, the detail screen, the run window and the resume
+  notice alike — even where its name, like "Sansha Refuge" or "Blood Den", proves it was a Combat Site. TYPE is now
+  read from the SDE's own archetype for a name whose every matching dungeon agrees on the kind, without ever picking
+  which specific one it was: Combat Sites, Escalation and the DED complexes read as Combat Site, Ore Anomalies as Ore
+  Site. A name carried by exactly one dungeon in the whole catalogue — "Desolate Site", "Chemical Yard", "Haunted
+  Yard", "Blood Raider Intelligence Collection Point" among them — additionally gets that dungeon id back the first
+  time you start this version, the same repair a homefront's own dungeon id already got, which also restores its
+  "what to expect here?" description. A name absent from the SDE, or shared by dungeons of different kinds, is left
+  reading "Site" rather than guessed.
 - **Fixed: a homefront flown on several of your own characters no longer counts every alt twice.** Starting a site
   on five of your characters in your own fleet could file two runs for each alt — nine runs for five characters — so
   TOTAL ISK read 135,000,000 where HOMEFRONT itself showed 5 × 15,000,000, the alts' bounty went unrecorded during

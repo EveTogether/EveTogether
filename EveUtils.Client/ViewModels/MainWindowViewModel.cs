@@ -2431,7 +2431,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         if (result.Error is null)
         {
             using var scope = _services.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<IDispatcher>().Send(new RepairHomefrontSiteTypeIdsCommand());
+            await scope.ServiceProvider.GetRequiredService<IDispatcher>().Send(new RepairSiteTypeIdsCommand());
         }
     }
 

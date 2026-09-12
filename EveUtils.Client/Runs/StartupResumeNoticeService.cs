@@ -5,6 +5,7 @@ using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Sde;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.Runs;
@@ -46,9 +47,13 @@ public sealed class StartupResumeNoticeService(IServiceProvider services) : ISin
 
     private void _Offer(IToastService toasts, StoppedRunDto run)
     {
+        // ET-275's archetype fallback needs a SiteName to look up, which this branch by definition does not have
+        // (the branch above already reads it when there is one) — sde is still threaded through for the same reason
+        // every other reader of RunTypeCatalogue.For now does, even though it can never fire here.
         string what = !string.IsNullOrWhiteSpace(run.SiteName)
             ? run.SiteName!
-            : RunTypeCatalogue.For(run.ActivityKind, run.SignatureGroupSnapshot, run.SiteTypeId).Name;
+            : RunTypeCatalogue.For(run.ActivityKind, run.SignatureGroupSnapshot, run.SiteTypeId,
+                services.GetService<ISdeAccessor>()).Name;
         toasts.Show($"EVE Together closed while {what} was running",
             $"Stopped {run.StoppedAtUtc.ToLocalTime():d MMM HH:mm}, when this app last saw it going. "
             + "Resume picks the clock back up from its original start, with everything it already collected.",

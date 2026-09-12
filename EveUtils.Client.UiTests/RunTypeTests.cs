@@ -6,6 +6,7 @@ using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Sde.Dtos;
 using Material.Icons;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -65,6 +66,89 @@ public sealed class RunTypeTests
     public void Resolve_ForASiteWithNoHomefrontDungeonId_FallsBackToTheScannerGroup() =>
         Assert.Equal(RunTypeId.CombatSite, RunTypeResolver.Resolve(ActivityKind.Site, "Combat Site", siteTypeId: 0));
 
+    // ── ET-275: the archetype fallback for a site with neither a dungeon id nor a recognised scanner group ────
+
+    /// <summary>Jithran's own measured case (ET-275): "Desolate Site" has exactly one SDE dungeon, archetype 24
+    /// Combat Sites — a run started before <c>SignatureGroupSnapshot</c> existed carries only the name, and must
+    /// still read "Combat Site" rather than the generic "Site" it fell back to before this ticket.</summary>
+    [Fact]
+    public void Resolve_ForASiteWithNoGroupOrDungeonId_ButOneSdeDungeonUnderItsName_ReturnsThatArchetypesType()
+    {
+        var sde = new FakeSdeAccessor()
+            .AddSite(new SdeSite(1265, "Desolate Site", 24, "Combat Sites", null, null, null, null, false, []));
+
+        Assert.Equal(RunTypeId.CombatSite,
+            RunTypeResolver.Resolve(ActivityKind.Site, null, siteTypeId: 0, sde, siteName: "Desolate Site"));
+    }
+
+    /// <summary>ET-275's other measured case: "Sansha Refuge" has two SDE dungeons (2313, 2323), both Combat Sites —
+    /// enough to say the type without ever picking which of the two this run was (AC-1).</summary>
+    [Fact]
+    public void Resolve_ForASiteNameSharedByDungeons_AllOfTheSameArchetype_StillReturnsTheirType()
+    {
+        var sde = new FakeSdeAccessor()
+            .AddSite(new SdeSite(2313, "Sansha Refuge", 24, "Combat Sites", null, null, null, null, false, []))
+            .AddSite(new SdeSite(2323, "Sansha Refuge", 24, "Combat Sites", null, null, null, null, false, []));
+
+        Assert.Equal(RunTypeId.CombatSite,
+            RunTypeResolver.Resolve(ActivityKind.Site, null, siteTypeId: 0, sde, siteName: "Sansha Refuge"));
+    }
+
+    /// <summary>27 (Ore Anomalies) is the other archetype ET-275 asked for, besides Combat Sites.</summary>
+    [Fact]
+    public void Resolve_ForASiteWithOneSdeDungeonOfAnOreArchetype_ReturnsOreSite()
+    {
+        var sde = new FakeSdeAccessor()
+            .AddSite(new SdeSite(9001, "Ore Anomaly Alpha", 27, "Ore Anomalies", null, null, null, null, false, []));
+
+        Assert.Equal(RunTypeId.OreSite,
+            RunTypeResolver.Resolve(ActivityKind.Site, null, siteTypeId: 0, sde, siteName: "Ore Anomaly Alpha"));
+    }
+
+    /// <summary>AC-3, "never a guess": a name whose dungeons disagree on the type must stay "Site" — not the type
+    /// either one, or the more common one, would suggest.</summary>
+    [Fact]
+    public void Resolve_ForASiteNameSharedByDungeonsOfDifferentArchetypes_StaysUnknown()
+    {
+        var sde = new FakeSdeAccessor()
+            .AddSite(new SdeSite(1, "Mixed Name", 24, "Combat Sites", null, null, null, null, false, []))
+            .AddSite(new SdeSite(2, "Mixed Name", 27, "Ore Anomalies", null, null, null, null, false, []));
+
+        Assert.Equal(RunTypeId.Unknown,
+            RunTypeResolver.Resolve(ActivityKind.Site, null, siteTypeId: 0, sde, siteName: "Mixed Name"));
+    }
+
+    /// <summary>An archetype this ticket's table does not know (e.g. 46, Incursion Sites) proves nothing about
+    /// <see cref="RunTypeId"/> — it must not silently fall through to any specific type.</summary>
+    [Fact]
+    public void Resolve_ForASiteWithAnUnmappedArchetype_StaysUnknown()
+    {
+        var sde = new FakeSdeAccessor()
+            .AddSite(new SdeSite(3001, "Some Incursion Site", 46, "Incursion Sites", null, null, null, null, false, []));
+
+        Assert.Equal(RunTypeId.Unknown,
+            RunTypeResolver.Resolve(ActivityKind.Site, null, siteTypeId: 0, sde, siteName: "Some Incursion Site"));
+    }
+
+    /// <summary>A name absent from the SDE altogether (ET-275's "Local Sansha Mainframe" and the like,
+    /// <c>SiteTypeSource.Uncatalogued</c>) stays "Site" — there is nothing here to derive from.</summary>
+    [Fact]
+    public void Resolve_ForASiteNameAbsentFromTheSde_StaysUnknown()
+    {
+        var sde = new FakeSdeAccessor();
+
+        Assert.Equal(RunTypeId.Unknown,
+            RunTypeResolver.Resolve(ActivityKind.Site, null, siteTypeId: 0, sde, siteName: "Local Sansha Mainframe"));
+    }
+
+    /// <summary>A caller giving no <see cref="EveUtils.Shared.Modules.Sde.ISdeAccessor"/> (not yet updated for
+    /// ET-275, or a test with none to give) resolves exactly as it did before this ticket — never throws, never
+    /// guesses.</summary>
+    [Fact]
+    public void Resolve_WithNoSdeAccessor_StaysUnknown_EvenWithASiteNameThatWouldOtherwiseResolve() =>
+        Assert.Equal(RunTypeId.Unknown,
+            RunTypeResolver.Resolve(ActivityKind.Site, null, siteTypeId: 0, sde: null, siteName: "Desolate Site"));
+
     // ── RunTypeCatalogue: every declared type has a name and an icon ───────────────────────────────────
 
     /// <summary>
@@ -117,6 +201,22 @@ public sealed class RunTypeTests
         ];
 
         Assert.Equal(icons.Length, icons.ToHashSet().Count);
+    }
+
+    /// <summary>ET-275's fallback reaches every screen through the same call every other one already goes through
+    /// (<see cref="RunTypeCatalogue.For(ActivityKind, string?, int, EveUtils.Shared.Modules.Sde.ISdeAccessor?, string?)"/>),
+    /// not a second route only the resolver knows about — "Sansha Refuge" reads "Combat Site" with its icon here too.</summary>
+    [Fact]
+    public void For_ForASiteWithNoGroupOrDungeonId_ButAnUnambiguousArchetypeName_ReadsTheArchetypesType()
+    {
+        var sde = new FakeSdeAccessor()
+            .AddSite(new SdeSite(2313, "Sansha Refuge", 24, "Combat Sites", null, null, null, null, false, []))
+            .AddSite(new SdeSite(2323, "Sansha Refuge", 24, "Combat Sites", null, null, null, null, false, []));
+
+        RunTypeDefinition type = RunTypeCatalogue.For(ActivityKind.Site, null, siteTypeId: 0, sde, siteName: "Sansha Refuge");
+
+        Assert.Equal("Combat Site", type.Name);
+        Assert.Equal(MaterialIconKind.SkullOutline, type.Icon);
     }
 
     // ── ET-228: the per-run refinement ET-236's design left for a homefront's own kind ─────────────────

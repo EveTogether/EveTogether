@@ -1,4 +1,5 @@
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Sde;
 
 namespace EveUtils.Shared.Modules.Runs;
 
@@ -20,23 +21,42 @@ namespace EveUtils.Shared.Modules.Runs;
 /// unconditionally for <see cref="ActivityKind.Site"/> — a mission's own id space (<see cref="SiteTypeSource.Mission"/>)
 /// never reaches this arm at all, since <see cref="ActivityKind.Mission"/> resolves above it, and the one other
 /// source, <see cref="SiteTypeSource.Uncatalogued"/>, only ever pairs with a 0 here, which is never a homefront id.
+///
+/// ET-275: a site with neither a homefront id nor a recognised scanner group falls back to its own name — a run
+/// started before <see cref="Entities.Run.SignatureGroupSnapshot"/> existed carries only <paramref name="siteName"/>
+/// and <see cref="Entities.Run.SiteTypeId"/> 0, "Sansha Refuge" among them. <see cref="SiteArchetypeCatalogue"/>
+/// answers only when every SDE dungeon under that exact name agrees on the type, so this never guesses which of two
+/// same-named dungeons a run actually was. <paramref name="sde"/> null (a caller that has not been updated, or a
+/// test with no SDE to ask) skips this arm exactly like a caller giving no <paramref name="siteName"/> would.
 /// </summary>
 public static class RunTypeResolver
 {
-    public static RunTypeId Resolve(ActivityKind activityKind, string? signatureGroupSnapshot, int siteTypeId = 0) =>
+    public static RunTypeId Resolve(ActivityKind activityKind, string? signatureGroupSnapshot, int siteTypeId = 0,
+        ISdeAccessor? sde = null, string? siteName = null) =>
         activityKind switch
         {
             ActivityKind.Mission => RunTypeId.Mission,
             ActivityKind.Abyssal => RunTypeId.Abyssal,
             ActivityKind.Mining => RunTypeId.Mining,
-            ActivityKind.Site => _ResolveSite(signatureGroupSnapshot, siteTypeId),
+            ActivityKind.Site => _ResolveSite(signatureGroupSnapshot, siteTypeId, sde, siteName),
             _ => RunTypeId.Unknown
         };
 
     // The dungeon id is the more specific fact where it is known (ET-228): archetype 70's 24 ids are the one
     // reliable way to tell a homefront from an ordinary site of the same scanner group.
-    private static RunTypeId _ResolveSite(string? signatureGroup, int siteTypeId) =>
-        HomefrontCatalogue.IsHomefrontDungeonId(siteTypeId) ? RunTypeId.Homefront : _ResolveSiteGroup(signatureGroup);
+    private static RunTypeId _ResolveSite(string? signatureGroup, int siteTypeId, ISdeAccessor? sde, string? siteName)
+    {
+        if (HomefrontCatalogue.IsHomefrontDungeonId(siteTypeId))
+            return RunTypeId.Homefront;
+
+        RunTypeId group = _ResolveSiteGroup(signatureGroup);
+        if (group != RunTypeId.Unknown)
+            return group;
+
+        return sde is not null && !string.IsNullOrWhiteSpace(siteName)
+            ? SiteArchetypeCatalogue.ResolveByName(sde, siteName) ?? RunTypeId.Unknown
+            : RunTypeId.Unknown;
+    }
 
     // Exact match on the scanner's own English group text (ET-79: the group column is whatever language the EVE
     // client runs in, so a localised client's group text falls through to Unknown here rather than a wrong kind —

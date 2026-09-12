@@ -213,8 +213,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// Reads the run's own stored dungeon id once one exists (<see cref="_runSiteTypeId"/>, ET-268) rather than
     /// <see cref="_SiteTypeId()"/> alone: MatchedSites is cleared on adopt and on a column switch, and without this a
     /// homefront read back "Site" the moment either happened, even though the run itself never stopped being one.
-    /// Falls back to the live match for a fresh copy that has not started a run of its own yet.</summary>
-    public RunTypeDefinition RunType => RunTypeCatalogue.For(Kind, SignatureGroup, _runSiteTypeId ?? _SiteTypeId());
+    /// Falls back to the live match for a fresh copy that has not started a run of its own yet. Feeds
+    /// <see cref="SignatureName"/> and the app's own <see cref="ISdeAccessor"/> to the ET-275 archetype fallback, so
+    /// a site copied without a scanner group still reads "Combat Site" or "Ore Site" when its name proves it,
+    /// rather than the plain "Site" this window showed before that ticket.</summary>
+    public RunTypeDefinition RunType => RunTypeCatalogue.For(Kind, SignatureGroup, _runSiteTypeId ?? _SiteTypeId(),
+        _services.GetService<ISdeAccessor>(), SignatureName);
 
     /// <summary>The sections the run's type has, in the order <see cref="RunSectionModules"/> gives them — what the
     /// window draws under its clock.</summary>

@@ -286,15 +286,16 @@ sealed class Program
             if (rebuilt.IsSuccess && rebuilt.Value > 0)
                 Console.Error.WriteLine($"[startup] added up the ISK of {rebuilt.Value} saved run(s) again");
 
-            // One-time repair for runs started before ET-228 kept a homefront's dungeon id (Run.SiteTypeId always
-            // came back as 0). Idempotent and cheap once repaired: a run whose id already matches its exact site
+            // One-time repair for a run whose dungeon id never resolved (Run.SiteTypeId 0) even though its own
+            // SiteName has exactly one match in the SDE — originally ET-228's homefronts alone, widened to every
+            // archetype by ET-275. Idempotent and cheap once repaired: a run whose id already matches its exact site
             // name is left alone, so this is a no-op on every later startup. On the first start after an SDE
             // schema bump the SDE is not available yet at this point, so this call repairs nothing — MainWindowViewModel
             // .RunSdeImportPopupAsync runs it again once that same session's SDE import finishes (ET-261).
-            Result<int> repairedHomefronts = dispatcher
-                .Send(new RepairHomefrontSiteTypeIdsCommand()).GetAwaiter().GetResult();
-            if (repairedHomefronts.IsSuccess && repairedHomefronts.Value > 0)
-                Console.Error.WriteLine($"[startup] repaired the homefront type of {repairedHomefronts.Value} run(s)");
+            Result<int> repairedSiteTypes = dispatcher
+                .Send(new RepairSiteTypeIdsCommand()).GetAwaiter().GetResult();
+            if (repairedSiteTypes.IsSuccess && repairedSiteTypes.Value > 0)
+                Console.Error.WriteLine($"[startup] repaired the dungeon id of {repairedSiteTypes.Value} run(s)");
 
             // One-time repair for ET-260: a mission flown with more than one own toon wrote the same reward
             // parameters onto every one of that group's runs, before the run window learned to write them onto only

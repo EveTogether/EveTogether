@@ -4,6 +4,7 @@ using System.Linq;
 using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Sde;
 using Material.Icons;
 
 namespace EveUtils.Client.ViewModels.Runs;
@@ -312,13 +313,16 @@ public static class RunTypeCatalogue
     /// <summary>The type of a run as it is carried — its kind, the scanner group it was copied with, and (for a site)
     /// the dungeon id a single catalogue match resolved to — which is how every run screen asks (ET-226, ET-228).
     /// <paramref name="siteTypeId"/> defaults to "no site id known", so a caller that has not been updated for
-    /// ET-228 (a mission, an abyssal, or a screen this ticket left alone) resolves exactly as before.</summary>
-    public static RunTypeDefinition For(ActivityKind kind, string? signatureGroup, int siteTypeId = 0)
+    /// ET-228 (a mission, an abyssal, or a screen this ticket left alone) resolves exactly as before. <paramref
+    /// name="sde"/> and <paramref name="siteName"/> feed <see cref="RunTypeResolver"/>'s ET-275 archetype fallback;
+    /// both null (a caller not yet updated for that ticket) resolves exactly as before it existed.</summary>
+    public static RunTypeDefinition For(ActivityKind kind, string? signatureGroup, int siteTypeId = 0,
+        ISdeAccessor? sde = null, string? siteName = null)
     {
         if (!Enum.IsDefined(kind))
             return NewerBuildKind;
 
-        RunTypeId id = RunTypeResolver.Resolve(kind, signatureGroup, siteTypeId);
+        RunTypeId id = RunTypeResolver.Resolve(kind, signatureGroup, siteTypeId, sde, siteName);
         RunTypeDefinition definition = For(id);
         return id == RunTypeId.Homefront
             && HomefrontCatalogue.KindByDungeonId.TryGetValue(siteTypeId, out string? homefrontKind)

@@ -10,20 +10,21 @@ using Microsoft.EntityFrameworkCore;
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
-internal sealed class RepairHomefrontSiteTypeIdsCommandHandler(
+internal sealed class RepairSiteTypeIdsCommandHandler(
     IDbContextFactory<ClientDbContext> contextFactory, ISdeAccessor sde, IDispatcher dispatcher)
-    : ICommandHandler<RepairHomefrontSiteTypeIdsCommand, Result<int>>
+    : ICommandHandler<RepairSiteTypeIdsCommand, Result<int>>
 {
-    public async Task<Result<int>> Handle(RepairHomefrontSiteTypeIdsCommand command, CancellationToken cancellationToken = default)
+    public async Task<Result<int>> Handle(RepairSiteTypeIdsCommand command, CancellationToken cancellationToken = default)
     {
         if (!sde.IsAvailable)
             return Result<int>.Success(0);
 
-        // Read live rather than hardcoded (ET-228 AC-3: only an exact match repairs a run, never a guess) — the
-        // group-by-name guard is defensive: domain/homefronts.md measured all 24 archetype-70 names unique across
-        // the whole 1409-site catalogue, but a future SDE build breaking that must fall back to "do not touch this
-        // name" rather than pick one of two dungeons for it.
-        Dictionary<string, int> dungeonIdByName = sde.SearchSites(archetypeId: 70)
+        // Read live rather than hardcoded (ET-228 AC-3: only an exact match repairs a run, never a guess) — every
+        // archetype, not just Homefront's 70 (ET-275): the same "no guessing" guard applies to a Combat Site or an
+        // Ore Site's dungeon id as much as to a homefront's. The group-by-name guard is defensive: domain/homefronts.md
+        // measured 218 of 1014 English names shared by more than one dungeon across the whole catalogue, and a name
+        // with more than one dungeon must fall back to "do not touch this name" rather than pick one of them.
+        Dictionary<string, int> dungeonIdByName = sde.SearchSites()
             .GroupBy(site => site.Name)
             .Where(group => group.Count() == 1)
             .ToDictionary(group => group.Key, group => group.First().DungeonId);
@@ -32,16 +33,16 @@ internal sealed class RepairHomefrontSiteTypeIdsCommandHandler(
 
         // A HashSet, not the dictionary's own KeyCollection: EF Core translates Contains against a captured
         // collection like this into a SQL IN clause, which a dictionary's key view is not guaranteed to support.
-        HashSet<string> homefrontNames = [.. dungeonIdByName.Keys];
+        HashSet<string> catalogueNames = [.. dungeonIdByName.Keys];
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
         // ET-261: Uncatalogued is not a competing guess, it is Site's own predecessor — a run started before this
         // catalogue existed (or before the SDE build behind it carried the site) recorded "the pilot's clipboard
         // named it, the catalogue just did not have it yet" (SiteTypeSource.cs's own doc on the value). An exact
-        // archetype-70 name match is exactly as much proof for one of those runs as for a fresh SiteTypeSource.Site
-        // run — so it repairs the same way, and its source is corrected to Site along with its id.
+        // name match is exactly as much proof for one of those runs as for a fresh SiteTypeSource.Site run — so it
+        // repairs the same way, and its source is corrected to Site along with its id.
         List<Run> candidates = await db.Set<Run>()
             .Where(run => (run.SiteTypeSource == SiteTypeSource.Site || run.SiteTypeSource == SiteTypeSource.Uncatalogued)
-                && run.SiteName != null && homefrontNames.Contains(run.SiteName!))
+                && run.SiteName != null && catalogueNames.Contains(run.SiteName!))
             .ToListAsync(cancellationToken);
 
         List<Guid> repairedRunIds = [];

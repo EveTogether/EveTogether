@@ -287,7 +287,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         }
 
         var fresh = new ActivityOverviewRowViewModel(row, _NameOf, _LoadSubRunsAsync, _OpenDetailAsync,
-            _canPublish ? _PublishAsync : null, _ServerNameOf, progress, _RetryPublishAsync);
+            _canPublish ? _PublishAsync : null, _ServerNameOf, progress, _RetryPublishAsync,
+            _services.GetService<ISdeAccessor>());
         if (shown is not null)
             subRunReads.Add(fresh.ContinueFromAsync(shown));
         return fresh;
