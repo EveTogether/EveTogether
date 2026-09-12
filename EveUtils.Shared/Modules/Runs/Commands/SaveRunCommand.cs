@@ -31,4 +31,7 @@ public sealed record SaveRunCommand(
     /// row, once per row saved, and took five to six seconds for it). False lets a caller saving several runs in one
     /// group run the scan once, after the last one, instead of once per row — the caller's job, since only it knows
     /// when the group is done.</summary>
-    bool RebuildSummaries = true) : ICommand<Result>;
+    bool RebuildSummaries = true,
+    /// <summary>How many characters were on the fleet's roster at STOP (ET-230), or null to leave the row's own
+    /// answer alone — a solo run, or the app's own save of a run nobody had a window open on.</summary>
+    int? FleetSizeAtStop = null) : ICommand<Result>;

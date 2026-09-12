@@ -24,4 +24,7 @@ public sealed class RunSaveDraft(Guid runId, int? characterId, bool isActingRun)
     public List<RunParameterInput> Parameters { get; } = [];
 
     public RunLootStrategy? LootStrategy { get; set; }
+
+    /// <summary>How many characters were on the fleet's roster at STOP (ET-230), or null when that was not read.</summary>
+    public int? FleetSizeAtStop { get; set; }
 }

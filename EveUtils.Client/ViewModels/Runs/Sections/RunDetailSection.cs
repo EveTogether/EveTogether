@@ -55,6 +55,8 @@ public sealed record RunDetailSectionInput(ActivityDetailDto Detail, RunTypeDefi
 
 /// <summary>What the detail screen was given to build its sections with. Every one but the dispatcher is optional, the
 /// same "no service, no action" rule the screen itself follows.</summary>
+/// <param name="Services">The app's services, for a section that reads the live fleet (HOMEFRONT's roster, presence
+/// and commander, ET-230) — null leaves it without, and it then shows no live fleet view at all.</param>
 public sealed record RunDetailSectionServices(
     CqrsDispatcher Dispatcher,
     IAppraisalProvider? Appraisal,
@@ -64,4 +66,5 @@ public sealed record RunDetailSectionServices(
     ISdeAccessor? Sde,
     ICharacterPortraitProvider? Portraits,
     ITypeImageProvider? Images,
-    IReadOnlySet<long>? OwnCharacterIds);
+    IReadOnlySet<long>? OwnCharacterIds,
+    IServiceProvider? Services = null);

@@ -22,8 +22,11 @@ public sealed class FleetWindowSectionViewModel(IRunWindowContext context)
     public ObservableCollection<RunParticipantViewModel> Participants => Context.Participants;
 
     /// <summary>Shown over every payout figure. The window reports an expectation, and never implies EVE's own
-    /// payout rule follows our exclusions.</summary>
-    public string PayoutExpectationLabel => RunPayoutSplit.ExpectationLabel;
+    /// payout rule follows our exclusions. At a homefront the "share" box splits bounty and loot only — the
+    /// homefront's own payout is per character and not split at all (ET-230), so the caption must not say otherwise.</summary>
+    public string PayoutExpectationLabel => Context.RunType.PaysPerCharacterInSite
+        ? RunPayoutSplit.HomefrontShareLabel
+        : RunPayoutSplit.ExpectationLabel;
 
     /// <summary>
     /// What the count is counted from, said outright. The fleet count counts samples, so a member who does not share
@@ -65,6 +68,9 @@ public sealed class FleetWindowSectionViewModel(IRunWindowContext context)
         {
             case nameof(IRunWindowContext.IsFleetShown):
                 OnPropertyChanged(nameof(IsShown));
+                break;
+            case nameof(IRunWindowContext.RunType):
+                OnPropertyChanged(nameof(PayoutExpectationLabel));
                 break;
             case nameof(IRunWindowContext.FleetMembers):
                 OnPropertyChanged(nameof(FleetBasisText));

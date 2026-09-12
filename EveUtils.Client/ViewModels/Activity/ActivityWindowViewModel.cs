@@ -2432,6 +2432,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                     existing.IsPayoutEligible = dto.IsPayoutEligible;
                     existing.BountyIsk = dto.BountyIsk;
                     existing.MiningEntries = dto.MiningEntries;
+                    existing.InSiteAtCompletion = dto.InSiteAtCompletion;
                     continue;
                 }
 
@@ -2441,7 +2442,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 int characterId = checked((int)dto.CharacterId);
                 string name = await _NameOfAsync(characterId) ?? $"Char {characterId}";
                 Participants.Add(new RunParticipantViewModel(
-                    dto.RunId, characterId, name, dto.IsParticipant, dto.IsPayoutEligible, dto.BountyIsk, dto.MiningEntries));
+                    dto.RunId, characterId, name, dto.IsParticipant, dto.IsPayoutEligible, dto.BountyIsk, dto.MiningEntries)
+                {
+                    InSiteAtCompletion = dto.InSiteAtCompletion
+                });
 
                 // A character this window did not itself just start (ET-259): the acting character's own
                 // OnRunStarted already ensured its collector, and a sibling just started this tick already got
@@ -2576,7 +2580,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 CorrectedStartUtc,
                 IsTimeCorrected ? nowUtc : null,
                 LootStrategy: own.LootStrategy,
-                RebuildSummaries: false));
+                RebuildSummaries: false,
+                FleetSizeAtStop: own.FleetSizeAtStop));
             if (!result.IsSuccess)
             {
                 RunNoticeText = result.Messages.FirstOrDefault()?.Text ?? "Could not save this run.";
@@ -2596,7 +2601,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 Result siblingResult = await dispatcher.Send(new SaveRunCommand(
                     sibling.RunId, EffectiveStopUtc ?? nowUtc, nowUtc, [], [],
                     theirs.Enemies, theirs.Parameters,
-                    LootStrategy: theirs.LootStrategy, RebuildSummaries: false));
+                    LootStrategy: theirs.LootStrategy, RebuildSummaries: false, FleetSizeAtStop: theirs.FleetSizeAtStop));
                 if (!siblingResult.IsSuccess)
                     _services.GetService<IToastService>()?.Show("A run in this group was not saved",
                         siblingResult.Messages.FirstOrDefault()?.Text ?? "Could not save one of the other characters' runs.",

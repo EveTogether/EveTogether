@@ -620,7 +620,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
                 // Only this machine's own pilots' runs can be corrected there, or deleted from there (ET-214):
                 // anyone else's came in from a server and could never be published back (ET-215).
                 _namesById.Keys.ToHashSet(),
-                _canPublish ? () => _PublishAsync(row) : null, _dialogs, _services.GetService<RunChangeFeed>()),
+                _canPublish ? () => _PublishAsync(row) : null, _dialogs, _services.GetService<RunChangeFeed>(),
+                _services),
             row.ActivitySummaryId);
         return Task.CompletedTask;
     }

@@ -44,6 +44,10 @@ public interface IRunWindowContext : INotifyPropertyChanged
     /// clock stops, rather than keep judging it against wall-clock time while the window sits open before SAVE.</summary>
     DateTime? EffectiveStopUtc { get; }
 
+    /// <summary>The instant the run started, times-corrected if it was — null before START. With
+    /// <see cref="EffectiveStopUtc"/> it bounds what a section counts as having happened during the run.</summary>
+    DateTime? EffectiveStartUtc { get; }
+
     /// <summary>The run on screen — whichever of the group's runs the character column shows.</summary>
     Guid? RunId { get; }
 

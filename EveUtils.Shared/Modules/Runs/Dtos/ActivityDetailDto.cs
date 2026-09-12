@@ -34,7 +34,11 @@ public sealed record ActivityRunDetailDto(
     // The pilot's own name, recorded when the run started (ET-212) — null on a run saved before this column
     // existed, or one synced from a fleetmate's older client. The screen falls back to a live lookup, then to the
     // bare id, exactly as it always did when this is null.
-    string? CharacterNameSnapshot = null);
+    string? CharacterNameSnapshot = null,
+    // The homefront attendance tick (ET-230) — null while nobody decided, which is every run before it.
+    bool? InSiteAtCompletion = null,
+    // How many characters were on the fleet's roster at STOP (ET-230) — a snapshot, never N.
+    int? FleetSizeAtStop = null);
 
 /// <summary>One activity, fully expanded. The totals (<see cref="LootIskGained"/> etc.) are
 /// <c>ActivitySummary</c>'s own — already computed excluding excluded loot captures — rather than recomputed here,
@@ -70,4 +74,9 @@ public sealed record ActivityDetailDto(
     IReadOnlyList<RunParameterDto> Parameters,
     IReadOnlyList<RunMiningEntryDto> MiningEntries,
     // TOTAL ISK and each source's share of it (ET-256), stored with the summary like the loot figures above.
-    IskBreakdown Isk);
+    IskBreakdown Isk,
+    // Who was in the site at completion (ET-230): the newest decision any of these runs carries, or null.
+    RunAttendanceDecision? Attendance = null,
+    // The fleet this activity's group was minted for (RunGroupOrigin, ET-182) — null for a solo run or a group this
+    // client never recorded an origin for. What lets HOMEFRONT ask that fleet's commander and roster (ET-230).
+    long? FleetId = null);

@@ -765,6 +765,21 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.Property<int?>("AgentId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("AttendanceCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("AttendanceNotOnRosterCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("AttendanceSetAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("AttendanceSetByCharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("AttendanceSource")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime?>("AutoSavedAtUtc")
                         .HasColumnType("TEXT");
 
@@ -786,6 +801,9 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("FleetSizeAtStop")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("FormerGroupCode")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
@@ -793,6 +811,9 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.Property<string>("GroupCode")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
+
+                    b.Property<bool?>("InSiteAtCompletion")
+                        .HasColumnType("INTEGER");
 
                     b.Property<bool>("IsParticipant")
                         .HasColumnType("INTEGER");
@@ -869,6 +890,42 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.HasIndex("GroupCode", "CharacterId");
 
                     b.ToTable("Run");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunAttendanceEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CharacterName")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsExternal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsInSite")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Reason")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ReasonAmount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId", "CharacterId")
+                        .IsUnique();
+
+                    b.ToTable("RunAttendanceEntry");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunBountyEntry", b =>
@@ -1424,6 +1481,17 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunAttendanceEntry", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", "Run")
+                        .WithMany("AttendanceEntries")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunBountyEntry", b =>
                 {
                     b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", "Run")
@@ -1503,6 +1571,8 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.Run", b =>
                 {
+                    b.Navigation("AttendanceEntries");
+
                     b.Navigation("BountyEntries");
 
                     b.Navigation("EnemyObservations");

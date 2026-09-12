@@ -10,7 +10,8 @@ public sealed record RunMiningOreDto(string OreType, int Units, int CriticalUnit
 ///
 /// <see cref="BountyIsk"/> is this run's own <c>RunBountyEntry</c> total (ET-219), read regardless of run state —
 /// the live window asks this before there is a fleet, or any save, to sum a group's bounty against (ET-257).
-/// <see cref="MiningEntries"/> is the same run's own <c>RunMiningEntry</c> rows (ET-229), read the same way.</summary>
+/// <see cref="MiningEntries"/> is the same run's own <c>RunMiningEntry</c> rows (ET-229), read the same way.
+/// <see cref="InSiteAtCompletion"/> is the homefront attendance tick (ET-230), null while nobody decided.</summary>
 public sealed record RunGroupParticipantDto(
     Guid RunId, long CharacterId, bool IsParticipant, bool IsPayoutEligible, decimal BountyIsk,
-    IReadOnlyList<RunMiningOreDto> MiningEntries);
+    IReadOnlyList<RunMiningOreDto> MiningEntries, bool? InSiteAtCompletion = null);

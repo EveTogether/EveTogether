@@ -69,12 +69,25 @@ public sealed partial class RunParticipantViewModel : ObservableObject
             ? IskFormat.Whole(isk)
             : "no figure yet";
 
+    /// <summary>The homefront attendance tick (ET-230), null while nobody decided — which is every run before it and
+    /// every run that is not a homefront.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StandingText))]
+    private bool? _inSiteAtCompletion;
+
     /// <summary>Both flags said out loud, because the interesting row is the one where they disagree.</summary>
-    public string StandingText => (IsParticipant, IsPayoutEligible) switch
+    public string StandingText => Describe(IsParticipant, IsPayoutEligible, InSiteAtCompletion);
+
+    /// <summary>
+    /// The two ET-105 facts in words. Once a homefront's attendance is decided (ET-230), "flew the site" would stand
+    /// beside HOMEFRONT's "not in site" for the hauler and contradict it, so the first half then says only that the
+    /// character has a run in the group — whether they were in the site is HOMEFRONT's to say. A run nobody decided
+    /// attendance for, every run before it, reads exactly as it always did.
+    /// </summary>
+    public static string Describe(bool isParticipant, bool isPayoutEligible, bool? inSiteAtCompletion)
     {
-        (true, true) => "flew the site · takes a share",
-        (true, false) => "flew the site · no share",
-        (false, true) => "did not fly the site · takes a share",
-        (false, false) => "did not fly the site · no share"
-    };
+        string flew = inSiteAtCompletion is not null ? "in the group"
+            : isParticipant ? "flew the site" : "did not fly the site";
+        return $"{flew} · {(isPayoutEligible ? "takes a share" : "no share")}";
+    }
 }

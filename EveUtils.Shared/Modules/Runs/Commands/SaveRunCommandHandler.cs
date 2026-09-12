@@ -101,6 +101,8 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
                 // unfinished run (ET-179) carries none and must not wipe it.
                 .SetProperty(candidate => candidate.LootStrategy,
                     candidate => command.LootStrategy ?? candidate.LootStrategy)
+                .SetProperty(candidate => candidate.FleetSizeAtStop,
+                    candidate => command.FleetSizeAtStop ?? candidate.FleetSizeAtStop)
                 .SetProperty(candidate => candidate.SavedAtUtc, command.SavedAtUtc)
                 .SetProperty(candidate => candidate.SyncState,
                     candidate => candidate.SyncState == RunSyncState.Local ? RunSyncState.Local : RunSyncState.Pending)

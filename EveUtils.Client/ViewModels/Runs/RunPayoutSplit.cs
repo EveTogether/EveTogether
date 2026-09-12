@@ -16,6 +16,12 @@ public static class RunPayoutSplit
         + "repair), up to twice the ideal fleet size, so an excluded pilot who fires one shot is still paid by EVE. "
         + "Exclusion here is our own bookkeeping. What was really received is only in the wallet journal.";
 
+    /// <summary>The same caption at a homefront (ET-230), where the old one would claim the homefront's ISK is shared:
+    /// it is a fixed amount per character counted in the site, and never passes through this box.</summary>
+    public const string HomefrontShareLabel =
+        "Share = how this run's bounty and loot are split between the local characters — our own bookkeeping. The "
+        + "homefront payout is not split and does not depend on this box: EVE pays it per character, see HOMEFRONT.";
+
     /// <summary>
     /// Divide <paramref name="totalIsk"/> equally over the participants who take a share. An excluded pilot is set
     /// to a real zero rather than left blank: AC-3 asks for a figure somebody chose, not a missing one. The

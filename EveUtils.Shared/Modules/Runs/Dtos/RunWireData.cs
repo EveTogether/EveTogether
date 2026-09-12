@@ -37,6 +37,19 @@ public sealed class RunWireData
     public required RunRole Role { get; init; }
     public required bool IsParticipant { get; init; }
     public required bool IsPayoutEligible { get; init; }
+
+    // The homefront attendance decision (ET-230) travels whole, so a member offline when the fleet commander corrected
+    // it still adopts it from the commander's own runs on the next pull. None of it required: a payload from an older
+    // client or server reads as "nobody decided", which is exactly what it is.
+    public bool? InSiteAtCompletion { get; init; }
+    public int? AttendanceCount { get; init; }
+    public int? AttendanceNotOnRosterCount { get; init; }
+    public AttendanceSource? AttendanceSource { get; init; }
+    public long? AttendanceSetByCharacterId { get; init; }
+    public DateTime? AttendanceSetAtUtc { get; init; }
+    public int? FleetSizeAtStop { get; init; }
+    public IReadOnlyList<RunAttendanceEntryInput> AttendanceEntries { get; init; } = [];
+
     public string? FitContentHash { get; init; }
     public string? FitNameSnapshot { get; init; }
 
@@ -80,6 +93,22 @@ public sealed class RunWireData
         Role = run.Role,
         IsParticipant = run.IsParticipant,
         IsPayoutEligible = run.IsPayoutEligible,
+        InSiteAtCompletion = run.InSiteAtCompletion,
+        AttendanceCount = run.AttendanceCount,
+        AttendanceNotOnRosterCount = run.AttendanceNotOnRosterCount,
+        AttendanceSource = run.AttendanceSource,
+        AttendanceSetByCharacterId = run.AttendanceSetByCharacterId,
+        AttendanceSetAtUtc = run.AttendanceSetAtUtc,
+        FleetSizeAtStop = run.FleetSizeAtStop,
+        AttendanceEntries = run.AttendanceEntries.Select(entry => new RunAttendanceEntryInput
+        {
+            CharacterId = entry.CharacterId,
+            CharacterName = entry.CharacterName,
+            IsInSite = entry.IsInSite,
+            IsExternal = entry.IsExternal,
+            Reason = entry.Reason,
+            ReasonAmount = entry.ReasonAmount
+        }).ToList(),
         FitContentHash = run.FitContentHash,
         FitNameSnapshot = run.FitNameSnapshot,
         CharacterNameSnapshot = run.CharacterNameSnapshot,
@@ -159,6 +188,13 @@ public sealed class RunWireData
             Role = Role,
             IsParticipant = IsParticipant,
             IsPayoutEligible = IsPayoutEligible,
+            InSiteAtCompletion = InSiteAtCompletion,
+            AttendanceCount = AttendanceCount,
+            AttendanceNotOnRosterCount = AttendanceNotOnRosterCount,
+            AttendanceSource = AttendanceSource,
+            AttendanceSetByCharacterId = AttendanceSetByCharacterId,
+            AttendanceSetAtUtc = AttendanceSetAtUtc,
+            FleetSizeAtStop = FleetSizeAtStop,
             FitContentHash = FitContentHash,
             FitNameSnapshot = FitNameSnapshot,
             CharacterNameSnapshot = CharacterNameSnapshot,
@@ -228,6 +264,18 @@ public sealed class RunWireData
                 ResidueUnits = entry.ResidueUnits,
                 FirstObservedAtUtc = entry.FirstObservedAtUtc,
                 LastObservedAtUtc = entry.LastObservedAtUtc
+            });
+        foreach (RunAttendanceEntryInput entry in AttendanceEntries)
+            run.AttendanceEntries.Add(new RunAttendanceEntry
+            {
+                Id = Guid.CreateVersion7(),
+                RunId = run.Id,
+                CharacterId = entry.CharacterId,
+                CharacterName = entry.CharacterName,
+                IsInSite = entry.IsInSite,
+                IsExternal = entry.IsExternal,
+                Reason = entry.Reason,
+                ReasonAmount = entry.ReasonAmount
             });
         return run;
     }

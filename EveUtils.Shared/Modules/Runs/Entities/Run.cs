@@ -70,6 +70,37 @@ public sealed class Run
     // but takes no share. Merged, "did not fly it" and "flew it unpaid" become indistinguishable afterwards.
     public bool IsParticipant { get; set; } = true;
     public bool IsPayoutEligible { get; set; }
+
+    /// <summary>Whether this character was in the site when the homefront completed (ET-230) — the fact the payout is
+    /// per character on, decided by the fleet commander (or the pilot over a run of their own), never measured. A
+    /// third fact beside the two above, not a new meaning of <see cref="IsParticipant"/>: the ET-105 hauler flew the run
+    /// unpaid and was still not in the site. Null while nobody has decided, which is every run before this column
+    /// and every run that is not a homefront.</summary>
+    public bool? InSiteAtCompletion { get; set; }
+
+    /// <summary>N: how many characters EVE counts for the homefront's payout — the ticked ones on
+    /// <see cref="AttendanceEntries"/> plus <see cref="AttendanceNotOnRosterCount"/>. The same on every run of the group,
+    /// on every member's machine, because it is the one decision copied to each. Null while undecided.</summary>
+    public int? AttendanceCount { get; set; }
+
+    /// <summary>The pilots counted in <see cref="AttendanceCount"/> who are on no roster at all — a stranger who joined
+    /// in, which EVE counts and the fleet cannot list.</summary>
+    public int? AttendanceNotOnRosterCount { get; set; }
+
+    public AttendanceSource? AttendanceSource { get; set; }
+
+    /// <summary>The character who decided — the fleet commander at the time, or the pilot.</summary>
+    public long? AttendanceSetByCharacterId { get; set; }
+
+    /// <summary>When the decision was made, on the deciding client's clock — what lets a later correction replace an
+    /// earlier one, and never the other way round.</summary>
+    public DateTime? AttendanceSetAtUtc { get; set; }
+
+    /// <summary>How many characters were on the fleet's roster when the run was stopped, externals included — a
+    /// snapshot beside N, never N itself (ET-230): the hauler outside the site is in the fleet and not counted. Null
+    /// on a solo run and on every run before this column.</summary>
+    public int? FleetSizeAtStop { get; set; }
+
     public string? FitContentHash { get; set; }
     public string? FitNameSnapshot { get; set; }
 
@@ -112,4 +143,5 @@ public sealed class Run
     public ICollection<RunEnemyObservation> EnemyObservations { get; } = [];
     public ICollection<RunParameter> Parameters { get; } = [];
     public ICollection<RunMiningEntry> MiningEntries { get; } = [];
+    public ICollection<RunAttendanceEntry> AttendanceEntries { get; } = [];
 }

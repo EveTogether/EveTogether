@@ -108,6 +108,14 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     /// ESI id still earns bounties.</summary>
     public event Action<string, BountyEvent>? BountyObserved;
 
+    /// <summary>Character id, what they did to the site, how much, and the gamelog line's own time (ET-230) — only
+    /// the outgoing half of damage, repair and capacitor, and a successful salvage. What a homefront's attendance
+    /// list proposes from; a character with no known id raises nothing, as with <see cref="CombatObserved"/>.</summary>
+    public event Action<int, SiteContribution, int, DateTime>? ContributionObserved;
+
+    // The notify line EVE writes for a wreck salvaged (domain/homefronts.md §8).
+    private const string SalvageSuccessPrefix = "You successfully salvage";
+
     public GamelogClientService(IServiceProvider services, IEventBus eventBus, ICharacterRegistry? registry = null,
         EveClientPresenceService? presence = null)
     {
@@ -336,7 +344,11 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
 
         var ownerId = _idByName.TryGetValue(name, out var id) ? id : (int?)null;
         if (ownerId is { } characterId)
+        {
             CombatObserved?.Invoke(characterId, target, at, direction);
+            if (direction == DamageDirection.Outgoing)
+                ContributionObserved?.Invoke(characterId, SiteContribution.Damage, amount, at);
+        }
 
         using (var scope = _services.CreateScope())
         {
@@ -572,7 +584,15 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         Metrics(name).RecordRemoteRep(outgoing, amount);
         if (!outgoing)
             RepInRate(name).Add(occurredAt ?? DateTime.UtcNow, amount);   // log-line time, not read time (smooth, not spiky)
+        else
+            RaiseContribution(name, SiteContribution.RemoteRepair, amount, occurredAt);
         MetricsChanged?.Invoke();
+    }
+
+    private void RaiseContribution(string name, SiteContribution contribution, int amount, DateTime? occurredAt)
+    {
+        if (_idByName.TryGetValue(name, out var characterId))
+            ContributionObserved?.Invoke(characterId, contribution, amount, occurredAt ?? DateTime.UtcNow);
     }
 
     /// <summary>Record an energy-neutralizer hit (cap warfare); session-only. Feeds the directional cumulative
@@ -592,7 +612,10 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     /// sliding-window rate (the live Cap graph line).</summary>
     public void AddCapTransfer(string characterName, bool outgoing, int amount, DateTime? occurredAt = null)
     {
-        CapRate(Resolve(characterName)).Add(occurredAt ?? DateTime.UtcNow, amount);   // log-line time, not read time
+        var name = Resolve(characterName);
+        CapRate(name).Add(occurredAt ?? DateTime.UtcNow, amount);   // log-line time, not read time
+        if (outgoing)
+            RaiseContribution(name, SiteContribution.RemoteCapacitor, amount, occurredAt);
         MetricsChanged?.Invoke();
     }
 
@@ -652,7 +675,10 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     /// <summary>Record a notable notify/warning event (scramble, jam, neut, …).</summary>
     public void AddNotify(string characterName, DateTime at, string message)
     {
-        Metrics(Resolve(characterName)).RecordNotify(at, message);
+        var name = Resolve(characterName);
+        Metrics(name).RecordNotify(at, message);
+        if (message.StartsWith(SalvageSuccessPrefix, StringComparison.OrdinalIgnoreCase))
+            RaiseContribution(name, SiteContribution.Salvage, 1, at);
         MetricsChanged?.Invoke();
     }
 

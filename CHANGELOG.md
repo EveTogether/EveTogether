@@ -13,6 +13,22 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Homefronts have a HOMEFRONT section: who was in the site when it completed.** A homefront pays a fixed amount
+  to every character counted in the site, and how much depends on how many were counted — not on the fleet's size.
+  The run window now lists every character on the fleet's roster in one flat list, your own characters marked
+  "Local", each with a tick for "in site at completion" and the reason it was proposed: damage or remote repair
+  dealt, remote capacitor given, a wreck salvaged, ore mined, or "had activity this run" for another pilot's
+  character. A character with nothing logged starts unticked and is marked, so the hauler outside the site stands
+  out; an external pilot starts unticked too, since no evidence can ever arrive for them. Pilots in the site who are
+  on no roster at all are counted with "+ pilots not on the roster", and "6 in fleet · 5 in site" is shown as you go.
+  In a fleet the fleet commander decides: every member sees the commander's list read-only and has it written on
+  their own runs. Flying without a fleet, you decide yourself. Homefronts flown in a row start from the list the last
+  homefront in the same fleet ended with; evidence can add a tick to it, never take one away. The saved activity shows
+  who was counted, who decided and when, and the fleet's size at STOP — and the one who decided can still change the
+  list there, which reaches every member again, also one who only comes online later. Online/offline beside each name
+  is the live fleet view and is never stored. The payout itself follows in a later update.
+- **Mining now travels with a fleet run when it is published.** A fleetmate's mining was left out of what their run
+  sent to the server, so a synced group showed only your own ore.
 - **A mission flown with more than one own toon no longer counts its reward twice.** Before, every own toon in the
   group — the shooter and a salvage alt riding along on the same fleet — was written with an identical copy of the
   same ISK, bonus and LP reward, so the runs overview's reward chips, and the MISSION section on the saved detail
