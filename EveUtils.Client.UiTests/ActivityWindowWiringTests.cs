@@ -421,9 +421,10 @@ public class ActivityWindowWiringTests
         adopting.Dispose();
 
         // What startup does now, before any window exists.
-        Result<int> stopped = await harness.Services.GetRequiredService<IDispatcher>()
+        Result<IReadOnlyList<StoppedRunDto>> stopped = await harness.Services.GetRequiredService<IDispatcher>()
             .Send(new StopRunsLeftRunningCommand(DateTime.UtcNow), TestContext.Current.CancellationToken);
-        Assert.Equal(1, stopped.Value);
+        StoppedRunDto stoppedRun = Assert.Single(stopped.Value!);
+        Assert.Equal(open, stoppedRun.RunId);
 
         ActivityWindowViewModel fresh = await harness.OpenAsync();
         Assert.Null(fresh.RunId);
@@ -435,6 +436,87 @@ public class ActivityWindowWiringTests
         Assert.Null(left.SavedAtUtc);
         Assert.Null(left.DeletedAtUtc);
         fresh.Dispose();
+    }
+
+    /// <summary>
+    /// ET-254: the restart moment used to become the stop time outright — Raymond's app, closed at 20:00 and
+    /// restarted the next morning at 08:00, read the run as twelve hours long. A heartbeat written while the run
+    /// was going (<see cref="TouchRunAliveCommand"/>, about once a minute from <c>ActivityWindowViewModel.Refresh</c>)
+    /// gives the startup sweep something truer to use instead of the moment it happened to notice.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ARunLeftRunning_StopsAtItsLastHeartbeat_NotAtTheRestartMoment()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        IDispatcher dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        DateTime startedAtUtc = DateTime.UtcNow.AddHours(-13);
+        Result<Guid> started = await dispatcher.Send(
+            new StartRunCommand(ActivityWindowHarness.CharacterId, ActivityKind.Site, startedAtUtc, 1234,
+                "Sansha Hideaway", 30000142), cancellationToken);
+        Guid open = started.Value;
+
+        DateTime lastAlive = DateTime.UtcNow.AddHours(-12);
+        await dispatcher.Send(new TouchRunAliveCommand(open, lastAlive), cancellationToken);
+        // The process goes away with the run still on the clock, twelve hours before the restart below.
+
+        await dispatcher.Send(new StopRunsLeftRunningCommand(DateTime.UtcNow), cancellationToken);
+
+        Run left = await _RunAsync(harness, open);
+        Assert.Equal(StoredRunState.Stopped, left.State);
+        Assert.Equal(lastAlive, left.StoppedAtUtc);
+    }
+
+    /// <summary>Counter-proof for the fallback: a run with no heartbeat at all — started and left running within
+    /// the same minute, or left by a build before this ticket ever wrote one — still gets the restart moment.
+    /// Nothing else is knowable about it, which is exactly the old behaviour this ticket otherwise replaces.</summary>
+    [AvaloniaFact]
+    public async Task ARunLeftRunning_WithNoHeartbeatWritten_StillFallsBackToTheRestartMoment()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        IDispatcher dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        DateTime startedAtUtc = DateTime.UtcNow.AddMinutes(-5);
+        Result<Guid> started = await dispatcher.Send(
+            new StartRunCommand(ActivityWindowHarness.CharacterId, ActivityKind.Site, startedAtUtc, 1234,
+                "Sansha Hideaway", 30000142), cancellationToken);
+        Guid open = started.Value;
+
+        DateTime restart = DateTime.UtcNow;
+        await dispatcher.Send(new StopRunsLeftRunningCommand(restart), cancellationToken);
+
+        Run left = await _RunAsync(harness, open);
+        Assert.Equal(restart, left.StoppedAtUtc);
+    }
+
+    /// <summary>The writer's own throttle (ET-254): a run live for under a minute has written no heartbeat at all
+    /// — a DB write on every one-second clock tick would be all cost for a precision nothing downstream uses —
+    /// and a run live for over a minute has written one, close to its own last tick rather than its start.</summary>
+    [AvaloniaFact]
+    public async Task ARunningRun_WritesItsHeartbeat_AboutOnceAMinute_NotEveryTick()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        model.SignatureId = "RUS-326";
+        model.SignatureName = "Sansha Hideaway";
+        await model.StartRunCommand.ExecuteAsync(null);
+        Guid runId = model.RunId!.Value;
+        DateTime start = model.AnchorUtc!.Value;
+
+        model.Refresh(start.AddSeconds(30));
+        Run tooSoon = await _RunAsync(harness, runId);
+        Assert.Null(tooSoon.LastAliveAtUtc);
+
+        DateTime overAMinute = start.AddSeconds(65);
+        model.Refresh(overAMinute);
+        Run written = await _RunAsync(harness, runId);
+        for (int attempt = 0; attempt < 50 && written.LastAliveAtUtc is null; attempt++)
+        {
+            await Task.Delay(20, TestContext.Current.CancellationToken);
+            written = await _RunAsync(harness, runId);
+        }
+        Assert.Equal(overAMinute, written.LastAliveAtUtc);
+        model.Dispose();
     }
 
     /// <summary>

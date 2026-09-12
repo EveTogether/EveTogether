@@ -798,6 +798,9 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.Property<bool>("IsPayoutEligible")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("LastAliveAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("LastPushedAtUtc")
                         .HasColumnType("TEXT");
 

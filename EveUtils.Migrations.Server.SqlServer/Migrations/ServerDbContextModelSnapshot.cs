@@ -816,6 +816,9 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                     b.Property<bool>("IsPayoutEligible")
                         .HasColumnType("bit");
 
+                    b.Property<DateTime?>("LastAliveAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime?>("LastPushedAtUtc")
                         .HasColumnType("datetime2");
 

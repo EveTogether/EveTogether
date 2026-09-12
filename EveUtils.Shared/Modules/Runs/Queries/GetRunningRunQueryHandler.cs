@@ -16,8 +16,11 @@ internal sealed class GetRunningRunQueryHandler(IDbContextFactory<ClientDbContex
     public async Task<Result<RunningRunDto>> Handle(GetRunningRunQuery query, CancellationToken cancellationToken = default)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        // A named RunId (ET-254) is answered outright, Stopped included, with no ambiguity to report even if other
+        // runs are running elsewhere — RunningRunLookup already has exactly this shape for the open window's own
+        // preferred run, reused here for a window resuming a run it does not have open yet.
         (Run? run, int runningCount) = await RunningRunLookup.FindAsync(db, cancellationToken,
-            characterId: query.CharacterId);
+            includeStopped: query.RunId is not null, preferredRunId: query.RunId, characterId: query.CharacterId);
         if (run is null)
             return Result<RunningRunDto>.Failure(runningCount == 0
                 ? new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound, "No run is running.", "Runs")
@@ -37,6 +40,7 @@ internal sealed class GetRunningRunQueryHandler(IDbContextFactory<ClientDbContex
 
         return Result<RunningRunDto>.Success(new RunningRunDto(
             run.Id, run.CharacterId, run.ActivityKind, run.StartedAtUtc, run.GroupCode, run.SiteName, run.Signature,
-            run.SignatureGroupSnapshot, run.AgentId, run.MissionLevel, run.SolarSystemId, parameters));
+            run.SignatureGroupSnapshot, run.AgentId, run.MissionLevel, run.SolarSystemId, parameters,
+            run.StoppedAtUtc));
     }
 }

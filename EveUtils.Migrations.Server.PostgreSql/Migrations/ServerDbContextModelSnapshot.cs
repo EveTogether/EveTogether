@@ -816,6 +816,9 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.Property<bool>("IsPayoutEligible")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTime?>("LastAliveAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime?>("LastPushedAtUtc")
                         .HasColumnType("timestamp with time zone");
 

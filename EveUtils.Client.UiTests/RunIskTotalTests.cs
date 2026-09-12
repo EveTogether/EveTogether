@@ -87,7 +87,8 @@ public sealed class RunIskTotalTests
         Assert.Equal(sample.Total, unfinished.Sum(run => run.TotalIsk));
         if (!sample.Group)
             Assert.Equal(IskFormat.Whole(sample.Total), new UnfinishedRunViewModel(unfinished[0],
-                ActivityWindowHarness.CharacterName, _ => Task.CompletedTask, _ => Task.CompletedTask).TotalIskText);
+                ActivityWindowHarness.CharacterName, _ => Task.CompletedTask, _ => Task.CompletedTask,
+                _ => Task.CompletedTask).TotalIskText);
 
         await window.SaveRunCommand.ExecuteAsync(null);
 

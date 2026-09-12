@@ -16,17 +16,25 @@ using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Grouping;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
+using EveUtils.Shared.Modules.Settings.Commands;
+using EveUtils.Shared.Modules.Settings.Queries;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
 /// <summary>
-/// The manual entry to a run (ET-163): character, activity kind and — for a site — one picked from the SDE
-/// catalogue, started through the same <see cref="StartRunCommand"/> the clipboard/signature flow in
-/// ActivityWindowViewModel uses; this is the second production caller, not a second run type. The mission path is
-/// deliberately absent: its three autocompletes need SDE data that is not imported yet (ET-129).
+/// The manual entry to a run (ET-163): character, activity kind and whatever that kind's own catalogue row asks for
+/// — a site, an abyssal's nothing-here (tier and weather are the run window's own question), or a mission's typed
+/// name — started through the same <see cref="StartRunCommand"/> the clipboard/signature flow in
+/// ActivityWindowViewModel uses; this is the second production caller, not a second run type.
 ///
-/// An abyssal asks for neither: a pocket is not in the site catalogue, so requiring one left START grey for good,
-/// and the run it prepares does not begin running here — see <see cref="_PrepareAbyssalRun"/>.
+/// <see cref="ActivityKinds"/> and what each one asks for both come from <see cref="RunTypeCatalogue"/> (ET-255):
+/// a kind with no catalogue row naming <see cref="ManualStartRequirement"/> never appears here at all, which is how
+/// a mission stayed out before this ticket (its agent/level autocompletes need SDE data that is still not imported,
+/// ET-129 — the name alone needs none) and how Mining stays out today (ET-229 has not given it an
+/// <see cref="ActivityKind"/> to resolve from yet).
+///
+/// An abyssal asks for nothing here: a pocket is not in the site catalogue, so requiring one left START grey for
+/// good, and the run it prepares does not begin running here — see <see cref="_PrepareAbyssalRun"/>.
 ///
 /// There is no STARTTIME field. Starting now means the starttime is now; BACKDATE is the one exception, for a run
 /// typed in after the fact.
@@ -69,7 +77,33 @@ public partial class ManualRunStartViewModel : ViewModelBase
         Character? starting = Characters.FirstOrDefault(character => character.EsiCharacterId == preselectedCharacter?.EsiCharacterId)
             ?? Characters.FirstOrDefault();
         SelectedCharacters = starting is null ? [] : [starting];
-        SelectedActivityKind = ActivityKind.Site;
+        // The field directly, not the property: the setter's own OnSelectedActivityKindChanged persists a choice
+        // (ET-255), and this default is not one — LoadAsync overwrites it with the remembered kind, if any, the
+        // moment it can ask, and must not lose a race against this constructor rewriting it back to Site first.
+        _selectedActivityKind = ActivityKind.Site;
+    }
+
+    /// <summary>Where the last picked kind is remembered (ET-255) — under <c>ui.</c> with the other shell prefs
+    /// <see cref="EveUtils.Client.ViewModels.Runs.Sections.ActivityWindowSectionViewModel"/> already keeps there.
+    /// Tier and weather need no key of their own here: they are the run window's own question, and
+    /// <see cref="_PrepareAbyssalRun"/> hands the pilot straight to a window that already restores its own last
+    /// answer from <c>ActivityWindowSectionViewModel.TierSettingKey</c>/<c>WeatherSettingKey</c> on
+    /// <c>LoadAsync</c>, with nothing for this dialog to remember twice.</summary>
+    public const string LastKindSettingKey = "ui.manual-start.activity-kind";
+
+    /// <summary>Restores the last picked kind, once the dialog's own queries can run — separate from the
+    /// constructor for the same reason <c>ActivityWindowViewModel.LoadAsync</c> is: a synchronous build that a test
+    /// can assert against before anything async races it. A stored kind this build no longer offers (an older
+    /// client's setting read by a build that dropped a kind, or simply none saved yet) leaves today's default,
+    /// Site, standing.</summary>
+    public async Task LoadAsync()
+    {
+        IReadOnlyList<Shared.Modules.Settings.Dtos.SettingDto> settings = await _dispatcher.Query(new GetSettingsQuery());
+        string? stored = settings.FirstOrDefault(setting => setting.Key == LastKindSettingKey)?.Value;
+        if (stored is not null
+            && Enum.TryParse(stored, out ActivityKind kind)
+            && ActivityKinds.Contains(kind))
+            SelectedActivityKind = kind;
     }
 
     public IReadOnlyList<Character> Characters { get; }
@@ -122,21 +156,32 @@ public partial class ManualRunStartViewModel : ViewModelBase
             .Where(character => character is not null)!];
     }
 
-    public IReadOnlyList<ActivityKind> ActivityKinds { get; } = [ActivityKind.Site, ActivityKind.Abyssal];
+    /// <summary>Every kind this dialog may offer (ET-255) — the catalogue's own answer, not a list kept here that a
+    /// new type could be forgotten from.</summary>
+    public IReadOnlyList<ActivityKind> ActivityKinds { get; } = RunTypeCatalogue.ManuallyStartableKinds;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyPropertyChangedFor(nameof(IsAbyssal))]
     [NotifyPropertyChangedFor(nameof(NeedsSite))]
+    [NotifyPropertyChangedFor(nameof(NeedsMissionName))]
     [NotifyPropertyChangedFor(nameof(CanBackdate))]
     [NotifyPropertyChangedFor(nameof(StartButtonText))]
     private ActivityKind _selectedActivityKind;
 
-    public bool IsAbyssal => SelectedActivityKind is ActivityKind.Abyssal;
+    /// <summary>What the selected kind's own catalogue row asks this dialog for (ET-255) — the one place that
+    /// decision is made; <see cref="IsAbyssal"/>, <see cref="NeedsSite"/> and <see cref="NeedsMissionName"/> below
+    /// just name this fact's three answers, the way <c>ManualRunStartWindow.axaml</c> already expects.</summary>
+    private ManualStartRequirement? _ManualStart => RunTypeCatalogue.For(SelectedActivityKind, null).ManualStart;
+
+    public bool IsAbyssal => _ManualStart == ManualStartRequirement.Abyssal;
 
     /// <summary>Whether this kind is named by a site from the catalogue. Only a site is: an abyssal pocket is not in
-    /// the catalogue at all, and a mission is named by its agent.</summary>
-    public bool NeedsSite => SelectedActivityKind is ActivityKind.Site;
+    /// the catalogue at all, and a mission is named by a typed name instead.</summary>
+    public bool NeedsSite => _ManualStart == ManualStartRequirement.Site;
+
+    /// <summary>Whether this kind is named by a typed name rather than a catalogue site (ET-255) — a mission today.</summary>
+    public bool NeedsMissionName => _ManualStart == ManualStartRequirement.MissionName;
 
     /// <summary>An abyssal run is not given a start time here — <see cref="_PrepareAbyssalRun"/> hands over a run
     /// that is not on the clock yet, so there is nothing for an earlier moment to move.</summary>
@@ -146,12 +191,21 @@ public partial class ManualRunStartViewModel : ViewModelBase
     /// this screen was misread.</summary>
     public string StartButtonText => IsAbyssal ? "PREPARE RUN" : "START RUN";
 
-    // A half-filled site behind a field that is no longer on screen is how a hidden choice comes back later: the
-    // kind decides what is asked, so changing it drops the answer to the question that is gone.
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    private string _missionName = string.Empty;
+
+    // A half-filled site (or mission name) behind a field that is no longer on screen is how a hidden choice comes
+    // back later: the kind decides what is asked, so changing it drops the answer to the question that is gone.
+    // The choice itself is remembered (ET-255) — fire-and-forget, the same way every other settings write a plain
+    // property setter causes in this app is (ActivityWindowSectionViewModel's own tier/weather persistence is the
+    // one exception, because those come from a RelayCommand that can simply await it).
     partial void OnSelectedActivityKindChanged(ActivityKind value)
     {
         SiteQuery = string.Empty;
         SelectedOption = null;
+        MissionName = string.Empty;
+        _ = _dispatcher.Send(new SetSettingCommand(LastKindSettingKey, value.ToString()));
     }
 
     [ObservableProperty]
@@ -196,7 +250,9 @@ public partial class ManualRunStartViewModel : ViewModelBase
     /// <summary>Raised once the run exists — the dialog's cue to go, the same signal SdeProgress uses.</summary>
     public event Action? CloseRequested;
 
-    private bool CanStart => SelectedCharacters.Count > 0 && (!NeedsSite || SelectedSite is not null);
+    private bool CanStart => SelectedCharacters.Count > 0
+        && (!NeedsSite || SelectedSite is not null)
+        && (!NeedsMissionName || !string.IsNullOrWhiteSpace(MissionName));
 
     [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task StartAsync(CancellationToken cancellationToken)
@@ -219,7 +275,25 @@ public partial class ManualRunStartViewModel : ViewModelBase
             return;
         }
 
-        if (SelectedSite is not { } site)
+        // What names this run (ET-255): a catalogue site, same as before, or — for a mission — the typed name, with
+        // no dungeon id to give (0, the same sentinel RunRewardStorageTests' own mission rows use) and its own
+        // SiteTypeSource so SiteTypeId's id space reads correctly back (ET-137).
+        int siteTypeId;
+        string name;
+        SiteTypeSource siteTypeSource;
+        if (NeedsMissionName)
+        {
+            siteTypeId = 0;
+            name = MissionName;
+            siteTypeSource = SiteTypeSource.Mission;
+        }
+        else if (SelectedSite is { } site)
+        {
+            siteTypeId = site.DungeonId;
+            name = site.Name;
+            siteTypeSource = SiteTypeSource.Site;
+        }
+        else
             return;
 
         // "Earlier moment" types a past moment; without it the starttime is simply now. Either way this is the
@@ -238,11 +312,11 @@ public partial class ManualRunStartViewModel : ViewModelBase
             pilotCharacterId,
             SelectedActivityKind,
             startedAtUtc,
-            site.DungeonId,
-            site.Name,
+            siteTypeId,
+            name,
             SolarSystemId: null,
             GroupCode: groupCode,
-            SiteTypeSource: SiteTypeSource.Site,
+            SiteTypeSource: siteTypeSource,
             Origin: RunOrigin.Manual,
             CharacterNameSnapshot: pilot.Name), cancellationToken);
 
@@ -265,11 +339,11 @@ public partial class ManualRunStartViewModel : ViewModelBase
                 extraId,
                 SelectedActivityKind,
                 startedAtUtc,
-                site.DungeonId,
-                site.Name,
+                siteTypeId,
+                name,
                 SolarSystemId: null,
                 GroupCode: groupCode,
-                SiteTypeSource: SiteTypeSource.Site,
+                SiteTypeSource: siteTypeSource,
                 Origin: RunOrigin.Manual,
                 CharacterNameSnapshot: extra.Name), cancellationToken);
 

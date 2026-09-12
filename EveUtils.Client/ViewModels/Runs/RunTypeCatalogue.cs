@@ -59,6 +59,34 @@ public sealed record RunTypeDefinition
     /// leg (ET-243, ET-246). Derived from the space: an abyssal pocket is the one place whose entry and exit this app
     /// sees per pilot, and a type claiming this without it would wait on a crossing nothing ever reports.</summary>
     public bool ClockPerPilot => Space is RunSpace.AbyssalPocket;
+
+    /// <summary>What Tools → Start run asks for a run of this type (ET-255) — null when this type is not one a
+    /// pilot can pick there at all. Replaces the two bare checks <c>ManualRunStartViewModel</c> used to carry itself
+    /// (<c>IsAbyssal</c>, <c>NeedsSite</c>): what a manual start needs is this type's own fact, the same way every
+    /// other thing a type means already lives here rather than on the window that happens to ask.</summary>
+    public ManualStartRequirement? ManualStart { get; init; }
+}
+
+/// <summary>What the manual run-start dialog needs to ask before <see cref="StartRunCommand"/> can fire, per
+/// <see cref="RunTypeDefinition.ManualStart"/>. Appended only, like every other catalogue enum beside it.</summary>
+public enum ManualStartRequirement
+{
+    /// <summary>A site from the SDE catalogue, same as today.</summary>
+    Site,
+
+    /// <summary>Tier and weather — asked for inside the run window itself once it opens, not by this dialog
+    /// (<see cref="RunTypeDefinition.ClockPerPilot"/>'s own window already remembers both via
+    /// <c>ActivityWindowSectionViewModel</c>'s settings keys, so a manual abyssal start inherits that for free).</summary>
+    Abyssal,
+
+    /// <summary>A typed name. Agent and level are not asked here — ET-129's SDE agent data is not imported, the same
+    /// gap that kept the mission path out of this dialog before this ticket.</summary>
+    MissionName,
+
+    /// <summary>Nothing beyond character(s) and a backdated moment. Declared now for Mining even though nothing
+    /// resolves to it yet (ET-229) — the same "reserve ≠ build" the row itself already practises (AGENTS.md §1):
+    /// once a kind exists for it, the picker offers it with no change here.</summary>
+    None
 }
 
 /// <summary>
@@ -110,7 +138,8 @@ public static class RunTypeCatalogue
         RunSectionId.Escalation
     ];
 
-    private static RunTypeDefinition _Site(RunTypeId id, string name, MaterialIconKind icon) => new()
+    private static RunTypeDefinition _Site(RunTypeId id, string name, MaterialIconKind icon,
+        ManualStartRequirement? manualStart = null) => new()
     {
         Id = id,
         Name = name,
@@ -119,14 +148,21 @@ public static class RunTypeCatalogue
         Noun = "a site",
         WindowSections = StandardWindow,
         DetailSections = SiteDetail,
-        LootStrategies = SiteLootStrategies
+        LootStrategies = SiteLootStrategies,
+        ManualStart = manualStart
     };
 
     private static readonly IReadOnlyDictionary<RunTypeId, RunTypeDefinition> Definitions = new Dictionary<RunTypeId, RunTypeDefinition>
     {
         // Not "Combat Site": a site whose group could not be resolved reads as what is actually known about it — a
-        // site — never the specific kind this ticket exists to stop defaulting to (ET-226 AC-3).
-        [RunTypeId.Unknown] = _Site(RunTypeId.Unknown, "Site", MaterialIconKind.MapMarkerOutline),
+        // site — never the specific kind this ticket exists to stop defaulting to (ET-226 AC-3). This is also the
+        // only site row Tools → Start run can ever land on (ET-255): a manual start has no scanner group to give,
+        // so "Site" in that picker always resolves here, never to one of the six rows below it.
+        [RunTypeId.Unknown] = _Site(RunTypeId.Unknown, "Site", MaterialIconKind.MapMarkerOutline,
+            ManualStartRequirement.Site),
+        // The six rows below, plus Homefront further down, are resolved only from a copied signature's scanner
+        // group (or, for Homefront, its archetype, ET-228) — never from this dialog's own choice. No ManualStart:
+        // each still flies, just as Unknown's own "Site" row above.
         [RunTypeId.CombatSite] = _Site(RunTypeId.CombatSite, "Combat Site", MaterialIconKind.SkullOutline),
         [RunTypeId.DataSite] = _Site(RunTypeId.DataSite, "Data Site", MaterialIconKind.DatabaseOutline),
         [RunTypeId.RelicSite] = _Site(RunTypeId.RelicSite, "Relic Site", MaterialIconKind.DiamondStone),
@@ -153,10 +189,16 @@ public static class RunTypeCatalogue
             // Same four a site loots by, same order (ET-172 backlog gap, closed by ET-237): a courier has nothing to
             // blitz or clear, so the row stays optional with no preselection — IsLootStrategyShown already hides an
             // empty list, and nothing here forces a choice on one that has none to make.
-            LootStrategies = SiteLootStrategies
+            LootStrategies = SiteLootStrategies,
+            // Manual start asks for a typed name only (ET-255) — agent and level stay optional, the same SDE-data
+            // gap (ET-129) that kept the mission path out of this dialog entirely before this ticket.
+            ManualStart = ManualStartRequirement.MissionName
         },
         // Nothing resolves to Mining yet (ET-229 adds its detection and its MINING section); until then it carries
-        // only what every run has.
+        // only what every run has. ManualStart is declared anyway (AGENTS.md §1, "reserve ≠ build"): Tools → Start
+        // run only ever offers a kind RunTypeResolver can actually produce, and no ActivityKind resolves to Mining
+        // yet, so this row stays invisible there until ET-229 gives it one — at which point it needs no further
+        // change here to appear.
         [RunTypeId.Mining] = new()
         {
             Id = RunTypeId.Mining,
@@ -165,7 +207,8 @@ public static class RunTypeCatalogue
             WindowTitle = "MINING RUN",
             Noun = "a mining run",
             WindowSections = [RunSectionId.Activity, RunSectionId.Fleet],
-            DetailSections = [RunSectionId.Activity, RunSectionId.Fleet]
+            DetailSections = [RunSectionId.Activity, RunSectionId.Fleet],
+            ManualStart = ManualStartRequirement.None
         },
         // Nothing resolves to Homefront yet (ET-228). A homefront is flown as a site today and reads as one, so it
         // keeps a site's sections until ET-230 gives it its own.
@@ -184,9 +227,19 @@ public static class RunTypeCatalogue
                 RunSectionId.Consumables
             ],
             Space = RunSpace.AbyssalPocket,
-            LootStrategies = AbyssalLootStrategies
+            LootStrategies = AbyssalLootStrategies,
+            ManualStart = ManualStartRequirement.Abyssal
         }
     };
+
+    /// <summary>Every kind Tools → Start run may offer (ET-255) — every <see cref="ActivityKind"/> whose catalogue
+    /// row (with no scanner group to go on, exactly what a manual start has) declares a <see cref="ManualStartRequirement"/>.
+    /// A manual start never knows a signature's group, so this is always the same row a copied signature with no
+    /// match would also land on — Unknown's own "Site", never one of the six specific site rows. The one place this
+    /// list is built: a new <see cref="ActivityKind"/> with a row that names <c>ManualStart</c> appears here with no
+    /// change to this property or to <c>ManualRunStartViewModel</c>.</summary>
+    public static IReadOnlyList<ActivityKind> ManuallyStartableKinds { get; } =
+        [.. Enum.GetValues<ActivityKind>().Where(kind => For(kind, null).ManualStart is not null)];
 
     /// <summary>A run stored by a later build under an <see cref="ActivityKind"/> this one has never heard of. It still
     /// opens and still reads as a run — the window going down over a header is the failure AGENTS.md §2 forbids — and
