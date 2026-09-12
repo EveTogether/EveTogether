@@ -179,10 +179,11 @@
                         <CheckBox x:Name="ShareCombatBox" Content="Share my live combat data with fleet members (DPS, neut, cap)"/>
                         <CheckBox x:Name="ShareBountyBox" Content="Share my bounty earnings with fleet members"/>
                         <CheckBox x:Name="ShareLootBox" Content="Share my loot with fleet members (items and value)"/>
+                        <CheckBox x:Name="ShareMiningBox" Content="Share my mining with fleet members (units mined)"/>
                         <CheckBox x:Name="ShareLocationBox" Content="Share my location with fleet members"/>
-                        <TextBlock Text="These are your global defaults for every fleet. Combat metrics are shared by default; bounty, loot and location are off by default. You can override any of these per fleet from its SHARING button."
+                        <TextBlock Text="These are your global defaults for every fleet. Combat metrics are shared by default; bounty, loot, mining and location are off by default. You can override any of these per fleet from its SHARING button."
                                    FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
-                        <TextBlock Text="On a run you fly together with a fleet, loot and bounty are shared unless you turn them off: the run window says so at the top, and one click there stops it for that run."
+                        <TextBlock Text="On a run you fly together with a fleet, loot, bounty and mining are shared unless you turn them off: the run window says so at the top, and one click there stops it for that run."
                                    FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
                     </StackPanel>
 

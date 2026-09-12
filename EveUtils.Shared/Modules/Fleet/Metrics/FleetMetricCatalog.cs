@@ -11,7 +11,7 @@ public static class FleetMetricCatalog
     {
         [MetricKind.Dps] = new(MetricKind.Dps, MetricSemantics.Rate, Aggregatable: true, Unit: "dps"),
         [MetricKind.DpsIn] = new(MetricKind.DpsIn, MetricSemantics.Rate, Aggregatable: true, Unit: "dps"),
-        [MetricKind.MiningYield] = new(MetricKind.MiningYield, MetricSemantics.Rate, Aggregatable: true, Unit: "m3/min"),
+        [MetricKind.MiningYield] = new(MetricKind.MiningYield, MetricSemantics.Cumulative, Aggregatable: true, Unit: "units"),
         [MetricKind.Bounty] = new(MetricKind.Bounty, MetricSemantics.Cumulative, Aggregatable: true, Unit: "ISK"),
         [MetricKind.Location] = new(MetricKind.Location, MetricSemantics.State, Aggregatable: false, Unit: "system"),
         [MetricKind.Neut] = new(MetricKind.Neut, MetricSemantics.Rate, Aggregatable: true, Unit: "GJ/s"),

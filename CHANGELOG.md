@@ -52,6 +52,14 @@ taken from the matching `## vX.Y.Z` section below.
   loot now has its own checkbox under Settings → Privacy & Sharing and in each fleet's SHARING dialog, off by
   default like bounty. Everyone on the run, and the server, need this version for the items to arrive; with an older
   server or fleetmate the items simply don't travel and the ISK figures behave as before.
+- **Mining now shares the same way loot and bounty do.** Before, mining only ever showed on the machine of the pilot
+  who mined it, so an FC could never see what the fleet as a whole pulled out of a site. Now MINING in the run window
+  adds a "fleet mined" line for whoever on the run shares it, and — on a Metaliminal Meteoroid homefront, whose
+  5,000-unit asteroid is a known amount — a "remaining" line as well; an ordinary mining fleet just sees the total. A
+  member mining shows as evidence for the run's attendance the same way bounty already does. Mining has its own
+  checkbox under Settings → Privacy & Sharing and in each fleet's SHARING dialog, and its own button on the run
+  window's SHARING strip, off by default like loot and bounty; the fleet's own total is a lower bound, said on
+  screen, since a pilot not sharing or not on EVE Together is missing from it.
 - **Fleet runs now publish themselves, and your fleetmates' runs come in by themselves.** Before, nothing reached the
   server until someone pressed PUBLISH, and nothing came back until you pressed it again — so whoever published first
   never saw the other pilot's run, name or loot without a second press. Now a run you fly in a fleet on a coupled

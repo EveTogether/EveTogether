@@ -536,9 +536,9 @@
                                Classes.waiting="{Binding IsWaitingForFleet}" Text="{Binding FleetClockText}"/>
                 </Grid>
 
-                <!-- What this pilot offers the fleet of this run (ET-242): on a shared run loot and bounty go out unless
-                     switched off here, so it is said on the window's face, in words, with the switch one click away —
-                     not in a section that may be folded shut. -->
+                <!-- What this pilot offers the fleet of this run (ET-242, mining added by ET-234): on a shared run
+                     loot, bounty and mining go out unless switched off here, so it is said on the window's face, in
+                     words, with the switch one click away — not in a section that may be folded shut. -->
                 <StackPanel x:Name="FleetSharingStrip" Spacing="2" IsVisible="{Binding FleetSharing.IsShown}">
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                         <TextBlock Classes="label" VerticalAlignment="Center" Text="SHARING"/>
@@ -551,6 +551,10 @@
                                     Content="{Binding FleetSharing.BountyToggleText}"
                                     Command="{Binding FleetSharing.ToggleBountyCommand}"
                                     ToolTip.Tip="Share my bounty with the fleet on this run."/>
+                            <Button x:Name="ShareMiningButton" Classes="pick" Classes.on="{Binding FleetSharing.IsSharingMining}"
+                                    Content="{Binding FleetSharing.MiningToggleText}"
+                                    Command="{Binding FleetSharing.ToggleMiningCommand}"
+                                    ToolTip.Tip="Share my mining with the fleet on this run: units mined so far."/>
                         </WrapPanel>
                     </Grid>
                     <TextBlock x:Name="FleetSharingText" Classes="hint" Margin="0" Text="{Binding FleetSharing.SharingText}"/>
