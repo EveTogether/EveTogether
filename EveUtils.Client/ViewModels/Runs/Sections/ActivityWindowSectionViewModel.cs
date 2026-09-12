@@ -190,6 +190,29 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
             .ShowMessageAsync("Ships allowed at this site", hulls);
     }
 
+    /// <summary>What the SDE's own <c>gameplayDescription</c> says about this site (ET-232) — recommended fleet
+    /// size, expected time, roles, wherever the catalogue carries one (chiefly homefronts). Shown only when every
+    /// match agrees, the same "silent about disagreement" rule <see cref="SignatureSiteText"/> follows.</summary>
+    public string? GameplayDescriptionText =>
+        Context.MatchedSites.Select(site => site.GameplayDescription).Distinct().ToList() is [{ Length: > 0 } only]
+            ? only
+            : null;
+
+    public bool HasGameplayDescription => GameplayDescriptionText is not null;
+
+    /// <summary>The gameplay text behind its own link, the same on-demand shape <see cref="ShowShipRestrictionAsync"/>
+    /// already uses — a homefront's own text runs to a paragraph or more (fleet size, timer, roles), which crowds
+    /// the section exactly as the hull list once did.</summary>
+    [RelayCommand]
+    private async Task ShowGameplayDescriptionAsync()
+    {
+        if (GameplayDescriptionText is not { } text)
+            return;
+
+        await Context.Services.GetRequiredService<IDialogService>()
+            .ShowMessageAsync("What to expect at this site", text);
+    }
+
     // ── The escalation ─────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Only a type that escalates (ET-124 measured this; an abyssal pocket and a mission do not).</summary>
@@ -474,12 +497,29 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
         SdeSiteDescription.DescribeCommon(Context.MatchedSites) is { Length: > 0 } common ? common : null;
 
     /// <summary>The hulls a site names, or null when it names none. A restricted site whose allow-list resolves to
-    /// no groups says nothing here and stays "ship-restricted" on the site line — reading it as "anything goes" is
-    /// the one mistake here that costs a ship.</summary>
-    private static string? _ShipRule(SdeSite site) =>
-        site is { IsShipRestricted: true, AllowedShipGroups: not [] }
-            ? string.Join(", ", site.AllowedShipGroups.Select(group => group.Name).Order())
-            : null;
+    /// no groups and no individual hulls says nothing here and stays "ship-restricted" on the site line — reading it
+    /// as "anything goes" is the one mistake here that costs a ship.
+    ///
+    /// Individually included hulls (ET-232) are the refinement a group alone cannot express — a homefront's T1-only
+    /// cruisers are 16 named types, not the whole Cruiser group, so they never show up in
+    /// <see cref="SdeSite.AllowedShipGroups"/> at all. An individually excluded hull is dropped from that list
+    /// unconditionally, even one that would otherwise pass through an allowed group: it is never shown as allowed
+    /// (ET-232 AC-2), and an include without a matching exclude simply widens what the groups already say.</summary>
+    private static string? _ShipRule(SdeSite site)
+    {
+        if (!site.IsShipRestricted)
+            return null;
+
+        HashSet<int> excludedTypeIds = [.. site.ExcludedShipTypes.Select(type => type.TypeId)];
+        string[] names =
+        [
+            .. site.AllowedShipGroups.Select(group => group.Name)
+                .Concat(site.IncludedShipTypes.Where(type => !excludedTypeIds.Contains(type.TypeId)).Select(type => type.Name))
+                .Distinct()
+                .Order()
+        ];
+        return names.Length == 0 ? null : string.Join(", ", names);
+    }
 
     /// <summary>The resist penalty is rolled per site rather than fixed per tier, so the window shows the band it
     /// can land in instead of a number it would be inventing — the same three strengths AbyssalBeacons offers as an

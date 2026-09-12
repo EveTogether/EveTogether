@@ -29,9 +29,9 @@ public enum RunTypeId
     /// adds the detection; this catalogue only lays the entry down (AGENTS.md §1, "reserve ≠ build").</summary>
     Mining,
 
-    /// <summary>A site whose archetype makes it one of CCP's Homefront dungeons, with its own kind (Raid, Metaliminal
-    /// Meteoroid, …) besides. Reserved for ET-228, which adds the archetype-based detection this catalogue does not
-    /// build.</summary>
+    /// <summary>A site whose dungeon id is one of CCP's 24 Homefront Operation dungeons (SDE archetype 70), with its
+    /// own kind (Raid, Metaliminal Meteoroid, …) besides — read from <see cref="HomefrontCatalogue"/> by
+    /// <see cref="Entities.Run.SiteTypeId"/>, never a second truth stored on the run (ET-228).</summary>
     Homefront,
     Abyssal
 }

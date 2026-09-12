@@ -283,6 +283,14 @@ sealed class Program
                 .Send(new RebuildActivitySummariesCommand(OnlyWhenOutdated: true)).GetAwaiter().GetResult();
             if (rebuilt.IsSuccess && rebuilt.Value > 0)
                 Console.Error.WriteLine($"[startup] added up the ISK of {rebuilt.Value} saved run(s) again");
+
+            // One-time repair for runs started before ET-228 kept a homefront's dungeon id (Run.SiteTypeId always
+            // came back as 0). Idempotent and cheap once repaired: a run whose id already matches its exact site
+            // name is left alone, so this is a no-op on every later startup.
+            Result<int> repairedHomefronts = dispatcher
+                .Send(new RepairHomefrontSiteTypeIdsCommand()).GetAwaiter().GetResult();
+            if (repairedHomefronts.IsSuccess && repairedHomefronts.Value > 0)
+                Console.Error.WriteLine($"[startup] repaired the homefront type of {repairedHomefronts.Value} run(s)");
         }
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);

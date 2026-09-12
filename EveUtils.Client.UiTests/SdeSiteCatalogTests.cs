@@ -43,12 +43,19 @@ public sealed class SdeSiteCatalogTests : IDisposable
         [
             """{"_key":482,"includedGroupIDs":[25,31],"name":"Dungeon Ship Restrictions [111]"}""",
             """{"_key":478,"includedGroupIDs":[237],"name":"Dungeon Ship Restrictions [116]"}""",
-            // A restriction expressed per hull instead of per group: resolves to no ship groups at all.
-            """{"_key":453,"includedTypeIDs":[621,630],"name":"Dungeon Ship Restrictions [hulls]"}"""
+            // A restriction expressed per hull instead of per group: resolves to no ship groups at all. 640
+            // (Punisher) is individually excluded even though it shares a group with the two included hulls.
+            """{"_key":453,"includedTypeIDs":[621,630],"excludedTypeIDs":[640],"name":"Dungeon Ship Restrictions [hulls]"}"""
+        ],
+        ["types.jsonl"] =
+        [
+            """{"_key":621,"groupID":25,"name":{"en":"Rifter"},"published":true}""",
+            """{"_key":630,"groupID":25,"name":{"en":"Merlin"},"published":true}""",
+            """{"_key":640,"groupID":25,"name":{"en":"Punisher"},"published":true}"""
         ],
         ["dungeons.jsonl"] =
         [
-            """{"_key":43,"name":{"en":"Guristas Supply Depot","de":"Guristas-Versorgungsdepot"},"description":{"en":"<P>A supply depot.</P>\n<P>DED Threat Assessment: Minor (2 of 10)</P>","de":"<P>Ein Depot.</P>"},"archetypeID":24,"factionID":500010,"allowedShipsList":[482,478]}""",
+            """{"_key":43,"name":{"en":"Guristas Supply Depot","de":"Guristas-Versorgungsdepot"},"description":{"en":"<P>A supply depot.</P>\n<P>DED Threat Assessment: Minor (2 of 10)</P>","de":"<P>Ein Depot.</P>"},"gameplayDescription":{"en":"<P>Bring 5 pilots.</P>"},"archetypeID":24,"factionID":500010,"allowedShipsList":[482,478]}""",
             """{"_key":100,"name":{"en":"Seasonal Event Pocket"},"archetypeID":43}""",
             """{"_key":200,"name":{"en":"Unrated Complex"},"description":{"en":"<P>Guarded.</P><BR><P>DED Threat Assessment: pending.</P>"},"archetypeID":24,"factionID":500010}""",
             """{"_key":300,"name":{"en":"Hull Restricted Pocket"},"archetypeID":24,"allowedShipsList":[453]}"""
@@ -158,6 +165,47 @@ public sealed class SdeSiteCatalogTests : IDisposable
         Assert.Empty(site.AllowedShipGroups);
     }
 
+    /// <summary>ET-232: the refinement includedGroupIDs alone cannot express — a hull individually included even
+    /// though its whole group is not, and a hull individually excluded even though it shares a group with two
+    /// included ones. Counter-proof: read only shipGroupIdsJson and this site's allow-list is empty on both axes.</summary>
+    [Fact]
+    public void Import_ResolvesIncludedAndExcludedShipTypes()
+    {
+        var site = Site(300);
+
+        Assert.Equal(["Merlin", "Rifter"], site.IncludedShipTypes.Select(t => t.Name).Order());
+        Assert.Equal(["Punisher"], site.ExcludedShipTypes.Select(t => t.Name));
+        // An excluded type must never also read as included, even though 640 shares a group (25) with 621/630.
+        Assert.DoesNotContain(site.IncludedShipTypes, t => t.Name == "Punisher");
+    }
+
+    /// <summary>A site with no per-hull refinement reads empty on both axes, never null — <see cref="SdeSite"/>'s own
+    /// "empty is the normal case" rule (unlike shipGroupIdsJson's NULL/"[]" distinction, which IsShipRestricted
+    /// already carries).</summary>
+    [Fact]
+    public void Import_SiteWithoutPerHullRefinement_ReadsEmptyIncludedAndExcludedShipTypes()
+    {
+        var site = Site(43);
+
+        Assert.Empty(site.IncludedShipTypes);
+        Assert.Empty(site.ExcludedShipTypes);
+    }
+
+    [Fact]
+    public void Import_StripsHtmlFromTheGameplayDescription_SeparatelyFromDescription()
+    {
+        var site = Site(43);
+
+        Assert.Equal("Bring 5 pilots.", site.GameplayDescription);
+        Assert.NotEqual(site.Description, site.GameplayDescription);
+    }
+
+    [Fact]
+    public void Import_SiteWithNoGameplayDescription_ReadsNull()
+    {
+        Assert.Null(Site(100).GameplayDescription);
+    }
+
     [Fact]
     public void SearchSites_FiltersByNameArchetypeAndFaction()
     {
@@ -171,9 +219,9 @@ public sealed class SdeSiteCatalogTests : IDisposable
     }
 
     [Fact]
-    public void SchemaVersion_IsSeven_AndAnOlderStoreReadsAsUnavailable()
+    public void SchemaVersion_IsEight_AndAnOlderStoreReadsAsUnavailable()
     {
-        Assert.Equal(7, SdeSchema.SchemaVersion);
+        Assert.Equal(8, SdeSchema.SchemaVersion);
 
         // A store left behind by a v3 build has no Site table. The accessor must refuse it outright so
         // SdeImporter.CheckForUpdateAsync sees a null local version and offers the rebuild.
