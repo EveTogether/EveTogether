@@ -195,6 +195,29 @@ public sealed class RunsOverviewTests
         Assert.Equal(6, RenderedText.VisibleTexts(root).Count(text => text.StartsWith("flew it")));
     }
 
+    /// <summary>ET-247: a fleet mate synced in from a server never logged in on this machine, so
+    /// <c>RunsOverviewViewModel</c>'s local roster (<c>_namesById</c>) has no entry for them — only the name their
+    /// own run recorded at start time (ET-212) can name them. Counter-proof: naming the crew straight off the bare
+    /// character ids, without the run's own snapshot, reads "character 883434905" here instead of "RaymondKrah".</summary>
+    [AvaloniaFact]
+    public async Task CrewText_NamesAFleetMateFromTheirRunsOwnSnapshot_NotJustTheLocalRoster()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunAsync(dispatcher, Crew[0].EsiCharacterId!.Value, "HF-7QK2", cancellationToken);
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(883434905, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142, "HF-7QK2", CharacterNameSnapshot: "RaymondKrah"), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15),
+            StartedAtUtc.AddMinutes(16), [], [], [], []), cancellationToken);
+
+        (_, _, RunsOverviewViewModel viewModel) = await _PresentAsync(instance, 758, cancellationToken);
+
+        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(viewModel.Tabs[0].Days).Rows);
+        Assert.Contains("RaymondKrah", row.CrewText);
+        Assert.DoesNotContain("character 883434905", row.CrewText);
+    }
+
     /// <summary>AC-6: a pilot with nothing running keeps their lane and their START. Counter-proof: filter the band
     /// on "has a running run" and the idle lane disappears, which this goes red on. A toon that drops out of the
     /// band is a toon you forget.</summary>

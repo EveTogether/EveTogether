@@ -13,9 +13,7 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// the id, which is what the detail screen still does.</param>
 public sealed class ActivityRunRowViewModel(ActivityRunDetailDto run, Func<long, string>? nameOf = null)
 {
-    public string CharacterText { get; } = !string.IsNullOrEmpty(run.CharacterNameSnapshot)
-        ? run.CharacterNameSnapshot
-        : nameOf?.Invoke(run.CharacterId) ?? $"character {run.CharacterId}";
+    public string CharacterText { get; } = CharacterNameResolver.Resolve(run.CharacterNameSnapshot, run.CharacterId, nameOf);
 
     public string DurationText { get; } = run.StoppedAtUtc is { } stoppedAtUtc
         ? (stoppedAtUtc - run.StartedAtUtc).ToString(@"hh\:mm\:ss")

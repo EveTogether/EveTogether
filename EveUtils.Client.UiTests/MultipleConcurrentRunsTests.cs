@@ -457,6 +457,41 @@ public class MultipleConcurrentRunsTests
     }
 
     /// <summary>
+    /// ET-257: an own-toon group with no fleet at all — <c>FleetId</c> stays null throughout, unlike the round-4
+    /// counter-proof above. Counter-proof, red against the pre-fix code: <c>_RefreshGroupTotalIsk</c> only summed
+    /// per participant when <c>FleetId is { } fleetId</c>, so without one it fell back to the acting character's own
+    /// <c>BountyIsk</c> and dropped the second toon's payout entirely — even though <c>RunBountyEntry</c> already
+    /// held it (ET-219), live, before any save. Also proves AC-2: the BOUNTY section itself lists both toons' own
+    /// shares, the same breakdown the detail screen already gives.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task LiveGroupTotalIsk_CoversBountyPerCharacter_EvenWithoutAFleet()
+    {
+        using var harness = await _TwoCharacters();
+        var gamelog = harness.Services.GetRequiredService<GamelogClientService>();
+        gamelog.MapCharacter(90000002, "Second Pilot");
+
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        harness.Dialogs.OnPickCharacters = (_, options) =>
+            Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId)]);
+        await model.StartRunCommand.ExecuteAsync(null);
+        await ActivityWindowHarness.WaitUntil(() => model.Participants.Count == 2);
+        Assert.Null(model.FleetId);
+
+        await gamelog.AddBountyAsync(ActivityWindowHarness.CharacterName, new BountyEvent(DateTime.UtcNow, 337_500));
+        await gamelog.AddBountyAsync("Second Pilot", new BountyEvent(DateTime.UtcNow, 675_000));
+        await ActivityWindowHarness.WaitUntil(() =>
+        {
+            model.Refresh(DateTime.UtcNow);
+            return model.GroupTotalIskText == "1,012,500 ISK";
+        });
+
+        Assert.Equal(2, model.Bounty().BountyRows.Count);
+        Assert.Contains(model.Bounty().BountyRows, row => row.CharacterText == ActivityWindowHarness.CharacterName && row.IskText == "337,500 ISK");
+        Assert.Contains(model.Bounty().BountyRows, row => row.CharacterText == "Second Pilot" && row.IskText == "675,000 ISK");
+    }
+
+    /// <summary>
     /// ET-215: the run window's LOOT list is the per-character component the saved detail screen shows — a block per
     /// character with their own run's subtotal, whichever character the column shows, and a correction made in one
     /// block moves the group total at the top. Counter-proof: bind the list to the column's own run again and the

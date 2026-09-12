@@ -14,13 +14,14 @@ namespace EveUtils.Client.ViewModels.Runs;
 public sealed partial class RunParticipantViewModel : ObservableObject
 {
     public RunParticipantViewModel(Guid runId, int characterId, string characterName,
-        bool isParticipant = true, bool isPayoutEligible = true)
+        bool isParticipant = true, bool isPayoutEligible = true, decimal bountyIsk = 0m)
     {
         RunId = runId;
         CharacterId = characterId;
         CharacterName = characterName;
         _isParticipant = isParticipant;
         _isPayoutEligible = isPayoutEligible;
+        _bountyIsk = bountyIsk;
     }
 
     public Guid RunId { get; }
@@ -38,6 +39,12 @@ public sealed partial class RunParticipantViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(PayoutDisplay))]
     [NotifyPropertyChangedFor(nameof(StandingText))]
     private bool _isPayoutEligible;
+
+    /// <summary>This run's own <c>RunBountyEntry</c> total (ET-219), refreshed alongside <see cref="IsParticipant"/>
+    /// — the live window's TOTAL ISK sums this across every participant regardless of a fleet (ET-257), the same
+    /// figure a saved activity already counts.</summary>
+    [ObservableProperty]
+    private decimal _bountyIsk;
 
     /// <summary>Null until there is a figure to divide; zero is never used to mean "not known".</summary>
     [ObservableProperty]

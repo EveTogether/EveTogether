@@ -1,12 +1,25 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
              xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
              x:Class="EveUtils.Client.Views.Runs.Sections.BountyWindowSectionView"
              x:DataType="vs:BountyWindowSectionViewModel">
     <StackPanel>
-        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+        <Grid Classes="kv" ColumnDefinitions="Auto,*" IsVisible="{Binding !IsGroup}">
             <TextBlock Text="OWN CHARACTER"/>
             <TextBlock Grid.Column="1" Text="{Binding BountyText}"/>
         </Grid>
+        <!-- Own-toon group, with or without a fleet (ET-257): one row per participant's own bounty, the same
+             breakdown the detail screen already gives (BountyDetailSectionView). -->
+        <ItemsControl ItemsSource="{Binding BountyRows}" IsVisible="{Binding IsGroup}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:ActivityBountyRowViewModel">
+                    <Grid Classes="kv" ColumnDefinitions="*,Auto">
+                        <TextBlock Text="{Binding CharacterText}"/>
+                        <TextBlock Grid.Column="1" Classes="money" Text="{Binding IskText}"/>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
     </StackPanel>
 </UserControl>
