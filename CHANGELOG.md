@@ -13,6 +13,11 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **The runs overview now pages by month instead of showing only the newest 50 activities.** Before, anything past
+  the 50 most recent activities was simply invisible on screen, even though it was still in your database — a busy
+  stretch could silently cut a day's own total in half. Now you see one month at a time, with previous/next buttons
+  to browse, and a month total (ISK and activity count) above the days. RUNNING and UNFINISHED stay above the month
+  regardless of which one you're viewing, and a fleet-filtered view or a server tab pages the same way.
 - **Mining now shows up on the run, per character and per ore.** A dedicated mining run shows it live in the run
   window; any other activity — a combat, data, relic, gas or wormhole site — shows it on the saved activity's
   detail screen once it's clear there is something to show. Units mined, critical strikes and residue are all

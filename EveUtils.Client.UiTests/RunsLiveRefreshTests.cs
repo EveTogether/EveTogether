@@ -139,18 +139,23 @@ public sealed class RunsLiveRefreshTests
 
     /// <summary>
     /// AC-5: a refresh folds no day, closes no row and moves nothing on screen. Ten activities on one evening, the
-    /// first one opened, the list scrolled to its end — then a save lands on an older evening. The rows that did not
-    /// change are the very same objects afterwards, the opened one still open with its runs, and the last row sits
-    /// exactly where it sat. Red with the refill this replaces: every row is rebuilt closed, the rows below the
-    /// opened one move up by the height of its runs, and the evening's band is a new object.
+    /// first one opened, the list scrolled to its end — then a save lands on a different evening in the same month
+    /// (ET-233 pages by month, so a day outside it would open a different page rather than add a band here). The
+    /// rows that did not change are the very same objects afterwards, the opened one still open with its runs, and
+    /// the last row sits exactly where it sat. Red with the refill this replaces: every row is rebuilt closed, the
+    /// rows below the opened one move up by the height of its runs, and the evening's band is a new object.
     /// </summary>
     [AvaloniaFact]
     public async Task ALiveRefresh_KeepsOpenRowsOpen_AndLeavesWhatIsOnScreenWhereItIs()
     {
         using var instance = TestClientInstance.Create();
         ICqrsDispatcher dispatcher = _Dispatcher(instance);
+        // Mid-month, so the second save below can land on an older evening in the same month (ET-233 pages by
+        // month) without crossing into the one before it — the overview sorts newest first, so an older evening's
+        // band lands after this one and never moves what is already rendered above it.
+        DateTime evening = new(StartedAtUtc.Year, StartedAtUtc.Month, 15, 12, 0, 0, DateTimeKind.Utc);
         for (int index = 0; index < 10; index++)
-            await _SaveAsync(dispatcher, Pilot, StartedAtUtc.AddMinutes(index * 20), rebuild: false);
+            await _SaveAsync(dispatcher, Pilot, evening.AddMinutes(index * 20), rebuild: false);
         await dispatcher.Send(new RebuildActivitySummariesCommand(), Token);
 
         (RunsOverviewViewModel overview, Window root) = await _PresentAsync(instance, height: 700);
@@ -166,7 +171,7 @@ public sealed class RunsLiveRefreshTests
         Vector offsetBefore = scroller.Offset;
         Point lastRowBefore = _PositionOf(root, scroller, day.Rows[^1]);
 
-        await _SaveAsync(dispatcher, Crewmate, StartedAtUtc.AddDays(-7));
+        await _SaveAsync(dispatcher, Crewmate, evening.AddDays(-7));
         await ActivityWindowHarness.WaitUntil(() => overview.Tabs[0].Days.Count == 2);
         root.UpdateLayout();
 
@@ -375,8 +380,8 @@ public sealed class RunsLiveRefreshTests
         Stopwatch load = Stopwatch.StartNew();
         await overview.LoadAsync(Token);
         load.Stop();
-        // One page of them: the overview never reads the whole history, whatever a refresh is answering.
-        Assert.Equal(50, overview.Tabs[0].Days.Sum(day => day.Rows.Count));
+        // All three hundred land in the current month (ET-233), which is the page now — no cap left to hit.
+        Assert.Equal(300, overview.Tabs[0].Days.Sum(day => day.Rows.Count));
         dispatcher.OverviewReads = 0;
 
         Stopwatch burst = Stopwatch.StartNew();
@@ -397,7 +402,7 @@ public sealed class RunsLiveRefreshTests
 
         int ceiling = (int)(burst.Elapsed / RunChangeFeed.DefaultWindow) + 2;
         TestContext.Current.TestOutputHelper?.WriteLine(
-            $"300 activities stored, a page of 50 shown: first load {load.ElapsedMilliseconds} ms. "
+            $"300 activities stored, all in the current month: first load {load.ElapsedMilliseconds} ms. "
             + $"200 payouts over {burst.ElapsedMilliseconds} ms read the overview {reads} times (ceiling {ceiling}); "
             + $"a warm whole re-read takes {reread.ElapsedMilliseconds} ms.");
         Assert.InRange(reads, 1, ceiling);
@@ -460,7 +465,9 @@ public sealed class RunsLiveRefreshTests
         }], new HashSet<Guid>(), Token);
 
     /// <summary>Written straight to the store and summarised once: three hundred SAVEs would each rebuild every
-    /// summary, which is the cost of seeding, not of what is measured.</summary>
+    /// summary, which is the cost of seeding, not of what is measured. Two minutes apart so all three hundred land
+    /// on the same day, well inside the current month (ET-233 pages by month) — the measurement is about read
+    /// count, not about how many of them the month happens to hold.</summary>
     private static async Task _SeedSavedActivitiesAsync(TestClientInstance instance, int count)
     {
         await using (ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
@@ -468,7 +475,7 @@ public sealed class RunsLiveRefreshTests
         {
             for (int index = 0; index < count; index++)
             {
-                DateTime startedAtUtc = StartedAtUtc.AddHours(-index * 3);
+                DateTime startedAtUtc = StartedAtUtc.AddMinutes(-index * 2);
                 var run = new Run
                 {
                     Id = Guid.CreateVersion7(),

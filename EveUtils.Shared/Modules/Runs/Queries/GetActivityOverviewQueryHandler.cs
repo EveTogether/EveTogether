@@ -22,7 +22,7 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
         if (query.FromUtc is { } fromUtc)
             summaries = summaries.Where(summary => summary.StartedAtUtc >= fromUtc);
         if (query.ToUtc is { } toUtc)
-            summaries = summaries.Where(summary => summary.StartedAtUtc <= toUtc);
+            summaries = summaries.Where(summary => summary.StartedAtUtc < toUtc);
         if (query.CharacterId is { } characterId)
             // Correlated against Run rather than a stored participant list — ActivitySummary carries none — using
             // the same Saved/non-deleted filter RebuildActivitySummariesCommandHandler built the summary from.
@@ -36,17 +36,15 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             summaries = summaries.Where(summary => summary.GroupCode != null && db.Set<RunGroupOrigin>()
                 .Any(origin => origin.GroupCode == summary.GroupCode && origin.FleetId == fleetId));
 
-        List<ActivitySummary> page = await summaries
+        List<ActivitySummary> matched = await summaries
             .OrderByDescending(summary => summary.StartedAtUtc)
-            .Skip(query.Page * query.PageSize)
-            .Take(query.PageSize)
             .ToListAsync(cancellationToken);
-        if (page.Count == 0)
+        if (matched.Count == 0)
             return Result<IReadOnlyList<ActivityOverviewRowDto>>.Success([]);
 
-        List<string> groupCodes = [.. page.Where(summary => summary.GroupCode != null).Select(summary => summary.GroupCode!)];
-        List<Guid> runIds = [.. page.Where(summary => summary.RunId != null).Select(summary => summary.RunId!.Value)];
-        // The runs behind this page of activities, resolved once so RunParameter can be filtered by a plain RunId
+        List<string> groupCodes = [.. matched.Where(summary => summary.GroupCode != null).Select(summary => summary.GroupCode!)];
+        List<Guid> runIds = [.. matched.Where(summary => summary.RunId != null).Select(summary => summary.RunId!.Value)];
+        // The runs behind these activities, resolved once so RunParameter can be filtered by a plain RunId
         // IN-list rather than joined through the Run navigation.
         var memberRuns = await db.Set<Run>()
             .AsNoTracking()
@@ -88,7 +86,7 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             .ToLookup(entry => entry.Activity, entry => entry.Sync);
 
         return Result<IReadOnlyList<ActivityOverviewRowDto>>.Success(
-            [.. page.Select(summary =>
+            [.. matched.Select(summary =>
             {
                 string activity = summary.GroupCode ?? summary.RunId!.Value.ToString();
                 return _ToDto(summary, rewardsByActivity[activity], crewByActivity[activity],

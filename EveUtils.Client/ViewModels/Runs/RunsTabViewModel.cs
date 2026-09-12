@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace EveUtils.Client.ViewModels.Runs;
@@ -25,4 +27,15 @@ public sealed partial class RunsTabViewModel(string header, string? serverAddres
     /// <summary>Why this tab is empty, when it is. A server tab and the local tab are empty for different reasons and
     /// say so.</summary>
     [ObservableProperty] private string? _statusMessage;
+
+    /// <summary>The viewed month's own total (ET-233): the same formula every day band below sums its own rows
+    /// with, over every row this tab holds regardless of which days are folded — a month is always complete, and so
+    /// is its total.</summary>
+    [ObservableProperty] private string _monthSummaryText = string.Empty;
+
+    public void UpdateMonthSummary()
+    {
+        List<ActivityOverviewRowViewModel> rows = [.. Days.SelectMany(day => day.Rows)];
+        MonthSummaryText = $"{RunsActivitySummaryText.ActivitiesCount(rows.Count)} this month · {RunsActivitySummaryText.NetFor(rows)}";
+    }
 }

@@ -277,6 +277,40 @@ public sealed class ActivityQueriesTests
         Assert.Equal(expectedEnemyTypeCount, row.EnemyTypeCount);
     }
 
+    /// <summary>ET-233: <c>ActivityDetailViewModel._FindAgainAsync</c> now looks an activity back up by its own key
+    /// (group code, or run id when it never had one) straight off <c>ActivitySummary</c>, rather than through the
+    /// runs overview — which is bounded to whichever month is on screen (this same ticket) and would miss an
+    /// activity outside it regardless of how many others exist. Fifty-five newer activities besides the target one
+    /// pin that the lookup is a real key match, not an accident of sort order or of however many rows happen to come
+    /// back first. Counter-proof: swap the <c>RunId</c> branch for the <c>GroupCode</c> one (or drop the query
+    /// entirely) and this goes red on a null result instead of the target's own id.</summary>
+    [AvaloniaFact]
+    public async Task FindActivitySummaryIdQuery_FindsAnActivityAmongManyOthers()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15),
+            StartedAtUtc.AddMinutes(16), [], [], [], []), cancellationToken);
+        for (int index = 1; index <= 55; index++)
+        {
+            DateTime newerStartedAtUtc = StartedAtUtc.AddMonths(index);
+            Result<Guid> newer = await dispatcher.Send(new StartRunCommand(90000002, ActivityKind.Site,
+                newerStartedAtUtc, 1234, "Homefront", 30000142), cancellationToken);
+            await dispatcher.Send(new SaveRunCommand(newer.Value, newerStartedAtUtc.AddMinutes(15),
+                newerStartedAtUtc.AddMinutes(16), [], [], [], []), cancellationToken);
+        }
+
+        Result<Guid?> found = await dispatcher.Query(new FindActivitySummaryIdQuery(null, started.Value), cancellationToken);
+
+        Assert.True(found.IsSuccess);
+        ActivityOverviewRowDto row = _Value(await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken))
+            .Single(candidate => candidate.RunId == started.Value);
+        Assert.Equal(row.ActivitySummaryId, found.Value);
+    }
+
     private static async Task _SaveRunAsync(IDispatcher dispatcher, long characterId, string? groupCode, CancellationToken cancellationToken)
     {
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site, StartedAtUtc,

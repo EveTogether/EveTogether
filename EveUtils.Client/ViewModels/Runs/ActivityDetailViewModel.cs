@@ -261,17 +261,13 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
 
     /// <summary>The activity these runs make up now, by the key its summary is built on — the group code, or the run
     /// itself when it has none. An activity deleted whole lost its summary row, and one restored before ET-222 made
-    /// that id stable came back under a new one.</summary>
+    /// that id stable came back under a new one. Looked up straight off <c>ActivitySummary</c>'s own key
+    /// (ET-233) rather than through the runs overview, which only ever answers for whichever month is on screen and
+    /// would miss this activity whenever it falls outside it.</summary>
     private async Task<Guid?> _FindAgainAsync(string? groupCode, Guid? loneRunId)
     {
-        Result<IReadOnlyList<ActivityOverviewRowDto>> overview = await _dispatcher.Query(new GetActivityOverviewQuery());
-        if (overview is not { IsSuccess: true, Value: { } rows })
-            return null;
-
-        ActivityOverviewRowDto? found = groupCode is not null
-            ? rows.FirstOrDefault(row => row.GroupCode == groupCode)
-            : rows.FirstOrDefault(row => row.RunId == loneRunId);
-        return found?.ActivitySummaryId;
+        Result<Guid?> found = await _dispatcher.Query(new FindActivitySummaryIdQuery(groupCode, loneRunId));
+        return found is { IsSuccess: true } ? found.Value : null;
     }
 
     private static Guid? _LoneRunIdOf(ActivityDetailDto detail) =>

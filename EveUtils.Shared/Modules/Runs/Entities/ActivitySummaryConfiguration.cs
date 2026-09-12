@@ -21,5 +21,8 @@ public sealed class ActivitySummaryConfiguration : IEntityTypeConfiguration<Acti
         builder.Property(summary => summary.IskSources).HasMaxLength(255);
         builder.HasIndex(summary => summary.GroupCode).IsUnique();
         builder.HasIndex(summary => summary.RunId).IsUnique();
+        // The runs overview now reads a month at a time (ET-233) — a range query and its ORDER BY both lean on this
+        // once the table grows past what a table scan handles comfortably.
+        builder.HasIndex(summary => summary.StartedAtUtc);
     }
 }

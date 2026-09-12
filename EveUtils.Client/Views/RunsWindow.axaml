@@ -271,6 +271,23 @@
             </StackPanel>
         </Border>
 
+        <!-- ══ Month ══ the page (ET-233): one month at a time, previous/next either side, its own total — the
+             same source the day bands below already sum, so the two can never disagree. Shown for every source
+             (Local, a fleet filter, a server tab): all three page the same way. -->
+        <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource BorderBrush}">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                <Button Grid.Column="0" Classes="rowaction" Content="&#x25C0;" MinWidth="30"
+                        Command="{Binding PreviousMonthCommand}" ToolTip.Tip="Previous month"/>
+                <TextBlock Grid.Column="1" Classes="panel-title" FontSize="12" Margin="10,0"
+                           VerticalAlignment="Center" Text="{Binding MonthHeaderText}"/>
+                <TextBlock Grid.Column="2" Classes="sectionsummary" VerticalAlignment="Center"
+                           Text="{Binding SelectedTab.MonthSummaryText}"/>
+                <Button Grid.Column="3" Classes="rowaction" Content="&#x25B6;" MinWidth="30"
+                        Command="{Binding NextMonthCommand}" ToolTip.Tip="Next month"/>
+            </Grid>
+        </Border>
+
         <!-- ══ Finished activities ══ one row per activity, under the day it belongs to. The days belong to the
              selected source: Local holds every activity, a server tab the ones published to it. -->
         <ScrollViewer HorizontalScrollBarVisibility="Disabled">
