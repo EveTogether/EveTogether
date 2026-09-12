@@ -8,19 +8,19 @@ namespace EveUtils.Client.ViewModels.Runs.Attendance;
 
 /// <summary>
 /// The preselection of a homefront's attendance list (ET-230) — a proposal the one who decides corrects, never a
-/// verdict. For each character, the first of these that knows them:
+/// verdict. Everyone in the fleet is in the site (Jithran, 2026-09-12: "als ik in een fleet zit ga ik er vanuit dat
+/// fleetmembers meedoen"), externals included — they count for N. For each character, the first of these that knows
+/// them:
 /// <list type="number">
 /// <item>The list this very run already stands at — a window reopened mid-run, or a commander taking over from another,
 /// picks the decision up where it was rather than starting it over from what this window happened to see.</item>
-/// <item>The list the previous homefront of the same fleet ended with (Jithran, 2026-09-11: a series keeps its list),
-/// with "same as last site" as the reason.</item>
-/// <item>Evidence from this run alone. No evidence at all defaults an own character in — deliberately put into the
-/// run, they are assumed present until shown otherwise (Jithran, 2026-09-12: a hauler with no evidence tracker
-/// catches, such as delivering cargo, still counted as flying the site) — and defaults anyone else, external or not,
-/// unticked: nothing this client can vouch for.</item>
+/// <item>A character somebody deliberately took out of the previous homefront of the same fleet stays out, "as last
+/// site" — the exception is remembered per fleet, the same as the own-character pick remembers it (ET-270).</item>
+/// <item>Otherwise in the site, whatever the evidence says — evidence only ever names why. Only a Local character
+/// this client sees logged out starts out of it.</item>
 /// </list>
-/// In the first two, evidence may add a tick, never take one away: a pilot who sat still on site 2 was still on site
-/// 1's list for a reason. A line set by hand in this run's list is not the proposal's to change at all.
+/// Evidence may put a character back in, never take one out. A line set by hand in this run's list is not the
+/// proposal's to change at all.
 /// </summary>
 public static class AttendanceProposal
 {
@@ -42,16 +42,14 @@ public static class AttendanceProposal
             {
                 ({ Reason: AttendanceReason.SetByHand } entry, _, _) =>
                     new AttendanceProposalLine(id, entry.IsInSite, AttendanceReason.SetByHand, null),
-                ({ IsInSite: true } entry, _, null) => new AttendanceProposalLine(id, true, entry.Reason, entry.ReasonAmount),
-                ({ IsInSite: false } entry, _, null) => new AttendanceProposalLine(id, false, entry.Reason, entry.ReasonAmount),
+                ({ } entry, _, null) => new AttendanceProposalLine(id, entry.IsInSite, entry.Reason, entry.ReasonAmount),
                 ({ }, _, { } seen) => new AttendanceProposalLine(id, true, seen.Reason, seen.Amount),
-                (null, { IsInSite: true }, null) => new AttendanceProposalLine(id, true, AttendanceReason.SameAsLastSite, null),
-                (null, { IsInSite: false }, { } seen) =>
+                (null, { IsInSite: false, Reason: AttendanceReason.SetByHand or AttendanceReason.SameAsLastSite }, { } seen) =>
                     new AttendanceProposalLine(id, true, seen.Reason, seen.Amount, IsAddedToLastSite: true),
+                (null, { IsInSite: false, Reason: AttendanceReason.SetByHand or AttendanceReason.SameAsLastSite }, null) =>
+                    new AttendanceProposalLine(id, false, AttendanceReason.SameAsLastSite, null),
                 (_, _, { } seen) => new AttendanceProposalLine(id, true, seen.Reason, seen.Amount),
-                // Nothing to go on at all: an own character deliberately put into the run is assumed present until
-                // shown otherwise (ET-269); anyone else — external or merely another pilot on the roster — is not.
-                _ => new AttendanceProposalLine(id, candidate.IsLocal, AttendanceReason.NoActivityLogged, null)
+                _ => new AttendanceProposalLine(id, !candidate.IsLoggedOut, AttendanceReason.NoActivityLogged, null)
             });
         }
 

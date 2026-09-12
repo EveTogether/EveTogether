@@ -439,6 +439,7 @@
                                                                                    FontSize="11.5"
                                                                                    Foreground="{StaticResource TextBrightBrush}"/>
                                                                         <TextBlock Classes="rowsub"
+                                                                                   IsVisible="{Binding StandingText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                                                                    Text="{Binding StandingText}"/>
                                                                     </StackPanel>
                                                                     <TextBlock Grid.Column="1" Classes="rowsub"

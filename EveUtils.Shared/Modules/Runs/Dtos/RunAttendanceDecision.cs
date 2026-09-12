@@ -46,6 +46,23 @@ public sealed record RunAttendanceDecision(
                          && pair.First.ReasonAmount == pair.Second.ReasonAmount
                          && pair.First.CharacterName == pair.Second.CharacterName);
 
+    /// <summary>
+    /// This decision, with the outcome <paramref name="standing"/> already carries when this one carries none — the one
+    /// rule that keeps an outcome, once somebody set it, from ever being erased (ET-271, HF-7TQB/HF-ESNB): a list
+    /// without an outcome is a list that did not speak about it — a window still on its first read, a fleet member on
+    /// an older client, a copy back from a server older than the column — never a pick of "not decided", which nothing
+    /// offers. Only another outcome replaces an outcome.
+    /// </summary>
+    public RunAttendanceDecision KeepingOutcomeOf(RunAttendanceDecision? standing) =>
+        Outcome is null && CompletedWaveCount is null && standing is { } kept
+            ? this with
+            {
+                Outcome = kept.Outcome,
+                CompletedWaveCount = kept.CompletedWaveCount,
+                OutcomeFromGameLog = kept.OutcomeFromGameLog
+            }
+            : this;
+
     /// <summary>The decision a run carries, or null for a run nobody decided one for.</summary>
     public static RunAttendanceDecision? Of(Entities.Run run) =>
         run is { AttendanceSource: { } source, AttendanceSetByCharacterId: { } setBy, AttendanceSetAtUtc: { } setAt }

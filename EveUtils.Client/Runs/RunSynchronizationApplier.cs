@@ -31,6 +31,18 @@ public sealed class RunSynchronizationApplier(
         HashSet<Guid> protectedRunIds = await db.Set<Run>().AsNoTracking()
             .Where(run => runIds.Contains(run.Id) && run.SyncState != RunSyncState.Synced)
             .Select(run => run.Id).ToHashSetAsync(cancellationToken);
+        // A homefront outcome already here is never erased by a copy that carries none (ET-271, the rule
+        // RunAttendanceDecision.KeepingOutcomeOf keeps for every list): a server older than the column hands runs back
+        // without it, and replacing the row with that copy dropped the Completed the pilot had set.
+        var storedOutcomes = (await db.Set<Run>().AsNoTracking()
+                .Where(run => runIds.Contains(run.Id) && (run.HomefrontOutcome != null || run.HomefrontCompletedWaveCount != null))
+                .Select(run => new
+                {
+                    run.Id, run.HomefrontOutcome, run.HomefrontCompletedWaveCount, run.HomefrontOutcomeFromGameLog,
+                    run.HomefrontPayoutTableVersion
+                })
+                .ToListAsync(cancellationToken))
+            .ToDictionary(run => run.Id);
         List<Run> applied = [];
         foreach (RunWirePayload payload in payloads)
         {
@@ -43,6 +55,15 @@ public sealed class RunSynchronizationApplier(
             {
                 await db.Set<Run>().Where(candidate => candidate.Id == run.Id).ExecuteDeleteAsync(cancellationToken);
                 continue;
+            }
+
+            if (run is { HomefrontOutcome: null, HomefrontCompletedWaveCount: null }
+                && storedOutcomes.TryGetValue(run.Id, out var kept))
+            {
+                run.HomefrontOutcome = kept.HomefrontOutcome;
+                run.HomefrontCompletedWaveCount = kept.HomefrontCompletedWaveCount;
+                run.HomefrontOutcomeFromGameLog = kept.HomefrontOutcomeFromGameLog;
+                run.HomefrontPayoutTableVersion ??= kept.HomefrontPayoutTableVersion;
             }
 
             run.StartedAtUtc = _Anchor(run.StartedAtUtc, payload.SentAtUnixMilliseconds);

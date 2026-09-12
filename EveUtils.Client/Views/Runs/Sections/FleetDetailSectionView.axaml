@@ -4,28 +4,66 @@
              xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
              x:Class="EveUtils.Client.Views.Runs.Sections.FleetDetailSectionView"
              x:DataType="vs:FleetDetailSectionViewModel">
+    <UserControl.Styles>
+        <Style Selector="Button.shareaction">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="Grid.fleetrow:pointerover Button.shareaction.can, Button.shareaction.can.out">
+            <Setter Property="IsVisible" Value="True"/>
+        </Style>
+    </UserControl.Styles>
+
     <StackPanel>
-        <Grid Classes="kv" ColumnDefinitions="Auto,*">
-            <TextBlock Text="PARTICIPANTS"/>
-            <TextBlock x:Name="ParticipantCount" Grid.Column="1" Text="{Binding ParticipantCountText}"/>
-        </Grid>
-        <ItemsControl x:Name="RunList" ItemsSource="{Binding RunRows}">
+        <!-- The same one row per character as the run window's FLEET (ET-272). -->
+        <ItemsControl x:Name="RunList" ItemsSource="{Binding Rows}">
             <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="vr:ActivityRunRowViewModel">
-                    <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                        <StackPanel>
-                            <TextBlock Text="{Binding CharacterText}"
-                                       Foreground="{StaticResource TextBrightBrush}" FontSize="11.5"/>
-                            <TextBlock Classes="hint" Margin="0" Text="{Binding StandingText}"/>
+                <DataTemplate x:DataType="vr:FleetCharacterRowViewModel">
+                    <Grid Classes="fleetrow" ColumnDefinitions="Auto,*,Auto" Margin="0,3" Background="Transparent">
+                        <Border Classes="localbar" Classes.on="{Binding IsLocal}"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Classes="charname" Text="{Binding Name}"/>
+                                <Border Classes="localtag" IsVisible="{Binding IsLocal}">
+                                    <TextBlock Text="Local"/>
+                                </Border>
+                                <Border Classes="chip warn" Margin="6,0,0,0" IsVisible="{Binding IsLeftOutOfSplit}">
+                                    <TextBlock Text="no loot share"/>
+                                </Border>
+                                <Button Classes="rowlink shareaction" Classes.out="{Binding IsLeftOutOfSplit}"
+                                        Classes.can="{Binding CanToggleShare}" Margin="8,0,0,0" VerticalAlignment="Center"
+                                        Content="{Binding ShareActionText}" Command="{Binding ToggleShareCommand}"/>
+                            </StackPanel>
+                            <TextBlock Classes="hint" Margin="0" IsVisible="{Binding SubText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                       Text="{Binding SubText}"/>
                         </StackPanel>
-                        <TextBlock Grid.Column="1" Classes="hint" Margin="0"
-                                   VerticalAlignment="Center" Text="{Binding TimeSourceText}"/>
-                        <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding DurationText}"/>
+                        <ItemsControl Grid.Column="2" ItemsSource="{Binding Figures}" VerticalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="12"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vr:FleetFigure">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Classes="figlabel" Text="{Binding Label}"/>
+                                        <TextBlock Classes="figvalue" Text="{Binding Value}" IsVisible="{Binding !IsQuiet}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </Grid>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
-        <TextBlock x:Name="FleetBasis" Classes="hint" TextWrapping="Wrap" Text="{Binding FleetBasisText}"
-                   IsVisible="{Binding FleetBasisText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+        <!-- TOTAL ISK itself, the activity's stored total, under the rows it is the sum of. -->
+        <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Margin="0,4,0,0" Padding="0,2,0,0">
+            <Grid x:Name="FleetTotalRow" Classes="kv" ColumnDefinitions="Auto,*">
+                <TextBlock Text="TOTAL" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" x:Name="FleetTotal" Text="{Binding TotalText}"/>
+            </Grid>
+        </Border>
+        <TextBlock x:Name="FleetBasis" Classes="hint" Margin="0,2,0,0" TextWrapping="Wrap" Text="{Binding NoteText}"
+                   IsVisible="{Binding NoteText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
     </StackPanel>
 </UserControl>

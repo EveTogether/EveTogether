@@ -17,7 +17,7 @@ using Xunit;
 namespace EveUtils.Client.UiTests;
 
 /// <summary>
-/// What each member of the fleet has made, under the FLEET fold, with the fleet's own total under the names.
+/// What each member of the fleet has made, as the fleet stream brings it onto the window's member rows.
 ///
 /// Loot and bounty travel the 1 Hz metric stream every other fleet figure travels, as their own kinds, and both are
 /// opt-IN at the share gate like the bounty figure already was: what a pilot made is theirs to offer. The loot ISK
@@ -66,69 +66,7 @@ public sealed class FleetMemberIskTests
         ActivityFleetMemberViewModel member = Assert.Single(window.FleetMembers);
         Assert.Equal(lootIsk, member.LootIsk);
         Assert.NotNull(member.BountyIsk);
-
-        // A figure nobody offered says so; it is never a zero, which would read as "they found nothing".
-        if (lootIsk is null)
-            Assert.Contains("loot not shared", member.IskText);
     }
-
-    /// <summary>
-    /// The total is exactly the sum of the rows standing above it — the two are the same set on purpose, so the
-    /// figure needs no sentence explaining what it covers. A member sharing nothing is in neither, and the caption
-    /// under both is what says the fleet may be larger than this list.
-    /// </summary>
-    [AvaloniaTheory]
-    [InlineData(1000, 250, 500, 100, true)]     // both members share both figures
-    // One shares loot and the other bounty, so the two halves of the total come from different rows — and that
-    // second member shares no location at all, which is the ordinary case: the three are separate opt-ins. Sharing
-    // a figure is being heard from, so it puts them in the list, or the total would exceed the names above it.
-    [InlineData(1000, null, null, 250, false)]
-    [InlineData(null, null, null, null, true)]  // neither shares a figure; both are here by their location alone
-    public async Task TheFleetTotal_IsExactlyTheSumOfTheRowsAboveIt(
-        int? pilotLoot, int? pilotBounty, int? otherLoot, int? otherBounty, bool otherSharesLocation)
-    {
-        using TestClientInstance instance = await _InstanceAsync();
-        using var window = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
-        await window.LoadAsync();
-
-        await _ShareLocationAsync(instance, Pilot, "Shaggoth");
-        if (otherSharesLocation)
-            await _ShareLocationAsync(instance, Other, "Amarr");
-        await _ShareIskAsync(instance, Pilot, pilotLoot, pilotBounty);
-        await _ShareIskAsync(instance, Other, otherLoot, otherBounty);
-
-        Assert.Equal(2, window.FleetMembers.Count);
-        Assert.True(window.Fleet().IsFleetTotalShown);
-
-        decimal? loot = _Sum(pilotLoot, otherLoot);
-        decimal? bounty = _Sum(pilotBounty, otherBounty);
-
-        // The invariant, stated over the rows themselves rather than over the numbers that were published.
-        Assert.Equal(loot, _SumOfRows(window, member => member.LootIsk));
-        Assert.Equal(bounty, _SumOfRows(window, member => member.BountyIsk));
-
-        if (loot is null && bounty is null)
-        {
-            Assert.Equal("no member is sharing loot or bounty", window.Fleet().FleetTotalText);
-            return;
-        }
-
-        Assert.Contains(
-            loot is { } lootTotal ? ActivityFleetMemberViewModel.Isk(lootTotal) : "loot not shared",
-            window.Fleet().FleetTotalText);
-        Assert.Contains(
-            bounty is { } bountyTotal ? ActivityFleetMemberViewModel.Isk(bountyTotal) : "bounty not shared",
-            window.Fleet().FleetTotalText);
-    }
-
-    private static decimal? _Sum(int? first, int? second) =>
-        first is null && second is null ? null : (first ?? 0) + (second ?? 0);
-
-    private static decimal? _SumOfRows(
-        ActivityWindowViewModel window, Func<ActivityFleetMemberViewModel, decimal?> figure) =>
-        window.FleetMembers.Select(figure).OfType<decimal>().ToList() is { Count: > 0 } shared
-            ? shared.Sum()
-            : null;
 
     private static async Task<TestClientInstance> _InstanceAsync()
     {
@@ -144,14 +82,6 @@ public sealed class FleetMemberIskTests
 
     private static Task _ShareLocationAsync(TestClientInstance instance, int characterId, string system) =>
         _PublishAsync(instance, new MetricSample(characterId, FleetId, MetricKind.Location, 0, 1_000, system));
-
-    private static async Task _ShareIskAsync(TestClientInstance instance, int characterId, int? loot, int? bounty)
-    {
-        if (loot is { } lootIsk)
-            await _PublishAsync(instance, new MetricSample(characterId, FleetId, MetricKind.Loot, lootIsk, 1_000));
-        if (bounty is { } bountyIsk)
-            await _PublishAsync(instance, new MetricSample(characterId, FleetId, MetricKind.Bounty, bountyIsk, 1_000));
-    }
 
     private static async Task _PublishAsync(TestClientInstance instance, MetricSample sample)
     {

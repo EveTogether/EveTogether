@@ -38,6 +38,29 @@ internal static class RunIskFactsReader
         };
     }
 
+    /// <summary>Every type a set of runs needs a price for — loot kept in the tally, each run's resolved filament
+    /// (ET-249) and each ore resolved by its exact SDE name, never guessed (ET-229) — so one price read serves them
+    /// all, and the stored summary and the detail screen's per-character figures price the same way.</summary>
+    public static IReadOnlyList<int> PricedTypeIds(IEnumerable<Run> runs, IEnumerable<RunParameter> parameters, ISdeAccessor sde)
+    {
+        Run[] all = [.. runs];
+        IEnumerable<int> loot = all
+            .SelectMany(run => run.LootCaptures)
+            .Where(capture => !capture.IsExcluded)
+            .SelectMany(capture => capture.Entries)
+            .Select(entry => entry.ItemTypeId);
+        IEnumerable<int> filaments = parameters
+            .GroupBy(parameter => parameter.RunId)
+            .Select(FilamentTypeId)
+            .OfType<int>();
+        IEnumerable<int> ores = sde.IsAvailable
+            ? all.SelectMany(run => run.MiningEntries)
+                .Select(entry => sde.TryGetTypeId(entry.OreType, out int typeId) ? (int?)typeId : null)
+                .OfType<int>()
+            : [];
+        return [.. loot.Concat(filaments).Concat(ores).Distinct()];
+    }
+
     /// <summary>What the curve owes this run's own character right now (ET-231), read the same way for a saved
     /// activity and the open run window (<c>ActivityWindowViewModel</c> reads the identical fact off its own
     /// participant rows, kept in step with the run's own columns).</summary>

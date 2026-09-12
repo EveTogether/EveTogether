@@ -16,8 +16,9 @@ public sealed record RunMiningOreDto(string OreType, int Units, int CriticalUnit
 /// <see cref="InSiteAtCompletion"/> is the homefront attendance tick (ET-230), null while nobody decided.
 /// <see cref="AttendanceCount"/>, <see cref="HomefrontOutcome"/> and <see cref="HomefrontCompletedWaveCount"/> are the
 /// same on every run of the group (ET-231) — carried per run anyway, the same as <see cref="InSiteAtCompletion"/>,
-/// since this is a flat list of runs and not a separate group-level fact.</summary>
+/// since this is a flat list of runs and not a separate group-level fact. <see cref="FixedPayoutIsk"/> is a homefront
+/// payout the pilot typed over the table's for this run (ET-271), null while they typed none.</summary>
 public sealed record RunGroupParticipantDto(
     Guid RunId, long CharacterId, bool IsParticipant, bool IsPayoutEligible, decimal BountyIsk,
     IReadOnlyList<RunMiningOreDto> MiningEntries, bool? InSiteAtCompletion = null, int? AttendanceCount = null,
-    HomefrontOutcome? HomefrontOutcome = null, int? HomefrontCompletedWaveCount = null);
+    HomefrontOutcome? HomefrontOutcome = null, int? HomefrontCompletedWaveCount = null, decimal? FixedPayoutIsk = null);

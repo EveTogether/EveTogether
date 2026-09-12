@@ -48,16 +48,18 @@ public sealed class HomefrontGameLogOutcomeTests
         await harness.StartWatchingAsync();
 
         await harness.WriteLineAsync(_PaleShadowLine());
-        Run run = await _TickUntilAsync(harness, window, section, runId, run => run.HomefrontOutcome is not null);
+        // Completed from the start (ET-271); the line only says where it came from.
+        Run run = await _TickUntilAsync(harness, window, section, runId, run => run.HomefrontOutcomeFromGameLog);
 
         Assert.Equal(HomefrontOutcome.Completed, run.HomefrontOutcome);
         Assert.True(run.HomefrontOutcomeFromGameLog);
         Assert.Equal("completed · from the game log", section.OutcomeText);
     }
 
-    /// <summary>Counter-proof: the same line, a homefront kind it says nothing about. AC-2.</summary>
+    /// <summary>Counter-proof: the same line, a homefront kind it says nothing about (AC-2) — the Raid stands at the
+    /// default Completed (ET-271), never "from the game log".</summary>
     [AvaloniaFact]
-    public async Task PaleShadowLine_OnARaid_NeverSetsAnOutcome()
+    public async Task PaleShadowLine_OnARaid_NeverClaimsTheOutcome()
     {
         using ActivityWindowHarness harness = await ActivityWindowHarness.CreateAsync();
         ActivityWindowViewModel window = await harness.OpenAsync();
@@ -68,11 +70,11 @@ public sealed class HomefrontGameLogOutcomeTests
         await harness.StartWatchingAsync();
 
         await harness.WriteLineAsync(_PaleShadowLine());
-        Run run = await _TickUntilAsync(harness, window, section, runId, _ => true, ticks: 15);
+        Run run = await _TickUntilAsync(harness, window, section, runId, _ => false, ticks: 15);
 
-        Assert.Null(run.HomefrontOutcome);
+        Assert.Equal(HomefrontOutcome.Completed, run.HomefrontOutcome);
         Assert.False(run.HomefrontOutcomeFromGameLog);
-        Assert.Equal("not decided", section.OutcomeText);
+        Assert.Equal("completed", section.OutcomeText);
     }
 
     /// <summary>The line only ever fills in an undecided outcome — a hand pick, "failed" included, stands over it.</summary>

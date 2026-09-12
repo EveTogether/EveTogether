@@ -1,5 +1,4 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using EveUtils.Client.Formatting;
 
 namespace EveUtils.Client.ViewModels.Activity;
 
@@ -9,7 +8,7 @@ namespace EveUtils.Client.ViewModels.Activity;
 /// a sample is not here at all, which is the whole reason the list is captioned with what it is counted from.
 ///
 /// Location, loot and bounty are three separate opt-ins, so any of the three may be missing on a member who is
-/// plainly here. Each says so in its own words rather than showing a zero.
+/// plainly here. FLEET says which one a member withholds, and leaves a figure nobody has off the row (ET-272).
 /// </summary>
 public sealed partial class ActivityFleetMemberViewModel : ObservableObject
 {
@@ -26,23 +25,8 @@ public sealed partial class ActivityFleetMemberViewModel : ObservableObject
     [ObservableProperty] private string _locationText = "not sharing a system";
 
     /// <summary>This member's run loot, net of what it cost them, as their own client priced it. Null is a figure
-    /// they do not share; never 0, which would say they found nothing.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IskText))]
-    private decimal? _lootIsk;
+    /// not heard; never 0, which would say they found nothing.</summary>
+    [ObservableProperty] private decimal? _lootIsk;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IskText))]
-    private decimal? _bountyIsk;
-
-    public string IskText => (LootIsk, BountyIsk) switch
-    {
-        (null, null) => "not sharing loot or bounty",
-        ({ } loot, null) => $"loot {Isk(loot)} · bounty not shared",
-        (null, { } bounty) => $"loot not shared · bounty {Isk(bounty)}",
-        ({ } loot, { } bounty) => $"loot {Isk(loot)} · bounty {Isk(bounty)}"
-    };
-
-    /// <summary>The one ISK format this window writes, the same one the payout figures beside it use.</summary>
-    public static string Isk(decimal value) => IskFormat.Whole(value);
+    [ObservableProperty] private decimal? _bountyIsk;
 }

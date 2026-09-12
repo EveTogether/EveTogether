@@ -10,7 +10,8 @@ using Microsoft.EntityFrameworkCore;
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
-internal sealed class SetRunPayoutEligibilityCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus)
+internal sealed class SetRunPayoutEligibilityCommandHandler(
+    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher)
     : ICommandHandler<SetRunPayoutEligibilityCommand, Result>
 {
     public async Task<Result> Handle(SetRunPayoutEligibilityCommand command, CancellationToken cancellationToken = default)
@@ -28,6 +29,9 @@ internal sealed class SetRunPayoutEligibilityCommandHandler(IDbContextFactory<Cl
             run.SyncState = RunSyncState.Pending;
         run.Revision++;
         await db.SaveChangesAsync(cancellationToken);
+        // The stored summary counts who shares (ET-271): a saved activity is added up again, not left stale.
+        if (run.State is RunState.Saved)
+            await dispatcher.Send(new RebuildActivitySummariesCommand(run.Id), cancellationToken);
         await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         return Result.Success();
     }

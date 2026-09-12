@@ -1,66 +1,54 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Client.ViewModels.Runs.Attendance;
+using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Runs.Commands;
+using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Isk;
+using Microsoft.Extensions.DependencyInjection;
+using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
 
 /// <summary>
-/// FLEET in the run window: who the window has heard from, what they shared, and who of this pilot's own toons is on
-/// the run with a share of it (ET-105). Gone rather than empty when no fleet has ever reported in: a FLEET section
-/// standing open on a solo run reads as a measurement, and nothing here can measure the absence of a fleet.
+/// FLEET in the run window (ET-272): one row per character — what each one made in this run — and the total they add
+/// up to, which is TOTAL ISK itself. This client's own characters come first, tagged "Local", with their own runs'
+/// figures; a fleet mate follows with what their client shares over the fleet stream, which is theirs and not in the
+/// total. Gone rather than empty when no fleet has ever reported in: a FLEET section standing open on a solo run reads
+/// as a measurement, and nothing here can measure the absence of a fleet.
 /// </summary>
-public sealed class FleetWindowSectionViewModel(IRunWindowContext context)
+public sealed partial class FleetWindowSectionViewModel(IRunWindowContext context)
     : RunWindowSection(context, RunSectionId.Fleet, "FLEET")
 {
+    private IReadOnlySet<long> _own = new HashSet<long>();
+    private bool _isOwnLoaded;
+    private bool _isLoadingOwn;
+
     public override bool IsShown => Context.IsFleetShown;
 
-    /// <summary>Who this window has actually heard from, one row per member that sent a sample. Never a roster:
-    /// nothing here can see a member who is not sharing, which is what <see cref="FleetBasisText"/> says.</summary>
-    public ObservableCollection<ActivityFleetMemberViewModel> FleetMembers => Context.FleetMembers;
+    public ObservableCollection<FleetCharacterRowViewModel> Rows { get; } = [];
 
-    public ObservableCollection<RunParticipantViewModel> Participants => Context.Participants;
+    /// <summary>TOTAL ISK, the header's own text — the sum of the Local rows, never added up again here.</summary>
+    [ObservableProperty] private string _totalText = string.Empty;
 
-    /// <summary>Shown over every payout figure. The window reports an expectation, and never implies EVE's own
-    /// payout rule follows our exclusions. At a homefront the "share" box splits bounty and loot only — the
-    /// homefront's own payout is per character and not split at all (ET-230), so the caption must not say otherwise.</summary>
-    public string PayoutExpectationLabel => Context.RunType.PaysPerCharacterInSite
-        ? RunPayoutSplit.HomefrontShareLabel
-        : RunPayoutSplit.ExpectationLabel;
+    [ObservableProperty] private bool _isTotalShown;
 
-    /// <summary>
-    /// What the count is counted from, said outright. The fleet count counts samples, so a member who does not share
-    /// is missing from both the number and the list — and a list of two names in a fleet of three is a lie unless it
-    /// says what it is a list of.
-    /// </summary>
-    public string FleetBasisText => FleetMembers.Count == 0
-        ? "No member has shared anything yet, so there is nobody to list."
-        : "Counted from what members share. A member sharing nothing is in the fleet but not in this list.";
-
-    /// <summary>
-    /// What the rows above add up to, and only them. That is why it stands between the names and
-    /// <see cref="FleetBasisText"/>: a total that covered more than the rows it sits under would need explaining,
-    /// and the caption below is already the line that says the fleet may be larger than this list. A member sharing
-    /// neither figure is in neither the rows nor the sum, which is the same rule in both places.
-    ///
-    /// Never a zero for a figure nobody offered — the two halves are counted apart, so a fleet sharing bounty and no
-    /// loot says exactly that rather than reporting nothing looted.
-    /// </summary>
-    public string FleetTotalText => (_FleetSum(row => row.LootIsk), _FleetSum(row => row.BountyIsk)) switch
-    {
-        (null, null) => "no member is sharing loot or bounty",
-        ({ } loot, null) => $"loot {ActivityFleetMemberViewModel.Isk(loot)} · bounty not shared",
-        (null, { } bounty) => $"loot not shared · bounty {ActivityFleetMemberViewModel.Isk(bounty)}",
-        ({ } loot, { } bounty) =>
-            $"loot {ActivityFleetMemberViewModel.Isk(loot)} · bounty {ActivityFleetMemberViewModel.Isk(bounty)}"
-    };
-
-    public bool IsFleetTotalShown => FleetMembers.Count > 0;
+    /// <summary>The one line under the total, only when something needs saying: somebody is out of the loot split,
+    /// or a fleet mate's figures stand beside the total without being in it.</summary>
+    [ObservableProperty] private string? _noteText;
 
     // Never "solo": nothing here can observe the absence of a fleet, only the presence of one. Without any the section
     // is hidden (IsShown) and this line is not on screen at all.
     public override void RefreshSummary() =>
-        HeaderSummary = Context.FleetMemberCount > 1 ? Context.FleetStatusText : "no fleet has reported in";
+        HeaderSummary = Context.FleetMemberCount > 1 ? Context.FleetStatusText : $"{Rows.Count} characters";
+
+    public override void Refresh(DateTime nowUtc) => _ = _LoadOwnAsync();
 
     protected override void OnContextChanged(string? propertyName)
     {
@@ -69,17 +57,114 @@ public sealed class FleetWindowSectionViewModel(IRunWindowContext context)
             case nameof(IRunWindowContext.IsFleetShown):
                 OnPropertyChanged(nameof(IsShown));
                 break;
-            case nameof(IRunWindowContext.RunType):
-                OnPropertyChanged(nameof(PayoutExpectationLabel));
-                break;
-            case nameof(IRunWindowContext.FleetMembers):
-                OnPropertyChanged(nameof(FleetBasisText));
-                OnPropertyChanged(nameof(FleetTotalText));
-                OnPropertyChanged(nameof(IsFleetTotalShown));
+            case nameof(IRunWindowContext.CharacterIsk) or nameof(IRunWindowContext.FleetMembers):
+                _Rebuild();
                 break;
         }
     }
 
-    private decimal? _FleetSum(Func<ActivityFleetMemberViewModel, decimal?> figure) =>
-        FleetMembers.Select(figure).OfType<decimal>().ToList() is { Count: > 0 } shared ? shared.Sum() : null;
+    private void _Rebuild()
+    {
+        List<FleetCharacterRowViewModel> rows = [];
+        FleetRunShares? shares = Context.Services.GetService<FleetRunShares>();
+        int localRuns = Context.Participants.Count(participant => _own.Contains(participant.CharacterId));
+
+        foreach (IGrouping<int, RunParticipantViewModel> character in Context.Participants.GroupBy(participant => participant.CharacterId))
+        {
+            FleetCharacterRowViewModel row = _RowFor(character.Key);
+            row.Name = character.First().CharacterName;
+            row.IsLocal = _own.Contains(character.Key);
+            row.SubText = null;
+            row.Figures = Context.CharacterIsk.TryGetValue(character.Key, out IskBreakdown? isk)
+                ? FleetCharacterRowViewModel.FiguresOf(isk)
+                : [new FleetFigure("nothing", string.Empty, IsQuiet: true)];
+            row.IsSharing = character.All(participant => participant.IsPayoutEligible);
+            row.CanToggleShare = row.IsLocal && localRuns > 1;
+            rows.Add(row);
+        }
+
+        // Whoever the fleet stream has heard from without a run here: a fleet mate on their own client, with the
+        // figures they share — or an own character in the fleet that is not on this run.
+        foreach (ActivityFleetMemberViewModel member in Context.FleetMembers.Where(member => rows.All(row => row.CharacterId != member.CharacterId)))
+        {
+            RunShareUpdate? share = Context.GroupCode is { } groupCode ? shares?.Of(groupCode, member.CharacterId) : null;
+            FleetCharacterRowViewModel row = _RowFor(member.CharacterId);
+            row.Name = member.Name;
+            row.IsLocal = _own.Contains(member.CharacterId);
+            row.SubText = member.LocationText;
+            row.Figures = FleetCharacterRowViewModel.FiguresOf(member.BountyIsk, member.LootIsk,
+                isBountyWithheld: share is { SharesBounty: false }, isLootWithheld: share is { SharesLoot: false });
+            row.IsSharing = true;
+            row.CanToggleShare = false;
+            rows.Add(row);
+        }
+
+        List<FleetCharacterRowViewModel> ordered = [.. rows
+            .OrderByDescending(row => row.IsLocal)
+            .ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase)];
+        if (!Rows.SequenceEqual(ordered))
+        {
+            Rows.Clear();
+            foreach (FleetCharacterRowViewModel row in ordered)
+                Rows.Add(row);
+        }
+
+        TotalText = Context.GroupTotalIskText;
+        IsTotalShown = Context.HasGroupTotalIsk && Context.Participants.Count > 0;
+        NoteText = _Note(ordered);
+        RefreshSummary();
+    }
+
+    private string? _Note(IReadOnlyList<FleetCharacterRowViewModel> rows)
+    {
+        FleetCharacterRowViewModel[] local = [.. rows.Where(row => row.CanToggleShare)];
+        decimal? localLoot = local.Length == 0
+            ? null
+            : local.Sum(row => Context.CharacterIsk.GetValueOrDefault(row.CharacterId)?.Of(IskSource.Loot)?.Amount ?? 0m);
+        if (FleetCharacterRowViewModel.LootSplitText(local, localLoot) is { } split)
+            return split;
+
+        return rows.Any(row => !row.IsLocal && Context.Participants.All(participant => participant.CharacterId != row.CharacterId))
+            ? "Fleet mates' figures are their own — not in this total."
+            : null;
+    }
+
+    private FleetCharacterRowViewModel _RowFor(long characterId) =>
+        Rows.FirstOrDefault(row => row.CharacterId == characterId) ?? new FleetCharacterRowViewModel(characterId, _ToggleShareAsync);
+
+    /// <summary>One click on a Local row (ET-272): the character is left out of the loot split, or put back — stored on
+    /// every run it has here, and the rest recomputed on the spot.</summary>
+    private async Task _ToggleShareAsync(FleetCharacterRowViewModel row)
+    {
+        bool isSharing = !row.IsSharing;
+        RunParticipantViewModel[] runs = [.. Context.Participants.Where(participant => participant.CharacterId == row.CharacterId)];
+        foreach (RunParticipantViewModel participant in runs)
+            participant.IsPayoutEligible = isSharing;
+        _Rebuild();
+
+        if (Context.Services.GetService<CqrsDispatcher>() is null)
+            return;
+        using IServiceScope scope = Context.Services.CreateScope();
+        CqrsDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
+        foreach (RunParticipantViewModel participant in runs)
+            await dispatcher.Send(new SetRunPayoutEligibilityCommand(participant.RunId, isSharing));
+    }
+
+    private async Task _LoadOwnAsync()
+    {
+        if (_isOwnLoaded || _isLoadingOwn)
+            return;
+
+        _isLoadingOwn = true;
+        try
+        {
+            _own = await AttendanceRoster.OwnCharacterIdsAsync(Context.Services);
+            _isOwnLoaded = true;
+            _Rebuild();
+        }
+        finally
+        {
+            _isLoadingOwn = false;
+        }
+    }
 }

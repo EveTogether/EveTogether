@@ -28,17 +28,12 @@ public sealed class ActivityRunRowViewModel(ActivityRunDetailDto run, Func<long,
         ? $"corrected by hand at {correctedAtUtc.ToLocalTime():HH:mm}"
         : "measured";
 
-    /// <summary>Both facts said out loud, because the interesting row is the one where they disagree — the hauler
-    /// who flew the site and takes no share (ET-105). Once a homefront's attendance is decided (ET-230) the first half
-    /// says only "in the group": whether they were in the site is HOMEFRONT's to say, and "flew it" beside its "not in
-    /// site" would contradict it. An undecided run reads exactly as before.</summary>
-    public string StandingText { get; } = (run.InSiteAtCompletion is not null, run.IsParticipant, run.IsPayoutEligible) switch
+    /// <summary>Only what is out of the ordinary about this character's run (ET-272): out of the homefront's site, did
+    /// not fly it, or left out of the loot split — the hauler's row (ET-105). A run in the site with its share, the
+    /// normal case, says nothing.</summary>
+    public string StandingText { get; } = string.Join(" · ", new[]
     {
-        (true, _, true) => "in the group · takes a share",
-        (true, _, false) => "in the group · no share",
-        (false, true, true) => "flew it · takes a share",
-        (false, true, false) => "flew it · no share",
-        (false, false, true) => "did not fly it · takes a share",
-        (false, false, false) => "did not fly it · no share"
-    };
+        run.InSiteAtCompletion is false ? "not in site" : run.InSiteAtCompletion is null && !run.IsParticipant ? "did not fly it" : null,
+        run.IsPayoutEligible ? null : "no loot share"
+    }.OfType<string>());
 }

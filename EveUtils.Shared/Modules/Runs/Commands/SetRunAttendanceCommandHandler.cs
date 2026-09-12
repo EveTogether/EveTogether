@@ -11,7 +11,8 @@ using Microsoft.EntityFrameworkCore;
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
-internal sealed class SetRunAttendanceCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus)
+internal sealed class SetRunAttendanceCommandHandler(
+    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher)
     : ICommandHandler<SetRunAttendanceCommand, Result<int>>
 {
     public async Task<Result<int>> Handle(SetRunAttendanceCommand command, CancellationToken cancellationToken = default)
@@ -24,7 +25,6 @@ internal sealed class SetRunAttendanceCommandHandler(IDbContextFactory<ClientDbC
             return Result<int>.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
                 "The number of pilots not on the roster cannot be negative.", "Runs"));
 
-        RunAttendanceDecision decision = command.Decision;
         long[] own = [.. command.OwnCharacterIds];
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
         List<Run> runs = await db.Set<Run>()
@@ -32,13 +32,27 @@ internal sealed class SetRunAttendanceCommandHandler(IDbContextFactory<ClientDbC
             .Where(run => !run.DeletedAtUtc.HasValue && own.Contains(run.CharacterId)
                           && (byGroup ? run.GroupCode == command.GroupCode : run.Id == command.RunId))
             .ToListAsync(cancellationToken);
+        // A proposal the store has moved on from is not written: somebody decided since it was worked out (I5). Read over
+        // every run of the group, the same set GetRunAttendanceQuery gave the window its standing list from.
+        if (command.IsProposal && await db.Set<Run>()
+                .Where(run => !run.DeletedAtUtc.HasValue && (byGroup ? run.GroupCode == command.GroupCode : run.Id == command.RunId))
+                .MaxAsync(run => run.AttendanceSetAtUtc, cancellationToken) != command.StandingSetAtUtc)
+            return Result<int>.Success(0);
+        // An outcome already stored is never erased by a list that carries none (RunAttendanceDecision.KeepingOutcomeOf).
+        RunAttendanceDecision decision = command.Decision.KeepingOutcomeOf(runs
+            .Where(run => run.HomefrontOutcome is not null || run.HomefrontCompletedWaveCount is not null)
+            .MaxBy(run => run.AttendanceSetAtUtc) is { } decided
+                ? RunAttendanceDecision.Of(decided)
+                : null);
 
         // An own character ticked in the site (ET-269) but with no run of its own here: the pilot started this
         // homefront for one toon only, or a multi-pick missed one, and only found out who was really in the site once
         // the attendance was decided. A run of its own is the one thing that makes its own payout and loot ever reach
         // TOTAL ISK — ticking it here cannot do that by itself.
-        if (byGroup && command.GroupCode is { } groupCode)
-            runs.AddRange(_BackfillMissingOwnRuns(db, runs, decision, own, groupCode));
+        IReadOnlyList<Run> backfilled = byGroup && command.GroupCode is { } groupCode
+            ? _BackfillMissingOwnRuns(db, runs, decision, own, groupCode)
+            : [];
+        runs.AddRange(backfilled);
 
         List<Run> changed = [.. runs.Where(run => _Takes(run, decision))];
         foreach (Run run in changed)
@@ -48,6 +62,14 @@ internal sealed class SetRunAttendanceCommandHandler(IDbContextFactory<ClientDbC
             return Result<int>.Success(0);
 
         await db.SaveChangesAsync(cancellationToken);
+
+        // A run made just now missed every bounty line its character earned before it existed (ET-271).
+        if (backfilled.Count > 0)
+            await dispatcher.Send(new ImportRunBountyCommand([.. backfilled.Select(run => run.Id)]), cancellationToken);
+        // The outcome, N and every tick are inputs of a saved activity's stored total (ET-271): set after SAVE, they
+        // add it up again, or the overview, the month bar and the detail keep the figure from before.
+        if (changed.FirstOrDefault(run => run.State is RunState.Saved) is { } saved)
+            await dispatcher.Send(new RebuildActivitySummariesCommand(saved.Id), cancellationToken);
         await eventBus.PublishAsync(
             new RunsChangedEvent(changed.Count == 1 ? changed[0].Id : null, byGroup ? command.GroupCode : changed[0].GroupCode),
             EventTarget.Local, cancellationToken);

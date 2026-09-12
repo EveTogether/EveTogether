@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -18,6 +19,7 @@ using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Runs.Queries;
 using Microsoft.Extensions.DependencyInjection;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
@@ -25,17 +27,23 @@ using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 namespace EveUtils.Client.ViewModels.Runs.Sections;
 
 /// <summary>
-/// HOMEFRONT in the run window (ET-230): who was in the site when it completed — the fact a homefront pays per
-/// character on — as one flat list of every character on the fleet's roster, this client's own ones tagged "Local".
+/// HOMEFRONT in the run window (ET-230): how the site ended and who was in it when it completed — the two facts a
+/// homefront pays per character on — as one flat list of every character on the fleet's roster, this client's own
+/// ones tagged "Local".
+///
+/// The normal case costs nothing (Jithran, 2026-09-12: "ga er standaard vanuit dat je de site optimaal draait"): the
+/// outcome starts at Completed, everyone in the fleet starts in the site, and the list is written as it stands, so STOP
+/// is the last thing anyone has to do. An exception costs one click — the outcome, a row's tick, a row's amount (ET-271).
 ///
 /// The app proposes (<see cref="AttendanceProposal"/>); one person decides. In a fleet that is whoever commands it,
 /// and their list goes to every member as <c>fleet.run-attendance</c>, where each client writes it onto its own runs
 /// (<see cref="FleetRunAttendance"/>) and shows it read-only. Without a fleet the pilot decides for their own runs.
 /// A member's window never writes a list of its own: it shows the commander's, or says it is waiting for it.
 ///
-/// The decision is written as it is made, after the same short bundle window the fleet share waits (ET-242), so the
-/// members see it without reopening anything; the commander's window sends it again every half minute for a member
-/// who connected late. Presence beside each name is the live fleet view and is never stored.
+/// A click is written the moment it is made and a run's first list at once; only what the window works out by itself
+/// — evidence, a roster read — waits the short bundle window the fleet share waits (ET-242), and never over a list
+/// decided elsewhere since (I1, I5 on <see cref="SetRunAttendanceCommand"/>). The commander's window sends the list
+/// again every half minute for a member who connected late.
 /// </summary>
 public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
 {
@@ -47,6 +55,9 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     /// connected after the last change — the server keeps no fleet message for anyone.</summary>
     public static readonly TimeSpan ResendInterval = TimeSpan.FromSeconds(30);
 
+    /// <summary>What an Abyssal Artifact Recovery site pays for when it goes the way it normally does: all of it.</summary>
+    public const int AllAarWaves = 9;
+
     private static readonly TimeSpan RosterReadInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan StoredReadInterval = TimeSpan.FromSeconds(5);
 
@@ -56,9 +67,13 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     private readonly Dictionary<long, string> _names = [];
     private readonly HashSet<long> _namesAsked = [];
     private readonly Dictionary<long, (PresenceState State, DateTimeOffset HeardAt)> _heard = [];
+    // What this window typed over the table's figure, per character — null for a correction dropped again. Ahead of
+    // Participants' own FixedPayoutIsk until that asynchronous mirror catches up with the write (ET-269's rule).
+    private readonly Dictionary<long, decimal?> _corrections = [];
     private readonly GamelogClientService? _gamelog;
     private readonly FleetRunAttendance? _attendance;
     private readonly IDisposable? _metricSubscription;
+    private readonly IDisposable? _runsSubscription;
 
     private IReadOnlySet<long> _own = new HashSet<long>();
     private bool _isOwnLoaded;
@@ -78,8 +93,19 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     private DateTime? _changedSinceUtc;
     private DateTime? _sentAtUtc;
     private DateTime _lastSetAtUtc;
-    private bool _isWriting;
+    private readonly SemaphoreSlim _writeGate = new(1, 1);
     private bool _isClosed;
+    // Which run everything below belongs to — the group code, or the run itself when it has none. A window that goes on
+    // to the next site starts its list, outcome and hand ticks over rather than carrying the last site's along.
+    private string? _stateKey;
+    // Something a person did in this window that has not been written yet — the one thing still written once the run
+    // is saved, so a click after SAVE is kept while a roster that drifts after SAVE never rewrites the list by itself.
+    private bool _isChangedByHand;
+    // Somebody picked the outcome (or AAR's waves) in this window: no default ever goes over it.
+    private bool _isOutcomeSetByHand;
+    // When the list this window last took up or wrote was set. A stored list newer than this was decided somewhere else
+    // — another window, the detail screen, the commander — and is taken up rather than argued with (I5).
+    private DateTime _knownSetAtUtc;
     private int? _fleetSizeAtStop;
     private DateTime _nowUtc = DateTime.UtcNow;
 
@@ -103,6 +129,9 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         if (_attendance is not null)
             _attendance.Applied += _OnAttendanceApplied;
         _metricSubscription = context.Services.GetService<IEventBus>()?.Subscribe<FleetMetricEvent>(_OnFleetMetric);
+        // A change made anywhere else — the detail screen, another window — is read on the very next tick rather than
+        // at the next five-second read, so this window never shows a total the store has already moved on from (I2).
+        _runsSubscription = context.Services.GetService<IEventBus>()?.Subscribe<RunsChangedEvent>(_OnRunsChanged);
     }
 
     /// <summary>One flat list: this client's own characters first, the rest A–Z. Never grouped by player — which
@@ -112,40 +141,31 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     /// <summary>This client decides the list: it commands the fleet, or flies without one.</summary>
     [ObservableProperty] private bool _canDecide;
 
-    [ObservableProperty] private string _decidedByText = string.Empty;
-
-    /// <summary>For a member: when the commander last changed the list, and when this client received it.</summary>
-    [ObservableProperty] private string? _lastChangeText;
-
-    /// <summary>"6 in fleet · 5 in site" — the fleet and N, side by side and never the same number.</summary>
+    /// <summary>"5 in site" — N, what the payout table is read at.</summary>
     [ObservableProperty] private string _countText = string.Empty;
-
-    [ObservableProperty] private string _breakdownText = string.Empty;
 
     /// <summary>Pilots in the site who are on no roster at all — a stranger who joined in. They count in N.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DecreaseNotOnRosterCommand))]
     private int _notOnRosterCount;
 
-    /// <summary>What the list is waiting on or why it cannot be changed here, in words; null when there is nothing
-    /// to say.</summary>
+    /// <summary>The one line that says why this list cannot be changed here, or what it waits on — null in the normal
+    /// case, where there is nothing to say.</summary>
     [ObservableProperty] private string? _noticeText;
 
-    [ObservableProperty] private string _captionText = string.Empty;
-
-    /// <summary>Said when the list started from the previous homefront of this fleet (Jithran, 2026-09-11).</summary>
-    [ObservableProperty] private string? _lastSiteText;
-
-    // ── The outcome and the payout (ET-231) ─────────────────────────────────────────────────────────
+    // ── The outcome and the payout (ET-231, ET-271) ─────────────────────────────────────────────────
 
     /// <summary>Abyssal Artifact Recovery has no completed/failed/unknown of its own — it pays per wave, and a site
     /// that fails part-way keeps whatever waves it already cleared. Every other homefront picks an outcome instead.</summary>
     public bool IsAar => Context.RunType.HomefrontKind == "Abyssal Artifact Recovery";
 
-    /// <summary>How the site ended — null while nobody has said. Editable only while <see cref="CanDecide"/>; a member
-    /// reads whatever the commander last set.</summary>
+    /// <summary>How the site ended. Completed from the start of a new run (ET-271) — null only on a run whose list was
+    /// written before that, which nobody's guess fills in. Editable only while <see cref="CanDecide"/>.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(OutcomeText))]
+    [NotifyPropertyChangedFor(nameof(IsCompleted))]
+    [NotifyPropertyChangedFor(nameof(IsFailed))]
+    [NotifyPropertyChangedFor(nameof(IsUnknown))]
     private HomefrontOutcome? _outcome;
 
     /// <summary>Whether <see cref="Outcome"/> came from the Metaliminal Meteoroid "pale shadow" gamelog line (ET-262)
@@ -160,12 +180,18 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     [NotifyCanExecuteChangedFor(nameof(IncreaseWaveCommand))]
     private int _completedWaveCount;
 
-    /// <summary>"15,000,000 ISK each", "if completed: 15,000,000 ISK each", or "N beyond the table" — the fixed
-    /// payout at the current N, read straight off <see cref="HomefrontPayoutTable"/>.</summary>
+    /// <summary>"Completed · 5 in site · 15,000,000 ISK each · 75,000,000 ISK total" — what the site pays, read
+    /// straight off <see cref="HomefrontPayoutTable"/> and the rows' own figures.</summary>
     [ObservableProperty] private string _payoutSummaryText = string.Empty;
 
-    /// <summary>"completed", "failed" or "unknown" — <see cref="Outcome"/> in words, lower case to match the
-    /// buttons that set it.</summary>
+    /// <summary>The three outcomes are one switch (ET-271): exactly one of these lights, and clicking another moves it.</summary>
+    public bool IsCompleted => Outcome is HomefrontOutcome.Completed;
+
+    public bool IsFailed => Outcome is HomefrontOutcome.Failed;
+
+    public bool IsUnknown => Outcome is HomefrontOutcome.Unknown;
+
+    /// <summary>"completed", "failed" or "unknown" — <see cref="Outcome"/> in words, for a reader who cannot change it.</summary>
     public string OutcomeText => Outcome switch
     {
         HomefrontOutcome.Completed when OutcomeIsFromGameLog => "completed · from the game log",
@@ -183,12 +209,14 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
 
         Outcome = outcome;
         OutcomeIsFromGameLog = false;
-        _changedSinceUtc ??= _nowUtc;
-        _Rebuild(_nowUtc);
+        _isOutcomeSetByHand = true;
+        _NoteChangeByHand();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(_CanIncreaseWave))]
     private void IncreaseWave() => _SetWaveCount(CompletedWaveCount + 1);
+
+    private bool _CanIncreaseWave() => CompletedWaveCount < AllAarWaves;
 
     [RelayCommand(CanExecute = nameof(_CanDecreaseWave))]
     private void DecreaseWave() => _SetWaveCount(CompletedWaveCount - 1);
@@ -197,17 +225,43 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
 
     private void _SetWaveCount(int count)
     {
-        if (!CanDecide || count is < 0 or > 9)
+        if (!CanDecide || count is < 0 or > AllAarWaves)
             return;
 
         CompletedWaveCount = count;
+        _isOutcomeSetByHand = true;
+        _NoteChangeByHand();
+    }
+
+    /// <summary>A click is stored the moment it is made (I1, SetRunAttendanceCommand): never held here until a bundle
+    /// window, a tick or a SAVE comes round — the window where HF-7TQB's Completed stood in the header and nowhere
+    /// else.</summary>
+    private void _NoteChangeByHand()
+    {
+        _isChangedByHand = true;
         _changedSinceUtc ??= _nowUtc;
         _Rebuild(_nowUtc);
+        _ = _WriteIfDueAsync(_nowUtc, isForced: true);
+    }
+
+    /// <summary>What the pilot typed over the table's figure for <paramref name="characterId"/>, or null when they
+    /// typed none — the one figure the run window's TOTAL ISK counts in place of the table's.</summary>
+    public decimal? CorrectionOf(long characterId)
+    {
+        decimal? stored = Context.Participants.FirstOrDefault(participant => participant.CharacterId == characterId)?.FixedPayoutIsk;
+        if (!_corrections.TryGetValue(characterId, out decimal? typed))
+            return stored;
+        // Only a bridge until the store's own copy shows it: from then on the store is the one source, so a figure
+        // changed on the detail screen afterwards reaches this window too.
+        if (typed == stored)
+            _corrections.Remove(characterId);
+        return typed;
     }
 
     public override void Refresh(DateTime nowUtc)
     {
         _nowUtc = nowUtc;
+        _StartOverIfAnotherRun();
         _evidence.SetWindow(Context.EffectiveStartUtc, Context.EffectiveStopUtc);
         foreach (RunParticipantViewModel participant in Context.Participants)
             _evidence.SetMined(participant.CharacterId, participant.MiningEntries.Sum(entry => entry.Units));
@@ -221,7 +275,12 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         _ = _WriteIfDueAsync(nowUtc);
     }
 
-    public override void RefreshSummary() => HeaderSummary = CountText;
+    public override void RefreshSummary() => HeaderSummary = (IsAar, Outcome) switch
+    {
+        (true, _) => $"{CompletedWaveCount} of {AllAarWaves} waves · {CountText}",
+        (false, { }) => $"{OutcomeText} · {CountText}",
+        _ => CountText
+    };
 
     public override void OnRunStarted()
     {
@@ -232,6 +291,18 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     }
 
     public override void OnRunClosed() => _isClosed = true;
+
+    /// <summary>STOP records the outcome and the list as they stand (ET-271): written now, on every run of the group,
+    /// without waiting out the bundle window — SAVE commits the rows and adds up the total straight after this.</summary>
+    public override async Task BeforeSaveAsync()
+    {
+        DateTime nowUtc = DateTime.UtcNow;
+        await _LoadOwnAsync();
+        if (_storedReadAtUtc is null)
+            await _ReadStoredIfDueAsync(nowUtc);
+        _Rebuild(nowUtc);
+        await _WriteIfDueAsync(nowUtc, isForced: true);
+    }
 
     /// <summary>The fleet's size at STOP goes onto every one of this client's runs in the group — a snapshot beside N,
     /// never N itself.</summary>
@@ -257,6 +328,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         if (_attendance is not null)
             _attendance.Applied -= _OnAttendanceApplied;
         _metricSubscription?.Dispose();
+        _runsSubscription?.Dispose();
         base.Dispose();
     }
 
@@ -274,8 +346,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             return;
 
         NotOnRosterCount = count;
-        _changedSinceUtc ??= _nowUtc;
-        _Rebuild(_nowUtc);
+        _NoteChangeByHand();
     }
 
     // ── Who decides ─────────────────────────────────────────────────────────────────────────────────
@@ -298,23 +369,33 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             .FirstOrDefault(participant => participant.FleetId == fleetId).FleetCommanderCharacterId
         : null;
 
+    /// <summary>The list as it stands was written by one of this client's own characters — so this client decides it,
+    /// even while the fleet read blinks. Without this a commander whose fleet membership was read empty for one tick
+    /// became a mere pilot, whose writes the store refuses over a commander's list: the Completed clicked in the run
+    /// window stood in the header and never reached a single run (HF-7TQB, 2026-09-12).</summary>
+    private bool _IsOwnDecision => _stored is { } stored && _own.Contains(stored.SetByCharacterId);
+
     private Role _RoleNow()
     {
-        if (Context.GroupCode is null || Context.FleetId is null)
-            return Role.Pilot;
+        int? commander = Context.GroupCode is not null ? _CommanderId() : null;
+        if (commander is { } named)
+            // A commander the roster names outranks any list this client wrote before — unless it is this client's own.
+            return _own.Contains(named) ? Role.Commander : Role.Member;
+        if (_IsOwnDecision)
+            return _stored?.Source is AttendanceSource.FleetCommander ? Role.Commander : Role.Pilot;
 
-        return _CommanderId() switch
-        {
-            null => Role.Unknown,
-            { } commander when _own.Contains(commander) => Role.Commander,
-            _ => Role.Member
-        };
+        return Context.GroupCode is null || Context.FleetId is null ? Role.Pilot : Role.Unknown;
     }
+
+    /// <summary>Who signs a commander's list: the commander the roster names now, or — while it names nobody for a
+    /// moment — whoever of this client's own characters signed it last.</summary>
+    private long? _CommanderSigner() => _CommanderId() ?? (_IsOwnDecision ? _stored?.SetByCharacterId : null);
 
     // ── The list ────────────────────────────────────────────────────────────────────────────────────
 
     private void _Rebuild(DateTime nowUtc)
     {
+        _StartOverIfAnotherRun();
         Role role = _RoleNow();
         CanDecide = role is Role.Pilot or Role.Commander;
         if (CanDecide && !_isStandingTaken && _storedReadAtUtc is not null)
@@ -323,10 +404,16 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             // commander goes on from the list as it stands instead of starting it over.
             _standing = _stored;
             _isStandingTaken = true;
+            _knownSetAtUtc = _stored?.SetAtUtc ?? default;
             NotOnRosterCount = _stored?.NotOnRosterCount ?? NotOnRosterCount;
-            Outcome = _stored?.Outcome ?? Outcome;
-            OutcomeIsFromGameLog = _stored?.OutcomeFromGameLog ?? OutcomeIsFromGameLog;
-            CompletedWaveCount = _stored?.CompletedWaveCount ?? CompletedWaveCount;
+            // A pick made in this window before the store was read stands; the store fills in only what nobody picked.
+            if (!_isOutcomeSetByHand)
+            {
+                Outcome = _stored?.Outcome ?? Outcome;
+                OutcomeIsFromGameLog = _stored?.OutcomeFromGameLog ?? OutcomeIsFromGameLog;
+                CompletedWaveCount = _stored?.CompletedWaveCount ?? CompletedWaveCount;
+            }
+            _DefaultOutcomeIfNew();
         }
         else if (!CanDecide)
             _isStandingTaken = false;
@@ -368,39 +455,74 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         RefreshSummary();
     }
 
+    private static string? _KeyOf(IRunWindowContext context) => context.GroupCode ?? context.RunId?.ToString();
+
+    /// <summary>The window went on to another run — the next site after SAVE, or another group adopted: nothing of the
+    /// last one's list, outcome, hand ticks or typed amounts may carry over onto it.</summary>
+    private void _StartOverIfAnotherRun()
+    {
+        string? key = _KeyOf(Context);
+        if (key == _stateKey)
+            return;
+
+        _stateKey = key;
+        _overrides.Clear();
+        _corrections.Clear();
+        _stored = null;
+        _standing = null;
+        _isStandingTaken = false;
+        _storedReadAtUtc = null;
+        _isStoredStale = true;
+        _changedSinceUtc = null;
+        _sentAtUtc = null;
+        _isChangedByHand = false;
+        _isOutcomeSetByHand = false;
+        _fleetSizeAtStop = null;
+        Outcome = null;
+        OutcomeIsFromGameLog = false;
+        CompletedWaveCount = 0;
+        NotOnRosterCount = 0;
+    }
+
+    /// <summary>A run nobody has written a list for yet goes the way a site normally goes (ET-271): Completed, or for
+    /// AAR every wave paid. A list written before — by an older version, or a pick somebody made — keeps what it says,
+    /// "not decided" included: an old homefront is never completed by a guess.</summary>
+    private void _DefaultOutcomeIfNew()
+    {
+        if (_stored is not null || _isOutcomeSetByHand
+            || Context.RunState is not (ActivityRunState.Running or ActivityRunState.Stopped))
+            return;
+
+        if (IsAar)
+            CompletedWaveCount = AllAarWaves;
+        else
+            Outcome = HomefrontOutcome.Completed;
+    }
+
     /// <summary>The decision exactly as this tick shows it — this client's own live pick while it decides, the
     /// commander's stored list while it only reads one, or null while it is still waiting for either. The single
     /// source <see cref="ActivityWindowViewModel"/>'s TOTAL ISK reads a homefront's outcome and N from, so the header
     /// can never disagree with what HOMEFRONT itself is showing right now.</summary>
     public RunAttendanceDecision? LiveDecision { get; private set; }
 
-    /// <summary>The fixed payout at the current N (ET-231), on the HOMEFRONT header and on every row. Read straight
-    /// off <see cref="HomefrontPayoutTable"/> — never a second computation of the same figure.</summary>
+    /// <summary>The fixed payout at the current N (ET-231), on every Local row and in the one summary line — read
+    /// straight off <see cref="HomefrontPayoutTable"/>, a typed figure standing in for a row's own.</summary>
     private void _ShowPayout(RunAttendanceDecision? decision)
     {
         string? kind = Context.RunType.HomefrontKind;
         int? n = decision?.InSiteCount;
         DateTime atUtc = Context.EffectiveStopUtc ?? _nowUtc;
-        (decimal Amount, string Version, DateTime EffectiveFromUtc)? table = IsAar ? null : HomefrontPayoutTable.TryGetTableAmount(kind, n, atUtc);
-        (decimal Amount, string Version, DateTime EffectiveFromUtc)? expected = HomefrontPayoutTable.TryGetExpected(
-            kind, true, n, Outcome, CompletedWaveCount, atUtc);
-
-        PayoutSummaryText = (IsAar, table, expected) switch
-        {
-            (true, _, { } aar) => $"{IskFormat.Whole(aar.Amount)} so far",
-            (true, _, null) => n is null ? string.Empty : "0 waves paid so far",
-            (false, _, { } completed) when n is { } count =>
-                $"Completed · {count} in site · {IskFormat.Whole(completed.Amount)} each · {IskFormat.Whole(completed.Amount * count)} total",
-            (false, { } t, null) => $"if completed: {IskFormat.Whole(t.Amount)} each",
-            _ => n is null ? string.Empty : "N beyond the table"
-        };
+        decimal? table = HomefrontPayoutTable.TryGetTableAmount(kind, n, atUtc)?.Amount;
+        decimal? expected = HomefrontPayoutTable.TryGetExpected(kind, true, n, Outcome, CompletedWaveCount, atUtc)?.Amount;
 
         foreach (AttendanceRowViewModel row in Rows)
         {
-            decimal? rowTable = row.IsInSite ? table?.Amount : null;
-            decimal? rowExpected = row.IsInSite ? expected?.Amount : null;
-            row.ShowPayout(rowTable, rowExpected, confirmedPayoutIsk: null);
+            row.HasRun = Context.Participants.Any(participant => participant.CharacterId == row.CharacterId);
+            row.ShowPayout(row.IsInSite ? table ?? expected : null, row.IsInSite ? expected : null,
+                row.IsInSite ? CorrectionOf(row.CharacterId) : null);
         }
+
+        PayoutSummaryText = HomefrontPayoutSummary.Describe(IsAar, Outcome, CompletedWaveCount, n, table, expected, Rows);
     }
 
     private IReadOnlyList<AttendanceCandidate> _Candidates(Role role)
@@ -413,10 +535,17 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
                 IsLocal: true, IsExternal: false);
         }
 
+        // An own character on the roster without a run here: in the site like everyone else, unless this client sees
+        // them logged out — a character with a run was picked into it, and a flaky window title never takes it out.
         if (Context.FleetId is not null)
             foreach (RosterCharacter member in _roster ?? [])
+            {
+                bool isLocal = _own.Contains(member.CharacterId);
                 candidates.TryAdd(member.CharacterId, new AttendanceCandidate(member.CharacterId, _NameOf(member.CharacterId),
-                    _own.Contains(member.CharacterId), member.IsExternal));
+                    isLocal, member.IsExternal,
+                    IsLoggedOut: isLocal && AttendanceRoster.PresenceOf(Context.Services, member.CharacterId, isLocal: true,
+                        null, null, new DateTimeOffset(_nowUtc, TimeSpan.Zero)) is FleetMemberPresenceState.Offline));
+            }
 
         // A member shows the commander's whole list, whoever this client's own roster read left out.
         if (role is not (Role.Pilot or Role.Commander))
@@ -455,9 +584,9 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             });
         }
 
-        long setBy = role is Role.Commander && _CommanderId() is { } commander
+        long setBy = role is Role.Commander && _CommanderSigner() is { } commander
             ? commander
-            : Context.ActingCharacterId ?? Context.RunCharacterId ?? 0;
+            : _IsOwnDecision && _stored is { } own ? own.SetByCharacterId : Context.ActingCharacterId ?? Context.RunCharacterId ?? 0;
         return new RunAttendanceDecision(entries, NotOnRosterCount,
             role is Role.Commander ? AttendanceSource.FleetCommander : AttendanceSource.Pilot, setBy, nowUtc,
             IsAar ? null : Outcome, IsAar ? CompletedWaveCount : null, !IsAar && OutcomeIsFromGameLog);
@@ -478,21 +607,21 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             bool isByHand = entry?.Reason is AttendanceReason.SetByHand;
             AttendanceEvidence shown = _ShownReason(candidate, entry, line);
             row.Show(entry?.IsInSite ?? false, shown.Reason, shown.Amount, line?.IsAddedToLastSite == true && !isByHand,
-                isByHand ? (CanDecide ? "you" : commanderName ?? "the fleet commander") : null);
+                isByHand && !CanDecide ? commanderName ?? "the fleet commander" : null);
             row.Presence = _PresenceOf(candidate);
             rows.Add(row);
         }
 
         _Place(rows);
-        _Count(decision.Entries.Count(entry => entry.IsInSite), decision.NotOnRosterCount);
+        _Count(decision.InSiteCount);
         if (!CanDecide)
             NotOnRosterCount = decision.NotOnRosterCount;
     }
 
     /// <summary>
-    /// The reason beside a tick. A line set by hand still shows what the evidence said — "set by" beside it says the
-    /// rest, and the one who decides sees why the proposal disagreed. A member's own characters show their own
-    /// gamelog's evidence beside the commander's tick, which this client can see better than the commander can.
+    /// The reason beside a tick. A line set by hand still shows what the evidence said, so the one who decides sees
+    /// why the proposal disagreed. A member's own characters show their own gamelog's evidence beside the commander's
+    /// tick, which this client can see better than the commander can.
     /// </summary>
     private AttendanceEvidence _ShownReason(AttendanceCandidate candidate, RunAttendanceEntryInput? entry,
         AttendanceProposalLine? line)
@@ -523,55 +652,21 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         }
 
         _Place(rows);
-        CountText = _roster is { } roster && Context.FleetId is not null ? $"{roster.Count} in fleet · — in site" : "— in site";
-        BreakdownText = string.Empty;
+        CountText = "— in site";
     }
 
-    private void _Count(int ticked, int notOnRoster)
-    {
-        int inSite = ticked + notOnRoster;
-        CountText = _roster is { } roster && Context.FleetId is not null
-            ? $"{roster.Count} in fleet · {inSite} in site"
-            : $"{inSite} in site";
-        BreakdownText = $"{ticked} ticked + {notOnRoster} not on the roster";
-    }
+    private void _Count(int inSite) => CountText = $"{inSite} in site";
 
     private void _Describe(Role role, string? commanderName)
     {
         string commander = commanderName ?? "the fleet commander";
-        DecidedByText = role switch
-        {
-            Role.Commander => "you · fleet commander",
-            Role.Pilot => "you",
-            Role.Member => $"🔒 {commander} · fleet commander",
-            _ => "not known right now"
-        };
-
-        CaptionText = role switch
-        {
-            Role.Commander => "Proposed from this run's evidence — you decide. Every member sees this list as you set it, read-only.",
-            Role.Pilot => "Proposed from this run's gamelog — you decide who was in the site when it completed.",
-            _ => $"Only {commander} changes this list. If it is wrong, tell them — this client applies what they set to its " +
-                 "local characters, and never overrides it with a guess of its own."
-        };
-
         NoticeText = role switch
         {
             Role.Unknown => "Who commands this fleet is not known right now, so this list cannot be set here.",
             Role.Member when _stored is null => $"Waiting for {commander}'s list.",
+            Role.Member => $"Set by {commander} — ask them to change it.",
             _ => null
         };
-
-        LastChangeText = role is Role.Member or Role.Unknown && _stored is { } stored
-            ? $"last change {stored.SetAtUtc.ToLocalTime():HH:mm}" + (Context.GroupCode is { } groupCode
-                && _attendance?.ReceivedAtUtc(groupCode) is { } received
-                    ? $" · received {received.ToLocalTime():HH:mm}"
-                    : string.Empty)
-            : null;
-
-        LastSiteText = CanDecide && _lastSite is not null
-            ? "Started from the list the last homefront in this fleet ended with."
-            : null;
     }
 
     private AttendanceRowViewModel _RowFor(AttendanceCandidate candidate)
@@ -579,7 +674,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         AttendanceRowViewModel? row = Rows.FirstOrDefault(existing => existing.CharacterId == candidate.CharacterId);
         if (row is null || row.IsLocal != candidate.IsLocal || row.IsExternal != candidate.IsExternal)
             return new AttendanceRowViewModel(candidate.CharacterId, candidate.Name, candidate.IsLocal, candidate.IsExternal,
-                _OnTicked);
+                _OnTicked, _OnEnterPayout);
 
         row.Name = candidate.Name;
         return row;
@@ -610,8 +705,27 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         else
             _overrides[row.CharacterId] = row.IsInSite;
 
-        _changedSinceUtc ??= _nowUtc;
+        _NoteChangeByHand();
+    }
+
+    /// <summary>A figure typed over the table's on a Local row (ET-271) — written onto that character's own run, and
+    /// counted from this moment on, ahead of the store catching up.</summary>
+    private void _OnEnterPayout(AttendanceRowViewModel row, decimal? amount)
+    {
+        if (!CanDecide || Context.Participants.FirstOrDefault(participant => participant.CharacterId == row.CharacterId)
+                is not { } participant)
+            return;
+
+        _corrections[row.CharacterId] = amount;
         _Rebuild(_nowUtc);
+        Context.Refresh(_nowUtc);
+        _ = _WritePayoutAsync(participant.RunId, amount);
+    }
+
+    private async Task _WritePayoutAsync(Guid runId, decimal? amount)
+    {
+        using IServiceScope scope = Context.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new SetHomefrontPayoutCommand(runId, amount));
     }
 
     private FleetMemberPresenceState? _PresenceOf(AttendanceCandidate candidate)
@@ -708,16 +822,26 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         try
         {
             _isStoredStale = false;
+            string? key = _KeyOf(Context);
             using IServiceScope scope = Context.Services.CreateScope();
             Result<RunAttendanceDecision?> read = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
                 .Query(new GetRunAttendanceQuery(Context.GroupCode, runId));
-            if (!read.IsSuccess)
+            // The window moved on to another run while this was read: this list is the last run's, not this one's.
+            if (!read.IsSuccess || key != _KeyOf(Context))
                 return;
 
             _stored = read.Value;
             _storedReadAtUtc = nowUtc;
             if (_stored is { } stored && stored.SetAtUtc > _lastSetAtUtc)
                 _lastSetAtUtc = stored.SetAtUtc;
+            // Decided somewhere else since this window last spoke, and nothing clicked here waits to be written: take
+            // that list up whole — outcome, ticks and all — instead of writing this window's older view back over it.
+            if (_stored is { } newer && _isStandingTaken && newer.SetAtUtc > _knownSetAtUtc && !_isChangedByHand)
+            {
+                _isStandingTaken = false;
+                _overrides.Clear();
+                _isOutcomeSetByHand = false;
+            }
         }
         finally
         {
@@ -740,12 +864,35 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
 
     // ── Writing ─────────────────────────────────────────────────────────────────────────────────────
 
-    private async Task _WriteIfDueAsync(DateTime nowUtc)
+    /// <param name="isForced">SAVE is waiting on it: written now, whatever the bundle window or a write already under
+    /// way (waited out rather than skipped).</param>
+    private async Task _WriteIfDueAsync(DateTime nowUtc, bool isForced = false)
+    {
+        if (isForced)
+            await _writeGate.WaitAsync();
+        else if (!_writeGate.Wait(0))
+            return;
+
+        try
+        {
+            await _WriteUnderGateAsync(nowUtc, isForced);
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
+
+    private async Task _WriteUnderGateAsync(DateTime nowUtc, bool isForced)
     {
         Role role = _RoleNow();
-        if (_isWriting || _isClosed || role is not (Role.Pilot or Role.Commander) || Context.RunId is not { } runId
-            || Context.RunState is not (ActivityRunState.Running or ActivityRunState.Stopped)
+        if (role is not (Role.Pilot or Role.Commander) || Context.RunId is not { } runId
+            || Context.RunState is not (ActivityRunState.Running or ActivityRunState.Stopped or ActivityRunState.Saved)
             || _storedReadAtUtc is null || !_isOwnLoaded)
+            return;
+        // Once the run is committed only a click in this window is written — a pick made just before or after SAVE is
+        // kept, and nothing else rewrites a saved list by itself.
+        if (_isClosed && !_isChangedByHand && !isForced)
             return;
         // A commander already decided these runs; a pilot's own list would never take (SetRunAttendanceCommand).
         if (role is Role.Pilot && _stored?.Source is AttendanceSource.FleetCommander)
@@ -757,48 +904,48 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         if (!isNew)
         {
             _changedSinceUtc = null;
-            if (role is Role.Commander && _stored is { } standing
+            _isChangedByHand = false;
+            if (role is Role.Commander && !_isClosed && _stored is { } standing
                 && (_sentAtUtc is not { } sentAt || nowUtc - sentAt >= ResendInterval || nowUtc < sentAt))
                 await _SendAsync(standing, nowUtc);
             return;
         }
 
+        // The first list of a run — its default outcome with it — is stored at once; only later changes the window
+        // makes by itself (evidence, a roster read) wait out the bundle window.
         _changedSinceUtc ??= nowUtc;
-        if (nowUtc - _changedSinceUtc < BundleWindow && nowUtc >= _changedSinceUtc)
+        if (!isForced && _stored is not null && nowUtc - _changedSinceUtc < BundleWindow && nowUtc >= _changedSinceUtc)
             return;
 
-        _isWriting = true;
-        try
+        // Never stamped earlier than the last one: a receiver keeps the newest, and a clock set back must not turn a
+        // correction into old news it ignores. Whole milliseconds, the wire's own grain, so the commander's copy and
+        // every member's are the same instant.
+        _lastSetAtUtc = RunGroupAttendance.ToWireInstant(nowUtc > _lastSetAtUtc ? nowUtc : _lastSetAtUtc.AddMilliseconds(1));
+        RunAttendanceDecision decision = current with { SetAtUtc = _lastSetAtUtc };
+        using (IServiceScope scope = Context.Services.CreateScope())
         {
-            // Never stamped earlier than the last one: a receiver keeps the newest, and a clock set back must not turn
-            // a correction into old news it ignores. Whole milliseconds, the wire's own grain, so the commander's copy
-            // and every member's are the same instant.
-            _lastSetAtUtc = RunGroupAttendance.ToWireInstant(nowUtc > _lastSetAtUtc ? nowUtc : _lastSetAtUtc.AddMilliseconds(1));
-            RunAttendanceDecision decision = current with { SetAtUtc = _lastSetAtUtc };
-            using (IServiceScope scope = Context.Services.CreateScope())
+            // A click goes over whatever stands; anything this window worked out by itself only over the list it was
+            // worked out from.
+            Result<int> written = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(
+                new SetRunAttendanceCommand(decision, [.. _own], Context.GroupCode,
+                    Context.GroupCode is null ? runId : null,
+                    IsProposal: !_isChangedByHand, StandingSetAtUtc: _stored?.SetAtUtc));
+            if (!written.IsSuccess)
+                return;
+            // Nothing took it — the store already holds this or a list that outranks it: read what it holds.
+            if (written.Value == 0)
             {
-                Result<int> written = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(
-                    new SetRunAttendanceCommand(decision, [.. _own], Context.GroupCode,
-                        Context.GroupCode is null ? runId : null));
-                if (!written.IsSuccess)
-                    return;
-                // Nothing took it — the store already holds this or a list that outranks it: read what it holds.
-                if (written.Value == 0)
-                {
-                    _isStoredStale = true;
-                    return;
-                }
+                _isStoredStale = true;
+                return;
             }
+        }
 
-            _stored = decision;
-            _changedSinceUtc = null;
-            if (role is Role.Commander)
-                await _SendAsync(decision, nowUtc);
-        }
-        finally
-        {
-            _isWriting = false;
-        }
+        _stored = decision;
+        _knownSetAtUtc = decision.SetAtUtc;
+        _changedSinceUtc = null;
+        _isChangedByHand = false;
+        if (role is Role.Commander)
+            await _SendAsync(decision, nowUtc);
     }
 
     private async Task _SendAsync(RunAttendanceDecision decision, DateTime nowUtc)
@@ -830,13 +977,13 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             _paleShadow = (characterId, atUtc);
     }
 
-    /// <summary>Sets <see cref="Outcome"/> to completed the first time this run's own gamelog shows the pale shadow
-    /// line, and only then: nothing here may decide for anyone, override a manual pick (including "failed" or
-    /// "unknown"), or fire for a kind other than Metaliminal Meteoroid, whose asteroid is the only site this line
-    /// means anything for.</summary>
+    /// <summary>Marks the outcome as completed from the game log the first time this run's own gamelog shows the pale
+    /// shadow line — over the default, never over a pick somebody made (including "failed" or "unknown"), and never
+    /// for a kind other than Metaliminal Meteoroid, whose asteroid is the only site this line means anything for.</summary>
     private void _ApplyGameLogOutcomeIfDue(DateTime nowUtc)
     {
-        if (!CanDecide || Outcome is not null || Context.RunType.HomefrontKind != "Metaliminal Meteoroid")
+        if (!CanDecide || Outcome is not (null or HomefrontOutcome.Completed) || OutcomeIsFromGameLog || _isOutcomeSetByHand
+            || Context.RunType.HomefrontKind != "Metaliminal Meteoroid")
             return;
 
         (int CharacterId, DateTime AtUtc)? paleShadow;
@@ -890,6 +1037,12 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     private void _OnAttendanceApplied(string groupCode)
     {
         if (groupCode == Context.GroupCode)
+            _isStoredStale = true;
+    }
+
+    private void _OnRunsChanged(RunsChangedEvent changed)
+    {
+        if (changed.Data.GroupCode is { } groupCode ? groupCode == Context.GroupCode : changed.Data.RunId == Context.RunId)
             _isStoredStale = true;
     }
 }

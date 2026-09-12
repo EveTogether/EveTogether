@@ -19,6 +19,8 @@ internal static class RunSectionAccess
     public static BountyWindowSectionViewModel Bounty(this ActivityWindowViewModel window) => window._Section<BountyWindowSectionViewModel>();
     public static LootWindowSectionViewModel Loot(this ActivityWindowViewModel window) => window._Section<LootWindowSectionViewModel>();
     public static MiningWindowSectionViewModel Mining(this ActivityWindowViewModel window) => window._Section<MiningWindowSectionViewModel>();
+    public static HomefrontWindowSectionViewModel Homefront(this ActivityWindowViewModel window) => window._Section<HomefrontWindowSectionViewModel>();
+    public static HomefrontDetailSectionViewModel Homefront(this ActivityDetailViewModel detail) => detail._Section<HomefrontDetailSectionViewModel>();
 
     public static ActivityDetailSectionViewModel Activity(this ActivityDetailViewModel detail) => detail._Section<ActivityDetailSectionViewModel>();
     public static MissionDetailSectionViewModel Mission(this ActivityDetailViewModel detail) => detail._Section<MissionDetailSectionViewModel>();

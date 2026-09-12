@@ -19,9 +19,15 @@ public static class IskContributors
         new HomefrontPayoutIskContributor()
     ];
 
-    /// <summary>Which sources a stored breakdown was built by. A summary built by another set is out of date and is
-    /// rebuilt at startup, so registering a source reaches activities saved before it existed.</summary>
-    public static string Signature { get; } = string.Join(",", All.Select(contributor => contributor.Source));
+    /// <summary>Which sources a stored breakdown was built by, and by which revision of the rules. A summary built by
+    /// another set is out of date and is rebuilt at startup, so registering a source reaches activities saved before
+    /// it existed.</summary>
+    public static string Signature { get; } = $"{string.Join(",", All.Select(contributor => contributor.Source))};r{Revision}";
+
+    // Raised whenever stored summaries may be wrong without any source changing. 2 (ET-271): a typed homefront payout
+    // moved from Rewards to HomefrontPayout, and an outcome, attendance or payout set after SAVE never rebuilt its
+    // summary before, so every activity saved until now is added up again once.
+    private const int Revision = 2;
 
     /// <param name="nowUtc">Stands in for the stop of a run that is still going.</param>
     public static IskBreakdown Breakdown(IReadOnlyList<RunIskFacts> runs, DateTime nowUtc) =>

@@ -14,8 +14,8 @@ namespace EveUtils.Client.UiTests;
 /// <summary>
 /// ET-231: confirming or typing a homefront's actual payout — never anything read from the wallet, only what the
 /// pilot says (<see cref="SetHomefrontPayoutCommand"/>). The one thing this must never do is leave two
-/// <see cref="RunParameterKey.FixedPayout"/> rows on the same run: <c>RewardIskContributor</c> sums every row with
-/// that key, so a second write has to replace the first or the run's own payout would count itself twice.
+/// <see cref="RunParameterKey.FixedPayout"/> rows on the same run, so a second write replaces the first, and typing
+/// the table's own figure back (a null amount) drops it (ET-271).
 /// </summary>
 public sealed class SetHomefrontPayoutCommandTests
 {
@@ -63,6 +63,25 @@ public sealed class SetHomefrontPayoutCommandTests
             .Where(p => p.RunId == started.Value && p.ParameterKey == RunParameterKey.FixedPayout)
             .ToListAsync(cancellationToken));
         Assert.Equal(11_250_000m, parameter.Amount);
+    }
+
+    [AvaloniaFact]
+    public async Task Handle_NoAmount_DropsTheTypedFigure()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000015, ActivityKind.Site, StartedAtUtc,
+            1234, "Raid: Hall of Sacrifice", 30000142), cancellationToken);
+        await dispatcher.Send(new SetHomefrontPayoutCommand(started.Value, 14_000_000m), cancellationToken);
+
+        Result dropped = await dispatcher.Send(new SetHomefrontPayoutCommand(started.Value, null), cancellationToken);
+
+        Assert.True(dropped.IsSuccess);
+        await using ClientDbContext db = await instance.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        Assert.False(await db.Set<RunParameter>()
+            .AnyAsync(p => p.RunId == started.Value && p.ParameterKey == RunParameterKey.FixedPayout, cancellationToken));
     }
 
     [AvaloniaFact]

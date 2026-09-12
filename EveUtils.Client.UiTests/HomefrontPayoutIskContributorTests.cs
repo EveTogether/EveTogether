@@ -8,10 +8,9 @@ namespace EveUtils.Client.UiTests;
 /// <summary>
 /// ET-269 (overriding ET-231's "expected until confirmed"): a homefront's payout counts as
 /// <see cref="IskCertainty.Measured"/> the moment the site reads Completed — there is no wallet scope to verify it
-/// against and never will be, so it cannot stay "expected" waiting for a confirmation that can never arrive. A run
-/// the pilot typed a different figure for already carries a <see cref="RunParameterKey.FixedPayout"/> row and is
-/// skipped here, so it is never counted twice — once here at the table figure, once by
-/// <see cref="RewardIskContributor"/> at the typed one.
+/// against and never will be, so it cannot stay "expected" waiting for a confirmation that can never arrive. A figure
+/// the pilot typed over the table's (a <see cref="RunParameterKey.FixedPayout"/> row) counts instead of it — once,
+/// here, and only while the payout is owed at all (ET-271).
 /// </summary>
 public sealed class HomefrontPayoutIskContributorTests
 {
@@ -28,27 +27,40 @@ public sealed class HomefrontPayoutIskContributorTests
     }
 
     [Fact]
-    public void Contribute_ATypedCorrection_IsSkipped_SoItIsNeverCountedTwice()
+    public void Contribute_ATypedFigure_CountsInsteadOfTheTables_AndNowhereElse()
     {
         RunIskFacts facts = _Facts(expected: 15_000_000m,
-            parameters: [new RunIskParameter(RunParameterKey.FixedPayout, 15_000_000m, null, DateTime.UtcNow)]);
+            parameters: [new RunIskParameter(RunParameterKey.FixedPayout, 14_000_000m, null, DateTime.UtcNow)]);
 
-        IskContribution? contribution = new HomefrontPayoutIskContributor().Contribute([facts], DateTime.UtcNow);
+        IskBreakdown isk = IskContributors.Breakdown([facts], DateTime.UtcNow);
 
-        Assert.Null(contribution);
+        Assert.Equal(14_000_000m, isk.Of(IskSource.HomefrontPayout)?.Amount);
+        Assert.Null(isk.Of(IskSource.Rewards));
+        Assert.Equal(14_000_000m, isk.Total);
+    }
+
+    /// <summary>AC-2: Failed takes the payout away — a typed figure included. Counter-proof: count a FixedPayout row
+    /// whatever the outcome (as Rewards did) and the failed site still pays 14,000,000.</summary>
+    [Fact]
+    public void Contribute_ATypedFigureOnASiteNoLongerOwed_CountsNothing()
+    {
+        RunIskFacts failed = _Facts(expected: null,
+            parameters: [new RunIskParameter(RunParameterKey.FixedPayout, 14_000_000m, null, DateTime.UtcNow)]);
+
+        Assert.Equal(0m, IskContributors.Breakdown([failed], DateTime.UtcNow).Total);
     }
 
     [Fact]
-    public void Contribute_SumsAcrossRuns_ButOnlyTheOnesWithNoTypedCorrection()
+    public void Contribute_SumsAcrossRuns_TheTypedFigureWhereThereIsOne()
     {
         RunIskFacts corrected = _Facts(expected: 15_000_000m,
-            parameters: [new RunIskParameter(RunParameterKey.FixedPayout, 15_000_000m, null, DateTime.UtcNow)]);
+            parameters: [new RunIskParameter(RunParameterKey.FixedPayout, 14_000_000m, null, DateTime.UtcNow)]);
         RunIskFacts atTableFigure = _Facts(expected: 15_000_000m);
 
         IskContribution? contribution = new HomefrontPayoutIskContributor().Contribute([corrected, atTableFigure], DateTime.UtcNow);
 
         Assert.NotNull(contribution);
-        Assert.Equal(15_000_000m, contribution.Amount);
+        Assert.Equal(29_000_000m, contribution.Amount);
         Assert.Equal(IskCertainty.Measured, contribution.Certainty);
     }
 

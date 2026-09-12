@@ -10,8 +10,7 @@ public enum IskSource
     Consumables = 3,
     Mining = 4,
 
-    /// <summary>A homefront's expected fixed payout, before the pilot confirms or types what actually arrived
-    /// (ET-231). Once confirmed it is a <see cref="RunParameterKey.FixedPayout"/> row instead, counted by
-    /// <see cref="Rewards"/> — the two never both count the same run.</summary>
+    /// <summary>A homefront's fixed payout per character in the site (ET-231) — the table's figure, or the one the
+    /// pilot typed over it as a <see cref="RunParameterKey.FixedPayout"/> row (ET-271), never both for one run.</summary>
     HomefrontPayout = 5
 }
