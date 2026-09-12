@@ -22,7 +22,8 @@ public sealed record RunGroupAttendance(
     IReadOnlyList<RunAttendanceEntryInput> Characters,
     int NotOnRosterCount,
     HomefrontOutcome? Outcome = null,
-    int? CompletedWaveCount = null)
+    int? CompletedWaveCount = null,
+    bool OutcomeFromGameLog = false)
 {
     /// <summary>An instant cut to whole milliseconds, the grain <see cref="UnixMs"/> carries — what the commander stamps
     /// their own copy with, so theirs and every member's are the same instant and a resend reads as the same list.</summary>

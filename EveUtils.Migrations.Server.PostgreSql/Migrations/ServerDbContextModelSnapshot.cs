@@ -834,6 +834,9 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.Property<int?>("HomefrontOutcome")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("HomefrontOutcomeFromGameLog")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("HomefrontPayoutTableVersion")
                         .HasColumnType("text");
 

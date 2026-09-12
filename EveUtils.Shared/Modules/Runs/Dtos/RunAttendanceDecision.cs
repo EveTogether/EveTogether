@@ -14,6 +14,9 @@ namespace EveUtils.Shared.Modules.Runs.Dtos;
 /// Null on every other kind, and on an AAR site nobody has said this for yet.</param>
 /// <param name="SetAtUtc">On the deciding client's clock. Only ever compared with another decision of the same group,
 /// so a later correction replaces an earlier one and a late copy of the earlier one never comes back.</param>
+/// <param name="OutcomeFromGameLog">Whether <paramref name="Outcome"/> came from the Metaliminal Meteoroid "pale
+/// shadow" gamelog line rather than a manual pick (ET-262) — never true together with a null
+/// <paramref name="Outcome"/>, and always false once a manual pick replaces it.</param>
 public sealed record RunAttendanceDecision(
     IReadOnlyList<RunAttendanceEntryInput> Entries,
     int NotOnRosterCount,
@@ -21,7 +24,8 @@ public sealed record RunAttendanceDecision(
     long SetByCharacterId,
     DateTime SetAtUtc,
     HomefrontOutcome? Outcome = null,
-    int? CompletedWaveCount = null)
+    int? CompletedWaveCount = null,
+    bool OutcomeFromGameLog = false)
 {
     /// <summary>N: the ticked characters plus the pilots on no roster.</summary>
     public int InSiteCount => Entries.Count(entry => entry.IsInSite) + NotOnRosterCount;
@@ -32,6 +36,7 @@ public sealed record RunAttendanceDecision(
         NotOnRosterCount == other.NotOnRosterCount
         && Outcome == other.Outcome
         && CompletedWaveCount == other.CompletedWaveCount
+        && OutcomeFromGameLog == other.OutcomeFromGameLog
         && Entries.Count == other.Entries.Count
         && Entries.OrderBy(entry => entry.CharacterId).Zip(other.Entries.OrderBy(entry => entry.CharacterId))
             .All(pair => pair.First.CharacterId == pair.Second.CharacterId
@@ -55,6 +60,6 @@ public sealed record RunAttendanceDecision(
                     ReasonAmount = entry.ReasonAmount
                 })],
                 run.AttendanceNotOnRosterCount ?? 0, source, setBy, setAt,
-                run.HomefrontOutcome, run.HomefrontCompletedWaveCount)
+                run.HomefrontOutcome, run.HomefrontCompletedWaveCount, run.HomefrontOutcomeFromGameLog)
             : null;
 }

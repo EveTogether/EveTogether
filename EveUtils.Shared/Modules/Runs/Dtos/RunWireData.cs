@@ -53,6 +53,7 @@ public sealed class RunWireData
     // How the homefront ended (ET-231), travelling whole for the same reason as the attendance decision above: a
     // member offline when it was corrected still adopts it from the commander's own runs on the next pull.
     public HomefrontOutcome? HomefrontOutcome { get; init; }
+    public bool HomefrontOutcomeFromGameLog { get; init; }
     public int? HomefrontCompletedWaveCount { get; init; }
     public string? HomefrontPayoutTableVersion { get; init; }
 
@@ -116,6 +117,7 @@ public sealed class RunWireData
             ReasonAmount = entry.ReasonAmount
         }).ToList(),
         HomefrontOutcome = run.HomefrontOutcome,
+        HomefrontOutcomeFromGameLog = run.HomefrontOutcomeFromGameLog,
         HomefrontCompletedWaveCount = run.HomefrontCompletedWaveCount,
         HomefrontPayoutTableVersion = run.HomefrontPayoutTableVersion,
         FitContentHash = run.FitContentHash,
@@ -205,6 +207,7 @@ public sealed class RunWireData
             AttendanceSetAtUtc = AttendanceSetAtUtc,
             FleetSizeAtStop = FleetSizeAtStop,
             HomefrontOutcome = HomefrontOutcome,
+            HomefrontOutcomeFromGameLog = HomefrontOutcomeFromGameLog,
             HomefrontCompletedWaveCount = HomefrontCompletedWaveCount,
             HomefrontPayoutTableVersion = HomefrontPayoutTableVersion,
             FitContentHash = FitContentHash,

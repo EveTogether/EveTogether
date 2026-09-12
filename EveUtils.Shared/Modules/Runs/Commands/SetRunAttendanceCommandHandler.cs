@@ -89,6 +89,7 @@ internal sealed class SetRunAttendanceCommandHandler(IDbContextFactory<ClientDbC
         run.AttendanceSetAtUtc = decision.SetAtUtc;
         run.HomefrontOutcome = decision.Outcome;
         run.HomefrontCompletedWaveCount = decision.CompletedWaveCount;
+        run.HomefrontOutcomeFromGameLog = decision.OutcomeFromGameLog;
 
         // The table version this run's own expected figure is computed against (ET-231) — recorded so two clients on
         // two app versions never silently disagree about the same site. Null, like the figure itself, until there is
