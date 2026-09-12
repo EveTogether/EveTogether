@@ -158,7 +158,11 @@ public class FleetParticipationActivationTests
     public async Task WithOnePreparedFleet_TheRunIsNotShared_AndTheWindowSaysWhy()
     {
         using var instance = TestClientInstance.Create();
-        await _CreateLocalFleetAsync(instance, FleetActivation.Forming);
+        long fleetId = await _CreateLocalFleetAsync(instance, FleetActivation.Forming);
+        // Somebody else is actually signed up to this one — the ET-165 case this notice exists for: a pilot flying
+        // with a real squad who forgot to start it. Without a second member "HF" would be nobody's fleet but this
+        // pilot's own, and ET-224's fix would rightly say nothing about it.
+        await _AddOtherMemberAsync(instance, fleetId, otherCharacterId: 90000091);
 
         var window = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
         await window.LoadAsync();
@@ -191,8 +195,12 @@ public class FleetParticipationActivationTests
     public async Task WithTwoPreparedFleets_TheRunIsNotShared_AndNoNameIsGuessed()
     {
         using var instance = TestClientInstance.Create();
-        await _CreateLocalFleetAsync(instance, FleetActivation.Forming);
-        await _CreateLocalFleetAsync(instance, FleetActivation.Forming);
+        long firstFleetId = await _CreateLocalFleetAsync(instance, FleetActivation.Forming);
+        long secondFleetId = await _CreateLocalFleetAsync(instance, FleetActivation.Forming);
+        // Both need someone else registered (ET-224) — otherwise neither is a fleet this pilot could actually be
+        // flying with, and the case under test (which of several to name) never arises.
+        await _AddOtherMemberAsync(instance, firstFleetId, otherCharacterId: 90000092);
+        await _AddOtherMemberAsync(instance, secondFleetId, otherCharacterId: 90000093);
 
         var window = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
         await window.LoadAsync();
@@ -234,6 +242,27 @@ public class FleetParticipationActivationTests
     }
 
     /// <summary>
+    /// ET-224. "HF" here is exactly Jithran's own report: a personal local fleet set up once, left Forming, with
+    /// nobody else ever signed up to it. Once started it would still have nobody to share this run with, so being
+    /// its only member reads the same as having no fleet at all — the notice this pilot actually complained about
+    /// firing on every solo run.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task MemberOfAForgottenSoloFleet_NoOneElseSignedUp_TheWindowSaysNothing()
+    {
+        using var instance = TestClientInstance.Create();
+        await _CreateLocalFleetAsync(instance, FleetActivation.Forming);
+
+        var window = new ActivityWindowViewModel(ActivityKind.Site, instance.Services);
+        await window.LoadAsync();
+        window.StartManualRun(DateTime.UtcNow);
+        await window.RefreshFleetCommandAsync(DateTime.UtcNow);
+
+        Assert.Null(window.FleetId);
+        Assert.False(window.HasFleetNotice);
+    }
+
+    /// <summary>
     /// Creates the fleet the way the client does — <see cref="ClientFleetService.CreateLocalFleetAsync"/>, which
     /// leaves it Forming — and then puts it at the activation under test. Set on the entity rather than through
     /// StartFleetCommand so all three values are reachable from one place; the refresher reads the repository, so
@@ -256,6 +285,20 @@ public class FleetParticipationActivationTests
         await repository.UpdateAsync(fleet);
 
         return created.Value;
+    }
+
+    /// <summary>Registers a second, external (no session) character on the fleet's roster directly — the roster
+    /// itself is not gated by activation the way the metrics feed is (ET-165's "no broadcast before start" rule),
+    /// so this is readable regardless of what <see cref="_CreateLocalFleetAsync"/> set the fleet's activation to.
+    /// </summary>
+    private static async Task _AddOtherMemberAsync(TestClientInstance instance, long fleetId, int otherCharacterId)
+    {
+        using IServiceScope scope = instance.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IFleetRepository>();
+        await repository.AddMemberAsync(new FleetMember
+        {
+            FleetId = fleetId, CharacterId = otherCharacterId, JoinTime = DateTimeOffset.UtcNow, IsExternal = true
+        });
     }
 
     private static FleetInfo _ServerFleet(FleetActivation activation) => new(

@@ -13,6 +13,20 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Solo runs no longer get warned about a fleet that isn't there.** Before, starting any run put "no other member
+  has reported in yet" in the title bar even when flying alone, and a run started while merely a member of a
+  long-forgotten personal fleet — never started, never joined by anyone else — said "'Local HF' has not been
+  started, so this run is not shared" every time. Now the run window only mentions a fleet when there is one to
+  mention: the "not shared" notice only fires for a forming fleet somebody else is actually signed up to, and the
+  header chip only reports on fleet members once a real member has actually reported in. A pilot who forgot to
+  start a fleet they are genuinely flying with — or who is in several started fleets at once — still gets told,
+  unchanged.
+- **SAVE while a run is still going.** Before, ending and saving a run always took two clicks — STOP, then SAVE —
+  even when there was nothing left to check. Now a SAVE button sits in the run controls the whole time a run is
+  going, between STOP and DISCARD, and stops the run at the moment it is clicked before saving it in the same step.
+  STOP is unchanged for anyone who wants to check the time or the loot first. Saving now also shows a clear "Saving
+  this run…" indicator in the window itself, with every control disabled until it is done, so a slow save (a
+  five-character group can take several seconds) is never mistaken for nothing happening.
 - **RESUME now catches up what EVE wrote to the gamelog while the app was closed.** Before, resuming a run after a
   crash or a closed app (the RESUME button in UNFINISHED, or the startup notice offering the same choice) picked the
   clock back up but left a gap: any bounty, mining or enemies from the time nothing was watching the gamelog were
