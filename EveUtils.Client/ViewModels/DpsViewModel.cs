@@ -23,6 +23,11 @@ namespace EveUtils.Client.ViewModels;
 ///
 /// The numbers and meters show each rate as measured; only the graph line is smoothed, for display. A calm line and an
 /// honest number: the smoothing that makes a curve pleasant to follow would otherwise also make the number lag.
+///
+/// The line is a trailing average over <see cref="SmoothingWindowFrames"/>, not an EMA (ET-280): an exponential
+/// average chases a cadence-held step with its own curved (exponential) response, which turned every volley's step
+/// into a little arc — a staircase of half-circles rather than a calm line. A plain trailing average cannot overshoot
+/// its own inputs and turns a step into a straight ramp instead.
 /// </summary>
 public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
 {
@@ -30,7 +35,9 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
                                                    // pixels-per-second slice of it anchored right, so a wider graph
                                                    // shows a longer timeline (covers fullscreen/ultrawide). Cheap: a
                                                    // ring buffer, and render only walks the visible samples
-    private const double Smoothing = 0.15;        // EMA coefficient for the 30fps render path (the graph line only)
+    // ~1 s at the nominal 30fps render rate (ET-280): the drawn line trails a plain average over this many recent
+    // frames instead of an EMA, so a cadence-held step draws as a straight ramp rather than a curved arc.
+    private const int SmoothingWindowFrames = 30;
 
     // The flags switch on at one figure and off at a lower one, so a value hovering at the edge does not blink them.
     // UNDER FIRE: taking this much more than the reps coming in. NEUTED: this much energy neutralized on you.
@@ -394,10 +401,10 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     /// the event-driven remote-member path, which only carries DPS out and in.</summary>
     public void Apply(DpsSampleDto sample)
     {
-        _outLine.Target = _outLine.Ema = sample.DealtPerSecond;
-        _inLine.Target = _inLine.Ema = sample.ReceivedPerSecond;
-        Append(_outLine.Series, _outLine.Ema);
-        Append(_inLine.Series, _inLine.Ema);
+        _outLine.Target = sample.DealtPerSecond;
+        _inLine.Target = sample.ReceivedPerSecond;
+        Append(_outLine.Series, _outLine.Smoothed(SmoothingWindowFrames));
+        Append(_inLine.Series, _inLine.Smoothed(SmoothingWindowFrames));
         RefreshFigures();
         AgeMarkers();
         GraphRevision++;
@@ -463,15 +470,13 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
         _capOutLine.Target = rates.CapOut;
     }
 
-    // The single smoothing + scroll core shared by every combat graph (own + fleet): EMA every line toward its target,
-    // append a frame, refresh the figures, age the markers. A tweak here lands on all graphs and all lines at once.
+    // The single smoothing + scroll core shared by every combat graph (own + fleet): average every line's target over
+    // its trailing window, append a frame, refresh the figures, age the markers. A tweak here lands on all graphs and
+    // all lines at once.
     private void StepFrame()
     {
         foreach (var line in _lines)
-        {
-            line.Ema += Smoothing * (line.Target - line.Ema);
-            Append(line.Series, line.Ema);
-        }
+            Append(line.Series, line.Smoothed(SmoothingWindowFrames));
 
         RefreshFigures();
         AgeMarkers();
@@ -554,12 +559,26 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     private static void Append(DpsSeries series, double value) => series.Add(value);
 
     // One live quantity: its series + smoothing state, keyed by the metric kind it renders. Target is the measured
-    // rate (what the figures show); Ema is the smoothed line.
+    // rate (what the figures show); Smoothed averages it for the line.
     private sealed class RateLine(MetricKind kind, IBrush ink, GraphLane lane, bool dashed = false)
     {
+        private readonly Queue<double> _recent = new();
+        private double _recentSum;
+
         public MetricKind Kind { get; } = kind;
         public DpsSeries Series { get; } = new(ink, GraphCapacityValue, lane, dashed);
-        public double Ema;
         public double Target;
+
+        /// <summary>Target averaged over the trailing <paramref name="frames"/> calls — one call is expected per
+        /// rendered frame, so this is the drawn line's value for "now". Never below the lowest, nor above the
+        /// highest, of the values it is averaging: a plain trailing average cannot overshoot its inputs.</summary>
+        public double Smoothed(int frames)
+        {
+            _recent.Enqueue(Target);
+            _recentSum += Target;
+            while (_recent.Count > frames)
+                _recentSum -= _recent.Dequeue();
+            return _recentSum / _recent.Count;
+        }
     }
 }

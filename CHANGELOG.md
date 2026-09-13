@@ -13,6 +13,14 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: the DPS/GJ graph no longer flattens a peak against the top edge, and the line no longer draws as a
+  staircase of little arcs.** The shared scale used to chase the current rate and could sink while a higher peak was
+  still on screen, clipping the line flat along the top; it now holds a peak for as long as it could plausibly still
+  be visible before easing down, and the graph itself never draws a scale lower than what is actually on screen. The
+  cadence-held rate that made a step per volley was smoothed with an exponential average, which turned each step into
+  a little arc; the line is now a plain trailing average instead, so it draws as a straight, calm curve. The number
+  shown still reads the measured rate, as before. Applies to both lanes (hp/s and GJ/s) and to the small graphs on
+  fleet cards.
 - **Changed: the DPS meter now shows your real DPS, without dips between volleys.** It used to count only the damage
   of the last 5 seconds, so any weapon slower than that — missiles, large turrets, slow drones — fell to almost nothing
   between two volleys and the graph sawed up and down. Each weapon (and each rat shooting at you) is now measured
