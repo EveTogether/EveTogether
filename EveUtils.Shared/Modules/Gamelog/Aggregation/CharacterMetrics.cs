@@ -73,6 +73,15 @@ public sealed class CharacterMetrics
         lock (_gate)
         {
             var miss = quality == HitQuality.Misses || amount <= 0;
+            if (direction == DamageDirection.Incoming)
+            {
+                if (!miss)
+                    _received += amount;
+                return;
+            }
+
+            // Hits, misses and the quality mix are YOUR shots only: counted together with the rats' shots at you (as
+            // they were until ET-277) the hit rate and the Quality line described nobody's accuracy.
             if (miss)
             {
                 _misses++;
@@ -81,12 +90,11 @@ public sealed class CharacterMetrics
             {
                 _hits++;
                 _qualities[quality] = _qualities.GetValueOrDefault(quality) + 1;
-                if (direction == DamageDirection.Outgoing) _dealt += amount;
-                else _received += amount;
+                _dealt += amount;
             }
 
             // Count every outgoing engagement (hit or miss) as an enemy encountered.
-            if (direction == DamageDirection.Outgoing && !string.IsNullOrWhiteSpace(target))
+            if (!string.IsNullOrWhiteSpace(target))
                 _enemies[target] = _enemies.GetValueOrDefault(target) + 1;
         }
     }

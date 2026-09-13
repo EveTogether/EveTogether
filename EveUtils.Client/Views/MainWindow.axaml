@@ -669,10 +669,12 @@
                                                             <TextBlock Classes="label" Text="DEALT / RECEIVED" Margin="0,2,0,0"
                                                                        IsVisible="{Binding IsLive}"/>
                                                             <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsLive}">
+                                                                <!-- The combat inks, not the faction accent (ET-277):
+                                                                     the same two colours as the lines beside them. -->
                                                                 <TextBlock Classes="mono" FontSize="19"
-                                                                           Foreground="{DynamicResource AccentBrightBrush}" Text="{Binding Dealt}"/>
+                                                                           Foreground="{x:Static ctl:CombatInk.Out}" Text="{Binding Dealt, StringFormat='{}{0:N0}'}"/>
                                                                 <TextBlock Classes="mono" FontSize="19"
-                                                                           Foreground="{StaticResource RedBrush}" Text="{Binding Received}"/>
+                                                                           Foreground="{x:Static ctl:CombatInk.In}" Text="{Binding Received, StringFormat='{}{0:N0}'}"/>
                                                             </StackPanel>
                                                             <TextBlock Classes="label" Foreground="{StaticResource ValueBrush}"
                                                                        IsVisible="{Binding HasBounty}" Text="{Binding BountyText}"/>
@@ -682,7 +684,9 @@
                                                         <ctl:DpsGraph Grid.Column="2" Margin="10,0,0,0"
                                                                       IsVisible="{Binding IsLive}"
                                                                       Series="{Binding Series}"
-                                                                      Revision="{Binding GraphRevision}"/>
+                                                                      Revision="{Binding GraphRevision}"
+                                                                      HitPointsMax="{Binding HitPointsScale}"
+                                                                      CapacitorMax="{Binding CapacitorScale}"/>
                                                         <TextBlock Grid.Column="2" Text="—" FontSize="26" Classes="label"
                                                                    HorizontalAlignment="Center" VerticalAlignment="Center"
                                                                    IsVisible="{Binding !IsLive}"/>

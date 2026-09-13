@@ -6,12 +6,17 @@ namespace EveUtils.Client.Controls;
 
 /// <summary>One line on the <see cref="DpsGraph"/>. The owner appends samples via <see cref="Add"/>; once the window
 /// is full the oldest scroll off. Backed by a ring buffer so a long history window stays O(1) per frame instead of
-/// shifting a list each tick.</summary>
-public sealed class DpsSeries(IBrush stroke, int capacity)
+/// shifting a list each tick. The lane is the line's unit — hp/s and GJ/s never share an axis (ET-277) — and a dashed
+/// line is the giving half of a quantity whose receiving half is drawn solid in the same colour.</summary>
+public sealed class DpsSeries(IBrush stroke, int capacity, GraphLane lane = GraphLane.HitPoints, bool dashed = false)
 {
     private readonly SampleRing _values = new(capacity);
 
     public IBrush Stroke { get; } = stroke;
+
+    public GraphLane Lane { get; } = lane;
+
+    public bool Dashed { get; } = dashed;
 
     /// <summary>Samples oldest→newest; the newest renders on the right ("now").</summary>
     public IReadOnlyList<double> Values => _values;

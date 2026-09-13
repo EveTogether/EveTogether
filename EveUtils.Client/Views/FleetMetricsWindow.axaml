@@ -62,6 +62,14 @@
                 <Setter Property="Opacity" Value="0.25"/>
             </Style>
 
+            <!-- The header's NEUTED names: dim while nobody is, the neut violet's text tint once somebody is. -->
+            <Style Selector="TextBlock.neutednames">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.neutednames.anyone">
+                <Setter Property="Foreground" Value="#FFB9B1F2"/>
+            </Style>
+
             <!-- One materialised member list, three densities: the layout picks the item template (and, for the grid,
                  the panel) so only the chosen one is ever built. Each template's field set is deliberate — see the
                  hint line, which names what the current density drops. -->
@@ -69,7 +77,7 @@
                 <Setter Property="ItemTemplate">
                     <Setter.Value>
                         <DataTemplate x:DataType="vm:DpsViewModel">
-                            <Border Classes="panel memberrow" Classes.dragging="{Binding IsDragging}" Margin="0,0,0,8" Height="116" Cursor="SizeAll">
+                            <Border Classes="panel memberrow" Classes.dragging="{Binding IsDragging}" Margin="0,0,0,8" Height="136" Cursor="SizeAll">
                                 <!-- The shared fleet-member menu, mounted the same way in all three densities: which
                                      lines it holds is decided in FleetMemberMenu and how a line is drawn in the
                                      app-level item theme, so nothing about the menu itself is repeated here. -->
@@ -77,48 +85,52 @@
                                     <ContextMenu ItemsSource="{Binding MemberMenu}"
                                                  ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>
                                 </Border.ContextMenu>
-                                <Grid ColumnDefinitions="174,*,Auto" Margin="12">
-                                    <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Character}" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextBrightBrush}"/>
-                                        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
-                                            <TextBlock Grid.Row="0" Grid.Column="0" Classes="mono" FontSize="15"
-                                                       Foreground="{DynamicResource AccentBrightBrush}"
-                                                       Text="{Binding Dealt, StringFormat='OUT {0}'}"/>
-                                            <TextBlock Grid.Row="0" Grid.Column="1" Classes="mono" FontSize="15"
-                                                       Foreground="{StaticResource RedBrush}"
-                                                       Text="{Binding Received, StringFormat='IN {0}'}"/>
-                                            <TextBlock Grid.Row="1" Grid.Column="0" Classes="mono" FontSize="15"
-                                                       Foreground="#FF4D90FF"
-                                                       Text="{Binding Cap, StringFormat='CAP {0}'}"/>
-                                            <TextBlock Grid.Row="1" Grid.Column="1" Classes="mono" FontSize="15"
-                                                       Foreground="#FFB07EE0"
-                                                       Text="{Binding Neut, StringFormat='NEUT {0}'}"/>
-                                        </Grid>
-                                        <StackPanel Orientation="Horizontal" Spacing="14">
-                                            <TextBlock Classes="location" Classes.withfc="{Binding IsWithCommander}"
-                                                       Classes.offline="{Binding IsOffline}"
-                                                       FontSize="11"
-                                                       IsVisible="{Binding LocationDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                                       Text="{Binding LocationDisplay, StringFormat='◉ {0}'}"
-                                                       ToolTip.Tip="Current solar system (location sharing)"/>
-                                            <TextBlock FontSize="11" Foreground="#FFE0B25A"
-                                                       IsVisible="{Binding HasBounty}"
-                                                       Text="{Binding BountyText, StringFormat='◇ {0}'}"
-                                                       ToolTip.Tip="Bounty earned this session (bounty sharing)"/>
+                                <Panel>
+                                    <Border Classes="cardedge" Classes.neuted="{Binding IsNeuted}" Classes.underfire="{Binding IsUnderFire}"/>
+                                    <!-- Figures as meters on the left (ET-277, design D), the graph beside them. -->
+                                    <Grid ColumnDefinitions="330,*,Auto" Margin="12,10">
+                                        <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Center">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0" Text="{Binding Character}" FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                                           Foreground="{StaticResource TextBrightBrush}"/>
+                                                <Border Grid.Column="1" Classes="verdict" Margin="8,0,0,0"
+                                                        Classes.sweet="{Binding IsApplicationSweetSpot}"
+                                                        Classes.adjust="{Binding IsApplicationAdjust}"
+                                                        Classes.unjudged="{Binding IsApplicationUnjudged}"
+                                                        IsVisible="{Binding HasApplication}"
+                                                        ToolTip.Tip="{x:Static vm:DpsViewModel.ApplicationTooltip}">
+                                                    <TextBlock Text="{Binding ApplicationText}"/>
+                                                </Border>
+                                            </Grid>
+                                            <v:CombatMeters/>
+                                            <StackPanel Orientation="Horizontal" Spacing="14">
+                                                <TextBlock Classes="location" Classes.withfc="{Binding IsWithCommander}"
+                                                           Classes.offline="{Binding IsOffline}"
+                                                           FontSize="11"
+                                                           IsVisible="{Binding LocationDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                           Text="{Binding LocationDisplay, StringFormat='◉ {0}'}"
+                                                           ToolTip.Tip="Current solar system (location sharing)"/>
+                                                <TextBlock FontSize="11" Foreground="#FFE0B25A"
+                                                           IsVisible="{Binding HasBounty}"
+                                                           Text="{Binding BountyText, StringFormat='◇ {0}'}"
+                                                           ToolTip.Tip="Bounty earned this session (bounty sharing)"/>
+                                            </StackPanel>
                                         </StackPanel>
-                                    </StackPanel>
-                                    <ctl:DpsGraph Grid.Column="1" Margin="10,0,0,0"
-                                                  Series="{Binding Series}"
-                                                  Revision="{Binding GraphRevision}"
-                                                  Markers="{Binding Markers}"/>
-                                    <Button Grid.Column="2" Padding="8,3" Margin="10,0,0,0"
-                                            VerticalAlignment="Top" ToolTip.Tip="Pop out this graph"
-                                            Command="{Binding $parent[ItemsControl].((vm:FleetMetricsViewModel)DataContext).PopOutCommand}"
-                                            CommandParameter="{Binding}">
-                                        <mi:MaterialIcon Kind="OpenInNew"/>
-                                    </Button>
-                                </Grid>
+                                        <ctl:DpsGraph Grid.Column="1" Margin="10,0,0,0"
+                                                      Series="{Binding Series}"
+                                                      Revision="{Binding GraphRevision}"
+                                                      Markers="{Binding Markers}"
+                                                      HitPointsMax="{Binding HitPointsScale}"
+                                                      CapacitorMax="{Binding CapacitorScale}"/>
+                                        <Button Grid.Column="2" Padding="8,3" Margin="10,0,0,0"
+                                                VerticalAlignment="Top" ToolTip.Tip="Pop out this graph"
+                                                Command="{Binding $parent[ItemsControl].((vm:FleetMetricsViewModel)DataContext).PopOutCommand}"
+                                                CommandParameter="{Binding}">
+                                            <mi:MaterialIcon Kind="OpenInNew"/>
+                                        </Button>
+                                    </Grid>
+                                </Panel>
                             </Border>
                         </DataTemplate>
                     </Setter.Value>
@@ -150,17 +162,20 @@
                         <DataTemplate x:DataType="vm:DpsViewModel">
                             <!-- No Width and no Margin: the card takes the width and the gaps from the panel above,
                                  whose MinItemWidth is where the 318 now lives. The HEIGHT stays fixed while the width
-                                 can grow to just under twice the minimum. Rendered at that widest stand (ET-108) the
-                                 graph is 621x100 and all four lines are still cleanly separated — DpsGraph plots at a
-                                 fixed time density, so a wider card shows a longer timeline at the same vertical
-                                 range rather than the same curve stretched flat. -->
-                            <Border Classes="panel memberrow" Classes.dragging="{Binding IsDragging}" Height="176" Cursor="SizeAll">
+                                 can grow to just under twice the minimum — DpsGraph plots at a fixed time density, so
+                                 a wider card shows a longer timeline at the same vertical range rather than the same
+                                 curve stretched flat. 226 since ET-277: three meter rows (four for a pilot who also
+                                 repairs, transmits or neuts) above a graph that still has room for its two lanes. The
+                                 left edge reports the card's state, as design D has it. -->
+                            <Border Classes="panel memberrow" Classes.dragging="{Binding IsDragging}" Height="226" Cursor="SizeAll">
                                 <Border.ContextMenu>
                                     <ContextMenu ItemsSource="{Binding MemberMenu}"
                                                  ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>
                                 </Border.ContextMenu>
-                                <Grid RowDefinitions="Auto,Auto,*" Margin="10,8">
-                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                                <Panel>
+                                <Border Classes="cardedge" Classes.neuted="{Binding IsNeuted}" Classes.underfire="{Binding IsUnderFire}"/>
+                                <Grid RowDefinitions="Auto,Auto,*" Margin="12,8,10,6">
+                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
                                         <StackPanel Grid.Column="0" Spacing="1">
                                             <TextBlock Text="{Binding Character}" FontWeight="SemiBold" FontSize="11.5"
                                                        TextTrimming="CharacterEllipsis"
@@ -192,33 +207,34 @@
                                                            ToolTip.Tip="Bounty earned this session (bounty sharing)"/>
                                             </Grid>
                                         </StackPanel>
-                                        <Button Grid.Column="1" Padding="6,1" Margin="8,0,0,0"
+                                        <!-- The application verdict (ET-277): glyph, word and percentage, so it never
+                                             rests on its colour alone. A member on a client from before ET-277 sends
+                                             none, and then there is no chip rather than a made-up one. -->
+                                        <Border Grid.Column="1" Classes="verdict" Margin="8,0,0,0" VerticalAlignment="Top"
+                                                Classes.sweet="{Binding IsApplicationSweetSpot}"
+                                                Classes.adjust="{Binding IsApplicationAdjust}"
+                                                Classes.unjudged="{Binding IsApplicationUnjudged}"
+                                                IsVisible="{Binding HasApplication}"
+                                                ToolTip.Tip="{x:Static vm:DpsViewModel.ApplicationTooltip}">
+                                            <TextBlock Text="{Binding ApplicationText}"/>
+                                        </Border>
+                                        <Button Grid.Column="2" Padding="6,1" Margin="8,0,0,0"
                                                 VerticalAlignment="Top" ToolTip.Tip="Pop out this graph"
                                                 Command="{Binding $parent[ItemsControl].((vm:FleetMetricsViewModel)DataContext).PopOutCommand}"
                                                 CommandParameter="{Binding}">
                                             <mi:MaterialIcon Classes="icon-sm" Kind="OpenInNew"/>
                                         </Button>
                                     </Grid>
-                                    <!-- Same four figures as the list, one size down so all four fit the card width. -->
-                                    <Grid Grid.Row="1" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" Margin="0,6,0,0">
-                                        <TextBlock Grid.Row="0" Grid.Column="0" Classes="mono" FontSize="12"
-                                                   Foreground="{DynamicResource AccentBrightBrush}"
-                                                   Text="{Binding Dealt, StringFormat='OUT {0}'}"/>
-                                        <TextBlock Grid.Row="0" Grid.Column="1" Classes="mono" FontSize="12"
-                                                   Foreground="{StaticResource RedBrush}"
-                                                   Text="{Binding Received, StringFormat='IN {0}'}"/>
-                                        <TextBlock Grid.Row="1" Grid.Column="0" Classes="mono" FontSize="12"
-                                                   Foreground="#FF4D90FF"
-                                                   Text="{Binding Cap, StringFormat='CAP {0}'}"/>
-                                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="mono" FontSize="12"
-                                                   Foreground="#FFB07EE0"
-                                                   Text="{Binding Neut, StringFormat='NEUT {0}'}"/>
-                                    </Grid>
-                                    <ctl:DpsGraph Grid.Row="2" Margin="0,6,0,0" MinHeight="74"
+                                    <!-- The figures as meters on the fleet's one scale (ET-277, design D). -->
+                                    <v:CombatMeters Grid.Row="1" Margin="0,6,0,0"/>
+                                    <ctl:DpsGraph Grid.Row="2" Margin="0,4,0,0" MinHeight="64"
                                                   Series="{Binding Series}"
                                                   Revision="{Binding GraphRevision}"
-                                                  Markers="{Binding Markers}"/>
+                                                  Markers="{Binding Markers}"
+                                                  HitPointsMax="{Binding HitPointsScale}"
+                                                  CapacitorMax="{Binding CapacitorScale}"/>
                                 </Grid>
+                                </Panel>
                             </Border>
                         </DataTemplate>
                     </Setter.Value>
@@ -274,7 +290,8 @@
                                         <ColumnDefinition Width="82"/>
                                         <ColumnDefinition Width="74"/>
                                         <ColumnDefinition Width="74"/>
-                                        <ColumnDefinition Width="82"/>
+                                        <ColumnDefinition Width="66"/>
+                                        <ColumnDefinition Width="72"/>
                                         <ColumnDefinition Width="92"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
@@ -290,22 +307,36 @@
                                                IsVisible="{Binding LocationDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                                Text="{Binding LocationDisplay, StringFormat='◉ {0}'}"
                                                ToolTip.Tip="Current solar system (location sharing)"/>
+                                    <!-- Figures in the text ink, as everywhere since ET-277; the colours belong to the
+                                         meters and lines, which this density leaves out. NEUT and CAP are what lands ON
+                                         the member — the list's always-present rows — never both directions added up;
+                                         what a member gives (reps, cap, neut) is in the list and grid. -->
                                     <TextBlock Grid.Column="2" Classes="mono" FontSize="12" VerticalAlignment="Center"
                                                HorizontalAlignment="Right"
-                                               Foreground="{DynamicResource AccentBrightBrush}"
-                                               Text="{Binding Dealt, StringFormat='OUT {0}'}"/>
+                                               Foreground="{StaticResource TextBrightBrush}"
+                                               Text="{Binding Dealt, StringFormat='OUT {0:N0}'}"/>
                                     <TextBlock Grid.Column="3" Classes="mono" FontSize="12" VerticalAlignment="Center"
                                                HorizontalAlignment="Right"
-                                               Foreground="{StaticResource RedBrush}"
-                                               Text="{Binding Received, StringFormat='IN {0}'}"/>
+                                               Foreground="{StaticResource TextBrightBrush}"
+                                               Text="{Binding Received, StringFormat='IN {0:N0}'}"/>
                                     <TextBlock Grid.Column="4" Classes="mono" FontSize="12" VerticalAlignment="Center"
                                                HorizontalAlignment="Right"
-                                               Foreground="#FF4D90FF"
-                                               Text="{Binding Cap, StringFormat='CAP {0}'}"/>
+                                               Foreground="{StaticResource TextBrightBrush}"
+                                               Text="{Binding NeutIn, StringFormat='NEUT {0:N0}'}"
+                                               ToolTip.Tip="Energy neutralized on this pilot, GJ/s"/>
                                     <TextBlock Grid.Column="5" Classes="mono" FontSize="12" VerticalAlignment="Center"
                                                HorizontalAlignment="Right"
-                                               Foreground="#FFB07EE0"
-                                               Text="{Binding Neut, StringFormat='NEUT {0}'}"/>
+                                               Foreground="{StaticResource TextBrightBrush}"
+                                               Text="{Binding CapIn, StringFormat='CAP {0:N0}'}"
+                                               ToolTip.Tip="Remote capacitor received by this pilot, GJ/s"/>
+                                    <Border Grid.Column="6" Classes="verdict" HorizontalAlignment="Right"
+                                            Classes.sweet="{Binding IsApplicationSweetSpot}"
+                                            Classes.adjust="{Binding IsApplicationAdjust}"
+                                            Classes.unjudged="{Binding IsApplicationUnjudged}"
+                                            IsVisible="{Binding HasApplication}"
+                                            ToolTip.Tip="{x:Static vm:DpsViewModel.ApplicationTooltip}">
+                                        <TextBlock Text="{Binding ApplicationShort}"/>
+                                    </Border>
                                     <!-- A FIXED column, not Auto: every row builds its own grid, so an Auto column
                                          would take the chip's own ~70px on a member who has earned something and 0 on
                                          the member below him, and everything to its right would step sideways row by
@@ -313,13 +344,13 @@
                                          than the mono of the live figures — it is a session roll-up and reads as the
                                          same chip the list and the pop-out show. 92 is the widest thing CompactIsk
                                          can produce ("◇ 999.99B ISK", ~78) plus a gutter in the figures' own key. -->
-                                    <TextBlock Grid.Column="6" FontSize="11" VerticalAlignment="Center"
+                                    <TextBlock Grid.Column="7" FontSize="11" VerticalAlignment="Center"
                                                HorizontalAlignment="Right"
                                                Foreground="#FFE0B25A"
                                                IsVisible="{Binding HasBounty}"
                                                Text="{Binding BountyText, StringFormat='◇ {0}'}"
                                                ToolTip.Tip="Bounty earned this session (bounty sharing)"/>
-                                    <Button Grid.Column="8" Padding="6,0" Margin="10,0,0,0"
+                                    <Button Grid.Column="9" Padding="6,0" Margin="10,0,0,0"
                                             VerticalAlignment="Center" ToolTip.Tip="Pop out this graph"
                                             Command="{Binding $parent[ItemsControl].((vm:FleetMetricsViewModel)DataContext).PopOutCommand}"
                                             CommandParameter="{Binding}">
@@ -405,30 +436,41 @@
                              mockup puts it and where it reads as what it is: a way off this screen. -->
                     </StackPanel>
                 </StackPanel>
-                <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto" VerticalAlignment="Center">
-                    <StackPanel Grid.Column="0" Spacing="1" Margin="0,0,18,0" HorizontalAlignment="Right">
+                <!-- The fleet's roll-up as design D has it (ET-277): what it deals, takes and repairs, who is being
+                     neuted — names, since that is what an FC acts on — and how well it applies. The MINING figure that
+                     stood here had no live source and only ever read "—"; NEUT added both directions together. -->
+                <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" VerticalAlignment="Center">
+                    <StackPanel Grid.Column="0" Spacing="1" Margin="0,0,16,0" HorizontalAlignment="Right">
                         <TextBlock Text="DEALT" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
-                        <TextBlock Text="{Binding DealtTotal}" Classes="mono" FontSize="18"
-                                   Foreground="{DynamicResource AccentBrightBrush}" HorizontalAlignment="Right"/>
+                        <TextBlock Text="{Binding DealtTotal}" Classes="mono" FontSize="16"
+                                   Foreground="{StaticResource TextBrightBrush}" HorizontalAlignment="Right"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="1" Spacing="1" Margin="0,0,18,0" HorizontalAlignment="Right">
+                    <StackPanel Grid.Column="1" Spacing="1" Margin="0,0,16,0" HorizontalAlignment="Right">
                         <TextBlock Text="RECEIVED" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
-                        <TextBlock Text="{Binding ReceivedTotal}" Classes="mono" FontSize="18"
-                                   Foreground="{DynamicResource TextAccentBrush}" HorizontalAlignment="Right"/>
+                        <TextBlock Text="{Binding ReceivedTotal}" Classes="mono" FontSize="16"
+                                   Foreground="{StaticResource TextBrightBrush}" HorizontalAlignment="Right"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="2" Spacing="1" Margin="0,0,18,0" HorizontalAlignment="Right">
-                        <TextBlock Text="MINING" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
-                        <TextBlock Text="{Binding MiningTotal}" Classes="mono" FontSize="18"
-                                   Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Right"/>
+                    <StackPanel Grid.Column="2" Spacing="1" Margin="0,0,16,0" HorizontalAlignment="Right">
+                        <TextBlock Text="REPS OUT" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
+                        <TextBlock Text="{Binding RepsOutTotal}" Classes="mono" FontSize="16"
+                                   Foreground="{StaticResource TextBrightBrush}" HorizontalAlignment="Right"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="3" Spacing="1" Margin="0,0,18,0" HorizontalAlignment="Right">
+                    <StackPanel Grid.Column="3" Spacing="1" Margin="0,0,16,0" HorizontalAlignment="Right" MaxWidth="160">
+                        <TextBlock Text="NEUTED" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
+                        <TextBlock Text="{Binding NeutedMembers}" FontSize="13" Margin="0,2,0,0"
+                                   Classes="neutednames" Classes.anyone="{Binding AnyoneNeuted}"
+                                   TextTrimming="CharacterEllipsis" HorizontalAlignment="Right"
+                                   ToolTip.Tip="Members with at least 5 GJ/s of energy neutralized on them right now"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="4" Spacing="1" Margin="0,0,16,0" HorizontalAlignment="Right">
+                        <TextBlock Text="APPLICATION" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
+                        <TextBlock Text="{Binding FleetApplication}" Classes="mono" FontSize="16"
+                                   Foreground="{StaticResource TextBrightBrush}" HorizontalAlignment="Right"
+                                   ToolTip.Tip="The measured members' application, weighed by the damage each of them deals"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="5" Spacing="1" HorizontalAlignment="Right">
                         <TextBlock Text="BOUNTY" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
-                        <TextBlock Text="{Binding BountyTotal}" Classes="mono" FontSize="18"
-                                   Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Right"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="4" Spacing="1" HorizontalAlignment="Right">
-                        <TextBlock Text="NEUT" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
-                        <TextBlock Text="{Binding NeutTotal}" Classes="mono" FontSize="18"
+                        <TextBlock Text="{Binding BountyTotal}" Classes="mono" FontSize="16"
                                    Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Right"/>
                     </StackPanel>
                 </Grid>
@@ -443,45 +485,29 @@
                     VerticalAlignment="Center" Margin="12,0,0,0">
                 <StackPanel Orientation="Horizontal">
                     <Button Content="LIST" Classes="viewtab" Classes.active="{Binding IsListLayout}"
-                            ToolTip.Tip="Full rows: every figure plus the live graph"
+                            ToolTip.Tip="Full rows: every meter plus the live graph"
                             Command="{Binding SetLayoutCommand}"
                             CommandParameter="{x:Static fleet:FleetMetricsLayout.List}"/>
                     <Button Content="GRID" Classes="viewtab" Classes.active="{Binding IsGridLayout}"
-                            ToolTip.Tip="Cards side by side: name, DPS out/in, location and the graph"
+                            ToolTip.Tip="Cards side by side: every meter, the application verdict and the graph"
                             Command="{Binding SetLayoutCommand}"
                             CommandParameter="{x:Static fleet:FleetMetricsLayout.Grid}"/>
                     <Button Content="COMPACT" Classes="viewtab" Classes.active="{Binding IsCompactLayout}"
-                            ToolTip.Tip="One line per member: name, DPS out/in and location"
+                            ToolTip.Tip="One line per member: name, location, DPS out/in, neut and application"
                             Command="{Binding SetLayoutCommand}"
                             CommandParameter="{x:Static fleet:FleetMetricsLayout.Compact}"/>
                 </StackPanel>
             </Border>
         </Grid>
 
-        <!-- Legend for the live combat lines (colours match DpsViewModel's series); nothing to legend without graphs. -->
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="16" Margin="2,0,0,10"
-                    IsVisible="{Binding ShowsGraphs}">
-            <StackPanel Orientation="Horizontal" Spacing="5">
-                <Border Width="14" Height="3" VerticalAlignment="Center" Background="{DynamicResource AccentBrightBrush}"/>
-                <TextBlock Text="DPS out" FontSize="10" Foreground="{StaticResource TextDimBrush}"/>
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="5">
-                <Border Width="14" Height="3" VerticalAlignment="Center" Background="#FFEF5A5A"/>
-                <TextBlock Text="DPS in" FontSize="10" Foreground="{StaticResource TextDimBrush}"/>
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="5">
-                <Border Width="14" Height="3" VerticalAlignment="Center" Background="#FFB07EE0"/>
-                <TextBlock Text="Neut" FontSize="10" Foreground="{StaticResource TextDimBrush}"/>
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="5">
-                <Border Width="14" Height="3" VerticalAlignment="Center" Background="#FF4D90FF"/>
-                <TextBlock Text="Cap" FontSize="10" Foreground="{StaticResource TextDimBrush}"/>
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="5">
-                <Border Width="14" Height="3" VerticalAlignment="Center" Background="#FF62D693"/>
-                <TextBlock Text="Rep in" FontSize="10" Foreground="{StaticResource TextDimBrush}"/>
-            </StackPanel>
-        </StackPanel>
+        <!-- Legend for the combat inks (CombatInk, the same in every faction theme) and the scale all cards share;
+             nothing to legend without graphs. -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="2,0,0,10" IsVisible="{Binding ShowsGraphs}">
+            <v:CombatLegend Grid.Column="0"/>
+            <TextBlock Grid.Column="1" Text="{Binding ScaleText}" FontSize="10" Margin="12,0,0,0"
+                       VerticalAlignment="Center" Foreground="{StaticResource TextDimBrush}"
+                       ToolTip.Tip="Every card's meters and graph are drawn against these, so the members can be compared at a glance"/>
+        </Grid>
 
         <!-- The member list, with the drag layer floating over it. The layer never takes a hit, so a drag still
              sees the rows underneath it. -->

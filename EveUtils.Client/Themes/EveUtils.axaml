@@ -1,6 +1,7 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="using:EveUtils.Client.Views"
+        xmlns:ctl="using:EveUtils.Client.Controls"
         xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia">
 
     <Styles.Resources>
@@ -334,6 +335,109 @@
     <Style Selector="Border.chip mi|MaterialIcon">
         <Setter Property="Width" Value="11"/>
         <Setter Property="Height" Value="11"/>
+    </Style>
+
+    <!-- ── Combat meters (ET-277, design D): the rows of CombatMeters, the UNDER FIRE / NEUTED flags and the
+         application verdict chip. In the theme, not on a screen, because the fleet screen (docked or floating) and the
+         DPS pop-out all show them and a pop-out inherits nothing (ET-43). None of it takes the faction accent: the
+         combat inks are fixed (Controls/CombatInk), and so are these. ── -->
+    <Style Selector="Grid.meterrow">
+        <Setter Property="Height" Value="17"/>
+    </Style>
+    <Style Selector="TextBlock.meterlabel">
+        <Setter Property="FontSize" Value="9"/>
+        <Setter Property="LetterSpacing" Value="1.1"/>
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="ctl|MeterBar.meter">
+        <Setter Property="Height" Value="7"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.meterfigure">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="HorizontalAlignment" Value="Right"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.meterdetail">
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Margin" Value="8,0,0,0"/>
+    </Style>
+    <Style Selector="StackPanel > TextBlock.meterdetail">
+        <Setter Property="Margin" Value="0"/>
+    </Style>
+    <Style Selector="Grid.meterrow > StackPanel">
+        <Setter Property="Margin" Value="8,0,0,0"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <Style Selector="Border.flag">
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="2"/>
+        <Setter Property="Padding" Value="4,0,4,1"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="TextElement.FontSize" Value="8.5"/>
+        <Setter Property="TextElement.FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style Selector="Border.flag.fire">
+        <Setter Property="BorderBrush" Value="{x:Static ctl:CombatInk.In}"/>
+        <Setter Property="Background" Value="#1FEF5A5A"/>
+        <Setter Property="TextElement.Foreground" Value="{x:Static ctl:CombatInk.In}"/>
+    </Style>
+    <Style Selector="Border.flag.neut">
+        <Setter Property="BorderBrush" Value="{x:Static ctl:CombatInk.Neut}"/>
+        <Setter Property="Background" Value="#249085E9"/>
+        <Setter Property="TextElement.Foreground">
+            <SolidColorBrush Color="#FFB9B1F2"/>
+        </Setter>
+    </Style>
+
+    <!-- The verdict chip is status, not a series: glyph + word + colour, never colour alone. SWEET SPOT green, OK the
+         neutral text ink, ADJUST the app's warning amber, and "not enough shots" / "n/a" dim. -->
+    <Style Selector="Border.verdict">
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="7,1,7,2"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="TextElement.FontSize" Value="9.5"/>
+        <Setter Property="TextElement.FontWeight" Value="SemiBold"/>
+        <Setter Property="BorderBrush" Value="#73D8D0C4"/>
+        <Setter Property="Background" Value="#0FD8D0C4"/>
+        <Setter Property="TextElement.Foreground" Value="{StaticResource TextBrush}"/>
+    </Style>
+    <Style Selector="Border.verdict.sweet">
+        <Setter Property="BorderBrush" Value="{StaticResource GreenBrush}"/>
+        <Setter Property="Background" Value="#1A4ADE80"/>
+        <Setter Property="TextElement.Foreground" Value="{StaticResource GreenBrush}"/>
+    </Style>
+    <Style Selector="Border.verdict.adjust">
+        <Setter Property="BorderBrush" Value="{StaticResource WarnBrush}"/>
+        <Setter Property="Background" Value="#1FE0B341"/>
+        <Setter Property="TextElement.Foreground" Value="{StaticResource WarnBrush}"/>
+    </Style>
+    <Style Selector="Border.verdict.unjudged">
+        <Setter Property="BorderBrush" Value="#808A7E6B"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="TextElement.Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="TextElement.FontWeight" Value="Normal"/>
+    </Style>
+
+    <!-- A card's left edge reports its state, as in design D: red while under fire, violet while neuted. -->
+    <Style Selector="Border.cardedge">
+        <Setter Property="Width" Value="3"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Border.cardedge.neuted">
+        <Setter Property="Background" Value="{x:Static ctl:CombatInk.Neut}"/>
+    </Style>
+    <Style Selector="Border.cardedge.underfire">
+        <Setter Property="Background" Value="{x:Static ctl:CombatInk.In}"/>
     </Style>
 
     <!-- ── Status card: one card per character, naming what is true of them right now (ET-200) ──

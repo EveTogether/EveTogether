@@ -40,6 +40,7 @@ public partial class CharacterMetricsRowViewModel : ViewModelBase
     [ObservableProperty] private string _peakDps = "—";
     [ObservableProperty] private string _enemies = "—";
     [ObservableProperty] private string _qualities = "—";
+    [ObservableProperty] private string _application = "—";
     [ObservableProperty] private string _duration = "—";
     [ObservableProperty] private string _mined = "—";
     [ObservableProperty] private string _reps = "—";
@@ -74,9 +75,16 @@ public partial class CharacterMetricsRowViewModel : ViewModelBase
         };
     }
 
-    /// <summary>~30fps graph tick: an EMA-smoothed sample so the metrics graph scrolls + decays like the
-    /// main view and the pop-out, instead of a coarse 1 Hz step squeezed into the ~20s window.</summary>
-    public void TickGraph(DpsSampleDto sample) => Dps.ApplySmoothed(sample);
+    /// <summary>~30fps graph tick with every live rate, so the metrics graph scrolls + decays like the main view and
+    /// the pop-out — reps, neut and cap included, which it drew but never fed until ET-277.</summary>
+    public void TickGraph(CombatRates rates) => Dps.ApplyRates(rates);
+
+    /// <summary>~1 Hz: each weapon's application on its current target (ET-277).</summary>
+    public void RefreshApplication(ApplicationSummary application)
+    {
+        Dps.SetApplication(application);
+        Application = application.Breakdown ?? "—";
+    }
 
     /// <summary>~1 Hz refresh: drop event-markers on new misses/notifies, then update the textual fields.</summary>
     public void RefreshSnapshot(CharacterMetricsSnapshot s)

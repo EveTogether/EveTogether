@@ -75,9 +75,11 @@ public sealed class MetricShareSnapshot(
     /// <see cref="MetricKind.Neut"/>, so leaving it out would push the very same fact past a toggle the user turned
     /// off, under a key of its own that defaults to shared. <see cref="MetricKind.RepIn"/> is live combat data in the
     /// same sense — reps landing on a member in a fight — even though (unlike neut) there is no combined rep kind
-    /// beside it to have shared a key with by default.</summary>
+    /// beside it to have shared a key with by default. The ET-277 kinds — the split neut and cap, reps given and
+    /// application — are the same live combat data, so the same switch holds them back.</summary>
     public static bool IsCombat(MetricKind kind) =>
-        kind is MetricKind.Dps or MetricKind.DpsIn or MetricKind.Neut or MetricKind.Cap or MetricKind.NeutIn or MetricKind.RepIn;
+        kind is MetricKind.Dps or MetricKind.DpsIn or MetricKind.Neut or MetricKind.Cap or MetricKind.NeutIn or MetricKind.RepIn
+            or MetricKind.NeutOut or MetricKind.CapIn or MetricKind.CapOut or MetricKind.RepOut or MetricKind.Application;
 
     /// <summary>The global client-setting key for a metric kind. Every combat line shares one key; Location reuses its
     /// existing key for backward compatibility.</summary>

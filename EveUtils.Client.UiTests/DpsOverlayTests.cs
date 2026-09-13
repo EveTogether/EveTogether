@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using EveUtils.Client.Controls;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Modules.Fleet.Metrics;
@@ -91,7 +92,7 @@ public class DpsOverlayTests
         var tracker = new DpsViewModel("Jithran", isSelf: true);
         // A local character samples zero rates until its first hit; the graph must still advance each frame (scroll
         // flat) like a fleet meter, not freeze — the regression that left a character-list pop-out completely dead.
-        tracker.UseSampler(() => new CombatRates(0, 0, 0, 0, 0));
+        tracker.UseSampler(() => new CombatRates(0, 0, 0, 0, 0, 0, 0, 0));
 
         var before = tracker.GraphRevision;
         tracker.RenderFrame();
@@ -128,8 +129,12 @@ public class DpsOverlayTests
         for (var i = 0; i < 20; i++)
             tracker.RenderFrame();
 
-        var repInLine = tracker.Series[^1];
-        Assert.True(repInLine.Values[^1] > 0);
+        // The one line that moved is the reps-received line: solid (received), rep ink, hp/s lane (ET-277).
+        var moved = Assert.Single(tracker.Series, series => series.Values.Count > 0 && series.Values[^1] > 0);
+        Assert.Same(CombatInk.Rep, moved.Stroke);
+        Assert.Equal(GraphLane.HitPoints, moved.Lane);
+        Assert.False(moved.Dashed);
+        Assert.Equal(250, tracker.RepIn);
     }
 
     [AvaloniaFact]
@@ -139,23 +144,25 @@ public class DpsOverlayTests
         var window = new DpsOverlayWindow(tracker) { Width = 560, Height = 280 };
         window.Show();
 
-        // Drive it like the ~30fps render timer (ApplySmoothed = EMA): idle, a hard step up to 800, plateau,
-        // then a hard step down. The EMA must round both edges (demo-parity) instead of vertical cliffs.
+        // Drive it like the ~30fps render timer: idle, a hard step up to 800, plateau, then a hard step down. The EMA
+        // must round both edges of the LINE (demo-parity) instead of vertical cliffs.
         void Feed(long dps, int frames)
         {
             for (var i = 0; i < frames; i++)
-                tracker.ApplySmoothed(new DpsSampleDto(91000000, "Jithran", dps, 0, DateTimeOffset.UtcNow));
+                tracker.ApplyRates(new CombatRates(dps, 0, 0, 0, 0, 0, 0, 0));
         }
 
         Feed(0, 40);
         Feed(800, 220);
-        Feed(0, 220);
+        Feed(0, 5);
 
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         var frame = window.CaptureRenderedFrame();
 
         Assert.NotNull(frame);
-        Assert.True(tracker.Dealt < 800); // EMA still trailing the step-down, not snapped to 0
+        var outLine = tracker.Series.Single(series => ReferenceEquals(series.Stroke, CombatInk.Out));
+        Assert.InRange(outLine.Values[^1], 1, 799); // the line still trailing the step-down, not snapped to 0…
+        Assert.Equal(0, tracker.Dealt);             // …while the number already shows the rate as measured (ET-277)
         frame!.Save("/tmp/eveutils-dps-overlay-ema.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }

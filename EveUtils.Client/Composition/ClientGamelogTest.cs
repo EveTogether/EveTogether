@@ -68,9 +68,9 @@ public static class ClientGamelogTest
 
             // Write the header AFTER the watcher started (so it tails new growth, not history), then append combat.
             // Every embedded log timestamp is anchored to DateTime.UtcNow at write time, not a fixed calendar date:
-            // the DPS/neut/cap sliding windows (LiveDpsTracker/LiveRateTracker, 5s) sample against the real wall
-            // clock, so a hit stamped with a date that has since scrolled out of that window is dropped before it's
-            // ever sampled — indistinguishable from the coupling itself being broken.
+            // the DPS/neut/cap rates (LiveDpsTracker/LiveRateTracker) sample against the real wall clock, so a hit
+            // stamped with a date that has long since faded out is gone before it's ever sampled — indistinguishable
+            // from the coupling itself being broken.
             var logPath = Path.Combine(dir, "20260528_123316_1.txt");
             await File.WriteAllTextAsync(logPath, Header("TestPilot", DateTime.UtcNow));
             await Task.Delay(900); // let the watcher baseline + detect the character

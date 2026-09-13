@@ -63,9 +63,12 @@
                                     <StackPanel Grid.Column="0" Spacing="3">
 
                                         <TextBlock Text="COMBAT" Classes="label" FontSize="9" Margin="0,0,0,2"/>
+                                        <!-- Hit rate and Quality count YOUR shots only since ET-277; they used to mix in
+                                             the rats' shots at you. -->
                                         <Grid ColumnDefinitions="92,*">
                                             <TextBlock Grid.Column="0" Text="Hit rate" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding HitRate}" FontSize="11"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding HitRate}" FontSize="11"
+                                                       ToolTip.Tip="Your own shots that landed, of all your shots this session"/>
                                         </Grid>
                                         <Grid ColumnDefinitions="92,*">
                                             <TextBlock Grid.Column="0" Text="Damage" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
@@ -73,7 +76,13 @@
                                         </Grid>
                                         <Grid ColumnDefinitions="92,*">
                                             <TextBlock Grid.Column="0" Text="Quality" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding Qualities}" FontSize="11" TextWrapping="Wrap"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Qualities}" FontSize="11" TextWrapping="Wrap"
+                                                       ToolTip.Tip="How your own hits landed this session, by the word the game log gives each one"/>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="92,*">
+                                            <TextBlock Grid.Column="0" Text="Application" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Application}" FontSize="11" TextWrapping="Wrap"
+                                                       ToolTip.Tip="{x:Static vm:DpsViewModel.ApplicationTooltip}"/>
                                         </Grid>
                                         <Grid ColumnDefinitions="92,*" IsVisible="{Binding HasReps}">
                                             <TextBlock Grid.Column="0" Text="Reps" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
@@ -117,9 +126,10 @@
                                     <!-- Right: live DPS graph + recent events -->
                                     <DockPanel Grid.Column="1" Margin="16,0,0,0">
                                         <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto">
-                                            <TextBlock Grid.Column="0" Classes="label" Text="DPS — DEALT / RECEIVED"/>
+                                            <TextBlock Grid.Column="0" Classes="label" Text="LIVE COMBAT"/>
                                             <TextBlock Grid.Column="1" Text="{Binding PeakDps}" Classes="label"/>
                                         </Grid>
+                                        <v:CombatLegend DockPanel.Dock="Top" Margin="0,4,0,0"/>
                                         <Border DockPanel.Dock="Bottom" Margin="0,8,0,0" MaxHeight="96">
                                             <ScrollViewer>
                                                 <ItemsControl ItemsSource="{Binding RecentEvents}">
@@ -135,7 +145,9 @@
                                         <ctl:DpsGraph MinHeight="160" Margin="0,4,0,0"
                                                       Series="{Binding Dps.Series}"
                                                       Markers="{Binding Dps.Markers}"
-                                                      Revision="{Binding Dps.GraphRevision}"/>
+                                                      Revision="{Binding Dps.GraphRevision}"
+                                                      HitPointsMax="{Binding Dps.HitPointsScale}"
+                                                      CapacitorMax="{Binding Dps.CapacitorScale}"/>
                                     </DockPanel>
                                 </Grid>
                             </DockPanel>

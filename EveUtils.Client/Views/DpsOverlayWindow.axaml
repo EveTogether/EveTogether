@@ -4,13 +4,13 @@
         xmlns:ctl="using:EveUtils.Client.Controls"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="240"
+        mc:Ignorable="d" d:DesignWidth="440" d:DesignHeight="300"
         x:Class="EveUtils.Client.Views.DpsOverlayWindow"
         x:DataType="vm:DpsViewModel"
         x:Name="OverlayRoot"
         Title="DPS Overlay"
         Icon="/Assets/eve-together.ico"
-        Width="420" Height="240" MinWidth="240" MinHeight="150"
+        Width="440" Height="300" MinWidth="300" MinHeight="190"
         Topmost="True" ShowInTaskbar="True"
         WindowDecorations="None"
         WindowStartupLocation="CenterScreen"
@@ -31,22 +31,18 @@
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <TextBlock Classes="diamond" Text="◆"/>
                             <TextBlock Classes="panel-title" Text="{Binding Character}"/>
+                            <Border Classes="verdict" Margin="4,0,0,0"
+                                    Classes.sweet="{Binding IsApplicationSweetSpot}"
+                                    Classes.adjust="{Binding IsApplicationAdjust}"
+                                    Classes.unjudged="{Binding IsApplicationUnjudged}"
+                                    IsVisible="{Binding HasApplication}"
+                                    ToolTip.Tip="{x:Static vm:DpsViewModel.ApplicationTooltip}">
+                                <TextBlock Text="{Binding ApplicationText}"/>
+                            </Border>
                         </StackPanel>
-                        <Grid ColumnDefinitions="Auto,Auto" RowDefinitions="Auto,Auto" Margin="0,2,0,0"
-                              ColumnSpacing="14" RowSpacing="1">
-                            <TextBlock Grid.Row="0" Grid.Column="0" Classes="mono" FontSize="13" MinWidth="64"
-                                       Foreground="{DynamicResource AccentBrightBrush}"
-                                       Text="{Binding Dealt, StringFormat='OUT {0}'}"/>
-                            <TextBlock Grid.Row="0" Grid.Column="1" Classes="mono" FontSize="13" MinWidth="64"
-                                       Foreground="{StaticResource RedBrush}"
-                                       Text="{Binding Received, StringFormat='IN {0}'}"/>
-                            <TextBlock Grid.Row="1" Grid.Column="0" Classes="mono" FontSize="13" MinWidth="64"
-                                       Foreground="#FF4D90FF"
-                                       Text="{Binding Cap, StringFormat='CAP {0}'}"/>
-                            <TextBlock Grid.Row="1" Grid.Column="1" Classes="mono" FontSize="13" MinWidth="64"
-                                       Foreground="#FFB07EE0"
-                                       Text="{Binding Neut, StringFormat='NEUT {0}'}"/>
-                        </Grid>
+                        <!-- The same rows as the member's fleet card (ET-277): a figure and a meter each, on the scale
+                             the tracker carries — the fleet's own when this was popped out of the fleet screen. -->
+                        <v:CombatMeters Margin="0,4,0,0"/>
                         <!-- Location + bounty, mirroring the fleet-metrics row: shown only when known/shared. -->
                         <StackPanel Orientation="Horizontal" Spacing="14" Margin="0,2,0,0">
                             <!-- Same tracker instance as the fleet-metrics row, so it turns green with it when the
@@ -75,7 +71,9 @@
                     ToolTip.Tip="Click to bring this character's EVE client to the front">
                 <ctl:DpsGraph Series="{Binding Series}"
                               Revision="{Binding GraphRevision}"
-                              Markers="{Binding Markers}"/>
+                              Markers="{Binding Markers}"
+                              HitPointsMax="{Binding HitPointsScale}"
+                              CapacitorMax="{Binding CapacitorScale}"/>
             </Border>
         </DockPanel>
     </Border>

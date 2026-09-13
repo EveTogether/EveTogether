@@ -191,11 +191,23 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     // screen cannot disagree about who is where or who is taking what (ET-72).
     IReadOnlyList<DpsViewModel> IFleetOverlaySource.Members => Members;
 
+    // The header's roll-up, laid out as in design D (ET-277): what the fleet deals, takes and repairs, who is being
+    // neuted, and how well it applies. The neut figure used to add both directions together, so a fleet that was
+    // neuting and one that was being neuted read the same.
     [ObservableProperty] private string _dealtTotal = "—";
     [ObservableProperty] private string _receivedTotal = "—";
-    [ObservableProperty] private string _miningTotal = "—";
+    [ObservableProperty] private string _repsOutTotal = "—";
     [ObservableProperty] private string _bountyTotal = "—";
-    [ObservableProperty] private string _neutTotal = "—";
+    [ObservableProperty] private string _neutedMembers = "nobody";
+    [ObservableProperty] private bool _anyoneNeuted;
+    [ObservableProperty] private string _fleetApplication = "—";
+
+    /// <summary>One scale for every card's meters and graph (ET-277): a member doing 90 dps no longer fills a bar as
+    /// full as one doing 900.</summary>
+    public CombatScale Scale { get; } = new();
+
+    /// <summary>The shared scale as a line under the header, so a bar can be read as a number too.</summary>
+    [ObservableProperty] private string _scaleText = string.Empty;
 
     /// <summary>The header badge: how many tracked members stand in the fleet commander's system. Lives in the
     /// header, so it stays on screen whichever member layout the screen shows.</summary>
@@ -224,10 +236,10 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     public string LayoutHint => Layout switch
     {
         FleetMetricsLayout.Grid =>
-            "Grid: every figure plus the graph, per card, one size down.",
+            "Grid: a card per member, every meter plus the graph.",
         FleetMetricsLayout.Compact =>
-            "Compact: every figure on one line per member. Graphs show in the list and grid views.",
-        _ => "One live graph per active member; location and bounty show when shared.",
+            "Compact: out, in, the neut and cap on each member, and application. Reps and graphs show in the list and grid.",
+        _ => "A meter per figure and a live graph per member; location and bounty show when shared.",
     };
 
     /// <summary>
@@ -556,8 +568,12 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         {
             // Each live combat line arrives as its own kind; feed the matching series' target and let the shared
             // driver smooth toward it. The driver appends frames — never this method directly (one render path).
-            case MetricKind.Dps or MetricKind.DpsIn or MetricKind.Neut or MetricKind.Cap or MetricKind.NeutIn or MetricKind.RepIn:
+            case MetricKind.Dps or MetricKind.DpsIn or MetricKind.Neut or MetricKind.Cap or MetricKind.NeutIn or MetricKind.RepIn
+                or MetricKind.NeutOut or MetricKind.CapIn or MetricKind.CapOut or MetricKind.RepOut:
                 Track(sample.CharacterId).SetRate(sample.Kind, sample.Value);
+                break;
+            case MetricKind.Application:
+                Track(sample.CharacterId).SetApplication(ApplicationSummary.FromWire(sample.Value, sample.Text));
                 break;
             case MetricKind.Location:
                 var row = Track(sample.CharacterId);
@@ -602,6 +618,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         tracker = new DpsViewModel(known ? resolved! : $"Char {characterId}", isSelf: false)
         {
             CharacterId = characterId,
+            Scale = Scale,
         };
         _trackers[characterId] = tracker;
 
@@ -761,11 +778,26 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     {
         DealtTotal = Format(FleetMetricCatalog.Aggregate(MetricKind.Dps, _trackers.Values.Select(t => (double)t.Dealt)), "dps");
         ReceivedTotal = Format(FleetMetricCatalog.Aggregate(MetricKind.DpsIn, _trackers.Values.Select(t => (double)t.Received)), "dps");
-        NeutTotal = Format(FleetMetricCatalog.Aggregate(MetricKind.Neut, _trackers.Values.Select(t => (double)t.Neut)), "GJ/s");
+        RepsOutTotal = Format(FleetMetricCatalog.Aggregate(MetricKind.RepOut, _trackers.Values.Select(t => (double)t.RepOut)), "hp/s");
+
+        var neuted = _trackers.Values.Where(t => t.IsNeuted).Select(t => t.Character).ToList();
+        AnyoneNeuted = neuted.Count > 0;
+        NeutedMembers = AnyoneNeuted ? string.Join(", ", neuted) : "nobody";
+
+        // The fleet's application weighs each measured member by the damage they deal: the pilot doing most of the
+        // shooting says most about whether the fleet is in range.
+        var measured = _trackers.Values
+            .Where(t => ApplicationSummary.IsMeasured(t.Application.Verdict) && t.Dealt > 0)
+            .Select(t => (Percent: t.Application.Percent ?? 0, Weight: (double)t.Dealt))
+            .ToList();
+        FleetApplication = measured.Count == 0
+            ? "—"
+            : $"{measured.Sum(m => m.Percent * m.Weight) / measured.Sum(m => m.Weight):0}%";
+
+        ScaleText = $"One scale for every card: {Scale.HitPoints:N0} hp/s · {Scale.Capacitor:N0} GJ/s";
 
         var bounty = FleetMetricCatalog.Aggregate(MetricKind.Bounty, _trackers.Values.Select(t => (double)t.Bounty));
         BountyTotal = bounty is { } total ? DpsViewModel.CompactIsk((long)total) : "—";
-        // Mining descriptor exists but has no live source yet — keep the "—" placeholder.
     }
 
     // Rides the sample stream the totals already ride, so the badge moves with the rest of the screen instead of
@@ -790,7 +822,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     }
 
     private static string Format(double? total, string unit) =>
-        total is { } value ? $"{(long)value} {unit}" : "—";
+        total is { } value ? $"{((long)value).ToString("N0", CultureInfo.InvariantCulture)} {unit}" : "—";
 
     public void Dispose()
     {

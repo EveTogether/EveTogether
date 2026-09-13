@@ -339,19 +339,18 @@ public class FleetOverlayTests
     [Fact]
     public void TheNeutRow_NamesWhoIsBeingNeuted_NotWhoIsDoingTheNeuting()
     {
-        // MetricKind.Neut combines both directions, by design, because it draws one cap-warfare line on a graph.
-        // Reading "who is being neuted" off it names the fleet's own neut boat — the pilot who needs nothing.
+        // MetricKind.Neut combines both directions. Reading "who is being neuted" off any figure that includes the
+        // giving half names the fleet's own neut boat — the pilot who needs nothing.
         var neutBoat = Member("Bhaalgorn Pilot");
-        neutBoat.SetRate(MetricKind.Neut, 900);          // applying a great deal, receiving none
+        neutBoat.SetRate(MetricKind.NeutOut, 900);       // applying a great deal, receiving none
         neutBoat.SetRate(MetricKind.NeutIn, 0);
         for (var i = 0; i < 120; i++) neutBoat.RenderFrame();
 
         var victim = Member("Logi Anchor");
-        victim.SetRate(MetricKind.Neut, 120);            // the same event, seen from the receiving end
-        victim.SetRate(MetricKind.NeutIn, 120);
+        victim.SetRate(MetricKind.NeutIn, 120);          // the same event, seen from the receiving end
         for (var i = 0; i < 120; i++) victim.RenderFrame();
 
-        Assert.True(neutBoat.Neut > victim.Neut);        // the combined line would pick the wrong pilot…
+        Assert.True(neutBoat.NeutOut + neutBoat.NeutIn > victim.NeutOut + victim.NeutIn); // the sum would pick the wrong pilot…
 
         var fleet = new FakeFleet();
         fleet.Rows.Add(neutBoat);

@@ -1965,6 +1965,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             tracker.UseSampler(() => _gamelog is { } gamelog && (_observedCharacters.Contains(character) || gamelog.HasLocalTracker(character))
                 ? gamelog.SampleCombat(character)
                 : (EveUtils.Shared.Modules.Gamelog.Aggregation.CombatRates?)null);
+            tracker.UseApplicationSampler(() => _gamelog is { } gamelog && gamelog.HasLocalTracker(character)
+                ? gamelog.SampleApplication(character)
+                : null);
             _renderDriver?.Register(tracker);
             ApplyGamelogMetrics(tracker); // seed bounty/location so a freshly popped overlay isn't blank until the next change
         }
