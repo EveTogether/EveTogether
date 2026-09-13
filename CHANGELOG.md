@@ -13,28 +13,41 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Added: application for missiles.** Missiles always log "Hits", however they land, so until now they showed
+  "APPLICATION n/a". Each volley is now set against a full volley at that target — worked out from the fit detected for
+  the ship you are flying, your skills and implants, after that NPC's resists — and gets the same ▲ ADJUST / ● OK /
+  ◆ SWEET SPOT label and percentage as turrets. When it lands short the label says why: a target too small for the
+  missile (with how much it could take even standing still: paint it or use smaller missiles), too fast (web or paint
+  it), or both. A character without a known fit learns its full volley from its own hits on a target the missile
+  fully lands on and shows "learning" until then, never a made-up figure; a missile fired at a player ship, whose
+  resists nobody can know, stays "n/a". The last volley on a dying target no longer counts against you. Hover the
+  label for every weapon's own figure. Fleet members share it the same way as before.
+- **Fixed: the DPS figure now reads where its graph line ends.** The figure showed the rate of this very moment
+  while the line beside it is a short average that trails it, so as a fight wound down a card could say OUT 124 next
+  to a line still ending near 250. The figures, the meters beside them and the fleet header now read the value the
+  line ends at.
+- **Fixed: missile DPS in the fit browser now counts Ballistic Control Systems.** Their damage bonus was left out of
+  every missile fit, so a HAM Caracal with three of them showed about a fifth less DPS than it does.
 - **Fixed: the DPS/GJ graph no longer flattens a peak against the top edge, and the line no longer draws as a
   staircase of little arcs.** The shared scale used to chase the current rate and could sink while a higher peak was
   still on screen, clipping the line flat along the top; it now holds a peak for as long as it could plausibly still
   be visible before easing down, and the graph itself never draws a scale lower than what is actually on screen. The
   cadence-held rate that made a step per volley was smoothed with an exponential average, which turned each step into
-  a little arc; the line is now a plain trailing average instead, so it draws as a straight, calm curve. The number
-  shown still reads the measured rate, as before. Applies to both lanes (hp/s and GJ/s) and to the small graphs on
-  fleet cards.
+  a little arc; the line is now a plain trailing average instead, so it draws as a straight, calm curve. Applies to
+  both lanes (hp/s and GJ/s) and to the small graphs on fleet cards.
 - **Changed: the DPS meter now shows your real DPS, without dips between volleys.** It used to count only the damage
   of the last 5 seconds, so any weapon slower than that — missiles, large turrets, slow drones — fell to almost nothing
   between two volleys and the graph sawed up and down. Each weapon (and each rat shooting at you) is now measured
   against its own rhythm: a HAM boat firing every 10 seconds reads as one flat line at its true DPS, a fast turret
   still follows a change within a few seconds, and when the shooting stops the meter holds for one missed volley and
   then falls to zero. Reps, neuts and remote cap work the same way, so a cap transmitter's 14-second cycle reads as a
-  steady 25 GJ/s instead of blinking between 0 and 73. The numbers show the rate as measured; only the graph line is
-  smoothed.
+  steady 25 GJ/s instead of blinking between 0 and 73.
 - **Added: application — how well your shots land — with a colour label.** Fleet cards, the DPS pop-out and the
   metrics window read the hit words of your own shots ("Smashes", "Glances Off", misses) per weapon on the target it is
   shooting now: ▲ ADJUST below 55 %, ● OK, ◆ SWEET SPOT from 80 %, with each weapon's own figure beside it. Turrets
   lead the verdict even while only missing, so two laser groups missing a frigate read ADJUST although the drones hit
-  it. Missiles always log "Hits", however they land, so they show "n/a" instead of a made-up percentage. Fleet members
-  on another computer share theirs too once they run this version, under the same combat-sharing switch.
+  it. Fleet members on another computer share theirs too once they run this version, under the same combat-sharing
+  switch.
 - **Changed: fleet metrics looks like the new meter design.** Every card shows its figures with a meter beside them —
   DPS out, DPS in, neut on you, and for a logi REP OUT, a cap chain CAP OUT, a neut boat NEUT OUT — all on one scale
   shared by the whole fleet, so a pilot doing 90 dps no longer looks as busy as one doing 900. A card's edge turns red

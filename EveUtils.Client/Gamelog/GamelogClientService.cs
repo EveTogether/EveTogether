@@ -71,7 +71,8 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     private readonly ConcurrentDictionary<string, LiveRateTracker> _repInRate = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, LiveRateTracker> _repOutRate = new(StringComparer.OrdinalIgnoreCase);
 
-    // Per-character application per weapon (ET-277), from the outgoing lines' hit-quality words.
+    // Per-character application per weapon (ET-277), from the outgoing lines' hit-quality words — and for missiles from
+    // each volley against a full one (ET-282), which needs the character's own fit, hence one gauge per character.
     private readonly ConcurrentDictionary<string, WeaponApplicationTracker> _application = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, WeaponClass> _weaponClasses = new(StringComparer.Ordinal);
 
@@ -733,7 +734,11 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     private static LiveRateTracker Rate(ConcurrentDictionary<string, LiveRateTracker> rates, string name) =>
         rates.GetOrAdd(name, _ => new LiveRateTracker());
     private WeaponApplicationTracker Application(string name) =>
-        _application.GetOrAdd(name, _ => new WeaponApplicationTracker(ClassifyWeapon));
+        _application.GetOrAdd(name, _ => new WeaponApplicationTracker(ClassifyWeapon, new MissileGauge(
+            _services.GetService<ISdeAccessor>,
+            missile => _idByName.TryGetValue(name, out var characterId)
+                ? _services.GetService<FittedMissileVolleys>()?.Find(characterId, missile)
+                : null)));
 
     // Resolved once per weapon name for the whole client; an unresolved name is not remembered, so it is asked again
     // once the SDE has been built.

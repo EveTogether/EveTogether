@@ -82,7 +82,7 @@
                                         <Grid ColumnDefinitions="92,*">
                                             <TextBlock Grid.Column="0" Text="Application" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
                                             <TextBlock Grid.Column="1" Text="{Binding Application}" FontSize="11" TextWrapping="Wrap"
-                                                       ToolTip.Tip="{x:Static vm:DpsViewModel.ApplicationTooltip}"/>
+                                                       ToolTip.Tip="{Binding Dps.ApplicationTip}"/>
                                         </Grid>
                                         <Grid ColumnDefinitions="92,*" IsVisible="{Binding HasReps}">
                                             <TextBlock Grid.Column="0" Text="Reps" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>

@@ -68,6 +68,12 @@ public static class DogmaAttributeIds
     public const int ThermalDamage = 118;
     public static readonly int[] DamageTypes = [EmDamage, ExplosiveDamage, KineticDamage, ThermalDamage];
 
+    // Missiles: a launched missile's damage is scaled by its owner's (the character's) multiplier, which is what a
+    // Ballistic Control System raises; explosion radius and velocity are the charge's own application attributes.
+    public const int MissileDamageMultiplier = 212;
+    public const int ExplosionVelocity = 653;
+    public const int ExplosionRadius = 654;
+
     // Fighter abilities carry their damage on per-ability attributes, not the universal 114/116/117/118 — EVE stores
     // fighter damage differently, so the fighter DPS pass reads these (same formula shape as the weapon/drone pass, just a
     // different attribute set). Primary "attack" ability (every damage-dealing fighter) + the heavy fighter's secondary

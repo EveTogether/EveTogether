@@ -99,7 +99,7 @@
                                                         Classes.adjust="{Binding IsApplicationAdjust}"
                                                         Classes.unjudged="{Binding IsApplicationUnjudged}"
                                                         IsVisible="{Binding HasApplication}"
-                                                        ToolTip.Tip="{x:Static vm:DpsViewModel.ApplicationTooltip}">
+                                                        ToolTip.Tip="{Binding ApplicationTip}">
                                                     <TextBlock Text="{Binding ApplicationText}"/>
                                                 </Border>
                                             </Grid>
@@ -215,7 +215,7 @@
                                                 Classes.adjust="{Binding IsApplicationAdjust}"
                                                 Classes.unjudged="{Binding IsApplicationUnjudged}"
                                                 IsVisible="{Binding HasApplication}"
-                                                ToolTip.Tip="{x:Static vm:DpsViewModel.ApplicationTooltip}">
+                                                ToolTip.Tip="{Binding ApplicationTip}">
                                             <TextBlock Text="{Binding ApplicationText}"/>
                                         </Border>
                                         <Button Grid.Column="2" Padding="6,1" Margin="8,0,0,0"
@@ -334,7 +334,7 @@
                                             Classes.adjust="{Binding IsApplicationAdjust}"
                                             Classes.unjudged="{Binding IsApplicationUnjudged}"
                                             IsVisible="{Binding HasApplication}"
-                                            ToolTip.Tip="{x:Static vm:DpsViewModel.ApplicationTooltip}">
+                                            ToolTip.Tip="{Binding ApplicationTip}">
                                         <TextBlock Text="{Binding ApplicationShort}"/>
                                     </Border>
                                     <!-- A FIXED column, not Auto: every row builds its own grid, so an Auto column

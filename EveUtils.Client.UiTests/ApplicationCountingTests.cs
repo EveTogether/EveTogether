@@ -80,16 +80,17 @@ public sealed class ApplicationCountingTests
     }
 
     [Fact]
-    public void Missiles_GetNoPercentage_HoweverManyHitsTheyLog()
+    public void Missiles_AreNotReadFromTheirWord_AndWithNoFullVolleyToGoBy_GetNoPercentage()
     {
-        // Every missile line says "Hits", however the missile lands; a percentage off that would be made up.
+        // Every missile line says "Hits", however the missile lands; a percentage off that would be made up. Missiles
+        // are read against a full volley instead (ET-282, MissileApplicationTests) — without one they are learning.
         var tracker = Shots(Hams, "Offertory Sigil", Enumerable.Repeat(HitQuality.Hits, 10).ToArray());
 
         var missiles = Assert.Single(tracker.Read(After(10)));
         Assert.Equal(WeaponClass.Missile, missiles.Class);
         Assert.Null(missiles.Percent);
-        Assert.Equal(ApplicationVerdict.NotMeasurable, missiles.Verdict);
-        Assert.Equal("○ APPLICATION n/a", new EveUtils.Client.ViewModels.DpsViewModel { Application = tracker.Summarize(After(10)) }.ApplicationText);
+        Assert.Equal(ApplicationVerdict.Learning, missiles.Verdict);
+        Assert.Equal("○ LEARNING", new EveUtils.Client.ViewModels.DpsViewModel { Application = tracker.Summarize(After(10)) }.ApplicationText);
     }
 
     [Fact]
@@ -213,6 +214,7 @@ public sealed class ApplicationCountingTests
     [InlineData(ApplicationVerdict.Idle)]
     [InlineData(ApplicationVerdict.NotEnoughShots)]
     [InlineData(ApplicationVerdict.NotMeasurable)]
+    [InlineData(ApplicationVerdict.Learning)]
     public void AVerdictWithoutAPercentage_CrossesTheWire_AsItself(ApplicationVerdict verdict)
     {
         var sent = new ApplicationSummary(verdict, null, "Nova Rage Heavy Assault Missile n/a");

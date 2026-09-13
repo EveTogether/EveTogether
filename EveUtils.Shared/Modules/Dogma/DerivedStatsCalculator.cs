@@ -67,16 +67,17 @@ public sealed class DerivedStatsCalculator(DogmaEvaluator evaluator, IDogmaDataA
     public IReadOnlyList<ModuleContribution> CalculateContributions(DogmaFit fit)
     {
         var shipMass = evaluator.Resolve(fit.Ship, DogmaAttributeIds.Mass);
+        var missileMultiplier = _MissileDamageMultiplier(fit);
         var contributions = new List<ModuleContribution>(fit.Modules.Count + fit.Drones.Count);
         foreach (var module in fit.Modules)
-            contributions.Add(_ModuleContribution(module, shipMass));
+            contributions.Add(_ModuleContribution(module, shipMass, missileMultiplier));
         foreach (var drone in fit.Drones)
             if (drone.CategoryId == DroneCategoryId)
                 contributions.Add(_DroneContribution(drone));
         return contributions;
     }
 
-    private ModuleContribution _ModuleContribution(DogmaItem module, double shipMass)
+    private ModuleContribution _ModuleContribution(DogmaItem module, double shipMass, double missileMultiplier)
     {
         var cycleTime = evaluator.Resolve(module, DogmaAttributeIds.CycleTime);
 
@@ -94,7 +95,7 @@ public sealed class DerivedStatsCalculator(DogmaEvaluator evaluator, IDogmaDataA
 
         if (module.Charge is { } missileCharge)
         {
-            var damage = _DamageOverCycle(missileCharge, 1, cycleTime);
+            var damage = _DamageOverCycle(missileCharge, missileMultiplier, cycleTime);
             if (damage.Dps > 0)
             {
                 // A missile's range is its velocity carried over its flight time (both fold in skill/ship bonuses), unlike
@@ -104,7 +105,9 @@ public sealed class DerivedStatsCalculator(DogmaEvaluator evaluator, IDogmaDataA
                 return new ModuleContribution(module.TypeId, ModuleContributionKind.Missile, module.State,
                     ChargeTypeId: missileCharge.TypeId, Dps: damage.Dps, DamageEm: damage.Em, DamageThermal: damage.Thermal,
                     DamageKinetic: damage.Kinetic, DamageExplosive: damage.Explosive,
-                    OptimalRange: velocity * flightTime / 1000.0);
+                    OptimalRange: velocity * flightTime / 1000.0,
+                    ExplosionRadius: evaluator.Resolve(missileCharge, DogmaAttributeIds.ExplosionRadius),
+                    ExplosionVelocity: evaluator.Resolve(missileCharge, DogmaAttributeIds.ExplosionVelocity));
             }
         }
 
@@ -377,21 +380,25 @@ public sealed class DerivedStatsCalculator(DogmaEvaluator evaluator, IDogmaDataA
 
     // Missile DPS: a launcher fires its loaded missile, whose damage sits on the charge (boosted by missile skills /
     // ship bonuses through the pipeline — Warhead Upgrades' real modifierInfo plus the patched size-skill bonuses) with
-    // no launcher damage multiplier, unlike a turret.
-    //   dps = sum(charge em/explosive/kinetic/thermal) / (cycleTime_ms / 1000), summed over the launchers.
+    // no launcher damage multiplier, unlike a turret. The owner's missileDamageMultiplier scales it on launch: that is
+    // where a Ballistic Control System's bonus lands (a charID modifier, stacking-penalised), not on the charge.
+    //   dps = sum(charge em/explosive/kinetic/thermal) * char missileDamageMultiplier / (cycleTime_ms / 1000)
     // Gate: a charged module that is not a turret and whose charge actually deals damage (excludes probes/miners).
     private double MissileDps(DogmaFit fit)
     {
+        var multiplier = _MissileDamageMultiplier(fit);
         double total = 0;
         foreach (var module in fit.Modules)
         {
             if (module.State < ModuleState.Active || module.Charge is not { } charge || IsTurret(module))
                 continue;
-            // A launcher has no damage multiplier (unlike a turret) — the charge's damage is the volley.
-            total += _DamageOverCycle(charge, 1, evaluator.Resolve(module, DogmaAttributeIds.CycleTime)).Dps;
+            total += _DamageOverCycle(charge, multiplier, evaluator.Resolve(module, DogmaAttributeIds.CycleTime)).Dps;
         }
         return total;
     }
+
+    private double _MissileDamageMultiplier(DogmaFit fit) =>
+        evaluator.Resolve(fit.Character, DogmaAttributeIds.MissileDamageMultiplier);
 
     // Sustained (reload-adjusted) turret DPS: a clip of N shots fires for N*cycle, then the weapon reloads (attr 1795)
     // before the next clip, so the long-run rate is burst * clipDuration / (clipDuration + reload). Mirrors TurretDps.
@@ -412,12 +419,13 @@ public sealed class DerivedStatsCalculator(DogmaEvaluator evaluator, IDogmaDataA
     // Sustained (reload-adjusted) missile DPS, mirroring MissileDps.
     private double MissileDpsSustained(DogmaFit fit)
     {
+        var multiplier = _MissileDamageMultiplier(fit);
         double total = 0;
         foreach (var module in fit.Modules)
         {
             if (module.State < ModuleState.Active || module.Charge is not { } charge || IsTurret(module))
                 continue;
-            total += _ReloadAdjusted(module, _DamageOverCycle(charge, 1, evaluator.Resolve(module, DogmaAttributeIds.CycleTime)).Dps);
+            total += _ReloadAdjusted(module, _DamageOverCycle(charge, multiplier, evaluator.Resolve(module, DogmaAttributeIds.CycleTime)).Dps);
         }
         return total;
     }

@@ -42,11 +42,12 @@ public sealed record ApplicationSummary(ApplicationVerdict Verdict, double? Perc
     public static bool IsMeasured(ApplicationVerdict verdict) =>
         verdict is ApplicationVerdict.Adjust or ApplicationVerdict.Ok or ApplicationVerdict.SweetSpot;
 
-    /// <summary>How one weapon reads in a breakdown line: its percentage, "n/a" when the log cannot say, "—" while
-    /// there are too few shots.</summary>
+    /// <summary>How one weapon reads in a breakdown line: its percentage, "n/a" when the log cannot say, "learning" while
+    /// a missile has no full volley to go by yet, "—" while there are too few shots.</summary>
     public static string Label(ApplicationVerdict verdict, double? percent) => verdict switch
     {
         ApplicationVerdict.NotMeasurable => "n/a",
+        ApplicationVerdict.Learning => "learning",
         _ when percent is { } value && IsMeasured(verdict) => value.ToString("0", CultureInfo.InvariantCulture) + "%",
         _ => "—",
     };

@@ -269,11 +269,16 @@ public class DogmaCalculatorTests
         Assert.Equal(0, Dps(ModuleState.Passive), 6);    // offlined -> nothing
     }
 
+    // The owner's missile damage multiplier as the SDE declares it (default 1). The fake knows no attribute it is not
+    // told about and would resolve it to 0, which scales every missile to nothing.
+    private static FakeDogmaDataAccessor MissileData() =>
+        new FakeDogmaDataAccessor().Attribute(DogmaAttributeIds.MissileDamageMultiplier, 1, stackable: false);
+
     [Fact]
     public void MissileDps_OnlyCountsActiveLaunchers_ZeroWhenOnlinedOrOfflined()
     {
         const int launcher = 2410, ammo = 209;
-        var data = new FakeDogmaDataAccessor()
+        var data = MissileData()
             .Type(587, 25, 6)
             .Type(launcher, 509, 7, new SdeDogmaAttribute(DogmaAttributeIds.CycleTime, 10000))
             .Type(ammo, 386, 8, new SdeDogmaAttribute(117, 120));
@@ -555,7 +560,7 @@ public class DogmaCalculatorTests
     {
         const int launcher = 2410;
         const int ammo = 209;
-        var data = new FakeDogmaDataAccessor()
+        var data = MissileData()
             .Type(587, 25, 6)
             .Type(launcher, 509, 7, new SdeDogmaAttribute(DogmaAttributeIds.CycleTime, 10000))   // no damageMultiplier -> not a turret
             .Type(ammo, 386, 8, new SdeDogmaAttribute(117, 120));                                 // 120 kinetic damage
@@ -567,6 +572,35 @@ public class DogmaCalculatorTests
     }
 
     [Fact]
+    public void MissileDamage_TakesTheBallisticControlBonus_FromTheCharactersMultiplier()
+    {
+        // A Ballistic Control System's real shape (effect 763, online): ItemModifier on charID, pre-multiplying the
+        // character's missileDamageMultiplier by its own bonus (1.1). The missile's damage is scaled by that on launch;
+        // before ET-282 the engine never read it, so every BCS on a missile fit was left out of its damage.
+        const int launcher = 2410;
+        const int ammo = 209;
+        const int ballisticControl = 22291;
+        const int bonus = 213;
+        var data = MissileData()
+            .Type(587, 25, 6)
+            .Type(launcher, 509, 7, new SdeDogmaAttribute(DogmaAttributeIds.CycleTime, 10000))
+            .Type(ammo, 386, 8, new SdeDogmaAttribute(117, 120))
+            .Type(ballisticControl, 367, 7, new SdeDogmaAttribute(bonus, 1.1))
+            .TypeEffect(ballisticControl, 763)
+            .Effect(763, 4, new ModifierInfo(ModifierFunc.ItemModifier, ModifierDomain.CharId, 0,
+                DogmaAttributeIds.MissileDamageMultiplier, bonus, null, null));
+
+        var result = Calculate(data, new FitInput(587,
+            [new ModuleInput(launcher, ModuleState.Active, ChargeTypeId: ammo), new ModuleInput(ballisticControl, ModuleState.Online)],
+            SkillSource.AllLevelFive));
+
+        var missile = Assert.Single(result.Contributions, contribution => contribution.Kind is ModuleContributionKind.Missile);
+        Assert.Equal(132, missile.DamageKinetic, 6);           // 120 × 1.1
+        Assert.Equal(13.2, result.Derived.MissileDps, 6);      // 132 / (10000 / 1000)
+        Assert.Equal(13.2, result.Derived.MissileDpsSustained, 6);
+    }
+
+    [Fact]
     public void LocationRequiredSkillModifier_NullSkill_ResolvesToCarrier_ReducingLauncherCycle()
     {
         // The missile-specialization RoF pattern (effect 1851 selfRof, patched with a null skillTypeID = carrier): the
@@ -575,7 +609,7 @@ public class DogmaCalculatorTests
         const int ammo = 209;
         const int specialization = 20211;
         const int rofBonus = 293;
-        var data = new FakeDogmaDataAccessor()
+        var data = MissileData()
             .Attribute(DogmaAttributeIds.CycleTime, 0, stackable: false)
             .Attribute(rofBonus, 0, stackable: true)
             .Type(587, 25, 6)
@@ -650,7 +684,7 @@ public class DogmaCalculatorTests
         const int launcher = 2410;
         const int ammo = 209;
         const int overloadRofBonus = 1205;
-        var data = new FakeDogmaDataAccessor()
+        var data = MissileData()
             .Type(587, 25, 6)
             .Type(launcher, 509, 7,
                 new SdeDogmaAttribute(DogmaAttributeIds.CycleTime, 10000),

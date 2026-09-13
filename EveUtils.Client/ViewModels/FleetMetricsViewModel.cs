@@ -632,6 +632,15 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         if (_driver is not null)
             _registrations[characterId] = _driver.Register(tracker);
 
+        // The cards' figures move every frame now, reading where their line ends (ET-282), so the header totals follow
+        // them as they move instead of only as samples arrive — a total that disagreed with its own cards would be the
+        // same fault one level up.
+        tracker.PropertyChanged += (_, e) =>
+        {
+            if (!_disposed && e.PropertyName is nameof(DpsViewModel.Dealt) or nameof(DpsViewModel.Received) or nameof(DpsViewModel.RepOut))
+                _RefreshRateTotals();
+        };
+
         // A fleet member not coupled on this client is unknown to the connected-set warmup. Show the placeholder
         // now (samples arrive faster than a network call) and resolve the real name best-effort via public ESI —
         // the same lookup seam + day-cache the roster uses — then update the label. Runs once per id; later samples
@@ -776,13 +785,24 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
 
     private void RefreshTotals()
     {
-        DealtTotal = Format(FleetMetricCatalog.Aggregate(MetricKind.Dps, _trackers.Values.Select(t => (double)t.Dealt)), "dps");
-        ReceivedTotal = Format(FleetMetricCatalog.Aggregate(MetricKind.DpsIn, _trackers.Values.Select(t => (double)t.Received)), "dps");
-        RepsOutTotal = Format(FleetMetricCatalog.Aggregate(MetricKind.RepOut, _trackers.Values.Select(t => (double)t.RepOut)), "hp/s");
+        _RefreshRateTotals();
 
         var neuted = _trackers.Values.Where(t => t.IsNeuted).Select(t => t.Character).ToList();
         AnyoneNeuted = neuted.Count > 0;
         NeutedMembers = AnyoneNeuted ? string.Join(", ", neuted) : "nobody";
+
+        ScaleText = $"One scale for every card: {Scale.HitPoints:N0} hp/s · {Scale.Capacitor:N0} GJ/s";
+
+        var bounty = FleetMetricCatalog.Aggregate(MetricKind.Bounty, _trackers.Values.Select(t => (double)t.Bounty));
+        BountyTotal = bounty is { } total ? DpsViewModel.CompactIsk((long)total) : "—";
+    }
+
+    // The totals that sum the cards' moving figures.
+    private void _RefreshRateTotals()
+    {
+        DealtTotal = Format(FleetMetricCatalog.Aggregate(MetricKind.Dps, _trackers.Values.Select(t => (double)t.Dealt)), "dps");
+        ReceivedTotal = Format(FleetMetricCatalog.Aggregate(MetricKind.DpsIn, _trackers.Values.Select(t => (double)t.Received)), "dps");
+        RepsOutTotal = Format(FleetMetricCatalog.Aggregate(MetricKind.RepOut, _trackers.Values.Select(t => (double)t.RepOut)), "hp/s");
 
         // The fleet's application weighs each measured member by the damage they deal: the pilot doing most of the
         // shooting says most about whether the fleet is in range.
@@ -793,11 +813,6 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         FleetApplication = measured.Count == 0
             ? "—"
             : $"{measured.Sum(m => m.Percent * m.Weight) / measured.Sum(m => m.Weight):0}%";
-
-        ScaleText = $"One scale for every card: {Scale.HitPoints:N0} hp/s · {Scale.Capacitor:N0} GJ/s";
-
-        var bounty = FleetMetricCatalog.Aggregate(MetricKind.Bounty, _trackers.Values.Select(t => (double)t.Bounty));
-        BountyTotal = bounty is { } total ? DpsViewModel.CompactIsk((long)total) : "—";
     }
 
     // Rides the sample stream the totals already ride, so the badge moves with the rest of the screen instead of
