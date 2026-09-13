@@ -8,7 +8,7 @@ using Avalonia.Media;
 namespace EveUtils.Client.Controls;
 
 /// <summary>
-/// Lightweight real-time line graph (PyEveLiveDPS style). Renders one polyline per series at a fixed time density —
+/// Lightweight real-time scrolling line graph for live combat rates. Renders one polyline per series at a fixed time density —
 /// a sample is always the same number of pixels wide (<see cref="PixelsPerSecond"/>), so a wider graph shows a longer
 /// timeline instead of stretching the same window. The newest sample sits on the right ("now") and the curve scrolls
 /// in from there. The owner mutates each series' values in place and bumps <see cref="Revision"/> to trigger a redraw.
