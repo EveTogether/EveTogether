@@ -1,42 +1,32 @@
 namespace EveUtils.Shared.Modules.Gamelog.Aggregation;
 
 /// <summary>
-/// A sliding-window rate of a single quantity (e.g. GJ neutralized or cap transmitted per second), sampled against an
-/// externally supplied "now" so it decays back to zero when the activity stops — what a live scrolling graph line
-/// needs. Direction-agnostic: callers that combine both directions (cap-warfare "activity") just add every amount.
-/// Lock-guarded so the gamelog pump (<see cref="Add"/>) and the UI/fleet sampler (<see cref="Sample"/>) can race the
-/// queue safely. The combat counterpart is <see cref="LiveDpsTracker"/>.
+/// The live per-second rate of a single quantity (e.g. GJ neutralized on you, or remote reps received), sampled
+/// against an externally supplied "now" so it decays back to zero when the activity stops — what a live scrolling
+/// graph line needs. Each <em>stream</em> (one module on one counterparty, as the log line names it) is measured
+/// against its own cycle by <see cref="CadenceRate"/>, so a 14.6 s cap-transfer cycle reads as a steady 25 GJ/s
+/// instead of blinking between 0 and 73 (ET-277). Lock-guarded so the gamelog pump (<see cref="Add"/>) and the
+/// UI/fleet sampler (<see cref="Sample"/>) can race safely. The combat counterpart is <see cref="LiveDpsTracker"/>.
 /// </summary>
-public sealed class LiveRateTracker(TimeSpan? window = null)
+public sealed class LiveRateTracker
 {
-    private readonly TimeSpan _window = window ?? TimeSpan.FromSeconds(5);
-    private readonly Queue<Entry> _recent = new();
+    private readonly CadenceStreams _streams = new();
     private readonly Lock _gate = new();
 
-    public void Add(DateTime at, int amount)
+    /// <param name="stream">What tells one cycle from another on this quantity — the counterparty and module the line
+    /// names. Null folds everything into one stream, which still adapts, only less precisely.</param>
+    public void Add(DateTime at, int amount, string? stream = null)
     {
         if (amount <= 0)
             return;
         lock (_gate)
-            _recent.Enqueue(new Entry(at, amount));
+            _streams.Add(stream ?? string.Empty, at, amount);
     }
 
-    /// <summary>The per-second rate over the trailing window at <paramref name="now"/> (0 once the window empties).</summary>
+    /// <summary>The per-second rate at <paramref name="now"/>: every stream's own rate, summed (0 once all have faded).</summary>
     public double Sample(DateTime now)
     {
         lock (_gate)
-        {
-            var cutoff = now - _window;
-            while (_recent.Count > 0 && _recent.Peek().At < cutoff)
-                _recent.Dequeue();
-
-            long total = 0;
-            foreach (var entry in _recent)
-                total += entry.Amount;
-
-            return total / _window.TotalSeconds;
-        }
+            return _streams.Sample(now);
     }
-
-    private readonly record struct Entry(DateTime At, int Amount);
 }

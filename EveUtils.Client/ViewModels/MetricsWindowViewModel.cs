@@ -133,7 +133,7 @@ public partial class MetricsWindowViewModel : ViewModelBase, IDisposable
     private void Tick()
     {
         foreach (var row in Rows)
-            row.TickGraph(_gamelog.PeekSample(row.Character));
+            row.TickGraph(_gamelog.SampleCombat(row.Character));
 
         if (_tick++ % 30 == 0)
             RefreshSnapshots();
@@ -145,6 +145,7 @@ public partial class MetricsWindowViewModel : ViewModelBase, IDisposable
         foreach (var row in Rows)
         {
             row.RefreshSnapshot(_gamelog.Snapshot(row.Character));
+            row.RefreshApplication(_gamelog.SampleApplication(row.Character));
             bounty += row.BountyValue;
             mined += row.MinedValue;
         }

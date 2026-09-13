@@ -35,11 +35,12 @@ public class GamelogHitTimestampTests
         double DpsAt(DateTime now) =>
             gamelog.Sample(fleetId, characterId, Ms(now)).First(s => s.Kind == MetricKind.Dps).Value;
 
-        // 4 s after the hit's own time → still inside the 5 s window → 500 / 5 = 100 dps.
+        // 4 s after the hit's own time → a lone hit, its weapon's cycle not known yet, is held over the base 5 s →
+        // 500 / 5 = 100 dps.
         Assert.Equal(100, DpsAt(hitTime.AddSeconds(4)));
-        // 6 s after → aged out of the window → 0. (With the old DateTime.UtcNow stamping, the hit would sit at the
-        // test's real wall clock, far from 2030, so even DpsAt(2030+4 s) would already read 0 — red without the fix.)
-        Assert.Equal(0, DpsAt(hitTime.AddSeconds(6)));
+        // Long after → faded out → 0. (With the old DateTime.UtcNow stamping, the hit would sit at the test's real
+        // wall clock, far from 2030, so even DpsAt(2030+4 s) would already read 0 — red without the fix.)
+        Assert.Equal(0, DpsAt(hitTime.AddSeconds(20)));
     }
 
     /// <summary>

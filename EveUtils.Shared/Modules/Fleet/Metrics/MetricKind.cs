@@ -82,4 +82,29 @@ public enum MetricKind
     /// slot on any existing screen, so this is the only place the figure is shown at all (ET-193).
     /// </summary>
     RepIn = 11,
+
+    /// <summary>
+    /// Energy this member neutralizes on others per second — the giving half of <see cref="Neut"/>, beside
+    /// <see cref="NeutIn"/>. Being neuted and neuting are different situations, and since ET-277 every screen shows
+    /// them apart; <see cref="Neut"/> is still sent for clients from before the split.
+    /// </summary>
+    NeutOut = 12,
+
+    /// <summary>Remote capacitor received per second — the receiving half of <see cref="Cap"/> (ET-277).</summary>
+    CapIn = 13,
+
+    /// <summary>Remote capacitor transmitted to others per second — the giving half of <see cref="Cap"/>, what a cap
+    /// chain pilot's card leads with (ET-277).</summary>
+    CapOut = 14,
+
+    /// <summary>Remote repair given per second (hp/s) — what a logi pilot's card leads with (ET-277).</summary>
+    RepOut = 15,
+
+    /// <summary>
+    /// How well this member's main weapon is landing on its current target (ET-277), a Rate-like reading rather than a
+    /// sum. The value is <see cref="Gamelog.Aggregation.ApplicationSummary.ToWireValue"/>: 0–100 when measured, a
+    /// negative code when there is no percentage (too few shots, or missiles, whose word is always "Hits"); the text is
+    /// the per-weapon breakdown for display. Not aggregatable — a fleet's application is no sum of its members'.
+    /// </summary>
+    Application = 16,
 }

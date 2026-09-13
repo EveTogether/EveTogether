@@ -8,17 +8,30 @@ using Avalonia.Media;
 namespace EveUtils.Client.Controls;
 
 /// <summary>
-/// Lightweight real-time line graph (PyEveLiveDPS style). Renders one polyline per series at a fixed time density —
+/// Lightweight real-time scrolling line graph for live combat rates. Renders one polyline per series at a fixed time density —
 /// a sample is always the same number of pixels wide (<see cref="PixelsPerSecond"/>), so a wider graph shows a longer
 /// timeline instead of stretching the same window. The newest sample sits on the right ("now") and the curve scrolls
-/// in from there; the Y axis auto-scales to the visible window. The owner mutates each series' values in place and
-/// bumps <see cref="Revision"/> to trigger a redraw. Folded from the EVE-Utils demo (own code).
+/// in from there. The owner mutates each series' values in place and bumps <see cref="Revision"/> to trigger a redraw.
+/// Folded from the EVE-Utils demo (own code).
+///
+/// Lines are drawn in one lane per unit (ET-277): hp/s on top, GJ/s below, each with its own axis. Five lines in three
+/// units on one auto-scaled axis made 46 GJ/s of neut a flat line under 1,000 dps. The GJ/s lane only takes room when
+/// something is on it. A lane's scale is its <see cref="HitPointsMax"/> / <see cref="CapacitorMax"/> when the owner
+/// sets one — a fleet screen gives every card the same — and otherwise follows the samples on screen.
 /// </summary>
 public sealed class DpsGraph : Control
 {
     private static readonly IBrush GridBrush = new SolidColorBrush(Color.Parse("#14FFFFFF"));
+    private static readonly IBrush LaneDividerBrush = new SolidColorBrush(Color.Parse("#26FFFFFF"));
     private static readonly IBrush LabelBrush = new SolidColorBrush(Color.Parse("#FF8A7E6B"));
     private static readonly Typeface LabelTypeface = new("Consolas");
+    private static readonly IDashStyle GivenDash = new DashStyle([3, 2.2], 0);
+
+    // Below this height two lanes cannot both be read: the graph keeps the hp/s lane alone and leaves the GJ/s lines out
+    // rather than put them back on the hp/s axis. The figures above the graph still carry them.
+    private const double MinSplitHeight = 64;
+    private const double LaneGap = 8;
+    private const double CapacitorShare = 0.36;
 
     public static readonly StyledProperty<IReadOnlyList<DpsSeries>?> SeriesProperty =
         AvaloniaProperty.Register<DpsGraph, IReadOnlyList<DpsSeries>?>(nameof(Series));
@@ -39,9 +52,18 @@ public sealed class DpsGraph : Control
     public static readonly StyledProperty<IReadOnlyList<GraphMarker>?> MarkersProperty =
         AvaloniaProperty.Register<DpsGraph, IReadOnlyList<GraphMarker>?>(nameof(Markers));
 
+    /// <summary>The top of the hp/s lane; 0 = follow the samples on screen.</summary>
+    public static readonly StyledProperty<double> HitPointsMaxProperty =
+        AvaloniaProperty.Register<DpsGraph, double>(nameof(HitPointsMax));
+
+    /// <summary>The top of the GJ/s lane; 0 = follow the samples on screen.</summary>
+    public static readonly StyledProperty<double> CapacitorMaxProperty =
+        AvaloniaProperty.Register<DpsGraph, double>(nameof(CapacitorMax));
+
     static DpsGraph()
     {
-        AffectsRender<DpsGraph>(SeriesProperty, RevisionProperty, PixelsPerSecondProperty, SecondsPerSampleProperty, MarkersProperty);
+        AffectsRender<DpsGraph>(SeriesProperty, RevisionProperty, PixelsPerSecondProperty, SecondsPerSampleProperty,
+            MarkersProperty, HitPointsMaxProperty, CapacitorMaxProperty);
     }
 
     public IReadOnlyList<DpsSeries>? Series
@@ -74,6 +96,18 @@ public sealed class DpsGraph : Control
         set => SetValue(MarkersProperty, value);
     }
 
+    public double HitPointsMax
+    {
+        get => GetValue(HitPointsMaxProperty);
+        set => SetValue(HitPointsMaxProperty, value);
+    }
+
+    public double CapacitorMax
+    {
+        get => GetValue(CapacitorMaxProperty);
+        set => SetValue(CapacitorMaxProperty, value);
+    }
+
     public override void Render(DrawingContext context)
     {
         var bounds = Bounds;
@@ -91,20 +125,47 @@ public sealed class DpsGraph : Control
         var visible = (int)Math.Ceiling(plot.Width / pxPerSample) + 2;
 
         var series = Series;
-        var max = NiceCeiling(ObservedMax(series, visible));
-        DrawGrid(context, plot, max);
+        var hitPointsMax = HitPointsMax > 0 ? HitPointsMax : NiceCeiling(ObservedMax(series, GraphLane.HitPoints, visible), 100);
+        var capacitorObserved = ObservedMax(series, GraphLane.Capacitor, visible);
+        var splits = capacitorObserved >= 0.5 && plot.Height >= MinSplitHeight;
+
+        var hitPointsLane = plot;
+        var capacitorLane = default(Rect);
+        if (splits)
+        {
+            var capacitorHeight = Math.Round((plot.Height - LaneGap) * CapacitorShare);
+            hitPointsLane = new Rect(plot.X, plot.Y, plot.Width, plot.Height - LaneGap - capacitorHeight);
+            capacitorLane = new Rect(plot.X, hitPointsLane.Bottom + LaneGap, plot.Width, capacitorHeight);
+        }
+
         DrawTimeGrid(context, plot);
+        // Split, the hp/s lane's "0" would sit right on top of the GJ/s lane's top figure; the baseline speaks for itself.
+        DrawLaneGrid(context, hitPointsLane, hitPointsMax, "hp/s", hitPointsLane.Height >= 60 ? 4 : 2, labelsBaseline: !splits);
+
+        var capacitorMax = CapacitorMax > 0 ? CapacitorMax : NiceCeiling(capacitorObserved, 10);
+        if (splits)
+        {
+            context.DrawLine(new Pen(LaneDividerBrush, 1),
+                new Point(plot.Left, hitPointsLane.Bottom + LaneGap / 2), new Point(plot.Right, hitPointsLane.Bottom + LaneGap / 2));
+            DrawLaneGrid(context, capacitorLane, capacitorMax, "GJ/s", 1);
+        }
 
         if (series is null)
             return;
 
-        using (context.PushClip(plot))
-        {
+        using (context.PushClip(hitPointsLane.Inflate(new Thickness(0, 1, 0, 0))))
             foreach (var s in series)
-                DrawSeries(context, plot, s, max, pxPerSample, visible);
+                if (s.Lane is GraphLane.HitPoints)
+                    DrawSeries(context, hitPointsLane, s, hitPointsMax, pxPerSample, visible);
 
+        if (splits)
+            using (context.PushClip(capacitorLane.Inflate(new Thickness(0, 1, 0, 0))))
+                foreach (var s in series)
+                    if (s.Lane is GraphLane.Capacitor)
+                        DrawSeries(context, capacitorLane, s, capacitorMax, pxPerSample, visible);
+
+        using (context.PushClip(plot))
             DrawMarkers(context, plot, pxPerSample);
-        }
     }
 
     private void DrawMarkers(DrawingContext context, Rect plot, double pxPerSample)
@@ -123,19 +184,25 @@ public sealed class DpsGraph : Control
         }
     }
 
-    // Y scale follows only the samples currently on screen, so an old spike that has scrolled past the left edge no
-    // longer compresses the visible curve.
-    private static double ObservedMax(IReadOnlyList<DpsSeries>? series, int visible)
+    // A lane's scale follows only the samples currently on screen, so an old spike that has scrolled past the left edge
+    // no longer compresses the visible curve.
+    private static double ObservedMax(IReadOnlyList<DpsSeries>? series, GraphLane lane, int visible)
     {
         var max = 0.0;
         if (series is not null)
             foreach (var s in series)
-            {
-                var values = s.Values;
-                for (var i = Math.Max(0, values.Count - visible); i < values.Count; i++)
-                    if (values[i] > max)
-                        max = values[i];
-            }
+                if (s.Lane == lane)
+                    max = Math.Max(max, VisibleMax(s, visible));
+        return max;
+    }
+
+    private static double VisibleMax(DpsSeries s, int visible)
+    {
+        var max = 0.0;
+        var values = s.Values;
+        for (var i = Math.Max(0, values.Count - visible); i < values.Count; i++)
+            if (values[i] > max)
+                max = values[i];
         return max;
     }
 
@@ -162,28 +229,40 @@ public sealed class DpsGraph : Control
         }
     }
 
-    private void DrawGrid(DrawingContext context, Rect plot, double max)
+    // Gridlines and tick labels for one lane, plus its unit in the lane's top-left corner so two stacked lanes can
+    // never be read on each other's scale.
+    private static void DrawLaneGrid(DrawingContext context, Rect lane, double max, string unit, int lines, bool labelsBaseline = true)
     {
         var pen = new Pen(GridBrush, 1);
-        const int lines = 4;
         for (var i = 0; i <= lines; i++)
         {
             var fraction = i / (double)lines;
-            var y = plot.Bottom - fraction * plot.Height;
-            context.DrawLine(pen, new Point(plot.Left, y), new Point(plot.Right, y));
+            var y = lane.Bottom - fraction * lane.Height;
+            context.DrawLine(pen, new Point(lane.Left, y), new Point(lane.Right, y));
+            if (i == 0 && !labelsBaseline)
+                continue;
 
-            var value = max * fraction;
             var text = new FormattedText(
-                FormatTick(value), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                FormatTick(max * fraction), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                 LabelTypeface, 10, LabelBrush);
-            context.DrawText(text, new Point(plot.Left - text.Width - 6, y - text.Height / 2));
+            context.DrawText(text, new Point(lane.Left - text.Width - 6, y - text.Height / 2));
         }
+
+        // In the gutter under the lane's top figure when the next figure is far enough down to leave room; otherwise
+        // just inside the plot.
+        var unitText = new FormattedText(unit, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            LabelTypeface, 9, LabelBrush);
+        context.DrawText(unitText, lane.Height / lines >= 26
+            ? new Point(lane.Left - unitText.Width - 6, lane.Top + 7)
+            : new Point(lane.Left + 4, lane.Top + 1));
     }
 
-    private static void DrawSeries(DrawingContext context, Rect plot, DpsSeries s, double max, double pxPerSample, int visible)
+    private static void DrawSeries(DrawingContext context, Rect lane, DpsSeries s, double max, double pxPerSample, int visible)
     {
         var values = s.Values;
-        if (values.Count < 2)
+        // A line with nothing on screen is not drawn: eight flat lines stacked on the baseline would hide the one
+        // that matters and say nothing themselves.
+        if (values.Count < 2 || VisibleMax(s, visible) < 0.5)
             return;
 
         var start = Math.Max(0, values.Count - visible);
@@ -193,8 +272,8 @@ public sealed class DpsGraph : Control
             var first = true;
             for (var i = start; i < values.Count; i++)
             {
-                var x = plot.Right - (values.Count - 1 - i) * pxPerSample;
-                var y = plot.Bottom - Math.Clamp(values[i] / max, 0, 1) * plot.Height;
+                var x = lane.Right - (values.Count - 1 - i) * pxPerSample;
+                var y = lane.Bottom - Math.Clamp(values[i] / max, 0, 1) * lane.Height;
                 var point = new Point(x, y);
                 if (first)
                 {
@@ -207,13 +286,13 @@ public sealed class DpsGraph : Control
             ctx.EndFigure(false);
         }
 
-        context.DrawGeometry(null, new Pen(s.Stroke, 1.6, lineJoin: PenLineJoin.Round), geometry);
+        context.DrawGeometry(null, new Pen(s.Stroke, 1.6, s.Dashed ? GivenDash : null, lineJoin: PenLineJoin.Round), geometry);
     }
 
-    private static double NiceCeiling(double value)
+    internal static double NiceCeiling(double value, double floor)
     {
-        if (value <= 100)
-            return 100;
+        if (value <= floor)
+            return floor;
 
         var magnitude = Math.Pow(10, Math.Floor(Math.Log10(value)));
         var normalized = value / magnitude;

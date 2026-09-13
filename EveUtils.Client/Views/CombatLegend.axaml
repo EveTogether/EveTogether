@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="using:EveUtils.Client.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="16"
+             x:Class="EveUtils.Client.Views.CombatLegend">
+
+    <!-- The key to the combat graph's lines (ET-277): one ink per quantity, fixed whatever the faction theme, and for
+         reps, neut and cap the line style says the direction — solid on this pilot, dashed by this pilot. -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock">
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Line">
+            <Setter Property="StartPoint" Value="0,1.5"/>
+            <Setter Property="EndPoint" Value="14,1.5"/>
+            <Setter Property="StrokeThickness" Value="2"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </UserControl.Styles>
+    <WrapPanel Orientation="Horizontal" ItemSpacing="14">
+        <StackPanel Orientation="Horizontal" Spacing="5">
+            <Line Stroke="{x:Static ctl:CombatInk.Out}"/>
+            <TextBlock Text="DPS out"/>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="5">
+            <Line Stroke="{x:Static ctl:CombatInk.In}"/>
+            <TextBlock Text="DPS in"/>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="5">
+            <Line Stroke="{x:Static ctl:CombatInk.Rep}"/>
+            <TextBlock Text="reps"/>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="5">
+            <Line Stroke="{x:Static ctl:CombatInk.Neut}"/>
+            <TextBlock Text="neut"/>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="5">
+            <Line Stroke="{x:Static ctl:CombatInk.Cap}"/>
+            <TextBlock Text="cap"/>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="5">
+            <Line Stroke="{StaticResource TextDimBrush}" StrokeDashArray="1.5,1.1"/>
+            <TextBlock Text="dashed: given by this pilot"/>
+        </StackPanel>
+    </WrapPanel>
+</UserControl>

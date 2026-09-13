@@ -1,0 +1,71 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EveUtils.Client.ViewModels"
+             xmlns:ctl="using:EveUtils.Client.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="60"
+             x:Class="EveUtils.Client.Views.CombatMeters"
+             x:DataType="vm:DpsViewModel">
+
+    <!-- One member's combat figures as design D draws them (ET-277): per row a label, a meter against the scale the
+         meter shares (on the fleet screen: every card's), the measured figure, and what it needs said beside it. The
+         rows a member does not need stay folded away — a logi leads with REP OUT, a cap chain with CAP OUT.
+
+         The bar columns are starred, never sized to their content, so every row's bar — and every card's, as the cards
+         in a row are equally wide — starts and ends in the same place and can be compared by eye. The figures wear the
+         text inks and the bars the combat inks: identity by the bar beside a number, never by the number's colour.
+         Styles: Themes/EveUtils.axaml (meter*, flag, verdict), so the docked tab and the pop-outs look alike. -->
+    <StackPanel Spacing="1">
+        <Grid Classes="meterrow" ColumnDefinitions="58,2*,50,3*" IsVisible="{Binding ShowsOut}">
+            <TextBlock Grid.Column="0" Classes="meterlabel" Text="OUT"/>
+            <ctl:MeterBar Grid.Column="1" Classes="meter" Fill="{x:Static ctl:CombatInk.Out}" Fraction="{Binding OutFraction}"/>
+            <TextBlock Grid.Column="2" Classes="meterfigure" Text="{Binding Dealt, StringFormat='{}{0:N0}'}"/>
+            <TextBlock Grid.Column="3" Classes="meterdetail" Text="{Binding ApplicationBreakdown}"
+                       ToolTip.Tip="{Binding ApplicationBreakdown}"/>
+        </Grid>
+        <Grid Classes="meterrow" ColumnDefinitions="58,2*,50,3*" IsVisible="{Binding ShowsRepOut}">
+            <TextBlock Grid.Column="0" Classes="meterlabel" Text="REP OUT"/>
+            <ctl:MeterBar Grid.Column="1" Classes="meter" Fill="{x:Static ctl:CombatInk.Rep}" Fraction="{Binding RepOutFraction}"/>
+            <TextBlock Grid.Column="2" Classes="meterfigure" Text="{Binding RepOut, StringFormat='{}{0:N0}'}"/>
+            <TextBlock Grid.Column="3" Classes="meterdetail" Text="hp/s repaired on others"/>
+        </Grid>
+        <Grid Classes="meterrow" ColumnDefinitions="58,2*,50,3*" IsVisible="{Binding ShowsCapOut}">
+            <TextBlock Grid.Column="0" Classes="meterlabel" Text="CAP OUT"/>
+            <ctl:MeterBar Grid.Column="1" Classes="meter" Fill="{x:Static ctl:CombatInk.Cap}" Fraction="{Binding CapOutFraction}"/>
+            <TextBlock Grid.Column="2" Classes="meterfigure" Text="{Binding CapOut, StringFormat='{}{0:N0}'}"/>
+            <TextBlock Grid.Column="3" Classes="meterdetail" Text="GJ/s transmitted"/>
+        </Grid>
+        <Grid Classes="meterrow" ColumnDefinitions="58,2*,50,3*" IsVisible="{Binding ShowsNeutOut}">
+            <TextBlock Grid.Column="0" Classes="meterlabel" Text="NEUT OUT"/>
+            <ctl:MeterBar Grid.Column="1" Classes="meter" Fill="{x:Static ctl:CombatInk.Neut}" Fraction="{Binding NeutOutFraction}"/>
+            <TextBlock Grid.Column="2" Classes="meterfigure" Text="{Binding NeutOut, StringFormat='{}{0:N0}'}"/>
+            <TextBlock Grid.Column="3" Classes="meterdetail" Text="GJ/s neutralized on others"/>
+        </Grid>
+        <Grid Classes="meterrow" ColumnDefinitions="58,2*,50,3*">
+            <TextBlock Grid.Column="0" Classes="meterlabel" Text="IN"/>
+            <ctl:MeterBar Grid.Column="1" Classes="meter" Fill="{x:Static ctl:CombatInk.In}" Fraction="{Binding InFraction}"/>
+            <TextBlock Grid.Column="2" Classes="meterfigure" Text="{Binding Received, StringFormat='{}{0:N0}'}"/>
+            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" ClipToBounds="True">
+                <Border Classes="flag fire" IsVisible="{Binding IsUnderFire}"
+                        ToolTip.Tip="Taking at least 150 hp/s more than the reps coming in">
+                    <TextBlock Text="✚ UNDER FIRE"/>
+                </Border>
+                <TextBlock Classes="meterdetail" Text="{Binding InDetail}"/>
+            </StackPanel>
+        </Grid>
+        <Grid Classes="meterrow" ColumnDefinitions="58,2*,50,3*">
+            <TextBlock Grid.Column="0" Classes="meterlabel" Text="NEUT IN"
+                       ToolTip.Tip="Energy neutralized on this pilot, GJ/s"/>
+            <ctl:MeterBar Grid.Column="1" Classes="meter" Fill="{x:Static ctl:CombatInk.Neut}" Fraction="{Binding NeutInFraction}"/>
+            <TextBlock Grid.Column="2" Classes="meterfigure" Text="{Binding NeutIn, StringFormat='{}{0:N0}'}"/>
+            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" ClipToBounds="True">
+                <Border Classes="flag neut" IsVisible="{Binding IsNeuted}"
+                        ToolTip.Tip="At least 5 GJ/s of energy is being neutralized on this pilot">
+                    <TextBlock Text="⚡ NEUTED"/>
+                </Border>
+                <TextBlock Classes="meterdetail" Text="{Binding NeutInDetail}"/>
+            </StackPanel>
+        </Grid>
+    </StackPanel>
+</UserControl>

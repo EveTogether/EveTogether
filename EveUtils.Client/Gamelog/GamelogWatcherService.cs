@@ -140,7 +140,8 @@ public sealed class GamelogWatcherService : ISingletonService
                     switch (item.Event)
                     {
                         case CombatEvent c:
-                            await _gamelog.AddHitAsync(item.Character, c.Direction, c.Amount, c.Target, c.Quality, c.Timestamp, cancellationToken);
+                            await _gamelog.AddHitAsync(item.Character, c.Direction, c.Amount, c.Target, c.Quality, c.Timestamp,
+                                c.Weapon, cancellationToken);
                             break;
                         case BountyEvent b:
                             await _gamelog.AddBountyAsync(item.Character, b);
@@ -155,13 +156,13 @@ public sealed class GamelogWatcherService : ISingletonService
                                     new MiningEvent(r.Timestamp, Units: 0, lastOre, IsCritical: false, LostResidue: r.Units));
                             break;
                         case RemoteRepEvent r:
-                            _gamelog.AddRemoteRep(item.Character, r.Outgoing, r.Amount, r.Timestamp);
+                            _gamelog.AddRemoteRep(item.Character, r.Outgoing, r.Amount, r.Timestamp, r.Counterparty);
                             break;
                         case NeutEvent nu:
-                            _gamelog.AddNeut(item.Character, nu.Outgoing, nu.Amount, nu.Timestamp);
+                            _gamelog.AddNeut(item.Character, nu.Outgoing, nu.Amount, nu.Timestamp, nu.Source);
                             break;
                         case CapTransferEvent ct:
-                            _gamelog.AddCapTransfer(item.Character, ct.Outgoing, ct.Amount, ct.Timestamp);
+                            _gamelog.AddCapTransfer(item.Character, ct.Outgoing, ct.Amount, ct.Timestamp, ct.Source);
                             break;
                         case LocationEvent l:
                             // SetLocation runs first (synchronously) so the snapshot is already populated when a

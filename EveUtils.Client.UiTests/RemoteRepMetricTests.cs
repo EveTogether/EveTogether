@@ -34,10 +34,11 @@ public class RemoteRepMetricTests
         double RepInAt(DateTime now) =>
             gamelog.Sample(FleetId, CharacterId, Ms(now)).First(s => s.Kind == MetricKind.RepIn).Value;
 
-        // 4 s after the rep's own time → still inside the 5 s window → 500 / 5 = 100 hp/s.
+        // 4 s after the rep's own time → a lone cycle, its interval not known yet, is held over the base 5 s → 100 hp/s.
         Assert.Equal(100, RepInAt(repAt.AddSeconds(4)));
-        // 6 s after → aged out of the window → 0.
-        Assert.Equal(0, RepInAt(repAt.AddSeconds(6)));
+        // Long after → faded out → 0. (Stamped at read time instead, the rep would sit at the test's real wall clock,
+        // far from 2030, and even the first reading would be 0.)
+        Assert.Equal(0, RepInAt(repAt.AddSeconds(20)));
     }
 
     [AvaloniaFact]
@@ -50,10 +51,11 @@ public class RemoteRepMetricTests
         var repAt = DateTime.UtcNow;
         gamelog.AddRemoteRep("Pilot", outgoing: true, amount: 500, occurredAt: repAt);
 
-        var sample = gamelog.Sample(FleetId, CharacterId, new DateTimeOffset(repAt.AddSeconds(1)).ToUnixTimeMilliseconds())
-            .First(s => s.Kind == MetricKind.RepIn);
+        var samples = gamelog.Sample(FleetId, CharacterId, new DateTimeOffset(repAt.AddSeconds(1)).ToUnixTimeMilliseconds()).ToList();
 
-        Assert.Equal(0, sample.Value);
+        Assert.Equal(0, samples.First(s => s.Kind == MetricKind.RepIn).Value);
+        // It is the logi's own output, and since ET-277 it has a kind of its own.
+        Assert.Equal(100, samples.First(s => s.Kind == MetricKind.RepOut).Value);
     }
 
     [Fact]

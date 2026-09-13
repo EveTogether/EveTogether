@@ -155,7 +155,8 @@ public static partial class LogLineParser
             return new CapTransferEvent(
                 timestamp,
                 cap.Groups["dir"].Value == "to",
-                int.Parse(cap.Groups["amt"].Value, CultureInfo.InvariantCulture));
+                int.Parse(cap.Groups["amt"].Value, CultureInfo.InvariantCulture),
+                cap.Groups["rest"].Value.Trim());
         }
 
         var neut = EnergyNeut().Match(body);
@@ -167,7 +168,8 @@ public static partial class LogLineParser
             return new NeutEvent(
                 timestamp,
                 Outgoing: !incoming,
-                int.Parse(neut.Groups["amt"].Value, CultureInfo.InvariantCulture));
+                int.Parse(neut.Groups["amt"].Value, CultureInfo.InvariantCulture),
+                neut.Groups["rest"].Value.Trim());
         }
 
         // "<amount> to|from <target> [- <weapon>] - <quality>"

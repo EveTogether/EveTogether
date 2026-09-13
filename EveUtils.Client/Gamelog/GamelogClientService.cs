@@ -23,6 +23,7 @@ using EveUtils.Shared.Modules.Gamelog.Repositories;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Events;
+using EveUtils.Shared.Modules.Sde;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using EveUtils.Shared.DependencyInjection;
@@ -49,7 +50,7 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     private readonly ICharacterRegistry? _registry;
     private readonly EveClientPresenceService? _presence;
 
-    // One sliding-window tracker per gamelog character name (the Listener: header — always present).
+    // One live DPS tracker per gamelog character name (the Listener: header — always present).
     private readonly ConcurrentDictionary<string, LiveDpsTracker> _trackers = new(StringComparer.OrdinalIgnoreCase);
 
     // name <-> ESI id. The fleet is told a characterId, so we resolve it to the gamelog name to find the
@@ -60,18 +61,19 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     // Per-character session metrics: combat totals, bounty, location, enemies, notable events.
     private readonly ConcurrentDictionary<string, CharacterMetrics> _metrics = new(StringComparer.OrdinalIgnoreCase);
 
-    // Sliding-window rates for the extra live combat-graph lines (cap-warfare activity, both directions combined).
-    private readonly ConcurrentDictionary<string, LiveRateTracker> _neutRate = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, LiveRateTracker> _capRate = new(StringComparer.OrdinalIgnoreCase);
-
-    // The receiving half of the neut rate on its own. The combined line above answers "is there cap warfare on this
-    // member", which is what a graph wants; it cannot answer "who is being neuted", because the member with the
-    // highest combined rate may be the one applying it (ET-72).
+    // The live rates for cap warfare and remote assistance, one tracker per direction. Received and given were summed
+    // into one neut and one cap figure until ET-277, which made being neuted read exactly like neuting; the combined
+    // kinds older clients draw are now the sum of the two halves at send time.
     private readonly ConcurrentDictionary<string, LiveRateTracker> _neutInRate = new(StringComparer.OrdinalIgnoreCase);
-
-    // Remote reps received, as a sliding-window rate — there is no combined "rep" rate to be a half of (unlike
-    // neut/cap), so this is the only tracker reps need (ET-193).
+    private readonly ConcurrentDictionary<string, LiveRateTracker> _neutOutRate = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, LiveRateTracker> _capInRate = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, LiveRateTracker> _capOutRate = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, LiveRateTracker> _repInRate = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, LiveRateTracker> _repOutRate = new(StringComparer.OrdinalIgnoreCase);
+
+    // Per-character application per weapon (ET-277), from the outgoing lines' hit-quality words.
+    private readonly ConcurrentDictionary<string, WeaponApplicationTracker> _application = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, WeaponClass> _weaponClasses = new(StringComparer.Ordinal);
 
     // Per-RUN bounty per (fleet, character): only ISK earned while the character is participating in that fleet — the
     // fleet meter is "this run", not the persisted lifetime total. Populated by AddBountyAsync when a kill lands while
@@ -334,12 +336,14 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
 
     /// <summary>Record a hit for the local default character (synthetic feeder / legacy callers).</summary>
     public Task AddHitAsync(DamageDirection direction, int amount, string target, CancellationToken cancellationToken = default) =>
-        AddHitAsync(_localCharacter, direction, amount, target, HitQuality.Hits, occurredAt: null, cancellationToken);
+        AddHitAsync(_localCharacter, direction, amount, target, HitQuality.Hits, occurredAt: null, cancellationToken: cancellationToken);
 
     /// <summary>Record a hit attributed to a specific character — the real gamelog watcher path. Updates the
     /// in-memory tracker/metrics in real time (the 30fps sampler reads it immediately) and persists the
     /// hit; the live sample publish (server + remote relay) is offloaded so it never throttles the feed.</summary>
-    public async Task AddHitAsync(string characterName, DamageDirection direction, int amount, string target, HitQuality quality = HitQuality.Hits, DateTime? occurredAt = null, CancellationToken cancellationToken = default)
+    public async Task AddHitAsync(string characterName, DamageDirection direction, int amount, string target,
+        HitQuality quality = HitQuality.Hits, DateTime? occurredAt = null, string? weapon = null,
+        CancellationToken cancellationToken = default)
     {
         var name = string.IsNullOrWhiteSpace(characterName) ? _localCharacter : characterName;
 
@@ -347,9 +351,15 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         // in chunks, so a single 500 ms poll can read several seconds of combat at once; stamping that whole batch
         // with DateTime.UtcNow piles it onto one instant and the live graph spikes then decays (a sawtooth) instead
         // of a smooth curve — and the shape then depends on each machine's disk/flush cadence, not the actual fight.
-        // The sliding-window decay still samples against wall-clock "now"; only the event placement uses the log time.
+        // The live rate still samples against wall-clock "now"; only the event placement uses the log time.
         var at = occurredAt ?? DateTime.UtcNow;
-        Tracker(name).Add(at, direction, amount);
+
+        // One cadence per weapon going out and per source coming in (ET-277): a launcher and a drone flight fire on
+        // different cycles, and each rat type on its own.
+        var stream = direction == DamageDirection.Outgoing ? weapon : weapon is null ? target : $"{target} - {weapon}";
+        Tracker(name).Add(at, direction, amount, stream);
+        if (direction == DamageDirection.Outgoing && weapon is not null)
+            Application(name).Add(at, weapon, target, quality, amount);
         var metrics = Metrics(name);
         metrics.RecordCombat(direction, amount, target, quality);
 
@@ -375,7 +385,7 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
 
     // Steady remote sampler: every RemotePublishInterval, sample each active local tracker against "now"
     // and publish it to the coupled servers. An idle tracker (decayed to zero) is skipped, so this is quiet
-    // between fights; while fighting — and during the ~5s decay tail after the last hit — it streams a smooth,
+    // between fights; while fighting — and during the decay tail after the last hit — it streams a smooth,
     // server-faithful curve. Self-throttling: a slow per-server gRPC write only delays the next sample, it never
     // touches the in-memory tracker the local graph reads, and nothing queues unboundedly.
     private async Task RemotePublishLoopAsync(CancellationToken cancellationToken)
@@ -460,22 +470,15 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     public IEnumerable<MetricSample> Sample(long fleetId, int characterId, long unixMs)
     {
         var now = DateTimeOffset.FromUnixTimeMilliseconds(unixMs).UtcDateTime;
-        var dps = new DpsSample(0, 0);
-        double neut = 0, neutIn = 0, cap = 0, repIn = 0;
+        var rates = new CombatRates();
+        var application = ApplicationSummary.Idle;
         string? system = null;
         DateTime? abyssalAnchor = null;
         if (_nameById.TryGetValue(characterId, out var name))
         {
-            if (_trackers.TryGetValue(name, out var tracker))
-                dps = tracker.Sample(now);
-            if (_neutRate.TryGetValue(name, out var neutRate))
-                neut = neutRate.Sample(now);
-            if (_neutInRate.TryGetValue(name, out var neutInRate))
-                neutIn = neutInRate.Sample(now);
-            if (_capRate.TryGetValue(name, out var capRate))
-                cap = capRate.Sample(now);
-            if (_repInRate.TryGetValue(name, out var repInRate))
-                repIn = repInRate.Sample(now);
+            rates = SampleRates(name, now);
+            if (_application.TryGetValue(name, out var weapons))
+                application = weapons.Summarize(now);
             if (_metrics.TryGetValue(name, out var metrics))
             {
                 system = metrics.Location; // last known solar system from the gamelog jump/undock
@@ -488,14 +491,20 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         var bounty = (double)_fleetRunBounty.GetValueOrDefault((fleetId, characterId));
 
         // Every combat rate every tick — including zero — so each live graph line decays back to zero when it stops.
-        yield return new MetricSample(characterId, fleetId, MetricKind.Dps, dps.Dealt, unixMs);
-        yield return new MetricSample(characterId, fleetId, MetricKind.DpsIn, dps.Received, unixMs);
-        yield return new MetricSample(characterId, fleetId, MetricKind.Neut, neut, unixMs);
-        yield return new MetricSample(characterId, fleetId, MetricKind.Cap, cap, unixMs);
-        // The received half on its own, for the one question the combined line cannot answer: who is being neuted.
-        yield return new MetricSample(characterId, fleetId, MetricKind.NeutIn, neutIn, unixMs);
-        // Reps landing on this member — no combined "rep" kind exists to be a half of, so this is the whole figure.
-        yield return new MetricSample(characterId, fleetId, MetricKind.RepIn, repIn, unixMs);
+        yield return new MetricSample(characterId, fleetId, MetricKind.Dps, rates.Dealt, unixMs);
+        yield return new MetricSample(characterId, fleetId, MetricKind.DpsIn, rates.Received, unixMs);
+        // Both directions summed, for fleet mates still on a client from before ET-277: they draw only these two.
+        yield return new MetricSample(characterId, fleetId, MetricKind.Neut, rates.Neut, unixMs);
+        yield return new MetricSample(characterId, fleetId, MetricKind.Cap, rates.Cap, unixMs);
+        // Received and given apart — being neuted is not neuting, and a cap chain's output is not its intake.
+        yield return new MetricSample(characterId, fleetId, MetricKind.NeutIn, rates.NeutIn, unixMs);
+        yield return new MetricSample(characterId, fleetId, MetricKind.NeutOut, rates.NeutOut, unixMs);
+        yield return new MetricSample(characterId, fleetId, MetricKind.CapIn, rates.CapIn, unixMs);
+        yield return new MetricSample(characterId, fleetId, MetricKind.CapOut, rates.CapOut, unixMs);
+        yield return new MetricSample(characterId, fleetId, MetricKind.RepIn, rates.RepIn, unixMs);
+        yield return new MetricSample(characterId, fleetId, MetricKind.RepOut, rates.RepOut, unixMs);
+        yield return new MetricSample(characterId, fleetId, MetricKind.Application, application.ToWireValue(), unixMs,
+            application.Breakdown);
         // Bounty is a cumulative ISK total (not a rate): the receiver shows the latest + the fleet sums them.
         yield return new MetricSample(characterId, fleetId, MetricKind.Bounty, bounty, unixMs);
 
@@ -507,19 +516,29 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
                 abyssalAnchor is { } anchor ? new DateTimeOffset(anchor, TimeSpan.Zero).ToUnixTimeMilliseconds() : 0);
     }
 
-    /// <summary>The local character's full set of live combat rates (DPS out/in + neut + cap GJ/s + reps received
-    /// hp/s) without publishing — for the shared 30fps render driver to scroll every line of an own meter smoothly
-    /// between gamelog ticks.</summary>
-    public CombatRates SampleCombat(string name)
+    /// <summary>The local character's full set of live combat rates (DPS out/in, neut and cap each way in GJ/s, reps
+    /// each way in hp/s) without publishing — for the shared 30fps render driver to scroll every line of an own meter
+    /// smoothly between gamelog ticks.</summary>
+    public CombatRates SampleCombat(string name) => SampleRates(Resolve(name), DateTime.UtcNow);
+
+    /// <summary>The local character's application per weapon right now (ET-277), as the fleet sample carries it.</summary>
+    public ApplicationSummary SampleApplication(string name) =>
+        _application.TryGetValue(Resolve(name), out var weapons) ? weapons.Summarize(DateTime.UtcNow) : ApplicationSummary.Idle;
+
+    private CombatRates SampleRates(string name, DateTime now)
     {
-        var resolved = Resolve(name);
-        var now = DateTime.UtcNow;
-        var dps = _trackers.TryGetValue(resolved, out var tracker) ? tracker.Sample(now) : new DpsSample(0, 0);
-        var neut = _neutRate.TryGetValue(resolved, out var neutRate) ? neutRate.Sample(now) : 0;
-        var cap = _capRate.TryGetValue(resolved, out var capRate) ? capRate.Sample(now) : 0;
-        var repIn = _repInRate.TryGetValue(resolved, out var repInRate) ? repInRate.Sample(now) : 0;
-        return new CombatRates(dps.Dealt, dps.Received, neut, cap, repIn);
+        var dps = _trackers.TryGetValue(name, out var tracker) ? tracker.Sample(now) : new DpsSample(0, 0);
+        return new CombatRates(dps.Dealt, dps.Received,
+            NeutIn: CurrentRate(_neutInRate, name, now),
+            NeutOut: CurrentRate(_neutOutRate, name, now),
+            CapIn: CurrentRate(_capInRate, name, now),
+            CapOut: CurrentRate(_capOutRate, name, now),
+            RepIn: CurrentRate(_repInRate, name, now),
+            RepOut: CurrentRate(_repOutRate, name, now));
     }
+
+    private static double CurrentRate(ConcurrentDictionary<string, LiveRateTracker> rates, string name, DateTime now) =>
+        rates.TryGetValue(name, out var rate) ? rate.Sample(now) : 0;
 
     /// <summary>Record a bounty payout (one kill); persisted across restarts. If the character is
     /// participating in a fleet right now, the payout is also added to that fleet's per-run bounty (fleet meter).
@@ -588,15 +607,22 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     }
 
     /// <summary>Record a remote rep (logi → you / you → fleetmate); session-only. Feeds the directional cumulative
-    /// (per-character readout) and, for the receiving half, the sliding-window rate (the live RepIn graph line).</summary>
-    public void AddRemoteRep(string characterName, bool outgoing, int amount, DateTime? occurredAt = null)
+    /// (per-character readout) and the live rate of that direction, one cadence per counterparty.</summary>
+    public void AddRemoteRep(string characterName, bool outgoing, int amount, DateTime? occurredAt = null,
+        string? counterparty = null)
     {
         var name = Resolve(characterName);
+        var at = occurredAt ?? DateTime.UtcNow;   // log-line time, not read time (smooth, not spiky)
         Metrics(name).RecordRemoteRep(outgoing, amount);
-        if (!outgoing)
-            RepInRate(name).Add(occurredAt ?? DateTime.UtcNow, amount);   // log-line time, not read time (smooth, not spiky)
-        else
+        if (outgoing)
+        {
+            Rate(_repOutRate, name).Add(at, amount, counterparty);
             RaiseContribution(name, SiteContribution.RemoteRepair, amount, occurredAt);
+        }
+        else
+        {
+            Rate(_repInRate, name).Add(at, amount, counterparty);
+        }
         MetricsChanged?.Invoke();
     }
 
@@ -607,24 +633,22 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     }
 
     /// <summary>Record an energy-neutralizer hit (cap warfare); session-only. Feeds the directional cumulative
-    /// (per-character readout) and the combined sliding-window rate (the live Neut graph line).</summary>
-    public void AddNeut(string characterName, bool outgoing, int amount, DateTime? occurredAt = null)
+    /// (per-character readout) and the live rate of that direction, one cadence per source.</summary>
+    public void AddNeut(string characterName, bool outgoing, int amount, DateTime? occurredAt = null, string? source = null)
     {
         var name = Resolve(characterName);
-        var at = occurredAt ?? DateTime.UtcNow;
+        var at = occurredAt ?? DateTime.UtcNow;   // log-line time, not read time (smooth, not spiky)
         Metrics(name).RecordNeut(outgoing, amount);
-        NeutRate(name).Add(at, amount);   // log-line time, not read time (smooth, not spiky)
-        if (!outgoing)
-            NeutInRate(name).Add(at, amount);
+        Rate(outgoing ? _neutOutRate : _neutInRate, name).Add(at, amount, source);
         MetricsChanged?.Invoke();
     }
 
-    /// <summary>Record a remote-capacitor transfer (cap support); session-only. Feeds the combined
-    /// sliding-window rate (the live Cap graph line).</summary>
-    public void AddCapTransfer(string characterName, bool outgoing, int amount, DateTime? occurredAt = null)
+    /// <summary>Record a remote-capacitor transfer (cap support); session-only. Feeds the live rate of that
+    /// direction, one cadence per transmitter.</summary>
+    public void AddCapTransfer(string characterName, bool outgoing, int amount, DateTime? occurredAt = null, string? source = null)
     {
         var name = Resolve(characterName);
-        CapRate(name).Add(occurredAt ?? DateTime.UtcNow, amount);   // log-line time, not read time
+        Rate(outgoing ? _capOutRate : _capInRate, name).Add(occurredAt ?? DateTime.UtcNow, amount, source);   // log-line time, not read time
         if (outgoing)
             RaiseContribution(name, SiteContribution.RemoteCapacitor, amount, occurredAt);
         MetricsChanged?.Invoke();
@@ -703,20 +727,24 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         return Metrics(name).Snapshot(name);
     }
 
-    /// <summary>A non-publishing DPS sample for a character — for UI polling / graph decay (no bus, no mutation).</summary>
-    public DpsSampleDto PeekSample(string characterName)
-    {
-        var name = Resolve(characterName);
-        var sample = Tracker(name).Sample(DateTime.UtcNow);
-        var id = _idByName.TryGetValue(name, out var cid) ? cid : (int?)null;
-        return new DpsSampleDto(id, name, (long)sample.Dealt, (long)sample.Received, DateTimeOffset.UtcNow);
-    }
-
     private string Resolve(string name) => string.IsNullOrWhiteSpace(name) ? _localCharacter : name;
     private CharacterMetrics Metrics(string name) => _metrics.GetOrAdd(name, _ => new CharacterMetrics());
     private LiveDpsTracker Tracker(string name) => _trackers.GetOrAdd(name, _ => new LiveDpsTracker());
-    private LiveRateTracker NeutRate(string name) => _neutRate.GetOrAdd(name, _ => new LiveRateTracker());
-    private LiveRateTracker NeutInRate(string name) => _neutInRate.GetOrAdd(name, _ => new LiveRateTracker());
-    private LiveRateTracker CapRate(string name) => _capRate.GetOrAdd(name, _ => new LiveRateTracker());
-    private LiveRateTracker RepInRate(string name) => _repInRate.GetOrAdd(name, _ => new LiveRateTracker());
+    private static LiveRateTracker Rate(ConcurrentDictionary<string, LiveRateTracker> rates, string name) =>
+        rates.GetOrAdd(name, _ => new LiveRateTracker());
+    private WeaponApplicationTracker Application(string name) =>
+        _application.GetOrAdd(name, _ => new WeaponApplicationTracker(ClassifyWeapon));
+
+    // Resolved once per weapon name for the whole client; an unresolved name is not remembered, so it is asked again
+    // once the SDE has been built.
+    private WeaponClass ClassifyWeapon(string weapon)
+    {
+        if (_weaponClasses.TryGetValue(weapon, out var known))
+            return known;
+
+        var resolved = WeaponClassifier.Classify(_services.GetService<ISdeAccessor>(), weapon);
+        if (resolved is not WeaponClass.Unknown)
+            _weaponClasses[weapon] = resolved;
+        return resolved;
+    }
 }

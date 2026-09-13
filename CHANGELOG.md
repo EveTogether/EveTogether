@@ -13,6 +13,31 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Changed: the DPS meter now shows your real DPS, without dips between volleys.** It used to count only the damage
+  of the last 5 seconds, so any weapon slower than that — missiles, large turrets, slow drones — fell to almost nothing
+  between two volleys and the graph sawed up and down. Each weapon (and each rat shooting at you) is now measured
+  against its own rhythm: a HAM boat firing every 10 seconds reads as one flat line at its true DPS, a fast turret
+  still follows a change within a few seconds, and when the shooting stops the meter holds for one missed volley and
+  then falls to zero. Reps, neuts and remote cap work the same way, so a cap transmitter's 14-second cycle reads as a
+  steady 25 GJ/s instead of blinking between 0 and 73. The numbers show the rate as measured; only the graph line is
+  smoothed.
+- **Added: application — how well your shots land — with a colour label.** Fleet cards, the DPS pop-out and the
+  metrics window read the hit words of your own shots ("Smashes", "Glances Off", misses) per weapon on the target it is
+  shooting now: ▲ ADJUST below 55 %, ● OK, ◆ SWEET SPOT from 80 %, with each weapon's own figure beside it. Turrets
+  lead the verdict even while only missing, so two laser groups missing a frigate read ADJUST although the drones hit
+  it. Missiles always log "Hits", however they land, so they show "n/a" instead of a made-up percentage. Fleet members
+  on another computer share theirs too once they run this version, under the same combat-sharing switch.
+- **Changed: fleet metrics looks like the new meter design.** Every card shows its figures with a meter beside them —
+  DPS out, DPS in, neut on you, and for a logi REP OUT, a cap chain CAP OUT, a neut boat NEUT OUT — all on one scale
+  shared by the whole fleet, so a pilot doing 90 dps no longer looks as busy as one doing 900. A card's edge turns red
+  with UNDER FIRE when damage outruns the reps coming in, violet with NEUTED when someone drains its capacitor, and the
+  header now names who is being neuted and gives the fleet's application.
+- **Fixed: combat colours no longer clash in some faction themes.** DPS out took the theme's accent, which made it
+  hard to tell from cap in Caldari and from reps in Gallente. Every combat line now has its own fixed colour in all four
+  themes, damage and repair (hp/s) and neut and cap (GJ/s) are drawn in two separate lanes with their own scale instead
+  of five lines on one, and neut and cap received are shown apart from neut and cap given — being neuted no longer
+  reads the same as neuting. The metrics window's hit rate and quality now count your own shots only; they used to mix
+  in the rats' shots at you.
 - **Fixed: the detail screen's FLEET no longer shows a TOTAL of "0 ISK" for an activity where nothing was ever
   measured.** A site with no bounty, no loot and no reward line showed a per-character row correctly saying
   "nothing", but the TOTAL line under it still read "0 ISK" — a real zero look for a figure that was never actually
