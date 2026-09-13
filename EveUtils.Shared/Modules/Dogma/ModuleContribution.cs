@@ -30,4 +30,8 @@ public sealed record ModuleContribution(
     double CapPerSec = 0,
     double RemoteRangeMeters = 0,
     // Fully spooled DPS for an entropic disintegrator (damage ramped to its max, attr 2734); equals Dps for non-ramp weapons.
-    double DpsMax = 0);
+    double DpsMax = 0,
+    // A missile's explosion radius (m) and velocity (m/s) after skills and rigs: what decides how much of its damage a
+    // small or fast target takes.
+    double ExplosionRadius = 0,
+    double ExplosionVelocity = 0);

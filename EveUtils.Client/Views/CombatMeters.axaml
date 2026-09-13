@@ -22,7 +22,7 @@
             <ctl:MeterBar Grid.Column="1" Classes="meter" Fill="{x:Static ctl:CombatInk.Out}" Fraction="{Binding OutFraction}"/>
             <TextBlock Grid.Column="2" Classes="meterfigure" Text="{Binding Dealt, StringFormat='{}{0:N0}'}"/>
             <TextBlock Grid.Column="3" Classes="meterdetail" Text="{Binding ApplicationBreakdown}"
-                       ToolTip.Tip="{Binding ApplicationBreakdown}"/>
+                       ToolTip.Tip="{Binding ApplicationTip}"/>
         </Grid>
         <Grid Classes="meterrow" ColumnDefinitions="58,2*,50,3*" IsVisible="{Binding ShowsRepOut}">
             <TextBlock Grid.Column="0" Classes="meterlabel" Text="REP OUT"/>

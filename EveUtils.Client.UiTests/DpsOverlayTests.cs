@@ -138,6 +138,24 @@ public class DpsOverlayTests
     }
 
     [AvaloniaFact]
+    public void FleetCard_TheFigure_ReadsWhereTheLineEnds_WhileTheRateFalls()
+    {
+        // A fleet card is fed once a second and its line averages that over the last frames. As a HAM fight wound down
+        // on 13 Sep a card read OUT 124 beside a line still ending near 250 (ET-282).
+        var meter = new DpsViewModel("Jithran", isSelf: false);
+        meter.SetRate(MetricKind.Dps, 397);
+        for (var i = 0; i < 60; i++)
+            meter.RenderFrame();
+        meter.SetRate(MetricKind.Dps, 124);
+        for (var i = 0; i < 10; i++)
+            meter.RenderFrame();
+
+        var outLine = meter.Series.Single(series => ReferenceEquals(series.Stroke, CombatInk.Out));
+        Assert.InRange(outLine.Values[^1], 125, 396);           // the line on its way down…
+        Assert.Equal((long)outLine.Values[^1], meter.Dealt);    // …and the figure beside it saying the same
+    }
+
+    [AvaloniaFact]
     public void DpsOverlay_EmaSmoothing_RoundsStepEdges()
     {
         var tracker = new DpsViewModel("Jithran", isSelf: true);
@@ -162,7 +180,10 @@ public class DpsOverlayTests
         Assert.NotNull(frame);
         var outLine = tracker.Series.Single(series => ReferenceEquals(series.Stroke, CombatInk.Out));
         Assert.InRange(outLine.Values[^1], 1, 799); // the line still trailing the step-down, not snapped to 0…
-        Assert.Equal(0, tracker.Dealt);             // …while the number already shows the rate as measured (ET-277)
+        // …and the number reads where the line ends (ET-282). It used to show the rate already at 0 beside a line
+        // still at 667, which on screen read as two different figures.
+        Assert.Equal((long)outLine.Values[^1], tracker.Dealt);
+        Assert.Equal(Math.Round(outLine.Values[^1] / tracker.HitPointsScale * 200) / 200, tracker.OutFraction);
         frame!.Save("/tmp/eveutils-dps-overlay-ema.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }

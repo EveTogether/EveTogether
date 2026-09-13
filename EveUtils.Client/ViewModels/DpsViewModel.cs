@@ -21,13 +21,14 @@ namespace EveUtils.Client.ViewModels;
 /// through the same shared path (<see cref="DpsRenderDriver"/> → <see cref="StepFrame"/>), so the own meters and the
 /// fleet-member meters stay identical.
 ///
-/// The numbers and meters show each rate as measured; only the graph line is smoothed, for display. A calm line and an
-/// honest number: the smoothing that makes a curve pleasant to follow would otherwise also make the number lag.
-///
 /// The line is a trailing average over <see cref="SmoothingWindowFrames"/>, not an EMA (ET-280): an exponential
 /// average chases a cadence-held step with its own curved (exponential) response, which turned every volley's step
 /// into a little arc — a staircase of half-circles rather than a calm line. A plain trailing average cannot overshoot
 /// its own inputs and turns a step into a straight ramp instead.
+///
+/// The figures, meters and flags read the value the line ends at, not the rate it is averaging (ET-282). Showing the
+/// raw rate beside a line that trails it by half its window read as two different numbers wherever the rate moved:
+/// OUT 124 beside a line still ending near 250 as a HAM fight wound down, on a real replay up to twice apart.
 /// </summary>
 public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
 {
@@ -121,6 +122,7 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     [NotifyPropertyChangedFor(nameof(ApplicationText))]
     [NotifyPropertyChangedFor(nameof(ApplicationShort))]
     [NotifyPropertyChangedFor(nameof(ApplicationBreakdown))]
+    [NotifyPropertyChangedFor(nameof(ApplicationTip))]
     [NotifyPropertyChangedFor(nameof(IsApplicationSweetSpot))]
     [NotifyPropertyChangedFor(nameof(IsApplicationOk))]
     [NotifyPropertyChangedFor(nameof(IsApplicationAdjust))]
@@ -359,11 +361,13 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     /// fleet screen hands every member the same one, so the cards compare.</summary>
     public CombatScale Scale { get; set; } = new();
 
-    /// <summary>What the verdict chip means, for its tooltip on every screen that shows one.</summary>
-    public const string ApplicationTooltip =
-        "How well the main weapon lands on the target it is shooting now, from the hit-quality word of each of its " +
-        "shots in the last 20 seconds (a miss counts as nothing, a wreck as a smash). Below 55 %: ADJUST. " +
-        "From 80 %: SWEET SPOT. Missiles always log \"Hits\", however they land, so they get no percentage.";
+    /// <summary>How the verdict chip is worked out, under every weapon's own figure in its tooltip.</summary>
+    public const string ApplicationMethod =
+        "How well the main weapon lands on the target it is shooting now. Turrets and drones: the hit-quality word of " +
+        "each shot in the last 20 seconds (a miss counts as nothing, a wreck as a smash). Missiles always log \"Hits\", " +
+        "so each volley in the last 30 seconds is set against a full volley at that target — from your fit and skills, " +
+        "or learned from your own full hits when no fit is known — after that target's resists. Below 55 %: ADJUST. " +
+        "From 80 %: SWEET SPOT.";
 
     public bool HasApplication => Application.Verdict is not ApplicationVerdict.Idle;
 
@@ -375,6 +379,7 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
         ApplicationVerdict.Adjust => $"▲ {Application.Percent:0}%",
         ApplicationVerdict.NotEnoughShots => "○ —",
         ApplicationVerdict.NotMeasurable => "○ n/a",
+        ApplicationVerdict.Learning => "○ learning",
         _ => string.Empty,
     };
 
@@ -386,25 +391,35 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
         ApplicationVerdict.Adjust => $"▲ ADJUST · {Application.Percent:0}%",
         ApplicationVerdict.NotEnoughShots => "○ NOT ENOUGH SHOTS",
         ApplicationVerdict.NotMeasurable => "○ APPLICATION n/a",
+        ApplicationVerdict.Learning => "○ LEARNING",
         _ => string.Empty,
     };
 
-    /// <summary>Every weapon's own figure, main weapon first: "Mega Pulse Laser II 74% · Acolyte II 100%".</summary>
+    /// <summary>Every weapon's own figure, main weapon first: "Mega Pulse Laser II 74% · Acolyte II 100%", with the
+    /// reason beside a missile that lands short.</summary>
     public string? ApplicationBreakdown => Application.Breakdown;
+
+    /// <summary>The chip's tooltip: each weapon on its own line — the cause beside a missile that lands short — then how
+    /// the figure is worked out.</summary>
+    public string ApplicationTip => Application.Breakdown is { Length: > 0 } breakdown
+        ? breakdown.Replace(" · ", Environment.NewLine) + Environment.NewLine + Environment.NewLine + ApplicationMethod
+        : ApplicationMethod;
 
     public bool IsApplicationSweetSpot => Application.Verdict is ApplicationVerdict.SweetSpot;
     public bool IsApplicationOk => Application.Verdict is ApplicationVerdict.Ok;
     public bool IsApplicationAdjust => Application.Verdict is ApplicationVerdict.Adjust;
-    public bool IsApplicationUnjudged => Application.Verdict is ApplicationVerdict.NotEnoughShots or ApplicationVerdict.NotMeasurable;
+    public bool IsApplicationUnjudged =>
+        Application.Verdict is ApplicationVerdict.NotEnoughShots or ApplicationVerdict.NotMeasurable or ApplicationVerdict.Learning;
 
-    /// <summary>Apply a sample — call on the UI thread. Ages existing markers one column. Raw (no EMA); used by
-    /// the event-driven remote-member path, which only carries DPS out and in.</summary>
+    /// <summary>Apply a sample — call on the UI thread. Ages existing markers one column. Used by the event-driven
+    /// remote-member path, which only carries DPS out and in, one column per sample: averaging over a window of frames
+    /// would span many seconds of those, so the sample is drawn as it is.</summary>
     public void Apply(DpsSampleDto sample)
     {
         _outLine.Target = sample.DealtPerSecond;
         _inLine.Target = sample.ReceivedPerSecond;
-        Append(_outLine.Series, _outLine.Smoothed(SmoothingWindowFrames));
-        Append(_inLine.Series, _inLine.Smoothed(SmoothingWindowFrames));
+        Append(_outLine.Series, _outLine.Smoothed(1));
+        Append(_inLine.Series, _inLine.Smoothed(1));
         RefreshFigures();
         AgeMarkers();
         GraphRevision++;
@@ -425,9 +440,9 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     /// <summary>Feed a local meter's application chip from the gamelog, a couple of times a second.</summary>
     public void UseApplicationSampler(Func<ApplicationSummary?> sampler) => _applicationSampler = sampler;
 
-    /// <summary>Set one line's latest value for a remote (fleet) meter; the figures take it as it is and the shared
-    /// driver smooths the graph line toward it each frame, so a fleet graph scrolls and decays exactly like the own
-    /// pop-out instead of stepping at 1 Hz. Unknown kinds are ignored (a newer client's metric kind degrades
+    /// <summary>Set one line's latest value for a remote (fleet) meter; the shared driver averages it into the graph
+    /// line each frame, and the figures show where that line ends, so a fleet graph scrolls and decays exactly like the
+    /// own pop-out instead of stepping at 1 Hz. Unknown kinds are ignored (a newer client's metric kind degrades
     /// gracefully), and so are the combined <see cref="MetricKind.Neut"/> and <see cref="MetricKind.Cap"/> that
     /// clients keep sending for older ones: this meter shows the two directions apart.</summary>
     public void SetRate(MetricKind kind, double value)
@@ -483,35 +498,35 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
         GraphRevision++;
     }
 
-    // The figures, the meters and the flags all read the measured rate, not the smoothed line.
+    // The figures, the meters and the flags all read what the line ends at, so a number never contradicts its own graph.
     private void RefreshFigures()
     {
-        Dealt = (long)_outLine.Target;
-        Received = (long)_inLine.Target;
-        RepIn = (long)_repInLine.Target;
-        RepOut = (long)_repOutLine.Target;
-        NeutIn = (long)_neutInLine.Target;
-        NeutOut = (long)_neutOutLine.Target;
-        CapIn = (long)_capInLine.Target;
-        CapOut = (long)_capOutLine.Target;
+        Dealt = (long)_outLine.Shown;
+        Received = (long)_inLine.Shown;
+        RepIn = (long)_repInLine.Shown;
+        RepOut = (long)_repOutLine.Shown;
+        NeutIn = (long)_neutInLine.Shown;
+        NeutOut = (long)_neutOutLine.Shown;
+        CapIn = (long)_capInLine.Shown;
+        CapOut = (long)_capOutLine.Shown;
 
         Scale.Observe(
-            Math.Max(Math.Max(_outLine.Target, _inLine.Target), Math.Max(_repInLine.Target, _repOutLine.Target)),
-            Math.Max(Math.Max(_neutInLine.Target, _neutOutLine.Target), Math.Max(_capInLine.Target, _capOutLine.Target)),
+            Math.Max(Math.Max(_outLine.Shown, _inLine.Shown), Math.Max(_repInLine.Shown, _repOutLine.Shown)),
+            Math.Max(Math.Max(_neutInLine.Shown, _neutOutLine.Shown), Math.Max(_capInLine.Shown, _capOutLine.Shown)),
             DateTime.UtcNow);
         HitPointsScale = Scale.HitPoints;
         CapacitorScale = Scale.Capacitor;
 
-        OutFraction = Fraction(_outLine.Target, HitPointsScale);
-        InFraction = Fraction(_inLine.Target, HitPointsScale);
-        RepOutFraction = Fraction(_repOutLine.Target, HitPointsScale);
-        CapOutFraction = Fraction(_capOutLine.Target, CapacitorScale);
-        NeutOutFraction = Fraction(_neutOutLine.Target, CapacitorScale);
-        NeutInFraction = Fraction(_neutInLine.Target, CapacitorScale);
+        OutFraction = Fraction(_outLine.Shown, HitPointsScale);
+        InFraction = Fraction(_inLine.Shown, HitPointsScale);
+        RepOutFraction = Fraction(_repOutLine.Shown, HitPointsScale);
+        CapOutFraction = Fraction(_capOutLine.Shown, CapacitorScale);
+        NeutOutFraction = Fraction(_neutOutLine.Shown, CapacitorScale);
+        NeutInFraction = Fraction(_neutInLine.Shown, CapacitorScale);
 
-        var netDamage = _inLine.Target - _repInLine.Target;
+        var netDamage = _inLine.Shown - _repInLine.Shown;
         IsUnderFire = IsUnderFire ? netDamage >= UnderFireOff : netDamage > UnderFireOn;
-        IsNeuted = IsNeuted ? _neutInLine.Target >= NeutedOff : _neutInLine.Target >= NeutedOn;
+        IsNeuted = IsNeuted ? _neutInLine.Shown >= NeutedOff : _neutInLine.Shown >= NeutedOn;
 
         InDetail = RepIn > 0 ? $"reps {RepIn:N0} · net {SignedNet(RepIn - Received)}" : null;
         NeutInDetail = CapIn > 0 ? $"cap in {CapIn:N0}" : null;
@@ -559,7 +574,7 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     private static void Append(DpsSeries series, double value) => series.Add(value);
 
     // One live quantity: its series + smoothing state, keyed by the metric kind it renders. Target is the measured
-    // rate (what the figures show); Smoothed averages it for the line.
+    // rate; Smoothed averages it into the line's newest value, which is also what the figures show (Shown).
     private sealed class RateLine(MetricKind kind, IBrush ink, GraphLane lane, bool dashed = false)
     {
         private readonly Queue<double> _recent = new();
@@ -568,6 +583,9 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
         public MetricKind Kind { get; } = kind;
         public DpsSeries Series { get; } = new(ink, GraphCapacityValue, lane, dashed);
         public double Target;
+
+        /// <summary>The line's newest value: what it ends at on screen.</summary>
+        public double Shown { get; private set; }
 
         /// <summary>Target averaged over the trailing <paramref name="frames"/> calls — one call is expected per
         /// rendered frame, so this is the drawn line's value for "now". Never below the lowest, nor above the
@@ -578,7 +596,7 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
             _recentSum += Target;
             while (_recent.Count > frames)
                 _recentSum -= _recent.Dequeue();
-            return _recentSum / _recent.Count;
+            return Shown = _recentSum / _recent.Count;
         }
     }
 }
