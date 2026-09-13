@@ -27,6 +27,11 @@ public sealed partial class FleetDetailSectionViewModel(RunDetailSectionServices
 
     [ObservableProperty] private string _totalText = string.Empty;
 
+    /// <summary>Whether TOTAL has anything to show at all — the same figure as the header's own
+    /// <see cref="ActivityDetailViewModel.HasTotalIsk"/>, gating this row the same way: an activity with no measured
+    /// ISK draws no TOTAL line rather than a bare "0 ISK" that reads as a real, measured zero.</summary>
+    [ObservableProperty] private bool _hasTotal;
+
     /// <summary>One line, only when something needs saying: somebody is out of the loot split, or the names below
     /// could not all be read from the runs themselves (ET-212).</summary>
     [ObservableProperty] private string? _noteText;
@@ -67,7 +72,10 @@ public sealed partial class FleetDetailSectionViewModel(RunDetailSectionServices
                      .ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase))
             Rows.Add(row);
 
+        // The header's own TOTAL ISK text, never a sum of its own (ET-271/272) — same value even while HasTotal is
+        // false, so a caller reading the figure directly (rather than what is drawn) still gets the header's answer.
         TotalText = IskFormat.Whole(detail.Isk.Total) + IskFormat.ExpectedPart(detail.Isk);
+        HasTotal = detail.Isk.HasFigure;
         FleetCharacterRowViewModel[] local = [.. Rows.Where(row => row.CanToggleShare)];
         decimal? localLoot = local.Length == 0
             ? null

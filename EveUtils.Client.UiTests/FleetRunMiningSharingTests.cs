@@ -47,9 +47,7 @@ public sealed class FleetRunMiningSharingTests
     [AvaloniaFact]
     public async Task OnAMetaliminalHomefront_RemainingSubtractsTheFleetsMinedAndResidue()
     {
-        using FleetOfTwo fleet = await FleetOfTwo.CreateAsync();
-        fleet.Jithran.Window.MatchedSites = [MetaliminalSite];
-        fleet.Raymond.Window.MatchedSites = [MetaliminalSite];
+        using FleetOfTwo fleet = await FleetOfTwo.CreateAsync(MetaliminalSite.DungeonId);
 
         await fleet.MineAsync(fleet.Jithran, "Amperum Mutanite", 3000, residueUnits: 500);
         await fleet.MineAsync(fleet.Raymond, "Amperum Mutanite", 1000);
@@ -67,9 +65,7 @@ public sealed class FleetRunMiningSharingTests
         // A homefront kind claims MINING outright regardless of who has mined yet (RunTypeCatalogue), unlike a plain
         // site, which only shows it live once its own participants have — Raymond mines nothing here, so his own
         // window needs the outright claim to have a MINING section to read the fleet total from at all.
-        using FleetOfTwo fleet = await FleetOfTwo.CreateAsync();
-        fleet.Jithran.Window.MatchedSites = [MetaliminalSite];
-        fleet.Raymond.Window.MatchedSites = [MetaliminalSite];
+        using FleetOfTwo fleet = await FleetOfTwo.CreateAsync(MetaliminalSite.DungeonId);
         await fleet.MineAsync(fleet.Jithran, "Amperum Mutanite", 1000);
         await fleet.SettleAsync(() => _Mining(fleet.Raymond)?.FleetMinedText?.Contains("1,000") == true);
 

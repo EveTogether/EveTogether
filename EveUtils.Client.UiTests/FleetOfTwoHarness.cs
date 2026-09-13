@@ -53,14 +53,21 @@ internal sealed class FleetOfTwo : IDisposable
 
     public Pilot Raymond { get; }
 
-    public static async Task<FleetOfTwo> CreateAsync()
+    /// <param name="siteTypeId">The dungeon id the commander's own copy already resolved (ET-228) — announced on the
+    /// join the same way a real commander's would be, so both windows' <c>RunType</c> pick up a homefront kind
+    /// through <c>JoinFleetRun</c>'s own <c>_runSiteTypeId</c> exactly as production does. Setting a joined window's
+    /// <c>MatchedSites</c> afterwards does not do this: <c>_runSiteTypeId</c> is already latched from this call's own
+    /// announcement (0 by default) by the time a caller could reach it, so a later match on either window is a
+    /// no-op for TYPE.</param>
+    public static async Task<FleetOfTwo> CreateAsync(int siteTypeId = 0)
     {
         Pilot jithran = await Pilot.CreateAsync(JithranId, "Jithran");
         Pilot raymond = await Pilot.CreateAsync(RaymondId, "Raymond");
         jithran.Wire.Destinations.Add(raymond.Instance.Services);
         raymond.Wire.Destinations.Add(jithran.Instance.Services);
 
-        RunGroupCodeStart start = new(FleetId, ActivityKind.Site, GroupCode, DateTime.UtcNow.AddMinutes(-2), IsFleetCommander: true);
+        RunGroupCodeStart start = new(FleetId, ActivityKind.Site, GroupCode, DateTime.UtcNow.AddMinutes(-2),
+            IsFleetCommander: true, SiteTypeId: siteTypeId);
         await jithran.JoinAsync(start);
         await raymond.JoinAsync(start);
         FleetOfTwo fleet = new(jithran, raymond);
