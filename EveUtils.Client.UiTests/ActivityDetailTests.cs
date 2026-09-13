@@ -465,14 +465,18 @@ public sealed class ActivityDetailTests
 
         List<string> texts = await _RenderAsync(instance, cancellationToken);
 
-        Assert.Contains(texts, text => text == "measured");
-        Assert.Contains(texts, text => text.StartsWith("corrected by hand at"));
+        // FLEET (ET-272) only notes what is out of the ordinary: the corrected character carries its own "times
+        // corrected by hand at HH:mm" subtext, the measured one carries none at all — the difference itself is the
+        // proof, not a literal "measured" label. (The header's own TimeSourceText also reads "times corrected by
+        // hand" without a moment, once for the whole activity — the per-character "at HH:mm" line is FLEET's own.)
+        Assert.Contains(texts, text => text.StartsWith("times corrected by hand at"));
+        Assert.Equal(1, texts.Count(text => text.Contains("corrected by hand at")));
     }
 
     /// <summary>AC-7: the fleet section reports the real headcount and says the names are what is missing, rather
     /// than standing empty. Counter-proof, both halves: an empty list with no line goes red on the missing
     /// sentence, and counting the (never filled) name list instead of the summary's own participant count reads
-    /// "0 participants" where six flew it.</summary>
+    /// "0 characters" where six flew it.</summary>
     [AvaloniaFact]
     public async Task FleetSection_ReportsTheRealHeadcount_AndSaysTheNamesAreMissing()
     {
@@ -484,8 +488,8 @@ public sealed class ActivityDetailTests
 
         List<string> texts = await _RenderAsync(instance, cancellationToken);
 
-        Assert.Contains(texts, text => text == "6 participants");
-        Assert.Contains(texts, text => text.StartsWith("Participant names are not recorded yet"));
+        Assert.Contains(texts, text => text == "6 characters");
+        Assert.Contains(texts, text => text.StartsWith("Some names are not recorded on their runs"));
     }
 
     /// <summary>ET-212 counter-proof: a saved activity must still name a participant once that character is no
@@ -508,7 +512,7 @@ public sealed class ActivityDetailTests
         List<string> texts = await _RenderAsync(instance, cancellationToken);
 
         Assert.Contains(texts, text => text == "Abnoba Auscent");
-        Assert.DoesNotContain(texts, text => text.StartsWith("Participant names are not recorded yet"));
+        Assert.DoesNotContain(texts, text => text.StartsWith("Some names are not recorded on their runs"));
     }
 
     /// <summary>AC-8, first half: nothing falls outside the module host's own 758px docked width, and the same

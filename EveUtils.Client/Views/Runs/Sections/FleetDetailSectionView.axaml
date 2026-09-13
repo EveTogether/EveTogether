@@ -56,8 +56,9 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <!-- TOTAL ISK itself, the activity's stored total, under the rows it is the sum of. -->
-        <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Margin="0,4,0,0" Padding="0,2,0,0">
+        <!-- TOTAL ISK itself, the activity's stored total, under the rows it is the sum of. Drawn only where the
+             header's own TOTAL ISK is (HasTotal) — nothing measured draws no line, never a bare "0 ISK". -->
+        <Border IsVisible="{Binding HasTotal}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Margin="0,4,0,0" Padding="0,2,0,0">
             <Grid x:Name="FleetTotalRow" Classes="kv" ColumnDefinitions="Auto,*">
                 <TextBlock Text="TOTAL" VerticalAlignment="Center"/>
                 <TextBlock Grid.Column="1" x:Name="FleetTotal" Text="{Binding TotalText}"/>

@@ -13,6 +13,11 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: the detail screen's FLEET no longer shows a TOTAL of "0 ISK" for an activity where nothing was ever
+  measured.** A site with no bounty, no loot and no reward line showed a per-character row correctly saying
+  "nothing", but the TOTAL line under it still read "0 ISK" — a real zero look for a figure that was never actually
+  taken. That line is now left off entirely, the same way the screen's own header already hides its TOTAL ISK figure
+  when there is nothing to show.
 - **Fixed: an older site run no longer shows the generic "Site" where it was in fact a Combat Site or an Ore Site.**
   A site started before this app recorded the scanner's own group text (2–11 September) fell back to the plain "Site"
   label and icon everywhere TYPE is shown — the runs overview, the detail screen, the run window and the resume
