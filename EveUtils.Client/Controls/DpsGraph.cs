@@ -16,8 +16,10 @@ namespace EveUtils.Client.Controls;
 ///
 /// Lines are drawn in one lane per unit (ET-277): hp/s on top, GJ/s below, each with its own axis. Five lines in three
 /// units on one auto-scaled axis made 46 GJ/s of neut a flat line under 1,000 dps. The GJ/s lane only takes room when
-/// something is on it. A lane's scale is its <see cref="HitPointsMax"/> / <see cref="CapacitorMax"/> when the owner
-/// sets one — a fleet screen gives every card the same — and otherwise follows the samples on screen.
+/// something is on it. A lane's scale is at least its <see cref="HitPointsMax"/> / <see cref="CapacitorMax"/> when the
+/// owner sets one — a fleet screen gives every card the same — but never lower than the highest sample still on
+/// screen (ET-280): the owner's shared scale can lag a peak that has not scrolled behind the left edge yet, and a
+/// line must never flatten against the top edge.
 /// </summary>
 public sealed class DpsGraph : Control
 {
@@ -125,7 +127,9 @@ public sealed class DpsGraph : Control
         var visible = (int)Math.Ceiling(plot.Width / pxPerSample) + 2;
 
         var series = Series;
-        var hitPointsMax = HitPointsMax > 0 ? HitPointsMax : NiceCeiling(ObservedMax(series, GraphLane.HitPoints, visible), 100);
+        // Never lower than what is actually about to be drawn (ET-280): the owner's scale (HitPointsMax/CapacitorMax,
+        // e.g. the shared CombatScale) sets the floor, but a peak still on screen always wins over it.
+        var hitPointsMax = NiceCeiling(Math.Max(HitPointsMax, ObservedMax(series, GraphLane.HitPoints, visible)), 100);
         var capacitorObserved = ObservedMax(series, GraphLane.Capacitor, visible);
         var splits = capacitorObserved >= 0.5 && plot.Height >= MinSplitHeight;
 
@@ -142,7 +146,7 @@ public sealed class DpsGraph : Control
         // Split, the hp/s lane's "0" would sit right on top of the GJ/s lane's top figure; the baseline speaks for itself.
         DrawLaneGrid(context, hitPointsLane, hitPointsMax, "hp/s", hitPointsLane.Height >= 60 ? 4 : 2, labelsBaseline: !splits);
 
-        var capacitorMax = CapacitorMax > 0 ? CapacitorMax : NiceCeiling(capacitorObserved, 10);
+        var capacitorMax = NiceCeiling(Math.Max(CapacitorMax, capacitorObserved), 10);
         if (splits)
         {
             context.DrawLine(new Pen(LaneDividerBrush, 1),
@@ -185,8 +189,9 @@ public sealed class DpsGraph : Control
     }
 
     // A lane's scale follows only the samples currently on screen, so an old spike that has scrolled past the left edge
-    // no longer compresses the visible curve.
-    private static double ObservedMax(IReadOnlyList<DpsSeries>? series, GraphLane lane, int visible)
+    // no longer compresses the visible curve. Internal (not private) so a test can check the scale rule (ET-280) —
+    // never lower than this — directly against a real series, without rendering pixels.
+    internal static double ObservedMax(IReadOnlyList<DpsSeries>? series, GraphLane lane, int visible)
     {
         var max = 0.0;
         if (series is not null)
