@@ -106,8 +106,10 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     [ObservableProperty] private string _kindText = string.Empty;
     [ObservableProperty] private MaterialIconKind _typeIcon;
     [ObservableProperty] private string _durationText = string.Empty;
-    [ObservableProperty] private string _startText = string.Empty;
-    [ObservableProperty] private string _endText = string.Empty;
+
+    /// <summary>"Sun 13 Sep 2026 · 11:24 – 11:36", local time (ET-284) — a time-only header gave no clue which day an
+    /// older activity happened on, once the runs overview no longer sits right beside it as context.</summary>
+    [ObservableProperty] private string _whenText = string.Empty;
 
     /// <summary>Everything this activity earned, as prominent as <see cref="DurationText"/> (ET-210 review finding,
     /// 2026-09-09: the total was there, split over three sections, and never once shown as one figure). The sum of
@@ -458,10 +460,9 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         KindText = type.Name;
         TypeIcon = type.Icon;
         DurationText = TimeSpan.FromSeconds(detail.DurationSeconds).ToString(@"hh\:mm\:ss");
-        StartText = detail.StartedAtUtc.ToLocalTime().ToString("HH:mm:ss");
-        EndText = detail.StoppedAtUtc is { } stoppedAtUtc
-            ? stoppedAtUtc.ToLocalTime().ToString("HH:mm:ss")
-            : "still open";
+        DateTime startLocal = detail.StartedAtUtc.ToLocalTime();
+        string endPart = detail.StoppedAtUtc is { } stoppedAtUtc ? stoppedAtUtc.ToLocalTime().ToString("HH:mm") : "still open";
+        WhenText = $"{startLocal:ddd d MMM yyyy} · {startLocal:HH:mm} – {endPart}";
         TimeSourceText = detail.Runs.Any(run => run.TimesCorrectedAtUtc is not null)
             ? "times corrected by hand"
             : "measured";

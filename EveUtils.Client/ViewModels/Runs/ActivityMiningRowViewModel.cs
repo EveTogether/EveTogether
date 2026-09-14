@@ -43,7 +43,9 @@ public sealed class ActivityMiningRowViewModel(
         ? $"{IskFormat.Number(units)} (+{IskFormat.Number(criticalUnits)} crit)"
         : IskFormat.Number(units);
 
-    public string ResidueText { get; } = residueUnits > 0 ? $"{IskFormat.Number(residueUnits)} residue" : "no residue";
+    /// <summary>Bare figure only (ET-284) — the RESIDUE column header above it already says what it is; "—" for
+    /// none, matching the mockup's own dash rather than restating "no residue" in every row.</summary>
+    public string ResidueText { get; } = residueUnits > 0 ? IskFormat.Number(residueUnits) : "—";
 
     /// <summary>"no price yet" until it can be valued at all; the NPC-buy exception is named rather than folded
     /// silently into the figure (ET-229).</summary>

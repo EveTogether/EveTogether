@@ -67,13 +67,20 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
     public ObservableCollection<MiningCharacterGroupViewModel> Groups { get; } = [];
 
     /// <summary>The whole fleet's mined units so far — this window's own rows plus whoever else shares (ET-234).
-    /// Null while there is nothing to say at all: no own mining and nobody sharing.</summary>
+    /// Null with no fleet at all (ET-284: a solo run has nobody else's mining to count, so a line about "what
+    /// members share" only confused Jithran's own 13 Sep run), and while there is nothing to say at all: no own
+    /// mining and nobody sharing.</summary>
     public string? FleetMinedText { get; private set; }
 
     /// <summary>What is left of a Metaliminal Meteoroid's 5,000-unit asteroid (<see cref="IRunWindowContext.RunType"/>'s
     /// own <c>SiteMiningCapacityUnits</c>) — null for any site whose capacity is not a known figure, including an
     /// ordinary mining fleet and AAR (ET-234).</summary>
     public string? RemainingText { get; private set; }
+
+    /// <summary>Whether <see cref="FleetMinedText"/> is worth its own line (ET-284) — false whenever
+    /// <see cref="RemainingText"/> already says as much as part of naming what capacity is left, so a Metaliminal
+    /// fleet never reads two short, overlapping lines under one MINING run.</summary>
+    public bool ShowFleetMinedText { get; private set; }
 
     public override void Refresh(DateTime nowUtc)
     {
@@ -147,6 +154,7 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
         int units = Rows.Sum(row => row.Units);
         int residue = Rows.Sum(row => row.ResidueUnits);
         bool hasShared = false;
+        bool inFleet = Context.GroupCode is not null && Context.FleetId is not null;
 
         if (Context.GroupCode is { } groupCode && Context.FleetId is { } fleetId
             && Context.Services.GetService<FleetRunShares>() is { } shares)
@@ -163,7 +171,7 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
             }
         }
 
-        FleetMinedText = Rows.Count == 0 && !hasShared
+        FleetMinedText = !inFleet || (Rows.Count == 0 && !hasShared)
             ? null
             : $"fleet mined {IskFormat.Number(units)} units. Counted from what members share — a member sharing " +
               "nothing is missing from this total.";
@@ -173,8 +181,11 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
               "accurate as what the fleet shares."
             : null;
 
+        ShowFleetMinedText = FleetMinedText is not null && RemainingText is null;
+
         OnPropertyChanged(nameof(FleetMinedText));
         OnPropertyChanged(nameof(RemainingText));
+        OnPropertyChanged(nameof(ShowFleetMinedText));
     }
 
     /// <summary>Rebuilt every tick from <see cref="IRunWindowContext.Participants"/>, which already carries each
