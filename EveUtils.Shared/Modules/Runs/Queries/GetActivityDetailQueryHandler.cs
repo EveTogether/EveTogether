@@ -112,7 +112,8 @@ internal sealed class GetActivityDetailQueryHandler(
                 .Select(parameter => new RunParameterDto(parameter.RunId, parameter.ParameterKey, parameter.TypedValue,
                     parameter.Amount, parameter.ItemTypeId, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))],
             [.. miningEntries.OrderByDescending(entry => entry.Units)
-                .Select(entry => new RunMiningEntryDto(entry.RunId, entry.OreType, entry.Units, entry.CriticalUnits, entry.ResidueUnits))],
+                .Select(entry => new RunMiningEntryDto(entry.RunId, entry.OreType, entry.Units, entry.CriticalUnits,
+                    entry.ResidueUnits, entry.FirstObservedAtUtc, entry.LastObservedAtUtc))],
             StoredIskBreakdown.Read(summary.IskContributions),
             attendance, fleetId, iskByCharacter));
     }

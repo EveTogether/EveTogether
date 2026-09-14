@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Esi;
@@ -43,7 +45,7 @@ namespace EveUtils.Client.Gamelog;
 /// The id→name map (seeded from <see cref="ICharacterRegistry"/> + sign-in) is what couples a fleet sample to the
 /// correct character's real combat — so a member's graph shows that member's actual DPS, not a global blob.
 /// </summary>
-public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
+public sealed partial class GamelogClientService : IFleetMetricSource, ISingletonService
 {
     private readonly IServiceProvider _services;
     private readonly IEventBus _eventBus;
@@ -121,6 +123,18 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     /// <see cref="ContributionObserved"/>.</summary>
     public event Action<int, DateTime>? HomefrontCompletionObserved;
 
+    /// <summary>Character id, the ore and units of one live mining cycle (crit included), at the gamelog line's own
+    /// time (ET-283) — what a run window's live ISK/h reads the last 5 minutes from; gone once the run is saved, the
+    /// same as every other live rate in this app. A character with no known id raises nothing, as with
+    /// <see cref="ContributionObserved"/>.</summary>
+    public event Action<int, string, int, DateTime>? MiningObserved;
+
+    /// <summary>The booster's own character id, the burst module's name, how many fleet members it reports reaching,
+    /// and the gamelog line's own time (ET-283) — only the booster's own log ever writes this; a receiver's log says
+    /// nothing at all, which is why MINING can only show a receiver's "boosted" as an inference. A character with no
+    /// known id raises nothing, as with <see cref="ContributionObserved"/>.</summary>
+    public event Action<int, string, int, DateTime>? MiningBoostObserved;
+
     // The notify line EVE writes for a wreck salvaged (domain/homefronts.md §8).
     private const string SalvageSuccessPrefix = "You successfully salvage";
 
@@ -129,6 +143,12 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     // The mining module leading it varies ("Miner II", "Mining Drone II", "Modulated Strip Miner II", …), so only
     // this fixed tail is matched.
     private const string PaleShadowSuffix = "a pale shadow of its former glory.";
+
+    // The notify line a command-burst booster's own gamelog writes, once per burst module per cycle (ET-283,
+    // measured against Abnoba Auscent's Orca log of 2026-08-31: "Your Mining Foreman Burst II has applied bonuses to
+    // 4 fleet members."). Only the booster's log ever carries this — a receiver's log stays silent.
+    [GeneratedRegex(@"^Your (?<module>.+) has applied bonuses to (?<count>\d+) fleet members\.$")]
+    private static partial Regex MiningBoostRegex();
 
     public GamelogClientService(IServiceProvider services, IEventBus eventBus, ICharacterRegistry? registry = null,
         EveClientPresenceService? presence = null)
@@ -595,6 +615,8 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         var name = Resolve(characterName);
         await EnsureSeededAsync(name);
         Metrics(name).RecordMining(mining);
+        if (_idByName.TryGetValue(name, out var observedId))
+            MiningObserved?.Invoke(observedId, mining.OreType, mining.Units, mining.Timestamp);
         MetricsChanged?.Invoke();
         await PersistAsync(name);
 
@@ -717,6 +739,9 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
             RaiseContribution(name, SiteContribution.Salvage, 1, at);
         if (message.EndsWith(PaleShadowSuffix, StringComparison.OrdinalIgnoreCase) && _idByName.TryGetValue(name, out var characterId))
             HomefrontCompletionObserved?.Invoke(characterId, at);
+        if (MiningBoostRegex().Match(message) is { Success: true } boost && _idByName.TryGetValue(name, out var boosterId))
+            MiningBoostObserved?.Invoke(boosterId, boost.Groups["module"].Value,
+                int.Parse(boost.Groups["count"].Value, CultureInfo.InvariantCulture), at);
         MetricsChanged?.Invoke();
     }
 

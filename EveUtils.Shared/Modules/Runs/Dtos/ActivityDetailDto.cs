@@ -5,9 +5,12 @@ namespace EveUtils.Shared.Modules.Runs.Dtos;
 
 public sealed record RunBountyEntryDto(Guid RunId, DateTime OccurredAtUtc, decimal Isk);
 
-/// <summary>One ore's aggregated mining on one run (ET-229) — no timestamps: the detail screen shows quantities and
-/// value only (Jithran, 2026-09-11), the activity already runs from a start to a stop time.</summary>
-public sealed record RunMiningEntryDto(Guid RunId, string OreType, int Units, int CriticalUnits, int ResidueUnits);
+/// <summary>One ore's aggregated mining on one run (ET-229). <see cref="FirstObservedAtUtc"/>/<see cref="LastObservedAtUtc"/>
+/// (ET-283) are the entry's own first-to-last yield line, not the whole run's start/stop — what the detail screen
+/// reads its "mining time" ISK/h from, next to the whole run's own average.</summary>
+public sealed record RunMiningEntryDto(
+    Guid RunId, string OreType, int Units, int CriticalUnits, int ResidueUnits,
+    DateTime FirstObservedAtUtc, DateTime LastObservedAtUtc);
 
 /// <summary>One sighting of one enemy type on one run. Deliberately not merged across runs by
 /// <see cref="EnemyTypeId"/>: two participants in the same activity can each carry their own row for the same type,

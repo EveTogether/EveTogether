@@ -5,6 +5,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Gamelog;
+using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Market.Services;
@@ -23,15 +25,46 @@ namespace EveUtils.Client.ViewModels.Runs.Sections;
 /// <see cref="FleetMinedText"/> and <see cref="RemainingText"/> (ET-234) add what the rest of the fleet shares
 /// (<c>RunShareUpdate</c>, ET-242's wire) on top of this window's own rows — the same "counted from what members
 /// share" honesty <see cref="FleetWindowSectionViewModel.FleetBasisText"/> already states for loot and bounty.
+///
+/// <see cref="Groups"/> (ET-283, variant C of the mining-ledger mockups) is the same data grouped one row per
+/// character: this window's own participants first, then whoever else shares mining (per-ore lines when their client
+/// sends them, ET-234's old total-only shape otherwise), then an external member with nothing shared at all — a
+/// "not shared" row, never counted, mirroring FLEET's own convention (ET-272).
 /// </summary>
-public sealed class MiningWindowSectionViewModel(IRunWindowContext context)
-    : RunWindowSection(context, RunSectionId.Mining, "MINING")
+public sealed class MiningWindowSectionViewModel : RunWindowSection
 {
+    private static readonly TimeSpan LiveRateWindow = TimeSpan.FromMinutes(5);
+
+    // A boost still reads "boosting"/"boosted" this long after its last observed burst line — long enough to span a
+    // couple of missed cycles on top of the ~60 s cadence measured on Abnoba Auscent's Orca (design/mining-ledger/v1).
+    private static readonly TimeSpan BoostFreshness = TimeSpan.FromMinutes(3);
+
+    private readonly object _gate = new();
+    private readonly Dictionary<int, List<(DateTime AtUtc, string OreType, int Units)>> _recentYield = [];
+    private readonly Dictionary<int, BoostState> _boost = [];
+    private readonly GamelogClientService? _gamelog;
+
     // Ore prices barely move mid-run and there are only ever a handful of distinct ores on one run, so every priced
     // type id is kept for the life of the section rather than re-asked once it has an answer.
     private readonly Dictionary<int, double> _prices = new();
 
+    private DateTime _nowUtc;
+
+    public MiningWindowSectionViewModel(IRunWindowContext context) : base(context, RunSectionId.Mining, "MINING")
+    {
+        _gamelog = context.Services.GetService<GamelogClientService>();
+        if (_gamelog is not null)
+        {
+            _gamelog.MiningObserved += _OnMiningObserved;
+            _gamelog.MiningBoostObserved += _OnMiningBoost;
+        }
+    }
+
     public ObservableCollection<ActivityMiningRowViewModel> Rows { get; } = [];
+
+    /// <summary>The same mining, grouped one row per character (ET-283) — what the view draws; <see cref="Rows"/>
+    /// stays flat underneath it for <see cref="FactsFor"/> and <see cref="UnitsFor"/>, which never needed grouping.</summary>
+    public ObservableCollection<MiningCharacterGroupViewModel> Groups { get; } = [];
 
     /// <summary>The whole fleet's mined units so far — this window's own rows plus whoever else shares (ET-234).
     /// Null while there is nothing to say at all: no own mining and nobody sharing.</summary>
@@ -44,8 +77,10 @@ public sealed class MiningWindowSectionViewModel(IRunWindowContext context)
 
     public override void Refresh(DateTime nowUtc)
     {
+        _nowUtc = nowUtc;
         _SyncRows();
         _RefreshFleetTotals();
+        _SyncGroups(nowUtc);
         _ = _RefreshPricesAsync();
     }
 
@@ -57,6 +92,26 @@ public sealed class MiningWindowSectionViewModel(IRunWindowContext context)
             : total is { } isk
                 ? $"{IskFormat.Whole(isk)} — {Rows.Count} ore lines"
                 : $"{Rows.Count} ore lines — no price yet";
+    }
+
+    protected override void OnContextChanged(string? propertyName)
+    {
+        if (propertyName is nameof(IRunWindowContext.GroupCode) or nameof(IRunWindowContext.RunId))
+            lock (_gate)
+            {
+                _recentYield.Clear();
+                _boost.Clear();
+            }
+    }
+
+    public override void Dispose()
+    {
+        if (_gamelog is not null)
+        {
+            _gamelog.MiningObserved -= _OnMiningObserved;
+            _gamelog.MiningBoostObserved -= _OnMiningBoost;
+        }
+        base.Dispose();
     }
 
     /// <summary>One participant's own mining, for the group ISK total (ET-256) — the same shape
@@ -170,5 +225,243 @@ public sealed class MiningWindowSectionViewModel(IRunWindowContext context)
                 _prices[row.Line.TypeId] = estimate;
 
         _SyncRows();
+        _SyncGroups(_nowUtc);
     }
+
+    // The gamelog watcher's pump thread (or, on RESUME, ET-258's catch-up read) writes these; this window's own
+    // tick reads them, the same split HomefrontWindowSectionViewModel's _heard/_paleShadow already use.
+    private void _OnMiningObserved(int characterId, string oreType, int units, DateTime atUtc)
+    {
+        lock (_gate)
+        {
+            if (!_recentYield.TryGetValue(characterId, out List<(DateTime AtUtc, string OreType, int Units)>? events))
+                _recentYield[characterId] = events = [];
+            events.Add((atUtc, oreType, units));
+            events.RemoveAll(observed => atUtc - observed.AtUtc > LiveRateWindow);
+        }
+    }
+
+    private void _OnMiningBoost(int characterId, string module, int reachCount, DateTime atUtc)
+    {
+        lock (_gate)
+            _boost[characterId] = _boost.TryGetValue(characterId, out BoostState? existing)
+                ? existing with { Module = module, BurstCount = existing.BurstCount + 1, LastAtUtc = atUtc, LastReachCount = reachCount }
+                : new BoostState(module, 1, atUtc, atUtc, reachCount);
+    }
+
+    private void _SyncGroups(DateTime nowUtc)
+    {
+        ISdeAccessor? sde = Context.Services.GetService<ISdeAccessor>();
+        FleetRunShares? shares = Context.Services.GetService<FleetRunShares>();
+
+        List<CharacterBuild> builds = [];
+        HashSet<int> ownIds = [];
+        foreach (IGrouping<int, RunParticipantViewModel> character in Context.Participants.GroupBy(p => p.CharacterId))
+        {
+            ownIds.Add(character.Key);
+            Dictionary<string, (int Units, int Crit, int Residue)> ores = [];
+            foreach (RunMiningOreDto entry in character.SelectMany(p => p.MiningEntries))
+                _Add(ores, entry.OreType, entry.Units, entry.CriticalUnits, entry.ResidueUnits);
+            builds.Add(new CharacterBuild(character.Key, character.First().CharacterName, IsLocal: true, ores));
+        }
+
+        if (Context.GroupCode is { } groupCode && Context.FleetId is { } fleetId && shares is not null)
+        {
+            HashSet<int> sharedIds = [];
+            foreach ((int characterId, RunShareUpdate share) in shares.Of(groupCode))
+            {
+                if (share.FleetId != fleetId || !share.SharesMining || ownIds.Contains(characterId))
+                    continue;
+
+                sharedIds.Add(characterId);
+                // Shares mining but has nothing yet (0 captures, an empty per-ore list) — nothing to draw a row for
+                // at all, own or fallback; not the same as an older client sending the total-only shape below.
+                if (share.MinedUnits == 0 && share.Mining.Count == 0)
+                    continue;
+
+                string name = Context.FleetMembers.FirstOrDefault(member => member.CharacterId == characterId)?.Name
+                              ?? $"character {characterId}";
+                if (share.Mining.Count > 0)
+                {
+                    Dictionary<string, (int Units, int Crit, int Residue)> ores = [];
+                    foreach (RunShareMiningLine line in share.Mining)
+                        _Add(ores, line.OreType, line.Units, line.CriticalUnits, line.ResidueUnits);
+                    builds.Add(new CharacterBuild(characterId, name, IsLocal: false, ores));
+                }
+                else
+                {
+                    builds.Add(new CharacterBuild(characterId, name, IsLocal: false, [],
+                        IsFallback: true, FallbackUnits: share.MinedUnits));
+                }
+            }
+
+            foreach (ActivityFleetMemberViewModel member in Context.FleetMembers)
+                if (!ownIds.Contains(member.CharacterId) && !sharedIds.Contains(member.CharacterId))
+                    builds.Add(new CharacterBuild(member.CharacterId, member.Name, IsLocal: false, [], IsNotShared: true));
+        }
+
+        // Per-ore fleet totals across every counted character (own + a shared member whose client sent per-ore
+        // lines) — what a fleet scenario's bar reads a character's own units against. A fallback or not-shared row
+        // carries no ore split, so it never enters this and never enters the fleet-scenario decision either.
+        CharacterBuild[] counted = [.. builds.Where(build => build is { IsFallback: false, IsNotShared: false })];
+        Dictionary<string, int> fleetOreUnits = [];
+        foreach (CharacterBuild build in counted)
+            foreach ((string ore, (int units, int _, int _)) in build.Ores)
+                fleetOreUnits[ore] = fleetOreUnits.GetValueOrDefault(ore) + units;
+        bool isFleetScenario = counted.Length > 1;
+
+        List<(MiningCharacterGroupViewModel Group, bool IsNotShared, decimal Isk)> built =
+            [.. builds.Select(build => _ToGroup(build, sde, fleetOreUnits, isFleetScenario, nowUtc))];
+
+        List<MiningCharacterGroupViewModel> ordered = [.. built
+            .OrderByDescending(entry => entry.Group.IsLocal)
+            .ThenBy(entry => entry.IsNotShared)
+            .ThenByDescending(entry => entry.Isk)
+            .Select(entry => entry.Group)];
+
+        Groups.Clear();
+        foreach (MiningCharacterGroupViewModel group in ordered)
+            Groups.Add(group);
+    }
+
+    private (MiningCharacterGroupViewModel Group, bool IsNotShared, decimal Isk) _ToGroup(
+        CharacterBuild build, ISdeAccessor? sde, IReadOnlyDictionary<string, int> fleetOreUnits, bool isFleetScenario,
+        DateTime nowUtc)
+    {
+        if (build.IsNotShared)
+            return (new MiningCharacterGroupViewModel(build.CharacterId, build.Name, false, null,
+                string.Empty, null, "no residue", null, null, null, [], fallbackText: null, isNotShared: true), true, 0m);
+
+        if (build.IsFallback)
+        {
+            string fallback = $"all ores · {IskFormat.Number(build.FallbackUnits)} units";
+            return (new MiningCharacterGroupViewModel(build.CharacterId, build.Name, false, null,
+                string.Empty, null, "not priced", null, null, null, [], fallbackText: fallback), false, 0m);
+        }
+
+        List<(string Ore, int Units, int Crit, int Residue, decimal? Isk, decimal? UnitPrice, bool IsFixedPrice)> lines = [];
+        foreach ((string ore, (int units, int crit, int residue)) in build.Ores)
+        {
+            (decimal? unitPrice, bool isFixedPrice) = _PriceOf(sde, ore);
+            lines.Add((ore, units, crit, residue, unitPrice is { } price ? price * units : null, unitPrice, isFixedPrice));
+        }
+
+        decimal? isk = lines.Any(line => line.Isk is not null) ? lines.Sum(line => line.Isk.GetValueOrDefault()) : null;
+        int totalResidue = lines.Sum(line => line.Residue);
+        decimal residueIsk = lines.Sum(line => (line.UnitPrice ?? 0m) * line.Residue);
+
+        List<ActivityMiningRowViewModel> oreRows = [];
+        foreach ((string ore, int units, int crit, int residue, decimal? lineIsk, decimal? _, bool isFixedPrice) in
+                 lines.OrderByDescending(line => line.Units))
+        {
+            double? shareFraction = null;
+            string? shareTooltip = null;
+            if (isFleetScenario)
+            {
+                int fleetUnits = fleetOreUnits.GetValueOrDefault(ore);
+                shareFraction = fleetUnits > 0 ? (double)units / fleetUnits : 0;
+                shareTooltip = $"{build.Name} · {ore} — {IskFormat.Number(units)} of the fleet's " +
+                                $"{IskFormat.Number(fleetUnits)} units";
+            }
+            else if (isk is { } total && total > 0 && lineIsk is not null)
+            {
+                shareFraction = (double)(lineIsk.Value / total);
+                shareTooltip = $"{ore} — part of {build.Name}'s own ISK mix";
+            }
+
+            oreRows.Add(new ActivityMiningRowViewModel(Guid.Empty, build.CharacterId, ore, units, crit, residue,
+                lineIsk, isFixedPrice, _ => build.Name, shareFraction, shareTooltip));
+        }
+
+        string residueText = totalResidue > 0 ? $"{IskFormat.Number(totalResidue)} residue" : "no residue";
+        string? residueTooltip = totalResidue > 0
+            ? $"{IskFormat.Whole(residueIsk)} lost — ore taken from the rock that never reached the hold"
+            : null;
+
+        (string RateText, string? RateTooltip) rate = build.IsLocal ? _LiveRateFor(build.CharacterId, sde, nowUtc) : (string.Empty, null);
+        (string? Glyph, string? Tooltip) boost = build.IsLocal ? _BoostFor(build.CharacterId, nowUtc) : (null, null);
+
+        return (new MiningCharacterGroupViewModel(build.CharacterId, build.Name, build.IsLocal, isk,
+            rate.RateText, rate.RateTooltip, residueText, residueTooltip, boost.Glyph, boost.Tooltip, oreRows), false,
+            isk ?? 0m);
+    }
+
+    /// <summary>ISK/h "now" (ET-283): the yield of the last 5 minutes, times 12 — live only, from the gamelog event
+    /// stream this window already receives (<see cref="_OnMiningObserved"/>); gone once the run is saved, the same
+    /// as any other live rate in this app.</summary>
+    private (string RateText, string? RateTooltip) _LiveRateFor(int characterId, ISdeAccessor? sde, DateTime nowUtc)
+    {
+        decimal sum = 0m;
+        bool any = false;
+        lock (_gate)
+            if (_recentYield.TryGetValue(characterId, out List<(DateTime AtUtc, string OreType, int Units)>? events))
+                foreach ((DateTime at, string ore, int units) in events)
+                {
+                    if (nowUtc - at > LiveRateWindow)
+                        continue;
+                    if (_PriceOf(sde, ore).UnitPrice is { } p)
+                    {
+                        sum += p * units;
+                        any = true;
+                    }
+                }
+
+        return any
+            ? ($"{IskFormat.Compact(sum * 12)}/h now", "ISK/h = the yield of the last 5 minutes, times 12.")
+            : ("—/h now", null);
+    }
+
+    /// <summary>The unit price and whether it is Mutanite's fixed NPC one — the same lookup <see cref="_SyncRows"/>
+    /// does inline, factored out for <see cref="_ToGroup"/> and <see cref="_LiveRateFor"/> to share without either
+    /// needing a null-forgiving read of <paramref name="sde"/> once it has already proven available.</summary>
+    private (decimal? UnitPrice, bool IsFixedPrice) _PriceOf(ISdeAccessor? sde, string oreType)
+    {
+        if (sde is not { IsAvailable: true } available || !available.TryGetTypeId(oreType, out int typeId))
+            return (null, false);
+
+        decimal? unitPrice = MiningValuation.UnitPrice(available, typeId, _prices);
+        bool isFixedPrice = available.GetType(typeId)?.GroupId == MiningValuation.MutaniteGroupId;
+        return (unitPrice, isFixedPrice);
+    }
+
+    /// <summary>▲▲ for the booster (this character's own gamelog wrote the burst lines), ▲ for another local
+    /// character while a local booster's burst is still fresh — inferred, since a receiver's own log never says
+    /// anything about a burst landing on them, even on this same PC. Null for anyone else: never "not boosted"
+    /// (ET-283). A booster or receiver on another PC is out of reach here — nothing about a burst crosses the fleet
+    /// wire yet, so a fleet mate elsewhere never gets a glyph from this window.</summary>
+    private (string? Glyph, string? Tooltip) _BoostFor(int characterId, DateTime nowUtc)
+    {
+        BoostState? own;
+        lock (_gate)
+            own = _boost.GetValueOrDefault(characterId);
+        if (own is { } booster && nowUtc - booster.LastAtUtc <= BoostFreshness)
+            return ("▲▲", $"Boosting · {booster.BurstCount}× {booster.Module}, last reached {booster.LastReachCount} " +
+                           $"fleet member(s) at {booster.LastAtUtc:HH:mm:ss}. Charge not known.");
+
+        KeyValuePair<int, BoostState> other;
+        lock (_gate)
+            other = _boost.FirstOrDefault(candidate =>
+                candidate.Key != characterId && nowUtc - candidate.Value.LastAtUtc <= BoostFreshness);
+        if (other.Value is null)
+            return (null, null);
+
+        string boosterName = Context.Participants.FirstOrDefault(participant => participant.CharacterId == other.Key)
+            ?.CharacterName ?? $"character {other.Key}";
+        return ("▲", $"Boosted (inferred) — {boosterName}'s bursts since {other.Value.SinceUtc:HH:mm:ss}, last " +
+                     $"reached {other.Value.LastReachCount} fleet member(s). Your own log says nothing when a burst " +
+                     $"lands on you; this is read from {boosterName}'s log only.");
+    }
+
+    private static void _Add(Dictionary<string, (int Units, int Crit, int Residue)> ores, string oreType, int units,
+        int crit, int residue)
+    {
+        (int Units, int Crit, int Residue) existing = ores.GetValueOrDefault(oreType);
+        ores[oreType] = (existing.Units + units, existing.Crit + crit, existing.Residue + residue);
+    }
+
+    private sealed record CharacterBuild(
+        int CharacterId, string Name, bool IsLocal, Dictionary<string, (int Units, int Crit, int Residue)> Ores,
+        bool IsFallback = false, int FallbackUnits = 0, bool IsNotShared = false);
+
+    private sealed record BoostState(string Module, int BurstCount, DateTime SinceUtc, DateTime LastAtUtc, int LastReachCount);
 }
