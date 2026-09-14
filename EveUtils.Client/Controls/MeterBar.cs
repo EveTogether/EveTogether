@@ -12,7 +12,7 @@ namespace EveUtils.Client.Controls;
 /// </summary>
 public sealed class MeterBar : Control
 {
-    private static readonly IBrush TrackBrush = new SolidColorBrush(Color.Parse("#0FFFFFFF"));
+    private static readonly IBrush DefaultTrack = new SolidColorBrush(Color.Parse("#0FFFFFFF"));
 
     public static readonly StyledProperty<double> FractionProperty =
         AvaloniaProperty.Register<MeterBar, double>(nameof(Fraction));
@@ -20,9 +20,15 @@ public sealed class MeterBar : Control
     public static readonly StyledProperty<IBrush?> FillProperty =
         AvaloniaProperty.Register<MeterBar, IBrush?>(nameof(Fill));
 
+    /// <summary>The bar's own faint background, styleable per owner (ET-285: MINING's share bar wants a track a
+    /// reader can actually see, where the combat meters this control also draws want the near-invisible default).
+    /// Defaults to the original always-faint brush so nothing changes for a caller that never sets it.</summary>
+    public static readonly StyledProperty<IBrush?> TrackProperty =
+        AvaloniaProperty.Register<MeterBar, IBrush?>(nameof(Track), DefaultTrack);
+
     static MeterBar()
     {
-        AffectsRender<MeterBar>(FractionProperty, FillProperty);
+        AffectsRender<MeterBar>(FractionProperty, FillProperty, TrackProperty);
     }
 
     public double Fraction
@@ -37,6 +43,12 @@ public sealed class MeterBar : Control
         set => SetValue(FillProperty, value);
     }
 
+    public IBrush? Track
+    {
+        get => GetValue(TrackProperty);
+        set => SetValue(TrackProperty, value);
+    }
+
     public override void Render(DrawingContext context)
     {
         var track = new Rect(Bounds.Size);
@@ -44,7 +56,7 @@ public sealed class MeterBar : Control
             return;
 
         var radius = Math.Min(2, track.Height / 2);
-        context.DrawRectangle(TrackBrush, null, track, radius, radius);
+        context.DrawRectangle(Track, null, track, radius, radius);
 
         var width = Math.Clamp(Fraction, 0, 1) * track.Width;
         // Anything at all shows as at least a sliver: 3 GJ/s on a 40 GJ/s scale is not nothing.

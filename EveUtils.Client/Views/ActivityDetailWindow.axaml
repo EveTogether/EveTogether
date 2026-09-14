@@ -13,8 +13,24 @@
         Title="Activity detail">
 
     <!-- One layout, sized off the space it is given rather than off the window: ModuleHostService moves this very
-         Content between a docked tab (758px) and a floating window, and there is no pop-out variant to fall back on. -->
-    <DockPanel>
+         Content between a docked tab (758px) and a floating window, and there is no pop-out variant to fall back on.
+
+         MaxWidth (ET-285): every activity kind shares one content width, capped rather than filling whatever host
+         it lands in — the rule is content width = min(available, 1040), filling up to that cap, never sized by
+         its own content. 1040 is roughly where a Sansha Refuge already sat before any of this (Jithran's own
+         reference point).
+
+         HorizontalAlignment is deliberately left at its default, Stretch, and not set to "Left" — every attempt
+         at moving this DockPanel (or a wrapper around it) to Left alignment, or into an "Auto" Grid column, which
+         is the same thing under the hood, broke the cap instead of enforcing it: a non-Stretch-sized element does
+         not fill the space it is measured with, it reports back only what its own content needs, MaxWidth or not.
+         Stretch is the only arrangement verified (by reading DockPanel.Bounds.Width, not by eye) to actually fill
+         up to 1040 rather than shrink to content on both real activities this ticket was built against. The one
+         side effect: Stretch centers this DockPanel within a wider host once MaxWidth caps it below the available
+         width, rather than sitting flush left the way most of this app's other screens do — a placement Jithran's
+         own original ticket named as fine either way ("gecentreerd of links"), and the one still available without
+         reopening the exact bug two earlier rounds of this same ticket already put back twice. -->
+    <DockPanel MaxWidth="1040">
 
         <!-- On the content root, not on the window: Window.Styles/Resources stay behind with the (never shown)
              window once the module host re-parents this content into a tab. -->
@@ -49,29 +65,6 @@
             </Style>
             <Style Selector="TextBlock.clockmeta.figure">
                 <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-            </Style>
-            <!-- ── The money column ── one width and one font for every ISK figure in the BOUNTY section, the same
-                 treatment ActivityWindow's own LOOT totals get — a row's value and the total below it land on the
-                 same characters, and the total reads as a total rather than one more row of the list (ET-210 review
-                 finding, 2026-09-09). -->
-            <Style Selector="TextBlock.money">
-                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
-                <Setter Property="FontSize" Value="11"/>
-                <Setter Property="TextAlignment" Value="Right"/>
-                <Setter Property="VerticalAlignment" Value="Center"/>
-            </Style>
-            <Style Selector="TextBlock.money.total">
-                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="FontSize" Value="13"/>
-            </Style>
-            <Style Selector="Border.totals">
-                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
-                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
-                <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="Padding" Value="8,6"/>
-                <Setter Property="Margin" Value="0,2,0,4"/>
             </Style>
             <!-- Its own class rather than "accent": the stock theme fills an accent button with the faction colour
                  and puts light text on it, which on the red and green factions falls under 4.5:1. Bright text on the
@@ -176,6 +169,22 @@
             </StackPanel>
         </Border>
 
+        <!-- ET-285 round 4: this Panel, not the ScrollViewer, is the DockPanel's real fill child now. A DockPanel
+             gives an explicit Dock (the header Border above, Dock="Top") its cross-axis in full, but a child with
+             none is docked Left by default — sized to its own content, unconstrained, exactly like a Left/Right
+             dock always is — and only the true LAST child with no Dock at all gets LastChildFill's full remaining
+             rect. This DockPanel had two such undocked children (the ScrollViewer below and the "Deleted" Border
+             further down, toggled by opposite halves of IsDeleted): the ScrollViewer, coming first, silently took
+             the Left slot and shrank to whatever its content measured out to; the Deleted Border, actually last,
+             took the fill. That is the real reason MINING and the Refuge read two different widths in the first
+             place (Jithran's original report) — no MaxWidth in the tree back then either, so each simply measured
+             out however wide its own widest unwrapped line happened to be — and why round 3's MaxWidth fix only
+             ever looked reliable: capping the DockPanel's own available width put a ceiling on how wide that
+             shrink-wrap could still reach, and the still-long two-line footnote of that round routinely measured
+             out close enough to the 1040 ceiling to hide the underlying bug. One Panel wrapping both toggled
+             states is the actual fix: now there is exactly one undocked (fill) child, so it — and everything
+             inside it — gets the DockPanel's full remaining rect, the same way the header Border already does. -->
+        <Panel>
         <ScrollViewer HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding !IsDeleted}">
             <StackPanel>
 
@@ -197,10 +206,11 @@
                 </ItemsControl>
 
                 <!-- ══ Why a section is not here ══ the distinguishing line of this screen. An absent section that
-                     says nothing reads exactly like an empty one, and the two mean opposite things. -->
+                     says nothing reads exactly like an empty one, and the two mean opposite things. One short line
+                     naming the sections (ET-285); the reason for each is the tooltip, not the line itself. -->
                 <Border Padding="14,12" IsVisible="{Binding AbsentSectionsText, Converter={x:Static ObjectConverters.IsNotNull}}">
                     <TextBlock x:Name="AbsentSections" Classes="hint" Margin="0" TextWrapping="Wrap"
-                               Text="{Binding AbsentSectionsText}"/>
+                               Text="{Binding AbsentSectionsText}" ToolTip.Tip="{Binding AbsentSectionsTooltip}"/>
                 </Border>
 
                 <!-- ══ Delete ══ bottom of the screen, understated but a real button (ET-214, Jithran's two reviews:
@@ -228,5 +238,6 @@
                         Content="{Binding UndoDeleteText}" Command="{Binding UndoDeleteCommand}"/>
             </StackPanel>
         </Border>
+        </Panel>
     </DockPanel>
 </v:ChromedWindow>

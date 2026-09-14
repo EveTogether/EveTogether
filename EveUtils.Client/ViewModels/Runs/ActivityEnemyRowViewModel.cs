@@ -16,4 +16,8 @@ public sealed class ActivityEnemyRowViewModel(RunEnemyObservationDto observation
     /// <summary>The row's own window, which is the reason it is a row of its own.</summary>
     public string WindowText { get; } =
         $"{observation.FirstObservedAtUtc.ToLocalTime():HH:mm:ss} – {observation.LastObservedAtUtc.ToLocalTime():HH:mm:ss}";
+
+    /// <summary>Zebra striping on the activity detail screen (ET-285), set by the caller once the row's final
+    /// position in the list is known.</summary>
+    public bool IsAlternate { get; set; }
 }

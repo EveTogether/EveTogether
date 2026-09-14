@@ -125,9 +125,15 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     /// <summary>Why there is nothing on screen, when there is nothing — a failed lookup is a state, not silence.</summary>
     [ObservableProperty] private string? _statusMessage;
 
-    /// <summary>The sections this type does not have, each with the reason. The distinguishing line of the screen:
-    /// an absent section that says nothing is indistinguishable from an empty one.</summary>
+    /// <summary>The sections this type does not have, named in one short line (ET-285: Jithran's own screenshot
+    /// showed this driving the whole screen's width when it ran as prose instead — "keep the footnote to one short
+    /// line"). The distinguishing line of the screen: an absent section that says nothing is indistinguishable from
+    /// an empty one. The reason for each sits in <see cref="AbsentSectionsTooltip"/> instead of on the line itself.</summary>
     [ObservableProperty] private string? _absentSectionsText;
+
+    /// <summary>Why each section in <see cref="AbsentSectionsText"/> is absent, one clause per section — the prose
+    /// the line itself used to be, moved to hover rather than dropped.</summary>
+    [ObservableProperty] private string? _absentSectionsTooltip;
 
     /// <summary>A run of this activity had its loot corrected after it was published (ET-215): the server still
     /// shows the older figures. Said on the screen for as long as it is true — never left for the pilot to find out
@@ -497,22 +503,34 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     private void _ApplySectionsPerType(RunTypeDefinition type)
     {
         List<RunDetailSection> shown = [];
-        List<string> absent = [];
+        List<string> absentNames = [];
+        List<string> absentReasons = [];
         foreach (RunDetailSection section in _sections)
         {
             if (type.DetailSections.Contains(section.Id) || section.HasContent)
                 shown.Add(section);
             else if (section.AbsentReason(type.Noun) is { } reason)
-                absent.Add(reason);
+            {
+                absentNames.Add(section.Title.ToLowerInvariant());
+                absentReasons.Add(reason);
+            }
         }
 
         Sections.ReconcileTo(shown);
         // Named rather than dropped because a section that is simply missing reads exactly like one that is empty,
-        // and the two mean opposite things. The line says which sections and why; it does not explain itself to the
-        // reader, who came here to see their run and not the reasoning behind the screen.
-        AbsentSectionsText = absent.Count == 0
-            ? null
-            : $"Not shown for this kind of activity: {string.Join("; ", absent)}.";
+        // and the two mean opposite things. Just the names, one short line (ET-285 — this used to be the full
+        // reason for each, prose long enough to grow the whole screen's width to fit it unwrapped); the reason for
+        // each still reaches the reader, on hover rather than on the line itself.
+        if (absentNames.Count == 0)
+        {
+            AbsentSectionsText = null;
+            AbsentSectionsTooltip = null;
+        }
+        else
+        {
+            AbsentSectionsText = $"Not shown for {type.Name.ToLowerInvariant()}: {string.Join(", ", absentNames)}.";
+            AbsentSectionsTooltip = string.Join("; ", absentReasons) + ".";
+        }
     }
 
     public void Dispose() => _runChangesSubscription?.Dispose();

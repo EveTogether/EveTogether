@@ -12,8 +12,11 @@
                       IsVisible="{Binding HasBountyFigures}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="vr:ActivityBountyRowViewModel">
-                    <Grid Classes="kv" ColumnDefinitions="*,Auto">
-                        <TextBlock Text="{Binding CharacterText}"/>
+                    <!-- Not Classes="kv" (ET-285): that grid's nth-child(1) styling is built for a label like SITE,
+                         and a character's name is not a label — it inherited the letter-spaced small caps meant
+                         for one, the exact inconsistency Jithran's screenshot showed against FLEET's plain names. -->
+                    <Grid Classes="detailrow" Classes.alt="{Binding IsAlternate}" ColumnDefinitions="*,Auto" Margin="0,3">
+                        <TextBlock Classes="charname" Text="{Binding CharacterText}"/>
                         <TextBlock Grid.Column="1" Classes="money" Text="{Binding IskText}"/>
                     </Grid>
                 </DataTemplate>

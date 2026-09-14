@@ -30,7 +30,7 @@ public sealed partial class EnemiesDetailSectionViewModel() : RunDetailSection(R
         ActivityDetailDto detail = input.Detail;
         EnemyRows.Clear();
         foreach (RunEnemyObservationDto observation in detail.EnemyObservations)
-            EnemyRows.Add(new ActivityEnemyRowViewModel(observation));
+            EnemyRows.Add(new ActivityEnemyRowViewModel(observation) { IsAlternate = EnemyRows.Count % 2 == 1 });
 
         // An empty list says no enemy observations were recorded, not that no combat happened.
         EnemiesEmptyText = EnemyRows.Count > 0
@@ -53,7 +53,10 @@ public sealed partial class EnemiesDetailSectionViewModel() : RunDetailSection(R
                      .GroupBy(observation => characterByRun[observation.RunId])
                      .OrderByDescending(group => group.Sum(observation => observation.Count)))
             EnemyCharacterRows.Add(new ActivityEnemyCharacterRowViewModel(
-                group.Key, group.Sum(observation => observation.Count), input.NameOf));
+                group.Key, group.Sum(observation => observation.Count), input.NameOf)
+            {
+                IsAlternate = EnemyCharacterRows.Count % 2 == 1
+            });
 
         HasEnemyFigures = countedEnemyCount > 0;
         EnemyTotalCountText = countedEnemyCount == 1 ? "1 enemy" : $"{countedEnemyCount} enemies";

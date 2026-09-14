@@ -18,7 +18,8 @@
         <ItemsControl x:Name="RunList" ItemsSource="{Binding Rows}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vr:FleetCharacterRowViewModel">
-                    <Grid Classes="fleetrow" ColumnDefinitions="Auto,*,Auto" Margin="0,3" Background="Transparent">
+                    <Grid Classes="fleetrow detailrow" Classes.alt="{Binding IsAlternate}"
+                          ColumnDefinitions="Auto,*,Auto" Margin="0,3">
                         <Border Classes="localbar" Classes.on="{Binding IsLocal}"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal">

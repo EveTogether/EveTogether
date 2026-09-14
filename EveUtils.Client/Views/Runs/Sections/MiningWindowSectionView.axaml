@@ -46,21 +46,15 @@
             <Setter Property="TextAlignment" Value="Right"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+        <!-- ET-285: full TextBrush rather than a faded Opacity — see MiningDetailSectionView's own copy of this
+             style for why. -->
         <Style Selector="TextBlock.sharepct">
             <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-            <Setter Property="Opacity" Value="0.75"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="FontSize" Value="10"/>
         </Style>
-        <!-- "money" is never styled in this window (only ActivityLootView/ActivityDetailWindow define it — a run
-             window's own ISK figures fell back to unstyled, unaligned text). Given its own definition here, same
-             shape as every other window's copy. -->
-        <Style Selector="TextBlock.money">
-            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="TextAlignment" Value="Right"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
+        <!-- "money" is global now (Themes/EveUtils.axaml, ET-285 round 2) — this window used to carry its own copy
+             because nothing else styled it here. -->
         <Style Selector="TextBlock.rate">
             <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
             <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
@@ -68,15 +62,18 @@
             <Setter Property="TextAlignment" Value="Right"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+        <!-- ET-285: bigger and with a real track, matching design/mining-ledger/v1/c-compact-table.html's own
+             .sbar (8px tall, 64px wide) — the detail screen's copy of this style carries the same numbers. -->
         <Style Selector="ctl|MeterBar.share">
-            <Setter Property="Height" Value="6"/>
-            <Setter Property="Width" Value="56"/>
+            <Setter Property="Height" Value="8"/>
+            <Setter Property="Width" Value="64"/>
+            <Setter Property="Track" Value="#26FFFFFF"/>
         </Style>
     </UserControl.Styles>
 
     <StackPanel>
         <!-- Column headers, hidden along with everything else once there is nothing mined at all. -->
-        <Grid ColumnDefinitions="*,70,65,80,105" ColumnSpacing="8" Margin="0,0,0,3"
+        <Grid ColumnDefinitions="*,100,65,80,105" ColumnSpacing="8" Margin="0,0,0,3"
               IsVisible="{Binding Groups.Count}">
             <TextBlock Classes="colhdr" Text="CHARACTER · ORE"/>
             <TextBlock Grid.Column="1" Classes="colhdr num" Text="SHARE"/>
@@ -96,7 +93,7 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="vr:MiningCharacterGroupViewModel">
                     <StackPanel>
-                        <Grid ColumnDefinitions="*,70,65,80,105" ColumnSpacing="8">
+                        <Grid ColumnDefinitions="*,100,65,80,105" ColumnSpacing="8">
                             <StackPanel Orientation="Horizontal" Spacing="4">
                                 <TextBlock Classes="charname" Text="{Binding CharacterName}"/>
                                 <Border Classes="localtag" IsVisible="{Binding IsLocal}">
@@ -125,12 +122,12 @@
                         <ItemsControl ItemsSource="{Binding Ores}" IsVisible="{Binding HasOres}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vr:ActivityMiningRowViewModel">
-                                    <Grid ColumnDefinitions="*,70,65,80,105" ColumnSpacing="8" Margin="0,2,0,0">
+                                    <Grid ColumnDefinitions="*,100,65,80,105" ColumnSpacing="8" Margin="0,2,0,0">
                                         <TextBlock Classes="oretext" Text="{Binding OreText}"/>
                                         <!-- Bar and percentage on one line, right-aligned as one unit so the
                                              percentage always sits flush against UNITS regardless of the bar's own
                                              width (ET-284 — it used to float above and to the right of the bar). -->
-                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
                                                     HorizontalAlignment="Right" IsVisible="{Binding HasShareBar}"
                                                     ToolTip.Tip="{Binding ShareTooltip}">
                                             <ctl:MeterBar Classes="share" Fraction="{Binding ShareFraction}" Fill="{DynamicResource AccentBrush}"/>

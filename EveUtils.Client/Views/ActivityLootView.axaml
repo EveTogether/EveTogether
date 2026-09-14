@@ -82,7 +82,7 @@
                 <ItemsControl ItemsSource="{Binding Loot.ItemRows}" IsVisible="{Binding !Loot.IsEditingLoot}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vr:ActivityLootLineViewModel">
-                            <Border Classes="itemrow" Classes.alt="{Binding IsAlternate}"
+                            <Border Classes="itemrow detailrow" Classes.alt="{Binding IsAlternate}"
                                     Classes.top="{Binding IsTopValue}" Classes.excluded="{Binding IsExcluded}">
                                 <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
                                     <Border Classes="icontile">
@@ -208,21 +208,23 @@
     </UserControl.Resources>
 
     <UserControl.Styles>
-        <Style Selector="TextBlock.money">
-            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="TextAlignment" Value="Right"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
+        <!-- "money" is global now (Themes/EveUtils.axaml, ET-285 round 2) — this view used to carry the original
+             copy every other window's own "money" was modelled after. -->
         <Style Selector="TextBlock.money.net">
             <Setter Property="Foreground" Value="{StaticResource ValueBrush}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="13"/>
         </Style>
+        <!-- ET-285: same size and letter-spacing as every other section's LABEL (Themes/EveUtils.axaml's own
+             "label" and Grid.kv's nth-child(1)) — this ran large and unspaced before, the one place in the
+             activity detail screen where a label read like a heading rather than a label. Foreground stays
+             LootMetaBrush rather than the shared TextDimBrush: this view can be set see-through (ET-215), and
+             LootMetaBrush is the one step brighter than TextDimBrush that keeps it legible over whatever shows
+             through — a considered exception, not a leftover. -->
         <Style Selector="TextBlock.kvlabel">
             <Setter Property="Foreground" Value="{StaticResource LootMetaBrush}"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="1.8"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style Selector="TextBlock.note">
@@ -246,14 +248,13 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
 
-        <!-- ── The item table ── striped, a hairline under every row, the heaviest line tinted. -->
+        <!-- ── The item table ── striped, a hairline under every row, the heaviest line tinted. The stripe and the
+             hover fill both come from Classes="detailrow" (Themes/EveUtils.axaml, ET-285) now — one definition for
+             every dense list in the activity detail screen, not one per section. -->
         <Style Selector="Border.itemrow">
             <Setter Property="Padding" Value="6,4"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
             <Setter Property="BorderBrush" Value="#08FFFFFF"/>
-        </Style>
-        <Style Selector="Border.itemrow.alt">
-            <Setter Property="Background" Value="{StaticResource BgRowAltBrush}"/>
         </Style>
         <Style Selector="Border.itemrow.top">
             <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
@@ -509,14 +510,6 @@
             <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
         </Style>
 
-        <Style Selector="Border.grouptotal">
-            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="4"/>
-            <Setter Property="Padding" Value="10,8"/>
-            <Setter Property="Margin" Value="0,6,0,0"/>
-        </Style>
     </UserControl.Styles>
 
     <StackPanel>
@@ -549,13 +542,13 @@
 
         <ItemsControl ItemsSource="{Binding Characters}" ItemTemplate="{StaticResource CharacterBlock}"/>
 
-        <!-- Under everything: what the whole group brought in. -->
-        <Border Classes="grouptotal" IsVisible="{Binding HasCaptures}">
+        <!-- Under everything: what the whole group brought in. Same "totals" row every other section's TOTAL uses
+             (ET-285 round 2) — this used to be its own bordered box in bigger type, the one place in the screen a
+             total read differently from the rest. -->
+        <Border Classes="totals" IsVisible="{Binding HasCaptures}">
             <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Foreground="{DynamicResource TextAccentBrush}" FontSize="12" LetterSpacing="0.5"
-                           VerticalAlignment="Center" Text="GROUP TOTAL"/>
-                <TextBlock Grid.Column="1" Foreground="{StaticResource TextBrush}" FontSize="16"
-                           VerticalAlignment="Center" Text="{Binding NetIskDisplay}"/>
+                <TextBlock Classes="label" VerticalAlignment="Center" Text="GROUP TOTAL"/>
+                <TextBlock Grid.Column="1" Classes="money total" Text="{Binding NetIskDisplay}"/>
             </Grid>
         </Border>
 

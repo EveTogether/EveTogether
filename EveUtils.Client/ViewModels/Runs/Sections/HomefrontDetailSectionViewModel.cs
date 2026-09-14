@@ -274,6 +274,8 @@ public sealed partial class HomefrontDetailSectionViewModel(RunDetailSectionServ
                      .OrderByDescending(row => row.IsLocal)
                      .ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase))
             Rows.Add(row);
+        for (int i = 0; i < Rows.Count; i++)
+            Rows[i].IsAlternate = i % 2 == 1;
 
         int inSite = rows.Count(row => row.IsInSite) + NotOnRosterCount;
         _ShowPayout(input, detail, decision, inSite);

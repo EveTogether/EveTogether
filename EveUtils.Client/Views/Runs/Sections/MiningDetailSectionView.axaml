@@ -36,9 +36,12 @@
             <Setter Property="TextAlignment" Value="Right"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+        <!-- ET-285: full TextBrush rather than a faded Opacity — dropped a percentage next to a track this
+             thin was "nauwelijks leesbaar" (Jithran); an explicit brush also reads the same on a hovered
+             (detailrow) row's background as it does on a plain one, where an alpha blend would not. -->
         <Style Selector="TextBlock.sharepct">
             <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-            <Setter Property="Opacity" Value="0.75"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="FontSize" Value="10"/>
         </Style>
         <Style Selector="TextBlock.rate">
@@ -48,14 +51,17 @@
             <Setter Property="TextAlignment" Value="Right"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+        <!-- ET-285: bigger and with a real track, matching design/mining-ledger/v1/c-compact-table.html's own
+             .sbar (8px tall, 64px wide) — the run window's copy of this style carries the same numbers. -->
         <Style Selector="ctl|MeterBar.share">
-            <Setter Property="Height" Value="6"/>
-            <Setter Property="Width" Value="56"/>
+            <Setter Property="Height" Value="8"/>
+            <Setter Property="Width" Value="64"/>
+            <Setter Property="Track" Value="#26FFFFFF"/>
         </Style>
     </UserControl.Styles>
 
     <StackPanel>
-        <Grid ColumnDefinitions="*,70,65,80,105" ColumnSpacing="8" Margin="0,0,0,3" IsVisible="{Binding HasMining}">
+        <Grid ColumnDefinitions="*,100,65,80,105" ColumnSpacing="8" Margin="0,0,0,3" IsVisible="{Binding HasMining}">
             <TextBlock Classes="colhdr" Text="CHARACTER · ORE"/>
             <TextBlock Grid.Column="1" Classes="colhdr num" Text="SHARE"/>
             <TextBlock Grid.Column="2" Classes="colhdr num" Text="UNITS"/>
@@ -72,7 +78,7 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="vr:MiningCharacterGroupViewModel">
                     <StackPanel>
-                        <Grid ColumnDefinitions="*,70,65,80,105" ColumnSpacing="8">
+                        <Grid ColumnDefinitions="*,100,65,80,105" ColumnSpacing="8">
                             <StackPanel Orientation="Horizontal" Spacing="4">
                                 <TextBlock Classes="charname" Text="{Binding CharacterName}"/>
                                 <Border Classes="localtag" IsVisible="{Binding IsLocal}">
@@ -88,9 +94,10 @@
                         <ItemsControl ItemsSource="{Binding Ores}" IsVisible="{Binding HasOres}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vr:ActivityMiningRowViewModel">
-                                    <Grid ColumnDefinitions="*,70,65,80,105" ColumnSpacing="8" Margin="0,2,0,0">
+                                    <Grid Classes="detailrow" Classes.alt="{Binding IsAlternate}"
+                                          ColumnDefinitions="*,100,65,80,105" ColumnSpacing="8" Margin="0,2,0,0">
                                         <TextBlock Classes="oretext" Text="{Binding OreText}"/>
-                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
                                                     HorizontalAlignment="Right" IsVisible="{Binding HasShareBar}"
                                                     ToolTip.Tip="{Binding ShareTooltip}">
                                             <ctl:MeterBar Classes="share" Fraction="{Binding ShareFraction}" Fill="{DynamicResource AccentBrush}"/>
@@ -109,7 +116,7 @@
         </ItemsControl>
         <!-- Same column grid as every row above it, so TOTAL's own ISK figure lands in the ISK column too. -->
         <Border Classes="totals" IsVisible="{Binding HasMining}">
-            <Grid ColumnDefinitions="*,70,65,80,105" ColumnSpacing="8">
+            <Grid ColumnDefinitions="*,100,65,80,105" ColumnSpacing="8">
                 <TextBlock Grid.ColumnSpan="4" Classes="label" Text="TOTAL" VerticalAlignment="Center"/>
                 <TextBlock Grid.Column="4" Classes="money total" Text="{Binding MiningText}"/>
             </Grid>

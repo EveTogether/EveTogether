@@ -15,4 +15,8 @@ public sealed class ActivityBountyRowViewModel(long characterId, decimal isk, Fu
     public string CharacterText { get; } = nameOf?.Invoke(characterId) ?? $"character {characterId}";
 
     public string IskText { get; } = IskFormat.Whole(isk);
+
+    /// <summary>Zebra striping on the activity detail screen (ET-285), set by the caller once the row's final
+    /// position in the (largest-share-first) list is known.</summary>
+    public bool IsAlternate { get; set; }
 }

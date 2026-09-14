@@ -168,7 +168,8 @@ public sealed class AbyssalFilamentTests
         await detail.LoadAsync();
 
         Assert.DoesNotContain(detail.Sections, section => section is MissionDetailSectionViewModel);
-        Assert.Contains("no MISSION", detail.AbsentSectionsText!, StringComparison.Ordinal);
+        Assert.Contains("mission", detail.AbsentSectionsText!, StringComparison.Ordinal);
+        Assert.Contains("no MISSION", detail.AbsentSectionsTooltip!, StringComparison.Ordinal);
     }
 
     // ── ET-248: LOCATION on an abyssal — the entry system when known, never "not recorded" ────────────
