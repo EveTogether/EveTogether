@@ -16,21 +16,20 @@
          Content between a docked tab (758px) and a floating window, and there is no pop-out variant to fall back on.
 
          MaxWidth (ET-285): every activity kind shares one content width, capped rather than filling whatever host
-         it lands in. Before this, a wide docked host (or a floating window dragged wide) let a mining run's own
-         footnote — "Not shown for this kind of activity: no MISSION — …; no ESCALATION — …" — measure out as one
-         unwrapped line and grow the whole screen to it, where a Sansha Refuge with a shorter footnote stayed
-         narrow: two activities of the same screen reading two different widths. 1040 is roughly where a Refuge
-         already sat (Jithran's own reference point); text wraps inside it and never sets it.
+         it lands in — the rule is content width = min(available, 1040), filling up to that cap, never sized by
+         its own content. 1040 is roughly where a Sansha Refuge already sat before any of this (Jithran's own
+         reference point).
 
-         Deliberately no HorizontalAlignment="Left" here (round 1 of this ticket had one, and it broke the cap
-         instead of enforcing it): a non-Stretch alignment measures this DockPanel with the available width but
-         reports back only what its content actually needs, so once the absent-sections footnote stopped being
-         the widest thing in it (round 2, shortened to one line) every section quietly reverted to its own
-         natural width — 470–550px instead of the 1040 cap, on both activities. Plain Stretch (the default, so
-         no setter at all) plus MaxWidth is the actual "min(available, 1040), filling up to it" rule: Stretch
-         fills the space it is given and MaxWidth only ever pulls that back down, never content driving it up.
-         Centers within a wider host once capped, which is one of the two placements Jithran named as fine
-         ("gecentreerd of links"). -->
+         HorizontalAlignment is deliberately left at its default, Stretch, and not set to "Left" — every attempt
+         at moving this DockPanel (or a wrapper around it) to Left alignment, or into an "Auto" Grid column, which
+         is the same thing under the hood, broke the cap instead of enforcing it: a non-Stretch-sized element does
+         not fill the space it is measured with, it reports back only what its own content needs, MaxWidth or not.
+         Stretch is the only arrangement verified (by reading DockPanel.Bounds.Width, not by eye) to actually fill
+         up to 1040 rather than shrink to content on both real activities this ticket was built against. The one
+         side effect: Stretch centers this DockPanel within a wider host once MaxWidth caps it below the available
+         width, rather than sitting flush left the way most of this app's other screens do — a placement Jithran's
+         own original ticket named as fine either way ("gecentreerd of links"), and the one still available without
+         reopening the exact bug two earlier rounds of this same ticket already put back twice. -->
     <DockPanel MaxWidth="1040">
 
         <!-- On the content root, not on the window: Window.Styles/Resources stay behind with the (never shown)
@@ -170,6 +169,22 @@
             </StackPanel>
         </Border>
 
+        <!-- ET-285 round 4: this Panel, not the ScrollViewer, is the DockPanel's real fill child now. A DockPanel
+             gives an explicit Dock (the header Border above, Dock="Top") its cross-axis in full, but a child with
+             none is docked Left by default — sized to its own content, unconstrained, exactly like a Left/Right
+             dock always is — and only the true LAST child with no Dock at all gets LastChildFill's full remaining
+             rect. This DockPanel had two such undocked children (the ScrollViewer below and the "Deleted" Border
+             further down, toggled by opposite halves of IsDeleted): the ScrollViewer, coming first, silently took
+             the Left slot and shrank to whatever its content measured out to; the Deleted Border, actually last,
+             took the fill. That is the real reason MINING and the Refuge read two different widths in the first
+             place (Jithran's original report) — no MaxWidth in the tree back then either, so each simply measured
+             out however wide its own widest unwrapped line happened to be — and why round 3's MaxWidth fix only
+             ever looked reliable: capping the DockPanel's own available width put a ceiling on how wide that
+             shrink-wrap could still reach, and the still-long two-line footnote of that round routinely measured
+             out close enough to the 1040 ceiling to hide the underlying bug. One Panel wrapping both toggled
+             states is the actual fix: now there is exactly one undocked (fill) child, so it — and everything
+             inside it — gets the DockPanel's full remaining rect, the same way the header Border already does. -->
+        <Panel>
         <ScrollViewer HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding !IsDeleted}">
             <StackPanel>
 
@@ -223,5 +238,6 @@
                         Content="{Binding UndoDeleteText}" Command="{Binding UndoDeleteCommand}"/>
             </StackPanel>
         </Border>
+        </Panel>
     </DockPanel>
 </v:ChromedWindow>
