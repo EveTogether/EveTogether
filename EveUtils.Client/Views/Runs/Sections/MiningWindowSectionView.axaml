@@ -48,10 +48,14 @@
         </Style>
         <!-- ET-285: full TextBrush rather than a faded Opacity — see MiningDetailSectionView's own copy of this
              style for why. -->
+        <!-- ET-286: right-aligned and vertically centred on the bar in its own fixed column — see the row
+             Grid's own comment for why the bar and this text each need their own column. -->
         <Style Selector="TextBlock.sharepct">
             <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="FontSize" Value="10"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <!-- "money" is global now (Themes/EveUtils.axaml, ET-285 round 2) — this window used to carry its own copy
              because nothing else styled it here. -->
@@ -68,18 +72,22 @@
             <Setter Property="Height" Value="8"/>
             <Setter Property="Width" Value="64"/>
             <Setter Property="Track" Value="#26FFFFFF"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
     </UserControl.Styles>
 
+    <!-- ET-286: SHARE split into its own bar column (64, the bar's own fixed width) and percentage column (28,
+         right-aligned) instead of one 100-wide cell holding both right-aligned as a unit — see
+         MiningDetailSectionView's own copy of this comment for why. -->
     <StackPanel>
         <!-- Column headers, hidden along with everything else once there is nothing mined at all. -->
-        <Grid ColumnDefinitions="*,100,65,80,105" ColumnSpacing="8" Margin="0,0,0,3"
+        <Grid ColumnDefinitions="*,64,28,65,80,105" ColumnSpacing="8" Margin="0,0,0,3"
               IsVisible="{Binding Groups.Count}">
             <TextBlock Classes="colhdr" Text="CHARACTER · ORE"/>
-            <TextBlock Grid.Column="1" Classes="colhdr num" Text="SHARE"/>
-            <TextBlock Grid.Column="2" Classes="colhdr num" Text="UNITS"/>
-            <TextBlock Grid.Column="3" Classes="colhdr num" Text="RESIDUE"/>
-            <TextBlock Grid.Column="4" Classes="colhdr num" Text="ISK"/>
+            <TextBlock Grid.Column="1" Grid.ColumnSpan="2" Classes="colhdr num" Text="SHARE"/>
+            <TextBlock Grid.Column="3" Classes="colhdr num" Text="UNITS"/>
+            <TextBlock Grid.Column="4" Classes="colhdr num" Text="RESIDUE"/>
+            <TextBlock Grid.Column="5" Classes="colhdr num" Text="ISK"/>
         </Grid>
 
         <!-- Own participants first, then whoever else shares mining, then an unshared external member last
@@ -93,7 +101,7 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="vr:MiningCharacterGroupViewModel">
                     <StackPanel>
-                        <Grid ColumnDefinitions="*,100,65,80,105" ColumnSpacing="8">
+                        <Grid ColumnDefinitions="*,64,28,65,80,105" ColumnSpacing="8">
                             <StackPanel Orientation="Horizontal" Spacing="4">
                                 <TextBlock Classes="charname" Text="{Binding CharacterName}"/>
                                 <Border Classes="localtag" IsVisible="{Binding IsLocal}">
@@ -103,12 +111,12 @@
                                            IsVisible="{Binding BoostGlyph, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                            ToolTip.Tip="{Binding BoostTooltip}"/>
                             </StackPanel>
-                            <!-- Spans SHARE + UNITS + RESIDUE: the rate reads right up against the ISK column,
-                                 the same place the mockup's own colspan puts it. -->
-                            <TextBlock Grid.Column="1" Grid.ColumnSpan="3" Classes="rate" Text="{Binding RateText}"
+                            <!-- Spans SHARE (bar+pct) + UNITS + RESIDUE: the rate reads right up against the ISK
+                                 column, the same place the mockup's own colspan puts it. -->
+                            <TextBlock Grid.Column="1" Grid.ColumnSpan="4" Classes="rate" Text="{Binding RateText}"
                                        ToolTip.Tip="{Binding RateTooltip}"
                                        IsVisible="{Binding RateText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                            <TextBlock Grid.Column="4" Classes="money" Text="{Binding IskText}"
+                            <TextBlock Grid.Column="5" Classes="money" Text="{Binding IskText}"
                                        ToolTip.Tip="{Binding ResidueTooltip}"/>
                         </Grid>
 
@@ -122,20 +130,20 @@
                         <ItemsControl ItemsSource="{Binding Ores}" IsVisible="{Binding HasOres}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vr:ActivityMiningRowViewModel">
-                                    <Grid ColumnDefinitions="*,100,65,80,105" ColumnSpacing="8" Margin="0,2,0,0">
+                                    <Grid ColumnDefinitions="*,64,28,65,80,105" ColumnSpacing="8" Margin="0,2,0,0">
                                         <TextBlock Classes="oretext" Text="{Binding OreText}"/>
-                                        <!-- Bar and percentage on one line, right-aligned as one unit so the
-                                             percentage always sits flush against UNITS regardless of the bar's own
-                                             width (ET-284 — it used to float above and to the right of the bar). -->
-                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
-                                                    HorizontalAlignment="Right" IsVisible="{Binding HasShareBar}"
-                                                    ToolTip.Tip="{Binding ShareTooltip}">
-                                            <ctl:MeterBar Classes="share" Fraction="{Binding ShareFraction}" Fill="{DynamicResource AccentBrush}"/>
-                                            <TextBlock Classes="sharepct" Text="{Binding ShareText}"/>
-                                        </StackPanel>
-                                        <TextBlock Grid.Column="2" Classes="cellnum" Text="{Binding UnitsText}"/>
-                                        <TextBlock Grid.Column="3" Classes="cellnum" Text="{Binding ResidueText}"/>
-                                        <TextBlock Grid.Column="4" Classes="money" Text="{Binding ValueText}"/>
+                                        <!-- Bar and percentage in their own fixed columns (ET-286) so every row's
+                                             bar starts and ends at the same x regardless of the percentage's own
+                                             digit count (ET-284's shared right-aligned cell let a lone "6%" shift
+                                             its bar relative to "61%"). -->
+                                        <ctl:MeterBar Grid.Column="1" Classes="share" Fraction="{Binding ShareFraction}"
+                                                      Fill="{DynamicResource AccentBrush}" IsVisible="{Binding HasShareBar}"
+                                                      ToolTip.Tip="{Binding ShareTooltip}"/>
+                                        <TextBlock Grid.Column="2" Classes="sharepct" Text="{Binding ShareText}"
+                                                   IsVisible="{Binding HasShareBar}" ToolTip.Tip="{Binding ShareTooltip}"/>
+                                        <TextBlock Grid.Column="3" Classes="cellnum" Text="{Binding UnitsText}"/>
+                                        <TextBlock Grid.Column="4" Classes="cellnum" Text="{Binding ResidueText}"/>
+                                        <TextBlock Grid.Column="5" Classes="money" Text="{Binding ValueText}"/>
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>

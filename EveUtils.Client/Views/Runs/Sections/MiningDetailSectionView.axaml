@@ -39,10 +39,14 @@
         <!-- ET-285: full TextBrush rather than a faded Opacity — dropped a percentage next to a track this
              thin was "nauwelijks leesbaar" (Jithran); an explicit brush also reads the same on a hovered
              (detailrow) row's background as it does on a plain one, where an alpha blend would not. -->
+        <!-- ET-286: right-aligned and vertically centred on the bar in its own fixed column — see the row
+             Grid's own comment for why the bar and this text each need their own column. -->
         <Style Selector="TextBlock.sharepct">
             <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="FontSize" Value="10"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style Selector="TextBlock.rate">
             <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
@@ -57,16 +61,22 @@
             <Setter Property="Height" Value="8"/>
             <Setter Property="Width" Value="64"/>
             <Setter Property="Track" Value="#26FFFFFF"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
     </UserControl.Styles>
 
+    <!-- ET-286: SHARE split into its own bar column (64, the bar's own fixed width) and percentage column (28,
+         right-aligned) instead of one 100-wide cell holding both right-aligned as a unit — that made the bar
+         itself drift with the percentage's own digit count (a lone "6%" is narrower than "61%"), so no two
+         ore rows' bars started at the same x. Same six-column grid — header, group row and ore row — as the
+         run window's copy of this table. -->
     <StackPanel>
-        <Grid ColumnDefinitions="*,100,65,80,105" ColumnSpacing="8" Margin="0,0,0,3" IsVisible="{Binding HasMining}">
+        <Grid ColumnDefinitions="*,64,28,65,80,105" ColumnSpacing="8" Margin="0,0,0,3" IsVisible="{Binding HasMining}">
             <TextBlock Classes="colhdr" Text="CHARACTER · ORE"/>
-            <TextBlock Grid.Column="1" Classes="colhdr num" Text="SHARE"/>
-            <TextBlock Grid.Column="2" Classes="colhdr num" Text="UNITS"/>
-            <TextBlock Grid.Column="3" Classes="colhdr num" Text="RESIDUE"/>
-            <TextBlock Grid.Column="4" Classes="colhdr num" Text="ISK"/>
+            <TextBlock Grid.Column="1" Grid.ColumnSpan="2" Classes="colhdr num" Text="SHARE"/>
+            <TextBlock Grid.Column="3" Classes="colhdr num" Text="UNITS"/>
+            <TextBlock Grid.Column="4" Classes="colhdr num" Text="RESIDUE"/>
+            <TextBlock Grid.Column="5" Classes="colhdr num" Text="ISK"/>
         </Grid>
 
         <ItemsControl x:Name="MiningList" ItemsSource="{Binding Groups}" IsVisible="{Binding HasMining}">
@@ -78,16 +88,16 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="vr:MiningCharacterGroupViewModel">
                     <StackPanel>
-                        <Grid ColumnDefinitions="*,100,65,80,105" ColumnSpacing="8">
+                        <Grid ColumnDefinitions="*,64,28,65,80,105" ColumnSpacing="8">
                             <StackPanel Orientation="Horizontal" Spacing="4">
                                 <TextBlock Classes="charname" Text="{Binding CharacterName}"/>
                                 <Border Classes="localtag" IsVisible="{Binding IsLocal}">
                                     <TextBlock Text="Local"/>
                                 </Border>
                             </StackPanel>
-                            <TextBlock Grid.Column="1" Grid.ColumnSpan="3" Classes="rate" Text="{Binding RateText}"
+                            <TextBlock Grid.Column="1" Grid.ColumnSpan="4" Classes="rate" Text="{Binding RateText}"
                                        ToolTip.Tip="{Binding RateTooltip}"/>
-                            <TextBlock Grid.Column="4" Classes="money" Text="{Binding IskText}"
+                            <TextBlock Grid.Column="5" Classes="money" Text="{Binding IskText}"
                                        ToolTip.Tip="{Binding ResidueTooltip}"/>
                         </Grid>
 
@@ -95,17 +105,16 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vr:ActivityMiningRowViewModel">
                                     <Grid Classes="detailrow" Classes.alt="{Binding IsAlternate}"
-                                          ColumnDefinitions="*,100,65,80,105" ColumnSpacing="8" Margin="0,2,0,0">
+                                          ColumnDefinitions="*,64,28,65,80,105" ColumnSpacing="8" Margin="0,2,0,0">
                                         <TextBlock Classes="oretext" Text="{Binding OreText}"/>
-                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
-                                                    HorizontalAlignment="Right" IsVisible="{Binding HasShareBar}"
-                                                    ToolTip.Tip="{Binding ShareTooltip}">
-                                            <ctl:MeterBar Classes="share" Fraction="{Binding ShareFraction}" Fill="{DynamicResource AccentBrush}"/>
-                                            <TextBlock Classes="sharepct" Text="{Binding ShareText}"/>
-                                        </StackPanel>
-                                        <TextBlock Grid.Column="2" Classes="cellnum" Text="{Binding UnitsText}"/>
-                                        <TextBlock Grid.Column="3" Classes="cellnum" Text="{Binding ResidueText}"/>
-                                        <TextBlock Grid.Column="4" Classes="money" Text="{Binding ValueText}"/>
+                                        <ctl:MeterBar Grid.Column="1" Classes="share" Fraction="{Binding ShareFraction}"
+                                                      Fill="{DynamicResource AccentBrush}" IsVisible="{Binding HasShareBar}"
+                                                      ToolTip.Tip="{Binding ShareTooltip}"/>
+                                        <TextBlock Grid.Column="2" Classes="sharepct" Text="{Binding ShareText}"
+                                                   IsVisible="{Binding HasShareBar}" ToolTip.Tip="{Binding ShareTooltip}"/>
+                                        <TextBlock Grid.Column="3" Classes="cellnum" Text="{Binding UnitsText}"/>
+                                        <TextBlock Grid.Column="4" Classes="cellnum" Text="{Binding ResidueText}"/>
+                                        <TextBlock Grid.Column="5" Classes="money" Text="{Binding ValueText}"/>
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -116,9 +125,9 @@
         </ItemsControl>
         <!-- Same column grid as every row above it, so TOTAL's own ISK figure lands in the ISK column too. -->
         <Border Classes="totals" IsVisible="{Binding HasMining}">
-            <Grid ColumnDefinitions="*,100,65,80,105" ColumnSpacing="8">
-                <TextBlock Grid.ColumnSpan="4" Classes="label" Text="TOTAL" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="4" Classes="money total" Text="{Binding MiningText}"/>
+            <Grid ColumnDefinitions="*,64,28,65,80,105" ColumnSpacing="8">
+                <TextBlock Grid.ColumnSpan="5" Classes="label" Text="TOTAL" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="5" Classes="money total" Text="{Binding MiningText}"/>
             </Grid>
         </Border>
         <TextBlock x:Name="MiningEmpty" Classes="hint" TextWrapping="Wrap"
