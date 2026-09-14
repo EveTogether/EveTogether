@@ -986,7 +986,33 @@
          Before this ticket, BOUNTY's and ENEMIES' name column sat inside a "kv" grid built for label/value pairs
          (SITE, LOCATION), so the name inherited the label's letter-spaced small caps — the exact inconsistency
          Jithran's screenshots showed against FLEET's plain names. Fixed at the call site (a name is never inside
-         a "kv" grid now), not by carving an exception into "kv" itself. -->
+         a "kv" grid now), not by carving an exception into "kv" itself.
+
+         "money"/"money.total"/"totals" moved here from ActivityDetailWindow.axaml's own Styles (ET-285 round 2):
+         that scoped them to the detail screen alone, which was fine for BOUNTY/ENEMIES/MINING/FLEET/HOMEFRONT's own
+         TOTAL rows (those view-models only ever render inside the detail screen) but not for LOOT's GROUP TOTAL —
+         ActivityLootView is shared with the live run window, where these classes resolved to nothing and left
+         LOOT's own bespoke "grouptotal" Border as the only thing giving it a look at all. Global now, so LOOT's
+         total reads the same as everyone else's total in both places at once. -->
+    <Style Selector="TextBlock.money">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="TextAlignment" Value="Right"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.money.total">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontSize" Value="13"/>
+    </Style>
+    <Style Selector="Border.totals">
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="8,6"/>
+        <Setter Property="Margin" Value="0,2,0,4"/>
+    </Style>
 
     <!-- ColumnDefinitions is not a styled property, so the columns stay on each Grid; everything else about a
          key/value line lives here. The label carries the letterspacing, the value carries the ink. -->

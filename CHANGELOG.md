@@ -22,7 +22,10 @@ taken from the matching `## vX.Y.Z` section below.
   its track is now visible, matching the mockup, with the percentage beside it in full-strength text instead of
   crowded and faded. Character and ore/enemy names read the same everywhere — BOUNTY's and ENEMIES' names had
   picked up a label's letter-spaced small caps from the grid they shared with SITE and LOCATION; LOOT's own LOOT /
-  CONSUMED / NET labels no longer run oversized against every other section's small caps.
+  CONSUMED / NET labels no longer run oversized against every other section's small caps. That footnote is now one
+  short line naming the missing sections ("Not shown for mining: mission, bounty, loot, consumables, escalation.")
+  with the reason for each on hover rather than spelled out on the line. LOOT's own GROUP TOTAL, which used to be
+  its own bigger, boxed figure, now reads as the same total row every other section's TOTAL does.
 - **Added: MINING now groups by character, with a share bar, ISK/h and residue.** Instead of one flat line per
   character per ore, MINING now shows a header per character — their total, ISK/h and residue — with their ores
   underneath, each with a small bar of that character's share of the ore against the rest of the fleet (solo, the
