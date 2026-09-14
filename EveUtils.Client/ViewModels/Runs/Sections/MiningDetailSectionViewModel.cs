@@ -165,8 +165,12 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
                 shareTooltip = $"{ore} — part of {build.Name}'s own ISK mix";
             }
 
-            oreRows.Add(new ActivityMiningRowViewModel(Guid.Empty, build.CharacterId, ore, units, crit, residue,
-                lineIsk, isFixedPrice, _ => build.Name, shareFraction, shareTooltip));
+            var row = new ActivityMiningRowViewModel(Guid.Empty, build.CharacterId, ore, units, crit, residue,
+                lineIsk, isFixedPrice, _ => build.Name, shareFraction, shareTooltip)
+            {
+                IsAlternate = oreRows.Count % 2 == 1
+            };
+            oreRows.Add(row);
         }
 
         string residueText = totalResidue > 0 ? $"{IskFormat.Number(totalResidue)} residue" : "no residue";

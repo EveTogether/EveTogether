@@ -12,8 +12,10 @@
                       IsVisible="{Binding HasEnemyFigures}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="vr:ActivityEnemyCharacterRowViewModel">
-                    <Grid Classes="kv" ColumnDefinitions="*,Auto">
-                        <TextBlock Text="{Binding CharacterText}"/>
+                    <!-- Not Classes="kv" (ET-285) — see BOUNTY's own copy of this row for why a name never sits in
+                         the label/value grid. -->
+                    <Grid Classes="detailrow" Classes.alt="{Binding IsAlternate}" ColumnDefinitions="*,Auto" Margin="0,3">
+                        <TextBlock Classes="charname" Text="{Binding CharacterText}"/>
                         <TextBlock Grid.Column="1" Classes="money" Text="{Binding CountText}"/>
                     </Grid>
                 </DataTemplate>
@@ -32,11 +34,16 @@
         <ItemsControl x:Name="EnemyList" ItemsSource="{Binding EnemyRows}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="vr:ActivityEnemyRowViewModel">
-                    <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                        <TextBlock Text="{Binding EnemyName}"/>
+                    <!-- Not Classes="kv" (ET-285): an enemy's name is a NAME, the same row-kind as a character or
+                         an ore, so it takes Classes="charname" rather than the label styling "kv" gave it before —
+                         this was the letter-spaced-caps enemy name Jithran's screenshot contrasted against MINING's
+                         plain ore names. -->
+                    <Grid Classes="detailrow" Classes.alt="{Binding IsAlternate}"
+                          ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" Margin="0,3">
+                        <TextBlock Classes="charname" Text="{Binding EnemyName}"/>
                         <TextBlock Grid.Column="1" Classes="hint" Margin="0"
                                    VerticalAlignment="Center" Text="{Binding WindowText}"/>
-                        <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding CountText}"/>
+                        <TextBlock Grid.Column="2" Classes="money" VerticalAlignment="Center" Text="{Binding CountText}"/>
                     </Grid>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>

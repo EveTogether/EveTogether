@@ -52,6 +52,10 @@ public sealed partial class FleetCharacterRowViewModel(long characterId, Func<Fl
     [NotifyCanExecuteChangedFor(nameof(ToggleShareCommand))]
     private bool _canToggleShare;
 
+    /// <summary>Zebra striping on the activity detail screen (ET-285), set by the caller once the row's final
+    /// position in the (Local-first, then alphabetical) list is known.</summary>
+    [ObservableProperty] private bool _isAlternate;
+
     public bool IsLeftOutOfSplit => !IsSharing;
 
     public string ShareActionText => IsSharing ? "leave out of loot split" : "put back in loot split";

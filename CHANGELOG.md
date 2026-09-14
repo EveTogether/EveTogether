@@ -13,6 +13,16 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: the activity detail screen now reads the same width for every kind of activity, and its wide tables are
+  easier to follow.** A mining run used to span the whole window while a combat site stayed narrow — its own long
+  footnote ("Not shown for this kind of activity: …") measured out unwrapped and grew the screen to fit it. Every
+  activity now shares one maximum content width; that footnote, and everything else, wraps inside it instead. Every
+  table on the screen (MINING, ENEMIES, LOOT, BOUNTY, FLEET, HOMEFRONT) now stripes its rows and highlights the one
+  under your pointer, one shared style so a themed fix reaches all six at once. MINING's share bar is bigger and
+  its track is now visible, matching the mockup, with the percentage beside it in full-strength text instead of
+  crowded and faded. Character and ore/enemy names read the same everywhere — BOUNTY's and ENEMIES' names had
+  picked up a label's letter-spaced small caps from the grid they shared with SITE and LOCATION; LOOT's own LOOT /
+  CONSUMED / NET labels no longer run oversized against every other section's small caps.
 - **Added: MINING now groups by character, with a share bar, ISK/h and residue.** Instead of one flat line per
   character per ore, MINING now shows a header per character — their total, ISK/h and residue — with their ores
   underneath, each with a small bar of that character's share of the ore against the rest of the fleet (solo, the

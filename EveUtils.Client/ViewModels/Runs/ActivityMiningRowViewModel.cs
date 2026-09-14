@@ -62,4 +62,9 @@ public sealed class ActivityMiningRowViewModel(
         : string.Empty;
 
     public string? ShareTooltip { get; } = shareTooltip;
+
+    /// <summary>Zebra striping on the activity detail screen (ET-285) — every second ore row, set by the caller
+    /// once the row's final position in its character group is known. Unused (stays false) on the run window,
+    /// which does not stripe its own copy of this table.</summary>
+    public bool IsAlternate { get; set; }
 }

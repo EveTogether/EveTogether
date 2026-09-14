@@ -82,7 +82,7 @@
                 <ItemsControl ItemsSource="{Binding Loot.ItemRows}" IsVisible="{Binding !Loot.IsEditingLoot}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vr:ActivityLootLineViewModel">
-                            <Border Classes="itemrow" Classes.alt="{Binding IsAlternate}"
+                            <Border Classes="itemrow detailrow" Classes.alt="{Binding IsAlternate}"
                                     Classes.top="{Binding IsTopValue}" Classes.excluded="{Binding IsExcluded}">
                                 <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
                                     <Border Classes="icontile">
@@ -220,9 +220,16 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="13"/>
         </Style>
+        <!-- ET-285: same size and letter-spacing as every other section's LABEL (Themes/EveUtils.axaml's own
+             "label" and Grid.kv's nth-child(1)) — this ran large and unspaced before, the one place in the
+             activity detail screen where a label read like a heading rather than a label. Foreground stays
+             LootMetaBrush rather than the shared TextDimBrush: this view can be set see-through (ET-215), and
+             LootMetaBrush is the one step brighter than TextDimBrush that keeps it legible over whatever shows
+             through — a considered exception, not a leftover. -->
         <Style Selector="TextBlock.kvlabel">
             <Setter Property="Foreground" Value="{StaticResource LootMetaBrush}"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="1.8"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style Selector="TextBlock.note">
@@ -246,14 +253,13 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
 
-        <!-- ── The item table ── striped, a hairline under every row, the heaviest line tinted. -->
+        <!-- ── The item table ── striped, a hairline under every row, the heaviest line tinted. The stripe and the
+             hover fill both come from Classes="detailrow" (Themes/EveUtils.axaml, ET-285) now — one definition for
+             every dense list in the activity detail screen, not one per section. -->
         <Style Selector="Border.itemrow">
             <Setter Property="Padding" Value="6,4"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
             <Setter Property="BorderBrush" Value="#08FFFFFF"/>
-        </Style>
-        <Style Selector="Border.itemrow.alt">
-            <Setter Property="Background" Value="{StaticResource BgRowAltBrush}"/>
         </Style>
         <Style Selector="Border.itemrow.top">
             <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>

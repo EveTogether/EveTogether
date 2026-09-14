@@ -15,4 +15,8 @@ public sealed class ActivityEnemyCharacterRowViewModel(long characterId, int cou
     public string CharacterText { get; } = nameOf?.Invoke(characterId) ?? $"character {characterId}";
 
     public string CountText { get; } = count == 1 ? "1 enemy" : $"{count} enemies";
+
+    /// <summary>Zebra striping on the activity detail screen (ET-285), set by the caller once the row's final
+    /// position in the (largest-contribution-first) list is known.</summary>
+    public bool IsAlternate { get; set; }
 }

@@ -46,7 +46,10 @@ public sealed partial class BountyDetailSectionViewModel() : RunDetailSection(Ru
                      .Where(entry => characterByRun.ContainsKey(entry.RunId))
                      .GroupBy(entry => characterByRun[entry.RunId])
                      .OrderByDescending(group => group.Sum(entry => entry.Isk)))
-            BountyRows.Add(new ActivityBountyRowViewModel(group.Key, group.Sum(entry => entry.Isk), input.NameOf));
+            BountyRows.Add(new ActivityBountyRowViewModel(group.Key, group.Sum(entry => entry.Isk), input.NameOf)
+            {
+                IsAlternate = BountyRows.Count % 2 == 1
+            });
     }
 
     public override string AbsentReason(string noun) => $"no BOUNTY — {noun} has no rats whose bounty lands in your wallet";

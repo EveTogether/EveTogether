@@ -67,7 +67,8 @@
         <ItemsControl x:Name="AttendanceList" ItemsSource="{Binding Rows}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="va:AttendanceRowViewModel">
-                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,2">
+                    <Grid Classes="detailrow" Classes.alt="{Binding IsAlternate}"
+                          ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,2">
                         <Border Classes="localbar" Classes.on="{Binding IsLocal}"/>
                         <!-- The hint gives way first: trimmed, never pushed under the figure beside it. -->
                         <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,*" VerticalAlignment="Center">

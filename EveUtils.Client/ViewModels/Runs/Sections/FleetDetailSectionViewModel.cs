@@ -71,6 +71,8 @@ public sealed partial class FleetDetailSectionViewModel(RunDetailSectionServices
                      .OrderByDescending(row => row.IsLocal)
                      .ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase))
             Rows.Add(row);
+        for (int i = 0; i < Rows.Count; i++)
+            Rows[i].IsAlternate = i % 2 == 1;
 
         // The header's own TOTAL ISK text, never a sum of its own (ET-271/272) — same value even while HasTotal is
         // false, so a caller reading the figure directly (rather than what is drawn) still gets the header's answer.

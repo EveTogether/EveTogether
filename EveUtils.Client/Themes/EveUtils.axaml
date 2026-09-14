@@ -945,6 +945,49 @@
         <Setter Property="Padding" Value="37,2,14,13"/>
     </Style>
 
+    <!-- ── One shared row style for every dense list on the activity detail screen (ET-285): MINING, ENEMIES,
+         LOOT, BOUNTY, FLEET, HOMEFRONT. A wide table with many rows is hard to scan by eye alone (Jithran,
+         2026-09-14); a faint zebra stripe plus a hover fill is enough to tell one row from its neighbour without
+         drawing attention to itself. Each section's own row view-model carries IsAlternate (index % 2 of the
+         row's own final list); :pointerover needs no binding at all. Declared in this order so a hovered alt row
+         still gets the hover fill: Avalonia resolves an equally-specific tie by declaration order, and a hovered
+         alt row ties ".alt" against ":pointerover", so :pointerover coming last is what wins.
+
+         Duplicated once for Border and once for Grid rather than one class-only selector: Border.Background and
+         Grid.Background (via Panel) are two independently registered AvaloniaProperties, not one shared through a
+         common base, so an untyped ".detailrow" selector cannot resolve which "Background" it is setting
+         (AVLN2200). Both halves reference the same two brushes below, so the one thing that actually varies
+         between sections — the colour — still lives in exactly one place. -->
+    <Style Selector="Border.detailrow">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Border.detailrow.alt">
+        <Setter Property="Background" Value="{StaticResource BgRowAltBrush}"/>
+    </Style>
+    <Style Selector="Border.detailrow:pointerover">
+        <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+    </Style>
+    <Style Selector="Grid.detailrow">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Grid.detailrow.alt">
+        <Setter Property="Background" Value="{StaticResource BgRowAltBrush}"/>
+    </Style>
+    <Style Selector="Grid.detailrow:pointerover">
+        <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+    </Style>
+
+    <!-- ── One typography rule per kind of row, applied the same way in every section (ET-285):
+         · a NAME (character, ore, item, enemy) — Classes="charname", bright, normal weight, no letter-spacing.
+         · a LABEL (SITE, LOCATION, TOTAL, a column header) — Classes="label" (or Grid.kv's own nth-child(1) below,
+           which is the same look) — dim, small, letter-spaced caps.
+         · an AMOUNT (ISK, a count, a quantity) — Classes="money" (or the section's own numeric variant, e.g.
+           MINING's cellnum) — bright, right-aligned, monospace.
+         Before this ticket, BOUNTY's and ENEMIES' name column sat inside a "kv" grid built for label/value pairs
+         (SITE, LOCATION), so the name inherited the label's letter-spaced small caps — the exact inconsistency
+         Jithran's screenshots showed against FLEET's plain names. Fixed at the call site (a name is never inside
+         a "kv" grid now), not by carving an exception into "kv" itself. -->
+
     <!-- ColumnDefinitions is not a styled property, so the columns stay on each Grid; everything else about a
          key/value line lives here. The label carries the letterspacing, the value carries the ink. -->
     <Style Selector="Grid.kv">

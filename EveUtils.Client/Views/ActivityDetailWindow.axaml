@@ -13,8 +13,16 @@
         Title="Activity detail">
 
     <!-- One layout, sized off the space it is given rather than off the window: ModuleHostService moves this very
-         Content between a docked tab (758px) and a floating window, and there is no pop-out variant to fall back on. -->
-    <DockPanel>
+         Content between a docked tab (758px) and a floating window, and there is no pop-out variant to fall back on.
+
+         MaxWidth + left alignment (ET-285): every activity kind shares one content width, capped rather than
+         filling whatever host it lands in. Before this, a wide docked host (or a floating window dragged wide)
+         let a mining run's own footnote — "Not shown for this kind of activity: no MISSION — …; no ESCALATION —
+         …" — measure out as one unwrapped line and grow the whole screen to it, where a Sansha Refuge with a
+         shorter footnote stayed narrow: two activities of the same screen reading two different widths. 1040 is
+         roughly where a Refuge already sat (Jithran's own reference point); text wraps inside it and never sets
+         it, because MaxWidth participates in measurement itself rather than only clamping the arranged result. -->
+    <DockPanel MaxWidth="1040" HorizontalAlignment="Left">
 
         <!-- On the content root, not on the window: Window.Styles/Resources stay behind with the (never shown)
              window once the module host re-parents this content into a tab. -->

@@ -45,6 +45,10 @@ public sealed partial class AttendanceRowViewModel : ObservableObject
 
     public bool IsExternal { get; }
 
+    /// <summary>Zebra striping on the activity detail screen (ET-285), set by the caller once the row's final
+    /// position in the (Local-first, then alphabetical) list is known.</summary>
+    [ObservableProperty] private bool _isAlternate;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TickText))]
     [NotifyPropertyChangedFor(nameof(PayoutText))]
