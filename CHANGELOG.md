@@ -16,14 +16,19 @@ taken from the matching `## vX.Y.Z` section below.
 - **Added: MINING now groups by character, with a share bar, ISK/h and residue.** Instead of one flat line per
   character per ore, MINING now shows a header per character — their total, ISK/h and residue — with their ores
   underneath, each with a small bar of that character's share of the ore against the rest of the fleet (solo, the
-  bar reads the mix of your own ISK across the ores you mined). ISK/h in the run window is the yield of the last 5
-  minutes; on the saved activity it is the average over your own mining time, with the average over the whole run on
-  hover. A crit shows right in the units figure ("61,554 (+1,200 crit)"). A fleet mate on a client new enough to send
+  bar reads the mix of your own ISK across the ores you mined). It reads as a real table now, with a column header
+  for ORE, SHARE, UNITS, RESIDUE and ISK, the same in the run window and the saved activity. ISK/h in the run
+  window is the yield of the last 5 minutes; on the saved activity it is the average over your own mining time,
+  with the average over the whole run on hover. A crit shows right in the units figure ("61,554 (+1,200 crit)").
+  A fleet mate on a client new enough to send
   the split gets the same per-ore breakdown as your own characters; an older client still shows their total, and an
   external member with nothing shared at all shows as "not shared" and is left out of the total, the same as FLEET
   already does. A local character who runs a Mining Foreman Burst gets a ▲▲ next to their name; other local
   characters get a ▲ while that burst is still recent — inferred from the booster's own log, since a receiver's log
   never says anything about a burst landing on them, so it is never shown as certain.
+- **Fixed: a saved activity's START and END now show the date.** The header used to read only a time ("11:24:25"),
+  which gave no clue which day an older activity happened on. It now reads "Sun 13 Sep 2026 · 11:24 – 11:36", in
+  your own local time.
 - **Added: application for missiles.** Missiles always log "Hits", however they land, so until now they showed
   "APPLICATION n/a". Each volley is now set against a full volley at that target — worked out from the fit detected for
   the ship you are flying, your skills and implants, after that NPC's resists — and gets the same ▲ ADJUST / ● OK /
