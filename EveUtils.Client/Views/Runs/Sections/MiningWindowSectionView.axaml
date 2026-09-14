@@ -2,23 +2,94 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
              xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             xmlns:ctl="using:EveUtils.Client.Controls"
              x:Class="EveUtils.Client.Views.Runs.Sections.MiningWindowSectionView"
              x:DataType="vs:MiningWindowSectionViewModel">
+    <UserControl.Styles>
+        <!-- The smallest step from BOUNTY's one-line-per-ore rows (ET-283, variant C of the mining-ledger mockups):
+             the same rows grouped under a header per character, with the ore lines indented beneath it. -->
+        <Style Selector="TextBlock.charname">
+            <Setter Property="FontWeight" Value="Medium"/>
+        </Style>
+        <Style Selector="TextBlock.boostglyph">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+        <Style Selector="Grid.orerow">
+            <Setter Property="Margin" Value="16,1,0,0"/>
+        </Style>
+        <Style Selector="TextBlock.oretext">
+            <Setter Property="Opacity" Value="0.85"/>
+        </Style>
+        <Style Selector="TextBlock.sharepct">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Opacity" Value="0.75"/>
+            <Setter Property="FontSize" Value="10"/>
+        </Style>
+        <Style Selector="ctl|MeterBar.share">
+            <Setter Property="Height" Value="6"/>
+            <Setter Property="Width" Value="56"/>
+        </Style>
+    </UserControl.Styles>
+
     <StackPanel>
-        <!-- General for any mining, not only a homefront's — one row per character per ore, the BOUNTY/ENEMIES shape. -->
-        <ItemsControl ItemsSource="{Binding Rows}">
+        <!-- Own participants first, then whoever else shares mining, then an unshared external member last
+             (ordering done in the view model). -->
+        <ItemsControl ItemsSource="{Binding Groups}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Spacing="6"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="vr:ActivityMiningRowViewModel">
-                    <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
-                        <TextBlock Text="{Binding CharacterText}"/>
-                        <TextBlock Grid.Column="1" Classes="hint" Text="{Binding OreText}"/>
-                        <TextBlock Grid.Column="2" Classes="hint" Text="{Binding UnitsText}"/>
-                        <TextBlock Grid.Column="3" Classes="money" Text="{Binding ValueText}"/>
-                    </Grid>
+                <DataTemplate DataType="vr:MiningCharacterGroupViewModel">
+                    <StackPanel>
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Classes="charname" Text="{Binding CharacterName}"/>
+                                <Border Classes="localtag" IsVisible="{Binding IsLocal}">
+                                    <TextBlock Text="Local"/>
+                                </Border>
+                                <TextBlock Classes="boostglyph" Text="{Binding BoostGlyph}"
+                                           IsVisible="{Binding BoostGlyph, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                           ToolTip.Tip="{Binding BoostTooltip}"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding RateText}"
+                                       ToolTip.Tip="{Binding RateTooltip}"
+                                       IsVisible="{Binding RateText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                            <TextBlock Grid.Column="2" Classes="money" Text="{Binding IskText}"
+                                       ToolTip.Tip="{Binding ResidueTooltip}"/>
+                        </Grid>
+
+                        <!-- An external member sharing nothing at all (ET-272's own convention) — never counted. -->
+                        <TextBlock Classes="hint" Margin="16,1,0,0" Text="not shared" IsVisible="{Binding IsNotShared}"/>
+
+                        <!-- A shared member on a client that has not sent per-ore lines yet (ET-234's old shape). -->
+                        <TextBlock Classes="hint" Margin="16,1,0,0" Text="{Binding FallbackText}"
+                                   IsVisible="{Binding IsFallbackTotalOnly}"/>
+
+                        <ItemsControl ItemsSource="{Binding Ores}" IsVisible="{Binding HasOres}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:ActivityMiningRowViewModel">
+                                    <Grid Classes="orerow" ColumnDefinitions="*,70,Auto,Auto,Auto" ColumnSpacing="8">
+                                        <TextBlock Classes="oretext" Text="{Binding OreText}"/>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" IsVisible="{Binding HasShareBar}"
+                                                    ToolTip.Tip="{Binding ShareTooltip}">
+                                            <ctl:MeterBar Classes="share" Fraction="{Binding ShareFraction}" Fill="{DynamicResource AccentBrush}"/>
+                                            <TextBlock Classes="sharepct" Text="{Binding ShareText}"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="2" Classes="hint" Text="{Binding UnitsText}"/>
+                                        <TextBlock Grid.Column="3" Classes="hint" Text="{Binding ResidueText}"/>
+                                        <TextBlock Grid.Column="4" Classes="money" Text="{Binding ValueText}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
-        <TextBlock x:Name="FleetMinedBlock" Classes="hint" TextWrapping="Wrap" Text="{Binding FleetMinedText}"
+        <TextBlock x:Name="FleetMinedBlock" Classes="hint" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding FleetMinedText}"
                    IsVisible="{Binding FleetMinedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
         <TextBlock x:Name="RemainingBlock" Classes="hint" TextWrapping="Wrap" Text="{Binding RemainingText}"
                    IsVisible="{Binding RemainingText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>

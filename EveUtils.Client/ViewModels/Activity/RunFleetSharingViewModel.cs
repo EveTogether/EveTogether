@@ -253,16 +253,27 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
         int captures = blocks.Sum(block => block.Loot.Captures.Count(capture => !capture.IsExcluded));
 
         // The pilot's own mining totals for this run, own ore lines summed (ET-234) — 0 while not sharing, the same
-        // convention SharesLoot's empty Loot list follows.
+        // convention SharesLoot's empty Loot list follows. Also grouped one line per ore (ET-283), mirroring lines
+        // above, for a receiver's per-ore group row.
         int minedUnits = 0, residueUnits = 0;
+        RunShareMiningLine[] miningLines = [];
         if (sharesMining)
-            foreach (RunMiningOreDto entry in participants.Where(p => p.CharacterId == character).SelectMany(p => p.MiningEntries))
+        {
+            RunMiningOreDto[] entries = [.. participants.Where(p => p.CharacterId == character).SelectMany(p => p.MiningEntries)];
+            foreach (RunMiningOreDto entry in entries)
             {
                 minedUnits += entry.Units;
                 residueUnits += entry.ResidueUnits;
             }
 
-        SentShare current = new(sharesLoot, sharesBounty, captures, lines, sharesMining, minedUnits, residueUnits, nowUtc);
+            miningLines = [.. entries
+                .GroupBy(entry => entry.OreType, StringComparer.Ordinal)
+                .Select(group => new RunShareMiningLine(group.Key, group.Sum(e => e.Units), group.Sum(e => e.CriticalUnits),
+                    group.Sum(e => e.ResidueUnits)))
+                .OrderBy(line => line.OreType, StringComparer.Ordinal)];
+        }
+
+        SentShare current = new(sharesLoot, sharesBounty, captures, lines, sharesMining, minedUnits, residueUnits, miningLines, nowUtc);
 
         SentShare? sent = _sent.GetValueOrDefault(character);
         // Taking something back is never held for a burst: from this moment the others see nothing more of it.
@@ -283,7 +294,7 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
         _lastUnixMs = Math.Max(new DateTimeOffset(nowUtc, TimeSpan.Zero).ToUnixTimeMilliseconds(), _lastUnixMs + 1);
         await eventBus.PublishAsync(new FleetRunShareEvent(new RunShareUpdate(
                 fleetId, groupCode, _lastUnixMs, sharesLoot, sharesBounty, captures, lines,
-                sharesMining, minedUnits, residueUnits), character),
+                sharesMining, minedUnits, residueUnits, miningLines), character),
             EventTarget.Remote);
     }
 
@@ -344,11 +355,12 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
         ActivityLootViewModel? Loot, IReadOnlyCollection<RunParticipantViewModel> Participants);
 
     private sealed record SentShare(bool SharesLoot, bool SharesBounty, int CaptureCount, RunShareLootLine[] Lines,
-        bool SharesMining, int MinedUnits, int ResidueUnits, DateTime SentAtUtc)
+        bool SharesMining, int MinedUnits, int ResidueUnits, RunShareMiningLine[] MiningLines, DateTime SentAtUtc)
     {
         public bool SaysTheSameAs(SentShare other) =>
             SharesLoot == other.SharesLoot && SharesBounty == other.SharesBounty && CaptureCount == other.CaptureCount
             && Lines.SequenceEqual(other.Lines) && SharesMining == other.SharesMining
-            && MinedUnits == other.MinedUnits && ResidueUnits == other.ResidueUnits;
+            && MinedUnits == other.MinedUnits && ResidueUnits == other.ResidueUnits
+            && MiningLines.SequenceEqual(other.MiningLines);
     }
 }

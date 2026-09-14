@@ -3,12 +3,17 @@ using EveUtils.Client.Formatting;
 namespace EveUtils.Client.ViewModels.Runs;
 
 /// <summary>One character's own mining of one ore (ET-229) — general for any mining, not only a homefront's. No
-/// timestamps: the activity already runs from a start to a stop time (Jithran, 2026-09-11).</summary>
+/// timestamps: the activity already runs from a start to a stop time (Jithran, 2026-09-11).
+///
+/// <paramref name="shareFraction"/> is this ore line's own inline bar (ET-283, variant C of the mining-ledger
+/// mockups): this character's share, 0–1, of this ore within the counted fleet — or, solo, this ore's own share of
+/// this character's ISK across every ore they mined. Null draws no bar at all, for a shared member whose client has
+/// not sent per-ore lines (ET-234's total-only fallback), where there is no fleet-wide ore total to compare against.</summary>
 /// <param name="nameOf">Turns a character id into a name where the caller has one — see
 /// <see cref="ActivityRunRowViewModel"/> for why this is not always possible yet.</param>
 public sealed class ActivityMiningRowViewModel(
     Guid runId, long characterId, string oreType, int units, int criticalUnits, int residueUnits, decimal? value,
-    bool isFixedPrice, Func<long, string>? nameOf = null)
+    bool isFixedPrice, Func<long, string>? nameOf = null, double? shareFraction = null, string? shareTooltip = null)
 {
     /// <summary>The run this ore was mined on — read back by the run window to sum one participant's own share
     /// (<see cref="Sections.MiningWindowSectionViewModel.FactsFor"/>), the same way CONSUMABLES' row carries it.</summary>
@@ -21,6 +26,9 @@ public sealed class ActivityMiningRowViewModel(
     /// than displays — the fleet's own "fleet mined" line (ET-234).</summary>
     public int Units { get; } = units;
 
+    /// <summary>The raw crit units already inside <see cref="Units"/>, for a caller that sums rather than displays.</summary>
+    public int CriticalUnits { get; } = criticalUnits;
+
     /// <summary>The raw residue <see cref="ResidueText"/> is built from, for the same reason as <see cref="Units"/> —
     /// the fleet's own "remaining" line, when the site's capacity is known (ET-234).</summary>
     public int ResidueUnits { get; } = residueUnits;
@@ -29,9 +37,11 @@ public sealed class ActivityMiningRowViewModel(
 
     public string OreText { get; } = oreType;
 
+    /// <summary>"61,554 (+1,200 crit)" only when there was a crit, otherwise the plain grouped figure — the units
+    /// column reads no unit word of its own, a header above it already saying UNITS (ET-283).</summary>
     public string UnitsText { get; } = criticalUnits > 0
-        ? $"{IskFormat.Number(units)} units ({IskFormat.Number(criticalUnits)} crit)"
-        : $"{IskFormat.Number(units)} units";
+        ? $"{IskFormat.Number(units)} (+{IskFormat.Number(criticalUnits)} crit)"
+        : IskFormat.Number(units);
 
     public string ResidueText { get; } = residueUnits > 0 ? $"{IskFormat.Number(residueUnits)} residue" : "no residue";
 
@@ -40,4 +50,14 @@ public sealed class ActivityMiningRowViewModel(
     public string ValueText { get; } = value is { } isk
         ? IskFormat.Whole(isk) + (isFixedPrice ? " (NPC price)" : string.Empty)
         : "no price yet";
+
+    public bool HasShareBar { get; } = shareFraction is not null;
+
+    public double ShareFraction { get; } = shareFraction ?? 0;
+
+    public string ShareText { get; } = shareFraction is { } fraction
+        ? (fraction >= 0.9995 ? "100" : fraction > 0 && fraction < 0.005 ? "<1" : Math.Round(fraction * 100)) + "%"
+        : string.Empty;
+
+    public string? ShareTooltip { get; } = shareTooltip;
 }

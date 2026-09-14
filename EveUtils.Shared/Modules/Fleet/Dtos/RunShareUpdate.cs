@@ -17,12 +17,19 @@ namespace EveUtils.Shared.Modules.Fleet.Dtos;
 /// <see cref="MinedUnits"/>/<see cref="ResidueUnits"/> are this run's own totals, summed across every ore — the
 /// residue split <c>MetricKind.MiningYield</c>'s single scalar cannot carry, and the one MINING's "fleet mined" and
 /// "remaining" lines need. Zero while <see cref="SharesMining"/> is false, the same as an empty <see cref="Loot"/>.
+///
+/// <see cref="Mining"/> (ET-283) carries the same totals split by ore, mirroring <see cref="Loot"/>'s shape — what
+/// lets a receiver draw a per-ore group row for a fleet mate exactly as it does for its own characters. Empty on an
+/// older client that has not been rebuilt for this field yet, in which case the receiver falls back to
+/// <see cref="MinedUnits"/>/<see cref="ResidueUnits"/>'s total-only row (ET-234).
 /// </summary>
 /// <param name="CaptureCount">How many of the pilot's captures the list was counted from.</param>
 /// <param name="Loot">The items that count, one line per kind — empty while <see cref="SharesLoot"/> is false.</param>
 /// <param name="MinedUnits">This run's total mined units (crit included) — 0 while <see cref="SharesMining"/> is
 /// false.</param>
 /// <param name="ResidueUnits">This run's total residue units — 0 while <see cref="SharesMining"/> is false.</param>
+/// <param name="Mining">The same totals, one line per ore — empty while <see cref="SharesMining"/> is false, or on an
+/// older client that only ever sends the totals above.</param>
 public sealed record RunShareUpdate(
     long FleetId,
     string GroupCode,
@@ -33,4 +40,9 @@ public sealed record RunShareUpdate(
     IReadOnlyList<RunShareLootLine> Loot,
     bool SharesMining = false,
     int MinedUnits = 0,
-    int ResidueUnits = 0);
+    int ResidueUnits = 0,
+    IReadOnlyList<RunShareMiningLine>? Mining = null)
+{
+    /// <summary>Never null on the reading side — an older sender's JSON simply omits the field.</summary>
+    public IReadOnlyList<RunShareMiningLine> Mining { get; init; } = Mining ?? [];
+}

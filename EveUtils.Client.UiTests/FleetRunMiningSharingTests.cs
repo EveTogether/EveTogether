@@ -5,11 +5,15 @@ using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.ViewModels;
+using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Runs.Sections;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde.Dtos;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace EveUtils.Client.UiTests;
@@ -74,6 +78,60 @@ public sealed class FleetRunMiningSharingTests
 
         Assert.False(fleet.Jithran.Window.FleetSharing.IsSharingMining);
         Assert.DoesNotContain("1,000", _Mining(fleet.Raymond)!.FleetMinedText ?? "");
+    }
+
+    /// <summary>ET-283: RunShareUpdate now carries one line per ore (mirroring loot's RunShareLootLine[]), so a
+    /// receiver draws the same per-character/per-ore group for a fleet mate on another PC as for its own rows.</summary>
+    [AvaloniaFact]
+    public async Task TwoPilotsMiningDifferentOres_EachGetsAPerOreGroupRowForTheOther()
+    {
+        using FleetOfTwo fleet = await FleetOfTwo.CreateAsync();
+        await fleet.MineAsync(fleet.Jithran, "Veldspar II-Grade", 1000, residueUnits: 50);
+        await fleet.MineAsync(fleet.Raymond, "Scordite", 500);
+
+        await fleet.SettleAsync(() =>
+            _Mining(fleet.Jithran)?.Groups.Count == 2 && _Mining(fleet.Raymond)?.Groups.Count == 2);
+
+        MiningCharacterGroupViewModel? raymondOnJithran =
+            _Mining(fleet.Jithran)!.Groups.FirstOrDefault(group => group.CharacterId == FleetOfTwo.RaymondId);
+        Assert.NotNull(raymondOnJithran);
+        Assert.False(raymondOnJithran!.IsFallbackTotalOnly);
+        Assert.Contains(raymondOnJithran.Ores, ore => ore.OreText == "Scordite" && ore.Units == 500);
+
+        MiningCharacterGroupViewModel? jithranOnRaymond =
+            _Mining(fleet.Raymond)!.Groups.FirstOrDefault(group => group.CharacterId == FleetOfTwo.JithranId);
+        Assert.NotNull(jithranOnRaymond);
+        Assert.Contains(jithranOnRaymond!.Ores, ore => ore.OreText == "Veldspar II-Grade" && ore.Units == 1000
+                                                        && ore.ResidueUnits == 50);
+
+        // Each pilot's own group is local; the other is a shared fleet mate.
+        Assert.True(_Mining(fleet.Jithran)!.Groups.First(group => group.CharacterId == FleetOfTwo.JithranId).IsLocal);
+        Assert.False(raymondOnJithran.IsLocal);
+    }
+
+    /// <summary>An older client that never learned per-ore lines still shares its total (ET-234's shape); the
+    /// receiver draws it as the "all ores" fallback row rather than crashing or hiding the member entirely (ET-283).</summary>
+    [AvaloniaFact]
+    public async Task AnOlderClientsShare_WithoutPerOreLines_DrawsTheFallbackRow()
+    {
+        // A homefront kind claims MINING outright regardless of who has mined yet (RunTypeCatalogue) — Jithran never
+        // mines here, only Raymond's share arrives, so the outright claim is what gives his own window a MINING
+        // section to draw the fallback row on at all (the same reason the other homefront tests above use it).
+        using FleetOfTwo fleet = await FleetOfTwo.CreateAsync(MetaliminalSite.DungeonId);
+        await fleet.SettleAsync(() => fleet.Jithran.Window.FleetSharing.IsShown && fleet.Raymond.Window.FleetSharing.IsShown);
+
+        RunShareUpdate oldStyleShare = new(FleetOfTwo.FleetId, FleetOfTwo.GroupCode,
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), SharesLoot: false, SharesBounty: false, CaptureCount: 0,
+            Loot: [], SharesMining: true, MinedUnits: 1500, ResidueUnits: 200);
+        await fleet.Raymond.Instance.Services.GetRequiredService<IEventBus>()
+            .PublishAsync(new FleetRunShareEvent(oldStyleShare, FleetOfTwo.RaymondId), EventTarget.Remote);
+        await fleet.SettleAsync(() => _Mining(fleet.Jithran)?.Groups.Any(group => group.IsFallbackTotalOnly) == true);
+
+        MiningCharacterGroupViewModel raymondGroup =
+            _Mining(fleet.Jithran)!.Groups.First(group => group.CharacterId == FleetOfTwo.RaymondId);
+        Assert.True(raymondGroup.IsFallbackTotalOnly);
+        Assert.False(raymondGroup.HasOres);
+        Assert.Contains("1,500 units", raymondGroup.FallbackText);
     }
 
     [Fact]
