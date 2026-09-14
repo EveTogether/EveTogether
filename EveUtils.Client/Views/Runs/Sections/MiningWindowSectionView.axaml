@@ -36,10 +36,12 @@
         </Style>
         <!-- UNITS and RESIDUE — deliberately not Classes="hint": that class carries a 6px top margin meant for a
              paragraph note under a section (EveUtils.axaml), which is exactly what pushed these two columns down
-             out of line with the share bar and the ISK figure beside them (Jithran's screenshot, ET-284). -->
+             out of line with the share bar and the ISK figure beside them (Jithran's screenshot, ET-284). Foreground
+             is ValueBrush, the same "normal value colour" every other figure in this app uses (bounty ISK, fit
+             value, loot money.net) and the mockup's own "value" token — dim grey read too quiet next to it. -->
         <Style Selector="TextBlock.cellnum">
             <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource ValueBrush}"/>
             <Setter Property="FontSize" Value="10.5"/>
             <Setter Property="TextAlignment" Value="Right"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
@@ -76,7 +78,7 @@
         <!-- Column headers, hidden along with everything else once there is nothing mined at all. -->
         <Grid ColumnDefinitions="*,70,65,80,105" ColumnSpacing="8" Margin="0,0,0,3"
               IsVisible="{Binding Groups.Count}">
-            <TextBlock Classes="colhdr" Text="ORE"/>
+            <TextBlock Classes="colhdr" Text="CHARACTER · ORE"/>
             <TextBlock Grid.Column="1" Classes="colhdr num" Text="SHARE"/>
             <TextBlock Grid.Column="2" Classes="colhdr num" Text="UNITS"/>
             <TextBlock Grid.Column="3" Classes="colhdr num" Text="RESIDUE"/>
@@ -146,7 +148,7 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
         <TextBlock x:Name="FleetMinedBlock" Classes="hint" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding FleetMinedText}"
-                   IsVisible="{Binding FleetMinedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                   IsVisible="{Binding ShowFleetMinedText}"/>
         <TextBlock x:Name="RemainingBlock" Classes="hint" TextWrapping="Wrap" Text="{Binding RemainingText}"
                    IsVisible="{Binding RemainingText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
     </StackPanel>

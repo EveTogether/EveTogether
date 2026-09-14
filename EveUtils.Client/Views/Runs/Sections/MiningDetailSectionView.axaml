@@ -27,10 +27,11 @@
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
         <!-- UNITS and RESIDUE — deliberately not Classes="hint": that class's 6px top margin (EveUtils.axaml) is
-             what pushed these two columns down out of line with the share bar and ISK figure beside them. -->
+             what pushed these two columns down out of line with the share bar and ISK figure beside them.
+             Foreground is ValueBrush, the same "normal value colour" every other figure in this app uses. -->
         <Style Selector="TextBlock.cellnum">
             <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource ValueBrush}"/>
             <Setter Property="FontSize" Value="10.5"/>
             <Setter Property="TextAlignment" Value="Right"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
@@ -55,7 +56,7 @@
 
     <StackPanel>
         <Grid ColumnDefinitions="*,70,65,80,105" ColumnSpacing="8" Margin="0,0,0,3" IsVisible="{Binding HasMining}">
-            <TextBlock Classes="colhdr" Text="ORE"/>
+            <TextBlock Classes="colhdr" Text="CHARACTER · ORE"/>
             <TextBlock Grid.Column="1" Classes="colhdr num" Text="SHARE"/>
             <TextBlock Grid.Column="2" Classes="colhdr num" Text="UNITS"/>
             <TextBlock Grid.Column="3" Classes="colhdr num" Text="RESIDUE"/>
