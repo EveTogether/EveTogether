@@ -13,6 +13,12 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: MINING's share bars now line up under each other, and their percentage sits level with the bar.** Bar
+  and percentage used to share one right-aligned cell, so a one-digit percentage ("6%") is narrower than a two-digit
+  one ("61%") and shifted its own bar out of line with the rest. The bar and the percentage now each have their own
+  fixed-width column — the bar always starts and ends at the same x, and the percentage is right-aligned in its own
+  column so the units digit lines up too — with the percentage vertically centred on the bar instead of sitting
+  above it. Same fix in the run window, which shares this table with the saved activity screen.
 - **Fixed: the activity detail screen now reads the same width for every kind of activity, and its wide tables are
   easier to follow.** A mining run used to span the whole window while a combat site stayed narrow — its own long
   footnote ("Not shown for this kind of activity: …") measured out unwrapped and grew the screen to fit it. Every
