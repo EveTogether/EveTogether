@@ -173,10 +173,8 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
             oreRows.Add(row);
         }
 
-        string residueText = totalResidue > 0 ? $"{IskFormat.Number(totalResidue)} residue" : "no residue";
-        string? residueTooltip = totalResidue > 0
-            ? $"{IskFormat.Whole(residueIsk)} lost — ore taken from the rock that never reached the hold"
-            : null;
+        string? iskTooltip = MiningCharacterGroupViewModel.IskTooltipFor(
+            lines.Any(line => line.IsFixedPrice), totalResidue, residueIsk);
 
         TimeSpan miningTime = build.MiningEnd - build.MiningStart;
         TimeSpan runTime = build.RunEnd - build.RunStart;
@@ -185,7 +183,7 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
         decimal? runTimeRate = isk is { } total3 && runTime > TimeSpan.Zero
             ? total3 / (decimal)runTime.TotalHours : null;
 
-        string rateText = miningTimeRate is { } avg ? $"{IskFormat.Compact(avg)}/h avg" : "—/h avg";
+        string rateText = miningTimeRate is { } avg ? $"{IskFormat.Compact(avg)} ISK/h avg" : "— ISK/h avg";
         string? rateTooltip = miningTimeRate is null && runTimeRate is null
             ? null
             : $"{(miningTimeRate is { } m ? IskFormat.Whole(m) : "no price yet")}/h over the mining time " +
@@ -193,7 +191,7 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
               $"the whole run ({_Duration(runTime)}).";
 
         return (new MiningCharacterGroupViewModel(build.CharacterId, build.Name, build.IsLocal, isk, rateText,
-            rateTooltip, residueText, residueTooltip, null, null, oreRows), isk ?? 0m);
+            rateTooltip, iskTooltip, null, null, oreRows), isk ?? 0m);
     }
 
     private static string _Duration(TimeSpan span) =>

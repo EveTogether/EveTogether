@@ -5,78 +5,21 @@
              xmlns:ctl="using:EveUtils.Client.Controls"
              x:Class="EveUtils.Client.Views.Runs.Sections.MiningDetailSectionView"
              x:DataType="vs:MiningDetailSectionViewModel">
+    <!-- The saved activity's copy of MINING's one table — "now" becomes "avg" (ET-283); the columns, the narrow layout
+         and every style come from MiningLedgerStyles.axaml, the same as the run window's (MiningWindowSectionView). -->
     <UserControl.Styles>
-        <!-- Same row shape as the run window (ET-283, variant C of the mining-ledger mockups): "now" becomes "avg".
-             Same fixed-width table as MiningWindowSectionView (ET-284) — see that view's own comment for why the
-             four right-hand columns use a literal pixel width rather than Avalonia's (WPF-only, unavailable)
-             SharedSizeGroup. -->
-        <Style Selector="TextBlock.charname">
-            <Setter Property="FontWeight" Value="Medium"/>
-        </Style>
-        <Style Selector="TextBlock.colhdr">
-            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
-            <Setter Property="FontSize" Value="9"/>
-            <Setter Property="LetterSpacing" Value="1.2"/>
-        </Style>
-        <Style Selector="TextBlock.colhdr.num">
-            <Setter Property="TextAlignment" Value="Right"/>
-        </Style>
-        <Style Selector="TextBlock.oretext">
-            <Setter Property="Opacity" Value="0.85"/>
-            <Setter Property="Margin" Value="16,0,0,0"/>
-            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-        </Style>
-        <!-- UNITS and RESIDUE — deliberately not Classes="hint": that class's 6px top margin (EveUtils.axaml) is
-             what pushed these two columns down out of line with the share bar and ISK figure beside them.
-             Foreground is ValueBrush, the same "normal value colour" every other figure in this app uses. -->
-        <Style Selector="TextBlock.cellnum">
-            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-            <Setter Property="Foreground" Value="{StaticResource ValueBrush}"/>
-            <Setter Property="FontSize" Value="10.5"/>
-            <Setter Property="TextAlignment" Value="Right"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-        <!-- ET-285: full TextBrush rather than a faded Opacity — dropped a percentage next to a track this
-             thin was "nauwelijks leesbaar" (Jithran); an explicit brush also reads the same on a hovered
-             (detailrow) row's background as it does on a plain one, where an alpha blend would not. -->
-        <!-- ET-286: right-aligned and vertically centred on the bar in its own fixed column — see the row
-             Grid's own comment for why the bar and this text each need their own column. -->
-        <Style Selector="TextBlock.sharepct">
-            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-            <Setter Property="FontSize" Value="10"/>
-            <Setter Property="TextAlignment" Value="Right"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-        <Style Selector="TextBlock.rate">
-            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
-            <Setter Property="FontSize" Value="10.5"/>
-            <Setter Property="TextAlignment" Value="Right"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-        <!-- ET-285: bigger and with a real track, matching design/mining-ledger/v1/c-compact-table.html's own
-             .sbar (8px tall, 64px wide) — the run window's copy of this style carries the same numbers. -->
-        <Style Selector="ctl|MeterBar.share">
-            <Setter Property="Height" Value="8"/>
-            <Setter Property="Width" Value="64"/>
-            <Setter Property="Track" Value="#26FFFFFF"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
+        <StyleInclude Source="avares://EveUtils.Client/Views/Runs/Sections/MiningLedgerStyles.axaml"/>
     </UserControl.Styles>
 
-    <!-- ET-286: SHARE split into its own bar column (64, the bar's own fixed width) and percentage column (28,
-         right-aligned) instead of one 100-wide cell holding both right-aligned as a unit — that made the bar
-         itself drift with the percentage's own digit count (a lone "6%" is narrower than "61%"), so no two
-         ore rows' bars started at the same x. Same six-column grid — header, group row and ore row — as the
-         run window's copy of this table. -->
-    <StackPanel>
-        <Grid ColumnDefinitions="*,64,28,65,80,105" ColumnSpacing="8" Margin="0,0,0,3" IsVisible="{Binding HasMining}">
-            <TextBlock Classes="colhdr" Text="CHARACTER · ORE"/>
-            <TextBlock Grid.Column="1" Grid.ColumnSpan="2" Classes="colhdr num" Text="SHARE"/>
-            <TextBlock Grid.Column="3" Classes="colhdr num" Text="UNITS"/>
-            <TextBlock Grid.Column="4" Classes="colhdr num" Text="RESIDUE"/>
-            <TextBlock Grid.Column="5" Classes="colhdr num" Text="ISK"/>
+    <StackPanel x:Name="Ledger">
+        <Grid Classes="ledger" ColumnDefinitions="*,64,24,42,36,48,62" RowDefinitions="Auto,Auto" Margin="0,0,0,3"
+              IsVisible="{Binding HasMining}">
+            <TextBlock Classes="colhdr lead" Text="CHARACTER · ORE"/>
+            <TextBlock Grid.Column="1" Grid.ColumnSpan="2" Classes="colhdr num figure" Text="SHARE"/>
+            <TextBlock Grid.Column="3" Classes="colhdr num figure" Text="UNITS"/>
+            <TextBlock Grid.Column="4" Classes="colhdr num figure" Text="CRIT"/>
+            <TextBlock Grid.Column="5" Classes="colhdr num figure" Text="RESIDUE"/>
+            <TextBlock Grid.Column="6" Classes="colhdr num figure" Text="ISK"/>
         </Grid>
 
         <ItemsControl x:Name="MiningList" ItemsSource="{Binding Groups}" IsVisible="{Binding HasMining}">
@@ -88,33 +31,36 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="vr:MiningCharacterGroupViewModel">
                     <StackPanel>
-                        <Grid ColumnDefinitions="*,64,28,65,80,105" ColumnSpacing="8">
-                            <StackPanel Orientation="Horizontal" Spacing="4">
+                        <Grid Classes="ledger" ColumnDefinitions="*,64,24,42,36,48,62">
+                            <WrapPanel Grid.ColumnSpan="6" Classes="who">
                                 <TextBlock Classes="charname" Text="{Binding CharacterName}"/>
                                 <Border Classes="localtag" IsVisible="{Binding IsLocal}">
                                     <TextBlock Text="Local"/>
                                 </Border>
-                            </StackPanel>
-                            <TextBlock Grid.Column="1" Grid.ColumnSpan="4" Classes="rate" Text="{Binding RateText}"
-                                       ToolTip.Tip="{Binding RateTooltip}"/>
-                            <TextBlock Grid.Column="5" Classes="money" Text="{Binding IskText}"
-                                       ToolTip.Tip="{Binding ResidueTooltip}"/>
+                                <TextBlock Classes="rate" Text="{Binding RateText}" ToolTip.Tip="{Binding RateTooltip}"/>
+                            </WrapPanel>
+                            <TextBlock Grid.Column="6" Classes="money" Text="{Binding IskText}"
+                                       ToolTip.Tip="{Binding IskTooltip}"/>
                         </Grid>
 
                         <ItemsControl ItemsSource="{Binding Ores}" IsVisible="{Binding HasOres}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vr:ActivityMiningRowViewModel">
-                                    <Grid Classes="detailrow" Classes.alt="{Binding IsAlternate}"
-                                          ColumnDefinitions="*,64,28,65,80,105" ColumnSpacing="8" Margin="0,2,0,0">
-                                        <TextBlock Classes="oretext" Text="{Binding OreText}"/>
-                                        <ctl:MeterBar Grid.Column="1" Classes="share" Fraction="{Binding ShareFraction}"
+                                    <Grid Classes="ledger detailrow" Classes.alt="{Binding IsAlternate}"
+                                          ColumnDefinitions="*,64,24,42,36,48,62" RowDefinitions="Auto,Auto" Margin="0,2,0,0">
+                                        <TextBlock Classes="oretext lead" Text="{Binding OreText}" ToolTip.Tip="{Binding OreText}"/>
+                                        <ctl:MeterBar Grid.Column="1" Classes="share figure" Fraction="{Binding ShareFraction}"
                                                       Fill="{DynamicResource AccentBrush}" IsVisible="{Binding HasShareBar}"
                                                       ToolTip.Tip="{Binding ShareTooltip}"/>
-                                        <TextBlock Grid.Column="2" Classes="sharepct" Text="{Binding ShareText}"
+                                        <TextBlock Grid.Column="2" Classes="sharepct figure" Text="{Binding ShareText}"
                                                    IsVisible="{Binding HasShareBar}" ToolTip.Tip="{Binding ShareTooltip}"/>
-                                        <TextBlock Grid.Column="3" Classes="cellnum" Text="{Binding UnitsText}"/>
-                                        <TextBlock Grid.Column="4" Classes="cellnum" Text="{Binding ResidueText}"/>
-                                        <TextBlock Grid.Column="5" Classes="money" Text="{Binding ValueText}"/>
+                                        <TextBlock Grid.Column="3" Classes="cellnum figure" Text="{Binding UnitsText}"/>
+                                        <TextBlock Grid.Column="4" Classes="cellnum figure" Text="{Binding CritText}"/>
+                                        <TextBlock Grid.Column="5" Classes="cellnum figure" Text="{Binding ResidueText}"/>
+                                        <!-- With one ore this is the character's total again, already on the line above. -->
+                                        <TextBlock Grid.Column="6" Classes="money figure" Text="{Binding ValueText}"
+                                                   ToolTip.Tip="{Binding ValueTooltip}"
+                                                   IsVisible="{Binding $parent[ItemsControl].((vr:MiningCharacterGroupViewModel)DataContext).HasSeveralOres}"/>
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -123,11 +69,13 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
-        <!-- Same column grid as every row above it, so TOTAL's own ISK figure lands in the ISK column too. -->
-        <Border Classes="totals" IsVisible="{Binding HasMining}">
-            <Grid ColumnDefinitions="*,64,28,65,80,105" ColumnSpacing="8">
-                <TextBlock Grid.ColumnSpan="5" Classes="label" Text="TOTAL" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="5" Classes="money total" Text="{Binding MiningText}"/>
+        <!-- No horizontal padding on the box itself, so TOTAL's figure ends on the same right edge as every ISK figure
+             above it; the label keeps the box's 8px inset on its own. The figure spans CRIT..ISK: at 13px it is wider
+             than the ISK column alone. -->
+        <Border Classes="totals" Padding="0,6" IsVisible="{Binding HasMining}">
+            <Grid Classes="ledger" ColumnDefinitions="*,64,24,42,36,48,62">
+                <TextBlock Grid.ColumnSpan="4" Margin="8,0,0,0" Classes="label" Text="TOTAL" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="4" Grid.ColumnSpan="3" Classes="money total" Text="{Binding MiningText}"/>
             </Grid>
         </Border>
         <TextBlock x:Name="MiningEmpty" Classes="hint" TextWrapping="Wrap"

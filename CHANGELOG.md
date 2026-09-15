@@ -13,6 +13,16 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: MINING is a clear table again — nothing clipped, nothing shown twice.** During a six-character homefront
+  the crit figure pushed the mined units out of their column, the "(NPC price)" note broke the ISK column over
+  several lines, and every character showed the same ISK twice. Crit now has its own CRIT column, ISK is a plain
+  amount (that Mutanite is valued at its fixed NPC price moved to the figure's tooltip), a character's total sits on
+  their own line with ISK/h next to their name, and an ore line shows its own ISK only when there are several ores to
+  split it over. A character who has not mined anything reads "no mining yet" instead of "—/h now · no price". When
+  the run window is too narrow for a name beside the figures, each ore puts its name on one line and its figures
+  under the headers on the next. With the run window turned see-through, the table now sits on a faint plate of its
+  own, so whatever is behind the window no longer runs straight through the figures. The run window and the saved
+  activity share this one table.
 - **Fixed: the run window no longer grinds to a halt during a homefront, and SAVE no longer freezes the app.** Three
   Metaliminal Meteoroid runs with six characters on 14 Sep each ended with Windows closing EVE Together as not
   responding. SAVE rebuilt the summary of every activity ever saved instead of just this one, and did it on the thread

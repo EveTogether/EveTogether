@@ -1,17 +1,20 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Client.Formatting;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
 /// <summary>One character's mining, grouped under a header row with its own ore lines indented beneath it (ET-283,
 /// variant C of the mining-ledger mockups — the smallest step from BOUNTY's flat rows). The header carries the
-/// character's own total, ISK/h and residue; each <see cref="Ores"/> row underneath carries the inline share bar,
-/// its own units (with crit), residue and ISK.
+/// character's own total ISK and ISK/h; each <see cref="Ores"/> row underneath carries the inline share bar, its own
+/// units, crit and residue — and its own ISK only when there are several ores to split the total over
+/// (<see cref="HasSeveralOres"/>, ET-288: with one ore that figure is the header's total a second time).
 ///
-/// Local characters and fleet mates that share their mining, per ore, look the same. Three exceptions:
-/// <see cref="IsFallbackTotalOnly"/> (a shared member on a client that has not sent per-ore lines yet, ET-234's old
-/// shape — an "all ores" line, no bar, no ISK), <see cref="IsNotShared"/> (an external member with no mining shared
-/// at all, ET-272's convention — a name-only row, never counted), and neither, the normal per-ore case.
+/// Local characters and fleet mates that share their mining, per ore, look the same. Three exceptions, each one row
+/// with a <see cref="NoteText"/> in place of figures: <see cref="IsFallbackTotalOnly"/> (a shared member on a client
+/// that has not sent per-ore lines yet, ET-234's old shape), <see cref="IsNotShared"/> (an external member with no
+/// mining shared at all, ET-272's convention — never counted), and a character of this window's own that has not
+/// mined anything yet.
 ///
 /// Observable (ET-287): the run window keeps one of these per character for the whole run and moves only what changed
 /// onto it (<see cref="TakeOver"/>). Rebuilding every group each clock tick recreated every row's container, share bar
@@ -20,18 +23,17 @@ public sealed partial class MiningCharacterGroupViewModel : ObservableObject
 {
     public MiningCharacterGroupViewModel(
         long characterId, string characterName, bool isLocal, decimal? isk, string rateText, string? rateTooltip,
-        string residueText, string? residueTooltip, string? boostGlyph, string? boostTooltip,
-        IReadOnlyList<ActivityMiningRowViewModel> ores, string? fallbackText = null, bool isNotShared = false)
+        string? iskTooltip, string? boostGlyph, string? boostTooltip, IReadOnlyList<ActivityMiningRowViewModel> ores,
+        string? fallbackText = null, bool isNotShared = false)
     {
         CharacterId = characterId;
         IsLocal = isLocal;
         IsNotShared = isNotShared;
         _characterName = characterName;
-        _iskText = Formatting.IskFormat.WholeOrNoPrice(isk);
+        _iskText = isk is { } amount ? IskFormat.Number(amount) : "—";
         _rateText = rateText;
         _rateTooltip = rateTooltip;
-        _residueText = residueText;
-        _residueTooltip = residueTooltip;
+        _iskTooltip = iskTooltip ?? (isk is null ? "No price for this character's ore yet." : null);
         _boostGlyph = boostGlyph;
         _boostTooltip = boostTooltip;
         _fallbackText = fallbackText;
@@ -44,6 +46,7 @@ public sealed partial class MiningCharacterGroupViewModel : ObservableObject
 
     public bool IsLocal { get; }
 
+    /// <summary>Bare amount (ET-288) — the ISK header above it names the unit.</summary>
     [ObservableProperty] private string _iskText;
 
     /// <summary>The run window's "now" (last 5 minutes) or the detail screen's "mining time avg · whole run avg" —
@@ -52,11 +55,10 @@ public sealed partial class MiningCharacterGroupViewModel : ObservableObject
 
     [ObservableProperty] private string? _rateTooltip;
 
-    [ObservableProperty] private string _residueText;
-
-    /// <summary>The residue's own ISK value, shown only on hover (ET-283) — residue never counts toward
-    /// <see cref="IskText"/>, it left the rock but never reached the hold.</summary>
-    [ObservableProperty] private string? _residueTooltip;
+    /// <summary>What the total does not say by itself, on hover: Mutanite's fixed NPC price when it holds any, and the
+    /// residue's own ISK value — residue never counts toward <see cref="IskText"/>, it left the rock but never
+    /// reached the hold (ET-283). Built by <see cref="IskTooltipFor"/>.</summary>
+    [ObservableProperty] private string? _iskTooltip;
 
     /// <summary>▲▲ boosting (this character's own gamelog wrote the burst lines) or ▲ boosted (inferred from a local
     /// booster's log — never from a receiver's own log, which says nothing) — null where nothing is determinable,
@@ -69,10 +71,12 @@ public sealed partial class MiningCharacterGroupViewModel : ObservableObject
 
     public bool HasOres => Ores.Count > 0;
 
+    public bool HasSeveralOres => Ores.Count > 1;
+
     /// <summary>Set only for a shared member whose client has not sent per-ore lines yet (ET-234's old shape) —
     /// "all ores · N units", no bar, no ISK. Null once the per-ore wire is there, and for this window's own rows.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFallbackTotalOnly))]
+    [NotifyPropertyChangedFor(nameof(IsFallbackTotalOnly), nameof(NoteText), nameof(HasFigures))]
     private string? _fallbackText;
 
     public bool IsFallbackTotalOnly => FallbackText is not null;
@@ -80,6 +84,13 @@ public sealed partial class MiningCharacterGroupViewModel : ObservableObject
     /// <summary>An external fleet member with no mining shared at all (ET-272's convention) — a name-only row, never
     /// counted in the total.</summary>
     public bool IsNotShared { get; }
+
+    /// <summary>What the row says in place of a rate and an ISK figure (ET-288) — both could only read "—" here, which
+    /// Jithran's 6-character homefront showed as "—/h now · no price" for the one character not mining. Null for a
+    /// row that has figures.</summary>
+    public string? NoteText => IsNotShared ? "not shared" : FallbackText ?? (HasOres ? null : "no mining yet");
+
+    public bool HasFigures => NoteText is null;
 
     /// <summary>Whether <paramref name="fresh"/> is this same row worked out again — the same character in the same
     /// role — rather than a different row that only happens to share a character id.</summary>
@@ -94,15 +105,34 @@ public sealed partial class MiningCharacterGroupViewModel : ObservableObject
         IskText = fresh.IskText;
         RateText = fresh.RateText;
         RateTooltip = fresh.RateTooltip;
-        ResidueText = fresh.ResidueText;
-        ResidueTooltip = fresh.ResidueTooltip;
+        IskTooltip = fresh.IskTooltip;
         BoostGlyph = fresh.BoostGlyph;
         BoostTooltip = fresh.BoostTooltip;
         FallbackText = fresh.FallbackText;
 
         bool hadOres = HasOres;
+        bool hadSeveralOres = HasSeveralOres;
         Ores.ReconcileTo([.. fresh.Ores.Select(ore => Ores.FirstOrDefault(shown => shown.ShowsSameAs(ore)) ?? ore)]);
         if (hadOres != HasOres)
+        {
             OnPropertyChanged(nameof(HasOres));
+            OnPropertyChanged(nameof(NoteText));
+            OnPropertyChanged(nameof(HasFigures));
+        }
+        if (hadSeveralOres != HasSeveralOres)
+            OnPropertyChanged(nameof(HasSeveralOres));
+    }
+
+    /// <summary>The one tooltip both MINING sections put on a character's total — see <see cref="IskTooltip"/>.</summary>
+    public static string? IskTooltipFor(bool holdsFixedPrice, int residueUnits, decimal residueIsk)
+    {
+        string[] lines =
+        [
+            .. holdsFixedPrice ? [ActivityMiningRowViewModel.FixedPriceTooltip] : Array.Empty<string>(),
+            .. residueUnits > 0
+                ? [$"{IskFormat.Whole(residueIsk)} lost to residue — ore taken from the rock that never reached the hold."]
+                : Array.Empty<string>()
+        ];
+        return lines.Length == 0 ? null : string.Join("\n", lines);
     }
 }

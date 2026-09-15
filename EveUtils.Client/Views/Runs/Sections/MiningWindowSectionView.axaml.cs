@@ -7,4 +7,10 @@ namespace EveUtils.Client.Views.Runs.Sections;
 public partial class MiningWindowSectionView : UserControl
 {
     public MiningWindowSectionView() => AvaloniaXamlLoader.Load(this);
+
+    protected override void OnSizeChanged(SizeChangedEventArgs e)
+    {
+        base.OnSizeChanged(e);
+        MiningLedger.FitTo(this.GetControl<StackPanel>("Ledger"), e.NewSize.Width);
+    }
 }

@@ -399,13 +399,13 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
     {
         if (build.IsNotShared)
             return (new MiningCharacterGroupViewModel(build.CharacterId, build.Name, false, null,
-                string.Empty, null, "no residue", null, null, null, [], fallbackText: null, isNotShared: true), true, 0m);
+                string.Empty, null, null, null, null, [], fallbackText: null, isNotShared: true), true, 0m);
 
         if (build.IsFallback)
         {
             string fallback = $"all ores · {IskFormat.Number(build.FallbackUnits)} units";
             return (new MiningCharacterGroupViewModel(build.CharacterId, build.Name, false, null,
-                string.Empty, null, "not priced", null, null, null, [], fallbackText: fallback), false, 0m);
+                string.Empty, null, null, null, null, [], fallbackText: fallback), false, 0m);
         }
 
         List<(string Ore, int Units, int Crit, int Residue, decimal? Isk, decimal? UnitPrice, bool IsFixedPrice)> lines = [];
@@ -442,16 +442,17 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
                 lineIsk, isFixedPrice, _ => build.Name, shareFraction, shareTooltip));
         }
 
-        string residueText = totalResidue > 0 ? $"{IskFormat.Number(totalResidue)} residue" : "no residue";
-        string? residueTooltip = totalResidue > 0
-            ? $"{IskFormat.Whole(residueIsk)} lost — ore taken from the rock that never reached the hold"
-            : null;
+        string? iskTooltip = MiningCharacterGroupViewModel.IskTooltipFor(
+            lines.Any(line => line.IsFixedPrice), totalResidue, residueIsk);
 
-        (string RateText, string? RateTooltip) rate = build.IsLocal ? _LiveRateFor(build.CharacterId, sde, nowUtc) : (string.Empty, null);
+        // A character of this window's own who has mined nothing reads "no mining yet" instead of a rate (ET-288).
+        (string RateText, string? RateTooltip) rate = build.IsLocal && lines.Count > 0
+            ? _LiveRateFor(build.CharacterId, sde, nowUtc)
+            : (string.Empty, null);
         (string? Glyph, string? Tooltip) boost = build.IsLocal ? _BoostFor(build.CharacterId, nowUtc) : (null, null);
 
         return (new MiningCharacterGroupViewModel(build.CharacterId, build.Name, build.IsLocal, isk,
-            rate.RateText, rate.RateTooltip, residueText, residueTooltip, boost.Glyph, boost.Tooltip, oreRows), false,
+            rate.RateText, rate.RateTooltip, iskTooltip, boost.Glyph, boost.Tooltip, oreRows), false,
             isk ?? 0m);
     }
 
@@ -476,8 +477,8 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
                 }
 
         return any
-            ? ($"{IskFormat.Compact(sum * 12)}/h now", "ISK/h = the yield of the last 5 minutes, times 12.")
-            : ("—/h now", null);
+            ? ($"{IskFormat.Compact(sum * 12)} ISK/h now", "ISK/h = the yield of the last 5 minutes, times 12.")
+            : ("— ISK/h now", null);
     }
 
     /// <summary>The unit price and whether it is Mutanite's fixed NPC one — the same lookup <see cref="_SyncRows"/>
