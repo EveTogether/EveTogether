@@ -13,6 +13,14 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: the run window no longer freezes in the middle of a homefront.** On 15 Sep a six-character Metaliminal
+  Meteoroid run stopped answering five minutes into mining — the window could not even be dragged — long before
+  anyone pressed SAVE. Every sample the fleet shares (location, bounty; a dozen a second with six characters) made the
+  window work out its whole readout again, and MINING's live ISK/h looked each mined cycle's ore up in the static
+  data again, on the thread that draws the window. The window fell further behind every second until Windows gave
+  up on it. A fleet sample now only updates the fleet lines and the clock; the rest keeps to the once-a-second
+  tick. MINING looks each ore up once per run, and adds up the last five minutes without holding up the game-log
+  reader while it prices them.
 - **Fixed: MINING is a clear table again — nothing clipped, nothing shown twice.** During a six-character homefront
   the crit figure pushed the mined units out of their column, the "(NPC price)" note broke the ISK column over
   several lines, and every character showed the same ISK twice. Crit now has its own CRIT column, ISK is a plain

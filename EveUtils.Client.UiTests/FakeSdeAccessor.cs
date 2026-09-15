@@ -88,10 +88,21 @@ public sealed class FakeSdeAccessor : ISdeAccessor
         return false;
     }
 
-    public bool TryGetTypeId(string name, out int typeId) => _byName.TryGetValue(name.Trim(), out typeId);
+    /// <summary>How often a type was looked up by name or id — each one a query against the real store, which the run
+    /// window must not repeat for an ore it already knows (ET-298).</summary>
+    public int TypeLookups { get; private set; }
 
-    public SdeType? GetType(int typeId) =>
-        _types.TryGetValue(typeId, out var e) ? new SdeType(e.TypeId, e.GroupId, e.Name, true, 0, e.Volume, 0, null) : null;
+    public bool TryGetTypeId(string name, out int typeId)
+    {
+        TypeLookups++;
+        return _byName.TryGetValue(name.Trim(), out typeId);
+    }
+
+    public SdeType? GetType(int typeId)
+    {
+        TypeLookups++;
+        return _types.TryGetValue(typeId, out var e) ? new SdeType(e.TypeId, e.GroupId, e.Name, true, 0, e.Volume, 0, null) : null;
+    }
 
     public bool IsMutatedType(int typeId) => _types.TryGetValue(typeId, out var e) && e.IsMutated;
 

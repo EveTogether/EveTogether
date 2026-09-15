@@ -3060,6 +3060,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             ApplyFleetEnvelope([.. _fleetLocations.Values], DateTime.UtcNow);
     });
 
+    /// <summary>
+    /// What a fleet sample changes, and nothing more (ET-298): the member rows and counts, a clock this pilot's own anchor
+    /// may just have started, and the lines that read them. Everything else waits for the clock tick. A fleet of six
+    /// publishes a dozen samples a second, and a whole <see cref="Refresh"/> per sample — MINING's live rate included —
+    /// queued up on the UI thread faster than it could run, until the window stopped answering mid-run.
+    /// </summary>
     public void ApplyFleetEnvelope(IReadOnlyList<MetricSample> samples, DateTime receivedUtc)
     {
         List<MetricSample> members = samples
@@ -3074,7 +3080,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (!_IsInPocket)
         {
             AnchoredFleetMemberCount = 0;
-            Refresh(receivedUtc);
+            _RefreshFleetReadout(receivedUtc);
             return;
         }
 
@@ -3101,7 +3107,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 _ = _BeginEstimatedRunAsync(ownAnchor);
         }
 
-        Refresh(receivedUtc);
+        _RefreshFleetReadout(receivedUtc);
+    }
+
+    private void _RefreshFleetReadout(DateTime nowUtc)
+    {
+        _RefreshClock(nowUtc);
+        _RefreshArmed();
+        _RefreshFleetClock(nowUtc);
+        _RefreshSummaries();
     }
 
     /// <summary>

@@ -37,7 +37,9 @@ using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using EveUtils.Shared.Modules.Runs.Commands;
+using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
+using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -563,6 +565,55 @@ public class ActivityWindowTests
         Assert.Equal(Anchor.AddMinutes(5), model.AnchorUtc);
         Assert.False(model.IsStartButtonVisible);
         Assert.False(model.IsArmedShown);
+    }
+
+    /// <summary>
+    /// ET-298: a fleet sample leaves MINING to the clock tick. With six characters a fleet publishes a dozen samples a
+    /// second, and each one used to work the whole window out again — MINING's SDE lookups with it — until the UI thread
+    /// fell behind for good and a live Metaliminal run froze mid-mining. The ore mined since the last tick is what a
+    /// whole refresh would have looked up.
+    /// </summary>
+    [Fact]
+    public void AFleetSample_LeavesMiningToTheClockTick()
+    {
+        (ActivityWindowViewModel model, RunParticipantViewModel miner, FakeSdeAccessor sde) = _MiningWindow();
+        miner.MiningEntries = [new RunMiningOreDto("Amperum Mutanite", 120, 0, 0), new RunMiningOreDto("Solis Mutanite", 40, 0, 0)];
+        int lookups = sde.TypeLookups;
+
+        model.ApplyFleetEnvelope([new MetricSample(2, 7, MetricKind.Location, 0, 1_000_000, Text: "Tama")], Anchor.AddMinutes(1));
+
+        Assert.Equal(lookups, sde.TypeLookups);
+    }
+
+    /// <summary>ET-298: the SDE is asked about an ore once. Every tick prices every ore line and every mined cycle of the
+    /// live ISK/h, and a query for each, on the UI thread, is what the frozen window was caught doing.</summary>
+    [Fact]
+    public void Mining_LooksAnOreUpOnce_NotEveryTick()
+    {
+        (ActivityWindowViewModel model, RunParticipantViewModel _, FakeSdeAccessor sde) = _MiningWindow();
+        int lookups = sde.TypeLookups;
+
+        model.Refresh(Anchor.AddMinutes(1));
+        model.Refresh(Anchor.AddMinutes(2));
+
+        Assert.Equal(lookups, sde.TypeLookups);
+    }
+
+    /// <summary>A run window with one pilot's Mutanite on it, shown once.</summary>
+    private static (ActivityWindowViewModel Model, RunParticipantViewModel Miner, FakeSdeAccessor Sde) _MiningWindow()
+    {
+        FakeSdeAccessor sde = new FakeSdeAccessor()
+            .Add(74521, "Amperum Mutanite", MiningValuation.MutaniteGroupId, 25)
+            .Add(74524, "Solis Mutanite", MiningValuation.MutaniteGroupId, 25);
+        ServiceCollection services = new();
+        services.AddSingleton<ISdeAccessor>(sde);
+        RunParticipantViewModel miner = new(Guid.NewGuid(), 90000001, "Test Pilot",
+            miningEntries: [new RunMiningOreDto("Amperum Mutanite", 120, 0, 0)]);
+        var model = new ActivityWindowViewModel(ActivityKind.Site, services.BuildServiceProvider());
+        model.Participants.Add(miner);
+        model.Refresh(Anchor);
+        Assert.NotEmpty(model.Mining().Rows);
+        return (model, miner, sde);
     }
 
     // ── The four buttons, against every state the run can be in ─────────────────────────────────────
