@@ -1527,17 +1527,28 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return;
         }
 
-        if (_namedCharacterId == characterId)
+        if (_namedCharacterId == characterId || _isNamingActingCharacter)
             return;
 
-        // The run's own character already carries its name; anyone else has to be looked up once.
-        string? name = _runCharacterId == characterId && _runCharacterName is not null
-            ? _runCharacterName
-            : _services.GetService<ICharacterRegistry>() is { } registry
-                ? (await registry.GetAllAsync()).FirstOrDefault(c => c.EsiCharacterId == characterId)?.Name
-                : null;
+        // The run's own character already carries its name; anyone else has to be looked up once — off the UI thread,
+        // and never a second lookup while one is still under way (ET-287).
+        string? name = null;
+        if (_runCharacterId == characterId && _runCharacterName is not null)
+            name = _runCharacterName;
+        else if (_services.GetService<ICharacterRegistry>() is { } registry)
+        {
+            _isNamingActingCharacter = true;
+            try
+            {
+                name = (await Task.Run(() => registry.GetAllAsync())).FirstOrDefault(c => c.EsiCharacterId == characterId)?.Name;
+            }
+            finally
+            {
+                _isNamingActingCharacter = false;
+            }
+        }
 
-        if (name is null)
+        if (name is null || _ActingCharacterId() != characterId)
             return; // leave it unnamed and try again next tick rather than caching a miss.
 
         _namedCharacterId = characterId;
@@ -1590,25 +1601,53 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (RunCharacters.Count == 0)
             return;
 
-        Dictionary<int, Guid> running = [];
-        if (!_isRefreshingRunCharacters && _services.GetService<CqrsDispatcher>() is { } dispatcher)
+        // A call that finds the last read still under way is owed rather than dropped (ET-287): now that the read runs
+        // off the UI thread, a start can land while an older read is out, and that older read never sees the new runs.
+        // Carrying on without a read instead, as this used to, marked every row as having no running run.
+        if (_isRefreshingRunCharacters)
         {
-            _isRefreshingRunCharacters = true;
-            try
-            {
-                using var scope = _services.CreateScope();
-                Result<IReadOnlyList<RunningRunDto>> result = await scope.ServiceProvider
-                    .GetRequiredService<CqrsDispatcher>().Query(new GetRunningRunsQuery());
-                if (result.IsSuccess)
-                    foreach (RunningRunDto run in result.Value!)
-                        running[checked((int)run.CharacterId)] = run.Id;
-            }
-            finally
-            {
-                _isRefreshingRunCharacters = false;
-            }
+            _isRunCharactersRefreshOwed = true;
+            return;
         }
 
+        _isRefreshingRunCharacters = true;
+        try
+        {
+            do
+            {
+                _isRunCharactersRefreshOwed = false;
+                _ShowRunCharacters(await _ReadRunningRunsAsync());
+            }
+            while (_isRunCharactersRefreshOwed);
+        }
+        finally
+        {
+            _isRefreshingRunCharacters = false;
+        }
+    }
+
+    private bool _isRunCharactersRefreshOwed;
+
+    /// <summary>Every running run by character, read off the UI thread (ET-287) — see _RefreshParticipantsAsync.</summary>
+    private async Task<Dictionary<int, Guid>> _ReadRunningRunsAsync()
+    {
+        Dictionary<int, Guid> running = [];
+        if (_services.GetService<CqrsDispatcher>() is null)
+            return running;
+
+        Result<IReadOnlyList<RunningRunDto>> result = await Task.Run(async () =>
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Query(new GetRunningRunsQuery());
+        });
+        if (result.IsSuccess)
+            foreach (RunningRunDto run in result.Value!)
+                running[checked((int)run.CharacterId)] = run.Id;
+        return running;
+    }
+
+    private void _ShowRunCharacters(IReadOnlyDictionary<int, Guid> running)
+    {
         int? acting = _ActingCharacterId();
         foreach (RunCharacterRowViewModel row in RunCharacters)
         {
@@ -1793,11 +1832,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _ = _WriteHeartbeatAsync(runId, nowUtc);
     }
 
-    private async Task _WriteHeartbeatAsync(Guid runId, DateTime atUtc)
-    {
-        using var scope = _services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new TouchRunAliveCommand(runId, atUtc));
-    }
+    private Task _WriteHeartbeatAsync(Guid runId, DateTime atUtc) =>
+        // Off the UI thread (ET-287) — see _RefreshParticipantsAsync.
+        Task.Run(async () =>
+        {
+            using var scope = _services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new TouchRunAliveCommand(runId, atUtc));
+        });
+
+    /// <summary>Guards <see cref="_RefreshActingCharacterAsync"/>'s registry lookup the way <see cref="_isRefreshingParticipants"/>
+    /// guards its own read (ET-287): a lookup outliving one tick must not be started again by the next.</summary>
+    private bool _isNamingActingCharacter;
+
+    /// <summary>Guards the unstarted-fleet lookup in <see cref="RefreshFleetCommandAsync"/> the same way (ET-287).</summary>
+    private bool _isCheckingUnstartedFleet;
 
     /// <summary>
     /// Offer what this run has looted to the fleet. Clock-driven like the rest of the window, and it only ever hands
@@ -2330,11 +2378,21 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             _unstartedFleetNoticeCheckedAtUtc = null;
         }
         // A text hint can wait briefly: checking every clock tick wastes work, but checking only once hides new fleets.
-        else if (_runCharacterId is not null && (_unstartedFleetNoticeCheckedAtUtc is null
-                                                || nowUtc - _unstartedFleetNoticeCheckedAtUtc >= UnstartedFleetNoticeRefreshInterval))
+        else if (_runCharacterId is not null && !_isCheckingUnstartedFleet
+                 && (_unstartedFleetNoticeCheckedAtUtc is null
+                     || nowUtc - _unstartedFleetNoticeCheckedAtUtc >= UnstartedFleetNoticeRefreshInterval))
         {
             _unstartedFleetNoticeCheckedAtUtc = nowUtc;
-            (UnstartedFleetName, FormingFleetCount) = await _UnstartedFleetNameAsync();
+            _isCheckingUnstartedFleet = true;
+            try
+            {
+                // Off the UI thread (ET-287) — see _RefreshParticipantsAsync.
+                (UnstartedFleetName, FormingFleetCount) = await Task.Run(() => _UnstartedFleetNameAsync());
+            }
+            finally
+            {
+                _isCheckingUnstartedFleet = false;
+            }
         }
     }
 
@@ -2475,9 +2533,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _isRefreshingParticipants = true;
         try
         {
-            using var scope = _services.CreateScope();
-            Result<IReadOnlyList<RunGroupParticipantDto>> result = await scope.ServiceProvider
-                .GetRequiredService<CqrsDispatcher>().Query(new GetRunGroupParticipantsQuery(GroupCode, runId));
+            // Off the UI thread (ET-287), like every other store read on this clock: Microsoft.Data.Sqlite's async API
+            // does its work synchronously, so awaiting it straight from a tick blocks the window once a second.
+            string? groupCode = GroupCode;
+            Result<IReadOnlyList<RunGroupParticipantDto>> result = await Task.Run(async () =>
+            {
+                using var scope = _services.CreateScope();
+                return await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+                    .Query(new GetRunGroupParticipantsQuery(groupCode, runId));
+            });
             if (!result.IsSuccess || result.Value is not { } participants)
                 return;
 
@@ -2610,13 +2674,17 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             // none of its own.
             //
             // The summary rebuild is deferred to one call after every row in the group is saved (ET-210 review
-            // finding): it scans every saved run in the store and prices its loot, and running that scan once per
-            // row — five times for a five-character group — was the whole of the five-to-six-second stall.
+            // finding), and scoped to this group's own activity (ET-287): it used to rebuild every activity in the
+            // store, which on a real store of a few hundred runs held this thread for seconds — the moment Windows
+            // closed the app after three 6-toon Metaliminal homefronts on 14 Sep.
+            //
+            // Every store call below runs off the UI thread (ET-287): Microsoft.Data.Sqlite's async API does its work
+            // synchronously, so awaiting it straight from here still blocks this thread for as long as it takes.
             //
             // What each run carries besides its times — its enemies, its escalation, how it was looted — is the
             // sections' to add (ET-236).
             RunSaveDraft own = _SaveDraftFor(runId, _runCharacterId, isActingRun: true);
-            Result result = await dispatcher.Send(new SaveRunCommand(
+            Result result = await Task.Run(() => dispatcher.Send(new SaveRunCommand(
                 runId, EffectiveStopUtc ?? nowUtc, nowUtc, [], [],
                 own.Enemies,
                 own.Parameters,
@@ -2625,7 +2693,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 IsTimeCorrected ? nowUtc : null,
                 LootStrategy: own.LootStrategy,
                 RebuildSummaries: false,
-                FleetSizeAtStop: own.FleetSizeAtStop));
+                FleetSizeAtStop: own.FleetSizeAtStop)));
             if (!result.IsSuccess)
             {
                 RunNoticeText = result.Messages.FirstOrDefault()?.Text ?? "Could not save this run.";
@@ -2642,18 +2710,19 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             foreach (RunParticipantViewModel sibling in Participants.Where(participant => participant.RunId != runId))
             {
                 RunSaveDraft theirs = _SaveDraftFor(sibling.RunId, sibling.CharacterId, isActingRun: false);
-                Result siblingResult = await dispatcher.Send(new SaveRunCommand(
+                Result siblingResult = await Task.Run(() => dispatcher.Send(new SaveRunCommand(
                     sibling.RunId, EffectiveStopUtc ?? nowUtc, nowUtc, [], [],
                     theirs.Enemies, theirs.Parameters,
-                    LootStrategy: theirs.LootStrategy, RebuildSummaries: false, FleetSizeAtStop: theirs.FleetSizeAtStop));
+                    LootStrategy: theirs.LootStrategy, RebuildSummaries: false, FleetSizeAtStop: theirs.FleetSizeAtStop)));
                 if (!siblingResult.IsSuccess)
                     _services.GetService<IToastService>()?.Show("A run in this group was not saved",
                         siblingResult.Messages.FirstOrDefault()?.Text ?? "Could not save one of the other characters' runs.",
                         ToastKind.Error);
             }
 
-            // The one rebuild the whole group's saves needed, run once now that every row is in.
-            await dispatcher.Send(new RebuildActivitySummariesCommand());
+            // The one rebuild the whole group's saves needed, run once now that every row is in — this group's own
+            // activity only (ET-287).
+            await Task.Run(() => dispatcher.Send(new RebuildActivitySummariesCommand(runId)));
             _OnRunClosed();
             if (RunLoot is not null)
                 await RunLoot.RefreshAsync();
