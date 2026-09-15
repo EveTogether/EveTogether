@@ -44,8 +44,8 @@ public sealed class FleetRunMiningSharingTests
         Assert.True(fleet.Jithran.Window.FleetSharing.IsSharingMining);
         Assert.Contains("1,500 units", _Mining(fleet.Jithran)!.FleetMinedText);
         Assert.Contains("1,500 units", _Mining(fleet.Raymond)!.FleetMinedText);
-        // A normal mining fleet (no known site capacity): the total, never "remaining".
-        Assert.Null(_Mining(fleet.Jithran)!.RemainingText);
+        // A normal mining fleet (no known site capacity): the total, never the site progress bar.
+        Assert.False(_Mining(fleet.Jithran)!.ShowSiteRemaining);
     }
 
     [AvaloniaFact]
@@ -56,11 +56,30 @@ public sealed class FleetRunMiningSharingTests
         await fleet.MineAsync(fleet.Jithran, "Amperum Mutanite", 3000, residueUnits: 500);
         await fleet.MineAsync(fleet.Raymond, "Amperum Mutanite", 1000);
 
-        await fleet.SettleAsync(() => _Mining(fleet.Jithran)?.RemainingText is not null);
+        await fleet.SettleAsync(() => _Mining(fleet.Jithran)?.ShowSiteRemaining == true);
 
-        // 5,000 − (3,000 + 1,000) − 500 residue = 500.
-        Assert.Contains("500 units remaining", _Mining(fleet.Jithran)!.RemainingText);
-        Assert.Contains("500 units remaining", _Mining(fleet.Raymond)!.RemainingText);
+        // 5,000 − (3,000 + 1,000) − 500 residue = 500 (no crit here, so unaffected by ET-299's fix).
+        Assert.Equal("500 / 5,000 units left", _Mining(fleet.Jithran)!.SiteRemainingLabel);
+        Assert.Equal("500 / 5,000 units left", _Mining(fleet.Raymond)!.SiteRemainingLabel);
+    }
+
+    /// <summary>ET-299: crit is bonus yield to the hold and costs the asteroid nothing — the old code subtracted
+    /// crit-inclusive units from capacity, double-counting the crit as depletion. The real depletion is
+    /// basis units (units − crit) plus residue, own rows and shared fleet members alike; a shared member's total-only
+    /// share (no per-ore crit split) is assumed to carry no crit.</summary>
+    [AvaloniaFact]
+    public async Task OnAMetaliminalHomefront_CritDoesNotDoubleCountAsDepletion()
+    {
+        using FleetOfTwo fleet = await FleetOfTwo.CreateAsync(MetaliminalSite.DungeonId);
+
+        // Jithran's own row: 3,000 units of which 500 are crit, plus 500 residue.
+        // Depletion so far: (3,000 − 500) + 500 = 3,000, so 2,000 should remain — not 5,000 − 3,000 − 500 = 1,500.
+        await fleet.MineAsync(fleet.Jithran, "Amperum Mutanite", 3000, criticalUnits: 500, residueUnits: 500);
+
+        await fleet.SettleAsync(() => _Mining(fleet.Jithran)?.ShowSiteRemaining == true);
+
+        Assert.Equal("2,000 / 5,000 units left", _Mining(fleet.Jithran)!.SiteRemainingLabel);
+        Assert.Equal(0.4, _Mining(fleet.Jithran)!.SiteRemainingFraction, precision: 5);
     }
 
     [AvaloniaFact]

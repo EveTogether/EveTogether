@@ -22,7 +22,7 @@ namespace EveUtils.Client.ViewModels.Runs.Sections;
 /// any mining, not only a homefront's. Priced through the price source, Mutanite at its fixed NPC price
 /// (<see cref="MiningValuation"/>). Contributes a share of TOTAL ISK — see <see cref="IskSource.Mining"/>.
 ///
-/// <see cref="FleetMinedText"/> and <see cref="RemainingText"/> (ET-234) add what the rest of the fleet shares
+/// <see cref="FleetMinedText"/> and <see cref="ShowSiteRemaining"/>'s progress bar (ET-234, bar since ET-299) add what the rest of the fleet shares
 /// (<c>RunShareUpdate</c>, ET-242's wire) on top of this window's own rows — the same "counted from what members
 /// share" honesty <see cref="FleetWindowSectionViewModel.FleetBasisText"/> already states for loot and bounty.
 ///
@@ -88,13 +88,22 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
     /// mining and nobody sharing.</summary>
     public string? FleetMinedText { get; private set; }
 
-    /// <summary>What is left of a Metaliminal Meteoroid's 5,000-unit asteroid (<see cref="IRunWindowContext.RunType"/>'s
-    /// own <c>SiteMiningCapacityUnits</c>) — null for any site whose capacity is not a known figure, including an
-    /// ordinary mining fleet and AAR (ET-234).</summary>
-    public string? RemainingText { get; private set; }
+    /// <summary>Whether a Metaliminal Meteoroid's asteroid capacity is known at all (<see
+    /// cref="IRunWindowContext.RunType"/>'s own <c>SiteMiningCapacityUnits</c>) — false for any site whose capacity is
+    /// not a known figure, including an ordinary mining fleet and AAR (ET-234), in which case the progress bar and its
+    /// label stay hidden.</summary>
+    public bool ShowSiteRemaining { get; private set; }
+
+    /// <summary>What is left of the asteroid, 0..1 of its capacity (ET-299) — <see cref="Controls.MeterBar.Fraction"/>
+    /// for the site-depletion bar: full at the start of a run, empty once nothing is left.</summary>
+    public double SiteRemainingFraction { get; private set; }
+
+    /// <summary>"1,240 / 5,000 units left" — the label drawn beside/over the bar. Null while
+    /// <see cref="ShowSiteRemaining"/> is false.</summary>
+    public string? SiteRemainingLabel { get; private set; }
 
     /// <summary>Whether <see cref="FleetMinedText"/> is worth its own line (ET-284) — false whenever
-    /// <see cref="RemainingText"/> already says as much as part of naming what capacity is left, so a Metaliminal
+    /// <see cref="ShowSiteRemaining"/> already says as much as part of naming what capacity is left, so a Metaliminal
     /// fleet never reads two short, overlapping lines under one MINING run.</summary>
     public bool ShowFleetMinedText { get; private set; }
 
@@ -159,15 +168,17 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
     /// twice, the same de-duplication <see cref="LootWindowSectionViewModel"/> applies against
     /// <see cref="IRunWindowContext.Participants"/>.
     ///
-    /// Crit is counted into <see cref="FleetMinedText"/> as real ore in the hold, but not subtracted from
-    /// <see cref="RemainingText"/>'s capacity — a crit yield takes nothing extra from the asteroid
-    /// (domain/homefronts.md §6.1). Treating it as consumed anyway is a deliberate, conservative simplification: it
-    /// slightly under-reports what is left rather than over-promise it, and it spares the wire a third field for an
-    /// effect measured at under 2% of mining lines.
+    /// Crit is counted into <see cref="FleetMinedText"/> as real ore in the hold — but it costs the asteroid nothing
+    /// extra (domain/homefronts.md §6.1), so what actually empties the rock is basis units (<c>Units −
+    /// CriticalUnits</c>) plus residue (ET-299; the older code subtracted crit-inclusive units here too, double-
+    /// counting the crit as depletion). A shared member's per-ore lines carry their own crit split the same way
+    /// (<see cref="RunShareMiningLine.CriticalUnits"/>); a total-only share from an older client has no crit figure at
+    /// all, so its crit is assumed 0 — a small, explicit over-count of depletion for that member only.
     /// </summary>
     private void _RefreshFleetTotals()
     {
-        int units = Rows.Sum(row => row.Units);
+        int minedUnits = Rows.Sum(row => row.Units);
+        int depletionUnits = Rows.Sum(row => row.Units - row.CriticalUnits);
         int residue = Rows.Sum(row => row.ResidueUnits);
         bool hasShared = false;
         bool inFleet = Context.GroupCode is not null && Context.FleetId is not null;
@@ -181,7 +192,10 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
                 if (share.FleetId != fleetId || !share.SharesMining || own.Contains(characterId))
                     continue;
 
-                units += share.MinedUnits;
+                minedUnits += share.MinedUnits;
+                depletionUnits += share.Mining.Count > 0
+                    ? share.Mining.Sum(line => line.Units - line.CriticalUnits)
+                    : share.MinedUnits;
                 residue += share.ResidueUnits;
                 hasShared = true;
             }
@@ -189,15 +203,22 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
 
         string? fleetMined = !inFleet || (Rows.Count == 0 && !hasShared)
             ? null
-            : $"fleet mined {IskFormat.Number(units)} units. Counted from what members share — a member sharing " +
+            : $"fleet mined {IskFormat.Number(minedUnits)} units. Counted from what members share — a member sharing " +
               "nothing is missing from this total.";
 
-        string? remaining = Context.RunType.SiteMiningCapacityUnits is { } capacity && fleetMined is not null
-            ? $"~{IskFormat.Number(Math.Max(0, capacity - units - residue))} units remaining in the site. Only as " +
-              "accurate as what the fleet shares."
-            : null;
+        int? siteCapacity = Context.RunType.SiteMiningCapacityUnits;
+        bool showSiteRemaining = siteCapacity is > 0 && fleetMined is not null;
+        double siteFraction = 0;
+        string? siteLabel = null;
+        if (showSiteRemaining)
+        {
+            int capacity = siteCapacity!.Value;
+            int remainingUnits = Math.Max(0, capacity - depletionUnits - residue);
+            siteFraction = Math.Clamp((double)remainingUnits / capacity, 0, 1);
+            siteLabel = $"{IskFormat.Number(remainingUnits)} / {IskFormat.Number(capacity)} units left";
+        }
 
-        bool showFleetMined = fleetMined is not null && remaining is null;
+        bool showFleetMined = fleetMined is not null && !showSiteRemaining;
 
         // Raised only on a change (ET-287): every notification re-measures its line in the view.
         if (fleetMined != FleetMinedText)
@@ -205,10 +226,20 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
             FleetMinedText = fleetMined;
             OnPropertyChanged(nameof(FleetMinedText));
         }
-        if (remaining != RemainingText)
+        if (showSiteRemaining != ShowSiteRemaining)
         {
-            RemainingText = remaining;
-            OnPropertyChanged(nameof(RemainingText));
+            ShowSiteRemaining = showSiteRemaining;
+            OnPropertyChanged(nameof(ShowSiteRemaining));
+        }
+        if (Math.Abs(siteFraction - SiteRemainingFraction) > double.Epsilon)
+        {
+            SiteRemainingFraction = siteFraction;
+            OnPropertyChanged(nameof(SiteRemainingFraction));
+        }
+        if (siteLabel != SiteRemainingLabel)
+        {
+            SiteRemainingLabel = siteLabel;
+            OnPropertyChanged(nameof(SiteRemainingLabel));
         }
         if (showFleetMined != ShowFleetMinedText)
         {
