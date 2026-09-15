@@ -32,7 +32,15 @@ public sealed record RunAttendanceDecision(
 
     /// <summary>Whether the two say the same thing, apart from when and by whom — what lets a copy that arrives again
     /// (a resend, the same decision back from the server) leave the stored one alone.</summary>
-    public bool ListsTheSameAs(RunAttendanceDecision other) =>
+    public bool ListsTheSameAs(RunAttendanceDecision other) => _IsSameAs(other, withEvidenceAmounts: true);
+
+    /// <summary>Whether the two decide the same thing: <see cref="ListsTheSameAs"/> without the evidence figure beside
+    /// each tick. That figure grows with every mining cycle and every volley while nothing about who was in the site
+    /// changes, so a window that wrote a list again for it alone rewrote every row of the group every bundle window
+    /// (ET-287). A click and SAVE still write the list whole, figures included.</summary>
+    public bool DecidesTheSameAs(RunAttendanceDecision other) => _IsSameAs(other, withEvidenceAmounts: false);
+
+    private bool _IsSameAs(RunAttendanceDecision other, bool withEvidenceAmounts) =>
         NotOnRosterCount == other.NotOnRosterCount
         && Outcome == other.Outcome
         && CompletedWaveCount == other.CompletedWaveCount
@@ -43,7 +51,7 @@ public sealed record RunAttendanceDecision(
                          && pair.First.IsInSite == pair.Second.IsInSite
                          && pair.First.IsExternal == pair.Second.IsExternal
                          && pair.First.Reason == pair.Second.Reason
-                         && pair.First.ReasonAmount == pair.Second.ReasonAmount
+                         && (!withEvidenceAmounts || pair.First.ReasonAmount == pair.Second.ReasonAmount)
                          && pair.First.CharacterName == pair.Second.CharacterName);
 
     /// <summary>

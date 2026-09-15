@@ -63,6 +63,14 @@ public sealed partial class FleetWindowSectionViewModel(IRunWindowContext contex
         }
     }
 
+    /// <summary>A new list only when a figure actually moved (ET-287): the list is built again every clock tick, and
+    /// handing the row an equal copy still redrew every figure on every row once a second.</summary>
+    private static void _ShowFigures(FleetCharacterRowViewModel row, IReadOnlyList<FleetFigure> figures)
+    {
+        if (!row.Figures.SequenceEqual(figures))
+            row.Figures = figures;
+    }
+
     private void _Rebuild()
     {
         List<FleetCharacterRowViewModel> rows = [];
@@ -75,9 +83,9 @@ public sealed partial class FleetWindowSectionViewModel(IRunWindowContext contex
             row.Name = character.First().CharacterName;
             row.IsLocal = _own.Contains(character.Key);
             row.SubText = null;
-            row.Figures = Context.CharacterIsk.TryGetValue(character.Key, out IskBreakdown? isk)
+            _ShowFigures(row, Context.CharacterIsk.TryGetValue(character.Key, out IskBreakdown? isk)
                 ? FleetCharacterRowViewModel.FiguresOf(isk)
-                : [new FleetFigure("nothing", string.Empty, IsQuiet: true)];
+                : [new FleetFigure("nothing", string.Empty, IsQuiet: true)]);
             row.IsSharing = character.All(participant => participant.IsPayoutEligible);
             row.CanToggleShare = row.IsLocal && localRuns > 1;
             rows.Add(row);
@@ -92,8 +100,8 @@ public sealed partial class FleetWindowSectionViewModel(IRunWindowContext contex
             row.Name = member.Name;
             row.IsLocal = _own.Contains(member.CharacterId);
             row.SubText = member.LocationText;
-            row.Figures = FleetCharacterRowViewModel.FiguresOf(member.BountyIsk, member.LootIsk,
-                isBountyWithheld: share is { SharesBounty: false }, isLootWithheld: share is { SharesLoot: false });
+            _ShowFigures(row, FleetCharacterRowViewModel.FiguresOf(member.BountyIsk, member.LootIsk,
+                isBountyWithheld: share is { SharesBounty: false }, isLootWithheld: share is { SharesLoot: false }));
             row.IsSharing = true;
             row.CanToggleShare = false;
             rows.Add(row);

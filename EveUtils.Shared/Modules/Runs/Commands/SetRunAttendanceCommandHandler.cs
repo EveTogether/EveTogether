@@ -161,19 +161,40 @@ internal sealed class SetRunAttendanceCommandHandler(
 
     private static void _Apply(ClientDbContext db, Run run, RunAttendanceDecision decision)
     {
-        db.Set<RunAttendanceEntry>().RemoveRange(run.AttendanceEntries);
-        foreach (RunAttendanceEntryInput entry in decision.Entries)
-            db.Set<RunAttendanceEntry>().Add(new RunAttendanceEntry
+        // Matched per character and changed in place (ET-287): a list that moved one tick costs one row, where deleting
+        // and inserting the whole list again cost two statements for every character on every run of the group.
+        Dictionary<long, RunAttendanceEntryInput> wanted = decision.Entries
+            .GroupBy(entry => entry.CharacterId)
+            .ToDictionary(character => character.Key, character => character.Last());
+        Dictionary<long, RunAttendanceEntry> stored = [];
+        foreach (RunAttendanceEntry entry in run.AttendanceEntries.ToList())
+            if (!wanted.ContainsKey(entry.CharacterId) || !stored.TryAdd(entry.CharacterId, entry))
+                db.Set<RunAttendanceEntry>().Remove(entry);
+
+        foreach (RunAttendanceEntryInput entry in wanted.Values)
+        {
+            if (!stored.TryGetValue(entry.CharacterId, out RunAttendanceEntry? row))
             {
-                Id = Guid.CreateVersion7(),
-                RunId = run.Id,
-                CharacterId = entry.CharacterId,
-                CharacterName = entry.CharacterName,
-                IsInSite = entry.IsInSite,
-                IsExternal = entry.IsExternal,
-                Reason = entry.Reason,
-                ReasonAmount = entry.ReasonAmount
-            });
+                db.Set<RunAttendanceEntry>().Add(new RunAttendanceEntry
+                {
+                    Id = Guid.CreateVersion7(),
+                    RunId = run.Id,
+                    CharacterId = entry.CharacterId,
+                    CharacterName = entry.CharacterName,
+                    IsInSite = entry.IsInSite,
+                    IsExternal = entry.IsExternal,
+                    Reason = entry.Reason,
+                    ReasonAmount = entry.ReasonAmount
+                });
+                continue;
+            }
+
+            row.CharacterName = entry.CharacterName;
+            row.IsInSite = entry.IsInSite;
+            row.IsExternal = entry.IsExternal;
+            row.Reason = entry.Reason;
+            row.ReasonAmount = entry.ReasonAmount;
+        }
 
         // A character the list does not name stays undecided rather than read as "not in site": the one who decided
         // never saw them, which is not the same as having seen them leave.

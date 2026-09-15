@@ -236,8 +236,13 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     /// <summary>A click is stored the moment it is made (I1, SetRunAttendanceCommand): never held here until a bundle
     /// window, a tick or a SAVE comes round — the window where HF-7TQB's Completed stood in the header and nowhere
     /// else.</summary>
+    // Counts clicks, so a write running off the UI thread (ET-287) knows whether one landed while it was under way — the
+    // list it wrote was worked out before that click, and must not mark the click as written.
+    private int _handChangeCount;
+
     private void _NoteChangeByHand()
     {
+        _handChangeCount++;
         _isChangedByHand = true;
         _changedSinceUtc ??= _nowUtc;
         _Rebuild(_nowUtc);
@@ -757,7 +762,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
 
     private async Task _ResolveNameAsync(long characterId)
     {
-        if (await AttendanceRoster.NameOfAsync(Context.Services, characterId) is { } name)
+        if (await Task.Run(() => AttendanceRoster.NameOfAsync(Context.Services, characterId)) is { } name)
             _names[characterId] = name;
     }
 
@@ -771,7 +776,9 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         _isLoadingOwn = true;
         try
         {
-            _own = await AttendanceRoster.OwnCharacterIdsAsync(Context.Services);
+            // Every store and server read in this section runs off the UI thread (ET-287): Microsoft.Data.Sqlite's
+            // async API does its work synchronously, so awaiting it straight from a clock tick blocks the window.
+            _own = await Task.Run(() => AttendanceRoster.OwnCharacterIdsAsync(Context.Services));
             _isOwnLoaded = true;
         }
         finally
@@ -796,7 +803,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         try
         {
             _rosterReadAtUtc = nowUtc;
-            IReadOnlyList<RosterCharacter>? roster = await AttendanceRoster.ReadAsync(Context.Services, fleetId);
+            IReadOnlyList<RosterCharacter>? roster = await Task.Run(() => AttendanceRoster.ReadAsync(Context.Services, fleetId));
             // An unreadable roster keeps the last one read: a server that blinks must not empty the list.
             if (roster is not null)
             {
@@ -823,9 +830,13 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         {
             _isStoredStale = false;
             string? key = _KeyOf(Context);
-            using IServiceScope scope = Context.Services.CreateScope();
-            Result<RunAttendanceDecision?> read = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
-                .Query(new GetRunAttendanceQuery(Context.GroupCode, runId));
+            string? groupCode = Context.GroupCode;
+            Result<RunAttendanceDecision?> read = await Task.Run(async () =>
+            {
+                using IServiceScope scope = Context.Services.CreateScope();
+                return await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+                    .Query(new GetRunAttendanceQuery(groupCode, runId));
+            });
             // The window moved on to another run while this was read: this list is the last run's, not this one's.
             if (!read.IsSuccess || key != _KeyOf(Context))
                 return;
@@ -856,9 +867,12 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             return;
 
         _lastSiteGroupCode = groupCode;
-        using IServiceScope scope = Context.Services.CreateScope();
-        Result<RunAttendanceDecision?> read = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
-            .Query(new GetFleetAttendanceBaseQuery(fleetId, groupCode));
+        Result<RunAttendanceDecision?> read = await Task.Run(async () =>
+        {
+            using IServiceScope scope = Context.Services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+                .Query(new GetFleetAttendanceBaseQuery(fleetId, groupCode));
+        });
         _lastSite = read.IsSuccess ? read.Value : null;
     }
 
@@ -899,7 +913,13 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             return;
 
         RunAttendanceDecision current = _CurrentDecision(_Candidates(role), role, nowUtc);
-        bool isNew = _stored is not { } stored || !stored.ListsTheSameAs(current) || stored.Source != current.Source
+        // What the window works out by itself is written again only when it decides something new (ET-287): the
+        // evidence figure beside each tick grows with every mining cycle and every volley, and comparing it too wrote
+        // the whole list onto every run of the group every bundle window. A click and SAVE still write the figures.
+        bool isWrittenWhole = isForced || _isChangedByHand;
+        bool isNew = _stored is not { } stored
+                     || !(isWrittenWhole ? stored.ListsTheSameAs(current) : stored.DecidesTheSameAs(current))
+                     || stored.Source != current.Source
                      || stored.SetByCharacterId != current.SetByCharacterId;
         if (!isNew)
         {
@@ -922,28 +942,34 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         // every member's are the same instant.
         _lastSetAtUtc = RunGroupAttendance.ToWireInstant(nowUtc > _lastSetAtUtc ? nowUtc : _lastSetAtUtc.AddMilliseconds(1));
         RunAttendanceDecision decision = current with { SetAtUtc = _lastSetAtUtc };
-        using (IServiceScope scope = Context.Services.CreateScope())
+        // A click goes over whatever stands; anything this window worked out by itself only over the list it was
+        // worked out from.
+        SetRunAttendanceCommand command = new(decision, [.. _own], Context.GroupCode,
+            Context.GroupCode is null ? runId : null,
+            IsProposal: !_isChangedByHand, StandingSetAtUtc: _stored?.SetAtUtc);
+        int handChangeCount = _handChangeCount;
+        Result<int> written = await Task.Run(async () =>
         {
-            // A click goes over whatever stands; anything this window worked out by itself only over the list it was
-            // worked out from.
-            Result<int> written = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(
-                new SetRunAttendanceCommand(decision, [.. _own], Context.GroupCode,
-                    Context.GroupCode is null ? runId : null,
-                    IsProposal: !_isChangedByHand, StandingSetAtUtc: _stored?.SetAtUtc));
-            if (!written.IsSuccess)
-                return;
-            // Nothing took it — the store already holds this or a list that outranks it: read what it holds.
-            if (written.Value == 0)
-            {
-                _isStoredStale = true;
-                return;
-            }
+            using IServiceScope scope = Context.Services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(command);
+        });
+        if (!written.IsSuccess)
+            return;
+        // Nothing took it — the store already holds this or a list that outranks it: read what it holds.
+        if (written.Value == 0)
+        {
+            _isStoredStale = true;
+            return;
         }
 
         _stored = decision;
         _knownSetAtUtc = decision.SetAtUtc;
-        _changedSinceUtc = null;
-        _isChangedByHand = false;
+        // A click made while this was written is not in it: it stays owed, and its own forced write follows.
+        if (handChangeCount == _handChangeCount)
+        {
+            _changedSinceUtc = null;
+            _isChangedByHand = false;
+        }
         if (role is Role.Commander)
             await _SendAsync(decision, nowUtc);
     }

@@ -67,4 +67,12 @@ public sealed class ActivityMiningRowViewModel(
     /// once the row's final position in its character group is known. Unused (stays false) on the run window,
     /// which does not stripe its own copy of this table.</summary>
     public bool IsAlternate { get; set; }
+
+    /// <summary>Whether <paramref name="other"/> draws exactly this row — what lets the run window keep the row it
+    /// already shows rather than rebuild its container every clock tick (ET-287).</summary>
+    public bool ShowsSameAs(ActivityMiningRowViewModel other) =>
+        RunId == other.RunId && CharacterText == other.CharacterText && OreText == other.OreText
+        && Units == other.Units && CriticalUnits == other.CriticalUnits && ResidueUnits == other.ResidueUnits
+        && Value == other.Value && ValueText == other.ValueText && HasShareBar == other.HasShareBar
+        && ShareFraction.Equals(other.ShareFraction) && ShareTooltip == other.ShareTooltip && IsAlternate == other.IsAlternate;
 }

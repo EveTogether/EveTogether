@@ -30,6 +30,10 @@ namespace EveUtils.Client.ViewModels.Runs.Sections;
 /// character: this window's own participants first, then whoever else shares mining (per-ore lines when their client
 /// sends them, ET-234's old total-only shape otherwise), then an external member with nothing shared at all — a
 /// "not shared" row, never counted, mirroring FLEET's own convention (ET-272).
+///
+/// Worked out again every tick, but shown by identity (ET-287): a row that says the same stays the object it is, and a
+/// group only takes over what changed. Clearing and refilling both collections every second recreated every container,
+/// share bar and tooltip under MINING once a second, for the whole run.
 /// </summary>
 public sealed class MiningWindowSectionViewModel : RunWindowSection
 {
@@ -39,6 +43,10 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
     // couple of missed cycles on top of the ~60 s cadence measured on Abnoba Auscent's Orca (design/mining-ledger/v1).
     private static readonly TimeSpan BoostFreshness = TimeSpan.FromMinutes(3);
 
+    // An ore the price source had no answer for is asked again this long after, not every tick (ET-287): its cache is
+    // refreshed hourly, so asking every second only ever repeated the same miss.
+    private static readonly TimeSpan PriceRetryInterval = TimeSpan.FromMinutes(2);
+
     private readonly object _gate = new();
     private readonly Dictionary<int, List<(DateTime AtUtc, string OreType, int Units)>> _recentYield = [];
     private readonly Dictionary<int, BoostState> _boost = [];
@@ -47,6 +55,9 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
     // Ore prices barely move mid-run and there are only ever a handful of distinct ores on one run, so every priced
     // type id is kept for the life of the section rather than re-asked once it has an answer.
     private readonly Dictionary<int, double> _prices = new();
+    private readonly HashSet<int> _priceAsked = [];
+    private DateTime? _pricesAskedAtUtc;
+    private bool _isPricing;
 
     private DateTime _nowUtc;
 
@@ -171,72 +182,111 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
             }
         }
 
-        FleetMinedText = !inFleet || (Rows.Count == 0 && !hasShared)
+        string? fleetMined = !inFleet || (Rows.Count == 0 && !hasShared)
             ? null
             : $"fleet mined {IskFormat.Number(units)} units. Counted from what members share — a member sharing " +
               "nothing is missing from this total.";
 
-        RemainingText = Context.RunType.SiteMiningCapacityUnits is { } capacity && FleetMinedText is not null
+        string? remaining = Context.RunType.SiteMiningCapacityUnits is { } capacity && fleetMined is not null
             ? $"~{IskFormat.Number(Math.Max(0, capacity - units - residue))} units remaining in the site. Only as " +
               "accurate as what the fleet shares."
             : null;
 
-        ShowFleetMinedText = FleetMinedText is not null && RemainingText is null;
+        bool showFleetMined = fleetMined is not null && remaining is null;
 
-        OnPropertyChanged(nameof(FleetMinedText));
-        OnPropertyChanged(nameof(RemainingText));
-        OnPropertyChanged(nameof(ShowFleetMinedText));
+        // Raised only on a change (ET-287): every notification re-measures its line in the view.
+        if (fleetMined != FleetMinedText)
+        {
+            FleetMinedText = fleetMined;
+            OnPropertyChanged(nameof(FleetMinedText));
+        }
+        if (remaining != RemainingText)
+        {
+            RemainingText = remaining;
+            OnPropertyChanged(nameof(RemainingText));
+        }
+        if (showFleetMined != ShowFleetMinedText)
+        {
+            ShowFleetMinedText = showFleetMined;
+            OnPropertyChanged(nameof(ShowFleetMinedText));
+        }
     }
 
-    /// <summary>Rebuilt every tick from <see cref="IRunWindowContext.Participants"/>, which already carries each
-    /// one's own <c>RunMiningEntry</c> rows (ET-229) — read-only rows (unlike CONSUMABLES' editable count), so a full
-    /// rebuild each tick is simpler than reconciling by identity and costs nothing a handful of ore lines can't take.</summary>
+    /// <summary>Worked out every tick from <see cref="IRunWindowContext.Participants"/>, which already carries each
+    /// one's own <c>RunMiningEntry</c> rows (ET-229) — and shown by identity (ET-287): a row that reads the same as the
+    /// one already shown keeps that object, so only a line that really moved is replaced.</summary>
     private void _SyncRows()
     {
         ISdeAccessor? sde = Context.Services.GetService<ISdeAccessor>();
-        Rows.Clear();
+        List<ActivityMiningRowViewModel> rows = [];
         foreach (RunParticipantViewModel participant in Context.Participants)
             foreach (RunMiningOreDto entry in participant.MiningEntries.OrderByDescending(e => e.Units))
             {
                 int? typeId = sde is { IsAvailable: true } && sde.TryGetTypeId(entry.OreType, out int id) ? id : null;
                 decimal? unitPrice = typeId is { } tid ? MiningValuation.UnitPrice(sde!, tid, _prices) : null;
                 bool isFixedPrice = typeId is { } fixedId && sde!.GetType(fixedId)?.GroupId == MiningValuation.MutaniteGroupId;
-                Rows.Add(new ActivityMiningRowViewModel(
+                rows.Add(new ActivityMiningRowViewModel(
                     participant.RunId, participant.CharacterId, entry.OreType, entry.Units, entry.CriticalUnits,
                     entry.ResidueUnits, unitPrice is { } price ? price * entry.Units : null, isFixedPrice,
                     _ => participant.CharacterName));
             }
 
+        Rows.ReconcileTo([.. rows.Select(row => Rows.FirstOrDefault(shown => shown.ShowsSameAs(row)) ?? row)]);
         RefreshSummary();
     }
 
-    /// <summary>Prices every distinct ore not yet priced, one appraisal call for the whole set.</summary>
+    /// <summary>Prices every distinct ore not yet priced, one appraisal call for the whole set — once per ore rather
+    /// than once per tick (ET-287): an ore already asked is asked again only after <see cref="PriceRetryInterval"/>,
+    /// Mutanite is never asked at all (its price is <see cref="MiningValuation"/>'s fixed NPC figure, whatever the
+    /// market says), a call still under way is never started a second time, and the store is read off the UI thread.</summary>
     private async Task _RefreshPricesAsync()
     {
-        if (Context.Services.GetService<ISdeAccessor>() is not { IsAvailable: true } sde
+        if (_isPricing
+            || Context.Services.GetService<ISdeAccessor>() is not { IsAvailable: true } sde
             || Context.Services.GetService<IAppraisalProvider>() is not { } appraisal)
             return;
+
+        if (_pricesAskedAtUtc is { } askedAt && (_nowUtc - askedAt >= PriceRetryInterval || _nowUtc < askedAt))
+            _priceAsked.Clear();
 
         int[] typeIds = [.. Context.Participants.SelectMany(p => p.MiningEntries).Select(e => e.OreType)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(ore => sde.TryGetTypeId(ore, out int id) ? (int?)id : null)
             .OfType<int>()
-            .Where(id => !_prices.ContainsKey(id))
+            .Where(id => !_prices.ContainsKey(id) && !_priceAsked.Contains(id)
+                         && sde.GetType(id)?.GroupId != MiningValuation.MutaniteGroupId)
             .Distinct()];
         if (typeIds.Length == 0)
             return;
 
-        Result<AppraisalOutcome> valued = await appraisal.AppraiseAsync(
-            [.. typeIds.Select(id => new AppraisalLine(id, string.Empty, 1))]);
-        if (!valued.IsSuccess)
-            return;
+        _isPricing = true;
+        _priceAsked.UnionWith(typeIds);
+        _pricesAskedAtUtc = _nowUtc;
+        try
+        {
+            Result<AppraisalOutcome> valued = await Task.Run(() => appraisal.AppraiseAsync(
+                [.. typeIds.Select(id => new AppraisalLine(id, string.Empty, 1))]));
+            if (!valued.IsSuccess)
+                return;
 
-        foreach (AppraisalRow row in valued.Value!.Rows)
-            if (row.Price?.Estimate is { } estimate)
-                _prices[row.Line.TypeId] = estimate;
+            bool isPriced = false;
+            foreach (AppraisalRow row in valued.Value!.Rows)
+                if (row.Price?.Estimate is { } estimate)
+                {
+                    _prices[row.Line.TypeId] = estimate;
+                    isPriced = true;
+                }
 
-        _SyncRows();
-        _SyncGroups(_nowUtc);
+            if (!isPriced)
+                return;
+
+            _SyncRows();
+            _SyncGroups(_nowUtc);
+        }
+        finally
+        {
+            _isPricing = false;
+        }
     }
 
     // The gamelog watcher's pump thread (or, on RESUME, ET-258's catch-up read) writes these; this window's own
@@ -324,15 +374,23 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
         List<(MiningCharacterGroupViewModel Group, bool IsNotShared, decimal Isk)> built =
             [.. builds.Select(build => _ToGroup(build, sde, fleetOreUnits, isFleetScenario, nowUtc))];
 
-        List<MiningCharacterGroupViewModel> ordered = [.. built
-            .OrderByDescending(entry => entry.Group.IsLocal)
-            .ThenBy(entry => entry.IsNotShared)
-            .ThenByDescending(entry => entry.Isk)
-            .Select(entry => entry.Group)];
+        List<MiningCharacterGroupViewModel> shown = [];
+        foreach (MiningCharacterGroupViewModel fresh in built
+                     .OrderByDescending(entry => entry.Group.IsLocal)
+                     .ThenBy(entry => entry.IsNotShared)
+                     .ThenByDescending(entry => entry.Isk)
+                     .Select(entry => entry.Group))
+        {
+            if (Groups.FirstOrDefault(group => group.CanTakeOver(fresh)) is { } kept && !shown.Contains(kept))
+            {
+                kept.TakeOver(fresh);
+                shown.Add(kept);
+            }
+            else
+                shown.Add(fresh);
+        }
 
-        Groups.Clear();
-        foreach (MiningCharacterGroupViewModel group in ordered)
-            Groups.Add(group);
+        Groups.ReconcileTo(shown);
     }
 
     private (MiningCharacterGroupViewModel Group, bool IsNotShared, decimal Isk) _ToGroup(

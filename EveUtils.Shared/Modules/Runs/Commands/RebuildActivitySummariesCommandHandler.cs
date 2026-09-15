@@ -49,6 +49,10 @@ internal sealed class RebuildActivitySummariesCommandHandler(
             .Include(run => run.BountyEntries)
             .Include(run => run.EnemyObservations)
             .Include(run => run.MiningEntries)
+            // One query per collection (ET-287): in one join the collections multiply into each other — every loot
+            // line repeated once per bounty line and once per enemy seen — which on a real store was most of SAVE's
+            // multi-second freeze (EF's MultipleCollectionIncludeWarning).
+            .AsSplitQuery()
             .ToListAsync(cancellationToken);
         // Read on their own rather than as one more Include: a fourth sibling collection in the same join would repeat
         // every loot line once more per parameter of its run.

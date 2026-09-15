@@ -115,10 +115,11 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
         // event fires, not after: PublishAsync awaits every subscriber, so a screen reacting to RunSavedEvent by
         // reading the overview (ET-189) would otherwise see last rebuild's summaries, missing this run.
         //
-        // Skippable: a full rebuild scans every saved run in the store and prices its loot, and a caller saving
-        // several runs of one group (ET-210) does not need that scan after every single one — only after the last.
+        // Skippable: a caller saving several runs of one group (ET-210) needs the rebuild after the last one only.
+        // Scoped to this run's own activity (ET-287): a save changes that one summary, and rebuilding every activity in
+        // the store for it froze the UI thread for seconds on a store of a few hundred runs.
         if (command.RebuildSummaries)
-            await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
+            await dispatcher.Send(new RebuildActivitySummariesCommand(command.RunId), cancellationToken);
         await eventBus.PublishAsync(new RunSavedEvent(command.RunId), EventTarget.Local, cancellationToken);
         await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         return Result.Success();

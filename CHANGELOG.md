@@ -13,6 +13,17 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: the run window no longer grinds to a halt during a homefront, and SAVE no longer freezes the app.** Three
+  Metaliminal Meteoroid runs with six characters on 14 Sep each ended with Windows closing EVE Together as not
+  responding. SAVE rebuilt the summary of every activity ever saved instead of just this one, and did it on the thread
+  that draws the window — seconds of nothing on a store of a few hundred runs. It now rebuilds only this activity's
+  summary, reads each collection in its own query, and does its store work in the background. The run window also
+  stopped redoing work every second that changed nothing: HOMEFRONT no longer rewrites the whole attendance list of
+  every run in the group every two seconds just because a mined or damage figure grew (a click and SAVE still write
+  it), MINING updates its rows in place instead of rebuilding every row, bar and tooltip each second, FLEET no longer
+  redraws unchanged figures, an ore the price source had no answer for is asked again every two minutes instead of
+  every second (Mutanite, with its fixed NPC price, is never asked), and the window's per-second store reads run in the
+  background and never start a second copy while one is still under way.
 - **Fixed: MINING's share bars now line up under each other, and their percentage sits level with the bar.** Bar
   and percentage used to share one right-aligned cell, so a one-digit percentage ("6%") is narrower than a two-digit
   one ("61%") and shifted its own bar out of line with the rest. The bar and the percentage now each have their own

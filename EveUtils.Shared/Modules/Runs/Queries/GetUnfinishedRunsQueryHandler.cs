@@ -34,6 +34,8 @@ internal sealed class GetUnfinishedRunsQueryHandler(
             // On the stop where there is one, on the start otherwise: a row without a stop stamp would sort as the
             // oldest thing on screen no matter when it was flown.
             .OrderByDescending(run => run.StoppedAtUtc ?? run.StartedAtUtc)
+            // One query per collection rather than their product in one join (ET-287, EF's MultipleCollectionIncludeWarning).
+            .AsSplitQuery()
             .ToListAsync(cancellationToken);
 
         // Valuation goes through ET's own type-id lookup (the market price cache), never the clipboard's own ISK
