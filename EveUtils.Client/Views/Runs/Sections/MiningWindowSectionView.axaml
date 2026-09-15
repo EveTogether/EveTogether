@@ -86,8 +86,13 @@
         </ItemsControl>
         <TextBlock x:Name="FleetMinedBlock" Classes="hint" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding FleetMinedText}"
                    IsVisible="{Binding ShowFleetMinedText}"/>
-        <TextBlock x:Name="RemainingBlock" Classes="hint" TextWrapping="Wrap" Text="{Binding RemainingText}"
-                   IsVisible="{Binding RemainingText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        <!-- The site's own progress: full at the run's start, emptying toward 0 as the asteroid depletes (ET-299).
+             Same honesty as the old text line — only as accurate as what the fleet shares — now on the tooltip. -->
+        <Grid x:Name="SiteRemainingRow" ColumnDefinitions="*,Auto" Margin="0,6,0,0" IsVisible="{Binding ShowSiteRemaining}"
+              ToolTip.Tip="Site capacity is only as accurate as what the fleet shares.">
+            <ctl:MeterBar Classes="site" Fraction="{Binding SiteRemainingFraction}" Fill="{DynamicResource AccentBrush}"/>
+            <TextBlock Grid.Column="1" Classes="sitelabel" Text="{Binding SiteRemainingLabel}"/>
+        </Grid>
     </StackPanel>
     </Border>
 </UserControl>

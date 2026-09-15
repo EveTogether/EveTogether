@@ -93,12 +93,18 @@ internal sealed class FleetOfTwo : IDisposable
     }
 
     /// <summary>One ore aggregated onto the pilot's own run (ET-229), as the gamelog watcher would file it; the
-    /// window's clock then runs past the bundle window, so it goes out (ET-234).</summary>
-    public async Task MineAsync(Pilot pilot, string oreType, int units, int residueUnits = 0)
+    /// window's clock then runs past the bundle window, so it goes out (ET-234). <paramref name="criticalUnits"/> (of
+    /// <paramref name="units"/>) goes out as its own crit-flagged cycle (ET-299), the same as the gamelog reporting a
+    /// crit line separately from a normal one.</summary>
+    public async Task MineAsync(Pilot pilot, string oreType, int units, int residueUnits = 0, int criticalUnits = 0)
     {
         int rowsBefore = pilot.Window.Participants.Sum(participant => participant.MiningEntries.Count);
-        await pilot.Instance.Services.GetRequiredService<IDispatcher>().Send(
-            new AddRunMiningEntryCommand(pilot.CharacterId, DateTime.UtcNow, oreType, units, IsCritical: false, residueUnits));
+        IDispatcher dispatcher = pilot.Instance.Services.GetRequiredService<IDispatcher>();
+        await dispatcher.Send(new AddRunMiningEntryCommand(
+            pilot.CharacterId, DateTime.UtcNow, oreType, units - criticalUnits, IsCritical: false, residueUnits));
+        if (criticalUnits > 0)
+            await dispatcher.Send(new AddRunMiningEntryCommand(
+                pilot.CharacterId, DateTime.UtcNow, oreType, criticalUnits, IsCritical: true, ResidueUnits: 0));
         await SettleAsync(() => pilot.Window.Participants.Sum(participant => participant.MiningEntries.Count) >= rowsBefore);
         pilot.Refresh();
         await pilot.TickPastTheBundleWindowAsync();

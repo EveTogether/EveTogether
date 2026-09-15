@@ -13,6 +13,12 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: MINING's "remaining in the site" figure now lands on 0 at the end of a full run, and is a progress bar.**
+  A crit yield costs the asteroid nothing extra, but the figure subtracted it from the site's capacity anyway — once
+  folded into the mined total, once more never given back — so a Metaliminal Meteoroid always read as depleted before
+  it actually was. What empties the site is now units plus residue, minus crit, for every fleet member the app counts
+  at all. The bare sentence is a progress bar now too: full at the start of a run, emptying toward 0 as the site
+  depletes, with the units left as a label beside it.
 - **Fixed: the run window no longer freezes in the middle of a homefront.** On 15 Sep a six-character Metaliminal
   Meteoroid run stopped answering five minutes into mining — the window could not even be dragged — long before
   anyone pressed SAVE. Every sample the fleet shares (location, bounty; a dozen a second with six characters) made the
