@@ -19,7 +19,15 @@ public static class MiningValuation
     /// <summary>The unit price for a resolved ore type, or null when neither the fixed exception nor the market
     /// cache has one.</summary>
     public static decimal? UnitPrice(ISdeAccessor sde, int typeId, IReadOnlyDictionary<int, double> marketPrices) =>
-        sde.IsAvailable && sde.GetType(typeId) is { } type && type.GroupId == MutaniteGroupId
+        UnitPrice(typeId, IsMutanite(sde, typeId), marketPrices);
+
+    /// <summary>The same price for a caller that already knows whether the type is Mutanite — the run window prices
+    /// every mined cycle for its live ISK/h and must not go back to the SDE for each one (ET-298).</summary>
+    public static decimal? UnitPrice(int typeId, bool isMutanite, IReadOnlyDictionary<int, double> marketPrices) =>
+        isMutanite
             ? MutaniteNpcBuyPricePerUnit
             : marketPrices.TryGetValue(typeId, out double price) ? (decimal)price : null;
+
+    public static bool IsMutanite(ISdeAccessor sde, int typeId) =>
+        sde.IsAvailable && sde.GetType(typeId)?.GroupId == MutaniteGroupId;
 }

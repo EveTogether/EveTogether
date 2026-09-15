@@ -56,6 +56,11 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
     // type id is kept for the life of the section rather than re-asked once it has an answer.
     private readonly Dictionary<int, double> _prices = new();
     private readonly HashSet<int> _priceAsked = [];
+
+    // An ore's type never changes, so the SDE is asked once per ore name (ET-298): every tick prices every ore line
+    // and every cycle of the live rate, and a query each time — on the UI thread — is what froze the window mid-run.
+    // An ore the SDE does not know is remembered as null; nothing is remembered while the SDE is unavailable.
+    private readonly Dictionary<string, OreType?> _oreTypes = new(StringComparer.OrdinalIgnoreCase);
     private DateTime? _pricesAskedAtUtc;
     private bool _isPricing;
 
@@ -222,9 +227,7 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
         foreach (RunParticipantViewModel participant in Context.Participants)
             foreach (RunMiningOreDto entry in participant.MiningEntries.OrderByDescending(e => e.Units))
             {
-                int? typeId = sde is { IsAvailable: true } && sde.TryGetTypeId(entry.OreType, out int id) ? id : null;
-                decimal? unitPrice = typeId is { } tid ? MiningValuation.UnitPrice(sde!, tid, _prices) : null;
-                bool isFixedPrice = typeId is { } fixedId && sde!.GetType(fixedId)?.GroupId == MiningValuation.MutaniteGroupId;
+                (decimal? unitPrice, bool isFixedPrice) = _PriceOf(sde, entry.OreType);
                 rows.Add(new ActivityMiningRowViewModel(
                     participant.RunId, participant.CharacterId, entry.OreType, entry.Units, entry.CriticalUnits,
                     entry.ResidueUnits, unitPrice is { } price ? price * entry.Units : null, isFixedPrice,
@@ -251,10 +254,11 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
 
         int[] typeIds = [.. Context.Participants.SelectMany(p => p.MiningEntries).Select(e => e.OreType)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(ore => sde.TryGetTypeId(ore, out int id) ? (int?)id : null)
-            .OfType<int>()
-            .Where(id => !_prices.ContainsKey(id) && !_priceAsked.Contains(id)
-                         && sde.GetType(id)?.GroupId != MiningValuation.MutaniteGroupId)
+            .Select(ore => _OreTypeOf(sde, ore))
+            .OfType<OreType>()
+            .Where(ore => !ore.IsMutanite)
+            .Select(ore => ore.TypeId)
+            .Where(id => !_prices.ContainsKey(id) && !_priceAsked.Contains(id))
             .Distinct()];
         if (typeIds.Length == 0)
             return;
@@ -461,37 +465,48 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
     /// as any other live rate in this app.</summary>
     private (string RateText, string? RateTooltip) _LiveRateFor(int characterId, ISdeAccessor? sde, DateTime nowUtc)
     {
-        decimal sum = 0m;
-        bool any = false;
+        // Only the adding up happens under the lock the gamelog pump writes through (ET-298); pricing waits until the
+        // pump is free to carry on.
+        Dictionary<string, int> unitsPerOre = new(StringComparer.OrdinalIgnoreCase);
         lock (_gate)
             if (_recentYield.TryGetValue(characterId, out List<(DateTime AtUtc, string OreType, int Units)>? events))
                 foreach ((DateTime at, string ore, int units) in events)
-                {
-                    if (nowUtc - at > LiveRateWindow)
-                        continue;
-                    if (_PriceOf(sde, ore).UnitPrice is { } p)
-                    {
-                        sum += p * units;
-                        any = true;
-                    }
-                }
+                    if (nowUtc - at <= LiveRateWindow)
+                        unitsPerOre[ore] = unitsPerOre.GetValueOrDefault(ore) + units;
+
+        decimal sum = 0m;
+        bool any = false;
+        foreach ((string ore, int units) in unitsPerOre)
+            if (_PriceOf(sde, ore).UnitPrice is { } price)
+            {
+                sum += price * units;
+                any = true;
+            }
 
         return any
             ? ($"{IskFormat.Compact(sum * 12)} ISK/h now", "ISK/h = the yield of the last 5 minutes, times 12.")
             : ("— ISK/h now", null);
     }
 
-    /// <summary>The unit price and whether it is Mutanite's fixed NPC one — the same lookup <see cref="_SyncRows"/>
-    /// does inline, factored out for <see cref="_ToGroup"/> and <see cref="_LiveRateFor"/> to share without either
-    /// needing a null-forgiving read of <paramref name="sde"/> once it has already proven available.</summary>
-    private (decimal? UnitPrice, bool IsFixedPrice) _PriceOf(ISdeAccessor? sde, string oreType)
-    {
-        if (sde is not { IsAvailable: true } available || !available.TryGetTypeId(oreType, out int typeId))
-            return (null, false);
+    /// <summary>The unit price and whether it is Mutanite's fixed NPC one, for <see cref="_SyncRows"/>,
+    /// <see cref="_ToGroup"/> and <see cref="_LiveRateFor"/> alike.</summary>
+    private (decimal? UnitPrice, bool IsFixedPrice) _PriceOf(ISdeAccessor? sde, string oreType) =>
+        _OreTypeOf(sde, oreType) is { } ore
+            ? (MiningValuation.UnitPrice(ore.TypeId, ore.IsMutanite, _prices), ore.IsMutanite)
+            : (null, false);
 
-        decimal? unitPrice = MiningValuation.UnitPrice(available, typeId, _prices);
-        bool isFixedPrice = available.GetType(typeId)?.GroupId == MiningValuation.MutaniteGroupId;
-        return (unitPrice, isFixedPrice);
+    private OreType? _OreTypeOf(ISdeAccessor? sde, string oreType)
+    {
+        if (_oreTypes.TryGetValue(oreType, out OreType? known))
+            return known;
+        if (sde is not { IsAvailable: true })
+            return null;
+
+        OreType? resolved = sde.TryGetTypeId(oreType, out int typeId)
+            ? new OreType(typeId, MiningValuation.IsMutanite(sde, typeId))
+            : null;
+        _oreTypes[oreType] = resolved;
+        return resolved;
     }
 
     /// <summary>▲▲ for the booster (this character's own gamelog wrote the burst lines), ▲ for another local
@@ -534,4 +549,6 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
         bool IsFallback = false, int FallbackUnits = 0, bool IsNotShared = false);
 
     private sealed record BoostState(string Module, int BurstCount, DateTime SinceUtc, DateTime LastAtUtc, int LastReachCount);
+
+    private sealed record OreType(int TypeId, bool IsMutanite);
 }
