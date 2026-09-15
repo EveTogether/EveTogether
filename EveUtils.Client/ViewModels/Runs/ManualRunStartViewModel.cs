@@ -96,11 +96,17 @@ public partial class ManualRunStartViewModel : ViewModelBase
     /// clipboard multi-select's own hint text reads off, and what keeps a restored pick from silently ticking a
     /// character who has since logged out. Null in a test that never wires one restores nothing, same as no
     /// characters being flying at all.</param>
+    /// <param name="isCharacterFixed">The runs overview's one-click start (ET-290): the dialog is for exactly
+    /// <paramref name="preselectedCharacter"/>, so the button that picks characters is not there at all — and with it
+    /// goes the ET-270 memory, which is neither read (a preselected character never restores a pick) nor written (only
+    /// that picker saves one), so a one-click start never becomes anyone's remembered team.</param>
     public ManualRunStartViewModel(IDispatcher dispatcher, ISdeAccessor sde, IDialogService dialogs,
         Func<ActivityKind, ActivityWindowViewModel> runWindowFor, IReadOnlyList<Character> characters,
         Character? preselectedCharacter = null, IToastService? toasts = null,
-        IFleetParticipation? fleetParticipation = null, ILocalCharacterPresence? localPresence = null)
+        IFleetParticipation? fleetParticipation = null, ILocalCharacterPresence? localPresence = null,
+        bool isCharacterFixed = false)
     {
+        IsCharacterFixed = isCharacterFixed && preselectedCharacter is not null;
         _dispatcher = dispatcher;
         _sde = sde;
         _dialogs = dialogs;
@@ -161,6 +167,12 @@ public partial class ManualRunStartViewModel : ViewModelBase
     }
 
     public IReadOnlyList<Character> Characters { get; }
+
+    /// <summary>Opened for one character only (ET-290): no picker on screen, and <see cref="PickCharactersCommand"/>
+    /// refuses to run.</summary>
+    public bool IsCharacterFixed { get; }
+
+    private bool CanPickCharacters => !IsCharacterFixed;
 
     /// <summary>Who this run is for — the first entry is the pilot the window is opened on, the rest ride along
     /// under the same group code once START fires (ET-221). Defaults to the preselected or first character, exactly
@@ -227,7 +239,7 @@ public partial class ManualRunStartViewModel : ViewModelBase
     /// follows the fixed candidate list, not click order (see <see cref="CharacterPickOption"/>'s callers), so
     /// re-ticking the same set reproduces the same order it returned last time — the first character stays the
     /// pilot across a reopen without any special-casing here.</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanPickCharacters))]
     private async Task PickCharactersAsync()
     {
         IReadOnlyList<int> preselected = [.. SelectedCharacters

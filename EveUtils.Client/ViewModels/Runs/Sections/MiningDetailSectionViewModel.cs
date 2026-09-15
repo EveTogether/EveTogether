@@ -63,12 +63,14 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
         }
 
         Dictionary<Guid, long> characterByRun = input.Detail.Runs.ToDictionary(run => run.RunId, run => run.CharacterId);
-        List<(RunMiningEntryDto Entry, int? TypeId)> resolved = [.. input.Detail.MiningEntries
+        // Each ore looked up once for the whole activity (ET-290, after ET-298), not once per line and again per price.
+        MiningOreTypes ores = MiningOreTypes.Resolve(input.Detail.MiningEntries.Select(entry => entry.OreType), sde);
+        List<(RunMiningEntryDto Entry, MiningOreType? Ore)> resolved = [.. input.Detail.MiningEntries
             .Where(entry => characterByRun.ContainsKey(entry.RunId))
-            .Select(entry => (entry, sde.TryGetTypeId(entry.OreType, out int id) ? (int?)id : null))];
+            .Select(entry => (entry, ores.Of(entry.OreType)))];
 
         Dictionary<int, double> prices = new();
-        int[] typeIds = [.. resolved.Select(r => r.TypeId).OfType<int>().Distinct()];
+        int[] typeIds = [.. resolved.Select(r => r.Ore?.TypeId).OfType<int>().Distinct()];
         if (typeIds.Length > 0 && services.Appraisal is { } appraisal)
         {
             Result<AppraisalOutcome> valued = await appraisal.AppraiseAsync(
@@ -80,26 +82,26 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
         }
 
         Rows.Clear();
-        foreach ((RunMiningEntryDto entry, int? typeId) in resolved.OrderByDescending(r => r.Entry.Units))
+        foreach ((RunMiningEntryDto entry, MiningOreType? ore) in resolved.OrderByDescending(r => r.Entry.Units))
         {
-            decimal? unitPrice = typeId is { } id ? MiningValuation.UnitPrice(sde, id, prices) : null;
-            bool isFixedPrice = typeId is { } fixedId && sde.GetType(fixedId)?.GroupId == MiningValuation.MutaniteGroupId;
+            decimal? unitPrice = ore is null ? null : MiningValuation.UnitPrice(ore.TypeId, ore.IsMutanite, prices);
             Rows.Add(new ActivityMiningRowViewModel(
                 entry.RunId, characterByRun[entry.RunId], entry.OreType, entry.Units, entry.CriticalUnits,
-                entry.ResidueUnits, unitPrice is { } price ? price * entry.Units : null, isFixedPrice, input.NameOf));
+                entry.ResidueUnits, unitPrice is { } price ? price * entry.Units : null, ore?.IsMutanite ?? false,
+                input.NameOf));
         }
 
-        _SyncGroups(input, resolved, characterByRun, sde, prices);
+        _SyncGroups(input, resolved, characterByRun, prices);
     }
 
-    private void _SyncGroups(RunDetailSectionInput input, List<(RunMiningEntryDto Entry, int? TypeId)> resolved,
-        IReadOnlyDictionary<Guid, long> characterByRun, ISdeAccessor sde, Dictionary<int, double> prices)
+    private void _SyncGroups(RunDetailSectionInput input, List<(RunMiningEntryDto Entry, MiningOreType? Ore)> resolved,
+        IReadOnlyDictionary<Guid, long> characterByRun, Dictionary<int, double> prices)
     {
         IReadOnlySet<long> own = services.OwnCharacterIds ?? new HashSet<long>();
         ILookup<long, ActivityRunDetailDto> runsByCharacter = input.Detail.Runs.ToLookup(run => run.CharacterId);
 
         List<CharacterBuild> builds = [];
-        foreach (IGrouping<long, (RunMiningEntryDto Entry, int? TypeId)> character in
+        foreach (IGrouping<long, (RunMiningEntryDto Entry, MiningOreType? Ore)> character in
                  resolved.GroupBy(r => characterByRun[r.Entry.RunId]))
         {
             ActivityRunDetailDto[] runs = [.. runsByCharacter[character.Key]];
@@ -114,11 +116,11 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
         bool isFleetScenario = builds.Count > 1;
         Dictionary<string, int> fleetOreUnits = [];
         foreach (CharacterBuild build in builds)
-            foreach ((RunMiningEntryDto entry, int? _) in build.Entries)
+            foreach ((RunMiningEntryDto entry, MiningOreType? _) in build.Entries)
                 fleetOreUnits[entry.OreType] = fleetOreUnits.GetValueOrDefault(entry.OreType) + entry.Units;
 
         List<(MiningCharacterGroupViewModel Group, decimal Isk)> built =
-            [.. builds.Select(build => _ToGroup(build, sde, prices, fleetOreUnits, isFleetScenario))];
+            [.. builds.Select(build => _ToGroup(build, prices, fleetOreUnits, isFleetScenario))];
 
         Groups.Clear();
         foreach (MiningCharacterGroupViewModel group in built
@@ -128,17 +130,16 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
             Groups.Add(group);
     }
 
-    private static (MiningCharacterGroupViewModel Group, decimal Isk) _ToGroup(CharacterBuild build, ISdeAccessor sde,
+    private static (MiningCharacterGroupViewModel Group, decimal Isk) _ToGroup(CharacterBuild build,
         Dictionary<int, double> prices, IReadOnlyDictionary<string, int> fleetOreUnits, bool isFleetScenario)
     {
         List<(string Ore, int Units, int Crit, int Residue, decimal? Isk, decimal? UnitPrice, bool IsFixedPrice)> lines =
         [
             .. build.Entries.Select(r =>
             {
-                decimal? unitPrice = r.TypeId is { } id ? MiningValuation.UnitPrice(sde, id, prices) : null;
-                bool isFixedPrice = r.TypeId is { } fixedId && sde.GetType(fixedId)?.GroupId == MiningValuation.MutaniteGroupId;
+                decimal? unitPrice = r.Ore is { } ore ? MiningValuation.UnitPrice(ore.TypeId, ore.IsMutanite, prices) : null;
                 return (r.Entry.OreType, r.Entry.Units, r.Entry.CriticalUnits, r.Entry.ResidueUnits,
-                    unitPrice is { } price ? price * r.Entry.Units : (decimal?)null, unitPrice, isFixedPrice);
+                    unitPrice is { } price ? price * r.Entry.Units : (decimal?)null, unitPrice, r.Ore?.IsMutanite ?? false);
             })
         ];
 
@@ -200,6 +201,6 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
     public override string AbsentReason(string noun) => $"no MINING — {noun} has nothing mined in your game log";
 
     private sealed record CharacterBuild(
-        long CharacterId, string Name, bool IsLocal, IReadOnlyList<(RunMiningEntryDto Entry, int? TypeId)> Entries,
+        long CharacterId, string Name, bool IsLocal, IReadOnlyList<(RunMiningEntryDto Entry, MiningOreType? Ore)> Entries,
         DateTime MiningStart, DateTime MiningEnd, DateTime RunStart, DateTime RunEnd);
 }

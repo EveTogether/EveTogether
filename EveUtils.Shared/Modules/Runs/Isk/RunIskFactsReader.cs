@@ -11,7 +11,8 @@ namespace EveUtils.Shared.Modules.Runs.Isk;
 /// many runs at once reads those apart.</summary>
 internal static class RunIskFactsReader
 {
-    public static RunIskFacts From(Run run, IEnumerable<RunParameter> parameters, IReadOnlyDictionary<int, double> prices, ISdeAccessor sde)
+    public static RunIskFacts From(Run run, IEnumerable<RunParameter> parameters, IReadOnlyDictionary<int, double> prices,
+        MiningOreTypes ores)
     {
         RunParameter[] all = [.. parameters];
         IReadOnlyList<LootTallyLine> loot = LootTally.Count(Tally(run));
@@ -30,7 +31,7 @@ internal static class RunIskFactsReader
             HasLoot = loot.Count > 0,
             ConsumableIskCost = consumableCost,
             HasConsumables = filamentCount is > 0,
-            MiningIskValue = MiningValue(run.MiningEntries, sde, prices),
+            MiningIskValue = MiningValue(run.MiningEntries, ores, prices),
             HasMining = run.MiningEntries.Count > 0,
             Parameters = [.. all.Select(parameter => new RunIskParameter(
                 parameter.ParameterKey, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))],
@@ -42,10 +43,9 @@ internal static class RunIskFactsReader
     /// <summary>Every type a set of runs needs a price for — loot kept in the tally, each run's resolved filament
     /// (ET-249) and each ore resolved by its exact SDE name, never guessed (ET-229) — so one price read serves them
     /// all, and the stored summary and the detail screen's per-character figures price the same way.</summary>
-    public static IReadOnlyList<int> PricedTypeIds(IEnumerable<Run> runs, IEnumerable<RunParameter> parameters, ISdeAccessor sde)
+    public static IReadOnlyList<int> PricedTypeIds(IEnumerable<Run> runs, IEnumerable<RunParameter> parameters, MiningOreTypes ores)
     {
-        Run[] all = [.. runs];
-        IEnumerable<int> loot = all
+        IEnumerable<int> loot = runs
             .SelectMany(run => run.LootCaptures)
             .Where(capture => !capture.IsExcluded)
             .SelectMany(capture => capture.Entries)
@@ -54,13 +54,12 @@ internal static class RunIskFactsReader
             .GroupBy(parameter => parameter.RunId)
             .Select(FilamentTypeId)
             .OfType<int>();
-        IEnumerable<int> ores = sde.IsAvailable
-            ? all.SelectMany(run => run.MiningEntries)
-                .Select(entry => sde.TryGetTypeId(entry.OreType, out int typeId) ? (int?)typeId : null)
-                .OfType<int>()
-            : [];
-        return [.. loot.Concat(filaments).Concat(ores).Distinct()];
+        return [.. loot.Concat(filaments).Concat(ores.TypeIds).Distinct()];
     }
+
+    /// <summary>Every ore the runs mined, each looked up in the SDE once for the whole read.</summary>
+    public static MiningOreTypes OresOf(IEnumerable<Run> runs, ISdeAccessor sde) =>
+        MiningOreTypes.Resolve(runs.SelectMany(run => run.MiningEntries).Select(entry => entry.OreType), sde);
 
     /// <summary>What the curve owes this run's own character right now (ET-231), read the same way for a saved
     /// activity and the open run window (<c>ActivityWindowViewModel</c> reads the identical fact off its own
@@ -76,18 +75,21 @@ internal static class RunIskFactsReader
     /// (<see cref="MiningValuation"/>), residue never counts (depleted, never collected, no ISK value), and a
     /// critical cycle's units are not added twice — they are already inside <see cref="RunMiningEntry.Units"/>.
     /// Null only when nothing on the run could be priced, the same "not priced yet, not zero" rule loot follows.</summary>
-    public static decimal? MiningValue(IEnumerable<RunMiningEntry> entries, ISdeAccessor sde, IReadOnlyDictionary<int, double> prices)
+    public static decimal? MiningValue(IEnumerable<RunMiningEntry> entries, MiningOreTypes ores, IReadOnlyDictionary<int, double> prices)
     {
         decimal[] values = [.. entries
-            .Where(entry => sde.IsAvailable && sde.TryGetTypeId(entry.OreType, out _))
-            .Select(entry =>
-            {
-                sde.TryGetTypeId(entry.OreType, out int typeId);
-                return (Entry: entry, Price: MiningValuation.UnitPrice(sde, typeId, prices));
-            })
+            .Select(entry => (Entry: entry, Price: ores.Of(entry.OreType) is { } ore
+                ? MiningValuation.UnitPrice(ore.TypeId, ore.IsMutanite, prices)
+                : null))
             .Where(resolved => resolved.Price is not null)
             .Select(resolved => resolved.Price!.Value * resolved.Entry.Units)];
         return values.Length == 0 ? null : values.Sum();
+    }
+
+    public static decimal? MiningValue(IEnumerable<RunMiningEntry> entries, ISdeAccessor sde, IReadOnlyDictionary<int, double> prices)
+    {
+        RunMiningEntry[] all = [.. entries];
+        return MiningValue(all, MiningOreTypes.Resolve(all.Select(entry => entry.OreType), sde), prices);
     }
 
     /// <summary>The resolved filament type a run's CONSUMABLES was saved against (ET-249), so a caller pricing many

@@ -14,6 +14,7 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Sde;
+using EveUtils.Shared.Modules.Sde.Dtos;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
@@ -23,13 +24,17 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// <see cref="EveUtils.Shared.Modules.Runs.Queries.GetActivityOverviewQuery"/>, which already groups on
 /// <c>GroupCode ?? RunId</c>. Binding to <c>Run</c> instead is what ET-161 AC-5 catches.
 ///
-/// The shape is the same at every width, because <c>ModuleHostService</c> moves this very content between a docked
-/// tab (758px) and a floating window and there is no second layout to fall back on. Three lines: the figures worth
-/// scanning down a column, then what explains them, then the rewards. Nothing is folded behind a "⋯" — a reward
-/// that vanishes at 758px is precisely what AC-3 forbids, and a wrapping chip strip costs a line instead of a fact.
+/// One line of a virtualised list, the same height at every width (ET-290): time, the type's icon, the site with
+/// TYPE · system · chips under it, the crew as a stack of hexes, ISK over the duration, and where it stands towards a
+/// server. What does not fit is trimmed, chips included — a row that grew would move every row under it in a list that
+/// cannot measure what it has not drawn — and the activity pane (RO-2) is where all of it can be read. Nothing here is
+/// looked up once the row exists: its type and system come from <see cref="RunRowFacts"/>, while the row is built off
+/// the UI thread.
 /// </summary>
 public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 {
+    private const int MaxCrewFaces = 5;
+
     private readonly Func<ActivityOverviewRowViewModel, Task> _loadSubRuns;
     private readonly Func<ActivityOverviewRowViewModel, Task> _openDetail;
     private readonly Func<ActivityOverviewRowViewModel, Task>? _publish;
@@ -41,8 +46,10 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     /// <param name="serverNameOf">A server's name as its tab shows it; the bare address when null.</param>
     /// <param name="publishProgress">The automatic publish of this activity in flight, or the reason it last failed
     /// (ET-245).</param>
-    /// <param name="sde">Feeds <see cref="RunTypeCatalogue"/>'s ET-275 archetype fallback for a site with no recorded
-    /// scanner group; null skips it, reading TYPE exactly as before that ticket.</param>
+    /// <param name="facts">Answers TYPE's ET-275 archetype fallback and the system line from the static data, once per
+    /// distinct question; null reads TYPE without that fallback and the system as unknown.</param>
+    /// <param name="faceOf">The shared face for a crew member by id and name, so an own character's portrait is loaded
+    /// once for the whole screen; null gives every member an initial.</param>
     public ActivityOverviewRowViewModel(
         ActivityOverviewRowDto row,
         Func<long, string> nameOf,
@@ -52,7 +59,8 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         Func<string, string>? serverNameOf = null,
         RunPublishProgress? publishProgress = null,
         Func<ActivityOverviewRowViewModel, Task>? retryPublish = null,
-        ISdeAccessor? sde = null)
+        RunRowFacts? facts = null,
+        Func<long, string, CharacterFaceViewModel>? faceOf = null)
     {
         _loadSubRuns = loadSubRuns;
         _openDetail = openDetail;
@@ -62,11 +70,12 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         _publishProgress = publishProgress;
         ActivitySummaryId = row.ActivitySummaryId;
         GroupCode = row.GroupCode;
+        RunId = row.RunId;
         StartedAtLocal = row.StartedAtUtc.ToLocalTime();
         Duration = TimeSpan.FromSeconds(row.DurationSeconds);
         TimeText = StartedAtLocal.ToString("HH:mm");
-        RunTypeDefinition type = RunTypeCatalogue.For(row.ActivityKind, row.SignatureGroupSnapshot, row.SiteTypeId,
-            sde, row.SiteName);
+        RunTypeDefinition type = facts?.TypeOf(row.ActivityKind, row.SignatureGroupSnapshot, row.SiteTypeId, row.SiteName)
+            ?? RunTypeCatalogue.For(row.ActivityKind, row.SignatureGroupSnapshot, row.SiteTypeId, null, row.SiteName);
         // An abyssal has no site at all — it never reads "Unnamed site" (ET-241), it reads what filament opened it,
         // or the type's own honest name while that is still unknown.
         SiteText = !string.IsNullOrWhiteSpace(row.SiteName)
@@ -75,24 +84,50 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
                 ? AbyssalFilamentName.From(row.AbyssalFilamentText)
                 : "Unnamed site";
         // An abyssal with no known filament falls back to the type's own name for both SiteText and KindText
-        // ("Abyssal"), which this one line would otherwise concatenate into "Abyssal Abyssal". The site name alone
-        // already says everything the kind would, so suppress the second, dimmed copy.
+        // ("Abyssal"), which would read "Abyssal Abyssal" side by side. The site name alone already says it.
         KindText = SiteText == type.Name ? string.Empty : type.Name;
+        TypeText = type.Name.ToUpperInvariant();
         TypeIcon = type.Icon;
+
+        SdeSolarSystem? system = facts?.SystemOf(row.SolarSystemId);
+        HasSystem = system is not null;
+        SystemText = system?.Name ?? "—";
+        SecurityText = system is null ? string.Empty : RunRowFacts.SecurityText(system.SecurityStatus);
+        SystemLineText = system is null ? SystemText : $"{SystemText} {SecurityText}";
+        // Never "system unknown" on the row: a dash, and the why on hover — most runs started by hand simply never
+        // learned where they were.
+        SystemTooltip = system is not null
+            ? null
+            : row.SolarSystemId is { } unknownId
+                ? $"Solar system {unknownId} is not in the static data yet"
+                : "No solar system was recorded for this activity";
+
         DurationText = Duration.ToString(@"hh\:mm\:ss");
         // The activity's own TOTAL ISK, the one the detail screen shows — never a sum of this row's own choosing:
         // adding bounty and loot here alone left a mission's rewards out of it (ET-256).
+        Isk = row.Isk;
         NetIsk = row.Isk.HasFigure ? row.Isk.Total : null;
         HasNet = NetIsk.HasValue;
         NetText = NetIsk is { } net
             ? (net < 0 ? string.Empty : "+") + IskFormat.Compact(net) + " ISK" + IskFormat.ExpectedPart(row.Isk)
             : string.Empty;
+
         // Snapshot first, then the live roster, then the bare id (ET-212, ET-247) — the exact chain the expanded
         // row already follows, so this line and that one can never name the same pilot two different ways.
-        CrewText = row.Crew.Count == 0
-            ? $"{row.ParticipantCount} pilots"
-            : string.Join(" · ", row.Crew.Select(member =>
-                CharacterNameResolver.Resolve(member.CharacterNameSnapshot, member.CharacterId, nameOf)));
+        string[] crewNames = [.. row.Crew.Select(member =>
+            CharacterNameResolver.Resolve(member.CharacterNameSnapshot, member.CharacterId, nameOf))];
+        CrewText = row.Crew.Count == 0 ? $"{row.ParticipantCount} pilots" : string.Join(" · ", crewNames);
+        HasCrewStack = row.Crew.Count > 1;
+        SoloCrewText = HasCrewStack ? string.Empty : CrewText;
+        CrewFaces = HasCrewStack
+            ? [.. row.Crew.Take(MaxCrewFaces).Select((member, index) =>
+                faceOf?.Invoke(member.CharacterId, crewNames[index]) ?? new CharacterFaceViewModel(member.CharacterId, crewNames[index]))]
+            : [];
+        // Five faces and the rest counted: "×4" when every pilot has a face, "+3" for the ones that do not fit.
+        CrewCountText = !HasCrewStack
+            ? string.Empty
+            : row.Crew.Count > MaxCrewFaces ? $"+{row.Crew.Count - MaxCrewFaces}" : $"×{row.Crew.Count}";
+
         EnemiesText = row.EnemyTypeCount > 0
             ? $"{row.EnemyTypeCount} enemy types"
             // "Counted", not "recorded": only hand-counted enemies are stored, so a zero here is nobody typing a
@@ -109,6 +144,15 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         HasPublishFailure = publishProgress is { Phase: RunPublishPhase.Failed } && !IsOnServer;
         PublishFailureText = HasPublishFailure ? publishProgress?.Message : null;
         SyncText = _SyncText(row.ServerSyncStates, publishProgress, serverNameOf ?? (address => address));
+        (SyncIcon, IsSyncAttention, IsSyncFailed) = HasPublishFailure
+            ? (MaterialIconKind.AlertCircleOutline, false, true)
+            : publishProgress is { Phase: RunPublishPhase.Publishing }
+                ? (MaterialIconKind.CloudUploadOutline, true, false)
+                : IsQueuedForServer
+                    ? (MaterialIconKind.ClockOutline, true, false)
+                    : IsBehindServer
+                        ? (MaterialIconKind.ArrowUpBoldCircleOutline, true, false)
+                        : (MaterialIconKind.CloudCheckOutline, false, false);
         // A homefront's payout, once the site reads Completed, counts straight away and has no RunParameter row of
         // its own unless the pilot typed a different figure (ET-269: there is no wallet to confirm it against) — so
         // it is not among row.Rewards, and is read off the same Isk breakdown NetText already uses instead of a
@@ -126,20 +170,47 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 
     public string? GroupCode { get; }
 
-    /// <summary>The activity's own day, in the reader's zone — the day band groups on this, not on UTC.</summary>
+    public Guid? RunId { get; }
+
+    /// <summary>The activity's own day, in the reader's zone — the day header groups on this, not on UTC.</summary>
     public DateTime StartedAtLocal { get; }
 
     public TimeSpan Duration { get; }
+
+    /// <summary>The activity's TOTAL ISK by source — what the row's figure adds up, and what its day's source bar
+    /// splits (<see cref="RunsActivitySummaryText.SourcesFor"/>).</summary>
+    public IskBreakdown Isk { get; }
 
     public decimal? NetIsk { get; }
 
     public string TimeText { get; }
     public string SiteText { get; }
     public string KindText { get; }
+    public string TypeText { get; }
     public MaterialIconKind TypeIcon { get; }
     public string DurationText { get; }
     public string CrewText { get; }
     public string EnemiesText { get; }
+
+    public bool HasSystem { get; }
+    public string SystemText { get; }
+    public string SecurityText { get; }
+
+    /// <summary>"Alkabsi 0.7", or the dash — one text, since a row is realised again every time it scrolls in.</summary>
+    public string SystemLineText { get; }
+
+    public string? SystemTooltip { get; }
+
+    /// <summary>Several pilots flew it: the crew cell draws their faces rather than a name, and the caret unfolds the
+    /// activity into one line per pilot.</summary>
+    public bool HasCrewStack { get; }
+
+    /// <summary>The one pilot's name, when there is one.</summary>
+    public string SoloCrewText { get; }
+
+    public IReadOnlyList<CharacterFaceViewModel> CrewFaces { get; }
+
+    public string CrewCountText { get; }
 
     public bool HasNet { get; }
     public string NetText { get; }
@@ -167,12 +238,43 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 
     public bool HasSyncText => IsOnServer || IsQueuedForServer || IsBehindServer || _publishProgress is not null;
 
+    /// <summary>The sync cell's glyph (ET-290): a cloud with a tick once published, a clock while queued or
+    /// publishing, an arrow once changed since published, an alert when the automatic publish failed. Its tooltip
+    /// is <see cref="SyncText"/>. An activity that never left this machine shows none.</summary>
+    public MaterialIconKind SyncIcon { get; }
+
+    /// <summary>Queued, publishing or changed since published: something is still on its way to the server.</summary>
+    public bool IsSyncAttention { get; }
+
+    public bool IsSyncFailed { get; }
+
     /// <summary>The last automatic publish of this activity failed, and nothing has put it on the server since. Never
     /// silent: the row says so and offers RETRY, and the runs stay queued for the next start or reconnect.</summary>
     public bool HasPublishFailure { get; }
 
     /// <summary>What the server or the connection said, for the RETRY button's tooltip.</summary>
     public string? PublishFailureText { get; }
+
+    /// <summary>Until the activity pane takes them (RO-2), PUBLISH and RETRY stay reachable in the sync cell on hover or
+    /// focus, so there is never a build without a manual publish. RETRY stands in PUBLISH's place while it applies.</summary>
+    public bool HasSyncAction => CanPublish || HasPublishFailure;
+
+    public MaterialIconKind SyncActionIcon => HasPublishFailure ? MaterialIconKind.Refresh : MaterialIconKind.CloudUploadOutline;
+
+    public string SyncActionTooltip => HasPublishFailure ? RetryTooltip : "Publish this activity to a coupled server";
+
+    /// <summary>The sync cell's one action: RETRY while an automatic publish has failed, PUBLISH otherwise.</summary>
+    [RelayCommand]
+    private Task SyncActionAsync() => HasPublishFailure ? RetryPublishAsync() : PublishAsync();
+
+    public string RetryTooltip => PublishFailureText is { } reason
+        ? $"Publishing failed: {reason} — try again"
+        : "Publishing failed — try again";
+
+    /// <summary>Whether this activity is filed under that server's tab: some of its runs were queued for it or went
+    /// there.</summary>
+    public bool IsPublishedTo(string serverAddress) =>
+        _source.ServerSyncStates.Any(state => state.ServerAddress == serverAddress);
 
     [RelayCommand]
     private async Task RetryPublishAsync()
@@ -206,10 +308,10 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
             await _publish(this);
     }
 
-    /// <summary>What stands where the net would be when neither a loot capture nor a bounty line was ever taken.
-    /// Never a "0 ISK": a zero here reads as a valuation that was taken and came out at nothing (ET-161 AC-4,
-    /// ET-65 AC-7).</summary>
-    public string NoNetText => "no loot or bounty recorded";
+    /// <summary>What stands where the ISK would be when nothing on the activity was valued. Never a "0 ISK": a zero
+    /// here reads as a valuation that was taken and came out at nothing (ET-161 AC-4, ET-65 AC-7). Not "no loot or
+    /// bounty" any more — since ET-256 ISK also counts rewards and payouts.</summary>
+    public string NoNetText => "nothing valued";
 
     public ObservableCollection<ActivityRewardChipViewModel> Chips { get; }
 
@@ -221,6 +323,25 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 
     /// <summary>Why the sub-runs are not there, when they are not — a failed read is a state, not silence.</summary>
     [ObservableProperty] private string? _subRunsStatus;
+
+    /// <summary><see cref="SubRunsStatus"/> as a line of its own in the list, under the unfolded row.</summary>
+    public RunsListNote? SubRunsNote { get; private set; }
+
+    /// <summary>Unfolded, folded, or its runs read again: the list around this row has to follow.</summary>
+    public event Action<ActivityOverviewRowViewModel>? LayoutChanged;
+
+    partial void OnIsExpandedChanged(bool value) => LayoutChanged?.Invoke(this);
+
+    /// <summary>The runs a read brought back, or why it brought none.</summary>
+    public void ShowSubRuns(IReadOnlyList<ActivityRunRowViewModel> runs, string? status)
+    {
+        SubRuns.Clear();
+        foreach (ActivityRunRowViewModel run in runs)
+            SubRuns.Add(run);
+        SubRunsStatus = status;
+        SubRunsNote = status is null ? null : new RunsListNote(status);
+        LayoutChanged?.Invoke(this);
+    }
 
     [RelayCommand]
     private async Task ToggleAsync()
@@ -248,7 +369,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     /// <summary>Whether this row already says everything <paramref name="row"/> would, so a refresh can keep this very
     /// instance on screen (ET-222). Record equality for every figure — a column added to the DTO later takes part
     /// without anyone having to list it here — and the three lists compared by content, which a record compares by
-    /// reference.</summary>
+    /// reference. Reads nothing but what the row was built from, so a refresh may ask it off the UI thread.</summary>
     public bool IsShowing(ActivityOverviewRowDto row, bool canPublish, RunPublishProgress? publishProgress = null) =>
         CanPublish == canPublish
         && _publishProgress == publishProgress

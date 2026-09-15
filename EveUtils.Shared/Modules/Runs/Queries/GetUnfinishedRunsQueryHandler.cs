@@ -53,20 +53,15 @@ internal sealed class GetUnfinishedRunsQueryHandler(
             .Distinct()];
         // MINING prices through the same cache, keyed by each ore's own resolved type (ET-229) — Mutanite's fixed
         // NPC price never needs it (MiningValuation).
-        List<int> oreTypeIds = sde.IsAvailable
-            ? [.. runs.SelectMany(run => run.MiningEntries)
-                .Select(entry => sde.TryGetTypeId(entry.OreType, out int typeId) ? (int?)typeId : null)
-                .OfType<int>()
-                .Distinct()]
-            : [];
-        List<int> priceTypeIds = [.. lootTypeIds.Concat(filamentTypeIds).Concat(oreTypeIds).Distinct()];
+        MiningOreTypes ores = RunIskFactsReader.OresOf(runs, sde);
+        List<int> priceTypeIds = [.. lootTypeIds.Concat(filamentTypeIds).Concat(ores.TypeIds).Distinct()];
         IReadOnlyDictionary<int, double> prices = priceTypeIds.Count == 0
             ? new Dictionary<int, double>()
             : await marketPrices.GetAveragePricesAsync(priceTypeIds, cancellationToken);
 
         List<UnfinishedRunDto> dtos = [.. runs.Select(run =>
         {
-            (decimal total, bool unknown) = _TotalIsk(run, prices);
+            (decimal total, bool unknown) = _TotalIsk(run, prices, ores);
             return new UnfinishedRunDto(
                 run.Id, run.CharacterId, run.ActivityKind, run.SiteName, run.SignatureGroupSnapshot, run.SiteTypeId,
                 run.StartedAtUtc, run.StoppedAtUtc, total, unknown);
@@ -80,9 +75,9 @@ internal sealed class GetUnfinishedRunsQueryHandler(
     // and a merged figure would not match what either button actually commits or discards.
     // Unknown only when loot is the sole reason nothing can be said: bounty and rewards are read straight off storage,
     // never priced, so either one being there already makes the total a real (if possibly loot-incomplete) figure.
-    private (decimal Total, bool Unknown) _TotalIsk(Run run, IReadOnlyDictionary<int, double> prices)
+    private static (decimal Total, bool Unknown) _TotalIsk(Run run, IReadOnlyDictionary<int, double> prices, MiningOreTypes ores)
     {
-        IskBreakdown isk = IskContributors.Breakdown([RunIskFactsReader.From(run, run.Parameters, prices, sde)], DateTime.UtcNow);
+        IskBreakdown isk = IskContributors.Breakdown([RunIskFactsReader.From(run, run.Parameters, prices, ores)], DateTime.UtcNow);
         return (isk.Total, isk.IsUnvalued);
     }
 }

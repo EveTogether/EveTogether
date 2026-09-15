@@ -21,9 +21,12 @@
             <!-- Multi-select (ET-221): opens the same character picker every other multi-toon start path in the
                  app uses, rather than a second selection widget invented here. -->
             <Button Command="{Binding PickCharactersCommand}" HorizontalAlignment="Stretch"
-                    HorizontalContentAlignment="Left">
+                    HorizontalContentAlignment="Left" IsVisible="{Binding !IsCharacterFixed}">
                 <TextBlock Text="{Binding CharacterSummaryText}"/>
             </Button>
+            <!-- Opened from a character's avatar in RUNNING (ET-290): that character, and nobody to pick instead. -->
+            <TextBlock IsVisible="{Binding IsCharacterFixed}" Text="{Binding CharacterSummaryText}"
+                       Foreground="{StaticResource TextBrightBrush}" Margin="0,4"/>
         </StackPanel>
 
         <!-- Only shown once the pilot is actually in a fleet (ET-267) — solo and own-characters behaviour needs no
