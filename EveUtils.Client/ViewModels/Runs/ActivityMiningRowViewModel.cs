@@ -1,4 +1,5 @@
 using EveUtils.Client.Formatting;
+using EveUtils.Shared.Modules.Runs.Isk;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
@@ -15,6 +16,12 @@ public sealed class ActivityMiningRowViewModel(
     Guid runId, long characterId, string oreType, int units, int criticalUnits, int residueUnits, decimal? value,
     bool isFixedPrice, Func<long, string>? nameOf = null, double? shareFraction = null, string? shareTooltip = null)
 {
+    /// <summary>What an ISK figure holding Mutanite says on hover (ET-288) — the fact ET-229 used to append to the
+    /// figure itself as " (NPC price)", which no ISK column in the run window has room for.</summary>
+    public static string FixedPriceTooltip { get; } =
+        $"Mutanite is valued at its fixed NPC buy price, {IskFormat.Whole(MiningValuation.MutaniteNpcBuyPricePerUnit)} " +
+        "per unit, not at the market's.";
+
     /// <summary>The run this ore was mined on — read back by the run window to sum one participant's own share
     /// (<see cref="Sections.MiningWindowSectionViewModel.FactsFor"/>), the same way CONSUMABLES' row carries it.</summary>
     public Guid RunId { get; } = runId;
@@ -33,25 +40,30 @@ public sealed class ActivityMiningRowViewModel(
     /// the fleet's own "remaining" line, when the site's capacity is known (ET-234).</summary>
     public int ResidueUnits { get; } = residueUnits;
 
+    public bool IsFixedPrice { get; } = isFixedPrice;
+
     public string CharacterText { get; } = nameOf?.Invoke(characterId) ?? $"character {characterId}";
 
     public string OreText { get; } = oreType;
 
-    /// <summary>"61,554 (+1,200 crit)" only when there was a crit, otherwise the plain grouped figure — the units
-    /// column reads no unit word of its own, a header above it already saying UNITS (ET-283).</summary>
-    public string UnitsText { get; } = criticalUnits > 0
-        ? $"{IskFormat.Number(units)} (+{IskFormat.Number(criticalUnits)} crit)"
-        : IskFormat.Number(units);
+    /// <summary>The grouped figure alone, crit included — the crit part has its own column (<see cref="CritText"/>,
+    /// ET-288): "61,554 (+1,200 crit)" in one cell pushed the figure out of its column in a 6-character homefront.</summary>
+    public string UnitsText { get; } = IskFormat.Number(units);
+
+    /// <summary>How much of <see cref="UnitsText"/> came from crits, "+1,200"; "—" for none (ET-288).</summary>
+    public string CritText { get; } = criticalUnits > 0 ? "+" + IskFormat.Number(criticalUnits) : "—";
 
     /// <summary>Bare figure only (ET-284) — the RESIDUE column header above it already says what it is; "—" for
     /// none, matching the mockup's own dash rather than restating "no residue" in every row.</summary>
     public string ResidueText { get; } = residueUnits > 0 ? IskFormat.Number(residueUnits) : "—";
 
-    /// <summary>"no price yet" until it can be valued at all; the NPC-buy exception is named rather than folded
-    /// silently into the figure (ET-229).</summary>
-    public string ValueText { get; } = value is { } isk
-        ? IskFormat.Whole(isk) + (isFixedPrice ? " (NPC price)" : string.Empty)
-        : "no price yet";
+    /// <summary>Bare amount (ET-288) — the ISK header above it names the unit, the same as UNITS and RESIDUE; "—"
+    /// until it can be valued at all, with <see cref="ValueTooltip"/> saying why.</summary>
+    public string ValueText { get; } = value is { } isk ? IskFormat.Number(isk) : "—";
+
+    /// <summary>The NPC-buy exception, named rather than folded silently into the figure (ET-229) — or that there is
+    /// no price yet.</summary>
+    public string? ValueTooltip { get; } = isFixedPrice ? FixedPriceTooltip : value is null ? "No price for this ore yet." : null;
 
     public bool HasShareBar { get; } = shareFraction is not null;
 
@@ -73,6 +85,6 @@ public sealed class ActivityMiningRowViewModel(
     public bool ShowsSameAs(ActivityMiningRowViewModel other) =>
         RunId == other.RunId && CharacterText == other.CharacterText && OreText == other.OreText
         && Units == other.Units && CriticalUnits == other.CriticalUnits && ResidueUnits == other.ResidueUnits
-        && Value == other.Value && ValueText == other.ValueText && HasShareBar == other.HasShareBar
+        && Value == other.Value && IsFixedPrice == other.IsFixedPrice && HasShareBar == other.HasShareBar
         && ShareFraction.Equals(other.ShareFraction) && ShareTooltip == other.ShareTooltip && IsAlternate == other.IsAlternate;
 }

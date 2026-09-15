@@ -1,0 +1,97 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ctl="using:EveUtils.Client.Controls">
+    <!-- MINING's one table, shared by the run window (MiningWindowSectionView) and the saved activity
+         (MiningDetailSectionView) so the two cannot drift apart (ET-288). Every row is a Grid with the same literal
+         columns — CHARACTER · ORE, share bar, share %, UNITS, CRIT, RESIDUE, ISK: "*,64,24,42,36,48,62" — because
+         Avalonia has no SharedSizeGroup (ET-284) and ColumnDefinitions is not a styled property. Each figure column is
+         as wide as its realistic widest content, measured in the ET-288 render harness: "268,920" units, "+1,200"
+         crit, the RESIDUE header itself (46 px), "12,345,678" ISK.
+
+         Below MiningLedger.NarrowBelow the ore name no longer fits beside those figures (the run window at its 420 px
+         minimum leaves 311 px), so the Ledger panel takes "narrow": a row's name (".lead") spans the whole first line
+         and its figures (".figure") drop to a second, still under their own headers. -->
+
+    <Style Selector="Grid.ledger">
+        <Setter Property="ColumnSpacing" Value="6"/>
+    </Style>
+    <Style Selector="StackPanel.narrow Grid.ledger">
+        <Setter Property="ColumnSpacing" Value="4"/>
+    </Style>
+    <Style Selector="StackPanel.narrow Grid.ledger > :is(Control).lead">
+        <Setter Property="Grid.ColumnSpan" Value="7"/>
+    </Style>
+    <Style Selector="StackPanel.narrow Grid.ledger > :is(Control).figure">
+        <Setter Property="Grid.Row" Value="1"/>
+    </Style>
+
+    <!-- Column headers: dim and small like every other section label, right-aligned over the figures beneath. -->
+    <Style Selector="TextBlock.colhdr">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="FontSize" Value="9"/>
+        <Setter Property="LetterSpacing" Value="1.2"/>
+        <Setter Property="VerticalAlignment" Value="Bottom"/>
+    </Style>
+    <Style Selector="TextBlock.colhdr.num">
+        <Setter Property="TextAlignment" Value="Right"/>
+    </Style>
+
+    <!-- The character line: name, Local, boost glyph, then ISK/h or a note — one WrapPanel, so a narrow window moves
+         the rate onto a second line instead of clipping it (ET-288: it used to sit under the RESIDUE header). -->
+    <Style Selector="WrapPanel.who > :is(Control)">
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Margin" Value="0,0,6,0"/>
+    </Style>
+    <Style Selector="TextBlock.charname">
+        <Setter Property="FontWeight" Value="Medium"/>
+    </Style>
+    <Style Selector="TextBlock.boostglyph">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="FontSize" Value="11"/>
+    </Style>
+    <Style Selector="TextBlock.rate">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        <Setter Property="FontSize" Value="10.5"/>
+    </Style>
+    <Style Selector="TextBlock.note">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="FontSize" Value="11"/>
+    </Style>
+
+    <!-- A solid TextBrush rather than the old 0.85 Opacity: an alpha blend reads weaker still over whatever shows
+         through a see-through run window (ET-215) and on a hovered row. -->
+    <Style Selector="TextBlock.oretext">
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="Margin" Value="16,0,0,0"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- UNITS, CRIT and RESIDUE — deliberately not Classes="hint": that class carries a 6px top margin meant for a
+         paragraph note (ET-284). ValueBrush, the normal value colour every other figure in this app uses. -->
+    <Style Selector="TextBlock.cellnum">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="Foreground" Value="{StaticResource ValueBrush}"/>
+        <Setter Property="FontSize" Value="10.5"/>
+        <Setter Property="TextAlignment" Value="Right"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- ET-285: full TextBrush; ET-286: its own fixed column, right-aligned and centred on the bar. -->
+    <Style Selector="TextBlock.sharepct">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="TextAlignment" Value="Right"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- ET-285: design/mining-ledger/v1/c-compact-table.html's own .sbar, 8px tall, 64px wide, with a real track. -->
+    <Style Selector="ctl|MeterBar.share">
+        <Setter Property="Height" Value="8"/>
+        <Setter Property="Width" Value="64"/>
+        <Setter Property="Track" Value="#26FFFFFF"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+</Styles>

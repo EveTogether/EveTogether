@@ -5,89 +5,27 @@
              xmlns:ctl="using:EveUtils.Client.Controls"
              x:Class="EveUtils.Client.Views.Runs.Sections.MiningWindowSectionView"
              x:DataType="vs:MiningWindowSectionViewModel">
+    <!-- The run window's copy of MINING's one table — the columns, the narrow layout and every style come from
+         MiningLedgerStyles.axaml, the same as the saved activity's (MiningDetailSectionView). -->
     <UserControl.Styles>
-        <!-- The smallest step from BOUNTY's one-line-per-ore rows (ET-283, variant C of the mining-ledger mockups):
-             the same rows grouped under a header per character, with the ore lines indented beneath it — now a real
-             table (ET-284): one fixed column layout shared by the header, every character's group row and every ore
-             row beneath it, so a figure always lands under its own header no matter which row it is in. Avalonia has
-             no SharedSizeGroup (WPF-only), so the four right-hand columns are given the same literal pixel width in
-             every row's Grid instead of letting each one measure its own content. -->
-        <Style Selector="TextBlock.charname">
-            <Setter Property="FontWeight" Value="Medium"/>
-        </Style>
-        <Style Selector="TextBlock.boostglyph">
-            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
-            <Setter Property="FontSize" Value="11"/>
-        </Style>
-        <!-- Column headers: dim and small like every other section label in this window, right-aligned over the
-             right-aligned figures beneath them. -->
-        <Style Selector="TextBlock.colhdr">
-            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
-            <Setter Property="FontSize" Value="9"/>
-            <Setter Property="LetterSpacing" Value="1.2"/>
-        </Style>
-        <Style Selector="TextBlock.colhdr.num">
-            <Setter Property="TextAlignment" Value="Right"/>
-        </Style>
-        <Style Selector="TextBlock.oretext">
-            <Setter Property="Opacity" Value="0.85"/>
-            <Setter Property="Margin" Value="16,0,0,0"/>
-            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-        </Style>
-        <!-- UNITS and RESIDUE — deliberately not Classes="hint": that class carries a 6px top margin meant for a
-             paragraph note under a section (EveUtils.axaml), which is exactly what pushed these two columns down
-             out of line with the share bar and the ISK figure beside them (Jithran's screenshot, ET-284). Foreground
-             is ValueBrush, the same "normal value colour" every other figure in this app uses (bounty ISK, fit
-             value, loot money.net) and the mockup's own "value" token — dim grey read too quiet next to it. -->
-        <Style Selector="TextBlock.cellnum">
-            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-            <Setter Property="Foreground" Value="{StaticResource ValueBrush}"/>
-            <Setter Property="FontSize" Value="10.5"/>
-            <Setter Property="TextAlignment" Value="Right"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-        <!-- ET-285: full TextBrush rather than a faded Opacity — see MiningDetailSectionView's own copy of this
-             style for why. -->
-        <!-- ET-286: right-aligned and vertically centred on the bar in its own fixed column — see the row
-             Grid's own comment for why the bar and this text each need their own column. -->
-        <Style Selector="TextBlock.sharepct">
-            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-            <Setter Property="FontSize" Value="10"/>
-            <Setter Property="TextAlignment" Value="Right"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-        <!-- "money" is global now (Themes/EveUtils.axaml, ET-285 round 2) — this window used to carry its own copy
-             because nothing else styled it here. -->
-        <Style Selector="TextBlock.rate">
-            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
-            <Setter Property="FontSize" Value="10.5"/>
-            <Setter Property="TextAlignment" Value="Right"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-        <!-- ET-285: bigger and with a real track, matching design/mining-ledger/v1/c-compact-table.html's own
-             .sbar (8px tall, 64px wide) — the detail screen's copy of this style carries the same numbers. -->
-        <Style Selector="ctl|MeterBar.share">
-            <Setter Property="Height" Value="8"/>
-            <Setter Property="Width" Value="64"/>
-            <Setter Property="Track" Value="#26FFFFFF"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
+        <StyleInclude Source="avares://EveUtils.Client/Views/Runs/Sections/MiningLedgerStyles.axaml"/>
     </UserControl.Styles>
 
-    <!-- ET-286: SHARE split into its own bar column (64, the bar's own fixed width) and percentage column (28,
-         right-aligned) instead of one 100-wide cell holding both right-aligned as a unit — see
-         MiningDetailSectionView's own copy of this comment for why. -->
-    <StackPanel>
+    <!-- A plate of the overlay's own fill (OverlayWindow's #0B0F0D) at 55% under the table: with the run window turned
+         see-through (ET-215), whatever window sits behind it ran straight through these small figures (ET-288). At the
+         default 0.9 fill it barely shows; at 0.35 it still hides ~70% of what is behind. The negative margin equals
+         the padding, so the table keeps exactly the width MiningLedger measures. -->
+    <Border Background="#8C0B0F0D" CornerRadius="3" Margin="-6,-2,-6,0" Padding="6,2,6,4">
+    <StackPanel x:Name="Ledger">
         <!-- Column headers, hidden along with everything else once there is nothing mined at all. -->
-        <Grid ColumnDefinitions="*,64,28,65,80,105" ColumnSpacing="8" Margin="0,0,0,3"
+        <Grid Classes="ledger" ColumnDefinitions="*,64,24,42,36,48,62" RowDefinitions="Auto,Auto" Margin="0,0,0,3"
               IsVisible="{Binding Groups.Count}">
-            <TextBlock Classes="colhdr" Text="CHARACTER · ORE"/>
-            <TextBlock Grid.Column="1" Grid.ColumnSpan="2" Classes="colhdr num" Text="SHARE"/>
-            <TextBlock Grid.Column="3" Classes="colhdr num" Text="UNITS"/>
-            <TextBlock Grid.Column="4" Classes="colhdr num" Text="RESIDUE"/>
-            <TextBlock Grid.Column="5" Classes="colhdr num" Text="ISK"/>
+            <TextBlock Classes="colhdr lead" Text="CHARACTER · ORE"/>
+            <TextBlock Grid.Column="1" Grid.ColumnSpan="2" Classes="colhdr num figure" Text="SHARE"/>
+            <TextBlock Grid.Column="3" Classes="colhdr num figure" Text="UNITS"/>
+            <TextBlock Grid.Column="4" Classes="colhdr num figure" Text="CRIT"/>
+            <TextBlock Grid.Column="5" Classes="colhdr num figure" Text="RESIDUE"/>
+            <TextBlock Grid.Column="6" Classes="colhdr num figure" Text="ISK"/>
         </Grid>
 
         <!-- Own participants first, then whoever else shares mining, then an unshared external member last
@@ -101,8 +39,9 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="vr:MiningCharacterGroupViewModel">
                     <StackPanel>
-                        <Grid ColumnDefinitions="*,64,28,65,80,105" ColumnSpacing="8">
-                            <StackPanel Orientation="Horizontal" Spacing="4">
+                        <!-- The character's own line: who, their ISK/h (or a note instead of figures), their total. -->
+                        <Grid Classes="ledger" ColumnDefinitions="*,64,24,42,36,48,62">
+                            <WrapPanel Grid.ColumnSpan="6" Classes="who">
                                 <TextBlock Classes="charname" Text="{Binding CharacterName}"/>
                                 <Border Classes="localtag" IsVisible="{Binding IsLocal}">
                                     <TextBlock Text="Local"/>
@@ -110,40 +49,33 @@
                                 <TextBlock Classes="boostglyph" Text="{Binding BoostGlyph}"
                                            IsVisible="{Binding BoostGlyph, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                            ToolTip.Tip="{Binding BoostTooltip}"/>
-                            </StackPanel>
-                            <!-- Spans SHARE (bar+pct) + UNITS + RESIDUE: the rate reads right up against the ISK
-                                 column, the same place the mockup's own colspan puts it. -->
-                            <TextBlock Grid.Column="1" Grid.ColumnSpan="4" Classes="rate" Text="{Binding RateText}"
-                                       ToolTip.Tip="{Binding RateTooltip}"
-                                       IsVisible="{Binding RateText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                            <TextBlock Grid.Column="5" Classes="money" Text="{Binding IskText}"
-                                       ToolTip.Tip="{Binding ResidueTooltip}"/>
+                                <TextBlock Classes="rate" Text="{Binding RateText}" ToolTip.Tip="{Binding RateTooltip}"
+                                           IsVisible="{Binding RateText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                <TextBlock Classes="note" Text="{Binding NoteText}"
+                                           IsVisible="{Binding !HasFigures}"/>
+                            </WrapPanel>
+                            <TextBlock Grid.Column="6" Classes="money" Text="{Binding IskText}"
+                                       ToolTip.Tip="{Binding IskTooltip}" IsVisible="{Binding HasFigures}"/>
                         </Grid>
-
-                        <!-- An external member sharing nothing at all (ET-272's own convention) — never counted. -->
-                        <TextBlock Classes="hint" Margin="16,2,0,0" Text="not shared" IsVisible="{Binding IsNotShared}"/>
-
-                        <!-- A shared member on a client that has not sent per-ore lines yet (ET-234's old shape). -->
-                        <TextBlock Classes="hint" Margin="16,2,0,0" Text="{Binding FallbackText}"
-                                   IsVisible="{Binding IsFallbackTotalOnly}"/>
 
                         <ItemsControl ItemsSource="{Binding Ores}" IsVisible="{Binding HasOres}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vr:ActivityMiningRowViewModel">
-                                    <Grid ColumnDefinitions="*,64,28,65,80,105" ColumnSpacing="8" Margin="0,2,0,0">
-                                        <TextBlock Classes="oretext" Text="{Binding OreText}"/>
-                                        <!-- Bar and percentage in their own fixed columns (ET-286) so every row's
-                                             bar starts and ends at the same x regardless of the percentage's own
-                                             digit count (ET-284's shared right-aligned cell let a lone "6%" shift
-                                             its bar relative to "61%"). -->
-                                        <ctl:MeterBar Grid.Column="1" Classes="share" Fraction="{Binding ShareFraction}"
+                                    <Grid Classes="ledger" ColumnDefinitions="*,64,24,42,36,48,62" RowDefinitions="Auto,Auto"
+                                          Margin="0,2,0,0">
+                                        <TextBlock Classes="oretext lead" Text="{Binding OreText}" ToolTip.Tip="{Binding OreText}"/>
+                                        <ctl:MeterBar Grid.Column="1" Classes="share figure" Fraction="{Binding ShareFraction}"
                                                       Fill="{DynamicResource AccentBrush}" IsVisible="{Binding HasShareBar}"
                                                       ToolTip.Tip="{Binding ShareTooltip}"/>
-                                        <TextBlock Grid.Column="2" Classes="sharepct" Text="{Binding ShareText}"
+                                        <TextBlock Grid.Column="2" Classes="sharepct figure" Text="{Binding ShareText}"
                                                    IsVisible="{Binding HasShareBar}" ToolTip.Tip="{Binding ShareTooltip}"/>
-                                        <TextBlock Grid.Column="3" Classes="cellnum" Text="{Binding UnitsText}"/>
-                                        <TextBlock Grid.Column="4" Classes="cellnum" Text="{Binding ResidueText}"/>
-                                        <TextBlock Grid.Column="5" Classes="money" Text="{Binding ValueText}"/>
+                                        <TextBlock Grid.Column="3" Classes="cellnum figure" Text="{Binding UnitsText}"/>
+                                        <TextBlock Grid.Column="4" Classes="cellnum figure" Text="{Binding CritText}"/>
+                                        <TextBlock Grid.Column="5" Classes="cellnum figure" Text="{Binding ResidueText}"/>
+                                        <!-- With one ore this is the character's total again, already on the line above. -->
+                                        <TextBlock Grid.Column="6" Classes="money figure" Text="{Binding ValueText}"
+                                                   ToolTip.Tip="{Binding ValueTooltip}"
+                                                   IsVisible="{Binding $parent[ItemsControl].((vr:MiningCharacterGroupViewModel)DataContext).HasSeveralOres}"/>
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -157,4 +89,5 @@
         <TextBlock x:Name="RemainingBlock" Classes="hint" TextWrapping="Wrap" Text="{Binding RemainingText}"
                    IsVisible="{Binding RemainingText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
     </StackPanel>
+    </Border>
 </UserControl>
