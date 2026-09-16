@@ -188,6 +188,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         _dialogs = dialogs;
         _services = services;
         _fleetFilter = fleetFilter;
+        Tabs = [new RunsTabViewModel("Local", null, _PublishDayAsync)];
         _facts = new RunRowFacts(services.GetService<ISdeAccessor>());
         _namesById = characters
             .Where(character => character.EsiCharacterId is > 0)
@@ -251,11 +252,14 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     /// <summary>Local first, then one tab per coupled server — the fit browser's strip, same sources, additive so a
     /// server coupled while this screen is open gets a tab without the others being rebuilt under the reader.</summary>
-    public ObservableCollection<RunsTabViewModel> Tabs { get; } = [new("Local", null)];
+    public ObservableCollection<RunsTabViewModel> Tabs { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLocalTabSelected))]
     [NotifyPropertyChangedFor(nameof(ShowUnfinishedBand))]
+    [NotifyPropertyChangedFor(nameof(LocalInViewCount))]
+    [NotifyPropertyChangedFor(nameof(ShowPublishView))]
+    [NotifyPropertyChangedFor(nameof(PublishViewButtonText))]
     private RunsTabViewModel? _selectedTab;
 
     /// <summary>RUNNING and UNFINISHED show only here. A running run is a clock on this machine and an unfinished run
@@ -339,6 +343,33 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         IsSummaryChosen = true;
         IsDrawerOpen = true;
     }
+
+    // ══ PUBLISH n LOCAL on the range line (RO-6) ═══════════════════════════════════════════════════════════════
+
+    /// <summary>Whether a batch publish — this day, or the whole view — is under way. Both buttons share one flag:
+    /// they would otherwise queue the same run twice, and the confirmation for one would sit behind the other's.</summary>
+    [ObservableProperty] private bool _isPublishingMany;
+
+    partial void OnIsPublishingManyChanged(bool value) => _ApplyFiltersToTabs();
+
+    /// <summary>Every local activity the selected tab shows after filters — what PUBLISH n LOCAL sends, never more
+    /// than what filtering already narrowed the screen to (§RO-6 "in beeld is ná filters").</summary>
+    public int LocalInViewCount => SelectedTab?.Days.SelectMany(day => day.Rows).Count(row => row.IsLocal) ?? 0;
+
+    public bool ShowPublishView => LocalInViewCount > 0 && _canPublish;
+
+    public string PublishViewButtonText =>
+        IsPublishingMany ? "PUBLISHING…" : $"⤒ PUBLISH {LocalInViewCount} LOCAL";
+
+    [RelayCommand]
+    private async Task PublishViewAsync()
+    {
+        if (SelectedTab is { } tab)
+            await _PublishManyAsync([.. tab.Days.SelectMany(day => day.Rows)]);
+    }
+
+    /// <summary>The day header's own "n local ↑" (RO-6).</summary>
+    private async Task _PublishDayAsync(RunsDayViewModel day) => await _PublishManyAsync([.. day.Rows]);
 
     /// <summary>A TOP RUNS line: that run selected and shown — beside the list, or in the drawer — with its day unfolded
     /// and the row scrolled into view. A run from a week's other month brings that month into view first.</summary>
@@ -707,7 +738,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             if (Tabs.Any(tab => tab.ServerAddress == address))
                 continue;
 
-            var added = new RunsTabViewModel(header, address);
+            var added = new RunsTabViewModel(header, address, _PublishDayAsync);
             _WatchItems(added);
             Tabs.Add(added);
         }
@@ -1025,7 +1056,9 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         }
 
         IServerRegistry? registry = _services.GetService<IServerRegistry>();
-        string? targetAddress = servers.Count == 1 ? servers[0] : await _SelectServerAsync(servers, registry, row);
+        string? targetAddress = servers.Count == 1
+            ? servers[0]
+            : await _SelectServerAsync(servers, registry, $"Publish '{row.SiteText}' to which server?");
         if (targetAddress is null)
         {
             _ReportPublish("Publish cancelled.", ToastKind.Information);
@@ -1079,7 +1112,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             return;
         }
 
-        (bool accepted, string message) = await Task.Run(() => _SynchronizeAsync(targetAddress, ownRuns));
+        (bool accepted, string message) =
+            await Task.Run(() => _SynchronizeAsync(targetAddress, [.. ownRuns.Select(run => run.CharacterId)]));
 
         // Read back first and report second: the runs changed either way — queued, or queued and accepted — and a
         // reload after the report would clear the status line that carries the outcome.
@@ -1092,15 +1126,129 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             _ReportPublish($"Publish rejected: {message}", ToastKind.Error, "Publish rejected");
     }
 
+    /// <summary>Publish every local activity among <paramref name="rows"/> in one go (RO-6): the day header's "n
+    /// local" and the range line's PUBLISH n LOCAL both funnel through here — the same confirmation, queueing and
+    /// per-character synchronise <see cref="_PublishAsync"/> does for one activity, batched so a day of 28 is one
+    /// dialog and one sync per character, never 28.</summary>
+    private async Task _PublishManyAsync(IReadOnlyList<ActivityOverviewRowViewModel> rows)
+    {
+        if (IsPublishingMany)
+            return;
+
+        List<ActivityOverviewRowViewModel> localRows = [.. rows.Where(row => row.IsLocal)];
+        if (localRows.Count == 0)
+            return;
+
+        IClientSessionStore? sessionStore = _services.GetService<IClientSessionStore>();
+        if (sessionStore is null)
+            return;
+
+        IReadOnlyList<string> servers = await Task.Run(() => sessionStore.ListServersAsync());
+        if (servers.Count == 0)
+        {
+            _ReportPublish("Not coupled to any server — couple a character first.", ToastKind.Warning);
+            return;
+        }
+
+        IServerRegistry? registry = _services.GetService<IServerRegistry>();
+        string? targetAddress = servers.Count == 1
+            ? servers[0]
+            : await _SelectServerAsync(servers, registry, $"Publish {localRows.Count} activities to which server?");
+        if (targetAddress is null)
+        {
+            _ReportPublish("Publish cancelled.", ToastKind.Information);
+            return;
+        }
+
+        if (_services.GetService<IRemoteBusConnector>()?.StateFor(targetAddress) != ServerConnectionState.Connected)
+        {
+            _ReportPublish("Not connected to that server.", ToastKind.Warning);
+            return;
+        }
+
+        IsPublishingMany = true;
+        try
+        {
+            Guid[] summaryIds = [.. localRows.Select(row => row.ActivitySummaryId)];
+            Result<IReadOnlyList<ActivityRunForPublishDto>> read =
+                await Task.Run(() => _dispatcher.Query(new GetActivityRunsForPublishQuery(summaryIds)));
+            if (!read.IsSuccess || read.Value is null)
+            {
+                _ReportPublish(read.Messages.Count > 0 ? read.Messages[0].Text : "The activities could not be read.", ToastKind.Error);
+                return;
+            }
+
+            IReadOnlyList<ClientSessionTokens> coupled = await Task.Run(() => sessionStore.LoadAllAsync(targetAddress));
+            List<ActivityRunForPublishDto> ownRuns = [.. read.Value
+                .Where(run => coupled.Any(session => session.CharacterId == run.CharacterId))];
+            if (ownRuns.Count == 0)
+            {
+                _ReportPublish("No run in these activities belongs to a character coupled to that server.", ToastKind.Warning);
+                return;
+            }
+
+            int publishedActivities = ownRuns.Select(run => run.ActivitySummaryId).Distinct().Count();
+            int skippedActivities = summaryIds.Length - publishedActivities;
+
+            string serverName = registry is null ? targetAddress : await registry.DisplayNameAsync(targetAddress);
+            if (!await _dialogs.ConfirmAsync($"Publish {summaryIds.Length} activities to {serverName}?",
+                    _WhatTravels(ownRuns.Count, serverName), "Publish"))
+            {
+                _ReportPublish("Publish cancelled.", ToastKind.Information);
+                return;
+            }
+
+            Result? refused = await Task.Run(async () =>
+            {
+                foreach (ActivityRunForPublishDto run in ownRuns)
+                {
+                    Result queued = await _dispatcher.Send(new QueueRunForServerSyncCommand(run.RunId, targetAddress));
+                    if (!queued.IsSuccess)
+                        return queued;
+                }
+
+                return (Result?)null;
+            });
+            if (refused is not null)
+            {
+                _ReportPublish(refused.Messages.Count > 0 ? refused.Messages[0].Text : "A run could not be queued.", ToastKind.Error);
+                return;
+            }
+
+            (bool accepted, string message) = await Task.Run(
+                () => _SynchronizeAsync(targetAddress, [.. ownRuns.Select(run => run.CharacterId).Distinct()]));
+
+            // Read back first and report second, same as the single-activity publish above: a reload after the
+            // report would clear the status line that carries the outcome.
+            await LoadAsync();
+            if (accepted)
+            {
+                string outcome = skippedActivities > 0
+                    ? $"Published {publishedActivities} of {summaryIds.Length} to {serverName} · {skippedActivities} "
+                      + $"had no run of a character coupled to {serverName}"
+                    : $"Published {publishedActivities} to {serverName}.";
+                _ReportPublish(outcome, ToastKind.Success, "Activities published");
+            }
+            else
+            {
+                // Same as the single-activity publish: the runs stay Pending, meant for the next attempt.
+                _ReportPublish($"Publish rejected: {message}", ToastKind.Error, "Publish rejected");
+            }
+        }
+        finally
+        {
+            IsPublishingMany = false;
+        }
+    }
+
     /// <summary>One synchronisation per owning character: the server attributes a push to the session it came in on,
-    /// so two of this machine's pilots in the same activity are two pushes, not one. Stops at the first refusal —
-    /// what the server said about it is worth more than a second attempt's message.</summary>
-    private async Task<(bool Accepted, string Message)> _SynchronizeAsync(
-        string targetAddress, IReadOnlyList<ActivityRunDetailDto> ownRuns)
+    /// so two of this machine's pilots in the same activity — or the same day — are two pushes, not one. Stops at
+    /// the first refusal — what the server said about it is worth more than a second attempt's message.</summary>
+    private async Task<(bool Accepted, string Message)> _SynchronizeAsync(string targetAddress, IReadOnlyList<long> characterIds)
     {
         using IServiceScope scope = _services.CreateScope();
         RunSynchronizationService synchronization = scope.ServiceProvider.GetRequiredService<RunSynchronizationService>();
-        foreach (long characterId in ownRuns.Select(run => run.CharacterId).Distinct())
+        foreach (long characterId in characterIds.Distinct())
         {
             (bool accepted, string message) = await synchronization.SynchronizeAsync(targetAddress, characterId);
             if (!accepted)
@@ -1115,13 +1263,12 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private Task _RetryPublishAsync(ActivityOverviewRowViewModel row) =>
         row.GroupCode is { } groupCode && _autoPublisher is { } publisher ? publisher.RetryAsync(groupCode) : Task.CompletedTask;
 
-    private async Task<string?> _SelectServerAsync(
-        IReadOnlyList<string> servers, IServerRegistry? registry, ActivityOverviewRowViewModel row)
+    private async Task<string?> _SelectServerAsync(IReadOnlyList<string> servers, IServerRegistry? registry, string prompt)
     {
         var options = new List<ServerPickOption>();
         foreach (string address in servers)
             options.Add(new ServerPickOption(address, registry is null ? address : await registry.DisplayNameAsync(address)));
-        return await _dialogs.SelectServerAsync($"Publish '{row.SiteText}' to which server?", options);
+        return await _dialogs.SelectServerAsync(prompt, options);
     }
 
     /// <summary>
@@ -1130,7 +1277,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// presses publish has to know they are telling a server operator their location.
     /// </summary>
     private static string _WhatTravels(int runCount, string serverName) =>
-        $"{runCount} of your runs in this activity go to {serverName}. Three things travel with them.\n\n"
+        $"{runCount} of your runs go to {serverName}. Three things travel with them.\n\n"
         + "What you earned — every loot line with its item, quantity and price, and every bounty payout.\n"
         + "The fit you flew — by name.\n"
         + "Where you were — the solar system, and the signature if the run recorded one.\n\n"
@@ -1405,11 +1552,17 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             ActivityOverviewRowViewModel[] tabRows = [.. (tab.ServerAddress is { } address
                 ? _loadedRows.Where(row => row.IsPublishedTo(address))
                 : _loadedRows)];
-            tab.Show([.. tabRows.Where(_PassesFilters)]);
+            tab.Show([.. tabRows.Where(_PassesFilters)], _canPublish, IsPublishingMany);
             tab.StatusMessage = tab.Days.Count > 0
                 ? null
                 : tabRows.Length > 0 ? "No activity matches the current filters." : _EmptyMessageFor(tab);
         }
+
+        // PUBLISH n LOCAL on the range line (RO-6): the selected tab's own local count, re-read every time a day's
+        // could have changed — a filter toggle, a live refresh, or IsPublishingMany flipping.
+        OnPropertyChanged(nameof(LocalInViewCount));
+        OnPropertyChanged(nameof(ShowPublishView));
+        OnPropertyChanged(nameof(PublishViewButtonText));
     }
 
     /// <summary>A tile toggled, soloed, or SHOW ALL: the tabs, the selection, the range line, the strip and the tiles
