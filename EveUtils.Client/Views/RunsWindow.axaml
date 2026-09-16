@@ -414,6 +414,134 @@
             <Style Selector="Grid#Band.narrow > vw|RunsActivityStrip">
                 <Setter Property="Grid.ColumnSpan" Value="3"/>
             </Style>
+            <Style Selector="Grid#Band.narrow > Border.filterblock">
+                <Setter Property="Grid.Row" Value="1"/>
+            </Style>
+
+            <!-- ══ TYPES / CHARACTERS filter blocks (ET-293) ══ a label, only while something in it is off an
+                 "n of m" and SHOW ALL, and a ColumnFlowPanel of tiles that stretches to the strip's own height. -->
+            <Style Selector="TextBlock.filtersummary">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Button.showall">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="MinWidth" Value="0"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <ContentPresenter x:Name="PART_ContentPresenter" Background="Transparent"
+                                          Content="{TemplateBinding Content}"/>
+                    </ControlTemplate>
+                </Setter>
+            </Style>
+            <Style Selector="TextBlock.showalltext">
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+            <Style Selector="Button.showall:pointerover TextBlock.showalltext">
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="TextDecorations" Value="Underline"/>
+            </Style>
+
+            <!-- One tile: a 13×13 check box, a type icon or a character's own HexPortrait, the full name — never
+                 trimmed below the panel's own last-resort tooltip fallback — and the count, mono and right-aligned. -->
+            <Style Selector="Button.tile">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="MinWidth" Value="0"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <!-- ItemsControl centres its generated containers vertically by default (ET-293 gotcha): without
+                     this, every tile sat at its own content height instead of filling the row ColumnFlowPanel gave
+                     it, and the block never reached the strip's own height. -->
+                <Setter Property="VerticalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <ContentPresenter x:Name="PART_ContentPresenter" Background="Transparent"
+                                          Content="{TemplateBinding Content}"
+                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                    </ControlTemplate>
+                </Setter>
+            </Style>
+            <Style Selector="Border.tilefill">
+                <Setter Property="Background" Value="#04FFFFFF"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+            </Style>
+            <Style Selector="Button.tile.on Border.tilefill">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            </Style>
+            <Style Selector="Button.tile:pointerover Border.tilefill">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            </Style>
+            <Style Selector="Button.tile.on:pointerover Border.tilefill">
+                <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+            </Style>
+            <Style Selector="Border.tileaccent">
+                <Setter Property="Width" Value="2"/>
+                <Setter Property="HorizontalAlignment" Value="Left"/>
+                <Setter Property="Background" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+            <Style Selector="Border.tilefocus">
+                <Setter Property="BorderThickness" Value="0"/>
+            </Style>
+            <Style Selector="Button.tile:focus-visible Border.tilefocus">
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+            <Style Selector="Border.tilecheck">
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="BorderBrush" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="Background" Value="Transparent"/>
+            </Style>
+            <Style Selector="Button.tile.on Border.tilecheck">
+                <Setter Property="Background" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+            <Style Selector="mi|MaterialIcon.tileicon">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            </Style>
+            <Style Selector="Button.tile.on mi|MaterialIcon.tileicon">
+                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            </Style>
+            <Style Selector="ctl|HexPortrait.tileportrait">
+                <Setter Property="Opacity" Value=".45"/>
+            </Style>
+            <Style Selector="Button.tile.on ctl|HexPortrait.tileportrait">
+                <Setter Property="Opacity" Value="1"/>
+            </Style>
+            <Style Selector="TextBlock.tilename">
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="Button.tile.on TextBlock.tilename, Button.tile:pointerover TextBlock.tilename">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.tilecount">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Button.tile.on TextBlock.tilecount">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            </Style>
         </Grid.Styles>
 
         <DockPanel x:Name="RunsContent">
@@ -603,8 +731,88 @@
                     </StackPanel>
                 </Grid>
 
-                <Grid x:Name="Band" Classes.narrow="{Binding IsNarrow}" ColumnDefinitions="400,*,*" ColumnSpacing="28">
+                <Grid x:Name="Band" Classes.narrow="{Binding IsNarrow}" ColumnDefinitions="400,*,*" ColumnSpacing="28"
+                      RowDefinitions="Auto,Auto" RowSpacing="10">
+                    <Grid.Resources>
+                        <!-- ET-293: a check box, a type icon or a character's HexPortrait, the full name and the
+                             count — shared between the TYPES and CHARACTERS ItemsControl below. -->
+                        <DataTemplate x:Key="FilterTileTemplate" DataType="vr:RunFilterTileViewModel">
+                            <Button Classes="tile" Classes.on="{Binding IsOn}" Focusable="True"
+                                    PointerReleased="_OnFilterTilePointerReleased" KeyDown="_OnFilterTileKeyDown"
+                                    ToolTip.Tip="{Binding Name}">
+                                <Panel>
+                                    <Border Classes="tilefill"/>
+                                    <Border Classes="tileaccent" IsVisible="{Binding IsOn}"/>
+                                    <Border Classes="tilefocus"/>
+                                    <Grid ColumnDefinitions="13,Auto,*,Auto" ColumnSpacing="6" Margin="6,0,8,0">
+                                        <Border Grid.Column="0" Classes="tilecheck" Width="13" Height="13"
+                                                VerticalAlignment="Center">
+                                            <mi:MaterialIcon Kind="Check" Width="10" Height="10"
+                                                              Foreground="#FF0C100E" IsVisible="{Binding IsOn}"/>
+                                        </Border>
+                                        <mi:MaterialIcon Grid.Column="1" Classes="tileicon" Width="16" Height="16"
+                                                          Kind="{Binding Icon}"
+                                                          IsVisible="{Binding Icon, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                        <ctl:HexPortrait Grid.Column="1" Classes="tileportrait" Size="20"
+                                                          Source="{Binding Face.Portrait}" Initial="{Binding Face.Initial}"
+                                                          IsVisible="{Binding Face, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                        <TextBlock Grid.Column="2" Classes="tilename" Text="{Binding Name}"/>
+                                        <TextBlock Grid.Column="3" Classes="tilecount" Text="{Binding Count}"/>
+                                    </Grid>
+                                </Panel>
+                            </Button>
+                        </DataTemplate>
+                    </Grid.Resources>
+
                     <vw:RunsActivityStrip x:Name="ActivityStrip" Grid.Column="0" DataContext="{Binding Strip}"/>
+
+                    <Border Grid.Column="1" Classes="filterblock" DataContext="{Binding TypeFilter}">
+                        <DockPanel>
+                            <Grid DockPanel.Dock="Top" Margin="0,0,0,6" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
+                                <TextBlock Grid.Column="0" Classes="label" Text="{Binding Label}"/>
+                                <TextBlock Grid.Column="2" Classes="filtersummary" Text="{Binding SummaryText}"
+                                           IsVisible="{Binding HasSummary}"/>
+                                <Button Grid.Column="3" Classes="showall" Command="{Binding ShowAllCommand}"
+                                        IsVisible="{Binding HasSummary}">
+                                    <TextBlock Classes="showalltext" Text="show all"/>
+                                </Button>
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding Tiles}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <ctl:ColumnFlowPanel MaxColumns="2" ColumnSpacing="10" RowSpacing="4" MinRowHeight="28"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <StaticResource ResourceKey="FilterTileTemplate"/>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DockPanel>
+                    </Border>
+
+                    <Border Grid.Column="2" Classes="filterblock" DataContext="{Binding CharacterFilter}">
+                        <DockPanel>
+                            <Grid DockPanel.Dock="Top" Margin="0,0,0,6" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
+                                <TextBlock Grid.Column="0" Classes="label" Text="{Binding Label}"/>
+                                <TextBlock Grid.Column="2" Classes="filtersummary" Text="{Binding SummaryText}"
+                                           IsVisible="{Binding HasSummary}"/>
+                                <Button Grid.Column="3" Classes="showall" Command="{Binding ShowAllCommand}"
+                                        IsVisible="{Binding HasSummary}">
+                                    <TextBlock Classes="showalltext" Text="show all"/>
+                                </Button>
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding Tiles}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <ctl:ColumnFlowPanel MaxColumns="2" ColumnSpacing="10" RowSpacing="4" MinRowHeight="28"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <StaticResource ResourceKey="FilterTileTemplate"/>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DockPanel>
+                    </Border>
                 </Grid>
             </StackPanel>
         </Border>

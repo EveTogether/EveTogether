@@ -97,6 +97,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
         KindText = SiteText == type.Name ? string.Empty : type.Name;
         TypeText = type.Name.ToUpperInvariant();
         TypeIcon = type.Icon;
+        TypeId = type.Id;
 
         SdeSolarSystem? system = facts?.SystemOf(row.SolarSystemId);
         HasSystem = system is not null;
@@ -141,6 +142,9 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
         string[] crewNames = [.. row.Crew.Select(member =>
             CharacterNameResolver.Resolve(member.CharacterNameSnapshot, member.CharacterId, nameOf))];
         CrewText = row.Crew.Count == 0 ? $"{row.ParticipantCount} pilots" : string.Join(" · ", crewNames);
+        // Unconditional, unlike CrewFaces below: the CHARACTERS filter (ET-293) has to see every crew member's id,
+        // not only the five a solo or small crew already fits on the row.
+        CrewCharacterIds = [.. row.Crew.Select(member => member.CharacterId)];
         HasCrewStack = row.Crew.Count > 1;
         SoloCrewText = HasCrewStack ? string.Empty : CrewText;
         CrewFaces = HasCrewStack
@@ -228,6 +232,10 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
     public string KindText { get; }
     public string TypeText { get; }
     public MaterialIconKind TypeIcon { get; }
+
+    /// <summary>The catalogue key TYPE reads off (ET-293): unlike <see cref="TypeText"/>, never refined past its base
+    /// row — a TYPES tile for a homefront covers every one of its "Homefront · …" sub-kinds, not one tile each.</summary>
+    public RunTypeId TypeId { get; }
     public string DurationText { get; }
     public string CrewText { get; }
     public string EnemiesText { get; }
@@ -249,6 +257,10 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
     public string SoloCrewText { get; }
 
     public IReadOnlyList<CharacterFaceViewModel> CrewFaces { get; }
+
+    /// <summary>Every pilot's character id, capped at neither five nor to a crew of more than one (ET-293) — what the
+    /// CHARACTERS filter checks a row against, unlike the presentation-shaped <see cref="CrewFaces"/> above.</summary>
+    public IReadOnlyList<long> CrewCharacterIds { get; }
 
     public string CrewCountText { get; }
 

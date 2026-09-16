@@ -163,6 +163,32 @@ public partial class RunsWindow : ChromedWindow
             _ = viewModel.OpenSelectedDetailAsync();
     }
 
+    /// <summary>A TYPES/CHARACTERS tile (ET-293): PointerReleased carries key modifiers where <c>Button.Click</c> does
+    /// not, so a plain click and an alt-click (solo) are both settled here rather than needing a second path just to
+    /// see Alt. Handled on every left-button release this handler sees, so Alt never reaches Button's own access-key
+    /// handling either — the pitfall the ticket calls out by name.</summary>
+    private void _OnFilterTilePointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (e.InitialPressMouseButton != MouseButton.Left || sender is not Button { DataContext: RunFilterTileViewModel tile })
+            return;
+
+        e.Handled = true;
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+            tile.Solo();
+        else
+            tile.Toggle();
+    }
+
+    /// <summary>Space togglet the focused tile — the one gesture the pointer handler above cannot cover.</summary>
+    private void _OnFilterTileKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Space || sender is not Button { DataContext: RunFilterTileViewModel tile })
+            return;
+
+        e.Handled = true;
+        tile.Toggle();
+    }
+
     /// <summary>
     /// ↑↓ steps through the activity rows of unfolded days; ↵ opens the detail screen, or the drawer where it is shut;
     /// Esc closes the drawer and nothing else. Handled here rather than left to a shortcut binding because a bare Esc
