@@ -25,6 +25,9 @@
 
     <SolidColorBrush x:Key="BgRowHoverBrush" Color="#144EC79E"/>
     <SolidColorBrush x:Key="BgRowSelectedBrush" Color="#244EC79E"/>
+    <!-- ET-307: the day header's own band — paler (AccentBright, not the base accent) and stronger than a selected
+         row, so a selected run can never read as a header even sitting directly under one. -->
+    <SolidColorBrush x:Key="BgDayHeadBrush" Color="#387EE0BB"/>
 
     <!-- Semi-transparent rail backdrop (faction-tinted corners, D-183) -->
     <SolidColorBrush x:Key="RailBackgroundBrush" Color="#CC0A0D0B"/>

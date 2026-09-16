@@ -114,12 +114,22 @@
             <Style Selector="Button.caretbtn:pointerover TextBlock.caret, Button.dayband:pointerover TextBlock.caret">
                 <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
             </Style>
+            <!-- ET-307: a run's own fold caret reads lighter and smaller than a day's, and sits further right (see
+                 the row Grid's own indent below) — the two never share a glyph, a size or an x position, which was
+                 Jithran's exact complaint ("naast de dagen hebben we pijltjes, maar naast de runs ook"). -->
+            <Style Selector="TextBlock.caret.rowcaret">
+                <Setter Property="FontSize" Value="8"/>
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            </Style>
 
-            <!-- Day header -->
+            <!-- Day header (ET-307: its own band, clearly heavier than both a normal and a selected run row — see
+                 BgDayHeadBrush's doc comment in each faction file — with a rule above it that closes the previous
+                 day off, not only the divider below every ordinary row. -->
             <Style Selector="Border.dayhead">
-                <Setter Property="Background" Value="{StaticResource BgRowBrush}"/>
-                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
-                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="Background" Value="{DynamicResource BgDayHeadBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="0,1,0,1"/>
+                <Setter Property="Margin" Value="0,3,0,0"/>
                 <Setter Property="Height" Value="28"/>
             </Style>
             <Style Selector="TextBlock.dayweek">
@@ -128,8 +138,10 @@
                 <Setter Property="LetterSpacing" Value="1.8"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
+            <!-- TextBrush, not TextDimBrush (ET-307): the day header's own band sits brighter than a plain row now,
+                 and dim text measured well under the 4.5:1 the project holds text to once composited over it. -->
             <Style Selector="TextBlock.daydate">
-                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
                 <Setter Property="FontSize" Value="10"/>
                 <Setter Property="LetterSpacing" Value="1.8"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
@@ -182,6 +194,19 @@
             </Style>
 
             <!-- Activity row -->
+            <!-- ET-307: the run rows under a day sit indented from it (see the row Grid's own Margin) and this bar
+                 fills that indent — a spine down the left edge that reads as one group hanging under its day
+                 header, per Jithran's own suggestion. Not hit-test visible: it must never steal a row's click.
+                 Opaque enough (BorderStrongBrush, not the fainter DividerBrush/BorderBrush) that it survives both
+                 the hover and the selected fill drawn behind it on the item's own ContentPresenter — it is part of
+                 the row's content, painted above that fill, not a sibling of it. Day headers never get this class. -->
+            <Style Selector="Border.rowspine">
+                <Setter Property="Width" Value="3"/>
+                <Setter Property="HorizontalAlignment" Value="Left"/>
+                <Setter Property="Margin" Value="14,0,0,0"/>
+                <Setter Property="Background" Value="{DynamicResource BorderStrongBrush}"/>
+                <Setter Property="IsHitTestVisible" Value="False"/>
+            </Style>
             <Style Selector="TextBlock.rowtime">
                 <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
                 <Setter Property="FontSize" Value="11"/>
@@ -1002,12 +1027,17 @@
 
                 <!-- An activity: 36 px, one control. The row button selects it and the pane reads it (ET-291); the
                      detail screen is a double-click, ↵ or the pane's own OPEN DETAIL. The caret sits on top of the
-                     row rather than inside it, so a click aimed at the row can never fold a group. -->
+                     row rather than inside it, so a click aimed at the row can never fold a group.
+
+                     ET-307: indented 8 px past the day header's own 14 px margin, and Border.rowspine fills that
+                     gap — the row reads as nested under its day rather than a sibling of it, and its own caret
+                     (rowcaret, further right besides) never lands on the day header caret's x. -->
                 <DataTemplate DataType="vr:ActivityOverviewRowViewModel">
                     <Border Height="36" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
                         <Panel>
+                            <Border Classes="rowspine"/>
                             <Button Classes="activityrow" Command="{Binding SelectCommand}">
-                                <Grid Margin="14,0" ColumnDefinitions="18,40,18,*,84,100,24" ColumnSpacing="8">
+                                <Grid Margin="22,0,14,0" ColumnDefinitions="18,40,18,*,84,100,24" ColumnSpacing="8">
                                     <TextBlock Grid.Column="1" Classes="rowtime" Text="{Binding TimeText}"/>
                                     <ctl:IconGlyph Grid.Column="2" Classes="typeicon" Kind="{Binding TypeIcon}"
                                                    ToolTip.Tip="{Binding TypeText}"/>
@@ -1074,10 +1104,10 @@
                                                    ToolTip.Tip="{Binding SyncText}"/>
                                 </Grid>
                             </Button>
-                            <Button Classes="caretbtn" Width="18" Height="36" Margin="14,0,0,0" HorizontalAlignment="Left"
+                            <Button Classes="caretbtn" Width="18" Height="36" Margin="22,0,0,0" HorizontalAlignment="Left"
                                     IsVisible="{Binding HasCrewStack}" Command="{Binding ToggleCommand}"
                                     ToolTip.Tip="Show the pilots on this activity">
-                                <TextBlock Classes="caret" Classes.expanded="{Binding IsExpanded}" Text="&#x25B6;"/>
+                                <TextBlock Classes="caret rowcaret" Classes.expanded="{Binding IsExpanded}" Text="&#x25B6;"/>
                             </Button>
                         </Panel>
                     </Border>
@@ -1086,28 +1116,34 @@
                 <!-- A pilot's own run under an unfolded activity: face and name, their own time and ISK, their own
                      standing towards a server. Six pilots on one site are six of these under one row (ET-161 AC-5).
                      A click selects the activity above it, the same as a click on that row: these are the one
-                     activity's runs, and the pane has no smaller thing to show. -->
+                     activity's runs, and the pane has no smaller thing to show.
+
+                     ET-307: the same left indent and spine as its parent activity row — a pilot's run stays inside
+                     the day's group rather than lining back up with the header above it. -->
                 <DataTemplate DataType="vr:ActivityRunRowViewModel">
-                    <Button Classes="activityrow" Height="26" Command="{Binding Activity.SelectCommand}"
-                            Background="{StaticResource BgRowBrush}">
-                        <Grid Margin="14,0" ColumnDefinitions="18,40,18,*,84,100,24" ColumnSpacing="8">
-                            <DockPanel Grid.Column="3">
-                                <ctl:HexPortrait DockPanel.Dock="Left" Size="14" VerticalAlignment="Center"
-                                                 Source="{Binding Face.Portrait}" Initial="{Binding Face.Initial}"/>
-                                <TextBlock DockPanel.Dock="Right" Classes="rowline" Margin="8,0,0,0"
-                                           TextTrimming="CharacterEllipsis" Text="{Binding StandingText}"/>
-                                <TextBlock Margin="6,0,0,0" FontSize="11" VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           Foreground="{StaticResource TextBrush}" Text="{Binding CharacterText}"/>
-                            </DockPanel>
-                            <TextBlock Grid.Column="4" Classes="rowsmall" Text="{Binding DurationText}"
-                                       ToolTip.Tip="{Binding TimeSourceText}"/>
-                            <TextBlock Grid.Column="5" Classes="rowsmall" Foreground="{StaticResource TextBrightBrush}"
-                                       Text="{Binding IskText}"/>
-                            <ctl:IconGlyph Grid.Column="6" Classes="syncstate" Kind="{Binding SyncIcon}"
-                                           IsVisible="{Binding HasSyncIcon}" ToolTip.Tip="{Binding SyncText}"/>
-                        </Grid>
-                    </Button>
+                    <Panel>
+                        <Border Classes="rowspine"/>
+                        <Button Classes="activityrow" Height="26" Command="{Binding Activity.SelectCommand}"
+                                Background="{StaticResource BgRowBrush}">
+                            <Grid Margin="22,0,14,0" ColumnDefinitions="18,40,18,*,84,100,24" ColumnSpacing="8">
+                                <DockPanel Grid.Column="3">
+                                    <ctl:HexPortrait DockPanel.Dock="Left" Size="14" VerticalAlignment="Center"
+                                                     Source="{Binding Face.Portrait}" Initial="{Binding Face.Initial}"/>
+                                    <TextBlock DockPanel.Dock="Right" Classes="rowline" Margin="8,0,0,0"
+                                               TextTrimming="CharacterEllipsis" Text="{Binding StandingText}"/>
+                                    <TextBlock Margin="6,0,0,0" FontSize="11" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{StaticResource TextBrush}" Text="{Binding CharacterText}"/>
+                                </DockPanel>
+                                <TextBlock Grid.Column="4" Classes="rowsmall" Text="{Binding DurationText}"
+                                           ToolTip.Tip="{Binding TimeSourceText}"/>
+                                <TextBlock Grid.Column="5" Classes="rowsmall" Foreground="{StaticResource TextBrightBrush}"
+                                           Text="{Binding IskText}"/>
+                                <ctl:IconGlyph Grid.Column="6" Classes="syncstate" Kind="{Binding SyncIcon}"
+                                               IsVisible="{Binding HasSyncIcon}" ToolTip.Tip="{Binding SyncText}"/>
+                            </Grid>
+                        </Button>
+                    </Panel>
                 </DataTemplate>
 
                 <DataTemplate DataType="vr:RunsListNote">
