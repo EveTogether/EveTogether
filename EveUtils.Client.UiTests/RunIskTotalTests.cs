@@ -233,7 +233,8 @@ public sealed class RunIskTotalTests
         ]);
         var row = new ActivityOverviewRowViewModel(
             new ActivityOverviewRowDto(Guid.NewGuid(), null, Guid.NewGuid(), ActivityKind.Site, "Homefront", null, 0, null,
-                DateTime.UtcNow, 600, 1, 1, [], [], 1_000_000m, null, 0, false, false, [], isk),
+                // Solo: the pilot's own share is the whole activity's (ET-296).
+                DateTime.UtcNow, 600, 1, 1, [], [], 1_000_000m, null, 0, false, false, [], isk, isk, true, []),
             id => $"character {id}", _ => Task.CompletedTask, _ => Task.CompletedTask);
 
         Assert.Equal(1_500_000m, row.NetIsk);

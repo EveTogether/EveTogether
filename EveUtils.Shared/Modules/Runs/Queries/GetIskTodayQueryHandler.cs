@@ -4,6 +4,7 @@ using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Isk;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Queries;
@@ -17,10 +18,11 @@ internal sealed class GetIskTodayQueryHandler(IDbContextFactory<ClientDbContext>
         if (query.CharacterIds.Count == 0)
             return Result<decimal>.Success(0m);
 
+        HashSet<long> characterIds = [.. query.CharacterIds];
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
         // Correlated against Run the same way GetActivityOverviewQueryHandler does — ActivitySummary carries no
         // participant list of its own, only GroupCode/RunId to join back through.
-        decimal? total = await db.Set<ActivitySummary>()
+        var today = await db.Set<ActivitySummary>()
             .AsNoTracking()
             .Where(summary => summary.StartedAtUtc >= query.SinceUtc)
             .Where(summary => db.Set<Run>().Any(run =>
@@ -29,8 +31,17 @@ internal sealed class GetIskTodayQueryHandler(IDbContextFactory<ClientDbContext>
                     || (summary.RunId != null && run.Id == summary.RunId))))
             // The same TOTAL ISK the runs overview and the detail screen show for each activity (ET-256), not its
             // bounty alone — a mission's reward and an evening's loot are ISK earned today too.
-            .SumAsync(summary => summary.TotalIsk, cancellationToken);
+            .Select(summary => new { summary.TotalIsk, summary.IskContributionsByCharacter })
+            .ToListAsync(cancellationToken);
 
-        return Result<decimal>.Success(total ?? 0m);
+        // These characters' own share, not the group's (ET-296) — the very figure the runs overview's day total adds
+        // up, so "ISK today" and that total can never disagree (RunIskTotalTests). Summed here rather than in the
+        // database because the split is JSON; it is one day's activities, not a month's.
+        decimal total = today.Sum(summary =>
+            StoredIskBreakdown.ReadByCharacter(summary.IskContributionsByCharacter) is { } byCharacter
+                ? byCharacter.Where(character => characterIds.Contains(character.Key)).Sum(character => character.Value.Total)
+                : summary.TotalIsk ?? 0m);
+
+        return Result<decimal>.Success(total);
     }
 }

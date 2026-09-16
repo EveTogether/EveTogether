@@ -115,8 +115,16 @@ internal sealed class RebuildActivitySummariesCommandHandler(
         decimal? lost = RunIskFactsReader.KnownLootValue(loot, LootKind.Lost, prices);
         // Per run, then added up over the activity by each contributor — the same breakdown the open run window and
         // UNFINISHED make, stored so every screen reads this one and none of them adds figures of its own (ET-256).
-        IskBreakdown isk = IskContributors.Breakdown(
-            [.. runs.Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices, ores))], DateTime.UtcNow);
+        // Earliest run first: the order decides which character a reward line copied onto several runs is handed to
+        // in the per-character split below (ET-296).
+        DateTime nowUtc = DateTime.UtcNow;
+        RunIskFacts[] facts = [.. runs
+            .OrderBy(run => run.StartedAtUtc).ThenBy(run => run.Id)
+            .Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices, ores))];
+        IskBreakdown isk = IskContributors.Breakdown(facts, nowUtc);
+        // The same facts once more, split by character rather than summed — no extra query, and per source it adds
+        // up to the activity's own breakdown (ET-296).
+        IReadOnlyDictionary<long, IskBreakdown> iskByCharacter = IskContributors.BreakdownByCharacter(facts, nowUtc);
         // Runs, for the PayoutEligibleCount column: how many eligible runs the activity holds.
         int payoutEligibleCount = runs.Count(run => run.IsPayoutEligible);
         // Distinct characters, for the expected payout: they differ because ET-130 lets one character hold more than
@@ -153,6 +161,7 @@ internal sealed class RebuildActivitySummariesCommandHandler(
             ExpectedPayoutIsk = payoutEligibleCharacterCount > 0 && gained is { } total ? total / payoutEligibleCharacterCount : 0m,
             TotalIsk = isk.HasFigure ? isk.Total : null,
             IskContributions = StoredIskBreakdown.Write(isk),
+            IskContributionsByCharacter = StoredIskBreakdown.WriteByCharacter(iskByCharacter),
             IskSources = IskContributors.Signature,
             EnemyTypeCount = runs.SelectMany(run => run.EnemyObservations).Select(observation => observation.EnemyTypeId).Distinct().Count(),
             CompletenessUnknown = source.GroupCode is not null,

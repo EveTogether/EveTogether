@@ -16,6 +16,7 @@ using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
@@ -117,6 +118,12 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     /// it leaves out, is that source's own contributor's to say.</summary>
     [ObservableProperty] private bool _hasTotalIsk;
     [ObservableProperty] private string _totalIskText = string.Empty;
+
+    /// <summary>What this machine's own characters made of that total (ET-296) — the figure every total on the runs
+    /// overview adds up, said here because this is the one screen whose headline figure is the whole group's. Drawn
+    /// only where somebody else flew along: otherwise it is the same number twice.</summary>
+    [ObservableProperty] private bool _hasOwnShare;
+    [ObservableProperty] private string _ownShareText = string.Empty;
 
     /// <summary>Whether the duration above it was measured or typed. The corrected moments overwrite the start and
     /// stop, so the figure itself can no longer say which of the two it is (ET-98).</summary>
@@ -493,6 +500,24 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     {
         HasTotalIsk = detail.Isk.HasFigure;
         TotalIskText = IskFormat.Whole(detail.Isk.Total) + IskFormat.ExpectedPart(detail.Isk);
+        _ApplyOwnShare(detail);
+    }
+
+    /// <summary>The group's total stays the header's figure — this is the one screen where what a fleet mate brought
+    /// in belongs (ET-296). Under it stands what this machine's own characters made of it, the very figure the runs
+    /// overview totals add up, and only where somebody else flew along: on a solo run, and on a fleet of nobody but
+    /// this pilot's own toons, the two are the same number and saying it twice says nothing.</summary>
+    private void _ApplyOwnShare(ActivityDetailDto detail)
+    {
+        IskBreakdown own = IskBreakdown.Sum(detail.Runs
+            .Select(run => run.CharacterId)
+            .Distinct()
+            .Where(characterId => _ownCharacterIds?.Contains(characterId) ?? true)
+            .Select(characterId => detail.IskByCharacter?.GetValueOrDefault(characterId) ?? IskBreakdown.None));
+        HasOwnShare = HasTotalIsk && detail.IskByCharacter is not null && _ownCharacterIds is not null
+                      && detail.Runs.Any(run => !_ownCharacterIds.Contains(run.CharacterId));
+        OwnShareText = "your share " + (own.Total < 0 ? string.Empty : "+")
+                       + IskFormat.Compact(own.Total) + " ISK" + IskFormat.ExpectedPart(own);
     }
 
     /// <summary>

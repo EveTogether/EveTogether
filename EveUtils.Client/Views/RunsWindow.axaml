@@ -537,8 +537,11 @@
                                     <StackPanel Grid.Column="5" VerticalAlignment="Center">
                                         <TextBlock Classes="rowfigure" IsVisible="{Binding HasNet}" Text="{Binding NetText}"/>
                                         <!-- Never a "0 ISK" where nothing was valued: a zero reads as a valuation that
-                                             came out at nothing. -->
+                                             came out at nothing. A dash instead where none of this pilot's own
+                                             characters flew it (ET-296) — the why is on hover, there is no room for
+                                             it on the row. -->
                                         <TextBlock Classes="rownone" IsVisible="{Binding !HasNet}"
+                                                   ToolTip.Tip="{Binding NoNetTooltip}"
                                                    Text="{Binding NoNetText}"/>
                                         <TextBlock Classes="rowsmall" Text="{Binding DurationText}"/>
                                     </StackPanel>

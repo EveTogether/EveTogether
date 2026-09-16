@@ -332,8 +332,12 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         Result<IReadOnlyList<UnfinishedRunDto>> unfinished = await _dispatcher.Query(new GetUnfinishedRunsQuery());
 
         (DateTime fromUtc, DateTime toUtc) = _MonthRangeUtc(request.MonthLocal);
+        // This machine's own characters, so every row comes back with their share of it rather than the group's
+        // (ET-296) — worked out in the handler, where the stored split is and where the read already runs off the UI
+        // thread. Not a filter: a fleet mate's run pulled in by sync keeps its row, it just earns nothing here.
         Result<IReadOnlyList<ActivityOverviewRowDto>> overview = await _dispatcher.Query(
-            new GetActivityOverviewQuery(fromUtc, toUtc, FleetId: _fleetFilter?.FleetId));
+            new GetActivityOverviewQuery(fromUtc, toUtc, FleetId: _fleetFilter?.FleetId,
+                OwnCharacterIds: [.. _namesById.Keys]));
         if (!overview.IsSuccess || overview.Value is null)
             return new ScreenRead(runningFacts, unfinished.Value ?? [], newServers, canPublish, null,
                 overview.Messages.Count > 0 ? overview.Messages[0].Text : "The activities could not be read.", false);

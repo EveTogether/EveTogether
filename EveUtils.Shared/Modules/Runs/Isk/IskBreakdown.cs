@@ -11,6 +11,18 @@ public sealed record IskBreakdown(IReadOnlyList<IskContribution> Contributions)
 {
     public static IskBreakdown None { get; } = new([]);
 
+    /// <summary>Breakdowns over runs that do not overlap, read as one — the pilot's own share out of an activity's
+    /// stored per-character split (ET-296). Added per source, so <see cref="Of"/> still answers and a source bar can
+    /// still split it, and a source keeps the firmest certainty any part gave it: an <see cref="IskCertainty.Unknown"/>
+    /// part is a run nothing on which could be priced, which adds a zero either way, while a part that was measured
+    /// makes the sum a measured figure rather than an unvalued one.</summary>
+    public static IskBreakdown Sum(IEnumerable<IskBreakdown> parts) =>
+        new([.. parts
+            .SelectMany(part => part.Contributions)
+            .GroupBy(contribution => contribution.Source)
+            .Select(source => new IskContribution(source.Key, source.Sum(contribution => contribution.Amount),
+                source.Min(contribution => contribution.Certainty)))]);
+
     public decimal Total => Contributions.Sum(contribution => contribution.Amount);
 
     /// <summary>Whether there is a total to show at all. Nothing but <see cref="IskCertainty.Unknown"/> parts is no

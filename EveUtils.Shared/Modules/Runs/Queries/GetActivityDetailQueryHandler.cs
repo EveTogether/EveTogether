@@ -90,10 +90,14 @@ internal sealed class GetActivityDetailQueryHandler(
         IReadOnlyDictionary<int, double> prices = await marketPrices.GetAveragePricesAsync(
             [.. RunIskFactsReader.PricedTypeIds(runs, parameters, ores)], cancellationToken);
         DateTime nowUtc = DateTime.UtcNow;
-        Dictionary<long, IskBreakdown> iskByCharacter = runs
-            .GroupBy(run => run.CharacterId)
-            .ToDictionary(character => character.Key, character => IskContributors.Breakdown(
-                [.. character.Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices, ores))], nowUtc));
+        // The summary's own split, not a second one priced here and now (ET-296): FLEET's rows are what TOTAL ISK
+        // above them is the sum of, and two valuations taken minutes apart would not add up to it. A summary built
+        // before the split was stored still has none, and is added up here until the startup rebuild reaches it.
+        IReadOnlyDictionary<long, IskBreakdown> iskByCharacter =
+            StoredIskBreakdown.ReadByCharacter(summary.IskContributionsByCharacter)
+            ?? IskContributors.BreakdownByCharacter([.. runs
+                .OrderBy(run => run.StartedAtUtc).ThenBy(run => run.Id)
+                .Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices, ores))], nowUtc);
 
         return Result<ActivityDetailDto>.Success(new ActivityDetailDto(
             summary.Id, summary.GroupCode, summary.ActivityKind, summary.SiteName, summary.SignatureGroupSnapshot,

@@ -41,6 +41,8 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     private readonly Func<ActivityOverviewRowViewModel, Task>? _retryPublish;
     private readonly ActivityOverviewRowDto _source;
     private readonly RunPublishProgress? _publishProgress;
+    private readonly string[] _otherEarnerNames;
+    private readonly string _groupNetText;
     private bool _subRunsLoaded;
 
     /// <param name="serverNameOf">A server's name as its tab shows it; the bare address when null.</param>
@@ -103,14 +105,29 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
                 : "No solar system was recorded for this activity";
 
         DurationText = Duration.ToString(@"hh\:mm\:ss");
-        // The activity's own TOTAL ISK, the one the detail screen shows — never a sum of this row's own choosing:
-        // adding bounty and loot here alone left a mission's rewards out of it (ET-256).
-        Isk = row.Isk;
-        NetIsk = row.Isk.HasFigure ? row.Isk.Total : null;
+        // What this machine's own characters made of it (ET-296), out of the summary's stored per-character split —
+        // never a sum of this row's own choosing: adding bounty and loot here alone left a mission's rewards out of
+        // it (ET-256). The group's own total, fleet mates included, is the detail screen's to show.
+        Isk = row.OwnIsk;
+        IsFlownByOwnCharacter = row.IsFlownByOwnCharacter;
+        NetIsk = row.OwnIsk.HasFigure ? row.OwnIsk.Total : null;
         HasNet = NetIsk.HasValue;
         NetText = NetIsk is { } net
-            ? (net < 0 ? string.Empty : "+") + IskFormat.Compact(net) + " ISK" + IskFormat.ExpectedPart(row.Isk)
+            ? (net < 0 ? string.Empty : "+") + IskFormat.Compact(net) + " ISK" + IskFormat.ExpectedPart(row.OwnIsk)
             : string.Empty;
+        // He flew it himself and recorded nothing on it, while the activity was valued all the same: every figure of
+        // it sits on a fleet mate's run. Measured on his own store (11 Sep 2026): five abyssal duos whose loot his
+        // mate pasted, every one of which used to read "nothing valued" — which says nobody could price it, where
+        // the truth is that it was priced and the money is someone else's.
+        IsRecordedOnFleetMate = row.IsFlownByOwnCharacter && !row.OwnIsk.HasFigure && row.Isk.HasFigure;
+        // Only a mate whose own run recorded a name (ET-212) is named: a bare character id reads worse in a money
+        // tooltip than the plain "a fleet mate's run" it falls back to.
+        _otherEarnerNames = IsRecordedOnFleetMate
+            ? [.. row.OtherEarners
+                .Where(member => !string.IsNullOrWhiteSpace(member.CharacterNameSnapshot))
+                .Select(member => CharacterNameResolver.Resolve(member.CharacterNameSnapshot, member.CharacterId, nameOf))]
+            : [];
+        _groupNetText = IskFormat.Compact(row.Isk.Total) + " ISK";
 
         // Snapshot first, then the live roster, then the bare id (ET-212, ET-247) — the exact chain the expanded
         // row already follows, so this line and that one can never name the same pilot two different ways.
@@ -161,7 +178,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         IEnumerable<ActivityRewardChipViewModel> chips = row.Rewards
             .OrderBy(reward => (int)reward.ParameterKey)
             .Select(reward => new ActivityRewardChipViewModel(reward.ParameterKey, reward.Amount));
-        if (row.Isk.Of(IskSource.HomefrontPayout) is { } homefrontPayout)
+        if (row.OwnIsk.Of(IskSource.HomefrontPayout) is { } homefrontPayout)
             chips = chips.Append(new ActivityRewardChipViewModel(RunParameterKey.FixedPayout, homefrontPayout.Amount));
         Chips = [.. chips];
     }
@@ -177,11 +194,19 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 
     public TimeSpan Duration { get; }
 
-    /// <summary>The activity's TOTAL ISK by source — what the row's figure adds up, and what its day's source bar
-    /// splits (<see cref="RunsActivitySummaryText.SourcesFor"/>).</summary>
+    /// <summary>This machine's own characters' share of the activity's TOTAL ISK, by source (ET-296) — what the row's
+    /// figure adds up, and what its day's source bar splits (<see cref="RunsActivitySummaryText.SourcesFor"/>).</summary>
     public IskBreakdown Isk { get; }
 
     public decimal? NetIsk { get; }
+
+    /// <summary>Whether any of this machine's own characters flew it — false on a row a server tab holds for a
+    /// group this pilot has no run in, and on one whose character has been taken out of the registry.</summary>
+    public bool IsFlownByOwnCharacter { get; }
+
+    /// <summary>He flew it, his own run records nothing of value, and the activity was valued all the same: the
+    /// proceeds are booked on a fleet mate's run (ET-296).</summary>
+    public bool IsRecordedOnFleetMate { get; }
 
     public string TimeText { get; }
     public string SiteText { get; }
@@ -310,8 +335,24 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 
     /// <summary>What stands where the ISK would be when nothing on the activity was valued. Never a "0 ISK": a zero
     /// here reads as a valuation that was taken and came out at nothing (ET-161 AC-4, ET-65 AC-7). Not "no loot or
-    /// bounty" any more — since ET-256 ISK also counts rewards and payouts.</summary>
-    public string NoNetText => "nothing valued";
+    /// bounty" any more — since ET-256 ISK also counts rewards and payouts. Three different silences, told apart
+    /// (ET-296): a dash where none of this pilot's own characters flew it, "on a fleet mate's run" where he flew it
+    /// but every figure of it was recorded on somebody else's run, and only otherwise the plain "nothing valued".</summary>
+    public string NoNetText =>
+        !IsFlownByOwnCharacter ? "—"
+        : IsRecordedOnFleetMate ? "on a fleet mate's run"
+        : "nothing valued";
+
+    /// <summary>The figure and, where the runs recorded a name, whose run it sits on — said on hover, since the ISK
+    /// column has no room for it. Null on a plain unvalued row, which <see cref="NoNetText"/> already says in
+    /// words.</summary>
+    public string? NoNetTooltip =>
+        !IsFlownByOwnCharacter ? "none of your characters flew this — the group total is in the detail"
+        : !IsRecordedOnFleetMate ? null
+        : _otherEarnerNames.Length == 0
+            ? $"{_groupNetText} recorded on a fleet mate's run"
+            : $"{_groupNetText} recorded on {string.Join(" and ", _otherEarnerNames)}'s "
+              + (_otherEarnerNames.Length == 1 ? "run" : "runs");
 
     public ObservableCollection<ActivityRewardChipViewModel> Chips { get; }
 
@@ -376,7 +417,8 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         && _WithoutLists(_source) == _WithoutLists(row)
         && _source.Crew.SequenceEqual(row.Crew)
         && _source.Rewards.SequenceEqual(row.Rewards)
-        && _source.ServerSyncStates.SequenceEqual(row.ServerSyncStates);
+        && _source.ServerSyncStates.SequenceEqual(row.ServerSyncStates)
+        && _source.OtherEarners.SequenceEqual(row.OtherEarners);
 
     /// <summary>Takes over from the row this one replaces on a refresh: open stays open, with its runs read again
     /// rather than left showing the figures that made the old row out of date.</summary>
@@ -393,7 +435,10 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     {
         Crew = Array.Empty<ActivityCrewMemberDto>(),
         Rewards = Array.Empty<ActivityRewardDto>(),
-        ServerSyncStates = Array.Empty<ActivityServerSyncDto>()
+        ServerSyncStates = Array.Empty<ActivityServerSyncDto>(),
+        // A list compares by reference on a record, and every read builds a new one — left in, no row would ever
+        // be held onto across a refresh (ET-222), and the whole list would be rebuilt on every tick (ET-287).
+        OtherEarners = Array.Empty<ActivityCrewMemberDto>()
     };
 
     /// <summary>TYPE, from the same catalogue every other run list reads (ET-226) — "Data Site", "Mission run", …,
