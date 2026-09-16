@@ -1,5 +1,0 @@
-- fixed: ET-293 the check box, icon/portrait, name and count inside a filter tile now stretch to the row height ColumnFlowPanel gives them — ItemsControl centres generated item containers vertically by default, which had every tile sitting at its own content height instead of filling the block
-
-- added: ET-293 RunsFilterTilesTests — all on by default means no filter at all and a group-mate activity with no own character still shows, SHOW ALL appears only once a tile is off and clears it, and toggling out the selected activity's type drops the selection and closes the drawer while an activity of a still-on type keeps its place
-
-- chore: ET-293 CHANGELOG — TYPES and CHARACTERS filter tiles above the runs list
