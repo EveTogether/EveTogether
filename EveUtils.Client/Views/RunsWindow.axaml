@@ -390,6 +390,8 @@
             </Style>
             <Style Selector="Grid.rangeline.narrow StackPanel.rangetotals">
                 <Setter Property="Grid.Row" Value="1"/>
+                <Setter Property="Grid.Column" Value="0"/>
+                <Setter Property="Grid.ColumnSpan" Value="2"/>
                 <Setter Property="HorizontalAlignment" Value="Left"/>
                 <Setter Property="Margin" Value="0,6,0,0"/>
             </Style>
@@ -530,9 +532,12 @@
                 <Setter Property="MinHeight" Value="0"/>
                 <Setter Property="MinWidth" Value="0"/>
                 <Setter Property="CornerRadius" Value="0"/>
-                <!-- ItemsControl centres its generated containers vertically by default (ET-293 gotcha): without
-                     this, every tile sat at its own content height instead of filling the row ColumnFlowPanel gave
-                     it, and the block never reached the strip's own height. -->
+                <!-- ItemsControl centres its generated containers on both axes by default (ET-293 gotcha, and its
+                     other half found by ET-302): without these two, every tile sat at its own content size —
+                     height first, and width the same way once a name of a different length was next to it — instead
+                     of filling the cell ColumnFlowPanel gave it, which is what keeps every tile in a block the same
+                     width no matter how long its own name is. -->
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
                 <Setter Property="VerticalAlignment" Value="Stretch"/>
                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                 <Setter Property="VerticalContentAlignment" Value="Stretch"/>
@@ -773,9 +778,12 @@
         <Border DockPanel.Dock="Top" Padding="14,10,14,12" BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource BorderBrush}">
             <StackPanel Spacing="10">
-                <!-- Wide, the totals sit on the line itself; narrow, on a line of their own under it. -->
-                <Grid x:Name="RangeLine" Classes="rangeline" Classes.narrow="{Binding IsNarrow}" RowDefinitions="26,Auto">
-                    <DockPanel Grid.Row="0">
+                <!-- Wide, the totals sit on the line itself, in the column left of SUMMARY/PUBLISH; narrow, on a
+                     line of their own under it, spanning both columns (ET-302: the two used to share a row with
+                     nothing keeping them apart, and a long totals line ran straight into the buttons). -->
+                <Grid x:Name="RangeLine" Classes="rangeline" Classes.narrow="{Binding IsNarrow}"
+                      ColumnDefinitions="*,Auto" RowDefinitions="26,Auto">
+                    <DockPanel Grid.Row="0" Grid.Column="0" LastChildFill="False">
                         <Button x:Name="RangePrevious" DockPanel.Dock="Left" Classes="rangenav" Content="&#x25C0;"
                                 Command="{Binding PreviousCommand}" ToolTip.Tip="{Binding PreviousTooltip}"/>
                         <TextBlock x:Name="RangeTitle" DockPanel.Dock="Left" Classes="rangetitle" Margin="10,0,0,0"
@@ -785,20 +793,20 @@
                                 Command="{Binding ClearRangeCommand}" ToolTip.Tip="Back to the whole month"/>
                         <Button x:Name="RangeNext" DockPanel.Dock="Left" Classes="rangenav" Margin="10,0,0,0"
                                 Content="&#x25B6;" Command="{Binding NextCommand}" ToolTip.Tip="{Binding NextTooltip}"/>
-                        <!-- SUMMARY (ET-294) and PUBLISH n LOCAL (RO-6): the totals end where they begin. -->
-                        <StackPanel x:Name="RangeActions" DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
-                            <Button x:Name="PublishViewButton" Classes="sumbtn" IsVisible="{Binding ShowPublishView}"
-                                    IsEnabled="{Binding !IsPublishingMany}" Content="{Binding PublishViewButtonText}"
-                                    Command="{Binding PublishViewCommand}"
-                                    ToolTip.Tip="Publish every local activity the view shows, after filters"/>
-                            <Button x:Name="SummaryToggle" Classes="sumbtn" Classes.on="{Binding IsSummaryOn}"
-                                    Content="SUMMARY" Command="{Binding ToggleSummaryCommand}"
-                                    ToolTip.Tip="The day, week or month added up, with the list's own filters"/>
-                        </StackPanel>
-                        <Panel/>
                     </DockPanel>
-                    <StackPanel x:Name="RangeTotals" Classes="rangetotals" Orientation="Horizontal"
-                                Spacing="10">
+                    <!-- SUMMARY (ET-294) and PUBLISH n LOCAL (RO-6): its own column, so the totals beside it can
+                         never grow into it — Grid gives each column its own width, a shared row never did. -->
+                    <StackPanel x:Name="RangeActions" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="PublishViewButton" Classes="sumbtn" IsVisible="{Binding ShowPublishView}"
+                                IsEnabled="{Binding !IsPublishingMany}" Content="{Binding PublishViewButtonText}"
+                                Command="{Binding PublishViewCommand}"
+                                ToolTip.Tip="Publish every local activity the view shows, after filters"/>
+                        <Button x:Name="SummaryToggle" Classes="sumbtn" Classes.on="{Binding IsSummaryOn}"
+                                Content="SUMMARY" Command="{Binding ToggleSummaryCommand}"
+                                ToolTip.Tip="The day, week or month added up, with the list's own filters"/>
+                    </StackPanel>
+                    <StackPanel x:Name="RangeTotals" Grid.Row="0" Grid.Column="0" Classes="rangetotals"
+                                Orientation="Horizontal" Spacing="10">
                         <TextBlock Classes="monthfigure" Text="{Binding RangeCountText}"/>
                         <TextBlock Classes="monthfigure sep" Text="&#x00B7;"/>
                         <TextBlock Classes="monthfigure" Text="{Binding RangeFlownText}"/>
@@ -1057,14 +1065,24 @@
                 </DataTemplate>
             </Grid.DataTemplates>
 
-            <Grid Grid.Column="0" RowDefinitions="Auto,*">
+            <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*">
                 <TextBlock x:Name="TabStatus" Grid.Row="0" Classes="hint" Margin="14,10" TextWrapping="Wrap"
                            IsVisible="{Binding SelectedTab.StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
                            Text="{Binding SelectedTab.StatusMessage}"/>
+                <!-- The day of the topmost row, pinned while its own header is scrolled away (RunsWindow.axaml.cs).
+                     Its own Auto row above the list (ET-302), not an overlay sharing the list's own row: an overlay
+                     drew over whatever the list already had at the top rather than making room for it, so the row
+                     right after the real header — the one the reader actually wants to read — sat half behind the
+                     pinned copy. An Auto row collapses to nothing while IsVisible is false, so this costs no space
+                     until there is something to pin. -->
+                <Border x:Name="StickyDay" Grid.Row="1" IsVisible="False"
+                        Background="{StaticResource DrawerSurfaceBrush}">
+                    <ContentControl x:Name="StickyDayContent"/>
+                </Border>
                 <!-- Virtualised: a month of a thousand activities realises only the rows on screen. SelectedItem is
                      bound to the screen's own selection (ET-291) and not the other way round: the list drops it
                      whenever a folded day takes the row out of Items, and that null is not an answer. -->
-                <ctl:RecyclingListBox x:Name="ActivityList" Grid.Row="1" Classes="runslist"
+                <ctl:RecyclingListBox x:Name="ActivityList" Grid.Row="2" Classes="runslist"
                                       ItemsSource="{Binding SelectedTab.Items}"
                                       SelectedItem="{Binding ListSelection, Mode=TwoWay}"
                                       SelectionMode="Single"
@@ -1075,11 +1093,6 @@
                         </ItemsPanelTemplate>
                     </ctl:RecyclingListBox.ItemsPanel>
                 </ctl:RecyclingListBox>
-                <!-- The day of the topmost row, pinned while its own header is scrolled away (RunsWindow.axaml.cs). -->
-                <Border x:Name="StickyDay" Grid.Row="1" VerticalAlignment="Top" IsVisible="False"
-                        Background="{StaticResource DrawerSurfaceBrush}">
-                    <ContentControl x:Name="StickyDayContent"/>
-                </Border>
             </Grid>
 
             <!-- The pane beside the list, on the wide layout. One view model, two hosts (ET-291): this one and the

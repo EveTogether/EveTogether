@@ -154,7 +154,12 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid ColumnDefinitions="24,*" RowDefinitions="12,Auto,10,Auto" ColumnSpacing="6" RowSpacing="3">
+    <!-- UseLayoutRounding="False" (ET-292/ET-302): device-pixel snapping on this outer grid's own "*" column can
+         hand the cell rows below a width a pixel narrower or wider than what this control's own Bounds later report,
+         which is exactly the gap between "the strip fits its 400 px column" and "the last cell lands a pixel past
+         it" — the same class of drift the cell/month/week grids below were already given this for. -->
+    <Grid ColumnDefinitions="24,*" RowDefinitions="12,Auto,10,Auto" ColumnSpacing="6" RowSpacing="3"
+          UseLayoutRounding="False">
 
         <ItemsControl x:Name="StripMonths" Grid.Row="0" Grid.Column="1" ItemsSource="{Binding MonthLabels}">
             <ItemsControl.ItemsPanel>
