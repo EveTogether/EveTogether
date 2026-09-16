@@ -39,6 +39,7 @@ public partial class RunsWindow : ChromedWindow
     private readonly Control _typeBlock;
     private readonly Control _characterBlock;
     private RunsBandLayout? _bandLayout;
+    private DayHeaderTier? _dayHeaderTier;
 
     public RunsWindow()
     {
@@ -68,6 +69,9 @@ public partial class RunsWindow : ChromedWindow
         // The band's own width, not the root's: it is what is left after the band's padding, and nothing the band
         // does to its own columns changes the width it is handed, so this cannot feed back into itself.
         _band.GetObservable(BoundsProperty).Subscribe(new WidthObserver(bounds => _ApplyBand(bounds.Width)));
+        // The list's own width, not the root's: it is what is left beside the pane (ET-304), and every realised day
+        // header — list and the pinned sticky copy alike — is handed the very same width.
+        _activityList.GetObservable(BoundsProperty).Subscribe(new WidthObserver(bounds => _ApplyDayHeaderTier(bounds.Width)));
 
         // The detail screen is a double-click, never a second single click: the first click has already selected
         // the row and, on the narrow layout, opened the drawer — a counter of presses would close it again.
@@ -177,6 +181,48 @@ public partial class RunsWindow : ChromedWindow
         Grid.SetColumn(_typeBlock, stacked ? 0 : 1);
         Grid.SetRow(_characterBlock, stacked ? 1 : 0);
         Grid.SetColumn(_characterBlock, stacked ? 1 : 2);
+    }
+
+    /// <summary>Every realised day header's totals columns for the list's own width (ET-304), read off
+    /// <see cref="RunsLayout.DayHeader"/> and applied only when it answers something different from last time — the
+    /// same dedupe <see cref="_ApplyBand"/> uses, so a resize inside one tier touches nothing. <c>Grid.ColumnDefinitions</c>
+    /// is not a styled property (the Mining Ledger's own ET-284 note), so which columns show cannot be a style —
+    /// every realised <c>DayTotals</c> Grid, in the list and the pinned sticky copy alike, is walked and set directly.</summary>
+    private void _ApplyDayHeaderTier(double width)
+    {
+        if (width <= 0)
+            return;
+
+        DayHeaderTier tier = RunsLayout.DayHeader(width);
+        if (tier == _dayHeaderTier)
+            return;
+
+        _dayHeaderTier = tier;
+        foreach (Grid totals in _root.GetVisualDescendants().OfType<Grid>().Where(grid => grid.Name == "DayTotals"))
+            _ApplyDayHeaderTier(totals, tier);
+    }
+
+    /// <summary>Flown time first, then the source bar — the two columns <see cref="RunsLayout.DayHeader"/> gives up
+    /// narrowest first. The count and the ISK figure, and the weekday/date star column beside them, never move.</summary>
+    private static void _ApplyDayHeaderTier(Grid totals, DayHeaderTier tier)
+    {
+        bool showFlown = tier == DayHeaderTier.Full;
+        bool showBar = tier != DayHeaderTier.NoBar;
+        totals.ColumnDefinitions[3] = new ColumnDefinition(showFlown ? RunsLayout.DayFlownWidth : 0, GridUnitType.Pixel);
+        totals.ColumnDefinitions[4] = new ColumnDefinition(showBar ? RunsLayout.DayBarWidth : 0, GridUnitType.Pixel);
+        if (totals.Children.Count > 3 && totals.Children[3] is Control flownText)
+            flownText.IsVisible = showFlown;
+        if (totals.Children.Count > 4 && totals.Children[4] is Control bar)
+            bar.IsVisible = showBar;
+    }
+
+    /// <summary>A day header freshly realised by the virtualised list, or recycled for a different day — either way
+    /// it starts on whatever tier the list's width last resolved to, since nothing here depends on the data
+    /// <see cref="RunsDayViewModel"/> carries.</summary>
+    private void _OnDayTotalsLoaded(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Grid totals && _dayHeaderTier is { } tier)
+            _ApplyDayHeaderTier(totals, tier);
     }
 
     private void _OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

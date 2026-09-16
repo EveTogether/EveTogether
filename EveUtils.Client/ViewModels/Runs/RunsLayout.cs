@@ -79,6 +79,77 @@ public static class RunsLayout
 
         return new RunsBandLayout(RunsBandKind.Stacked, width, CompactTiles: true);
     }
+
+    /// <summary>The day header's own left margin (14 px each side) plus its caret column (ET-304).</summary>
+    public const double DayLeadIn = 14 * 2 + 18;
+
+    /// <summary>The gap between every column of the day header's totals (its own ColumnSpacing).</summary>
+    public const double DayColumnSpacing = 8;
+
+    /// <summary>The weekday and date together with a comfortable reading width — measured headless, "WEDNESDAY" (79)
+    /// plus its 8 px gap plus "16 SEPTEMBER" (95), the longest weekday and the longest date this app ever shows,
+    /// rounded up. Below this the pair keeps its own place (it is the Grid's star column, never a fixed one) but
+    /// starts trimming with a tooltip, same as a filter tile's name.</summary>
+    public const double DayLeadWidth = 190;
+
+    /// <summary>The activity count, right-aligned — measured headless, "185 activities" (85 px) rounded up, the
+    /// widest figure Jithran's own ET-303 screenshot showed.</summary>
+    public const double DayCountWidth = 88;
+
+    /// <summary>The flown time, right-aligned — measured headless, "27:46:11 flown" (85 px) rounded up, the same
+    /// figure ET-303 measured. The first column to give way when the header is narrow: redundant with the count
+    /// for "did I do more that day", and the only one of the two Jithran did not ask to keep unconditionally.</summary>
+    public const double DayFlownWidth = 88;
+
+    /// <summary>The source bar beside the ISK figure — unchanged from before ET-304, its own column now rather than
+    /// an overlay. The second column to give way, once the flown time alone was not enough room.</summary>
+    public const double DayBarWidth = 48;
+
+    /// <summary>The net ISK figure, right-aligned — measured headless, "-999.99B ISK net" (97 px) rounded up, wider
+    /// than any signed compact figure this app can produce. Never given up: it is what Jithran compares days by.
+    /// "nothing recorded to value" (152 px) is wider still but rare enough that it trims with a tooltip instead of
+    /// setting every day's column to a width the common case never needs.</summary>
+    public const double DayIskWidth = 100;
+
+    /// <summary>PUBLISH n LOCAL, in its own column at the far right — reserved at this width whether the button
+    /// shows or not (ET-304 AC-1: a day without it must not let the column beside it grow into where it would sit).
+    /// The button's own 90 px MinWidth plus the 14 px the header already keeps clear at its right edge.</summary>
+    public const double DayLocalWidth = 104;
+
+    /// <summary>
+    /// The day header's totals, widest first (ET-304): every column but the weekday/date is a fixed width shared by
+    /// every day, so "1 activity" and "46 activities" still start at the same x. Narrower than
+    /// <see cref="DayLeadIn"/> plus every column plus <see cref="DayLeadWidth"/> drops the flown time first, then
+    /// the source bar — the weekday and date keep their place regardless, a star column that only ever loses reading
+    /// comfort, never overlaps anything.
+    /// </summary>
+    public static DayHeaderTier DayHeader(double width)
+    {
+        double fixedWidth = DayLeadIn + DayColumnSpacing + DayCountWidth + DayColumnSpacing + DayFlownWidth
+            + DayColumnSpacing + DayBarWidth + DayColumnSpacing + DayIskWidth + DayLocalWidth;
+        if (width >= fixedWidth + DayLeadWidth)
+            return DayHeaderTier.Full;
+
+        fixedWidth -= DayFlownWidth + DayColumnSpacing;
+        if (width >= fixedWidth + DayLeadWidth)
+            return DayHeaderTier.NoFlown;
+
+        return DayHeaderTier.NoBar;
+    }
+}
+
+/// <summary>Which of the day header's totals columns show, widest first (ET-304).</summary>
+public enum DayHeaderTier
+{
+    /// <summary>Count, flown time, the source bar and the ISK figure all show.</summary>
+    Full,
+
+    /// <summary>The flown time is gone; the bar and the ISK figure keep their place.</summary>
+    NoFlown,
+
+    /// <summary>Flown time and the source bar are both gone; only the count and the ISK figure remain beside the
+    /// weekday and date.</summary>
+    NoBar
 }
 
 public enum RunsBandKind

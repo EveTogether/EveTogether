@@ -133,6 +133,11 @@
                 <Setter Property="FontSize" Value="10"/>
                 <Setter Property="LetterSpacing" Value="1.8"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
+                <!-- ET-304: the pair sits in the header's star column, so only this one ever gives ground to the
+                     fixed totals columns beside it — trimmed with a tooltip (set inline in the DataTemplate) rather
+                     than a truncation the reader is left to guess at, for the narrowest width the weekday alone
+                     still leaves it. -->
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
             </Style>
             <Style Selector="TextBlock.daysum">
                 <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
@@ -936,37 +941,60 @@
                 <ColumnDefinition Width="0"/>
             </Grid.ColumnDefinitions>
             <Grid.DataTemplates>
-                <!-- A day: caret, the weekday bright and the date dim, and its summary — still there while it is
-                     folded (ET-199 AC-4). A click anywhere on it folds or unfolds it. -->
+                <!-- A day: caret, the weekday bright and the date dim, and its totals in the same columns as every
+                     other day header (ET-304) — count, flown time, the source bar and the ISK figure each their own
+                     fixed width, so the figures line up down the list and a reader can compare days at a glance
+                     rather than reading each one's own right-aligned sentence. Still there while it is folded
+                     (ET-199 AC-4). A click anywhere on it folds or unfolds it. -->
                 <DataTemplate DataType="vr:RunsDayViewModel">
-                    <!-- The publish button is a sibling of the fold toggle, not nested inside it (same reason the
-                         activity row's caret sits over it rather than in it): a Button-in-Button double-fires. -->
-                    <Grid ColumnDefinitions="*,Auto">
+                    <!-- The publish column is a sibling of the fold toggle, not nested inside it (same reason the
+                         activity row's caret sits over it rather than in it): a Button-in-Button double-fires. Its
+                         own fixed column, 104 px whether the button shows or not (ET-304 AC-1) — Auto let it collapse
+                         to nothing on a day with no local activities and grow the moment one appeared, which is what
+                         let the totals beside it run into the ISK figure without warning. -->
+                    <Grid ColumnDefinitions="*,104">
                         <Button Grid.Column="0" Classes="dayband" Command="{Binding ToggleCommand}"
                                 ToolTip.Tip="Show or hide this day's activities">
                             <Border Classes="dayhead">
-                                <Grid Margin="14,0" ColumnDefinitions="18,*,24" ColumnSpacing="8">
+                                <!-- Explicit ColumnDefinition elements, not the shorthand string (ET-293's Mining
+                                     Ledger note: it is not a styled property) — DayTotalsLoaded needs to reach the
+                                     flown-time and source-bar columns by index and zero them out under
+                                     RunsLayout.DayHeader's narrower tiers. -->
+                                <Grid x:Name="DayTotals" Margin="14,0" ColumnSpacing="8" Loaded="_OnDayTotalsLoaded">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="18"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="88"/>
+                                        <ColumnDefinition Width="88"/>
+                                        <ColumnDefinition Width="48"/>
+                                        <ColumnDefinition Width="100"/>
+                                    </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Classes="caret" Classes.expanded="{Binding IsExpanded}"
                                                Text="&#x25B6;"/>
+                                    <!-- A DockPanel, not a StackPanel: the star column's own width only constrains a
+                                         fill child's measure, which is what lets daydate's TextTrimming actually
+                                         activate rather than overflow past the column into the totals beside it. -->
                                     <DockPanel Grid.Column="1">
                                         <TextBlock DockPanel.Dock="Left" Classes="dayweek" Text="{Binding WeekdayText}"/>
-                                        <TextBlock DockPanel.Dock="Left" Classes="daydate" Margin="8,0,12,0"
+                                        <TextBlock Classes="daydate" Margin="8,0,0,0" ToolTip.Tip="{Binding DateText}"
                                                    Text="{Binding DateText}"/>
-                                        <TextBlock DockPanel.Dock="Right" Classes="daysum" Margin="8,0,0,0" MinWidth="60"
-                                                   Text="{Binding NetText}"/>
-                                        <ctl:IskSourceBar DockPanel.Dock="Right" Width="48" Height="6" Margin="8,0,0,0"
-                                                          VerticalAlignment="Center" Isk="{Binding Isk}"/>
-                                        <TextBlock Classes="daysum" Text="{Binding CountAndFlownText}"/>
                                     </DockPanel>
+                                    <TextBlock Grid.Column="2" Classes="daysum" Text="{Binding CountText}"/>
+                                    <TextBlock Grid.Column="3" Classes="daysum" Text="{Binding FlownText}"/>
+                                    <ctl:IskSourceBar Grid.Column="4" Width="48" Height="6" VerticalAlignment="Center"
+                                                      Isk="{Binding Isk}"/>
+                                    <TextBlock Grid.Column="5" Classes="daysum" ToolTip.Tip="{Binding NetText}"
+                                               Text="{Binding NetText}"/>
                                 </Grid>
                             </Border>
                         </Button>
                         <!-- PUBLISH this day's local activities (RO-6): only on Local, with a coupled server and
                              n > 0 — never on a server tab, whose days hold nothing local. -->
                         <Border Grid.Column="1" Classes="dayhead" Padding="0,0,14,0">
-                            <Button Classes="daypublish" MinWidth="90" VerticalAlignment="Center"
-                                    IsVisible="{Binding ShowPublishLocal}" IsEnabled="{Binding CanPublishLocal}"
-                                    Content="{Binding PublishLocalButtonText}" Command="{Binding PublishLocalCommand}"
+                            <Button Classes="daypublish" MinWidth="90" HorizontalAlignment="Right"
+                                    VerticalAlignment="Center" IsVisible="{Binding ShowPublishLocal}"
+                                    IsEnabled="{Binding CanPublishLocal}" Content="{Binding PublishLocalButtonText}"
+                                    Command="{Binding PublishLocalCommand}"
                                     ToolTip.Tip="Publish this day's local activities"/>
                         </Border>
                     </Grid>
