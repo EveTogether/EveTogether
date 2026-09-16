@@ -244,7 +244,16 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     partial void OnListSelectionChanged(object? value)
     {
         if (value is ActivityOverviewRowViewModel row)
+        {
             Select(row);
+            return;
+        }
+
+        // A ListBox whose selected item leaves its source does not go empty: it takes the neighbour at the same
+        // index, which after folding a day is that day's own header. Only an activity row is selectable on this
+        // screen — a day header and a pilot's run are not — so anything else is handed straight back.
+        if (value is not null)
+            ListSelection = null;
     }
 
     partial void OnIsWideChanged(bool value)
@@ -394,9 +403,11 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         ListSelection = SelectedRow is { } row && SelectedTab?.Items.Contains(row) == true ? row : null;
 
     /// <summary>Every rebuild of a tab's flat sequence is a day folding or unfolding, or a read landing: whether the
-    /// list can show the selected row may have changed with it.</summary>
+    /// list can show the selected row may have changed with it. Once the rebuild is whole, not per change inside it —
+    /// a <c>ListBox</c> half way through a reconcile is still moving its own <c>SelectedItem</c> onto whatever sits
+    /// at the index the selected row left, and the last word has to be this screen's.</summary>
     private void _WatchItems(RunsTabViewModel tab) =>
-        tab.Items.CollectionChanged += (_, _) => _SyncListSelection();
+        tab.ItemsRebuilt += _ => _SyncListSelection();
 
     public void RefreshModule() => _ = LoadAsync();
 
