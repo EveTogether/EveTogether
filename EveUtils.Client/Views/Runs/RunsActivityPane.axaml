@@ -134,7 +134,7 @@
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
                         <Button x:Name="PanePublish" Classes="accent rowaction"
-                                IsVisible="{Binding Row.CanPublish}"
+                                IsVisible="{Binding Row.CanPublishNow}"
                                 Command="{Binding Row.PublishCommand}"
                                 Content="{Binding PublishText}"
                                 ToolTip.Tip="Publish this activity to a coupled server"/>

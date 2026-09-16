@@ -344,6 +344,11 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     /// the same rule the fit browser follows rather than offering an action with nowhere to go.</summary>
     public bool CanPublish => _publish is not null;
 
+    /// <summary>Whether the pane offers PUBLISH (ET-291): a server to send to, and something to send. An activity
+    /// the server already holds unchanged has nothing — but one corrected since it went there
+    /// (<see cref="IsBehindServer"/>) has, and is offered it again.</summary>
+    public bool CanPublishNow => CanPublish && !IsOnServer;
+
     [RelayCommand]
     private async Task PublishAsync()
     {
