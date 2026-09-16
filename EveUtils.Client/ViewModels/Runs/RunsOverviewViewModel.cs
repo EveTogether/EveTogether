@@ -27,6 +27,7 @@ using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
@@ -110,6 +111,19 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// from, so a week reaching into the month before is still counted whole.</summary>
     private IReadOnlyList<RunsActivityFacts> _loadedFacts = [];
 
+    /// <summary>Every row the last read built for the month, before a tab's own server rule or the TYPES/CHARACTERS
+    /// filter (ET-293) narrows it — what a tile toggle re-filters from, so hiding a type is as cheap as folding a day
+    /// and never a read of its own.</summary>
+    private IReadOnlyList<ActivityOverviewRowViewModel> _loadedRows = [];
+
+    /// <summary>Types and characters a tile turned off. Empty means every tile is on, which this screen treats as no
+    /// filter at all rather than "everything present is selected" — the difference matters for CHARACTERS: with
+    /// nothing excluded, a group-mate's activity with none of this machine's own characters on it still shows (Jithran,
+    /// 15 Sep); the moment one character goes off, only a row with an own, still-on character passes.</summary>
+    private readonly HashSet<RunTypeId> _excludedTypes = [];
+
+    private readonly HashSet<long> _excludedCharacters = [];
+
     private DateOnly _loadedFrom = DateOnly.MaxValue;
     private DateOnly _loadedTo = DateOnly.MinValue;
     private DateOnly? _firstTracked;
@@ -121,6 +135,12 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     // ══ The range line and the activity strip (ET-292) ══════════════════════════════════════════════════════════
 
     public RunsActivityStripViewModel Strip { get; }
+
+    // ══ TYPES and CHARACTERS filters (ET-293) ═══════════════════════════════════════════════════════════════════
+
+    public RunFilterBlockViewModel TypeFilter { get; }
+
+    public RunFilterBlockViewModel CharacterFilter { get; }
 
     /// <summary>The month in view, or a day or week picked in the strip. Picking never filters the list: the list is
     /// always the month, and the pick is what the range line totals and the strip outlines.</summary>
@@ -171,6 +191,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             .ToDictionary(group => group.Key, group => group.First().Name);
         Strip = new RunsActivityStripViewModel(
             day => _ = ToggleDayAsync(day), week => _ = ToggleWeekAsync(week), month => _ = _GoToMonthAsync(month));
+        TypeFilter = new RunFilterBlockViewModel("TYPES", () => { _excludedTypes.Clear(); _AfterFilterChanged(); });
+        CharacterFilter = new RunFilterBlockViewModel("CHARACTERS", () => { _excludedCharacters.Clear(); _AfterFilterChanged(); });
         // The week start is live (ET-297): the strip re-lays itself on a change, with no read unless the grid now
         // reaches further back than the last one did.
         _weekStart = services.GetService<IWeekStartService>();
@@ -179,6 +201,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         SelectedTab = LocalTab;
         Pane = new RunsActivityPaneViewModel(_ReadPaneDetailAsync, _PublishTargetName, paneReadDelay);
         _RefreshRange();
+        _RefreshFilterTiles();
         _WatchItems(LocalTab);
 
         // A lane per local character, running or not. Each asks GetRunningRunsQuery (ET-203) which run is running for
@@ -329,7 +352,12 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         _SettleSelection();
         // The constructor sets the first tab before the strip and the pane exist.
         if (Pane is not null)
+        {
             _RefreshRange();
+            // Every tab keeps its own filtered Days already (see _ApplyFiltersToTabs); only the tile counts and the
+            // set of types this tab has to offer are tab-scoped and need to be drawn again.
+            _RefreshFilterTiles();
+        }
     }
 
     /// <summary>The width the module content was handed. One place decides what "wide" means (ET-291).</summary>
@@ -601,21 +629,14 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
                 subRunReads.Add(row.ContinueFromAsync(previous));
         }
 
-        ActivityOverviewRowViewModel[] rows = [.. read.Rows.Select(pair => pair.Row)];
-        foreach (RunsTabViewModel tab in Tabs)
-        {
-            // Local holds every activity; a server tab the ones whose runs carry that server's address — including a
-            // group-mate's run, which the sync merged into the local database as its own row under their character id.
-            // A run someone else flew SOLO on that server is not here, and that is the server's own rule:
-            // ServerRunSyncRepository.ListChangedAsync hands a run only to a character who holds a run in its group.
-            tab.Show(tab.ServerAddress is { } address ? [.. rows.Where(row => row.IsPublishedTo(address))] : rows);
-            tab.StatusMessage = tab.Days.Count > 0 ? null : _EmptyMessageFor(tab);
-        }
+        _loadedRows = [.. read.Rows.Select(pair => pair.Row)];
+        _ApplyFiltersToTabs();
 
         _loadedFacts = read.Facts;
         _loadedFrom = request.ReadFrom;
         _loadedTo = request.ReadTo;
         _firstTracked = read.FirstTracked;
+        _RefreshFilterTiles();
 
         // The selected activity may have been replaced by an equal instance, or have left this month altogether.
         ActivityOverviewRowViewModel? selectedBefore = SelectedRow;
@@ -678,7 +699,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         DateOnly? firstTracked = firstStart is { IsSuccess: true, Value: { } firstUtc }
             ? DateOnly.FromDateTime(firstUtc.ToLocalTime())
             : null;
-        RunsActivityFacts[] facts = [.. overview.Value.Select(RunsActivityFacts.From)];
+        RunsActivityFacts[] facts = [.. overview.Value.Select(dto => RunsActivityFacts.From(dto, _facts))];
         ActivityOverviewRowDto[] monthRows = [.. overview.Value
             .Where(dto => dto.StartedAtUtc >= monthFromUtc && dto.StartedAtUtc < monthToUtc)];
 
@@ -1183,6 +1204,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             ? new Dictionary<DateOnly, IReadOnlyList<RunsActivityFacts>>()
             : _loadedFacts
                 .Where(tab.Holds)
+                .Where(_PassesFilters)
                 .GroupBy(activity => activity.Day)
                 .ToDictionary(day => day.Key, day => (IReadOnlyList<RunsActivityFacts>)[.. day]);
 
@@ -1224,6 +1246,164 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         RangeNetText = RunsActivitySummaryText.NetFor(figures);
         RangeIsk = RunsActivitySummaryText.SourcesFor(figures);
         Pane.ShowMonth(RangeCountText, RangeNetText);
+    }
+
+    // ── TYPES and CHARACTERS filters (ET-293) ────────────────────────────────────────────────────────────────────
+
+    private bool _PassesTypeFilter(RunTypeId typeId) => _excludedTypes.Count == 0 || !_excludedTypes.Contains(typeId);
+
+    /// <summary>Empty excluded set: every row passes, including one with no own character on it at all — a group-mate's
+    /// activity on a server tab, say. The moment one tile is off, only a row carrying a still-on own character does
+    /// (Jithran, 15 Sep): a crew id this machine does not own never counts towards "on" on its own.</summary>
+    private bool _PassesCharacterFilter(IReadOnlyList<long> crewCharacterIds)
+    {
+        if (_excludedCharacters.Count == 0)
+            return true;
+
+        foreach (long characterId in crewCharacterIds)
+            if (_namesById.ContainsKey(characterId) && !_excludedCharacters.Contains(characterId))
+                return true;
+
+        return false;
+    }
+
+    private bool _PassesFilters(ActivityOverviewRowViewModel row) =>
+        _PassesTypeFilter(row.TypeId) && _PassesCharacterFilter(row.CrewCharacterIds);
+
+    private bool _PassesFilters(RunsActivityFacts facts) =>
+        _PassesTypeFilter(facts.TypeId) && _PassesCharacterFilter(facts.CrewCharacterIds);
+
+    /// <summary>Every tab's days, rebuilt from <see cref="_loadedRows"/> with the TYPES/CHARACTERS filter applied —
+    /// never a read of its own, so a tile toggle is as cheap as folding a day (ET-287).</summary>
+    private void _ApplyFiltersToTabs()
+    {
+        foreach (RunsTabViewModel tab in Tabs)
+        {
+            // Local holds every activity; a server tab the ones whose runs carry that server's address — including a
+            // group-mate's run, which the sync merged into the local database as its own row under their character id.
+            // A run someone else flew SOLO on that server is not here, and that is the server's own rule:
+            // ServerRunSyncRepository.ListChangedAsync hands a run only to a character who holds a run in its group.
+            ActivityOverviewRowViewModel[] tabRows = [.. (tab.ServerAddress is { } address
+                ? _loadedRows.Where(row => row.IsPublishedTo(address))
+                : _loadedRows)];
+            tab.Show([.. tabRows.Where(_PassesFilters)]);
+            tab.StatusMessage = tab.Days.Count > 0
+                ? null
+                : tabRows.Length > 0 ? "No activity matches the current filters." : _EmptyMessageFor(tab);
+        }
+    }
+
+    /// <summary>A tile toggled, soloed, or SHOW ALL: the tabs, the selection, the range line, the strip and the tiles
+    /// themselves all follow, without reading anything again.</summary>
+    private void _AfterFilterChanged()
+    {
+        _ApplyFiltersToTabs();
+        _SettleSelection();
+        _RefreshRange();
+        _RefreshFilterTiles();
+    }
+
+    private void _ToggleType(object key)
+    {
+        var typeId = (RunTypeId)key;
+        if (!_excludedTypes.Remove(typeId))
+            _excludedTypes.Add(typeId);
+        _AfterFilterChanged();
+    }
+
+    private void _SoloType(object key)
+    {
+        var typeId = (RunTypeId)key;
+        _excludedTypes.Clear();
+        _excludedTypes.UnionWith(TypeFilter.Tiles.Select(tile => (RunTypeId)tile.Key).Where(other => other != typeId));
+        _AfterFilterChanged();
+    }
+
+    private void _ToggleCharacter(object key)
+    {
+        var characterId = (long)key;
+        if (!_excludedCharacters.Remove(characterId))
+            _excludedCharacters.Add(characterId);
+        _AfterFilterChanged();
+    }
+
+    private void _SoloCharacter(object key)
+    {
+        var characterId = (long)key;
+        _excludedCharacters.Clear();
+        _excludedCharacters.UnionWith(_namesById.Keys.Where(other => other != characterId));
+        _AfterFilterChanged();
+    }
+
+    /// <summary>The tiles of both blocks, drawn again from <see cref="_loadedRows"/> for the selected tab — never a
+    /// read. Reconciled by <see cref="RunFilterTileViewModel.Key"/> rather than rebuilt (ET-287): a live refresh must
+    /// not drop a hovered or focused tile just because the counts under it moved.</summary>
+    private void _RefreshFilterTiles()
+    {
+        RunsTabViewModel? tab = SelectedTab;
+        ActivityOverviewRowViewModel[] tabRows = tab is null
+            ? []
+            : [.. (tab.ServerAddress is { } address
+                ? _loadedRows.Where(row => row.IsPublishedTo(address))
+                : _loadedRows)];
+
+        _ShowTypeTiles(tabRows);
+        _ShowCharacterTiles(tabRows);
+    }
+
+    /// <summary>Every <see cref="RunTypeId"/> this tab's rows carry, in catalogue order — a count of 0 never happens
+    /// here, unlike the mockup's own note about it: a type with nothing in this tab gets no tile at all rather than
+    /// one reading zero (§RO-4: "types die in het geladen bereik voorkomen"). Counted against the CHARACTERS filter,
+    /// never against its own — turning a type off must not also erase every other type's own count.</summary>
+    private void _ShowTypeTiles(IReadOnlyList<ActivityOverviewRowViewModel> tabRows)
+    {
+        ActivityOverviewRowViewModel[] scoped = [.. tabRows.Where(row => _PassesCharacterFilter(row.CrewCharacterIds))];
+        Dictionary<RunTypeId, int> counts = scoped.GroupBy(row => row.TypeId).ToDictionary(group => group.Key, group => group.Count());
+        List<RunTypeId> order = [.. RunTypeCatalogue.All.Select(definition => definition.Id).Distinct()
+            .Where(typeId => tabRows.Any(row => row.TypeId == typeId))];
+
+        Dictionary<object, RunFilterTileViewModel> shown = TypeFilter.Tiles.ToDictionary(tile => tile.Key);
+        List<RunFilterTileViewModel> tiles = [];
+        foreach (RunTypeId typeId in order)
+        {
+            RunTypeDefinition definition = RunTypeCatalogue.For(typeId);
+            RunFilterTileViewModel tile = shown.TryGetValue(typeId, out RunFilterTileViewModel? existing)
+                ? existing
+                : new RunFilterTileViewModel(typeId, definition.Name, definition.Icon, null, _ToggleType, _SoloType);
+            tile.Count = counts.GetValueOrDefault(typeId);
+            tile.IsOn = !_excludedTypes.Contains(typeId);
+            tiles.Add(tile);
+        }
+
+        TypeFilter.Tiles.ReconcileTo(tiles);
+        _ShowSummary(TypeFilter, tiles);
+    }
+
+    /// <summary>This machine's own characters, by name — counted against the TYPES filter, never its own, for the
+    /// same reason <see cref="_ShowTypeTiles"/> counts against CHARACTERS.</summary>
+    private void _ShowCharacterTiles(IReadOnlyList<ActivityOverviewRowViewModel> tabRows)
+    {
+        ActivityOverviewRowViewModel[] scoped = [.. tabRows.Where(row => _PassesTypeFilter(row.TypeId))];
+        Dictionary<object, RunFilterTileViewModel> shown = CharacterFilter.Tiles.ToDictionary(tile => tile.Key);
+        List<RunFilterTileViewModel> tiles = [];
+        foreach ((long characterId, string name) in _namesById.OrderBy(pair => pair.Value, StringComparer.OrdinalIgnoreCase))
+        {
+            RunFilterTileViewModel tile = shown.TryGetValue(characterId, out RunFilterTileViewModel? existing)
+                ? existing
+                : new RunFilterTileViewModel(characterId, name, null, _FaceOf(characterId, name), _ToggleCharacter, _SoloCharacter);
+            tile.Count = scoped.Count(row => row.CrewCharacterIds.Contains(characterId));
+            tile.IsOn = !_excludedCharacters.Contains(characterId);
+            tiles.Add(tile);
+        }
+
+        CharacterFilter.Tiles.ReconcileTo(tiles);
+        _ShowSummary(CharacterFilter, tiles);
+    }
+
+    private static void _ShowSummary(RunFilterBlockViewModel block, IReadOnlyList<RunFilterTileViewModel> tiles)
+    {
+        int on = tiles.Count(tile => tile.IsOn);
+        block.SummaryText = on < tiles.Count ? $"{on} of {tiles.Count}" : null;
     }
 
     private static DateTime _MonthStart(DateTime local) => new(local.Year, local.Month, 1, 0, 0, 0, DateTimeKind.Local);
