@@ -110,6 +110,7 @@ public static class ClientServices
             new EsiImplantImporter(sp.GetRequiredService<IEsiClient>(), sp.GetRequiredService<ICharacterImplantRepository>())); // implants import
         services.AddSingleton(TimeProvider.System); // injectable clock
         services.AddSingleton<IThemeService, ThemeService>(); // runtime faction theming (live swap + persistence)
+        services.AddSingleton<Calendar.IWeekStartService, Calendar.WeekStartService>(); // week-start setting (live swap + persistence)
         // Public corp/alliance lookups go through ICharacterInfoService + the shared metered IEsiAffiliationResolver.
         // EsiExternalCharacterSource + ExternalCharacterLookup carry lifetime markers → auto-registered.
         // IExternalCharacterCache/EfExternalCharacterCache now live in Shared (Modules/Fleet/Repositories) and

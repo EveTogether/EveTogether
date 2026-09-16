@@ -86,6 +86,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private readonly EsiTokenStatusTracker? _tokenStatus;
     private readonly ICharacterPortraitProvider? _portraits;
     private readonly IThemeService? _theme;
+    private readonly Calendar.IWeekStartService? _weekStart;
     private readonly IDialogService? _dialogs;
     private readonly IEsiAvailabilityState? _availability;
     private readonly IEsiScopeRegistry? _scopeRegistry;
@@ -468,6 +469,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         // metered ESI pipeline. Seed each rebuilt row from the cache (RefreshCharactersAsync) and follow changes.
         _portraits = services.GetRequiredService<ICharacterPortraitProvider>();
         _theme = services.GetRequiredService<IThemeService>();
+        _weekStart = services.GetRequiredService<Calendar.IWeekStartService>();
         _characterInfo = services.GetRequiredService<ICharacterInfoService>();
         _characterInfo.AffiliationChanged += (characterId, info) =>
             Avalonia.Threading.Dispatcher.UIThread.Post(() => _ApplyAffiliation(characterId, info));
@@ -1167,7 +1169,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             shares.IsShared(MetricKind.Location), shares.IsShared(MetricKind.Bounty), shares.IsShared(MetricKind.Dps),
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
             localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow,
-            autoPublishFleetRuns, shares.IsShared(MetricKind.Loot), shares.IsShared(MetricKind.MiningYield), autoStartMissions, autoStartSites);
+            autoPublishFleetRuns, shares.IsShared(MetricKind.Loot), shares.IsShared(MetricKind.MiningYield), autoStartMissions, autoStartSites,
+            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault());
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,
@@ -1199,6 +1202,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
         // Apply + persist the chosen faction theme: re-tints the whole surface live.
         _theme?.Apply(result.Faction);
+
+        // Apply + persist the chosen week start live (no visible effect yet — RO-3/ET-292 is the first consumer).
+        _weekStart?.Apply(result.WeekStartsOn);
 
         using (var scope = _services.CreateScope())
         {

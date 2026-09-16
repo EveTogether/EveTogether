@@ -40,6 +40,9 @@ public partial class App : Application
             // apply the persisted faction theme (default Gallente is already merged in App.axaml).
             _ = Program.Services.GetRequiredService<Theming.IThemeService>().InitializeAsync();
 
+            // apply the persisted week-start setting (default follows the system culture).
+            _ = Program.Services.GetRequiredService<Calendar.IWeekStartService>().InitializeAsync();
+
             // Keyboard shortcuts (ET-209): reads any recorded overrides before the window can receive its first
             // key press.
             _ = Program.Services.GetRequiredService<Input.KeyboardShortcutRegistry>().InitializeAsync();
