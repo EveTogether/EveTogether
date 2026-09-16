@@ -124,7 +124,7 @@ public sealed class RunsVisualCorrectionsTests
 
         var rangeTitle = _Named<TextBlock>(presented, "RangeTitle");
         var rangeActions = _Named<StackPanel>(presented, "RangeActions");
-        var rangeTotals = _Named<StackPanel>(presented, "RangeTotals");
+        var rangeTotals = _Named<StackPanel>(presented, "RangeFigures");
         var rangeNet = _Named<TextBlock>(presented, "RangeNet");
 
         Rect titleRect = _Rect(presented, rangeTitle);

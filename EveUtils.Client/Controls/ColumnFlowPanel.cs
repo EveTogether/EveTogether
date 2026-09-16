@@ -104,7 +104,9 @@ public sealed class ColumnFlowPanel : Panel
         int columns = _ColumnsFor(finalSize.Width, widest);
         int rows = _RowsFor(columns);
         double scale = LayoutHelper.GetLayoutScale(this);
-        double rowHeight = Math.Max(MinRowHeight, (finalSize.Height - (rows - 1) * RowSpacing) / rows);
+        // Rows by their snapped edges, like the columns (ET-303): a fractional row height added up row by row put the
+        // last tile's bottom a pixel past the block it fills.
+        double height = Math.Max(finalSize.Height, rows * MinRowHeight + (rows - 1) * RowSpacing);
 
         for (int index = 0; index < Children.Count; index++)
         {
@@ -112,7 +114,9 @@ public sealed class ColumnFlowPanel : Panel
             int row = index % rows;
             double x = FillGridGeometry.Edge(column, columns, finalSize.Width, 1, ColumnSpacing, UseLayoutRounding, scale);
             double width = FillGridGeometry.ColumnWidth(column, columns, finalSize.Width, 1, ColumnSpacing, UseLayoutRounding, scale);
-            Children[index].Arrange(new Rect(x, row * (rowHeight + RowSpacing), width, rowHeight));
+            double y = FillGridGeometry.Edge(row, rows, height, 1, RowSpacing, UseLayoutRounding, scale);
+            double rowHeight = FillGridGeometry.ColumnWidth(row, rows, height, 1, RowSpacing, UseLayoutRounding, scale);
+            Children[index].Arrange(new Rect(x, y, width, rowHeight));
         }
 
         return finalSize;
