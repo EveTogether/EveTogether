@@ -13,6 +13,15 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Added: an activity strip over the runs list — twelve weeks of evenings at a glance.** Where the month bar used to
+  be, each day of the last twelve weeks is a small cell, shaded by the ISK it earned (or, with the switch under it, by
+  how many activities it had), with today outlined, days before your first saved run hatched, and a bar of week
+  segments beneath. Click a day and it unfolds in the list and scrolls to the top, and the line above the strip shows
+  that day's activities, time flown and ISK; click a week segment for the whole week. The list itself still shows the
+  whole month — nothing is filtered out, and the days you folded or unfolded stay that way. Click the same day again,
+  or ✕, to go back to the month. ◀ and ▶ step a month, or with a day or week picked, to the previous or next one that
+  has runs. The weeks follow your "Week starts on" setting and re-arrange the moment you change it.
+
 - **Added: the run you click now reads out beside the list, instead of taking over the screen.** On a wide runs
   window it opens in a panel down the right-hand side: the site and when and where you flew it, the ISK written out
   in full and split by where it came from, every pilot on it with their own time and their own share, the enemy count
@@ -26,8 +35,7 @@ taken from the matching `## vX.Y.Z` section below.
   NOTIFICATIONS. It defaults to whatever your Windows/system region already uses (Monday for a Dutch-region
   computer) — leave it alone and nothing changes. Choosing the other one and saving takes effect at once, no
   restart; choosing your region's own default back removes the override, so a later region change is still
-  followed. It has no visible effect yet — the runs overview's activity strip and week summary, which will read it,
-  are a follow-up.
+  followed. The runs overview's activity strip follows it.
 - **Fixed: the totals on the runs overview are your own earnings, not the whole fleet's.** Fly a homefront with five
   pilots of whom three are your own characters and the row, the day, the month and "ISK today" counted all five —
   everything the other two brought in landed in your total the moment their client published it. They now count what
