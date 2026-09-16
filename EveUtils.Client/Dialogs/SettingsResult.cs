@@ -24,4 +24,5 @@ public sealed record SettingsResult(
     bool ShareLoot = false,
     bool ShareMining = false,
     bool AutoStartMissions = true,
-    bool AutoStartSites = true);
+    bool AutoStartSites = true,
+    DayOfWeek WeekStartsOn = DayOfWeek.Monday);

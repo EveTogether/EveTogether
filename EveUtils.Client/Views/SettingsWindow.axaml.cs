@@ -50,6 +50,8 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private CheckBox _autoStartMissionsBox = null!, _autoStartSitesBox = null!;
     private TextBlock _clipboardConsumersBlock = null!, _clipboardUnsupportedBlock = null!;
     private ComboBox _toastPositionBox = null!;
+    private ComboBox _weekStartsOnBox = null!;
+    private TextBlock _weekStartsOnHintBlock = null!;
     private TextBox _localApiPortBox = null!;
     private Ellipse _localApiStatusDot = null!;
     private TextBlock _localApiStatusBlock = null!;
@@ -86,7 +88,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     }
 
     public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null,
-        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true) : this()
+        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday) : this()
     {
         _detectedDefault = detectedDefault;
         _localApi = localApiServer;
@@ -109,6 +111,8 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _clipboardUnsupportedBlock = this.FindControl<TextBlock>("ClipboardUnsupportedBlock")!;
         _enableLocalApiBox = this.FindControl<CheckBox>("EnableLocalApiBox")!;
         _toastPositionBox = this.FindControl<ComboBox>("ToastPositionBox")!;
+        _weekStartsOnBox = this.FindControl<ComboBox>("WeekStartsOnBox")!;
+        _weekStartsOnHintBlock = this.FindControl<TextBlock>("WeekStartsOnHintBlock")!;
         _localApiPortBox = this.FindControl<TextBox>("LocalApiPortBox")!;
         _localApiStatusDot = this.FindControl<Ellipse>("LocalApiStatusDot")!;
         _localApiStatusBlock = this.FindControl<TextBlock>("LocalApiStatusBlock")!;
@@ -152,6 +156,9 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         this.FindControl<TextBlock>("SdeVersionBlock")!.Text = sdeVersionLabel;
         this.FindControl<TextBlock>("DataFolderBlock")!.Text = Composition.ClientServices.DataDirectory();
         _toastPositionBox.SelectedIndex = (int)toastPosition;
+        _weekStartsOnBox.SelectedIndex = weekStartsOn == DayOfWeek.Sunday ? 1 : 0;
+        _weekStartsOnHintBlock.Text =
+            $"Used by the runs overview's activity strip and the week summary. Default follows your system's regional settings ({Calendar.WeekStartService.SystemDefault()} on this computer).";
         _enableLocalApiBox.IsChecked = enableLocalApi;
         _localApiPortBox.Text = localApiPort.ToString();
 
@@ -472,6 +479,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         var shareMining = _shareMiningBox?.IsChecked ?? false;
         var autoStartMissions = _autoStartMissionsBox.IsChecked ?? true;
         var autoStartSites = _autoStartSitesBox.IsChecked ?? true;
-        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites);
+        var weekStartsOn = _weekStartsOnBox.SelectedIndex == 1 ? DayOfWeek.Sunday : DayOfWeek.Monday;
+        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn);
     }
 }

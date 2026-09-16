@@ -13,6 +13,12 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Added: a "Week starts on" setting, Monday or Sunday.** In Settings → Interface, right under TOAST
+  NOTIFICATIONS. It defaults to whatever your Windows/system region already uses (Monday for a Dutch-region
+  computer) — leave it alone and nothing changes. Choosing the other one and saving takes effect at once, no
+  restart; choosing your region's own default back removes the override, so a later region change is still
+  followed. It has no visible effect yet — the runs overview's activity strip and week summary, which will read it,
+  are a follow-up.
 - **Fixed: the totals on the runs overview are your own earnings, not the whole fleet's.** Fly a homefront with five
   pilots of whom three are your own characters and the row, the day, the month and "ISK today" counted all five —
   everything the other two brought in landed in your total the moment their client published it. They now count what
