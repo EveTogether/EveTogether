@@ -333,8 +333,9 @@
                 <Setter Property="Ring" Value="{DynamicResource AccentBrightBrush}"/>
             </Style>
 
-            <!-- The month bar's own total (ET-266) — bolder and bigger than the day headers' summary below, so the two
-                 never look like the same kind of text. ISK carries .isk on top for the heavier weight. -->
+            <!-- ══ The range line (ET-292) ══ its totals keep the month bar's weight (ET-266) — bolder and bigger than
+                 the day headers' summary below, so the two never look like the same kind of text. ISK carries .isk on
+                 top for the heavier weight. -->
             <Style Selector="TextBlock.monthfigure">
                 <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
                 <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
@@ -345,6 +346,73 @@
             <Style Selector="TextBlock.monthfigure.isk">
                 <Setter Property="FontSize" Value="15"/>
                 <Setter Property="FontWeight" Value="Bold"/>
+            </Style>
+            <Style Selector="TextBlock.monthfigure.sep">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontWeight" Value="Normal"/>
+            </Style>
+            <Style Selector="StackPanel.rangetotals">
+                <Setter Property="HorizontalAlignment" Value="Right"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Grid.rangeline.narrow StackPanel.rangetotals">
+                <Setter Property="Grid.Row" Value="1"/>
+                <Setter Property="HorizontalAlignment" Value="Left"/>
+                <Setter Property="Margin" Value="0,6,0,0"/>
+            </Style>
+            <Style Selector="Grid.rangeline.narrow TextBlock.monthfigure">
+                <Setter Property="FontSize" Value="11.5"/>
+            </Style>
+            <Style Selector="Grid.rangeline.narrow TextBlock.monthfigure.isk">
+                <Setter Property="FontSize" Value="13.5"/>
+            </Style>
+            <Style Selector="TextBlock.rangetitle">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="FontWeight" Value="Medium"/>
+                <Setter Property="LetterSpacing" Value="2.2"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Button.rangenav">
+                <Setter Property="Width" Value="26"/>
+                <Setter Property="Height" Value="24"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Button.rangenav:pointerover /template/ ContentPresenter, Button.rangenav:focus-visible /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="Button.rangenav:disabled /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            </Style>
+            <Style Selector="Button.rangeclear">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="4,0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Button.rangeclear:pointerover /template/ ContentPresenter, Button.rangeclear:focus-visible /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <!-- The strip spans the band below the breakpoint; the filters (RO-4) go under it. -->
+            <Style Selector="Grid#Band.narrow > vw|RunsActivityStrip">
+                <Setter Property="Grid.ColumnSpan" Value="3"/>
             </Style>
         </Grid.Styles>
 
@@ -499,30 +567,46 @@
             </StackPanel>
         </Border>
 
-        <!-- ══ Month ══ the page (ET-233): one month at a time, previous/next either side, its own total and where it
-             came from — the same rows the day headers below already sum, so the two can never disagree. Shown for every
-             source (Local, a fleet filter, a server tab): all three page the same way. RO-3 replaces it. -->
-        <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1"
+        <!-- ══ Range line and band (ET-292) ══ the month in view, or the day or week picked in the strip, with its
+             totals — ET-266's weight on them kept: mono 12.5 semibold, the ISK 15 bold. Under it the band: the activity
+             strip in a 400 px column beside the two filter columns RO-4 fills, and across the whole width below the
+             breakpoint. Shown for every source (Local, a fleet filter, a server tab): all three page the same way. -->
+        <Border DockPanel.Dock="Top" Padding="14,10,14,12" BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource BorderBrush}">
-            <Grid ColumnDefinitions="Auto,Auto,*,Auto">
-                <Button Grid.Column="0" Classes="rowaction" Content="&#x25C0;" MinWidth="30"
-                        Command="{Binding PreviousMonthCommand}" ToolTip.Tip="Previous month"/>
-                <TextBlock Grid.Column="1" Classes="panel-title" FontSize="12" Margin="10,0"
-                           VerticalAlignment="Center" Text="{Binding MonthHeaderText}"/>
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="0,0,10,0"
-                            HorizontalAlignment="Right">
-                    <TextBlock Classes="monthfigure" VerticalAlignment="Center"
-                               Text="{Binding SelectedTab.MonthActivitiesText}"/>
-                    <TextBlock Classes="monthfigure" VerticalAlignment="Center"
-                               Foreground="{StaticResource TextDimBrush}" FontWeight="Normal" Text="&#x00B7;"/>
-                    <ctl:IskSourceBar Width="48" Height="6" VerticalAlignment="Center"
-                                      Isk="{Binding SelectedTab.MonthIsk}"/>
-                    <TextBlock Classes="monthfigure isk" VerticalAlignment="Center"
-                               Text="{Binding SelectedTab.MonthNetText}"/>
-                </StackPanel>
-                <Button Grid.Column="3" Classes="rowaction" Content="&#x25B6;" MinWidth="30"
-                        Command="{Binding NextMonthCommand}" ToolTip.Tip="Next month"/>
-            </Grid>
+            <StackPanel Spacing="10">
+                <!-- Wide, the totals sit on the line itself; narrow, on a line of their own under it. -->
+                <Grid x:Name="RangeLine" Classes="rangeline" Classes.narrow="{Binding IsNarrow}" RowDefinitions="26,Auto">
+                    <DockPanel Grid.Row="0">
+                        <Button x:Name="RangePrevious" DockPanel.Dock="Left" Classes="rangenav" Content="&#x25C0;"
+                                Command="{Binding PreviousCommand}" ToolTip.Tip="{Binding PreviousTooltip}"/>
+                        <TextBlock x:Name="RangeTitle" DockPanel.Dock="Left" Classes="rangetitle" Margin="10,0,0,0"
+                                   Text="{Binding RangeTitleText}"/>
+                        <Button x:Name="RangeClear" DockPanel.Dock="Left" Classes="rangeclear" Margin="4,0,0,0"
+                                Content="&#x2715;" IsVisible="{Binding IsRangePicked}"
+                                Command="{Binding ClearRangeCommand}" ToolTip.Tip="Back to the whole month"/>
+                        <Button x:Name="RangeNext" DockPanel.Dock="Left" Classes="rangenav" Margin="10,0,0,0"
+                                Content="&#x25B6;" Command="{Binding NextCommand}" ToolTip.Tip="{Binding NextTooltip}"/>
+                        <!-- Kept for SUMMARY (RO-5) and PUBLISH n LOCAL (RO-6): the totals end where they begin. -->
+                        <StackPanel x:Name="RangeActions" DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8"/>
+                        <Panel/>
+                    </DockPanel>
+                    <StackPanel x:Name="RangeTotals" Grid.Row="0" Classes="rangetotals" Orientation="Horizontal"
+                                Spacing="10">
+                        <TextBlock Classes="monthfigure" Text="{Binding RangeCountText}"/>
+                        <TextBlock Classes="monthfigure sep" Text="&#x00B7;"/>
+                        <TextBlock Classes="monthfigure" Text="{Binding RangeFlownText}"/>
+                        <TextBlock Classes="monthfigure sep" Text="&#x00B7;"/>
+                        <ctl:IskSourceBar Width="90" Height="8" VerticalAlignment="Center" Isk="{Binding RangeIsk}"/>
+                        <!-- 10 px of air before the edge or ▶ (ET-266): the heaviest figure never touches a control. -->
+                        <TextBlock x:Name="RangeNet" Classes="monthfigure isk" Margin="0,0,10,0"
+                                   Text="{Binding RangeNetText}"/>
+                    </StackPanel>
+                </Grid>
+
+                <Grid x:Name="Band" Classes.narrow="{Binding IsNarrow}" ColumnDefinitions="400,*,*" ColumnSpacing="28">
+                    <vw:RunsActivityStrip x:Name="ActivityStrip" Grid.Column="0" DataContext="{Binding Strip}"/>
+                </Grid>
+            </StackPanel>
         </Border>
 
         <!-- ══ Finished activities ══ the one undocked child (ET-285): the list, and the pane's own column beside it.

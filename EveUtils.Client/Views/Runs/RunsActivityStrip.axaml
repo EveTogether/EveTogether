@@ -1,0 +1,258 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="170"
+             x:Class="EveUtils.Client.Views.Runs.RunsActivityStrip"
+             x:DataType="vr:RunsActivityStripViewModel">
+
+    <!-- Twelve weeks of evenings (ET-292): month names over the columns, every other weekday beside the rows, a cell per
+         day, a segment per week under them, and the legend with the ISK | runs switch. The grid stretches to the width
+         it is handed — a 400 px column beside the filters when wide, the whole band when narrow — so the cells are
+         wider than tall at both. -->
+    <UserControl.Styles>
+        <Style Selector="Button.stripcell, Button.weekseg, Button.monthlabel, Button.shade">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter x:Name="PART_ContentPresenter" Background="Transparent"
+                                      Content="{TemplateBinding Content}"
+                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.clickable">
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+
+        <!-- ══ A day ══ the fill carries the shade and the month dimming as its opacity; today's edge, the picked
+             outline and the hover ring are layers of their own on top, so neither opacity ever dims them. -->
+        <Style Selector="Button.stripcell">
+            <Setter Property="Height" Value="14"/>
+        </Style>
+        <Style Selector=".narrow Button.stripcell">
+            <Setter Property="Height" Value="16"/>
+        </Style>
+        <Style Selector="Border.fill">
+            <Setter Property="CornerRadius" Value="2"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.fill.empty">
+            <Setter Property="Background" Value="{StaticResource StripEmptyBrush}"/>
+        </Style>
+        <Style Selector="Border.fill.accent">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+        </Style>
+        <Style Selector="Border.fill.bright">
+            <Setter Property="Background" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <!-- Before the first activity ever saved: hatched, the mockup's repeating 135° stripe. -->
+        <Style Selector="Border.fill.untracked">
+            <Setter Property="Background">
+                <LinearGradientBrush StartPoint="0,0" EndPoint="3,3" SpreadMethod="Repeat">
+                    <GradientStop Offset="0" Color="#12FFFFFF"/>
+                    <GradientStop Offset="0.5" Color="#12FFFFFF"/>
+                    <GradientStop Offset="0.5" Color="#00FFFFFF"/>
+                    <GradientStop Offset="1" Color="#00FFFFFF"/>
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+        <Style Selector="Border.today">
+            <Setter Property="CornerRadius" Value="2"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <!-- The picked day: the bright accent outside and a dark ring inside it. The bright ring alone is invisible on
+             the brightest cell, which is the same accent — and on Amarr and Gallente that accent is light. -->
+        <Style Selector="Border.picked">
+            <Setter Property="CornerRadius" Value="2"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="Border.pickedinner">
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BgDeepBrush}"/>
+        </Style>
+        <Style Selector="Border.hoverring">
+            <Setter Property="CornerRadius" Value="2"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.stripcell.clickable:pointerover Border.hoverring">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+
+        <!-- ══ A week ══ a 6 px segment in a 10 px target: soft at rest, found by hover and tooltip. -->
+        <Style Selector="Button.weekseg">
+            <Setter Property="Height" Value="10"/>
+        </Style>
+        <Style Selector="Border.segment">
+            <Setter Property="Height" Value="6"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="CornerRadius" Value="1"/>
+            <Setter Property="Background" Value="{DynamicResource DividerBrush}"/>
+        </Style>
+        <Style Selector="Button.weekseg.clickable:pointerover Border.segment">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+        </Style>
+        <Style Selector="Button.weekseg.picked Border.segment, Button.weekseg.picked:pointerover Border.segment">
+            <Setter Property="Background" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.weekseg:not(.clickable) Border.segment">
+            <Setter Property="Opacity" Value=".4"/>
+        </Style>
+
+        <!-- ══ Labels ══ -->
+        <Style Selector="TextBlock.stripink">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.monthlabel">
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+        </Style>
+        <Style Selector="Button.monthlabel:pointerover TextBlock.stripink">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.monthlabel.active TextBlock.stripink">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="Border.legend">
+            <Setter Property="Width" Value="10"/>
+            <Setter Property="Height" Value="10"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.shade">
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.shade > Border">
+            <Setter Property="Padding" Value="5,1"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.shade:pointerover TextBlock.stripink">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.shade.on > Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        </Style>
+        <Style Selector="Button.shade.on TextBlock.stripink">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid ColumnDefinitions="24,*" RowDefinitions="12,Auto,10,Auto" ColumnSpacing="6" RowSpacing="3">
+
+        <ItemsControl x:Name="StripMonths" Grid.Row="0" Grid.Column="1" ItemsSource="{Binding MonthLabels}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Rows="1" Columns="12" ColumnSpacing="3"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:RunsStripMonthLabelViewModel">
+                    <Button Classes="monthlabel clickable" Classes.active="{Binding IsActive}"
+                            IsVisible="{Binding HasLabel}" Command="{Binding ClickCommand}"
+                            ToolTip.Tip="{Binding Tooltip}">
+                        <TextBlock Classes="stripink" Text="{Binding Text}" LetterSpacing="0.5"/>
+                    </Button>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <ItemsControl Grid.Row="1" Grid.Column="0" ItemsSource="{Binding WeekdayLabels}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Rows="7" Columns="1" RowSpacing="3"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:RunsStripWeekdayLabel">
+                    <TextBlock Classes="stripink" FontSize="9" Text="{Binding Text}"/>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Row by row: the view model hands the cells over in that order (UniformGrid fills rows first). -->
+        <ItemsControl x:Name="StripCells" Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Cells}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Rows="7" Columns="12" RowSpacing="3" ColumnSpacing="3"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:RunsStripCellViewModel">
+                    <Button Classes="stripcell" Classes.clickable="{Binding IsClickable}"
+                            Command="{Binding ClickCommand}" ToolTip.Tip="{Binding Tooltip}">
+                        <Panel>
+                            <Border Classes="fill" Classes.empty="{Binding IsEmpty}" Classes.accent="{Binding IsAccent}"
+                                    Classes.bright="{Binding IsBright}" Classes.untracked="{Binding IsUntracked}"
+                                    Opacity="{Binding FillOpacity}"/>
+                            <Border Classes="today" IsVisible="{Binding IsToday}"/>
+                            <Border Classes="picked" IsVisible="{Binding IsPicked}">
+                                <Border Classes="pickedinner"/>
+                            </Border>
+                            <Border Classes="hoverring"/>
+                        </Panel>
+                    </Button>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <ItemsControl x:Name="StripWeeks" Grid.Row="2" Grid.Column="1" ItemsSource="{Binding WeekSegments}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Rows="1" Columns="12" ColumnSpacing="3"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:RunsStripWeekViewModel">
+                    <Button Classes="weekseg" Classes.clickable="{Binding IsClickable}"
+                            Classes.picked="{Binding IsPicked}" Command="{Binding ClickCommand}"
+                            ToolTip.Tip="{Binding Tooltip}">
+                        <Border Classes="segment"/>
+                    </Button>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <DockPanel Grid.Row="3" Grid.Column="1" Margin="0,2,0,0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2">
+                <Button x:Name="ShadeIsk" Classes="shade clickable" Classes.on="{Binding IsIskShade}"
+                        Command="{Binding ShadeByIskCommand}" ToolTip.Tip="Shade each day by the ISK it earned">
+                    <Border>
+                        <TextBlock Classes="stripink" Text="ISK"/>
+                    </Border>
+                </Button>
+                <Button x:Name="ShadeRuns" Classes="shade clickable" Classes.on="{Binding IsRunsShade}"
+                        Command="{Binding ShadeByRunsCommand}" ToolTip.Tip="Shade each day by how many activities it had">
+                    <Border>
+                        <TextBlock Classes="stripink" Text="runs"/>
+                    </Border>
+                </Button>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBlock Classes="stripink" Margin="0,0,2,0" Text="less"/>
+                <Border Classes="legend fill empty"/>
+                <Border Classes="legend fill accent" Opacity=".28"/>
+                <Border Classes="legend fill accent" Opacity=".48"/>
+                <Border Classes="legend fill accent" Opacity=".70"/>
+                <Border Classes="legend fill bright"/>
+                <TextBlock Classes="stripink" Margin="2,0,0,0" Text="more"/>
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</UserControl>

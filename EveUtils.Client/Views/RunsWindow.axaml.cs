@@ -71,12 +71,39 @@ public partial class RunsWindow : ChromedWindow
     {
         DataContext = viewModel;
         viewModel.PropertyChanged += _OnViewModelPropertyChanged;
+        viewModel.DayScrollRequested += _ScrollDayToTop;
         Closed += (_, _) =>
         {
             viewModel.PropertyChanged -= _OnViewModelPropertyChanged;
+            viewModel.DayScrollRequested -= _ScrollDayToTop;
             viewModel.Dispose();
         };
     }
+
+    /// <summary>
+    /// A day picked in the activity strip (ET-292), at the top of the list. The list is virtualised and the day was
+    /// only just unfolded, so its header may not have a container yet: first the layout that takes the unfold in, then
+    /// <c>ScrollIntoView</c> to realise the header somewhere in view, then the offset moved by exactly how far below
+    /// the top it landed. At the top, the pinned day over the list is that very day drawn over its own header.
+    /// </summary>
+    private void _ScrollDayToTop(RunsDayViewModel day) =>
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_activityList.Scroll is not ScrollViewer scroll)
+                return;
+
+            _activityList.UpdateLayout();
+            _activityList.ScrollIntoView(day);
+            _activityList.UpdateLayout();
+            if (_activityList.ContainerFromItem(day) is { } header
+                && header.TranslatePoint(new Point(0, 0), scroll) is { } at)
+            {
+                scroll.Offset = new Vector(scroll.Offset.X, Math.Max(0, scroll.Offset.Y + at.Y));
+                _activityList.UpdateLayout();
+            }
+
+            _PinTopDay();
+        }, DispatcherPriority.Background);
 
     private RunsOverviewViewModel? _ViewModel => _root.DataContext as RunsOverviewViewModel;
 

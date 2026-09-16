@@ -29,6 +29,9 @@
              theme, sheer enough that the selected row stays visible underneath — closing by clicking the list you
              can still see is the whole reason the drawer is 430 px and not the full width (Jithran, 15 Sep). -->
         <SolidColorBrush x:Key="ScrimBrush" Color="#AD02050A"/>
+        <!-- A day in the runs activity strip with nothing to shade (ET-292): there, but quieter than any evening that
+             earned something. Neutral, since the shaded days are the accent's. -->
+        <SolidColorBrush x:Key="StripEmptyBrush" Color="#0DFFFFFF"/>
 
         <SolidColorBrush x:Key="TextBrush" Color="#FFD8D0C4"/>
         <SolidColorBrush x:Key="TextDimBrush" Color="#FF8A7E6B"/>
