@@ -13,6 +13,14 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Added: TYPES and CHARACTERS filters above the runs list, as columns of tiles.** Each tile is a checkbox, an icon
+  or your character's own portrait, its full name and how many activities it covers. Everything is on by default, so
+  nothing changes until you turn one off — the moment you do, an "n of m" count and SHOW ALL appear over that column.
+  Click a tile to hide or bring back its activities; alt-click one to keep only it. The list, the day headers, the
+  range totals and the activity strip's shading all follow. Turning off even one character also hides an activity
+  none of your own characters flew — a fleet mate's run pulled in by sync, say — since with everything on that kind of
+  activity stays visible on purpose.
+
 - **Added: an activity strip over the runs list — twelve weeks of evenings at a glance.** Where the month bar used to
   be, each day of the last twelve weeks is a small cell, shaded by the ISK it earned (or, with the switch under it, by
   how many activities it had), with today outlined, days before your first saved run hatched, and a bar of week

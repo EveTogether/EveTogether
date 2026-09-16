@@ -459,6 +459,10 @@
                 <Setter Property="MinHeight" Value="0"/>
                 <Setter Property="MinWidth" Value="0"/>
                 <Setter Property="CornerRadius" Value="0"/>
+                <!-- ItemsControl centres its generated containers vertically by default (ET-293 gotcha): without
+                     this, every tile sat at its own content height instead of filling the row ColumnFlowPanel gave
+                     it, and the block never reached the strip's own height. -->
+                <Setter Property="VerticalAlignment" Value="Stretch"/>
                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                 <Setter Property="VerticalContentAlignment" Value="Stretch"/>
                 <Setter Property="Cursor" Value="Hand"/>
