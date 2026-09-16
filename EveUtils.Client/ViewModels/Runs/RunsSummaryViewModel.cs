@@ -242,19 +242,28 @@ public sealed partial class RunsSummaryViewModel : ObservableObject
             _ => _Newest(daysInMonth)
         };
 
-        (DateOnly? day, string dayWhy) = input.SelectedDay is { } selectedDay
-            ? ((DateOnly?)selectedDay, "the selected run's day")
+        // The selected run's day and week first — unless a day or week picked since lies elsewhere: a DAYS cell or a
+        // strip click has to show the day it was clicked on, whatever row is still selected.
+        DateOnly? selected = input.SelectedDay;
+        bool selectedInPick = selected is { } inPick && input.RangeKind switch
+        {
+            RunsRangeKind.Day => inPick == input.RangeStart,
+            RunsRangeKind.Week => inPick >= input.RangeStart && inPick < input.RangeStart.AddDays(7),
+            _ => true
+        };
+        (DateOnly? day, string dayWhy) = selectedInPick
+            ? (selected, "the selected run's day")
             : input.RangeKind == RunsRangeKind.Day
                 ? ((DateOnly?)input.RangeStart, "the day picked in the strip")
                 : (newestInView, "the newest day in view");
-        (DateOnly? week, string weekWhy) = input.SelectedDay is { } selected
-            ? ((DateOnly?)WeekMath.StartOf(selected, input.FirstDay), "the selected run's week")
-            : input.RangeKind switch
-            {
-                RunsRangeKind.Week => ((DateOnly?)input.RangeStart, "the week picked in the strip"),
-                RunsRangeKind.Day => ((DateOnly?)WeekMath.StartOf(input.RangeStart, input.FirstDay), "the week of the day picked in the strip"),
-                _ => (newestInView is { } newest ? WeekMath.StartOf(newest, input.FirstDay) : null, "the newest week in view")
-            };
+        (DateOnly? week, string weekWhy) = input.RangeKind switch
+        {
+            RunsRangeKind.Week => ((DateOnly?)input.RangeStart, selectedInPick ? "the selected run's week" : "the week picked in the strip"),
+            RunsRangeKind.Day => ((DateOnly?)WeekMath.StartOf(input.RangeStart, input.FirstDay),
+                selectedInPick ? "the selected run's week" : "the week of the day picked in the strip"),
+            _ when selected is { } selectedDay => ((DateOnly?)WeekMath.StartOf(selectedDay, input.FirstDay), "the selected run's week"),
+            _ => (newestInView is { } newest ? WeekMath.StartOf(newest, input.FirstDay) : null, "the newest week in view")
+        };
 
         RunsRangeKind scope = _chosenScope ?? input.RangeKind;
         if ((scope == RunsRangeKind.Day && day is null) || (scope == RunsRangeKind.Week && week is null))
