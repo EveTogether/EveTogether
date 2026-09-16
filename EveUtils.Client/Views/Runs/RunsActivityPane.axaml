@@ -12,8 +12,41 @@
          1303, and the 430 px drawer over the list at 758. Its own styles rather than the runs screen's, since it is
          also handed to a drawer that is not inside that screen's list. -->
     <UserControl.Styles>
+        <!-- Secondary ink on an OPAQUE surface. TextDimBrush is 4.69:1 on #0C100E in theory and 4.2–4.4 measured off
+             a render, because the labels here are 9–10 px and an antialiased glyph that small never reaches its own
+             colour. This one is 6.6:1 nominal, which leaves the room the antialiasing takes on the banded crew rows too and still reads a clear
+             step below TextBrush. Local to the pane: the same ink over the app's translucent panels would be too
+             bright, and this surface is the only opaque one (ET-291). -->
+        <Style Selector="TextBlock.pk, TextBlock.pth, TextBlock.plocal, TextBlock.pherononne">
+            <Setter Property="Foreground">
+                <SolidColorBrush Color="#FFA0958A"/>
+            </Setter>
+        </Style>
+        <!-- The pane's own sections re-use the app's label and hint, on a surface neither was measured against. -->
+        <Style Selector="TextBlock.label">
+            <Setter Property="Foreground">
+                <SolidColorBrush Color="#FFA0958A"/>
+            </Setter>
+        </Style>
+        <Style Selector="TextBlock.hint">
+            <Setter Property="Foreground">
+                <SolidColorBrush Color="#FFA0958A"/>
+            </Setter>
+        </Style>
+        <!-- PUBLISH, outlined rather than filled — the mockup's own .btn.primary. The app's Classes="accent" lands on
+             Fluent's built-in accent-button theme, whose white-on-accent fill measured 2.0:1 on Amarr and 3.0 on
+             Caldari against the 4.5 this ticket owes. -->
+        <Style Selector="Button.paneprimary">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.paneprimary:pointerover /template/ ContentPresenter, Button.paneprimary:focus-visible /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
         <Style Selector="TextBlock.pk">
-            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
             <Setter Property="FontSize" Value="9.5"/>
             <Setter Property="LetterSpacing" Value="1.4"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
@@ -37,7 +70,6 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style Selector="TextBlock.pherononne">
-            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
             <Setter Property="FontSize" Value="13"/>
         </Style>
         <Style Selector="TextBlock.pdur">
@@ -78,7 +110,6 @@
         <!-- CREW table: banded, and lifting to the row hover fill under the pointer. Both fills keep the mono ink
              above 4.5:1 — they are 4 % and 6 % whites over an opaque surface, not a second background. -->
         <Style Selector="TextBlock.pth">
-            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
             <Setter Property="FontSize" Value="9"/>
             <Setter Property="LetterSpacing" Value="1.2"/>
             <Setter Property="TextAlignment" Value="Right"/>
@@ -108,7 +139,6 @@
             <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
         </Style>
         <Style Selector="TextBlock.plocal">
-            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
             <Setter Property="FontSize" Value="9.5"/>
             <Setter Property="TextAlignment" Value="Right"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
@@ -133,7 +163,7 @@
                     BorderBrush="{DynamicResource BorderBrush}" Background="{StaticResource BgPanelBrush}">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
-                        <Button x:Name="PanePublish" Classes="accent rowaction"
+                        <Button x:Name="PanePublish" Classes="paneprimary rowaction"
                                 IsVisible="{Binding Row.CanPublishNow}"
                                 Command="{Binding Row.PublishCommand}"
                                 Content="{Binding PublishText}"

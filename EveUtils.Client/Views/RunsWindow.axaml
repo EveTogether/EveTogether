@@ -261,9 +261,13 @@
                 <Setter Property="FontSize" Value="10"/>
                 <Setter Property="LetterSpacing" Value="1.8"/>
             </Style>
+            <!-- The same ink the pane's own labels use on this opaque surface: TextDimBrush at 10 px measured 4.41:1
+                 off a render, under the 4.5 a key hint owes as much as any other text. -->
             <Style Selector="TextBlock.kbd">
                 <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="Foreground">
+                    <SolidColorBrush Color="#FFA0958A"/>
+                </Setter>
                 <Setter Property="FontSize" Value="10"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
