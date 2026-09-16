@@ -72,6 +72,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private readonly IDialogService _dialogs;
     private readonly IServiceProvider _services;
     private readonly IReadOnlyDictionary<long, string> _namesById;
+    private readonly RunsCharacterNames _characterNames;
     private readonly DispatcherTimer? _clock;
     private readonly RunsFleetFilter? _fleetFilter;
     private readonly IDisposable? _runChangesSubscription;
@@ -194,6 +195,9 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             .Where(character => character.EsiCharacterId is > 0)
             .GroupBy(character => (long)character.EsiCharacterId!.Value)
             .ToDictionary(group => group.Key, group => group.First().Name);
+        // Own characters first, then CachedExternalCharacter through the same cache-then-ESI path the external-member
+        // flow already uses (ET-306) — never the bare id while a name is there to find anywhere.
+        _characterNames = new RunsCharacterNames(_namesById, services.GetService<IExternalCharacterLookup>());
         Strip = new RunsActivityStripViewModel(
             day => _ = ToggleDayAsync(day), week => _ = ToggleWeekAsync(week), month => _ = _GoToMonthAsync(month));
         TypeFilter = new RunFilterBlockViewModel("TYPES", () => { _excludedTypes.Clear(); _AfterFilterChanged(); });
@@ -228,12 +232,6 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         LanesEmptyText = Lanes.Count == 0
             ? "No character is linked yet, so there is no one to start a run for."
             : null;
-
-        // Best-effort and fire-and-forget, the same as a fleet roster leaf and the character picker (ET-184): the hex
-        // shows the initial until the portrait lands. One face per character, shared by every place that draws them.
-        if (services.GetService<ICharacterPortraitProvider>() is { } portraits)
-            foreach (RunningLaneViewModel lane in Lanes)
-                _ = lane.Face.LoadPortraitAsync(portraits);
 
         // One subscription for every way a run can change (ET-222). The feed hands the change over on the UI thread
         // and folds a burst of payouts into one batch, so all that is left here is what to read again.
@@ -594,6 +592,9 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
                     detail.Messages.Count > 0 ? detail.Messages[0].Text : "The runs could not be read.");
 
             cancellationToken.ThrowIfCancellationRequested();
+            // Resolved once for the activity, before a single row is built (ET-306): a crew member with no run-start
+            // snapshot and no local character reads their real name from here, never a permanent "character {id}".
+            await _characterNames.HydrateAsync(activity.Runs.Select(run => run.CharacterId), cancellationToken);
             ActivityRunRowViewModel[] crew = [.. activity.Runs.OrderBy(run => run.StartedAtUtc).Select(run =>
                 new ActivityRunRowViewModel(run, _NameOf,
                     _FaceOf(run.CharacterId, CharacterNameResolver.Resolve(run.CharacterNameSnapshot, run.CharacterId, _NameOf)),
@@ -849,6 +850,12 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         RunsActivityFacts[] facts = [.. overview.Value.Select(dto => RunsActivityFacts.From(dto, _facts))];
         ActivityOverviewRowDto[] monthRows = [.. overview.Value
             .Where(dto => dto.StartedAtUtc >= monthFromUtc && dto.StartedAtUtc < monthToUtc)];
+
+        // Every crew member and other earner the month's rows name, resolved once here — off the UI thread, this read
+        // already is — rather than one row at a time turning up its own fallback the moment it is built (ET-306).
+        await _characterNames.HydrateAsync(monthRows
+            .SelectMany(dto => dto.Crew.Select(member => member.CharacterId)
+                .Concat(dto.OtherEarners.Select(member => member.CharacterId))));
 
         string ServerNameOf(string address) => headers.GetValueOrDefault(address) ?? address;
         List<(ActivityOverviewRowViewModel Row, ActivityOverviewRowViewModel? Previous)> rows = [];
@@ -1697,13 +1704,20 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             group.Tick(nowUtc);
     }
 
-    private string _NameOf(long characterId) =>
-        _namesById.TryGetValue(characterId, out string? name) ? name : $"character {characterId}";
+    private string _NameOf(long characterId) => _characterNames.NameOf(characterId);
 
-    /// <summary>One face per character for the whole screen: this machine's own come with a portrait, anyone else
-    /// with their initial.</summary>
+    /// <summary>One face per character for the whole screen, own and external alike: the hex shows the initial until
+    /// the portrait lands, best-effort and fire-and-forget the same as a fleet roster leaf (ET-184, ET-306) — posted
+    /// to the UI thread regardless of which thread creates the face, since a crew face is as likely to be minted from
+    /// the pane's off-thread detail read as from the UI thread building the running lanes.</summary>
     private CharacterFaceViewModel _FaceOf(long characterId, string name) =>
-        _faces.GetOrAdd(characterId, id => new CharacterFaceViewModel(id, name));
+        _faces.GetOrAdd(characterId, id =>
+        {
+            var face = new CharacterFaceViewModel(id, name);
+            if (_services.GetService<ICharacterPortraitProvider>() is { } portraits)
+                Dispatcher.UIThread.Post(() => _ = face.LoadPortraitAsync(portraits));
+            return face;
+        });
 
     /// <summary>The pilots' runs behind one row, read through the detail query rather than a read path of this screen's
     /// own — ET-160 owns what an activity's runs are, and a second answer here could disagree with the detail screen
@@ -1718,6 +1732,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
                 if (!detail.IsSuccess || detail.Value is not { } activity)
                     return ([], detail.Messages.Count > 0 ? detail.Messages[0].Text : "The runs could not be read.");
 
+                await _characterNames.HydrateAsync(activity.Runs.Select(run => run.CharacterId));
                 return ([.. activity.Runs.OrderBy(run => run.StartedAtUtc).Select(run => new ActivityRunRowViewModel(run, _NameOf,
                     _FaceOf(run.CharacterId, CharacterNameResolver.Resolve(run.CharacterNameSnapshot, run.CharacterId, _NameOf)),
                     activity.IskByCharacter?.GetValueOrDefault(run.CharacterId), row))], null);
