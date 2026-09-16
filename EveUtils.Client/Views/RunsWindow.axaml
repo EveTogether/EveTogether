@@ -975,7 +975,9 @@
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate DataType="vr:ActivityRewardChipViewModel">
                                                         <Border Classes="chip" Classes.dim="{Binding IsKnownKind}"
-                                                                Classes.warn="{Binding IsUnknownKind}">
+                                                                Classes.warn="{Binding IsUnknownKind}"
+                                                                Classes.esc="{Binding IsEscalation}"
+                                                                ToolTip.Tip="{Binding Tooltip}">
                                                             <TextBlock Text="{Binding Text}"/>
                                                         </Border>
                                                     </DataTemplate>

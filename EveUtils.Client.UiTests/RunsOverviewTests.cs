@@ -149,6 +149,35 @@ public sealed class RunsOverviewTests
         Assert.Contains(texts, text => text == "1,240 LP");
     }
 
+    /// <summary>ET-289 (RO-0): an escalation is one chip naming its destination site, never the four raw
+    /// accounting keys it is written alongside. Counter-proof (red on the old code): the row used to carry a chip
+    /// per <c>RunParameter</c> row regardless of what it was for, so ESCALATIONDUNGEONID, ESCALATIONSYSTEM,
+    /// ESCALATIONSOLARSYSTEMID and ESCALATIONEXPIRESATUTC each rendered their own bare enum name.</summary>
+    [AvaloniaFact]
+    public async Task Escalation_IsOneChipNamingItsSite_AndItsAccountingKeysNeverBecomeChipsOfTheirOwn()
+    {
+        using var instance = TestClientInstance.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        DateTime expiresAtUtc = StartedAtUtc.AddHours(20);
+        await _SaveSiteRunAsync(_Dispatcher(instance), 90000001, groupCode: null, cancellationToken: cancellationToken,
+            parameters:
+            [
+                new RunParameterInput { ParameterKey = RunParameterKey.Escalation,
+                    TypedValue = "Sansha's Command Relay Outpost", ObservedAtUtc = StartedAtUtc },
+                new RunParameterInput { ParameterKey = RunParameterKey.EscalationDungeonId, TypedValue = "12345", ObservedAtUtc = StartedAtUtc },
+                new RunParameterInput { ParameterKey = RunParameterKey.EscalationSystem, TypedValue = "Alkabsi", ObservedAtUtc = StartedAtUtc },
+                new RunParameterInput { ParameterKey = RunParameterKey.EscalationSolarSystemId, TypedValue = "30000142", ObservedAtUtc = StartedAtUtc },
+                new RunParameterInput { ParameterKey = RunParameterKey.EscalationExpiresAtUtc,
+                    TypedValue = expiresAtUtc.ToString("O"), ObservedAtUtc = StartedAtUtc }
+            ]);
+
+        Window root = (await _PresentAsync(instance, 758, cancellationToken)).Root;
+        List<string> texts = RenderedText.VisibleTexts(root);
+
+        Assert.Contains(texts, text => text == "→ Sansha's Command Relay Outpost");
+        Assert.DoesNotContain(texts, text => text.Contains("ESCALATION"));
+    }
+
     /// <summary>AC-4: an activity with nothing to value — no loot capture and no bounty line — says so instead of
     /// showing a figure. Counter-proof: format the net as <c>LootIskNet ?? 0</c> and this goes red on "0 ISK" — a
     /// zero there reads as a valuation that was taken and came out at nothing.</summary>

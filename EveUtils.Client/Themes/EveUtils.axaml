@@ -354,6 +354,12 @@
     <Style Selector="Border.chip.dim">
         <Setter Property="TextElement.Foreground" Value="{StaticResource TextDimBrush}"/>
     </Style>
+    <!-- The escalation chip (RO-0/ET-289): the value colour, same amber every other figure in this app uses for
+         something the pilot earned or is owed — an escalation is exactly that, a site handed to them. -->
+    <Style Selector="Border.chip.esc">
+        <Setter Property="BorderBrush" Value="{StaticResource ValueBrush}"/>
+        <Setter Property="TextElement.Foreground" Value="{StaticResource ValueBrush}"/>
+    </Style>
 
     <!-- A chip's icon rides at the label's size, not the app default: a chip is 9.5px text, and a 14px icon beside it
          would be the loudest thing on the character card. -->
