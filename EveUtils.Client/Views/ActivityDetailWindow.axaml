@@ -145,6 +145,10 @@
                     <StackPanel Grid.Column="1" Spacing="2" IsVisible="{Binding HasTotalIsk}">
                         <TextBlock Classes="label" Text="TOTAL ISK"/>
                         <TextBlock x:Name="TotalIskFigure" Classes="durationfigure" Text="{Binding TotalIskText}"/>
+                        <!-- The whole group's above, this pilot's own under it (ET-296) — the figure the runs
+                             overview's own totals are made of. Only where somebody else flew along. -->
+                        <TextBlock x:Name="OwnShareFigure" Classes="hint" Margin="0"
+                                   IsVisible="{Binding HasOwnShare}" Text="{Binding OwnShareText}"/>
                     </StackPanel>
                     <!-- The stamp is the only thing telling a typed duration from a measured one; the figure beside
                          it cannot, because a correction overwrites the moments themselves. -->

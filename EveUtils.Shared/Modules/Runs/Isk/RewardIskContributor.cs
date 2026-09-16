@@ -20,14 +20,17 @@ internal sealed class RewardIskContributor : IIskContributor
     public IskContribution? Contribute(IReadOnlyList<RunIskFacts> runs, DateTime nowUtc)
     {
         RunIskParameter[] counted = [.. runs
-            .SelectMany(run => run.Parameters.Where(parameter => _Counts(parameter, run.StoppedAtUtc ?? nowUtc)))
+            .SelectMany(run => run.Parameters.Where(parameter => Counts(parameter, run.StoppedAtUtc ?? nowUtc)))
             .Distinct()];
         return counted.Length == 0
             ? null
             : new IskContribution(Source, counted.Sum(parameter => parameter.Amount.GetValueOrDefault()), IskCertainty.Measured);
     }
 
-    private static bool _Counts(RunIskParameter parameter, DateTime judgedAtUtc) =>
+    /// <summary>Whether this line counts on a run that stopped at <paramref name="judgedAtUtc"/> — the very rule
+    /// <see cref="Contribute"/> filters by, so <see cref="IskContributors.BreakdownByCharacter"/> can hand the one
+    /// copy of a duplicated line to one character and still add up to what the activity counts (ET-296).</summary>
+    internal static bool Counts(RunIskParameter parameter, DateTime judgedAtUtc) =>
         parameter.Key is RunParameterKey.Isk or RunParameterKey.BonusIsk or RunParameterKey.Escrow
         && parameter.Amount is not null
         && !(parameter.Key is RunParameterKey.BonusIsk

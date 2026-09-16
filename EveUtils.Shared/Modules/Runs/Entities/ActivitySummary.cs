@@ -39,6 +39,14 @@ public sealed class ActivitySummary
     /// breakdowns were stored.</summary>
     public string? IskContributions { get; set; }
 
+    /// <summary>The same breakdown split over the characters who flew it, as JSON (<c>StoredIskBreakdown</c>), so
+    /// every total can show the pilot's own share — the sum over this machine's own characters — while the detail
+    /// screen goes on showing the group's (ET-296). Per source it adds up to <see cref="IskContributions"/> exactly.
+    /// Stored per character rather than as one "own ISK" figure because which characters are local changes without
+    /// any run changing, and filtering at the read keeps that right without a rebuild. Null on a summary built
+    /// before the split was stored.</summary>
+    public string? IskContributionsByCharacter { get; set; }
+
     /// <summary>The <c>IskContributors.Signature</c> this row was built by; any other value is rebuilt at startup.</summary>
     public string? IskSources { get; set; }
 

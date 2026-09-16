@@ -103,13 +103,15 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
                 : "No solar system was recorded for this activity";
 
         DurationText = Duration.ToString(@"hh\:mm\:ss");
-        // The activity's own TOTAL ISK, the one the detail screen shows — never a sum of this row's own choosing:
-        // adding bounty and loot here alone left a mission's rewards out of it (ET-256).
-        Isk = row.Isk;
-        NetIsk = row.Isk.HasFigure ? row.Isk.Total : null;
+        // What this machine's own characters made of it (ET-296), out of the summary's stored per-character split —
+        // never a sum of this row's own choosing: adding bounty and loot here alone left a mission's rewards out of
+        // it (ET-256). The group's own total, fleet mates included, is the detail screen's to show.
+        Isk = row.OwnIsk;
+        IsFlownByOwnCharacter = row.IsFlownByOwnCharacter;
+        NetIsk = row.OwnIsk.HasFigure ? row.OwnIsk.Total : null;
         HasNet = NetIsk.HasValue;
         NetText = NetIsk is { } net
-            ? (net < 0 ? string.Empty : "+") + IskFormat.Compact(net) + " ISK" + IskFormat.ExpectedPart(row.Isk)
+            ? (net < 0 ? string.Empty : "+") + IskFormat.Compact(net) + " ISK" + IskFormat.ExpectedPart(row.OwnIsk)
             : string.Empty;
 
         // Snapshot first, then the live roster, then the bare id (ET-212, ET-247) — the exact chain the expanded
@@ -161,7 +163,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         IEnumerable<ActivityRewardChipViewModel> chips = row.Rewards
             .OrderBy(reward => (int)reward.ParameterKey)
             .Select(reward => new ActivityRewardChipViewModel(reward.ParameterKey, reward.Amount));
-        if (row.Isk.Of(IskSource.HomefrontPayout) is { } homefrontPayout)
+        if (row.OwnIsk.Of(IskSource.HomefrontPayout) is { } homefrontPayout)
             chips = chips.Append(new ActivityRewardChipViewModel(RunParameterKey.FixedPayout, homefrontPayout.Amount));
         Chips = [.. chips];
     }
@@ -177,11 +179,15 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 
     public TimeSpan Duration { get; }
 
-    /// <summary>The activity's TOTAL ISK by source — what the row's figure adds up, and what its day's source bar
-    /// splits (<see cref="RunsActivitySummaryText.SourcesFor"/>).</summary>
+    /// <summary>This machine's own characters' share of the activity's TOTAL ISK, by source (ET-296) — what the row's
+    /// figure adds up, and what its day's source bar splits (<see cref="RunsActivitySummaryText.SourcesFor"/>).</summary>
     public IskBreakdown Isk { get; }
 
     public decimal? NetIsk { get; }
+
+    /// <summary>Whether any of this machine's own characters flew it — false on a row a server tab holds for a
+    /// group this pilot has no run in, and on one whose character has been taken out of the registry.</summary>
+    public bool IsFlownByOwnCharacter { get; }
 
     public string TimeText { get; }
     public string SiteText { get; }
@@ -310,8 +316,15 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 
     /// <summary>What stands where the ISK would be when nothing on the activity was valued. Never a "0 ISK": a zero
     /// here reads as a valuation that was taken and came out at nothing (ET-161 AC-4, ET-65 AC-7). Not "no loot or
-    /// bounty" any more — since ET-256 ISK also counts rewards and payouts.</summary>
-    public string NoNetText => "nothing valued";
+    /// bounty" any more — since ET-256 ISK also counts rewards and payouts. A dash where none of this pilot's own
+    /// characters flew it (ET-296): there is nothing of his to value, which is not the same as nothing having been
+    /// valued, and the group's total is one click away on the detail.</summary>
+    public string NoNetText => IsFlownByOwnCharacter ? "nothing valued" : "—";
+
+    /// <summary>Why the dash, where the figure would be — said on hover rather than on the row, which has no room
+    /// for it. Null while the row is simply unvalued, which <see cref="NoNetText"/> already says in words.</summary>
+    public string? NoNetTooltip =>
+        IsFlownByOwnCharacter ? null : "none of your characters flew this — the group total is in the detail";
 
     public ObservableCollection<ActivityRewardChipViewModel> Chips { get; }
 

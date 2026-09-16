@@ -28,4 +28,10 @@ public sealed record GetActivityOverviewQuery(
     /// this as a count or a list must not read "empty" as "zero" for a fleet old enough to predate the table,
     /// exactly the distinction ET-166 already draws by leaving its completed-run count out rather than showing a
     /// false zero.</summary>
-    long? FleetId = null) : IQuery<Result<IReadOnlyList<ActivityOverviewRowDto>>>;
+    long? FleetId = null,
+    /// <summary>This machine's own characters — whose share of each row is <c>ActivityOverviewRowDto.OwnIsk</c>, the
+    /// figure every total on the runs overview adds up (ET-296). Not a filter on which activities come back: a fleet
+    /// mate's run pulled in by server sync belongs on the same row, it just earns nothing towards this pilot's own
+    /// total. Null asks for no split at all and leaves the own share equal to the group's — what a caller that knows
+    /// no registry, and every screen before this ticket, reads.</summary>
+    IReadOnlyList<long>? OwnCharacterIds = null) : IQuery<Result<IReadOnlyList<ActivityOverviewRowDto>>>;

@@ -60,6 +60,17 @@ public sealed record ActivityOverviewRowDto(
     /// <summary>The activity's TOTAL ISK and what each source added to it (ET-256) — the summary's stored breakdown,
     /// the very one the detail screen shows, so the row and the screen it opens can never disagree.</summary>
     IskBreakdown Isk,
+    /// <summary>What this machine's own characters earned of <see cref="Isk"/> — the figure the row shows and every
+    /// total on the runs overview adds up (ET-296). The group's own share of a fleet belongs in the detail, not in
+    /// the pilot's totals: three of his toons on a fleet of five is his three toons' ISK here.
+    ///
+    /// Equal to <see cref="Isk"/> on a solo activity, on one nobody else published a run for, and whenever the
+    /// caller named no characters at all (<c>GetActivityOverviewQuery.OwnCharacterIds</c>).</summary>
+    IskBreakdown OwnIsk,
+    /// <summary>Whether any of this machine's own characters flew it at all. False is a row that is here because a
+    /// server tab holds it, or because a character was taken out of the registry — its <see cref="OwnIsk"/> is empty
+    /// for a reason worth saying, rather than because nothing on it could be valued.</summary>
+    bool IsFlownByOwnCharacter,
     /// <summary>The abyssal pocket's own stored tier and weather (ET-241), raw as <c>RunParameterKey.AbyssalFilament</c>
     /// wrote it — null on every non-abyssal activity, and on an abyssal saved before this ticket. Not a member of
     /// <see cref="Rewards"/>: it names what the run was, it is not something the pilot earned. Read into a name (e.g.
