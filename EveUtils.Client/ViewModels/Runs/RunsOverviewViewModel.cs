@@ -11,6 +11,7 @@ using Avalonia.Controls;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Calendar;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
@@ -26,6 +27,7 @@ using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Transport;
@@ -92,13 +94,65 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// <summary>The month on screen (ET-233), the first of that month at local midnight. Local, not UTC, because the
     /// days below it already group by local day (ET-98) — a month that disagreed with its own days about where
     /// midnight falls would put an activity under a header that says one date inside a month that says another.
-    /// Untouched by a live refresh: only <see cref="PreviousMonthAsync"/> and <see cref="NextMonthAsync"/> move it,
-    /// so a run landing in the current month while an older one is on screen never pulls the reader back to it.</summary>
+    /// Untouched by a live refresh: only the range line's ◀▶, a month's name in the strip and a day or week picked in
+    /// another month move it, so a run landing in the current month while an older one is on screen never pulls the
+    /// reader back to it.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MonthHeaderText))]
     private DateTime _viewedMonthLocal = _MonthStart(DateTime.Now);
 
     public string MonthHeaderText => ViewedMonthLocal.ToString("MMMM yyyy", CultureInfo.InvariantCulture).ToUpperInvariant();
+
+    private readonly IWeekStartService? _weekStart;
+
+    /// <summary>Every activity the last read brought, over the strip and the month in view together, as the strip
+    /// counts them — rows are only ever built for the month (ET-292). What the range line totals a picked day or week
+    /// from, so a week reaching into the month before is still counted whole.</summary>
+    private IReadOnlyList<RunsActivityFacts> _loadedFacts = [];
+
+    private DateOnly _loadedFrom = DateOnly.MaxValue;
+    private DateOnly _loadedTo = DateOnly.MinValue;
+    private DateOnly? _firstTracked;
+
+    /// <summary>The selected tab's activities per local day, as <see cref="_RefreshRange"/> last grouped them.</summary>
+    private IReadOnlyDictionary<DateOnly, IReadOnlyList<RunsActivityFacts>> _tabDays =
+        new Dictionary<DateOnly, IReadOnlyList<RunsActivityFacts>>();
+
+    // ══ The range line and the activity strip (ET-292) ══════════════════════════════════════════════════════════
+
+    public RunsActivityStripViewModel Strip { get; }
+
+    /// <summary>The month in view, or a day or week picked in the strip. Picking never filters the list: the list is
+    /// always the month, and the pick is what the range line totals and the strip outlines.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsRangePicked))]
+    private RunsRangeKind _rangeKind = RunsRangeKind.Month;
+
+    /// <summary>The picked day, or the first day of the picked week. Meaningless while <see cref="RangeKind"/> is the
+    /// month.</summary>
+    [ObservableProperty] private DateOnly _rangeStart;
+
+    public bool IsRangePicked => RangeKind != RunsRangeKind.Month;
+
+    [ObservableProperty] private string _rangeTitleText = string.Empty;
+    [ObservableProperty] private string _rangeCountText = string.Empty;
+    [ObservableProperty] private string _rangeFlownText = string.Empty;
+    [ObservableProperty] private string _rangeNetText = string.Empty;
+    [ObservableProperty] private IskBreakdown _rangeIsk = IskBreakdown.None;
+    [ObservableProperty] private string _previousTooltip = "Previous month";
+    [ObservableProperty] private string _nextTooltip = "Next month";
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PreviousCommand))]
+    private bool _canGoPrevious = true;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(NextCommand))]
+    private bool _canGoNext = true;
+
+    /// <summary>A day was unfolded for the reader and belongs at the top of the list — once the list has laid the
+    /// change out, which only the view can tell (RunsWindow.axaml.cs).</summary>
+    public event Action<RunsDayViewModel>? DayScrollRequested;
 
     /// <param name="paneReadDelay">How long the pane waits before reading a newly selected activity (ET-291); zero in
     /// a test that wants that read to have happened by the time it looks.</param>
@@ -115,8 +169,16 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             .Where(character => character.EsiCharacterId is > 0)
             .GroupBy(character => (long)character.EsiCharacterId!.Value)
             .ToDictionary(group => group.Key, group => group.First().Name);
+        Strip = new RunsActivityStripViewModel(
+            day => _ = ToggleDayAsync(day), week => _ = ToggleWeekAsync(week), month => _ = _GoToMonthAsync(month));
+        // The week start is live (ET-297): the strip re-lays itself on a change, with no read unless the grid now
+        // reaches further back than the last one did.
+        _weekStart = services.GetService<IWeekStartService>();
+        if (_weekStart is not null)
+            _weekStart.Changed += _OnWeekStartChanged;
         SelectedTab = LocalTab;
         Pane = new RunsActivityPaneViewModel(_ReadPaneDetailAsync, _PublishTargetName, paneReadDelay);
+        _RefreshRange();
         _WatchItems(LocalTab);
 
         // A lane per local character, running or not. Each asks GetRunningRunsQuery (ET-203) which run is running for
@@ -262,7 +324,13 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             IsDrawerOpen = false;
     }
 
-    partial void OnSelectedTabChanged(RunsTabViewModel? value) => _SettleSelection();
+    partial void OnSelectedTabChanged(RunsTabViewModel? value)
+    {
+        _SettleSelection();
+        // The constructor sets the first tab before the strip and the pane exist.
+        if (Pane is not null)
+            _RefreshRange();
+    }
 
     /// <summary>The width the module content was handed. One place decides what "wide" means (ET-291).</summary>
     public void ApplyWidth(double width) => IsWide = width >= RunsLayout.WideFrom;
@@ -481,10 +549,11 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// <summary>One pass: everything read and every row built off the UI thread, then shown here.</summary>
     private async Task _ReadOnceAsync(RunChangeBatch? changed, bool withAutoSave)
     {
-        var request = new ScreenReadRequest(ViewedMonthLocal,
+        (DateOnly readFrom, DateOnly readTo) = _ReadRange();
+        var request = new ScreenReadRequest(ViewedMonthLocal, readFrom, readTo,
             LocalTab.Days.SelectMany(day => day.Rows).ToDictionary(row => row.ActivitySummaryId),
             Tabs.Where(tab => tab.ServerAddress is not null).ToDictionary(tab => tab.ServerAddress!, tab => tab.Header),
-            withAutoSave);
+            withAutoSave, changed);
         ScreenRead read = await Task.Run(() => _ReadScreenAsync(request));
 
         _ShowRunning(read.Running);
@@ -501,6 +570,9 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
         HasServerTabs = Tabs.Count > 1;
         _canPublish = read.CanPublish;
+
+        if (read.OverviewSkipped)
+            return;
 
         if (read.Rows is null)
         {
@@ -540,10 +612,16 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             tab.StatusMessage = tab.Days.Count > 0 ? null : _EmptyMessageFor(tab);
         }
 
+        _loadedFacts = read.Facts;
+        _loadedFrom = request.ReadFrom;
+        _loadedTo = request.ReadTo;
+        _firstTracked = read.FirstTracked;
+
         // The selected activity may have been replaced by an equal instance, or have left this month altogether.
         ActivityOverviewRowViewModel? selectedBefore = SelectedRow;
         _SettleSelection();
-        Pane.ShowMonth(SelectedTab?.MonthActivitiesText ?? string.Empty, SelectedTab?.MonthNetText ?? string.Empty);
+        // A live refresh keeps a picked day or week, and the days it unfolded stay unfolded (Days keep their fold).
+        _RefreshRange();
         // A change that reached the activity on show, without its own row having moved: the pane's crew and loot are
         // read again, the head it is already drawing left alone.
         if (SelectedRow is { } stillSelected && ReferenceEquals(stillSelected, selectedBefore)
@@ -571,7 +649,20 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             await _dispatcher.Send(new SaveRunsLeftUnfinishedCommand(DateTime.UtcNow));
         Result<IReadOnlyList<UnfinishedRunDto>> unfinished = await _dispatcher.Query(new GetUnfinishedRunsQuery());
 
-        (DateTime fromUtc, DateTime toUtc) = _MonthRangeUtc(request.MonthLocal);
+        // A bounty or a loot line landing on a run that is still running changes nothing in the list or the strip: a
+        // running run has no activity yet. Only RUNNING and UNFINISHED are read for such a batch — a run being saved has
+        // left GetRunningRunsQuery by the time its batch arrives, so a save still reads everything (ET-292).
+        if (request.Changed is { IsUnscoped: false } changed && changed.RunIds.Count > 0 && running.IsSuccess
+            && changed.RunIds.All(runId => runningFacts.Any(run => run.Run.Id == runId))
+            && changed.GroupCodes.All(groupCode => runningFacts.Any(run => run.Run.GroupCode == groupCode)))
+            return new ScreenRead(runningFacts, unfinished.Value ?? [], newServers, canPublish, null, null, false,
+                [], null, OverviewSkipped: true);
+
+        // One read over the strip and the month in view together; rows are built for the month only, and the rest is
+        // counted as facts for the strip and the range line (ET-292).
+        DateTime fromUtc = request.ReadFrom.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).ToUniversalTime();
+        DateTime toUtc = request.ReadTo.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).ToUniversalTime();
+        (DateTime monthFromUtc, DateTime monthToUtc) = _MonthRangeUtc(request.MonthLocal);
         // This machine's own characters, so every row comes back with their share of it rather than the group's
         // (ET-296) — worked out in the handler, where the stored split is and where the read already runs off the UI
         // thread. Not a filter: a fleet mate's run pulled in by sync keeps its row, it just earns nothing here.
@@ -580,11 +671,20 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
                 OwnCharacterIds: [.. _namesById.Keys]));
         if (!overview.IsSuccess || overview.Value is null)
             return new ScreenRead(runningFacts, unfinished.Value ?? [], newServers, canPublish, null,
-                overview.Messages.Count > 0 ? overview.Messages[0].Text : "The activities could not be read.", false);
+                overview.Messages.Count > 0 ? overview.Messages[0].Text : "The activities could not be read.", false,
+                [], null, OverviewSkipped: false);
+
+        Result<DateTime?> firstStart = await _dispatcher.Query(new GetFirstActivityStartQuery());
+        DateOnly? firstTracked = firstStart is { IsSuccess: true, Value: { } firstUtc }
+            ? DateOnly.FromDateTime(firstUtc.ToLocalTime())
+            : null;
+        RunsActivityFacts[] facts = [.. overview.Value.Select(RunsActivityFacts.From)];
+        ActivityOverviewRowDto[] monthRows = [.. overview.Value
+            .Where(dto => dto.StartedAtUtc >= monthFromUtc && dto.StartedAtUtc < monthToUtc)];
 
         string ServerNameOf(string address) => headers.GetValueOrDefault(address) ?? address;
         List<(ActivityOverviewRowViewModel Row, ActivityOverviewRowViewModel? Previous)> rows = [];
-        foreach (ActivityOverviewRowDto dto in overview.Value)
+        foreach (ActivityOverviewRowDto dto in monthRows)
         {
             request.ShownRows.TryGetValue(dto.ActivitySummaryId, out ActivityOverviewRowViewModel? shown);
             RunPublishProgress? progress = _autoPublisher?.ProgressFor(dto.GroupCode);
@@ -597,9 +697,10 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
         // Only worth asking when the fleet filter came up empty — a coverage query a full result already answers by
         // existing (ET-185: GetFleetRunCoverageQuery is the "why is this empty" question, not the "what is here" one).
-        bool fleetHistoryKnownEmpty = overview.Value.Count > 0 || _fleetFilter is null
+        bool fleetHistoryKnownEmpty = monthRows.Length > 0 || _fleetFilter is null
             || await _IsFleetHistoryKnownEmptyAsync(_fleetFilter);
-        return new ScreenRead(runningFacts, unfinished.Value ?? [], newServers, canPublish, rows, null, fleetHistoryKnownEmpty);
+        return new ScreenRead(runningFacts, unfinished.Value ?? [], newServers, canPublish, rows, null, fleetHistoryKnownEmpty,
+            facts, firstTracked, OverviewSkipped: false);
     }
 
     /// <summary>Every coupled server, and a name for each one this screen has no tab for yet — never rebuilding the
@@ -906,16 +1007,223 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         _services.GetService<IToastService>()?.Show(title, message, kind);
     }
 
-    [RelayCommand]
-    private Task PreviousMonthAsync() => _GoToMonthAsync(ViewedMonthLocal.AddMonths(-1));
+    // ── Picking in the strip, and the range line's ◀ ✕ ▶ (ET-292) ─────────────────────────────────────────────────
 
-    [RelayCommand]
-    private Task NextMonthAsync() => _GoToMonthAsync(ViewedMonthLocal.AddMonths(1));
+    private DateOnly _MonthInView => DateOnly.FromDateTime(ViewedMonthLocal);
 
-    private Task _GoToMonthAsync(DateTime monthLocal)
+    private DayOfWeek _FirstDay => _weekStart?.FirstDay ?? WeekStartService.SystemDefault();
+
+    private static DateOnly _Today => DateOnly.FromDateTime(DateTime.Now);
+
+    /// <summary>A click on a day in the strip: picks it, or — on the day already picked — goes back to the month. The
+    /// day stays unfolded either way.</summary>
+    public Task ToggleDayAsync(DateOnly day)
     {
-        ViewedMonthLocal = monthLocal;
+        if (RangeKind == RunsRangeKind.Day && RangeStart == day)
+        {
+            ClearRange();
+            return Task.CompletedTask;
+        }
+
+        return PickDayAsync(day);
+    }
+
+    /// <summary>A click on a week segment: picks the week, or lets the picked one go.</summary>
+    public Task ToggleWeekAsync(DateOnly weekStart)
+    {
+        if (RangeKind == RunsRangeKind.Week && RangeStart == weekStart)
+        {
+            ClearRange();
+            return Task.CompletedTask;
+        }
+
+        return PickWeekAsync(weekStart);
+    }
+
+    /// <summary>
+    /// The range line on this day and its totals, the day unfolded and scrolled to the top of the list — and nothing
+    /// else touched: the list keeps the whole month and every other day keeps its fold (besluit Jithran, 15 Sep).
+    /// A day in another month brings that month into view first, so there is a header to scroll to.
+    /// </summary>
+    public async Task PickDayAsync(DateOnly day)
+    {
+        RangeKind = RunsRangeKind.Day;
+        RangeStart = day;
+        var month = new DateOnly(day.Year, day.Month, 1);
+        if (month != _MonthInView)
+            await _GoToMonthAsync(month, keepRange: true);
+        else
+            _RefreshRange();
+
+        _Reveal([day]);
+    }
+
+    /// <summary>The week's totals on the range line, and its days with runs unfolded with the first of them in the list
+    /// — the newest, since the list runs newest first — at the top, so the week reads downwards. The month in view
+    /// stays where it is while the week touches it; otherwise it becomes the month of the week's first day with runs.</summary>
+    public async Task PickWeekAsync(DateOnly weekStart)
+    {
+        RangeKind = RunsRangeKind.Week;
+        RangeStart = weekStart;
+        DateOnly[] days = [.. Enumerable.Range(0, 7).Select(weekStart.AddDays)];
+        DateOnly monthInView = _MonthInView;
+        if (!days.Any(day => day.Year == monthInView.Year && day.Month == monthInView.Month))
+        {
+            DateOnly anchor = days.FirstOrDefault(_tabDays.ContainsKey, weekStart);
+            await _GoToMonthAsync(new DateOnly(anchor.Year, anchor.Month, 1), keepRange: true);
+        }
+        else
+        {
+            _RefreshRange();
+        }
+
+        _Reveal(days);
+    }
+
+    [RelayCommand]
+    public void ClearRange()
+    {
+        RangeKind = RunsRangeKind.Month;
+        _RefreshRange();
+    }
+
+    /// <summary>◀: the month before, or the previous day or week that has runs on this tab.</summary>
+    [RelayCommand(CanExecute = nameof(CanGoPrevious))]
+    private Task PreviousAsync() => _StepAsync(-1);
+
+    [RelayCommand(CanExecute = nameof(CanGoNext))]
+    private Task NextAsync() => _StepAsync(1);
+
+    private Task _StepAsync(int direction)
+    {
+        switch (RangeKind)
+        {
+            case RunsRangeKind.Day when _StepDay(direction) is { } day:
+                return PickDayAsync(day);
+            case RunsRangeKind.Week when _StepWeek(direction) is { } week:
+                return PickWeekAsync(week);
+            case RunsRangeKind.Month:
+                return _GoToMonthAsync(_MonthInView.AddMonths(direction));
+            default:
+                return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>The nearest day with runs before or after the picked one, among what the last read brought (the strip
+    /// and the month in view).</summary>
+    private DateOnly? _StepDay(int direction)
+    {
+        IEnumerable<DateOnly> candidates = direction < 0
+            ? _tabDays.Keys.Where(day => day < RangeStart).OrderDescending()
+            : _tabDays.Keys.Where(day => day > RangeStart).Order();
+        return candidates.Cast<DateOnly?>().FirstOrDefault();
+    }
+
+    private DateOnly? _StepWeek(int direction)
+    {
+        DayOfWeek firstDay = _FirstDay;
+        IEnumerable<DateOnly> candidates = direction < 0
+            ? _tabDays.Keys.Where(day => day < RangeStart).OrderDescending()
+            : _tabDays.Keys.Where(day => day >= RangeStart.AddDays(7)).Order();
+        return candidates.Select(day => (DateOnly?)WeekMath.StartOf(day, firstDay)).FirstOrDefault();
+    }
+
+    private Task _GoToMonthAsync(DateOnly month, bool keepRange = false)
+    {
+        if (!keepRange)
+            RangeKind = RunsRangeKind.Month;
+        ViewedMonthLocal = month.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local);
+        _RefreshRange();
         return _ReadAsync(null, withAutoSave: false);
+    }
+
+    /// <summary>Unfolds these days where the selected tab has them and asks the view to bring the first of them in the
+    /// list to the top.</summary>
+    private void _Reveal(IEnumerable<DateOnly> days)
+    {
+        if (SelectedTab is not { } tab)
+            return;
+
+        IReadOnlyList<RunsDayViewModel> expanded =
+            tab.ExpandDays(days.Select(day => day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local)));
+        if (expanded.Count > 0)
+            DayScrollRequested?.Invoke(expanded[0]);
+    }
+
+    /// <summary>What one read has to cover: the twelve weeks of the strip and the month in view, whichever reaches
+    /// further either way. Local days; the read converts local midnight to UTC (ET-233).</summary>
+    private (DateOnly From, DateOnly To) _ReadRange()
+    {
+        DateOnly month = _MonthInView;
+        DateOnly stripStart = RunsActivityStripViewModel.StartFor(_Today, month, _FirstDay);
+        DateOnly stripEnd = stripStart.AddDays(7 * RunsActivityStripViewModel.Weeks);
+        DateOnly monthEnd = month.AddMonths(1);
+        return (stripStart < month ? stripStart : month, stripEnd > monthEnd ? stripEnd : monthEnd);
+    }
+
+    /// <summary>A week start changed while the screen is open (ET-297): the strip re-lays itself from what is already
+    /// loaded. A picked week goes — the same dates are a different week now — and a picked day stays. Read again only
+    /// when the grid now reaches past what the last read covered.</summary>
+    private void _OnWeekStartChanged(DayOfWeek firstDay)
+    {
+        if (RangeKind == RunsRangeKind.Week)
+            RangeKind = RunsRangeKind.Month;
+        _RefreshRange();
+
+        (DateOnly from, DateOnly to) = _ReadRange();
+        if (from < _loadedFrom || to > _loadedTo)
+            _ = _ReadAsync(null, withAutoSave: false);
+    }
+
+    /// <summary>The strip and the range line, drawn again from what is loaded — never a read.</summary>
+    private void _RefreshRange()
+    {
+        RunsTabViewModel? tab = SelectedTab;
+        _tabDays = tab is null
+            ? new Dictionary<DateOnly, IReadOnlyList<RunsActivityFacts>>()
+            : _loadedFacts
+                .Where(tab.Holds)
+                .GroupBy(activity => activity.Day)
+                .ToDictionary(day => day.Key, day => (IReadOnlyList<RunsActivityFacts>)[.. day]);
+
+        Strip.Show(new RunsStripInput(_FirstDay, _Today, _firstTracked, _MonthInView, RangeKind, RangeStart, _tabDays));
+
+        List<IRunsActivityFigures> figures;
+        switch (RangeKind)
+        {
+            case RunsRangeKind.Day:
+                figures = [.. _tabDays.GetValueOrDefault(RangeStart) ?? []];
+                RangeTitleText = RangeStart.ToString("dddd d MMMM", CultureInfo.InvariantCulture).ToUpperInvariant();
+                PreviousTooltip = "Previous day with runs";
+                NextTooltip = "Next day with runs";
+                CanGoPrevious = _StepDay(-1) is not null;
+                CanGoNext = _StepDay(1) is not null;
+                break;
+            case RunsRangeKind.Week:
+                figures = [.. Enumerable.Range(0, 7).SelectMany(offset => _tabDays.GetValueOrDefault(RangeStart.AddDays(offset)) ?? [])];
+                RangeTitleText = WeekMath.RangeText(RangeStart);
+                PreviousTooltip = "Previous week with runs";
+                NextTooltip = "Next week with runs";
+                CanGoPrevious = _StepWeek(-1) is not null;
+                CanGoNext = _StepWeek(1) is not null;
+                break;
+            default:
+                // The month's own rows, every day of them whether folded or not: a month is always complete, and so
+                // is its total (ET-233).
+                figures = [.. tab?.Days.SelectMany(day => day.Rows) ?? []];
+                RangeTitleText = MonthHeaderText;
+                PreviousTooltip = "Previous month";
+                NextTooltip = "Next month";
+                CanGoPrevious = true;
+                CanGoNext = true;
+                break;
+        }
+
+        RangeCountText = RunsActivitySummaryText.ActivitiesCount(figures.Count);
+        RangeFlownText = RunsActivitySummaryText.FlownFor(figures);
+        RangeNetText = RunsActivitySummaryText.NetFor(figures);
+        RangeIsk = RunsActivitySummaryText.SourcesFor(figures);
+        Pane.ShowMonth(RangeCountText, RangeNetText);
     }
 
     private static DateTime _MonthStart(DateTime local) => new(local.Year, local.Month, 1, 0, 0, 0, DateTimeKind.Local);
@@ -1046,6 +1354,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     public void Dispose()
     {
         _runChangesSubscription?.Dispose();
+        if (_weekStart is not null)
+            _weekStart.Changed -= _OnWeekStartChanged;
         if (_clock is null)
             return;
 
@@ -1055,9 +1365,12 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     private sealed record ScreenReadRequest(
         DateTime MonthLocal,
+        DateOnly ReadFrom,
+        DateOnly ReadTo,
         IReadOnlyDictionary<Guid, ActivityOverviewRowViewModel> ShownRows,
         IReadOnlyDictionary<string, string> ServerHeaders,
-        bool WithAutoSave);
+        bool WithAutoSave,
+        RunChangeBatch? Changed);
 
     private sealed record RunningRunFacts(RunningRunDto Run, string TypeText, string? SystemText);
 
@@ -1068,5 +1381,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         bool CanPublish,
         IReadOnlyList<(ActivityOverviewRowViewModel Row, ActivityOverviewRowViewModel? Previous)>? Rows,
         string? OverviewError,
-        bool FleetHistoryKnownEmpty);
+        bool FleetHistoryKnownEmpty,
+        IReadOnlyList<RunsActivityFacts> Facts,
+        DateOnly? FirstTracked,
+        bool OverviewSkipped);
 }

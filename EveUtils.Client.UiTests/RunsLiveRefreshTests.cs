@@ -364,11 +364,13 @@ public sealed class RunsLiveRefreshTests
 
     /// <summary>
     /// AC-4, measured: two hundred payouts landing while the overview is open over three hundred saved activities, with
-    /// the window the app really runs with. The overview is read a handful of times, not two hundred; the figures go
-    /// to the test output. Red with no window (every signal its own read): two hundred reads.
+    /// the window the app really runs with. Since ET-292 a batch whose runs are all still running does not read the
+    /// overview at all — a running run has no activity in the list or the strip yet — so the count is zero; RUNNING is
+    /// still read. The figures go to the test output. Red with no skip: a handful of reads per window; red with no
+    /// window either: two hundred.
     /// </summary>
     [AvaloniaFact]
-    public async Task ABurstOfPayouts_ReadsTheOverviewAHandfulOfTimes_NotOncePerPayout()
+    public async Task ABurstOfPayoutsOnARunningRun_DoesNotReadTheOverview()
     {
         using var instance = TestClientInstance.Create(services => services.AddSingleton(provider =>
             new RunChangeFeed(provider.GetRequiredService<IEventBus>(), provider.GetRequiredService<ILogger<RunChangeFeed>>())));
@@ -401,12 +403,11 @@ public sealed class RunsLiveRefreshTests
         await overview.LoadAsync(Token);
         reread.Stop();
 
-        int ceiling = (int)(burst.Elapsed / RunChangeFeed.DefaultWindow) + 2;
         TestContext.Current.TestOutputHelper?.WriteLine(
             $"300 activities stored, all in the current month: first load {load.ElapsedMilliseconds} ms. "
-            + $"200 payouts over {burst.ElapsedMilliseconds} ms read the overview {reads} times (ceiling {ceiling}); "
+            + $"200 payouts on a running run over {burst.ElapsedMilliseconds} ms read the overview {reads} times; "
             + $"a warm whole re-read takes {reread.ElapsedMilliseconds} ms.");
-        Assert.InRange(reads, 1, ceiling);
+        Assert.Equal(0, reads);
     }
 
     private static ICqrsDispatcher _Dispatcher(TestClientInstance instance) => instance.Services.GetRequiredService<ICqrsDispatcher>();

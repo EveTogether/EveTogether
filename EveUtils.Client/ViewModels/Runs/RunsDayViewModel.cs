@@ -71,9 +71,8 @@ public sealed partial class RunsDayViewModel : ObservableObject
     {
         Rows.ReconcileTo(rows);
 
-        var flown = TimeSpan.FromSeconds(rows.Sum(row => row.Duration.TotalSeconds));
         CountText = RunsActivitySummaryText.ActivitiesCount(rows.Count);
-        FlownText = $"{(int)flown.TotalHours}:{flown.Minutes:00}:{flown.Seconds:00} flown";
+        FlownText = RunsActivitySummaryText.FlownFor(rows);
         NetText = RunsActivitySummaryText.NetFor(rows);
         CountAndFlownText = $"{CountText} · {FlownText}";
         SummaryText = $"{CountAndFlownText} · {NetText}";

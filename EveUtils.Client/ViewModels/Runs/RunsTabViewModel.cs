@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
-using EveUtils.Shared.Modules.Runs.Isk;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
@@ -44,14 +43,10 @@ public sealed partial class RunsTabViewModel(string header, string? serverAddres
     /// say so.</summary>
     [ObservableProperty] private string? _statusMessage;
 
-    /// <summary>The viewed month's own total (ET-233): the same formula every day header sums its own rows with, over
-    /// every row this tab holds regardless of which days are folded — a month is always complete, and so is its total.
-    /// Split in two (ET-266) so the month bar can give the ISK figure more weight than the activity count.</summary>
-    [ObservableProperty] private string _monthActivitiesText = string.Empty;
-
-    [ObservableProperty] private string _monthNetText = string.Empty;
-
-    [ObservableProperty] private IskBreakdown _monthIsk = IskBreakdown.None;
+    /// <summary>Whether an activity belongs under this tab: every one on Local, the ones published to it on a server
+    /// tab — the rule <see cref="RunsOverviewViewModel"/> hands rows over by, applied to what the strip counts.</summary>
+    public bool Holds(RunsActivityFacts activity) =>
+        ServerAddress is not { } address || activity.ServerAddresses.Contains(address);
 
     /// <summary>
     /// This tab's activities as they now stand, grouped under their local day. A day already on screen is the same day
@@ -94,7 +89,6 @@ public sealed partial class RunsTabViewModel(string header, string? serverAddres
             _isShowing = false;
         }
 
-        UpdateMonthSummary();
         RebuildItems();
     }
 
@@ -129,23 +123,31 @@ public sealed partial class RunsTabViewModel(string header, string? serverAddres
         ItemsRebuilt?.Invoke(this);
     }
 
-    /// <summary>Unfolds one day and leaves every other as the reader set it — for the activity strip (RO-3), which
+    /// <summary>Unfolds one day and leaves every other as the reader set it — for the activity strip (ET-292), which
     /// picks a day to show. Null when this tab holds nothing on that day.</summary>
-    public RunsDayViewModel? ExpandDay(DateTime dayLocal)
-    {
-        if (Days.FirstOrDefault(day => day.Day == dayLocal.Date) is not { } shown)
-            return null;
+    public RunsDayViewModel? ExpandDay(DateTime dayLocal) => ExpandDays([dayLocal]).FirstOrDefault();
 
-        shown.IsExpanded = true;
-        return shown;
-    }
-
-    public void UpdateMonthSummary()
+    /// <summary>Unfolds the days this tab holds among these, in the order the list draws them (newest first), in one
+    /// rebuild of the list — a picked week is up to seven of them. Every other day keeps its fold.</summary>
+    public IReadOnlyList<RunsDayViewModel> ExpandDays(IEnumerable<DateTime> daysLocal)
     {
-        List<ActivityOverviewRowViewModel> rows = [.. Days.SelectMany(day => day.Rows)];
-        MonthActivitiesText = $"{RunsActivitySummaryText.ActivitiesCount(rows.Count)} this month";
-        MonthNetText = RunsActivitySummaryText.NetFor(rows);
-        MonthIsk = RunsActivitySummaryText.SourcesFor(rows);
+        HashSet<DateTime> wanted = [.. daysLocal.Select(day => day.Date)];
+        List<RunsDayViewModel> expanded = [.. Days.Where(day => wanted.Contains(day.Day))];
+        bool anyFolded = expanded.Any(day => !day.IsExpanded);
+        _isShowing = true;
+        try
+        {
+            foreach (RunsDayViewModel day in expanded)
+                day.IsExpanded = true;
+        }
+        finally
+        {
+            _isShowing = false;
+        }
+
+        if (anyFolded)
+            RebuildItems();
+        return expanded;
     }
 
     private void _OnDayExpandedChanged(RunsDayViewModel day)

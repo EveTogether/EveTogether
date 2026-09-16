@@ -35,7 +35,7 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// A click selects the row and the pane reads it; the detail screen (ET-162) is a double-click, ↵ or the pane's own
 /// OPEN DETAIL. PUBLISH and RETRY live in the pane since ET-291 — the row keeps the commands, not a button.
 /// </summary>
-public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
+public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsActivityFigures
 {
     private const int MaxCrewFaces = 5;
 
