@@ -1058,9 +1058,9 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         _Reveal([day]);
     }
 
-    /// <summary>The week's totals on the range line, and its days with runs unfolded, the earliest at the top. The month
-    /// in view stays where it is while the week touches it; otherwise it becomes the month of the week's first day with
-    /// runs.</summary>
+    /// <summary>The week's totals on the range line, and its days with runs unfolded with the first of them in the list
+    /// — the newest, since the list runs newest first — at the top, so the week reads downwards. The month in view
+    /// stays where it is while the week touches it; otherwise it becomes the month of the week's first day with runs.</summary>
     public async Task PickWeekAsync(DateOnly weekStart)
     {
         RangeKind = RunsRangeKind.Week;
@@ -1137,7 +1137,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         return _ReadAsync(null, withAutoSave: false);
     }
 
-    /// <summary>Unfolds these days where the selected tab has them and asks the view to bring the earliest to the top.</summary>
+    /// <summary>Unfolds these days where the selected tab has them and asks the view to bring the first of them in the
+    /// list to the top.</summary>
     private void _Reveal(IEnumerable<DateOnly> days)
     {
         if (SelectedTab is not { } tab)

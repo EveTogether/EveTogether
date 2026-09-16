@@ -127,12 +127,12 @@ public sealed partial class RunsTabViewModel(string header, string? serverAddres
     /// picks a day to show. Null when this tab holds nothing on that day.</summary>
     public RunsDayViewModel? ExpandDay(DateTime dayLocal) => ExpandDays([dayLocal]).FirstOrDefault();
 
-    /// <summary>Unfolds the days this tab holds among these, earliest first, in one rebuild of the list — a picked week
-    /// is up to seven of them. Every other day keeps its fold.</summary>
+    /// <summary>Unfolds the days this tab holds among these, in the order the list draws them (newest first), in one
+    /// rebuild of the list — a picked week is up to seven of them. Every other day keeps its fold.</summary>
     public IReadOnlyList<RunsDayViewModel> ExpandDays(IEnumerable<DateTime> daysLocal)
     {
         HashSet<DateTime> wanted = [.. daysLocal.Select(day => day.Date)];
-        List<RunsDayViewModel> expanded = [.. Days.Where(day => wanted.Contains(day.Day)).OrderBy(day => day.Day)];
+        List<RunsDayViewModel> expanded = [.. Days.Where(day => wanted.Contains(day.Day))];
         bool anyFolded = expanded.Any(day => !day.IsExpanded);
         _isShowing = true;
         try
