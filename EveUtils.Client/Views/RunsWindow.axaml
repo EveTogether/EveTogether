@@ -596,12 +596,21 @@
             </Style>
             <Style Selector="mi|MaterialIcon.tileicon">
                 <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <!-- Stretch is the Grid default for a child (ET-293); an icon this much smaller than its row then
+                     anchors at the row's top instead of the row's middle, same as ET-305's portrait below. -->
+                <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
             <Style Selector="Button.tile.on mi|MaterialIcon.tileicon">
                 <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
             </Style>
             <Style Selector="ctl|HexPortrait.tileportrait">
                 <Setter Property="Opacity" Value=".45"/>
+                <!-- ET-305: no VerticalAlignment here meant Stretch (the Grid default), which anchors a fixed-size
+                     control at the row's top rather than centring it — the checkbox and tilename/tilecount both set
+                     Center explicitly and read fine; the portrait was the one piece that never did. ColumnFlowPanel
+                     stretches a row past MinRowHeight to use spare height (RO-4), so the gap this left under a
+                     short row is not a rounding error but the strip's own height. -->
+                <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
             <Style Selector="Button.tile.on ctl|HexPortrait.tileportrait">
                 <Setter Property="Opacity" Value="1"/>

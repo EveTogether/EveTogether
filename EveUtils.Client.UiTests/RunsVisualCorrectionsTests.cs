@@ -236,6 +236,57 @@ public sealed class RunsVisualCorrectionsTests
             $"the picked day's first row {rowRect} starts above the sticky header's bottom {stickyBottom} — clipped under it");
     }
 
+    /// <summary>ET-305: the portrait (CHARACTERS) and the icon (TYPES) in a filter tile centre vertically on the
+    /// tile, in both its normal form and ET-303's compact one — including a row well past <c>MinRowHeight</c>,
+    /// which is what actually exposed this in Jithran's screenshot (ColumnFlowPanel stretches a row to use spare
+    /// height beside the taller strip, RO-4). Counter-proof: before this fix neither style set VerticalAlignment,
+    /// so both fell back to the Grid's own Stretch default (ET-293). A Bounds-only check would miss it for the
+    /// portrait — Stretch makes its Bounds equal the row, so a Bounds-vs-tile centre compare is trivially true —
+    /// which is why this also pins each glyph's own height to its natural size: stretched, <c>HexPortrait</c> still
+    /// paints a fixed 20 px hex at its own top-left (ET-290's shared draw), so a Bounds taller than that natural
+    /// size is exactly the bug, on screen as empty space under the portrait and none above it.</summary>
+    [AvaloniaTheory]
+    [InlineData(1920d, false)]
+    [InlineData(630d, true)]
+    public async Task FilterTileGlyph_IsVerticallyCentered_NormalAndCompact(double width, bool compact)
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        using var instance = TestClientInstance.Create();
+        await _SaveRunAsync(instance, 90000001, Evening, cancellationToken);
+        Presented presented = await _PresentAsync(instance, width, cancellationToken);
+
+        var band = _Named<Grid>(presented, "Band");
+        Assert.Equal(compact, band.Classes.Contains("compact"));
+
+        // Icon (16 px, its own explicit Height) and portrait (HexPortrait's 34:39 proportion at Size 20) each have
+        // one correct natural height regardless of how tall the row around them stretches.
+        List<(Control Glyph, Button Tile, double NaturalHeight)> glyphs = [.. presented.Content.GetVisualDescendants()
+            .OfType<Button>()
+            .Where(tile => tile.Classes.Contains("tile") && tile.IsVisible)
+            .Select(tile => (Tile: tile, Glyph: tile.GetVisualDescendants().OfType<Control>().FirstOrDefault(c =>
+                c.IsVisible && (c.Classes.Contains("tileicon") || c.Classes.Contains("tileportrait")))))
+            .Where(pair => pair.Glyph is not null)
+            .Select(pair => (pair.Glyph!, pair.Tile,
+                NaturalHeight: pair.Glyph!.Classes.Contains("tileicon") ? 16.0 : System.Math.Round(20 * 39.0 / 34)))];
+
+        Assert.NotEmpty(glyphs);
+        Assert.Contains(glyphs, g => g.Glyph.Classes.Contains("tileportrait"));
+        Assert.Contains(glyphs, g => g.Glyph.Classes.Contains("tileicon"));
+        foreach ((Control glyph, Button tile, double naturalHeight) in glyphs)
+        {
+            Rect glyphRect = _Rect(presented, glyph);
+            Rect tileRect = _Rect(presented, tile);
+            Assert.True(System.Math.Abs(glyphRect.Height - naturalHeight) <= 1.0,
+                $"{glyph.Classes} is {glyphRect.Height} px tall, not its natural {naturalHeight} — stretched to the row at {width}");
+            double glyphCenter = glyphRect.Top + glyphRect.Height / 2;
+            double tileCenter = tileRect.Top + tileRect.Height / 2;
+            Assert.True(System.Math.Abs(glyphCenter - tileCenter) <= 1.0,
+                $"{glyph.Classes} rect={glyphRect} centre {glyphCenter} vs tile rect={tileRect} centre {tileCenter} at {width}");
+            Assert.True(glyphRect.Top >= tileRect.Top - 0.5 && glyphRect.Bottom <= tileRect.Bottom + 0.5,
+                $"{glyph.Classes} {glyphRect} leaves the tile {tileRect} at {width}");
+        }
+    }
+
     private static void AssertAllWithin(IReadOnlyList<double> widths, double tolerance, string block)
     {
         double first = widths[0];
