@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace EveUtils.Client.ViewModels.Runs;
@@ -19,7 +20,8 @@ public sealed record RunsListNote(string Text);
 /// <see cref="RunsOverviewViewModel"/> from the one overview read, so a server tab cannot disagree with Local about
 /// an activity they both show.
 /// </summary>
-public sealed partial class RunsTabViewModel(string header, string? serverAddress) : ObservableObject
+public sealed partial class RunsTabViewModel(string header, string? serverAddress, Func<RunsDayViewModel, Task> publishLocal)
+    : ObservableObject
 {
     private bool _isShowing;
 
@@ -53,7 +55,7 @@ public sealed partial class RunsTabViewModel(string header, string? serverAddres
     /// afterwards, open or folded as the reader left it (ET-189); a row whose figures did not move is the same row
     /// (ET-222), which keeps an opened row open and the scroll offset where it was while payouts land.
     /// </summary>
-    public void Show(IReadOnlyList<ActivityOverviewRowViewModel> rows)
+    public void Show(IReadOnlyList<ActivityOverviewRowViewModel> rows, bool canPublish, bool isPublishing)
     {
         Dictionary<DateTime, RunsDayViewModel> shownDays = Days.ToDictionary(day => day.Day);
         List<RunsDayViewModel> days = [];
@@ -64,12 +66,12 @@ public sealed partial class RunsTabViewModel(string header, string? serverAddres
             {
                 if (shownDays.TryGetValue(day.Key, out RunsDayViewModel? shown))
                 {
-                    shown.Show([.. day]);
+                    shown.Show([.. day], canPublish, isPublishing);
                     days.Add(shown);
                     continue;
                 }
 
-                var fresh = new RunsDayViewModel(day.Key, [.. day]);
+                var fresh = new RunsDayViewModel(day.Key, [.. day], canPublish, isPublishing, publishLocal);
                 fresh.ExpandedChanged += _OnDayExpandedChanged;
                 days.Add(fresh);
             }

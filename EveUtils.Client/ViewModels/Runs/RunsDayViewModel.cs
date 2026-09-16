@@ -19,13 +19,17 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// </summary>
 public sealed partial class RunsDayViewModel : ObservableObject
 {
-    public RunsDayViewModel(DateTime day, IReadOnlyList<ActivityOverviewRowViewModel> rows)
+    private readonly Func<RunsDayViewModel, Task> _publishLocal;
+
+    public RunsDayViewModel(DateTime day, IReadOnlyList<ActivityOverviewRowViewModel> rows, bool canPublish,
+        bool isPublishing, Func<RunsDayViewModel, Task> publishLocal)
     {
+        _publishLocal = publishLocal;
         Day = day;
         DayText = day.ToString("dddd d MMMM", CultureInfo.InvariantCulture).ToUpperInvariant();
         WeekdayText = day.ToString("dddd", CultureInfo.InvariantCulture).ToUpperInvariant();
         DateText = day.ToString("d MMMM", CultureInfo.InvariantCulture).ToUpperInvariant();
-        Show(rows);
+        Show(rows, canPublish, isPublishing);
     }
 
     /// <summary>The date this day groups by — and what a refresh recognises it by, so the day itself, open or folded,
@@ -65,9 +69,25 @@ public sealed partial class RunsDayViewModel : ObservableObject
     [RelayCommand]
     private void Toggle() => IsExpanded = !IsExpanded;
 
+    /// <summary>Never queued for, or on, any server — this day's own count of what PUBLISH n LOCAL would send.
+    /// Always 0 on a server tab: every row it holds is filtered to ones already published to that server (RO-6).</summary>
+    [ObservableProperty] private int _localCount;
+
+    /// <summary>Whether the button shows at all: a server coupled and something local to send. Independent of
+    /// <see cref="CanPublishLocal"/>, which also asks the screen is not already publishing — hiding the button while
+    /// busy would take away the "PUBLISHING…" it is meant to say.</summary>
+    [ObservableProperty] private bool _showPublishLocal;
+
+    [ObservableProperty] private bool _canPublishLocal;
+
+    [ObservableProperty] private string _publishLocalButtonText = string.Empty;
+
+    [RelayCommand]
+    private async Task PublishLocalAsync() => await _publishLocal(this);
+
     /// <summary>This evening's rows as they now stand, and the day total over them. Still said while the day is
     /// folded (ET-199 AC-4): a folded evening keeps its piece in the header.</summary>
-    public void Show(IReadOnlyList<ActivityOverviewRowViewModel> rows)
+    public void Show(IReadOnlyList<ActivityOverviewRowViewModel> rows, bool canPublish, bool isPublishing)
     {
         Rows.ReconcileTo(rows);
 
@@ -77,5 +97,10 @@ public sealed partial class RunsDayViewModel : ObservableObject
         CountAndFlownText = $"{CountText} · {FlownText}";
         SummaryText = $"{CountAndFlownText} · {NetText}";
         Isk = RunsActivitySummaryText.SourcesFor(rows);
+
+        LocalCount = rows.Count(row => row.IsLocal);
+        ShowPublishLocal = canPublish && LocalCount > 0;
+        CanPublishLocal = ShowPublishLocal && !isPublishing;
+        PublishLocalButtonText = isPublishing ? "PUBLISHING…" : $"{LocalCount} local ↑";
     }
 }

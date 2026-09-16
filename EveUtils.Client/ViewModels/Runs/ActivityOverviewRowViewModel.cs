@@ -335,6 +335,11 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
     public bool IsPublishedTo(string serverAddress) =>
         _source.ServerSyncStates.Any(state => state.ServerAddress == serverAddress);
 
+    /// <summary>Never queued for, or on, any server (RO-6) — what the day header's "n local" and the range line's
+    /// PUBLISH n LOCAL count. The server sync states it reads are already compared field-by-field in
+    /// <see cref="IsShowing"/>, so this needs no comparison of its own.</summary>
+    public bool IsLocal => _source.ServerSyncStates.Count == 0;
+
     [RelayCommand]
     private async Task RetryPublishAsync()
     {

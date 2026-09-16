@@ -143,6 +143,39 @@
                 <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
 
+            <!-- PUBLISH n LOCAL, on the day header (RO-6): dim at rest, no border — a day with nothing local looks
+                 exactly as it does today — the accent edge and bright ink on hover. Its own template, so Fluent's
+                 ListBoxItem presenter states never paint over it (ET-198, the SUMMARY button hit this once already). -->
+            <Style Selector="Button.daypublish">
+                <Setter Property="Height" Value="20"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Padding" Value="8,0"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="BorderBrush" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <ContentPresenter Background="{TemplateBinding Background}"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}"
+                                          Padding="{TemplateBinding Padding}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          Content="{TemplateBinding Content}"
+                                          VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
+                    </ControlTemplate>
+                </Setter>
+            </Style>
+            <Style Selector="Button.daypublish:pointerover, Button.daypublish:focus-visible">
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+            <Style Selector="Button.daypublish:disabled">
+                <Setter Property="Foreground" Value="{StaticResource TextDimSmallBrush}"/>
+            </Style>
+
             <!-- Activity row -->
             <Style Selector="TextBlock.rowtime">
                 <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
@@ -754,6 +787,10 @@
                                 Content="&#x25B6;" Command="{Binding NextCommand}" ToolTip.Tip="{Binding NextTooltip}"/>
                         <!-- SUMMARY (ET-294) and PUBLISH n LOCAL (RO-6): the totals end where they begin. -->
                         <StackPanel x:Name="RangeActions" DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+                            <Button x:Name="PublishViewButton" Classes="sumbtn" IsVisible="{Binding ShowPublishView}"
+                                    IsEnabled="{Binding !IsPublishingMany}" Content="{Binding PublishViewButtonText}"
+                                    Command="{Binding PublishViewCommand}"
+                                    ToolTip.Tip="Publish every local activity the view shows, after filters"/>
                             <Button x:Name="SummaryToggle" Classes="sumbtn" Classes.on="{Binding IsSummaryOn}"
                                     Content="SUMMARY" Command="{Binding ToggleSummaryCommand}"
                                     ToolTip.Tip="The day, week or month added up, with the list's own filters"/>
@@ -872,25 +909,37 @@
                 <!-- A day: caret, the weekday bright and the date dim, and its summary — still there while it is
                      folded (ET-199 AC-4). A click anywhere on it folds or unfolds it. -->
                 <DataTemplate DataType="vr:RunsDayViewModel">
-                    <Button Classes="dayband" Command="{Binding ToggleCommand}"
-                            ToolTip.Tip="Show or hide this day's activities">
-                        <Border Classes="dayhead">
-                            <Grid Margin="14,0" ColumnDefinitions="18,*,24" ColumnSpacing="8">
-                                <TextBlock Grid.Column="0" Classes="caret" Classes.expanded="{Binding IsExpanded}"
-                                           Text="&#x25B6;"/>
-                                <DockPanel Grid.Column="1">
-                                    <TextBlock DockPanel.Dock="Left" Classes="dayweek" Text="{Binding WeekdayText}"/>
-                                    <TextBlock DockPanel.Dock="Left" Classes="daydate" Margin="8,0,12,0"
-                                               Text="{Binding DateText}"/>
-                                    <TextBlock DockPanel.Dock="Right" Classes="daysum" Margin="8,0,0,0" MinWidth="60"
-                                               Text="{Binding NetText}"/>
-                                    <ctl:IskSourceBar DockPanel.Dock="Right" Width="48" Height="6" Margin="8,0,0,0"
-                                                      VerticalAlignment="Center" Isk="{Binding Isk}"/>
-                                    <TextBlock Classes="daysum" Text="{Binding CountAndFlownText}"/>
-                                </DockPanel>
-                            </Grid>
+                    <!-- The publish button is a sibling of the fold toggle, not nested inside it (same reason the
+                         activity row's caret sits over it rather than in it): a Button-in-Button double-fires. -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Button Grid.Column="0" Classes="dayband" Command="{Binding ToggleCommand}"
+                                ToolTip.Tip="Show or hide this day's activities">
+                            <Border Classes="dayhead">
+                                <Grid Margin="14,0" ColumnDefinitions="18,*,24" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Classes="caret" Classes.expanded="{Binding IsExpanded}"
+                                               Text="&#x25B6;"/>
+                                    <DockPanel Grid.Column="1">
+                                        <TextBlock DockPanel.Dock="Left" Classes="dayweek" Text="{Binding WeekdayText}"/>
+                                        <TextBlock DockPanel.Dock="Left" Classes="daydate" Margin="8,0,12,0"
+                                                   Text="{Binding DateText}"/>
+                                        <TextBlock DockPanel.Dock="Right" Classes="daysum" Margin="8,0,0,0" MinWidth="60"
+                                                   Text="{Binding NetText}"/>
+                                        <ctl:IskSourceBar DockPanel.Dock="Right" Width="48" Height="6" Margin="8,0,0,0"
+                                                          VerticalAlignment="Center" Isk="{Binding Isk}"/>
+                                        <TextBlock Classes="daysum" Text="{Binding CountAndFlownText}"/>
+                                    </DockPanel>
+                                </Grid>
+                            </Border>
+                        </Button>
+                        <!-- PUBLISH this day's local activities (RO-6): only on Local, with a coupled server and
+                             n > 0 — never on a server tab, whose days hold nothing local. -->
+                        <Border Grid.Column="1" Classes="dayhead" Padding="0,0,14,0">
+                            <Button Classes="daypublish" MinWidth="90" VerticalAlignment="Center"
+                                    IsVisible="{Binding ShowPublishLocal}" IsEnabled="{Binding CanPublishLocal}"
+                                    Content="{Binding PublishLocalButtonText}" Command="{Binding PublishLocalCommand}"
+                                    ToolTip.Tip="Publish this day's local activities"/>
                         </Border>
-                    </Button>
+                    </Grid>
                 </DataTemplate>
 
                 <!-- An activity: 36 px, one control. The row button selects it and the pane reads it (ET-291); the

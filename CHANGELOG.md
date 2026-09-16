@@ -13,6 +13,12 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Added: publish a whole day, or everything the runs list currently shows, in one go.** A day header with local
+  activities on it now shows "n local ↑" — click it and, after one confirmation naming what travels, every local
+  activity that day is queued and sent in a single synchronise per character. PUBLISH n LOCAL on the range line does
+  the same for everything the list shows after your filters, across every day in view. Either button turns into
+  PUBLISHING… while it runs, and an activity with no run of a character coupled to the server is skipped and counted
+  in the result rather than treated as an error.
 - **Added: SUMMARY on the runs screen — the day, the week or the month added up.** A SUMMARY button on the range
   line shows it beside the list on a wide screen (and it is there by itself while no run is selected), or in the
   drawer on a narrow one. Switch between DAY, WEEK and MONTH at the top; it opens on what you picked in the activity
