@@ -9,7 +9,7 @@
 
     <!-- Twelve weeks of evenings (ET-292): month names over the columns, every other weekday beside the rows, a cell per
          day, a segment per week under them, and the legend with the ISK | runs switch. The grid stretches to the width
-         it is handed — a 400 px column beside the filters when wide, the whole band when narrow — so the cells are
+         it is handed — a 260–400 px column beside the filters, or the whole band once stacked (ET-303) — so the cells are
          wider than tall at both. -->
     <UserControl.Styles>
         <Style Selector="Button.stripcell, Button.weekseg, Button.monthlabel, Button.shade">
@@ -40,9 +40,6 @@
              outline and the hover ring are layers of their own on top, so neither opacity ever dims them. -->
         <Style Selector="Button.stripcell">
             <Setter Property="Height" Value="14"/>
-        </Style>
-        <Style Selector=".narrow Button.stripcell">
-            <Setter Property="Height" Value="16"/>
         </Style>
         <Style Selector="Border.fill">
             <Setter Property="CornerRadius" Value="2"/>

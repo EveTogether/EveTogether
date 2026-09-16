@@ -384,21 +384,10 @@
                 <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
                 <Setter Property="FontWeight" Value="Normal"/>
             </Style>
-            <Style Selector="StackPanel.rangetotals">
-                <Setter Property="HorizontalAlignment" Value="Right"/>
-                <Setter Property="VerticalAlignment" Value="Center"/>
-            </Style>
-            <Style Selector="Grid.rangeline.narrow StackPanel.rangetotals">
-                <Setter Property="Grid.Row" Value="1"/>
-                <Setter Property="Grid.Column" Value="0"/>
-                <Setter Property="Grid.ColumnSpan" Value="2"/>
-                <Setter Property="HorizontalAlignment" Value="Left"/>
-                <Setter Property="Margin" Value="0,6,0,0"/>
-            </Style>
-            <Style Selector="Grid.rangeline.narrow TextBlock.monthfigure">
+            <Style Selector="ctl|RangeLinePanel.rangeline.narrow TextBlock.monthfigure">
                 <Setter Property="FontSize" Value="11.5"/>
             </Style>
-            <Style Selector="Grid.rangeline.narrow TextBlock.monthfigure.isk">
+            <Style Selector="ctl|RangeLinePanel.rangeline.narrow TextBlock.monthfigure.isk">
                 <Setter Property="FontSize" Value="13.5"/>
             </Style>
             <Style Selector="TextBlock.rangetitle">
@@ -483,12 +472,29 @@
                 <Setter Property="LetterSpacing" Value="1.4"/>
             </Style>
 
-            <!-- The strip spans the band below the breakpoint; the filters (RO-4) go under it. -->
-            <Style Selector="Grid#Band.narrow > vw|RunsActivityStrip">
-                <Setter Property="Grid.ColumnSpan" Value="3"/>
+            <!-- Where the strip and the two filter blocks sit is set from the code-behind off RunsLayout.Band (ET-303):
+                 cell positions as styles lost to local values once already (ET-302's range line). What changes
+                 inside a block follows from the band's .compact class: tiles without their names (the name stays in
+                 the tooltip), up to four columns. -->
+            <Style Selector="Grid#Band ctl|ColumnFlowPanel.tiles">
+                <Setter Property="MaxColumns" Value="2"/>
             </Style>
-            <Style Selector="Grid#Band.narrow > Border.filterblock">
+            <Style Selector="Grid#Band.compact ctl|ColumnFlowPanel.tiles">
+                <Setter Property="MaxColumns" Value="4"/>
+            </Style>
+            <Style Selector="Grid#Band.compact TextBlock.tilename">
+                <Setter Property="IsVisible" Value="False"/>
+            </Style>
+            <!-- "n of m · show all": beside the label while there is room for it, on its own line under the label in
+                 a compact block, which is narrower than the label and the summary together. -->
+            <Style Selector="StackPanel.filterstate">
+                <Setter Property="Grid.Column" Value="2"/>
+            </Style>
+            <Style Selector="Grid#Band.compact StackPanel.filterstate">
+                <Setter Property="Grid.Column" Value="0"/>
+                <Setter Property="Grid.ColumnSpan" Value="3"/>
                 <Setter Property="Grid.Row" Value="1"/>
+                <Setter Property="Margin" Value="0,2,0,0"/>
             </Style>
 
             <!-- ══ TYPES / CHARACTERS filter blocks (ET-293) ══ a label, only while something in it is off an
@@ -773,30 +779,44 @@
 
         <!-- ══ Range line and band (ET-292) ══ the month in view, or the day or week picked in the strip, with its
              totals — ET-266's weight on them kept: mono 12.5 semibold, the ISK 15 bold. Under it the band: the activity
-             strip in a 400 px column beside the two filter columns RO-4 fills, and across the whole width below the
-             breakpoint. Shown for every source (Local, a fleet filter, a server tab): all three page the same way. -->
+             strip beside the two filter blocks RO-4 fills while they fit beside it, across the band with the blocks
+             under it once they do not (RunsLayout.Band, ET-303). Shown for every source (Local, a fleet filter, a server tab): all three page the same way. -->
         <Border DockPanel.Dock="Top" Padding="14,10,14,12" BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource BorderBrush}">
             <StackPanel Spacing="10">
-                <!-- Wide, the totals sit on the line itself, in the column left of SUMMARY/PUBLISH; narrow, on a
-                     line of their own under it, spanning both columns (ET-302: the two used to share a row with
-                     nothing keeping them apart, and a long totals line ran straight into the buttons). -->
-                <Grid x:Name="RangeLine" Classes="rangeline" Classes.narrow="{Binding IsNarrow}"
-                      ColumnDefinitions="*,Auto" RowDefinitions="26,Auto">
-                    <DockPanel Grid.Row="0" Grid.Column="0" LastChildFill="False">
-                        <Button x:Name="RangePrevious" DockPanel.Dock="Left" Classes="rangenav" Content="&#x25C0;"
+                <!-- ET-303: one rectangle per piece at every width. The panel measures the pieces and moves what does
+                     not fit to a row of its own — the totals under the navigation, then the actions on a row of their
+                     own, then the ISK under the figures — rather than letting one piece run through another (ET-302
+                     kept the actions apart, but the navigation still shared its column with the totals). -->
+                <ctl:RangeLinePanel x:Name="RangeLine" Classes="rangeline" Classes.narrow="{Binding IsNarrow}"
+                                    Gap="16" Spacing="10" RowSpacing="6">
+                    <StackPanel x:Name="RangeNavigation" ctl:RangeLinePanel.Slot="Lead" Orientation="Horizontal"
+                                Height="26">
+                        <Button x:Name="RangePrevious" Classes="rangenav" Content="&#x25C0;"
                                 Command="{Binding PreviousCommand}" ToolTip.Tip="{Binding PreviousTooltip}"/>
-                        <TextBlock x:Name="RangeTitle" DockPanel.Dock="Left" Classes="rangetitle" Margin="10,0,0,0"
+                        <TextBlock x:Name="RangeTitle" Classes="rangetitle" Margin="10,0,0,0"
                                    Text="{Binding RangeTitleText}"/>
-                        <Button x:Name="RangeClear" DockPanel.Dock="Left" Classes="rangeclear" Margin="4,0,0,0"
+                        <Button x:Name="RangeClear" Classes="rangeclear" Margin="4,0,0,0"
                                 Content="&#x2715;" IsVisible="{Binding IsRangePicked}"
                                 Command="{Binding ClearRangeCommand}" ToolTip.Tip="Back to the whole month"/>
-                        <Button x:Name="RangeNext" DockPanel.Dock="Left" Classes="rangenav" Margin="10,0,0,0"
+                        <Button x:Name="RangeNext" Classes="rangenav" Margin="10,0,0,0"
                                 Content="&#x25B6;" Command="{Binding NextCommand}" ToolTip.Tip="{Binding NextTooltip}"/>
-                    </DockPanel>
-                    <!-- SUMMARY (ET-294) and PUBLISH n LOCAL (RO-6): its own column, so the totals beside it can
-                         never grow into it — Grid gives each column its own width, a shared row never did. -->
-                    <StackPanel x:Name="RangeActions" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    </StackPanel>
+                    <StackPanel x:Name="RangeFigures" ctl:RangeLinePanel.Slot="Figures" Orientation="Horizontal"
+                                Spacing="10">
+                        <TextBlock Classes="monthfigure" Text="{Binding RangeCountText}"/>
+                        <TextBlock Classes="monthfigure sep" Text="&#x00B7;"/>
+                        <TextBlock Classes="monthfigure" Text="{Binding RangeFlownText}"/>
+                    </StackPanel>
+                    <TextBlock x:Name="RangeJoint" ctl:RangeLinePanel.Slot="Joint" Classes="monthfigure sep"
+                               Text="&#x00B7;"/>
+                    <StackPanel x:Name="RangeIsk" ctl:RangeLinePanel.Slot="Isk" Orientation="Horizontal" Spacing="10">
+                        <ctl:IskSourceBar Width="90" Height="8" VerticalAlignment="Center" Isk="{Binding RangeIsk}"/>
+                        <TextBlock x:Name="RangeNet" Classes="monthfigure isk" Text="{Binding RangeNetText}"/>
+                    </StackPanel>
+                    <!-- SUMMARY (ET-294) and PUBLISH n LOCAL (RO-6), always right-aligned. -->
+                    <StackPanel x:Name="RangeActions" ctl:RangeLinePanel.Slot="Trail" Orientation="Horizontal"
+                                Spacing="8" Height="26">
                         <Button x:Name="PublishViewButton" Classes="sumbtn" IsVisible="{Binding ShowPublishView}"
                                 IsEnabled="{Binding !IsPublishingMany}" Content="{Binding PublishViewButtonText}"
                                 Command="{Binding PublishViewCommand}"
@@ -805,21 +825,10 @@
                                 Content="SUMMARY" Command="{Binding ToggleSummaryCommand}"
                                 ToolTip.Tip="The day, week or month added up, with the list's own filters"/>
                     </StackPanel>
-                    <StackPanel x:Name="RangeTotals" Grid.Row="0" Grid.Column="0" Classes="rangetotals"
-                                Orientation="Horizontal" Spacing="10">
-                        <TextBlock Classes="monthfigure" Text="{Binding RangeCountText}"/>
-                        <TextBlock Classes="monthfigure sep" Text="&#x00B7;"/>
-                        <TextBlock Classes="monthfigure" Text="{Binding RangeFlownText}"/>
-                        <TextBlock Classes="monthfigure sep" Text="&#x00B7;"/>
-                        <ctl:IskSourceBar Width="90" Height="8" VerticalAlignment="Center" Isk="{Binding RangeIsk}"/>
-                        <!-- 10 px of air before the edge or ▶ (ET-266): the heaviest figure never touches a control. -->
-                        <TextBlock x:Name="RangeNet" Classes="monthfigure isk" Margin="0,0,10,0"
-                                   Text="{Binding RangeNetText}"/>
-                    </StackPanel>
-                </Grid>
+                </ctl:RangeLinePanel>
 
-                <Grid x:Name="Band" Classes.narrow="{Binding IsNarrow}" ColumnDefinitions="400,*,*" ColumnSpacing="28"
-                      RowDefinitions="Auto,Auto" RowSpacing="10">
+                <!-- Columns, rows and cell positions come from RunsWindow._ApplyBand (ET-303). -->
+                <Grid x:Name="Band" ColumnDefinitions="400,*,*" ColumnSpacing="28" RowDefinitions="Auto,Auto">
                     <Grid.Resources>
                         <!-- ET-293: a check box, a type icon or a character's HexPortrait, the full name and the
                              count — shared between the TYPES and CHARACTERS ItemsControl below. -->
@@ -851,23 +860,25 @@
                         </DataTemplate>
                     </Grid.Resources>
 
-                    <vw:RunsActivityStrip x:Name="ActivityStrip" Grid.Column="0" DataContext="{Binding Strip}"/>
+                    <vw:RunsActivityStrip x:Name="ActivityStrip" DataContext="{Binding Strip}"/>
 
-                    <Border Grid.Column="1" Classes="filterblock" DataContext="{Binding TypeFilter}">
+                    <Border x:Name="TypeFilterBlock" Grid.Column="1" Classes="filterblock" DataContext="{Binding TypeFilter}">
                         <DockPanel>
-                            <Grid DockPanel.Dock="Top" Margin="0,0,0,6" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
-                                <TextBlock Grid.Column="0" Classes="label" Text="{Binding Label}"/>
-                                <TextBlock Grid.Column="2" Classes="filtersummary" Text="{Binding SummaryText}"
-                                           IsVisible="{Binding HasSummary}"/>
-                                <Button Grid.Column="3" Classes="showall" Command="{Binding ShowAllCommand}"
-                                        IsVisible="{Binding HasSummary}">
-                                    <TextBlock Classes="showalltext" Text="show all"/>
-                                </Button>
+                            <Grid DockPanel.Dock="Top" Margin="0,0,0,6" ColumnDefinitions="Auto,*,Auto"
+                                  RowDefinitions="Auto,Auto">
+                                <TextBlock Classes="label" Text="{Binding Label}"/>
+                                <StackPanel Classes="filterstate" Orientation="Horizontal" Spacing="6"
+                                            IsVisible="{Binding HasSummary}">
+                                    <TextBlock Classes="filtersummary" Text="{Binding SummaryText}"/>
+                                    <Button Classes="showall" Command="{Binding ShowAllCommand}">
+                                        <TextBlock Classes="showalltext" Text="show all"/>
+                                    </Button>
+                                </StackPanel>
                             </Grid>
                             <ItemsControl ItemsSource="{Binding Tiles}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
-                                        <ctl:ColumnFlowPanel MaxColumns="2" ColumnSpacing="10" RowSpacing="4" MinRowHeight="28"/>
+                                        <ctl:ColumnFlowPanel Classes="tiles" ColumnSpacing="10" RowSpacing="4" MinRowHeight="24"/>
                                     </ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
@@ -877,21 +888,23 @@
                         </DockPanel>
                     </Border>
 
-                    <Border Grid.Column="2" Classes="filterblock" DataContext="{Binding CharacterFilter}">
+                    <Border x:Name="CharacterFilterBlock" Grid.Column="2" Classes="filterblock" DataContext="{Binding CharacterFilter}">
                         <DockPanel>
-                            <Grid DockPanel.Dock="Top" Margin="0,0,0,6" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
-                                <TextBlock Grid.Column="0" Classes="label" Text="{Binding Label}"/>
-                                <TextBlock Grid.Column="2" Classes="filtersummary" Text="{Binding SummaryText}"
-                                           IsVisible="{Binding HasSummary}"/>
-                                <Button Grid.Column="3" Classes="showall" Command="{Binding ShowAllCommand}"
-                                        IsVisible="{Binding HasSummary}">
-                                    <TextBlock Classes="showalltext" Text="show all"/>
-                                </Button>
+                            <Grid DockPanel.Dock="Top" Margin="0,0,0,6" ColumnDefinitions="Auto,*,Auto"
+                                  RowDefinitions="Auto,Auto">
+                                <TextBlock Classes="label" Text="{Binding Label}"/>
+                                <StackPanel Classes="filterstate" Orientation="Horizontal" Spacing="6"
+                                            IsVisible="{Binding HasSummary}">
+                                    <TextBlock Classes="filtersummary" Text="{Binding SummaryText}"/>
+                                    <Button Classes="showall" Command="{Binding ShowAllCommand}">
+                                        <TextBlock Classes="showalltext" Text="show all"/>
+                                    </Button>
+                                </StackPanel>
                             </Grid>
                             <ItemsControl ItemsSource="{Binding Tiles}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
-                                        <ctl:ColumnFlowPanel MaxColumns="2" ColumnSpacing="10" RowSpacing="4" MinRowHeight="28"/>
+                                        <ctl:ColumnFlowPanel Classes="tiles" ColumnSpacing="10" RowSpacing="4" MinRowHeight="24"/>
                                     </ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>

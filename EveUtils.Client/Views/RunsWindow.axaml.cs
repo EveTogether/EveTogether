@@ -34,6 +34,11 @@ public partial class RunsWindow : ChromedWindow
     private readonly ColumnDefinition _paneColumn;
     private readonly Border _drawer;
     private readonly Button _drawerClose;
+    private readonly Grid _band;
+    private readonly Control _strip;
+    private readonly Control _typeBlock;
+    private readonly Control _characterBlock;
+    private RunsBandLayout? _bandLayout;
 
     public RunsWindow()
     {
@@ -45,6 +50,10 @@ public partial class RunsWindow : ChromedWindow
         _paneColumn = this.FindControl<Grid>("ListAndPane")!.ColumnDefinitions[1];
         _drawer = this.FindControl<Border>("Drawer")!;
         _drawerClose = this.FindControl<Button>("DrawerClose")!;
+        _band = this.FindControl<Grid>("Band")!;
+        _strip = this.FindControl<Control>("ActivityStrip")!;
+        _typeBlock = this.FindControl<Control>("TypeFilterBlock")!;
+        _characterBlock = this.FindControl<Control>("CharacterFilterBlock")!;
         _activityList.AddHandler(ScrollViewer.ScrollChangedEvent, (_, _) => _PinTopDay());
         // Folding the day from its pinned header brings that header to the top, rather than leaving the reader
         // wherever the rows after it happen to land.
@@ -55,7 +64,10 @@ public partial class RunsWindow : ChromedWindow
         // Subscribed on the root and not on the window because the host lifts the root out of the window (ET-42):
         // a subscription here follows the content wherever it is parented. The observer reads the root's own
         // DataContext on every tick rather than capturing one, since ModuleHostService.Open re-assigns it.
-        _root.GetObservable(BoundsProperty).Subscribe(new WidthObserver(this));
+        _root.GetObservable(BoundsProperty).Subscribe(new WidthObserver(bounds => _ApplyWidth(bounds.Width)));
+        // The band's own width, not the root's: it is what is left after the band's padding, and nothing the band
+        // does to its own columns changes the width it is handed, so this cannot feed back into itself.
+        _band.GetObservable(BoundsProperty).Subscribe(new WidthObserver(bounds => _ApplyBand(bounds.Width)));
 
         // The detail screen is a double-click, never a second single click: the first click has already selected
         // the row and, on the narrow layout, opened the drawer — a counter of presses would close it again.
@@ -130,6 +142,41 @@ public partial class RunsWindow : ChromedWindow
         // name can never take room from the pane or the pane from the list.
         _paneColumn.Width = new GridLength(wide ? RunsLayout.PaneWidth : 0);
         _drawer.MaxWidth = Math.Max(RunsLayout.DrawerWidth / 2, width - RunsLayout.DrawerMinimumGap);
+    }
+
+    /// <summary>The strip and the two filter blocks for the band's own width (ET-303), rearranged only when
+    /// <see cref="RunsLayout.Band"/> answers something different from last time — a resize by a pixel inside one
+    /// arrangement touches nothing, and nothing here ever depends on the data.</summary>
+    private void _ApplyBand(double width)
+    {
+        if (width <= 0)
+            return;
+
+        RunsBandLayout layout = RunsLayout.Band(width);
+        if (layout == _bandLayout)
+            return;
+
+        bool sameKind = _bandLayout?.Kind == layout.Kind;
+        _bandLayout = layout;
+        _band.Classes.Set("compact", layout.CompactTiles);
+        bool stacked = layout.Kind == RunsBandKind.Stacked;
+        if (sameKind)
+        {
+            if (!stacked)
+                _band.ColumnDefinitions[0].Width = new GridLength(layout.StripWidth);
+            return;
+        }
+
+        _band.ColumnDefinitions = stacked
+            ? new ColumnDefinitions { new(1, GridUnitType.Star), new(1, GridUnitType.Star) }
+            : new ColumnDefinitions { new(layout.StripWidth, GridUnitType.Pixel), new(1, GridUnitType.Star), new(1, GridUnitType.Star) };
+        _band.RowSpacing = stacked ? 10 : 0;
+
+        Grid.SetColumnSpan(_strip, stacked ? 2 : 1);
+        Grid.SetRow(_typeBlock, stacked ? 1 : 0);
+        Grid.SetColumn(_typeBlock, stacked ? 0 : 1);
+        Grid.SetRow(_characterBlock, stacked ? 1 : 0);
+        Grid.SetColumn(_characterBlock, stacked ? 1 : 2);
     }
 
     private void _OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -237,9 +284,9 @@ public partial class RunsWindow : ChromedWindow
         e.Handled = true;
     }
 
-    private sealed class WidthObserver(RunsWindow window) : IObserver<Rect>
+    private sealed class WidthObserver(Action<Rect> apply) : IObserver<Rect>
     {
-        public void OnNext(Rect bounds) => window._ApplyWidth(bounds.Width);
+        public void OnNext(Rect bounds) => apply(bounds);
         public void OnError(Exception error) { }
         public void OnCompleted() { }
     }
