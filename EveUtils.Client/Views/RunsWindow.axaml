@@ -410,6 +410,44 @@
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
             </Style>
+            <!-- SUMMARY (ET-294): a ghost button, on while the summary is on screen — the soft accent fill, the accent edge
+                 and bright ink. Its own template, so Fluent's presenter states never paint over it (ET-198). -->
+            <Style Selector="Button.sumbtn">
+                <Setter Property="Height" Value="24"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Padding" Value="10,0"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <ContentPresenter Background="{TemplateBinding Background}"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}"
+                                          Padding="{TemplateBinding Padding}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          Content="{TemplateBinding Content}"
+                                          VerticalContentAlignment="Center"/>
+                    </ControlTemplate>
+                </Setter>
+            </Style>
+            <Style Selector="Button.sumbtn:pointerover, Button.sumbtn:focus-visible">
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="Button.sumbtn.on">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="Button.sumbtn TextBlock">
+                <Setter Property="LetterSpacing" Value="1.4"/>
+            </Style>
+
             <!-- The strip spans the band below the breakpoint; the filters (RO-4) go under it. -->
             <Style Selector="Grid#Band.narrow > vw|RunsActivityStrip">
                 <Setter Property="Grid.ColumnSpan" Value="3"/>
@@ -714,8 +752,12 @@
                                 Command="{Binding ClearRangeCommand}" ToolTip.Tip="Back to the whole month"/>
                         <Button x:Name="RangeNext" DockPanel.Dock="Left" Classes="rangenav" Margin="10,0,0,0"
                                 Content="&#x25B6;" Command="{Binding NextCommand}" ToolTip.Tip="{Binding NextTooltip}"/>
-                        <!-- Kept for SUMMARY (RO-5) and PUBLISH n LOCAL (RO-6): the totals end where they begin. -->
-                        <StackPanel x:Name="RangeActions" DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8"/>
+                        <!-- SUMMARY (ET-294) and PUBLISH n LOCAL (RO-6): the totals end where they begin. -->
+                        <StackPanel x:Name="RangeActions" DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+                            <Button x:Name="SummaryToggle" Classes="sumbtn" Classes.on="{Binding IsSummaryOn}"
+                                    Content="SUMMARY" Command="{Binding ToggleSummaryCommand}"
+                                    ToolTip.Tip="The day, week or month added up, with the list's own filters"/>
+                        </StackPanel>
                         <Panel/>
                     </DockPanel>
                     <StackPanel x:Name="RangeTotals" Classes="rangetotals" Orientation="Horizontal"
@@ -990,9 +1032,17 @@
             </Grid>
 
             <!-- The pane beside the list, on the wide layout. One view model, two hosts (ET-291): this one and the
-                 drawer below, of which exactly one is ever shown. -->
+                 drawer below, of which exactly one is ever shown. It holds the selected run, or the summary (ET-294)
+                 when that was asked for or there is no run to show. -->
             <Border x:Name="PaneHost" Grid.Column="1" Classes="panecolumn" IsVisible="{Binding IsWide}">
-                <vw:RunsActivityPane DataContext="{Binding Pane}"/>
+                <Panel>
+                    <Panel IsVisible="{Binding !ShowsSummaryInPane}">
+                        <vw:RunsActivityPane DataContext="{Binding Pane}"/>
+                    </Panel>
+                    <Panel x:Name="PaneSummary" IsVisible="{Binding ShowsSummaryInPane}">
+                        <vw:RunsSummaryPane DataContext="{Binding Summary}"/>
+                    </Panel>
+                </Panel>
             </Border>
         </Grid>
     </DockPanel>
@@ -1014,14 +1064,21 @@
             <Border Classes="dbar" DockPanel.Dock="Top">
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
                     <Border Grid.Column="0" Classes="dlabel">
-                        <TextBlock Text="{Binding Pane.Title}"/>
+                        <TextBlock Text="{Binding DrawerTitle}"/>
                     </Border>
                     <TextBlock Grid.Column="2" Classes="kbd" Text="Esc"/>
                     <Button x:Name="DrawerClose" Grid.Column="3" Classes="drawerclose" Content="&#x2715;"
                             Command="{Binding CloseDrawerCommand}" ToolTip.Tip="Close (Esc)"/>
                 </Grid>
             </Border>
-            <vw:RunsActivityPane DataContext="{Binding Pane}"/>
+            <Panel>
+                <Panel IsVisible="{Binding !ShowsSummaryInDrawer}">
+                    <vw:RunsActivityPane DataContext="{Binding Pane}"/>
+                </Panel>
+                <Panel x:Name="DrawerSummary" IsVisible="{Binding ShowsSummaryInDrawer}">
+                    <vw:RunsSummaryPane DataContext="{Binding Summary}"/>
+                </Panel>
+            </Panel>
         </DockPanel>
     </Border>
     </Grid>

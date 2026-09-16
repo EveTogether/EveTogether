@@ -30,19 +30,29 @@ internal static class RunsActivitySummaryText
 {
     public static string ActivitiesCount(int count) => $"{count} {(count == 1 ? "activity" : "activities")}";
 
-    public static string FlownFor<T>(IReadOnlyList<T> activities) where T : IRunsActivityFigures
+    public static string FlownFor<T>(IReadOnlyList<T> activities) where T : IRunsActivityFigures =>
+        Flown(activities) + " flown";
+
+    /// <summary>"24:18:33" — hours past a day keep counting rather than wrapping.</summary>
+    public static string Flown<T>(IReadOnlyCollection<T> activities) where T : IRunsActivityFigures
     {
         var flown = TimeSpan.FromSeconds(activities.Sum(activity => activity.Duration.TotalSeconds));
-        return $"{(int)flown.TotalHours}:{flown.Minutes:00}:{flown.Seconds:00} flown";
+        return $"{(int)flown.TotalHours}:{flown.Minutes:00}:{flown.Seconds:00}";
     }
 
-    public static string NetFor<T>(IReadOnlyList<T> activities) where T : IRunsActivityFigures
+    public static string NetFor<T>(IReadOnlyList<T> activities) where T : IRunsActivityFigures =>
+        Net(activities) is { } net ? Signed(net) + " ISK net" : "nothing recorded to value";
+
+    /// <summary>The own share over these activities, or null where none of them was valued — the one sum
+    /// <see cref="NetFor"/> and the summary's figures (ET-294) are both made of.</summary>
+    public static decimal? Net<T>(IEnumerable<T> activities) where T : IRunsActivityFigures
     {
         decimal[] known = [.. activities.Where(activity => activity.NetIsk.HasValue).Select(activity => activity.NetIsk!.Value)];
-        return known.Length == 0
-            ? "nothing recorded to value"
-            : (known.Sum() < 0 ? string.Empty : "+") + IskFormat.Compact(known.Sum()) + " ISK net";
+        return known.Length == 0 ? null : known.Sum();
     }
+
+    /// <summary>"+2.46B", "-3.1M": compact, with the plus a figure that was earned carries.</summary>
+    public static string Signed(decimal value) => (value < 0 ? string.Empty : "+") + IskFormat.Compact(value);
 
     /// <summary>What each source brought in over the same activities, for the source bar beside a total (ET-290) — the
     /// very breakdowns <see cref="NetFor"/> adds up, split by source rather than summed a second way, so the own share

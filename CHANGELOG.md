@@ -13,6 +13,14 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Added: SUMMARY on the runs screen — the day, the week or the month added up.** A SUMMARY button on the range
+  line shows it beside the list on a wide screen (and it is there by itself while no run is selected), or in the
+  drawer on a narrow one. Switch between DAY, WEEK and MONTH at the top; it opens on what you picked in the activity
+  strip, and on the selected run's day or week. Every summary has the total ISK and ISK per hour, ISK by source, BY
+  TYPE and BY CHARACTER — each of your characters with the ISK that is their own share, adding up to the total. A month
+  adds its TOP SITES; a day its HOURS, shaded like the strip, and TOP RUNS; a week its DAYS — click one to open that
+  day — and TOP RUNS. Click a top run to open it. The summary uses the same TYPES and CHARACTERS filters as the list,
+  follows your "Week starts on" setting, and never changes the list itself.
 - **Added: TYPES and CHARACTERS filters above the runs list, as columns of tiles.** Each tile is a checkbox, an icon
   or your character's own portrait, its full name and how many activities it covers. Everything is on by default, so
   nothing changes until you turn one off — the moment you do, an "n of m" count and SHOW ALL appear over that column.

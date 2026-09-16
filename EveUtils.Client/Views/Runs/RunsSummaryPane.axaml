@@ -1,0 +1,499 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:ctl="using:EveUtils.Client.Controls"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="900"
+             x:Class="EveUtils.Client.Views.Runs.RunsSummaryPane"
+             x:DataType="vr:RunsSummaryViewModel">
+
+    <!-- SUMMARY (ET-294): the day, week or month added up, in the pane's two hosts — the 400 px column at 1303 and the
+         430 px drawer at 758. The head scrolls with the rest here; in the drawer its top bar is what stays. Inks are the
+         activity pane's own, measured on the same opaque surface (ET-291). -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.pk, TextBlock.pth, TextBlock.label, TextBlock.hint, TextBlock.hlabel, TextBlock.pdim">
+            <Setter Property="Foreground">
+                <SolidColorBrush Color="#FFA0958A"/>
+            </Setter>
+        </Style>
+        <Style Selector="TextBlock.pk">
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="LetterSpacing" Value="1.4"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.ptitle">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="TextBlock.pmeta">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="TextBlock.phero">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="TextBlock.pherononne">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground">
+                <SolidColorBrush Color="#FFA0958A"/>
+            </Setter>
+        </Style>
+        <Style Selector="TextBlock.prate">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+        </Style>
+        <Style Selector="Border.psec">
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="0,8,0,10"/>
+        </Style>
+        <Style Selector="TextBlock.psum">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.pkvk">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="TextBlock.pkvv">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- ══ DAY | WEEK | MONTH ══ its own template, so no Fluent presenter state paints over it (ET-198). The chosen
+             one is marked three ways — fill, edge and a 2 px underline — and a disabled one keeps a readable ink. -->
+        <Style Selector="Button.seg">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Padding" Value="11,3"/>
+            <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Panel>
+                        <ContentPresenter Background="{TemplateBinding Background}"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}"
+                                          Padding="{TemplateBinding Padding}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          Content="{TemplateBinding Content}"
+                                          VerticalContentAlignment="Center"/>
+                        <Border x:Name="PART_Underline" Height="2" Margin="1,0,1,1" VerticalAlignment="Bottom"
+                                Background="{DynamicResource AccentBrightBrush}" IsVisible="False"/>
+                    </Panel>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.seg TextBlock">
+            <Setter Property="LetterSpacing" Value="1.2"/>
+        </Style>
+        <Style Selector="Button.seg:pointerover, Button.seg:focus-visible">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.seg.on">
+            <Setter Property="ZIndex" Value="1"/>
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.seg.on /template/ Border#PART_Underline">
+            <Setter Property="IsVisible" Value="True"/>
+        </Style>
+        <Style Selector="Button.seg:disabled">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Cursor" Value="Arrow"/>
+            <Setter Property="Foreground">
+                <SolidColorBrush Color="#FFA0958A"/>
+            </Setter>
+        </Style>
+
+        <!-- ══ Tables ══ the activity pane's CREW table: 9 px heads, mono figures, a hover fill on a line that opens. -->
+        <Style Selector="TextBlock.pth">
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="LetterSpacing" Value="1.2"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.ptd">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.ptname">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.pdim">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Grid.ptrow">
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Margin" Value="14,0"/>
+            <Setter Property="ColumnSpacing" Value="4"/>
+        </Style>
+        <Style Selector="Button.toprun">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="{TemplateBinding Background}"
+                                      Content="{TemplateBinding Content}"
+                                      HorizontalContentAlignment="Stretch"/>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.toprun:pointerover, Button.toprun:focus-visible">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        </Style>
+        <Style Selector="ctl|IconGlyph.ptype">
+            <Setter Property="Width" Value="13"/>
+            <Setter Property="Height" Value="13"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+        </Style>
+
+        <!-- ══ HOURS / DAYS cells ══ the strip's own steps: accent at 28/48/70 %, then the bright accent (ET-292). -->
+        <Style Selector="Border.fill">
+            <Setter Property="Height" Value="16"/>
+            <Setter Property="CornerRadius" Value="2"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.fill.empty">
+            <Setter Property="Background" Value="{StaticResource StripEmptyBrush}"/>
+        </Style>
+        <Style Selector="Border.fill.accent">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+        </Style>
+        <Style Selector="Border.fill.bright">
+            <Setter Property="Background" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="Border.hoverring">
+            <Setter Property="Height" Value="16"/>
+            <Setter Property="CornerRadius" Value="2"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.daycell">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="Transparent"
+                                      Content="{TemplateBinding Content}" HorizontalContentAlignment="Stretch"/>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.daycell.clickable">
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="Button.daycell.clickable:pointerover Border.hoverring, Button.daycell.clickable:focus-visible Border.hoverring">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.daycell.clickable:pointerover TextBlock.hlabel">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.hlabel">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="9.5"/>
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer x:Name="SummaryScroll" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel>
+
+            <!-- ══ Head ══ -->
+            <Border x:Name="SummaryHead" Padding="14,12,14,10" BorderThickness="0,0,0,1"
+                    BorderBrush="{DynamicResource BorderBrush}">
+                <StackPanel Spacing="2">
+                    <DockPanel>
+                        <StackPanel x:Name="SummaryScope" DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button x:Name="ScopeDay" Classes="seg" Classes.on="{Binding IsDayScope}"
+                                    IsEnabled="{Binding CanChooseDay}" Command="{Binding ChooseDayCommand}"
+                                    ToolTip.Tip="{Binding DayTooltip}" ToolTip.ShowOnDisabled="True">
+                                <TextBlock Text="DAY"/>
+                            </Button>
+                            <Button x:Name="ScopeWeek" Classes="seg" Classes.on="{Binding IsWeekScope}" Margin="-1,0,0,0"
+                                    IsEnabled="{Binding CanChooseWeek}" Command="{Binding ChooseWeekCommand}"
+                                    ToolTip.Tip="{Binding WeekTooltip}" ToolTip.ShowOnDisabled="True">
+                                <TextBlock Text="WEEK"/>
+                            </Button>
+                            <Button x:Name="ScopeMonth" Classes="seg" Classes.on="{Binding IsMonthScope}" Margin="-1,0,0,0"
+                                    Command="{Binding ChooseMonthCommand}" ToolTip.Tip="{Binding MonthTooltip}">
+                                <TextBlock Text="MONTH"/>
+                            </Button>
+                        </StackPanel>
+                        <TextBlock Classes="pk" Text="{Binding KickerText}"/>
+                    </DockPanel>
+                    <TextBlock x:Name="SummaryTitle" Classes="ptitle" Margin="0,3,0,0" Text="{Binding TitleText}"/>
+                    <TextBlock x:Name="SummaryMeta" Classes="pmeta" Text="{Binding MetaText}" ToolTip.Tip="{Binding MetaText}"/>
+                    <Grid Margin="0,8,0,0" ColumnDefinitions="*,120" ColumnSpacing="10">
+                        <TextBlock x:Name="SummaryNet" Grid.Column="0" Classes="phero" IsVisible="{Binding HasNet}"
+                                   VerticalAlignment="Center" Text="{Binding NetText}"/>
+                        <TextBlock Grid.Column="0" Classes="pherononne" IsVisible="{Binding !HasNet}"
+                                   VerticalAlignment="Center" Text="{Binding NetText}"/>
+                        <TextBlock x:Name="SummaryPerHour" Grid.Column="1" Classes="prate" VerticalAlignment="Center"
+                                   Text="{Binding PerHourText}"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <TextBlock x:Name="SummaryEmpty" Classes="hint" Margin="14,10" TextWrapping="Wrap"
+                       IsVisible="{Binding !HasRows}" Text="{Binding EmptyText}"/>
+
+            <StackPanel IsVisible="{Binding HasRows}">
+
+                <!-- ══ ISK BY SOURCE ══ -->
+                <Border Classes="psec">
+                    <StackPanel>
+                        <TextBlock Classes="label" Margin="14,0,14,4" Text="ISK BY SOURCE"/>
+                        <StackPanel Margin="14,2,14,0">
+                            <ctl:IskSourceBar Height="10" Isk="{Binding Isk}"/>
+                            <ItemsControl x:Name="SummaryIskParts" Margin="0,6,0,0" ItemsSource="{Binding IskParts}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vr:RunsIskPartViewModel">
+                                        <Grid Height="17" ColumnDefinitions="8,*,110" ColumnSpacing="7">
+                                            <ctl:IskSourceBar Grid.Column="0" Width="8" Height="8" VerticalAlignment="Center"
+                                                              IsVisible="{Binding HasInk}" Isk="{Binding Ink}"/>
+                                            <TextBlock Grid.Column="1" Classes="pkvk" Text="{Binding Label}"/>
+                                            <TextBlock Grid.Column="2" Classes="pkvv" Text="{Binding AmountText}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ══ HOURS (day) ══ 24 cells by start hour. -->
+                <Border x:Name="SummaryHours" Classes="psec" IsVisible="{Binding IsDayScope}">
+                    <StackPanel>
+                        <Grid Margin="14,0,14,4" ColumnDefinitions="60,*" ColumnSpacing="8">
+                            <TextBlock Grid.Column="0" Classes="label" Text="HOURS" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Classes="psum" Text="{Binding HoursSummaryText}"/>
+                        </Grid>
+                        <StackPanel Margin="14,4,14,0">
+                            <ItemsControl ItemsSource="{Binding Hours}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Rows="1" Columns="24" ColumnSpacing="2" UseLayoutRounding="False"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vr:RunsSummaryCellViewModel">
+                                        <Panel Background="Transparent" ToolTip.Tip="{Binding Tooltip}">
+                                            <Border Classes="fill" Classes.empty="{Binding IsEmpty}"
+                                                    Classes.accent="{Binding IsAccent}" Classes.bright="{Binding IsBright}"
+                                                    Opacity="{Binding FillOpacity}"/>
+                                        </Panel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Grid Height="12" Margin="0,3,0,2" ColumnDefinitions="*,*,*,*">
+                                <TextBlock Grid.Column="0" Classes="hlabel" Text="00"/>
+                                <TextBlock Grid.Column="1" Classes="hlabel" Text="06"/>
+                                <TextBlock Grid.Column="2" Classes="hlabel" Text="12"/>
+                                <TextBlock Grid.Column="3" Classes="hlabel" Text="18"/>
+                                <TextBlock Grid.Column="3" Classes="hlabel" HorizontalAlignment="Right" Text="24"/>
+                            </Grid>
+                            <TextBlock Classes="hint" Margin="0,2,0,0" TextWrapping="Wrap">
+                                <Run Text="Shaded by"/>
+                                <Run Text="{Binding ShadeHint}"/>
+                                <Run Text="started in each hour, like the strip; hover an hour."/>
+                            </TextBlock>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ══ DAYS (week) ══ 7 cells in the week's own order; a click picks that day. -->
+                <Border x:Name="SummaryDays" Classes="psec" IsVisible="{Binding IsWeekScope}">
+                    <StackPanel>
+                        <TextBlock Classes="label" Margin="14,0,14,4" Text="DAYS"/>
+                        <StackPanel Margin="14,4,14,0">
+                            <ItemsControl x:Name="SummaryWeekDays" ItemsSource="{Binding WeekDays}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Rows="1" Columns="7" ColumnSpacing="3" UseLayoutRounding="False"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vr:RunsSummaryCellViewModel">
+                                        <Button Classes="daycell" Classes.clickable="{Binding IsClickable}"
+                                                Command="{Binding ClickCommand}" ToolTip.Tip="{Binding Tooltip}">
+                                            <StackPanel Spacing="3">
+                                                <Panel>
+                                                    <Border Classes="fill" Classes.empty="{Binding IsEmpty}"
+                                                            Classes.accent="{Binding IsAccent}"
+                                                            Classes.bright="{Binding IsBright}"
+                                                            Opacity="{Binding FillOpacity}"/>
+                                                    <Border Classes="hoverring"/>
+                                                </Panel>
+                                                <TextBlock Classes="hlabel" HorizontalAlignment="Center" Text="{Binding Label}"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Classes="hint" Margin="0,4,0,0" TextWrapping="Wrap"
+                                       Text="Shaded like the strip; click a day to see it."/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ══ BY TYPE ══ -->
+                <Border Classes="psec">
+                    <StackPanel>
+                        <TextBlock Classes="label" Margin="14,0,14,4" Text="BY TYPE"/>
+                        <Grid Classes="ptrow" Height="16" ColumnDefinitions="*,40,70,64">
+                            <TextBlock Grid.Column="0" Classes="pth" TextAlignment="Left" Text="TYPE"/>
+                            <TextBlock Grid.Column="1" Classes="pth" Text="RUNS"/>
+                            <TextBlock Grid.Column="2" Classes="pth" Text="FLOWN"/>
+                            <TextBlock Grid.Column="3" Classes="pth" Text="ISK"/>
+                        </Grid>
+                        <Border Height="1" Margin="14,0" Background="{DynamicResource DividerBrush}"/>
+                        <ItemsControl x:Name="SummaryByType" ItemsSource="{Binding ByType}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:RunsSummaryTypeLine">
+                                    <Grid Classes="ptrow" ColumnDefinitions="*,40,70,64">
+                                        <DockPanel Grid.Column="0">
+                                            <ctl:IconGlyph DockPanel.Dock="Left" Classes="ptype" Kind="{Binding Icon}"/>
+                                            <TextBlock Classes="ptname" Margin="6,0,0,0" Text="{Binding Name}"/>
+                                        </DockPanel>
+                                        <TextBlock Grid.Column="1" Classes="ptd" Text="{Binding Runs}"/>
+                                        <TextBlock Grid.Column="2" Classes="ptd" Text="{Binding FlownText}"/>
+                                        <TextBlock Grid.Column="3" Classes="ptd" Text="{Binding IskText}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- ══ BY CHARACTER ══ this machine's own characters; ISK is each one's own share (ET-296). -->
+                <Border Classes="psec" IsVisible="{Binding HasCharacters}">
+                    <StackPanel>
+                        <TextBlock Classes="label" Margin="14,0,14,4" Text="BY CHARACTER"/>
+                        <Grid Classes="ptrow" Height="16" ColumnDefinitions="*,40,64">
+                            <TextBlock Grid.Column="0" Classes="pth" TextAlignment="Left" Text="PILOT"/>
+                            <TextBlock Grid.Column="1" Classes="pth" Text="RUNS"/>
+                            <TextBlock Grid.Column="2" Classes="pth" Text="ISK"/>
+                        </Grid>
+                        <Border Height="1" Margin="14,0" Background="{DynamicResource DividerBrush}"/>
+                        <ItemsControl x:Name="SummaryByCharacter" ItemsSource="{Binding ByCharacter}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:RunsSummaryCharacterLine">
+                                    <Grid Classes="ptrow" ColumnDefinitions="*,40,64">
+                                        <DockPanel Grid.Column="0">
+                                            <ctl:HexPortrait DockPanel.Dock="Left" Size="16" VerticalAlignment="Center"
+                                                             Source="{Binding Face.Portrait}" Initial="{Binding Face.Initial}"/>
+                                            <TextBlock Classes="ptname" Margin="6,0,0,0" Text="{Binding Name}"/>
+                                        </DockPanel>
+                                        <TextBlock Grid.Column="1" Classes="ptd" Text="{Binding Runs}"/>
+                                        <TextBlock Grid.Column="2" Classes="ptd" Text="{Binding IskText}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- ══ TOP SITES (month) ══ -->
+                <Border x:Name="SummaryTopSites" Classes="psec" IsVisible="{Binding IsMonthScope}">
+                    <StackPanel>
+                        <TextBlock Classes="label" Margin="14,0,14,4" Text="TOP SITES"/>
+                        <Grid Classes="ptrow" Height="16" ColumnDefinitions="*,40,64">
+                            <TextBlock Grid.Column="0" Classes="pth" TextAlignment="Left" Text="SITE"/>
+                            <TextBlock Grid.Column="1" Classes="pth" Text="RUNS"/>
+                            <TextBlock Grid.Column="2" Classes="pth" Text="ISK"/>
+                        </Grid>
+                        <Border Height="1" Margin="14,0" Background="{DynamicResource DividerBrush}"/>
+                        <ItemsControl ItemsSource="{Binding TopSites}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:RunsSummarySiteLine">
+                                    <Grid Classes="ptrow" ColumnDefinitions="*,40,64">
+                                        <TextBlock Grid.Column="0" Classes="ptname" Text="{Binding Site}"
+                                                   ToolTip.Tip="{Binding Site}"/>
+                                        <TextBlock Grid.Column="1" Classes="ptd" Text="{Binding Runs}"/>
+                                        <TextBlock Grid.Column="2" Classes="ptd" Text="{Binding IskText}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- ══ TOP RUNS (day, week) ══ a line opens that run. -->
+                <Border x:Name="SummaryTopRuns" Classes="psec" IsVisible="{Binding !IsMonthScope}">
+                    <StackPanel>
+                        <TextBlock Classes="label" Margin="14,0,14,4" Text="TOP RUNS"/>
+                        <Grid Classes="ptrow" Height="16" ColumnDefinitions="*,68,64,60">
+                            <TextBlock Grid.Column="0" Classes="pth" TextAlignment="Left" Text="RUN"/>
+                            <TextBlock Grid.Column="1" Classes="pth" Text="START"/>
+                            <TextBlock Grid.Column="2" Classes="pth" Text="FLOWN"/>
+                            <TextBlock Grid.Column="3" Classes="pth" Text="ISK"/>
+                        </Grid>
+                        <Border Height="1" Margin="14,0" Background="{DynamicResource DividerBrush}"/>
+                        <ItemsControl x:Name="SummaryTopRunsList" ItemsSource="{Binding TopRuns}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:RunsSummaryRunLine">
+                                    <Button Classes="toprun" ToolTip.Tip="Open this run"
+                                            Command="{Binding $parent[UserControl].((vr:RunsSummaryViewModel)DataContext).OpenRunCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Grid Classes="ptrow" ColumnDefinitions="*,68,64,60">
+                                            <DockPanel Grid.Column="0">
+                                                <ctl:IconGlyph DockPanel.Dock="Left" Classes="ptype" Kind="{Binding Icon}"/>
+                                                <TextBlock DockPanel.Dock="Right" Classes="pdim" Margin="4,0,0,0"
+                                                           IsVisible="{Binding HasCrew}" Text="{Binding CrewText}"/>
+                                                <TextBlock Classes="ptname" Margin="6,0,0,0" Text="{Binding Site}"/>
+                                            </DockPanel>
+                                            <TextBlock Grid.Column="1" Classes="ptd" Text="{Binding StartText}"/>
+                                            <TextBlock Grid.Column="2" Classes="ptd" Text="{Binding FlownText}"/>
+                                            <TextBlock Grid.Column="3" Classes="ptd" Text="{Binding IskText}"/>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

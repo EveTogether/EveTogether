@@ -85,13 +85,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
         TimeText = StartedAtLocal.ToString("HH:mm");
         RunTypeDefinition type = facts?.TypeOf(row.ActivityKind, row.SignatureGroupSnapshot, row.SiteTypeId, row.SiteName)
             ?? RunTypeCatalogue.For(row.ActivityKind, row.SignatureGroupSnapshot, row.SiteTypeId, null, row.SiteName);
-        // An abyssal has no site at all — it never reads "Unnamed site" (ET-241), it reads what filament opened it,
-        // or the type's own honest name while that is still unknown.
-        SiteText = !string.IsNullOrWhiteSpace(row.SiteName)
-            ? row.SiteName
-            : type.Space is RunSpace.AbyssalPocket
-                ? AbyssalFilamentName.From(row.AbyssalFilamentText)
-                : "Unnamed site";
+        SiteText = SiteTextOf(row, type);
         // An abyssal with no known filament falls back to the type's own name for both SiteText and KindText
         // ("Abyssal"), which would read "Abyssal Abyssal" side by side. The site name alone already says it.
         KindText = SiteText == type.Name ? string.Empty : type.Name;
@@ -201,6 +195,16 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
             chips = chips.Append(new ActivityRewardChipViewModel(RunParameterKey.FixedPayout, homefrontPayout.Amount));
         Chips = [.. chips];
     }
+
+    /// <summary>An abyssal has no site at all — it never reads "Unnamed site" (ET-241), it reads what filament opened
+    /// it, or the type's own honest name while that is still unknown. Shared with the runs summary's TOP RUNS and TOP
+    /// SITES (ET-294), which name activities they never build a row for.</summary>
+    internal static string SiteTextOf(ActivityOverviewRowDto row, RunTypeDefinition type) =>
+        !string.IsNullOrWhiteSpace(row.SiteName)
+            ? row.SiteName
+            : type.Space is RunSpace.AbyssalPocket
+                ? AbyssalFilamentName.From(row.AbyssalFilamentText)
+                : "Unnamed site";
 
     public Guid ActivitySummaryId { get; }
 
@@ -463,7 +467,14 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
         && _source.Crew.SequenceEqual(row.Crew)
         && _source.Rewards.SequenceEqual(row.Rewards)
         && _source.ServerSyncStates.SequenceEqual(row.ServerSyncStates)
-        && _source.OtherEarners.SequenceEqual(row.OtherEarners);
+        && _source.OtherEarners.SequenceEqual(row.OtherEarners)
+        && _SameSplit(_source.OwnIskByCharacter, row.OwnIskByCharacter);
+
+    private static bool _SameSplit(IReadOnlyDictionary<long, IskBreakdown>? first, IReadOnlyDictionary<long, IskBreakdown>? second) =>
+        first is null || second is null
+            ? first is null && second is null
+            : first.Count == second.Count
+              && first.All(pair => second.TryGetValue(pair.Key, out IskBreakdown? other) && pair.Value.Equals(other));
 
     /// <summary>Takes over from the row this one replaces on a refresh: open stays open, with its runs read again
     /// rather than left showing the figures that made the old row out of date.</summary>
@@ -483,7 +494,8 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
         ServerSyncStates = Array.Empty<ActivityServerSyncDto>(),
         // A list compares by reference on a record, and every read builds a new one — left in, no row would ever
         // be held onto across a refresh (ET-222), and the whole list would be rebuilt on every tick (ET-287).
-        OtherEarners = Array.Empty<ActivityCrewMemberDto>()
+        OtherEarners = Array.Empty<ActivityCrewMemberDto>(),
+        OwnIskByCharacter = null
     };
 
     /// <summary>TYPE, from the same catalogue every other run list reads (ET-226) — "Data Site", "Mission run", …,

@@ -72,10 +72,12 @@ public partial class RunsWindow : ChromedWindow
         DataContext = viewModel;
         viewModel.PropertyChanged += _OnViewModelPropertyChanged;
         viewModel.DayScrollRequested += _ScrollDayToTop;
+        viewModel.RowScrollRequested += _ScrollRowIntoView;
         Closed += (_, _) =>
         {
             viewModel.PropertyChanged -= _OnViewModelPropertyChanged;
             viewModel.DayScrollRequested -= _ScrollDayToTop;
+            viewModel.RowScrollRequested -= _ScrollRowIntoView;
             viewModel.Dispose();
         };
     }
@@ -102,6 +104,16 @@ public partial class RunsWindow : ChromedWindow
                 _activityList.UpdateLayout();
             }
 
+            _PinTopDay();
+        }, DispatcherPriority.Background);
+
+    /// <summary>A run a summary's TOP RUNS opened (ET-294): its day was only just unfolded, so the list lays that out
+    /// before the row can be brought into view.</summary>
+    private void _ScrollRowIntoView(ActivityOverviewRowViewModel row) =>
+        Dispatcher.UIThread.Post(() =>
+        {
+            _activityList.UpdateLayout();
+            _activityList.ScrollIntoView(row);
             _PinTopDay();
         }, DispatcherPriority.Background);
 
