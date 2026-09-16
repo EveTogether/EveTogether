@@ -6,6 +6,8 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -40,10 +42,20 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// <para><b>One compact list, drawn from the space it is handed (ET-290).</b> <c>ModuleHostService.Render</c> moves this
 /// very <c>Content</c> between a docked tab and a floating window, so the layout sizes off its host and never off the
 /// window: docked at 1303 and floating at 758 are the same list with more or less room for a site's name. Every row has
-/// one fixed height at every width; what does not fit is trimmed, chips included, and the activity pane (RO-2) is where
+/// one fixed height at every width; what does not fit is trimmed, chips included, and the activity pane (ET-291) is where
 /// all of it can be read. The day headers, activity rows and pilots' runs are one flat, virtualised sequence per tab
 /// (<see cref="RunsTabViewModel.Items"/>): folding a day takes its rows out of it, since expanders nested inside a list
 /// would put every row back in the visual tree.</para>
+///
+/// <para><b>Wider is not a second design (ET-291).</b> The same list and the same pane at both widths: at and above
+/// <see cref="RunsLayout.WideFrom"/> the pane stands beside the list in a column of its own, below it the very same
+/// pane slides in over the list as a 430 px drawer, with the list dimmed behind it and a click on it to close. What
+/// changes is where the pane is drawn, never what it says.</para>
+///
+/// <para><b>The selection is this screen's, not the list's.</b> It hangs on <c>ActivitySummaryId</c> and survives a
+/// refresh that replaces the row instance, a filter, the drawer closing, and — the case a <c>ListBox</c> cannot hold —
+/// its own day being folded: a folded day takes its rows out of <see cref="RunsTabViewModel.Items"/>, at which point
+/// the list drops its <c>SelectedItem</c>. That null is never read as "nothing is selected" (ET-290 + ET-291).</para>
 ///
 /// <para><b>Nothing is read on the UI thread.</b> Every query and command this screen sends runs inside
 /// <c>Task.Run</c>, with building the rows from what came back — a dispatcher call is a direct one and the SQLite
@@ -88,8 +100,11 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     public string MonthHeaderText => ViewedMonthLocal.ToString("MMMM yyyy", CultureInfo.InvariantCulture).ToUpperInvariant();
 
+    /// <param name="paneReadDelay">How long the pane waits before reading a newly selected activity (ET-291); zero in
+    /// a test that wants that read to have happened by the time it looks.</param>
     public RunsOverviewViewModel(CqrsDispatcher dispatcher, IDialogService dialogs, IServiceProvider services,
-        IReadOnlyList<Character> characters, bool runClock = true, RunsFleetFilter? fleetFilter = null)
+        IReadOnlyList<Character> characters, bool runClock = true, RunsFleetFilter? fleetFilter = null,
+        TimeSpan? paneReadDelay = null)
     {
         _dispatcher = dispatcher;
         _dialogs = dialogs;
@@ -101,6 +116,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             .GroupBy(character => (long)character.EsiCharacterId!.Value)
             .ToDictionary(group => group.Key, group => group.First().Name);
         SelectedTab = LocalTab;
+        Pane = new RunsActivityPaneViewModel(_ReadPaneDetailAsync, _PublishTargetName, paneReadDelay);
+        _WatchItems(LocalTab);
 
         // A lane per local character, running or not. Each asks GetRunningRunsQuery (ET-203) which run is running for
         // ITS character, so two characters running at once are two running lanes — that query has no "exactly one"
@@ -187,6 +204,200 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// <summary>Why nothing is listed — a failed read and an empty history are different things and say so.</summary>
     [ObservableProperty] private string? _statusMessage;
 
+    // ══ The pane, the selection and the drawer (ET-291) ═════════════════════════════════════════════════════════
+
+    /// <summary>The selected run, read out in full. One view model for both hosts — the column beside the list and the
+    /// drawer over it — of which one is ever on screen.</summary>
+    public RunsActivityPaneViewModel Pane { get; }
+
+    /// <summary>Whether there is room for the pane beside the list. Set from the bounds of the module content, so a
+    /// docked tab and a floating window each answer for the width they were actually given.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PaneColumnWidth))]
+    [NotifyPropertyChangedFor(nameof(IsNarrow))]
+    private bool _isWide;
+
+    public bool IsNarrow => !IsWide;
+
+    /// <summary>An explicit column, never <c>Auto</c> (ET-285): 400 px beside the list, and nothing at all below the
+    /// breakpoint, where the same pane is the drawer instead.</summary>
+    public GridLength PaneColumnWidth => IsWide ? new GridLength(RunsLayout.PaneWidth) : new GridLength(0);
+
+    /// <summary>The drawer is over the list, so it is only ever open on the narrow layout. Widening past the
+    /// breakpoint closes it: the pane beside the list is already showing the very same run.</summary>
+    [ObservableProperty] private bool _isDrawerOpen;
+
+    /// <summary>The selected activity, whether or not the list can currently show it. This, not
+    /// <c>ListBox.SelectedItem</c>, is what "selected" means on this screen.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelection))]
+    private ActivityOverviewRowViewModel? _selectedRow;
+
+    public bool HasSelection => SelectedRow is not null;
+
+    /// <summary>What the list's own <c>SelectedItem</c> is bound to: the selected row while its day is unfolded, and
+    /// null while it is not. A null <i>from</i> the list is ignored (see <see cref="OnListSelectionChanged"/>) — a
+    /// folded day is not "out of view", and clearing the selection because the list lost sight of the row is exactly
+    /// the bug ET-290's folding introduced.</summary>
+    [ObservableProperty] private object? _listSelection;
+
+    partial void OnListSelectionChanged(object? value)
+    {
+        if (value is ActivityOverviewRowViewModel row)
+            Select(row);
+    }
+
+    partial void OnIsWideChanged(bool value)
+    {
+        if (value)
+            IsDrawerOpen = false;
+    }
+
+    partial void OnSelectedTabChanged(RunsTabViewModel? value) => _SettleSelection();
+
+    /// <summary>The width the module content was handed. One place decides what "wide" means (ET-291).</summary>
+    public void ApplyWidth(double width) => IsWide = width >= RunsLayout.WideFrom;
+
+    /// <summary>A click on a row, or on one of its pilots' runs. On the narrow layout it opens the drawer as well —
+    /// the pane has nowhere else to be drawn there.</summary>
+    public void Select(ActivityOverviewRowViewModel row)
+    {
+        bool moved = !ReferenceEquals(SelectedRow, row);
+        if (moved)
+        {
+            SelectedRow = row;
+            Pane.Show(row);
+        }
+
+        if (!IsWide)
+            IsDrawerOpen = true;
+        _SyncListSelection();
+    }
+
+    /// <summary>↑ and ↓ over the activity rows of unfolded days, in the order the list draws them: pilots' runs and
+    /// day headers are stepped past, and a folded day is stepped over without being unfolded (Jithran, 15 Sep). With
+    /// nothing selected yet, a step picks the first row there is.</summary>
+    public void MoveSelection(int direction)
+    {
+        if (SelectedTab is not { } tab || direction == 0)
+            return;
+
+        // Every row of every day, folded or not — so a selection inside a folded day still has a place to step from.
+        List<(RunsDayViewModel Day, ActivityOverviewRowViewModel Row)> rows =
+            [.. tab.Days.SelectMany(day => day.Rows.Select(row => (Day: day, Row: row)))];
+        if (rows.Count == 0)
+            return;
+
+        int from = SelectedRow is null ? -1 : rows.FindIndex(pair => ReferenceEquals(pair.Row, SelectedRow));
+        int step = Math.Sign(direction);
+        for (int index = from < 0 ? (step > 0 ? 0 : rows.Count - 1) : from + step;
+             index >= 0 && index < rows.Count;
+             index += step)
+        {
+            if (!rows[index].Day.IsExpanded)
+                continue;
+
+            Select(rows[index].Row);
+            return;
+        }
+    }
+
+    /// <summary>↵, a double-click on a row, or the pane's own OPEN DETAIL: the ET-162 screen for the selected
+    /// activity. On the narrow layout with the drawer shut, ↵ opens the drawer instead — there is a step between the
+    /// list and a whole screen there.</summary>
+    public Task OpenSelectedDetailAsync()
+    {
+        if (SelectedRow is not { } row)
+            return Task.CompletedTask;
+
+        if (!IsWide && !IsDrawerOpen)
+        {
+            IsDrawerOpen = true;
+            return Task.CompletedTask;
+        }
+
+        return _OpenDetailAsync(row);
+    }
+
+    /// <summary>✕, a click on the scrim, or Esc. The selection stays: the reader closed a panel, they did not
+    /// unpick a run.</summary>
+    [RelayCommand]
+    public void CloseDrawer() => IsDrawerOpen = false;
+
+    /// <summary>Whether the pane's PUBLISH can name where it is going. One coupled server is named; a choice between
+    /// several is made in the dialog the button already opens, so the button says the plain verb.</summary>
+    private string? _PublishTargetName()
+    {
+        RunsTabViewModel[] servers = [.. Tabs.Where(tab => !tab.IsLocal)];
+        return servers.Length == 1 ? servers[0].Header : null;
+    }
+
+    /// <summary>The pane's own read (ET-291): the pilots' runs and the loot lines behind the selected activity. Off
+    /// the UI thread — this is the same eight-to-ten round trips plus a market lookup the detail screen makes.</summary>
+    private async Task<RunsPaneDetail> _ReadPaneDetailAsync(Guid activitySummaryId, CancellationToken cancellationToken)
+    {
+        return await Task.Run<RunsPaneDetail>(async () =>
+        {
+            Result<ActivityDetailDto> detail = await _dispatcher.Query(new GetActivityDetailQuery(activitySummaryId));
+            if (!detail.IsSuccess || detail.Value is not { } activity)
+                return new RunsPaneDetail([], 0, null,
+                    detail.Messages.Count > 0 ? detail.Messages[0].Text : "The runs could not be read.");
+
+            cancellationToken.ThrowIfCancellationRequested();
+            ActivityRunRowViewModel[] crew = [.. activity.Runs.OrderBy(run => run.StartedAtUtc).Select(run =>
+                new ActivityRunRowViewModel(run, _NameOf,
+                    _FaceOf(run.CharacterId, CharacterNameResolver.Resolve(run.CharacterNameSnapshot, run.CharacterId, _NameOf)),
+                    activity.IskByCharacter?.GetValueOrDefault(run.CharacterId)))];
+            // The lines a pilot actually kept: a capture they excluded is not loot, and the activity's own LootIskNet
+            // already leaves it out, so counting it here would put an item count beside a figure that never held it.
+            int lootItems = activity.Runs
+                .SelectMany(run => run.LootCaptures.Where(capture => !capture.IsExcluded))
+                .Sum(capture => capture.Entries.Count);
+            return new RunsPaneDetail(crew, lootItems, activity.LootIskNet, null);
+        }, cancellationToken);
+    }
+
+    /// <summary>Brings the selection back in line with what the tab now holds — after a read, a tab switch, or a day
+    /// being folded or unfolded. An activity that is gone from the tab altogether takes the selection and the drawer
+    /// with it; one that is merely inside a folded day keeps both.</summary>
+    private void _SettleSelection()
+    {
+        if (SelectedTab is not { } tab || SelectedRow is not { } selected)
+        {
+            _SyncListSelection();
+            return;
+        }
+
+        // A refresh may have replaced the instance with an equal one (ET-222), which is still the same activity.
+        ActivityOverviewRowViewModel? still = tab.Days
+            .SelectMany(day => day.Rows)
+            .FirstOrDefault(row => row.ActivitySummaryId == selected.ActivitySummaryId);
+        if (still is null)
+        {
+            SelectedRow = null;
+            IsDrawerOpen = false;
+            Pane.Show(null);
+            _SyncListSelection();
+            return;
+        }
+
+        if (!ReferenceEquals(still, selected))
+        {
+            SelectedRow = still;
+            Pane.Show(still);
+        }
+
+        _SyncListSelection();
+    }
+
+    private void _SyncListSelection() =>
+        ListSelection = SelectedRow is { } row && SelectedTab?.Items.Contains(row) == true ? row : null;
+
+    /// <summary>Every rebuild of a tab's flat sequence is a day folding or unfolding, or a read landing: whether the
+    /// list can show the selected row may have changed with it.</summary>
+    private void _WatchItems(RunsTabViewModel tab) =>
+        tab.Items.CollectionChanged += (_, _) => _SyncListSelection();
+
     public void RefreshModule() => _ = LoadAsync();
 
     /// <summary>Everything on the screen read again, after the day-old stopped runs are saved as they stand — this
@@ -268,8 +479,15 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         _ShowRunning(read.Running);
         _ShowUnfinished(read.Unfinished);
         foreach ((string address, string header) in read.NewServers)
-            if (Tabs.All(tab => tab.ServerAddress != address))
-                Tabs.Add(new RunsTabViewModel(header, address));
+        {
+            if (Tabs.Any(tab => tab.ServerAddress == address))
+                continue;
+
+            var added = new RunsTabViewModel(header, address);
+            _WatchItems(added);
+            Tabs.Add(added);
+        }
+
         HasServerTabs = Tabs.Count > 1;
         _canPublish = read.CanPublish;
 
@@ -295,6 +513,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             }
 
             row.LayoutChanged += _OnRowLayoutChanged;
+            row.SelectRequested += Select;
             if (previous is not null)
                 subRunReads.Add(row.ContinueFromAsync(previous));
         }
@@ -309,6 +528,16 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             tab.Show(tab.ServerAddress is { } address ? [.. rows.Where(row => row.IsPublishedTo(address))] : rows);
             tab.StatusMessage = tab.Days.Count > 0 ? null : _EmptyMessageFor(tab);
         }
+
+        // The selected activity may have been replaced by an equal instance, or have left this month altogether.
+        ActivityOverviewRowViewModel? selectedBefore = SelectedRow;
+        _SettleSelection();
+        Pane.ShowMonth(SelectedTab?.MonthActivitiesText ?? string.Empty, SelectedTab?.MonthNetText ?? string.Empty);
+        // A change that reached the activity on show, without its own row having moved: the pane's crew and loot are
+        // read again, the head it is already drawing left alone.
+        if (SelectedRow is { } stillSelected && ReferenceEquals(stillSelected, selectedBefore)
+            && (changed is null || changed.Concerns(stillSelected.RunId is { } selectedRunId ? [selectedRunId] : [], stillSelected.GroupCode)))
+            Pane.RereadDetail();
 
         await Task.WhenAll(subRunReads);
     }

@@ -30,6 +30,15 @@ public sealed class ActivityRunRowViewModel(ActivityRunDetailDto run, Func<long,
 
     public ActivityOverviewRowViewModel? Activity { get; } = activity;
 
+    /// <summary>Its place in the pane's CREW table (ET-291), for the banded fill. Set by whoever fills that table;
+    /// the same row under an unfolded activity in the list ignores it, since a list row already has the list's own
+    /// hover and selection behind it.</summary>
+    public bool IsAlternate { get; set; }
+
+    /// <summary>What the pane's SERVER column says where there is no glyph: the run is on this machine and nowhere
+    /// else. A blank cell would read as a column that failed to fill rather than an answer.</summary>
+    public string ServerText => HasSyncIcon ? string.Empty : "local";
+
     public string DurationText { get; } = run.StoppedAtUtc is { } stoppedAtUtc
         ? (stoppedAtUtc - run.StartedAtUtc).ToString(@"hh\:mm\:ss")
         : "still open";

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -27,13 +28,19 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// One line of a virtualised list, the same height at every width (ET-290): time, the type's icon, the site with
 /// TYPE · system · chips under it, the crew as a stack of hexes, ISK over the duration, and where it stands towards a
 /// server. What does not fit is trimmed, chips included — a row that grew would move every row under it in a list that
-/// cannot measure what it has not drawn — and the activity pane (RO-2) is where all of it can be read. Nothing here is
+/// cannot measure what it has not drawn — and the activity pane (ET-291) is where all of it can be read. Nothing here is
 /// looked up once the row exists: its type and system come from <see cref="RunRowFacts"/>, while the row is built off
 /// the UI thread.
+///
+/// A click selects the row and the pane reads it; the detail screen (ET-162) is a double-click, ↵ or the pane's own
+/// OPEN DETAIL. PUBLISH and RETRY live in the pane since ET-291 — the row keeps the commands, not a button.
 /// </summary>
 public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 {
     private const int MaxCrewFaces = 5;
+
+    /// <summary>A scanned cosmic signature: three letters, a dash, three digits.</summary>
+    private static readonly Regex _ScanSignature = new("^[A-Z]{3}-[0-9]{3}$", RegexOptions.Compiled);
 
     private readonly Func<ActivityOverviewRowViewModel, Task> _loadSubRuns;
     private readonly Func<ActivityOverviewRowViewModel, Task> _openDetail;
@@ -145,6 +152,14 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
             ? string.Empty
             : row.Crew.Count > MaxCrewFaces ? $"+{row.Crew.Count - MaxCrewFaces}" : $"×{row.Crew.Count}";
 
+        CrewCount = Math.Max(row.Crew.Count, row.ParticipantCount);
+        EnemyTypeCount = row.EnemyTypeCount;
+        // The pane's meta line carries the signature only where one was scanned (ET-291). SignatureGroupSnapshot
+        // holds whatever the run recorded there, and on 13 of Jithran's 26 September runs that is the group's own
+        // name — "Combat Site" — which says nothing a line already reading COMBAT SITE does not.
+        ScanSignatureText = _ScanSignature.IsMatch(row.SignatureGroupSnapshot ?? string.Empty)
+            ? row.SignatureGroupSnapshot
+            : null;
         EnemiesText = row.EnemyTypeCount > 0
             ? $"{row.EnemyTypeCount} enemy types"
             // "Counted", not "recorded": only hand-counted enemies are stored, so a zero here is nobody typing a
@@ -237,6 +252,16 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 
     public string CrewCountText { get; }
 
+    /// <summary>How many pilots flew it, however few of them the row has room to draw — the pane's CREW heading says
+    /// "5 pilots" before its own read of their runs has landed.</summary>
+    public int CrewCount { get; }
+
+    public int EnemyTypeCount { get; }
+
+    /// <summary>The scanned signature ("NKP-364"), or null where what was recorded is the group's own name rather
+    /// than an id (ET-291).</summary>
+    public string? ScanSignatureText { get; }
+
     public bool HasNet { get; }
     public string NetText { get; }
 
@@ -280,17 +305,10 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     /// <summary>What the server or the connection said, for the RETRY button's tooltip.</summary>
     public string? PublishFailureText { get; }
 
-    /// <summary>Until the activity pane takes them (RO-2), PUBLISH and RETRY stay reachable in the sync cell on hover or
-    /// focus, so there is never a build without a manual publish. RETRY stands in PUBLISH's place while it applies.</summary>
+    /// <summary>Whether this activity has anything to offer towards a server at all: the pane shows PUBLISH, or RETRY
+    /// in its place while an automatic publish is failing. They left the row with ET-291 — a hover-revealed button in a
+    /// 24 px cell was RO-1's stopgap so no build shipped without a manual publish.</summary>
     public bool HasSyncAction => CanPublish || HasPublishFailure;
-
-    public MaterialIconKind SyncActionIcon => HasPublishFailure ? MaterialIconKind.Refresh : MaterialIconKind.CloudUploadOutline;
-
-    public string SyncActionTooltip => HasPublishFailure ? RetryTooltip : "Publish this activity to a coupled server";
-
-    /// <summary>The sync cell's one action: RETRY while an automatic publish has failed, PUBLISH otherwise.</summary>
-    [RelayCommand]
-    private Task SyncActionAsync() => HasPublishFailure ? RetryPublishAsync() : PublishAsync();
 
     public string RetryTooltip => PublishFailureText is { } reason
         ? $"Publishing failed: {reason} — try again"
@@ -370,6 +388,16 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 
     /// <summary>Unfolded, folded, or its runs read again: the list around this row has to follow.</summary>
     public event Action<ActivityOverviewRowViewModel>? LayoutChanged;
+
+    /// <summary>A click on the row, or on one of its pilots' runs: the screen picks it up and the pane reads it
+    /// (ET-291). An event rather than an eleventh constructor callback, and wired where <see cref="LayoutChanged"/>
+    /// already is, so a row that survives a refresh keeps both.</summary>
+    public event Action<ActivityOverviewRowViewModel>? SelectRequested;
+
+    /// <summary>A click selects; the detail screen is a double-click, ↵ or the pane's OPEN DETAIL. Until ET-291 a
+    /// single click opened that screen, which made the list unusable as a list.</summary>
+    [RelayCommand]
+    private void Select() => SelectRequested?.Invoke(this);
 
     partial void OnIsExpandedChanged(bool value) => LayoutChanged?.Invoke(this);
 

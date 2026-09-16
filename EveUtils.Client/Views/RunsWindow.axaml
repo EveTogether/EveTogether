@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
         xmlns:ctl="using:EveUtils.Client.Controls"
+        xmlns:vw="using:EveUtils.Client.Views.Runs"
         xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -15,12 +16,18 @@
     <!-- One layout, drawn from the space it is handed and never from the window: ModuleHostService moves this very
          Content between a docked tab (1303) and a floating window (758), and both are the same compact list with more
          or less room for a site's name (ET-290). A row has one height at every width: what does not fit trims, chips
-         included, and the activity pane (RO-2) is where all of it can be read. -->
-    <DockPanel>
+         included, and the activity pane (ET-291) is where all of it can be read.
+
+         Three layers, and the content root is this Grid (ET-291). Layer 0 is the screen itself, whose last undocked
+         child is the list beside the pane's own column. Layer 1 dims that screen and layer 2 is the drawer over it,
+         both only below the breakpoint. They are siblings of the DockPanel and not a second undocked child of it
+         (ET-285), and they are Borders in this very Grid rather than a Popup or the OverlayLayer: those hang off a
+         TopLevel, and this content is re-parented between a tab and a window under them. -->
+    <Grid x:Name="RunsRoot">
 
         <!-- On the content root, not on the window: Window.Styles stay behind with the (never shown) window once
              the module host re-parents this content into a tab. -->
-        <DockPanel.Styles>
+        <Grid.Styles>
             <!-- ══ The list ══ one ListBox over the tab's flat Items: day headers, activity rows, pilots' runs. -->
             <Style Selector="ListBox.runslist">
                 <Setter Property="Background" Value="Transparent"/>
@@ -199,30 +206,89 @@
             <Style Selector="ctl|IconGlyph.syncstate.failed">
                 <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
             </Style>
-            <!-- Until RO-2 moves them to the pane, PUBLISH and RETRY wait in the sync cell and come forward on hover or
-                 focus, taking the state glyph's place. -->
-            <Style Selector="Button.syncaction">
-                <Setter Property="Opacity" Value="0"/>
+            <!-- ══ The drawer (ET-291) ══ the pane over the list below the breakpoint. Opaque, edged in the bright
+                 accent so the edge reads against the scrim in every theme (border-s measured 2.3:1 on Minmatar in
+                 the v2 check, against the 3:1 a border owes), and slid in from the right. It stays in the tree while
+                 it is shut, translated off its own width: a transition can then carry it both ways, and the render
+                 harness takes the transitions off to capture an end state rather than wait for one. -->
+            <Style Selector="Border.drawer">
+                <Setter Property="Width" Value="430"/>
+                <Setter Property="HorizontalAlignment" Value="Right"/>
+                <Setter Property="Background" Value="{StaticResource DrawerSurfaceBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="BorderThickness" Value="1,0,0,0"/>
+                <Setter Property="BoxShadow" Value="-18 0 36 0 #99000000"/>
+                <Setter Property="RenderTransform" Value="translateX(430px)"/>
+                <Setter Property="IsHitTestVisible" Value="False"/>
+                <Setter Property="Transitions">
+                    <Transitions>
+                        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.22"/>
+                    </Transitions>
+                </Setter>
             </Style>
-            <Style Selector="ListBoxItem:pointerover Button.syncaction, ListBoxItem:focus-within Button.syncaction">
+            <Style Selector="Border.drawer.open">
+                <Setter Property="RenderTransform" Value="none"/>
+                <Setter Property="IsHitTestVisible" Value="True"/>
+            </Style>
+            <Style Selector="Border.scrim">
+                <Setter Property="Background" Value="{StaticResource ScrimBrush}"/>
+                <Setter Property="Opacity" Value="0"/>
+                <Setter Property="IsHitTestVisible" Value="False"/>
+                <Setter Property="Transitions">
+                    <Transitions>
+                        <DoubleTransition Property="Opacity" Duration="0:0:0.2"/>
+                    </Transitions>
+                </Setter>
+            </Style>
+            <Style Selector="Border.scrim.open">
                 <Setter Property="Opacity" Value="1"/>
+                <Setter Property="IsHitTestVisible" Value="True"/>
             </Style>
-            <Style Selector="ListBoxItem:pointerover ctl|IconGlyph.syncstate.actionable, ListBoxItem:focus-within ctl|IconGlyph.syncstate.actionable">
-                <Setter Property="Opacity" Value="0"/>
+            <!-- The drawer's own top bar: what it holds, the key that shuts it, and the ✕. -->
+            <Style Selector="Border.dbar">
+                <Setter Property="Background" Value="{StaticResource BgHeaderBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="Padding" Value="14,6,6,6"/>
             </Style>
-            <Style Selector="Button.syncaction">
-                <Setter Property="Width" Value="24"/>
-                <Setter Property="Height" Value="24"/>
+            <Style Selector="Border.dlabel">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="Padding" Value="7,2,7,3"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Border.dlabel > TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="LetterSpacing" Value="1.8"/>
+            </Style>
+            <Style Selector="TextBlock.kbd">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Button.drawerclose">
+                <Setter Property="Width" Value="32"/>
+                <Setter Property="Height" Value="32"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="13"/>
                 <Setter Property="HorizontalContentAlignment" Value="Center"/>
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
-                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
             </Style>
-            <Style Selector="Button.syncaction:pointerover /template/ ContentPresenter, Button.syncaction:focus-visible /template/ ContentPresenter">
+            <Style Selector="Button.drawerclose:pointerover /template/ ContentPresenter, Button.drawerclose:focus-visible /template/ ContentPresenter">
                 <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
                 <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
             </Style>
-            <Style Selector="Button.syncaction.retry">
-                <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+
+            <!-- The pane's own column beside the list, ruled off from it. -->
+            <Style Selector="Border.panecolumn">
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1,0,0,0"/>
             </Style>
 
             <!-- ══ RUNNING ══ -->
@@ -276,7 +342,9 @@
                 <Setter Property="FontSize" Value="15"/>
                 <Setter Property="FontWeight" Value="Bold"/>
             </Style>
-        </DockPanel.Styles>
+        </Grid.Styles>
+
+        <DockPanel x:Name="RunsContent">
 
         <!-- ══ Header ══ -->
         <Border DockPanel.Dock="Top" Padding="14,12" BorderThickness="0,0,0,1"
@@ -453,9 +521,15 @@
             </Grid>
         </Border>
 
-        <!-- ══ Finished activities ══ the one undocked child (ET-285). The days belong to the selected source: Local
-             holds every activity, a server tab the ones published to it. -->
-        <Grid RowDefinitions="Auto,*">
+        <!-- ══ Finished activities ══ the one undocked child (ET-285): the list, and the pane's own column beside it.
+             The column is explicit and never Auto; its width is set from the content root's bounds in the code-behind
+             (400 wide, 0 below the breakpoint, where the very same pane is the drawer instead). The days belong to the
+             selected source: Local holds every activity, a server tab the ones published to it. -->
+        <Grid x:Name="ListAndPane">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="0"/>
+            </Grid.ColumnDefinitions>
             <Grid.DataTemplates>
                 <!-- A day: caret, the weekday bright and the date dim, and its summary — still there while it is
                      folded (ET-199 AC-4). A click anywhere on it folds or unfolds it. -->
@@ -481,13 +555,13 @@
                     </Button>
                 </DataTemplate>
 
-                <!-- An activity: 36 px, one control. The row button opens the detail (ET-162); the caret and the sync
-                     actions sit on top of it rather than inside, so a click aimed at the detail can never fold a group
-                     or publish anything. -->
+                <!-- An activity: 36 px, one control. The row button selects it and the pane reads it (ET-291); the
+                     detail screen is a double-click, ↵ or the pane's own OPEN DETAIL. The caret sits on top of the
+                     row rather than inside it, so a click aimed at the row can never fold a group. -->
                 <DataTemplate DataType="vr:ActivityOverviewRowViewModel">
                     <Border Height="36" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
                         <Panel>
-                            <Button Classes="activityrow" Command="{Binding OpenDetailCommand}">
+                            <Button Classes="activityrow" Command="{Binding SelectCommand}">
                                 <Grid Margin="14,0" ColumnDefinitions="18,40,18,*,84,100,24" ColumnSpacing="8">
                                     <TextBlock Grid.Column="1" Classes="rowtime" Text="{Binding TimeText}"/>
                                     <ctl:IconGlyph Grid.Column="2" Classes="typeicon" Kind="{Binding TypeIcon}"
@@ -549,7 +623,6 @@
                                     <ctl:IconGlyph Grid.Column="6" Classes="syncstate"
                                                    Classes.attention="{Binding IsSyncAttention}"
                                                    Classes.failed="{Binding IsSyncFailed}"
-                                                   Classes.actionable="{Binding HasSyncAction}"
                                                    Kind="{Binding SyncIcon}" IsVisible="{Binding HasSyncText}"
                                                    ToolTip.Tip="{Binding SyncText}"/>
                                 </Grid>
@@ -559,20 +632,16 @@
                                     ToolTip.Tip="Show the pilots on this activity">
                                 <TextBlock Classes="caret" Classes.expanded="{Binding IsExpanded}" Text="&#x25B6;"/>
                             </Button>
-                            <Button Classes="syncaction" Classes.retry="{Binding HasPublishFailure}" Margin="0,0,14,0"
-                                    HorizontalAlignment="Right" VerticalAlignment="Center"
-                                    IsVisible="{Binding HasSyncAction}" Command="{Binding SyncActionCommand}"
-                                    ToolTip.Tip="{Binding SyncActionTooltip}">
-                                <ctl:IconGlyph Width="14" Height="14" Kind="{Binding SyncActionIcon}"/>
-                            </Button>
                         </Panel>
                     </Border>
                 </DataTemplate>
 
                 <!-- A pilot's own run under an unfolded activity: face and name, their own time and ISK, their own
-                     standing towards a server. Six pilots on one site are six of these under one row (ET-161 AC-5). -->
+                     standing towards a server. Six pilots on one site are six of these under one row (ET-161 AC-5).
+                     A click selects the activity above it, the same as a click on that row: these are the one
+                     activity's runs, and the pane has no smaller thing to show. -->
                 <DataTemplate DataType="vr:ActivityRunRowViewModel">
-                    <Button Classes="activityrow" Height="26" Command="{Binding Activity.OpenDetailCommand}"
+                    <Button Classes="activityrow" Height="26" Command="{Binding Activity.SelectCommand}"
                             Background="{StaticResource BgRowBrush}">
                         <Grid Margin="14,0" ColumnDefinitions="18,40,18,*,84,100,24" ColumnSpacing="8">
                             <DockPanel Grid.Column="3">
@@ -599,25 +668,65 @@
                 </DataTemplate>
             </Grid.DataTemplates>
 
-            <TextBlock x:Name="TabStatus" Grid.Row="0" Classes="hint" Margin="14,10" TextWrapping="Wrap"
-                       IsVisible="{Binding SelectedTab.StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
-                       Text="{Binding SelectedTab.StatusMessage}"/>
-            <!-- Virtualised: a month of a thousand activities realises only the rows on screen. No selection
-                 behaviour yet — the row's own button takes the click (RO-2 makes a click select). -->
-            <ctl:RecyclingListBox x:Name="ActivityList" Grid.Row="1" Classes="runslist"
-                                  ItemsSource="{Binding SelectedTab.Items}"
-                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                <ctl:RecyclingListBox.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <VirtualizingStackPanel/>
-                    </ItemsPanelTemplate>
-                </ctl:RecyclingListBox.ItemsPanel>
-            </ctl:RecyclingListBox>
-            <!-- The day of the topmost row, pinned while its own header is scrolled away (RunsWindow.axaml.cs). -->
-            <Border x:Name="StickyDay" Grid.Row="1" VerticalAlignment="Top" IsVisible="False"
-                    Background="#FF0C100E">
-                <ContentControl x:Name="StickyDayContent"/>
+            <Grid Grid.Column="0" RowDefinitions="Auto,*">
+                <TextBlock x:Name="TabStatus" Grid.Row="0" Classes="hint" Margin="14,10" TextWrapping="Wrap"
+                           IsVisible="{Binding SelectedTab.StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           Text="{Binding SelectedTab.StatusMessage}"/>
+                <!-- Virtualised: a month of a thousand activities realises only the rows on screen. SelectedItem is
+                     bound to the screen's own selection (ET-291) and not the other way round: the list drops it
+                     whenever a folded day takes the row out of Items, and that null is not an answer. -->
+                <ctl:RecyclingListBox x:Name="ActivityList" Grid.Row="1" Classes="runslist"
+                                      ItemsSource="{Binding SelectedTab.Items}"
+                                      SelectedItem="{Binding ListSelection, Mode=TwoWay}"
+                                      SelectionMode="Single"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ctl:RecyclingListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <VirtualizingStackPanel/>
+                        </ItemsPanelTemplate>
+                    </ctl:RecyclingListBox.ItemsPanel>
+                </ctl:RecyclingListBox>
+                <!-- The day of the topmost row, pinned while its own header is scrolled away (RunsWindow.axaml.cs). -->
+                <Border x:Name="StickyDay" Grid.Row="1" VerticalAlignment="Top" IsVisible="False"
+                        Background="{StaticResource DrawerSurfaceBrush}">
+                    <ContentControl x:Name="StickyDayContent"/>
+                </Border>
+            </Grid>
+
+            <!-- The pane beside the list, on the wide layout. One view model, two hosts (ET-291): this one and the
+                 drawer below, of which exactly one is ever shown. -->
+            <Border x:Name="PaneHost" Grid.Column="1" Classes="panecolumn" IsVisible="{Binding IsWide}">
+                <vw:RunsActivityPane DataContext="{Binding Pane}"/>
             </Border>
         </Grid>
     </DockPanel>
+
+    <!-- ══ Layer 1 ══ the list dimmed behind the drawer. A click on it closes — which is the whole point of a 430 px
+         drawer rather than a full-width one: the list stays visible and is itself the way out (Jithran, 15 Sep). -->
+    <Border x:Name="Scrim" Classes="scrim" Classes.open="{Binding IsDrawerOpen}"
+            IsVisible="{Binding IsNarrow}">
+        <Button x:Name="ScrimClose" Classes="scrimbtn" Background="Transparent" BorderThickness="0" CornerRadius="0"
+                Padding="0" MinHeight="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                IsTabStop="False" Command="{Binding CloseDrawerCommand}"
+                ToolTip.Tip="Click to close"/>
+    </Border>
+
+    <!-- ══ Layer 2 ══ the drawer, over the whole module content, header and bands included. -->
+    <Border x:Name="Drawer" Classes="drawer" Classes.open="{Binding IsDrawerOpen}"
+            IsVisible="{Binding IsNarrow}">
+        <DockPanel>
+            <Border Classes="dbar" DockPanel.Dock="Top">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                    <Border Grid.Column="0" Classes="dlabel">
+                        <TextBlock Text="{Binding Pane.Title}"/>
+                    </Border>
+                    <TextBlock Grid.Column="2" Classes="kbd" Text="Esc"/>
+                    <Button x:Name="DrawerClose" Grid.Column="3" Classes="drawerclose" Content="&#x2715;"
+                            Command="{Binding CloseDrawerCommand}" ToolTip.Tip="Close (Esc)"/>
+                </Grid>
+            </Border>
+            <vw:RunsActivityPane DataContext="{Binding Pane}"/>
+        </DockPanel>
+    </Border>
+    </Grid>
 </v:ChromedWindow>
