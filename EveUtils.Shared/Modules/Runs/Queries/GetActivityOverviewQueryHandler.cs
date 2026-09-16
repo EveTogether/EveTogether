@@ -164,7 +164,19 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             _OwnShareOf(summary, ownCharacterIds),
             ownCharacterIds is null || flewIt.Any(member => ownCharacterIds.Contains(member.CharacterId)),
             _OtherEarnersOf(summary, ownCharacterIds, members),
-            abyssalFilamentText);
+            abyssalFilamentText,
+            _OwnShareByCharacterOf(summary, ownCharacterIds));
+    }
+
+    private static IReadOnlyDictionary<long, IskBreakdown>? _OwnShareByCharacterOf(
+        ActivitySummary summary, IReadOnlySet<long>? ownCharacterIds)
+    {
+        if (ownCharacterIds is null || StoredIskBreakdown.ReadByCharacter(summary.IskContributionsByCharacter) is not { } byCharacter)
+            return null;
+
+        return byCharacter
+            .Where(character => ownCharacterIds.Contains(character.Key))
+            .ToDictionary(character => character.Key, character => character.Value);
     }
 
     private static decimal? _SumOrNull(IEnumerable<decimal?> amounts)

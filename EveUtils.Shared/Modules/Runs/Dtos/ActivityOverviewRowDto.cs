@@ -80,4 +80,9 @@ public sealed record ActivityOverviewRowDto(
     /// wrote it — null on every non-abyssal activity, and on an abyssal saved before this ticket. Not a member of
     /// <see cref="Rewards"/>: it names what the run was, it is not something the pilot earned. Read into a name (e.g.
     /// "Agitated Dark") by the client, which is the only side that knows the tier's own word.</summary>
-    string? AbyssalFilamentText = null);
+    string? AbyssalFilamentText = null,
+    /// <summary><see cref="OwnIsk"/> split per own character — the stored split GetActivityDetailQuery's
+    /// <c>IskByCharacter</c> reads, narrowed to the caller's characters, so the runs summary's BY CHARACTER (ET-294)
+    /// adds up to its hero figure without a detail read per activity. Null where no split is stored yet, and when the
+    /// caller named no characters.</summary>
+    IReadOnlyDictionary<long, IskBreakdown>? OwnIskByCharacter = null);

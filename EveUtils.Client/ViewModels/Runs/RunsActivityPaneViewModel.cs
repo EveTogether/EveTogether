@@ -38,8 +38,8 @@ public sealed record RunsIskPartViewModel(string Label, IskBreakdown? Ink, strin
 /// lookup — so that read runs off the UI thread, after a short wait, and is dropped when the selection has moved on:
 /// ten quick arrow steps are one read, not ten (ET-287).</para>
 ///
-/// <para>SUMMARY (ET-294) takes the same two hosts: it sets <see cref="Title"/> and puts its own content where this
-/// one's is. Nothing here assumes the pane is showing an activity except <see cref="HasActivity"/>.</para>
+/// <para>SUMMARY (<see cref="RunsSummaryViewModel"/>, ET-294) takes the same two hosts and stands in this one's place
+/// while it is chosen, or while no run is selected on the wide layout.</para>
 /// </summary>
 public sealed partial class RunsActivityPaneViewModel : ViewModelBase
 {
@@ -47,7 +47,7 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
     /// feels like it is waiting for anything.</summary>
     public static readonly TimeSpan ReadDelay = TimeSpan.FromMilliseconds(150);
 
-    private static readonly (IskSource Source, string Label)[] Sources =
+    internal static readonly (IskSource Source, string Label)[] Sources =
     [
         (IskSource.Bounty, "BOUNTY"),
         (IskSource.Loot, "LOOT"),
@@ -74,10 +74,6 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
         _publishTargetName = publishTargetName ?? (() => null);
         _readDelay = readDelay ?? ReadDelay;
     }
-
-    /// <summary>What the drawer's top bar calls what it is holding. ACTIVITY today; SUMMARY once ET-294 shares
-    /// these hosts.</summary>
-    public string Title => "ACTIVITY";
 
     /// <summary>The row on show, and the one every action here applies to. Bound to directly for PUBLISH, RETRY and
     /// OPEN DETAIL rather than mirrored into commands of this pane's own: two copies of one command is how the pane
@@ -153,18 +149,6 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
 
     /// <summary>"PUBLISH TO ET" where exactly one server is coupled, the bare verb where the target is a choice.</summary>
     [ObservableProperty] private string _publishText = "PUBLISH";
-
-    // ── Nothing selected, on the wide layout ────────────────────────────────────────────────────────────────────
-
-    /// <summary>What the pane says while no run is picked. A placeholder until RO-5 puts the month's own summary
-    /// here — but never an empty panel: the reader has to be told the space is waiting for a click.</summary>
-    [ObservableProperty] private string _emptyLineText = string.Empty;
-
-    public string EmptyHint => "Select a run to see it here.";
-
-    /// <summary>The month bar's own figures, so the empty pane says something true rather than nothing.</summary>
-    public void ShowMonth(string activitiesText, string netText) =>
-        EmptyLineText = string.IsNullOrEmpty(netText) ? activitiesText : $"{activitiesText} · {netText}";
 
     /// <summary>
     /// Show this run, or nothing. Everything the row already knows is set here and now; the rest is read after

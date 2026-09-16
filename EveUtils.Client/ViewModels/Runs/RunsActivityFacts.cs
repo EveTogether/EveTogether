@@ -12,7 +12,8 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// <see cref="ActivityOverviewRowViewModel"/> takes them, so a day counted here and the same day's header add up to
 /// the same text. <see cref="TypeId"/> and <see cref="CrewCharacterIds"/> are the two facts the TYPES/CHARACTERS
 /// filter needs (ET-293) to hide a day's strip shading the same way it hides the day's own rows — a plain figure
-/// record otherwise has no type or crew to filter on at all.</summary>
+/// record otherwise has no type or crew to filter on at all. The rest is what the summary (ET-294) names: a week
+/// reaches into the month before, where no row exists to ask.</summary>
 public sealed record RunsActivityFacts(
     DateTime StartedAtLocal,
     TimeSpan Duration,
@@ -20,18 +21,30 @@ public sealed record RunsActivityFacts(
     IskBreakdown Isk,
     IReadOnlyList<string> ServerAddresses,
     RunTypeId TypeId,
-    IReadOnlyList<long> CrewCharacterIds) : IRunsActivityFigures
+    IReadOnlyList<long> CrewCharacterIds,
+    Guid ActivitySummaryId = default,
+    string SiteText = "",
+    int CrewCount = 1,
+    IReadOnlyDictionary<long, IskBreakdown>? IskByOwnCharacter = null) : IRunsActivityFigures
 {
     public DateOnly Day => DateOnly.FromDateTime(StartedAtLocal);
 
     /// <param name="facts">The same cache <see cref="ActivityOverviewRowViewModel"/> resolves TYPE through, so a
     /// site the row calls "Homefront" is never counted here under plain "Site" for want of the SDE fallback.</param>
-    public static RunsActivityFacts From(ActivityOverviewRowDto row, RunRowFacts facts) => new(
-        row.StartedAtUtc.ToLocalTime(),
-        TimeSpan.FromSeconds(row.DurationSeconds),
-        row.OwnIsk.HasFigure ? row.OwnIsk.Total : null,
-        row.OwnIsk,
-        [.. row.ServerSyncStates.Select(state => state.ServerAddress).Distinct()],
-        facts.TypeOf(row.ActivityKind, row.SignatureGroupSnapshot, row.SiteTypeId, row.SiteName).Id,
-        [.. row.Crew.Select(member => member.CharacterId)]);
+    public static RunsActivityFacts From(ActivityOverviewRowDto row, RunRowFacts facts)
+    {
+        RunTypeDefinition type = facts.TypeOf(row.ActivityKind, row.SignatureGroupSnapshot, row.SiteTypeId, row.SiteName);
+        return new RunsActivityFacts(
+            row.StartedAtUtc.ToLocalTime(),
+            TimeSpan.FromSeconds(row.DurationSeconds),
+            row.OwnIsk.HasFigure ? row.OwnIsk.Total : null,
+            row.OwnIsk,
+            [.. row.ServerSyncStates.Select(state => state.ServerAddress).Distinct()],
+            type.Id,
+            [.. row.Crew.Select(member => member.CharacterId)],
+            row.ActivitySummaryId,
+            ActivityOverviewRowViewModel.SiteTextOf(row, type),
+            Math.Max(row.Crew.Count, row.ParticipantCount),
+            row.OwnIskByCharacter);
+    }
 }

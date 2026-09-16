@@ -85,13 +85,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
         TimeText = StartedAtLocal.ToString("HH:mm");
         RunTypeDefinition type = facts?.TypeOf(row.ActivityKind, row.SignatureGroupSnapshot, row.SiteTypeId, row.SiteName)
             ?? RunTypeCatalogue.For(row.ActivityKind, row.SignatureGroupSnapshot, row.SiteTypeId, null, row.SiteName);
-        // An abyssal has no site at all — it never reads "Unnamed site" (ET-241), it reads what filament opened it,
-        // or the type's own honest name while that is still unknown.
-        SiteText = !string.IsNullOrWhiteSpace(row.SiteName)
-            ? row.SiteName
-            : type.Space is RunSpace.AbyssalPocket
-                ? AbyssalFilamentName.From(row.AbyssalFilamentText)
-                : "Unnamed site";
+        SiteText = SiteTextOf(row, type);
         // An abyssal with no known filament falls back to the type's own name for both SiteText and KindText
         // ("Abyssal"), which would read "Abyssal Abyssal" side by side. The site name alone already says it.
         KindText = SiteText == type.Name ? string.Empty : type.Name;
@@ -201,6 +195,16 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
             chips = chips.Append(new ActivityRewardChipViewModel(RunParameterKey.FixedPayout, homefrontPayout.Amount));
         Chips = [.. chips];
     }
+
+    /// <summary>An abyssal has no site at all — it never reads "Unnamed site" (ET-241), it reads what filament opened
+    /// it, or the type's own honest name while that is still unknown. Shared with the runs summary's TOP RUNS and TOP
+    /// SITES (ET-294), which name activities they never build a row for.</summary>
+    internal static string SiteTextOf(ActivityOverviewRowDto row, RunTypeDefinition type) =>
+        !string.IsNullOrWhiteSpace(row.SiteName)
+            ? row.SiteName
+            : type.Space is RunSpace.AbyssalPocket
+                ? AbyssalFilamentName.From(row.AbyssalFilamentText)
+                : "Unnamed site";
 
     public Guid ActivitySummaryId { get; }
 

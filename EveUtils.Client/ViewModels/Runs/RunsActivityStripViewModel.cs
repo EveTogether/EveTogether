@@ -115,15 +115,8 @@ public sealed partial class RunsActivityStripViewModel : ObservableObject
                 ? CultureInfo.InvariantCulture.DateTimeFormat.GetAbbreviatedDayName(order[row])
                 : string.Empty;
 
-        // The thresholds are the quartiles of the days that have anything to shade, so a quiet stretch still reads as
-        // light and heavy against itself instead of all of it drowning under one big evening.
-        decimal[] values = [.. Enumerable.Range(0, 7 * Weeks)
-            .Select(offset => _ValueOf(input, Start.AddDays(offset)))
-            .Where(value => value > 0)
-            .Order()];
-        decimal Quartile(double fraction) =>
-            values.Length == 0 ? 0 : values[Math.Min(values.Length - 1, (int)Math.Floor(fraction * values.Length))];
-        decimal[] thresholds = [Quartile(0.25), Quartile(0.5), Quartile(0.75)];
+        Func<decimal, int> levelOf = LevelScale([.. Enumerable.Range(0, 7 * Weeks)
+            .Select(offset => _ValueOf(input, Start.AddDays(offset)))]);
 
         for (int week = 0; week < Weeks; week++)
         {
@@ -131,8 +124,7 @@ public sealed partial class RunsActivityStripViewModel : ObservableObject
             for (int row = 0; row < 7; row++)
             {
                 DateOnly day = weekStart.AddDays(row);
-                decimal value = _ValueOf(input, day);
-                int level = value <= 0 ? 0 : value <= thresholds[0] ? 1 : value <= thresholds[1] ? 2 : value <= thresholds[2] ? 3 : 4;
+                int level = levelOf(_ValueOf(input, day));
                 input.Days.TryGetValue(day, out IReadOnlyList<RunsActivityFacts>? facts);
                 Cells[row * Weeks + week].Show(day, level,
                     isFuture: day > input.Today,
@@ -140,7 +132,7 @@ public sealed partial class RunsActivityStripViewModel : ObservableObject
                     isToday: day == input.Today,
                     isPicked: input.RangeKind == RunsRangeKind.Day && input.RangeStart == day,
                     isOutsideMonth: day < input.MonthInView || day >= monthEnd,
-                    tooltip: _Tooltip(day.ToString("ddd d MMM", CultureInfo.InvariantCulture).ToUpperInvariant(), facts));
+                    tooltip: DayTooltip(day, facts));
             }
 
             List<RunsActivityFacts> weekFacts = [.. Enumerable.Range(0, 7)
@@ -180,15 +172,30 @@ public sealed partial class RunsActivityStripViewModel : ObservableObject
         }
     }
 
-    private decimal _ValueOf(RunsStripInput input, DateOnly day)
+    /// <summary>The five steps a set of cells is shaded in: 0 for nothing, then 1–4 split at the quartiles of the cells
+    /// that have anything to shade, so a quiet stretch still reads as light and heavy against itself instead of all of
+    /// it drowning under one big evening. The summary's HOURS and DAYS (ET-294) step the same way.</summary>
+    internal static Func<decimal, int> LevelScale(IEnumerable<decimal> values)
     {
-        if (!input.Days.TryGetValue(day, out IReadOnlyList<RunsActivityFacts>? facts))
-            return 0;
-
-        return Shade == RunsStripShade.Runs
-            ? facts.Count
-            : facts.Where(activity => activity.NetIsk.HasValue).Sum(activity => activity.NetIsk!.Value);
+        decimal[] shaded = [.. values.Where(value => value > 0).Order()];
+        decimal Quartile(double fraction) =>
+            shaded.Length == 0 ? 0 : shaded[Math.Min(shaded.Length - 1, (int)Math.Floor(fraction * shaded.Length))];
+        decimal[] thresholds = [Quartile(0.25), Quartile(0.5), Quartile(0.75)];
+        return value => value <= 0 ? 0 : value <= thresholds[0] ? 1 : value <= thresholds[1] ? 2 : value <= thresholds[2] ? 3 : 4;
     }
+
+    /// <summary>What a set of activities weighs under a shade: their own share's ISK, or how many there are.</summary>
+    internal static decimal ValueOf(RunsStripShade shade, IReadOnlyCollection<IRunsActivityFigures> activities) =>
+        shade == RunsStripShade.Runs
+            ? activities.Count
+            : activities.Where(activity => activity.NetIsk.HasValue).Sum(activity => activity.NetIsk!.Value);
+
+    private decimal _ValueOf(RunsStripInput input, DateOnly day) =>
+        input.Days.TryGetValue(day, out IReadOnlyList<RunsActivityFacts>? facts) ? ValueOf(Shade, facts) : 0;
+
+    /// <summary>A day's tooltip, the one the summary's DAYS (ET-294) repeats for the same day.</summary>
+    internal static string DayTooltip(DateOnly day, IReadOnlyList<RunsActivityFacts>? facts) =>
+        _Tooltip(day.ToString("ddd d MMM", CultureInfo.InvariantCulture).ToUpperInvariant(), facts);
 
     /// <summary>The same three phrases the day header says about these activities, word for word.</summary>
     private static string _Tooltip(string when, IReadOnlyList<RunsActivityFacts>? facts) =>
@@ -219,7 +226,7 @@ public sealed partial class RunsActivityStripViewModel : ObservableObject
 /// opacity on the fill, and an opacity on the whole cell would dim today's edge and the picked outline with it.</summary>
 public sealed partial class RunsStripCellViewModel(Action<RunsStripCellViewModel> clicked) : ObservableObject
 {
-    private static readonly double[] LevelOpacity = [1, .28, .48, .70, 1];
+    internal static readonly double[] LevelOpacity = [1, .28, .48, .70, 1];
 
     public DateOnly Date { get; private set; }
 

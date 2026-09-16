@@ -145,15 +145,8 @@
         </Style>
     </UserControl.Styles>
 
+    <!-- Nothing picked has no placeholder here: the summary (ET-294) takes this host's place instead. -->
     <Panel>
-        <!-- Nothing picked, on the wide layout. A placeholder for RO-5's own summary, never an empty rectangle: the
-             reader has to be told the space is waiting for a click. -->
-        <StackPanel x:Name="PaneEmpty" Margin="14" Spacing="2" VerticalAlignment="Top"
-                    IsVisible="{Binding !HasActivity}">
-            <TextBlock Classes="label" Text="{Binding EmptyLineText}"/>
-            <TextBlock Classes="hint" Margin="0,4,0,0" Text="{Binding EmptyHint}"/>
-        </StackPanel>
-
         <DockPanel x:Name="PaneBody" IsVisible="{Binding HasActivity}">
 
             <!-- ══ Actions ══ pinned under the pane rather than scrolled past: PUBLISH is why a pilot came here.

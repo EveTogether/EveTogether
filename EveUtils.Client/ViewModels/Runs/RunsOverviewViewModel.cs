@@ -170,6 +170,10 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     [NotifyCanExecuteChangedFor(nameof(NextCommand))]
     private bool _canGoNext = true;
 
+    /// <summary>A row the summary's TOP RUNS opened (ET-294): its day is unfolded, and the row itself belongs in view
+    /// once the list has laid that out.</summary>
+    public event Action<ActivityOverviewRowViewModel>? RowScrollRequested;
+
     /// <summary>A day was unfolded for the reader and belongs at the top of the list — once the list has laid the
     /// change out, which only the view can tell (RunsWindow.axaml.cs).</summary>
     public event Action<RunsDayViewModel>? DayScrollRequested;
@@ -200,6 +204,13 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             _weekStart.Changed += _OnWeekStartChanged;
         SelectedTab = LocalTab;
         Pane = new RunsActivityPaneViewModel(_ReadPaneDetailAsync, _PublishTargetName, paneReadDelay);
+        Summary = new RunsSummaryViewModel(_FaceOf, day => _ = PickDayAsync(day), line => _ = OpenSummaryRunAsync(line));
+        // HOURS and DAYS shade the way the strip does, so they follow its ISK | runs switch.
+        Strip.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(RunsActivityStripViewModel.Shade))
+                _ShowSummary();
+        };
         _RefreshRange();
         _RefreshFilterTiles();
         _WatchItems(LocalTab);
@@ -295,6 +306,104 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// drawer over it — of which one is ever on screen.</summary>
     public RunsActivityPaneViewModel Pane { get; }
 
+    /// <summary>SUMMARY (ET-294): the day, week or month added up, in the same two hosts as <see cref="Pane"/>.</summary>
+    public RunsSummaryViewModel Summary { get; }
+
+    /// <summary>The reader asked for the summary rather than the selected run — SUMMARY on the range line. A click on a
+    /// row or a TOP RUNS line asks for the run again.</summary>
+    [ObservableProperty] private bool _isSummaryChosen;
+
+    /// <summary>Wide: the pane beside the list holds the summary when it was asked for, and whenever there is no run
+    /// to show — never an empty column (ET-294).</summary>
+    public bool ShowsSummaryInPane => IsSummaryChosen || SelectedRow is null;
+
+    /// <summary>What the drawer holds on the narrow layout. Kept while it slides shut, so it leaves with its content.</summary>
+    public bool ShowsSummaryInDrawer => IsSummaryChosen;
+
+    /// <summary>SUMMARY's <c>on</c> state: the summary is actually on screen.</summary>
+    public bool IsSummaryOn => IsWide ? ShowsSummaryInPane : IsDrawerOpen && IsSummaryChosen;
+
+    public string DrawerTitle => IsSummaryChosen ? "SUMMARY" : "ACTIVITY";
+
+    /// <summary>Wide, it swaps the pane between the run and the summary — with no run selected there is nothing to swap
+    /// to, and it stays on. Narrow, it opens the drawer on the summary.</summary>
+    [RelayCommand]
+    public void ToggleSummary()
+    {
+        if (IsWide)
+        {
+            IsSummaryChosen = !(ShowsSummaryInPane && SelectedRow is not null);
+            return;
+        }
+
+        IsSummaryChosen = true;
+        IsDrawerOpen = true;
+    }
+
+    /// <summary>A TOP RUNS line: that run selected and shown — beside the list, or in the drawer — with its day unfolded
+    /// and the row scrolled into view. A run from a week's other month brings that month into view first.</summary>
+    public async Task OpenSummaryRunAsync(RunsSummaryRunLine line)
+    {
+        IsSummaryChosen = false;
+        if (_RowOf(line.ActivitySummaryId) is null)
+        {
+            var month = new DateOnly(line.Day.Year, line.Day.Month, 1);
+            if (month == _MonthInView)
+                return;
+
+            await _GoToMonthAsync(month, keepRange: true);
+        }
+
+        if (SelectedTab is not { } tab || _RowOf(line.ActivitySummaryId) is not { } row)
+            return;
+
+        tab.ExpandDays([line.Day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local)]);
+        Select(row);
+        RowScrollRequested?.Invoke(row);
+    }
+
+    private ActivityOverviewRowViewModel? _RowOf(Guid activitySummaryId) =>
+        SelectedTab?.Days.SelectMany(day => day.Rows).FirstOrDefault(row => row.ActivitySummaryId == activitySummaryId);
+
+    partial void OnIsSummaryChosenChanged(bool value) => _SyncSummaryShown();
+
+    partial void OnIsDrawerOpenChanged(bool value) => _SyncSummaryShown();
+
+    partial void OnSelectedRowChanged(ActivityOverviewRowViewModel? value)
+    {
+        _SyncSummaryShown();
+        // The summary's day and week follow the selection.
+        _ShowSummary();
+    }
+
+    private void _SyncSummaryShown()
+    {
+        OnPropertyChanged(nameof(ShowsSummaryInPane));
+        OnPropertyChanged(nameof(ShowsSummaryInDrawer));
+        OnPropertyChanged(nameof(IsSummaryOn));
+        OnPropertyChanged(nameof(DrawerTitle));
+        if (Summary is not null)
+            Summary.IsActive = IsSummaryOn;
+    }
+
+    /// <summary>The summary's input, from what the range line was just drawn from — never a read.</summary>
+    private void _ShowSummary()
+    {
+        if (Summary is null)
+            return;
+
+        RunsTabViewModel[] servers = [.. Tabs.Where(tab => !tab.IsLocal)];
+        Summary.Show(new RunsSummaryInput(_tabDays, _Today, _MonthInView, RangeKind, RangeStart,
+            SelectedRow is { } row ? DateOnly.FromDateTime(row.StartedAtLocal) : null, _FirstDay, Strip.Shade,
+            servers.Length == 1 ? (servers[0].ServerAddress!, servers[0].Header) : null, _namesById));
+    }
+
+    partial void OnRangeKindChanged(RunsRangeKind value) => Summary?.ResetScope();
+
+    partial void OnRangeStartChanged(DateOnly value) => Summary?.ResetScope();
+
+    partial void OnViewedMonthLocalChanged(DateTime value) => Summary?.ResetScope();
+
     /// <summary>Whether there is room for the pane beside the list. Set from the bounds of the module content, so a
     /// docked tab and a floating window each answer for the width they were actually given.</summary>
     [ObservableProperty]
@@ -345,6 +454,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     {
         if (value)
             IsDrawerOpen = false;
+        _SyncSummaryShown();
     }
 
     partial void OnSelectedTabChanged(RunsTabViewModel? value)
@@ -365,8 +475,12 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     /// <summary>A click on a row, or on one of its pilots' runs. On the narrow layout it opens the drawer as well —
     /// the pane has nowhere else to be drawn there.</summary>
-    public void Select(ActivityOverviewRowViewModel row)
+    /// <param name="showRun">A click asks for the run and takes the summary off; ↑↓ with the summary open leave it
+    /// there, where its day and week follow the step.</param>
+    public void Select(ActivityOverviewRowViewModel row, bool showRun = true)
     {
+        if (showRun)
+            IsSummaryChosen = false;
         bool moved = !ReferenceEquals(SelectedRow, row);
         if (moved)
         {
@@ -402,7 +516,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             if (!rows[index].Day.IsExpanded)
                 continue;
 
-            Select(rows[index].Row);
+            Select(rows[index].Row, showRun: false);
             return;
         }
     }
@@ -480,7 +594,9 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         if (still is null)
         {
             SelectedRow = null;
-            IsDrawerOpen = false;
+            // A drawer holding the summary has nothing of the run in it to lose.
+            if (!IsSummaryChosen)
+                IsDrawerOpen = false;
             Pane.Show(null);
             _SyncListSelection();
             return;
@@ -624,7 +740,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             }
 
             row.LayoutChanged += _OnRowLayoutChanged;
-            row.SelectRequested += Select;
+            row.SelectRequested += selected => Select(selected);
             if (previous is not null)
                 subRunReads.Add(row.ContinueFromAsync(previous));
         }
@@ -1187,8 +1303,11 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// when the grid now reaches past what the last read covered.</summary>
     private void _OnWeekStartChanged(DayOfWeek firstDay)
     {
+        // WEEK stays open over the change: its range, title and DAYS re-lay under the new start (ET-294).
+        RunsRangeKind? chosenScope = Summary.ChosenScope ?? (RangeKind == RunsRangeKind.Week ? RunsRangeKind.Week : null);
         if (RangeKind == RunsRangeKind.Week)
             RangeKind = RunsRangeKind.Month;
+        Summary.ChosenScope = chosenScope;
         _RefreshRange();
 
         (DateOnly from, DateOnly to) = _ReadRange();
@@ -1245,7 +1364,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         RangeFlownText = RunsActivitySummaryText.FlownFor(figures);
         RangeNetText = RunsActivitySummaryText.NetFor(figures);
         RangeIsk = RunsActivitySummaryText.SourcesFor(figures);
-        Pane.ShowMonth(RangeCountText, RangeNetText);
+        _ShowSummary();
     }
 
     // ── TYPES and CHARACTERS filters (ET-293) ────────────────────────────────────────────────────────────────────
