@@ -159,7 +159,7 @@
         <ItemsControl x:Name="StripMonths" Grid.Row="0" Grid.Column="1" ItemsSource="{Binding MonthLabels}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <UniformGrid Rows="1" Columns="12" ColumnSpacing="3"/>
+                    <UniformGrid Rows="1" Columns="12" ColumnSpacing="3" UseLayoutRounding="False"/>
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
@@ -190,7 +190,7 @@
         <ItemsControl x:Name="StripCells" Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Cells}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <UniformGrid Rows="7" Columns="12" RowSpacing="3" ColumnSpacing="3"/>
+                    <UniformGrid Rows="7" Columns="12" RowSpacing="3" ColumnSpacing="3" UseLayoutRounding="False"/>
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
@@ -215,7 +215,7 @@
         <ItemsControl x:Name="StripWeeks" Grid.Row="2" Grid.Column="1" ItemsSource="{Binding WeekSegments}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <UniformGrid Rows="1" Columns="12" ColumnSpacing="3"/>
+                    <UniformGrid Rows="1" Columns="12" ColumnSpacing="3" UseLayoutRounding="False"/>
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
