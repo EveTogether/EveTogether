@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -23,7 +24,6 @@ using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
-using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Transport;
@@ -33,20 +33,23 @@ using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 namespace EveUtils.Client.ViewModels.Runs;
 
 /// <summary>
-/// ET-161: the runs screen in the shell — the band of running runs on top, then one row per finished activity,
-/// grouped under a day band. Until this existed a saved run left the screen the moment its window closed and there
-/// was nowhere in the app to see what you flew yesterday.
+/// ET-161: the runs screen in the shell — RUNNING on top, then one row per finished activity under its day. Until this
+/// existed a saved run left the screen the moment its window closed and there was nowhere in the app to see what you
+/// flew yesterday.
 ///
-/// <para><b>The width this is designed at, and why.</b> Jithran's open question — design at the start size or at the
-/// window as it actually stands — is answered here as <i>the start size, 758px</i>, and the answer is a choice, not
-/// a measurement. Three reasons. <c>ModuleHostService.Render</c> moves this very <c>Content</c> between a docked tab
-/// and a floating window, so there is exactly one layout and its binding constraint is the narrowest width it must
-/// survive; 758 is that width and it is the default, not an edge case. "The window as it stands" is not one number —
-/// docked and floating differ by 342px and no two operators keep the same size — so designing to it is designing to
-/// nothing. And elastic layout is free here: star columns, a wrapping chip strip and character-ellipsis trimming
-/// cost nothing at 1180 and are the whole of what makes 758 work. Wider is therefore not a second design but the
-/// same one with more room, which is also why no element is folded behind a "⋯": an overflow menu would hide, at
-/// the default width, exactly the rewards AC-3 says may never disappear.</para>
+/// <para><b>One compact list, drawn from the space it is handed (ET-290).</b> <c>ModuleHostService.Render</c> moves this
+/// very <c>Content</c> between a docked tab and a floating window, so the layout sizes off its host and never off the
+/// window: docked at 1303 and floating at 758 are the same list with more or less room for a site's name. Every row has
+/// one fixed height at every width; what does not fit is trimmed, chips included, and the activity pane (RO-2) is where
+/// all of it can be read. The day headers, activity rows and pilots' runs are one flat, virtualised sequence per tab
+/// (<see cref="RunsTabViewModel.Items"/>): folding a day takes its rows out of it, since expanders nested inside a list
+/// would put every row back in the visual tree.</para>
+///
+/// <para><b>Nothing is read on the UI thread.</b> Every query and command this screen sends runs inside
+/// <c>Task.Run</c>, with building the rows from what came back — a dispatcher call is a direct one and the SQLite
+/// provider's async API is synchronous, so an <c>await</c> alone moved nothing. Only the collections change on the UI
+/// thread, reconciled by identity (ET-222). One read runs at a time; a change that lands while one is out is owed and
+/// read straight after, never dropped (ET-287).</para>
 /// </summary>
 public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableModule, IDisposable
 {
@@ -58,19 +61,27 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private readonly RunsFleetFilter? _fleetFilter;
     private readonly IDisposable? _runChangesSubscription;
     private readonly FleetRunAutoPublisher? _autoPublisher;
+    private readonly RunRowFacts _facts;
+    private readonly ConcurrentDictionary<long, CharacterFaceViewModel> _faces = new();
     private bool _canPublish;
 
     /// <summary>Set once per load when <see cref="_fleetFilter"/> is active and turned up nothing: whether that
-    /// empty result is a real zero or an unknowable one (ET-185) — read by <see cref="_FillTab"/> so every tab's
-    /// empty message says the same thing rather than each guessing from its own row count.</summary>
+    /// empty result is a real zero or an unknowable one (ET-185) — read by <see cref="_EmptyMessageFor"/> so every
+    /// tab's empty message says the same thing rather than each guessing from its own row count.</summary>
     private bool _fleetHistoryKnownEmpty;
 
+    /// <summary>The read in flight, if any. A change that lands meanwhile is owed to the next pass, which runs right
+    /// after it and is awaited by whoever asked — so two reads never interleave on this screen, and none is lost.</summary>
+    private TaskCompletionSource? _reading;
+    private bool _isReadOwed;
+    private RunChangeBatch? _owedChanges;
+    private bool _owedAutoSave;
+
     /// <summary>The month on screen (ET-233), the first of that month at local midnight. Local, not UTC, because the
-    /// day bands below it already group by local day (ET-98) — a month that disagreed with its own days about where
-    /// midnight falls would put an activity in a band that says one date under a header that says another.
-    /// Untouched by a live refresh (<see cref="_RefreshAsync"/>): only <see cref="PreviousMonthAsync"/> and
-    /// <see cref="NextMonthAsync"/> move it, so a run landing in the current month while an older one is on screen
-    /// never pulls the reader back to it.</summary>
+    /// days below it already group by local day (ET-98) — a month that disagreed with its own days about where
+    /// midnight falls would put an activity under a header that says one date inside a month that says another.
+    /// Untouched by a live refresh: only <see cref="PreviousMonthAsync"/> and <see cref="NextMonthAsync"/> move it,
+    /// so a run landing in the current month while an older one is on screen never pulls the reader back to it.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MonthHeaderText))]
     private DateTime _viewedMonthLocal = _MonthStart(DateTime.Now);
@@ -84,34 +95,34 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         _dialogs = dialogs;
         _services = services;
         _fleetFilter = fleetFilter;
+        _facts = new RunRowFacts(services.GetService<ISdeAccessor>());
         _namesById = characters
             .Where(character => character.EsiCharacterId is > 0)
             .GroupBy(character => (long)character.EsiCharacterId!.Value)
             .ToDictionary(group => group.Key, group => group.First().Name);
         SelectedTab = LocalTab;
 
-        // A lane per local character, running or not — the roster is the band. Each lane asks GetRunningRunsQuery
-        // (ET-203) which run is running for ITS character, so two characters running at once already show two live
-        // lanes here; that query has no "exactly one" rule to hit, unlike the single-run GetRunningRunQuery a run
-        // window uses to reopen (ET-130 is only about lifting the one-app-wide limit that query's callers still have).
+        // A lane per local character, running or not. Each asks GetRunningRunsQuery (ET-203) which run is running for
+        // ITS character, so two characters running at once are two running lanes — that query has no "exactly one"
+        // rule to hit, unlike the single-run GetRunningRunQuery a run window uses to reopen (ET-130). The band draws
+        // them as a line per running group and an avatar per idle character (ET-290).
         Lanes = [.. characters
             .Where(character => character.EsiCharacterId is > 0)
-            .Select(character => new RunningLaneViewModel(character, _ActOnLaneAsync))];
+            .Select(character => new RunningLaneViewModel(character,
+                _FaceOf(character.EsiCharacterId!.Value, character.Name), _ActOnLaneAsync))];
+        IdleLanes = [.. Lanes];
         LanesEmptyText = Lanes.Count == 0
-            ? "No character is linked yet, so there is no lane to run one on."
+            ? "No character is linked yet, so there is no one to start a run for."
             : null;
 
-        // Best-effort, fire-and-forget per lane — same pattern as a fleet roster leaf (FleetsViewModel) and the
-        // character picker (ET-184): the hex shows the glyph fallback until the render lands, rather than the whole
-        // screen waiting on a network call for a portrait that ET-200 only asks to reuse, not to gate on.
+        // Best-effort and fire-and-forget, the same as a fleet roster leaf and the character picker (ET-184): the hex
+        // shows the initial until the portrait lands. One face per character, shared by every place that draws them.
         if (services.GetService<ICharacterPortraitProvider>() is { } portraits)
             foreach (RunningLaneViewModel lane in Lanes)
-                _ = lane.LoadPortraitAsync(portraits);
+                _ = lane.Face.LoadPortraitAsync(portraits);
 
-        // One subscription for every way a run can change (ET-222). This screen used to hold six, one per event, each
-        // added when the gap before it was found (ET-189, ET-203, ET-220) and each knowing which part to reload — the
-        // next command or event was always one more pairing nobody remembered. The feed hands the change over on the
-        // UI thread and folds a burst of payouts into one read, so all that is left here is what to read again.
+        // One subscription for every way a run can change (ET-222). The feed hands the change over on the UI thread
+        // and folds a burst of payouts into one batch, so all that is left here is what to read again.
         _runChangesSubscription = services.GetService<RunChangeFeed>()?.Subscribe(_RefreshAsync);
         // Where a fleet run's automatic publish stands (ET-245) — announced through the same feed, so no second
         // subscription: only read here when a row is built.
@@ -134,7 +145,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     [NotifyPropertyChangedFor(nameof(ShowUnfinishedBand))]
     private RunsTabViewModel? _selectedTab;
 
-    /// <summary>RUNNING and UNFINISHED show only here. A lane is a clock running on this machine and an unfinished run
+    /// <summary>RUNNING and UNFINISHED show only here. A running run is a clock on this machine and an unfinished run
     /// is a decision owed on it; neither is something a server holds, so neither belongs under a server's name.</summary>
     public bool IsLocalTabSelected => SelectedTab?.IsLocal ?? true;
 
@@ -144,7 +155,17 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     private RunsTabViewModel LocalTab => Tabs[0];
 
+    /// <summary>Every local character's place in RUNNING, running or not.</summary>
     public ObservableCollection<RunningLaneViewModel> Lanes { get; }
+
+    /// <summary>A line per running group this machine's characters are on (<c>GroupCode ?? RunId</c>), earliest
+    /// start first.</summary>
+    public ObservableCollection<RunningGroupViewModel> RunningGroups { get; } = [];
+
+    /// <summary>The characters with nothing running — an avatar each, one click from a start fixed on them.</summary>
+    public ObservableCollection<RunningLaneViewModel> IdleLanes { get; }
+
+    [ObservableProperty] private bool _hasRunning;
 
     /// <summary>Stopped and never finished — their own band, above the days and outside them (ET-179).</summary>
     public ObservableCollection<UnfinishedRunViewModel> UnfinishedRuns { get; } = [];
@@ -155,7 +176,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     public bool ShowUnfinishedBand => HasUnfinishedRuns && IsLocalTabSelected;
 
-    /// <summary>Why the band is empty, when it is. Null once there is at least one lane.</summary>
+    /// <summary>Why the band has nobody in it, when it has not.</summary>
     public string? LanesEmptyText { get; }
 
     /// <summary>"Runs for 'Woensdag Homefronts'" when opened from a fleet's RUNS button (ET-185), null otherwise —
@@ -168,130 +189,249 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     public void RefreshModule() => _ = LoadAsync();
 
-    public async Task LoadAsync(CancellationToken cancellationToken = default)
+    /// <summary>Everything on the screen read again, after the day-old stopped runs are saved as they stand — this
+    /// screen is where such a run would otherwise sit and be offered as unfinished long after it stopped being that
+    /// (ET-179).</summary>
+    public Task LoadAsync(CancellationToken cancellationToken = default)
     {
-        await _LoadLanesAsync(cancellationToken);
-        // The deadline is judged here as well as at startup: this screen is where a day-old stopped run would
-        // otherwise sit and be offered as unfinished long after it stopped being that (ET-179).
-        await _dispatcher.Send(new SaveRunsLeftUnfinishedCommand(DateTime.UtcNow), cancellationToken);
-        await _LoadUnfinishedRunsAsync(cancellationToken);
-
-        await _RefreshServerTabsAsync(cancellationToken);
-        await _FillTabsAsync(null, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        return _ReadAsync(null, withAutoSave: true);
     }
 
-    /// <summary>Everything on this screen a run can change, read again in place (ET-222): the lanes, UNFINISHED and
-    /// every tab's days. Not the auto-save <see cref="LoadAsync"/> runs first — a refresh answers a change and never
-    /// makes one. Already on the UI thread, handed over by <see cref="RunChangeFeed"/>, so no token: nothing is in
-    /// flight for one to cancel.</summary>
-    private async Task _RefreshAsync(RunChangeBatch changed)
-    {
-        await _LoadLanesAsync(CancellationToken.None);
-        await _LoadUnfinishedRunsAsync(CancellationToken.None);
-        await _FillTabsAsync(changed, CancellationToken.None);
-    }
+    /// <summary>What a run can change on this screen, read again in place (ET-222) — without the auto-save
+    /// <see cref="LoadAsync"/> runs first: a refresh answers a change and never makes one. Handed over by
+    /// <see cref="RunChangeFeed"/> on the UI thread.</summary>
+    private Task _RefreshAsync(RunChangeBatch changed) => _ReadAsync(changed, withAutoSave: false);
 
-    /// <summary>Reads the overview and brings every tab's day bands in line with it.</summary>
     /// <param name="changed">What moved, when this answers a change; null reads every open row's runs again.</param>
-    private async Task _FillTabsAsync(RunChangeBatch? changed, CancellationToken cancellationToken)
+    private Task _ReadAsync(RunChangeBatch? changed, bool withAutoSave)
     {
-        (DateTime fromUtc, DateTime toUtc) = _MonthRangeUtc(ViewedMonthLocal);
-        Result<IReadOnlyList<ActivityOverviewRowDto>> overview = await _dispatcher.Query(
-            new GetActivityOverviewQuery(fromUtc, toUtc, FleetId: _fleetFilter?.FleetId), cancellationToken);
-        if (!overview.IsSuccess || overview.Value is null)
+        // A null batch is "everything" and swallows whatever it meets.
+        if (!_isReadOwed)
+            _owedChanges = changed;
+        else if (_owedChanges is not null)
+            _owedChanges = changed is null ? null : _Merged(_owedChanges, changed);
+        _owedAutoSave |= withAutoSave;
+        _isReadOwed = true;
+        if (_reading is { } inFlight)
+            return inFlight.Task;
+
+        var reading = _reading = new TaskCompletionSource();
+        _ = _ReadWhileOwedAsync(reading);
+        return reading.Task;
+    }
+
+    private async Task _ReadWhileOwedAsync(TaskCompletionSource reading)
+    {
+        try
+        {
+            while (_isReadOwed)
+            {
+                RunChangeBatch? changed = _owedChanges;
+                bool withAutoSave = _owedAutoSave;
+                _isReadOwed = false;
+                _owedChanges = null;
+                _owedAutoSave = false;
+                await _ReadOnceAsync(changed, withAutoSave);
+            }
+
+            _reading = null;
+            reading.SetResult();
+        }
+        catch (Exception exception)
+        {
+            _isReadOwed = false;
+            _owedChanges = null;
+            _owedAutoSave = false;
+            _reading = null;
+            reading.SetException(exception);
+        }
+    }
+
+    private static RunChangeBatch _Merged(RunChangeBatch first, RunChangeBatch second)
+    {
+        var merged = new RunChangeBatch();
+        merged.Add(first);
+        merged.Add(second);
+        return merged;
+    }
+
+    /// <summary>One pass: everything read and every row built off the UI thread, then shown here.</summary>
+    private async Task _ReadOnceAsync(RunChangeBatch? changed, bool withAutoSave)
+    {
+        var request = new ScreenReadRequest(ViewedMonthLocal,
+            LocalTab.Days.SelectMany(day => day.Rows).ToDictionary(row => row.ActivitySummaryId),
+            Tabs.Where(tab => tab.ServerAddress is not null).ToDictionary(tab => tab.ServerAddress!, tab => tab.Header),
+            withAutoSave);
+        ScreenRead read = await Task.Run(() => _ReadScreenAsync(request));
+
+        _ShowRunning(read.Running);
+        _ShowUnfinished(read.Unfinished);
+        foreach ((string address, string header) in read.NewServers)
+            if (Tabs.All(tab => tab.ServerAddress != address))
+                Tabs.Add(new RunsTabViewModel(header, address));
+        HasServerTabs = Tabs.Count > 1;
+        _canPublish = read.CanPublish;
+
+        if (read.Rows is null)
         {
             // What is on screen stays: a read that failed says nothing about what the days hold.
-            StatusMessage = overview.Messages.Count > 0 ? overview.Messages[0].Text : "The activities could not be read.";
+            StatusMessage = read.OverviewError;
             return;
         }
 
         StatusMessage = null;
-        // Only worth asking when the fleet filter came up empty — a coverage query a full result already answers by
-        // existing (ET-185: GetFleetRunCoverageQuery is the "why is this empty" question, not the "what is here" one).
-        _fleetHistoryKnownEmpty = overview.Value.Count > 0 || _fleetFilter is null || await _IsFleetHistoryKnownEmptyAsync(
-            _fleetFilter, cancellationToken);
+        _fleetHistoryKnownEmpty = read.FleetHistoryKnownEmpty;
         List<Task> subRunReads = [];
+        foreach ((ActivityOverviewRowViewModel row, ActivityOverviewRowViewModel? previous) in read.Rows)
+        {
+            if (ReferenceEquals(row, previous))
+            {
+                // An unchanged row that is open has its runs read again when the change reached them: a pilot's share
+                // or a corrected time moves a run without moving the activity's figures.
+                if (row.IsExpanded && (changed is null || changed.Concerns(row.RunId is { } runId ? [runId] : [], row.GroupCode)))
+                    subRunReads.Add(_LoadSubRunsAsync(row));
+                continue;
+            }
+
+            row.LayoutChanged += _OnRowLayoutChanged;
+            if (previous is not null)
+                subRunReads.Add(row.ContinueFromAsync(previous));
+        }
+
+        ActivityOverviewRowViewModel[] rows = [.. read.Rows.Select(pair => pair.Row)];
         foreach (RunsTabViewModel tab in Tabs)
-            _FillTab(tab, overview.Value, changed, subRunReads);
+        {
+            // Local holds every activity; a server tab the ones whose runs carry that server's address — including a
+            // group-mate's run, which the sync merged into the local database as its own row under their character id.
+            // A run someone else flew SOLO on that server is not here, and that is the server's own rule:
+            // ServerRunSyncRepository.ListChangedAsync hands a run only to a character who holds a run in its group.
+            tab.Show(tab.ServerAddress is { } address ? [.. rows.Where(row => row.IsPublishedTo(address))] : rows);
+            tab.StatusMessage = tab.Days.Count > 0 ? null : _EmptyMessageFor(tab);
+        }
+
         await Task.WhenAll(subRunReads);
     }
 
-    /// <summary>
-    /// The activities this tab stands for: everything on Local, and on a server tab the ones whose runs carry that
-    /// server's address — including a group-mate's run, which the sync merged into the local database as its own row
-    /// under their character id.
-    ///
-    /// A run someone else flew SOLO on that server is not here, and that is the server's own rule rather than a gap
-    /// in this filter: <c>ServerRunSyncRepository.ListChangedAsync</c> hands back a run only to a character who holds
-    /// a run in the same group, so the server never tells us about it and no screen can show it.
-    ///
-    /// Reconciled rather than rebuilt (ET-222): a day already on screen is the same band afterwards, open or folded as
-    /// the reader left it (ET-189), and a row whose figures did not move is the same row — which is what keeps an
-    /// opened row open and the scroll offset where it was while payouts land every few seconds. An activity is
-    /// recognised by its summary id, which a rebuild keeps (ET-215).
-    /// </summary>
-    private void _FillTab(RunsTabViewModel tab, IReadOnlyList<ActivityOverviewRowDto> overview, RunChangeBatch? changed,
-        List<Task> subRunReads)
+    /// <summary>Off the UI thread: every read one pass needs, and the rows built from them. A row already on screen
+    /// that still says the same is handed back as itself (ET-222); anything else is built new here, its type and
+    /// system answered by <see cref="_facts"/>.</summary>
+    private async Task<ScreenRead> _ReadScreenAsync(ScreenReadRequest request)
     {
-        List<ActivityOverviewRowDto> rows = tab.ServerAddress is { } address
-            ? [.. overview.Where(row => row.ServerSyncStates.Any(state => state.ServerAddress == address))]
-            : [.. overview];
-        Dictionary<Guid, ActivityOverviewRowViewModel> shownRows = tab.Days.SelectMany(day => day.Rows)
-            .ToDictionary(row => row.ActivitySummaryId);
-        Dictionary<DateTime, RunsDayViewModel> shownDays = tab.Days.ToDictionary(day => day.Day);
+        // Servers first: whether a row offers PUBLISH is part of what it shows.
+        (bool canPublish, IReadOnlyList<(string Address, string Header)> newServers, IReadOnlyDictionary<string, string> headers) =
+            await _ReadServersAsync(request.ServerHeaders);
 
-        List<RunsDayViewModel> days = [];
-        foreach (IGrouping<DateTime, ActivityOverviewRowViewModel> day in rows
-                     .Select(row => _RowFor(row, shownRows, changed, subRunReads))
-                     .GroupBy(row => row.StartedAtLocal.Date))
+        Result<IReadOnlyList<RunningRunDto>> running = await _dispatcher.Query(new GetRunningRunsQuery());
+        RunningRunFacts[] runningFacts = [.. (running.IsSuccess ? running.Value ?? [] : []).Select(run => new RunningRunFacts(run,
+            _facts.TypeOf(run.ActivityKind, run.SignatureGroupSnapshot, run.SiteTypeId, run.SiteName).Name,
+            _facts.SystemOf(run.SolarSystemId)?.Name))];
+
+        if (request.WithAutoSave)
+            await _dispatcher.Send(new SaveRunsLeftUnfinishedCommand(DateTime.UtcNow));
+        Result<IReadOnlyList<UnfinishedRunDto>> unfinished = await _dispatcher.Query(new GetUnfinishedRunsQuery());
+
+        (DateTime fromUtc, DateTime toUtc) = _MonthRangeUtc(request.MonthLocal);
+        Result<IReadOnlyList<ActivityOverviewRowDto>> overview = await _dispatcher.Query(
+            new GetActivityOverviewQuery(fromUtc, toUtc, FleetId: _fleetFilter?.FleetId));
+        if (!overview.IsSuccess || overview.Value is null)
+            return new ScreenRead(runningFacts, unfinished.Value ?? [], newServers, canPublish, null,
+                overview.Messages.Count > 0 ? overview.Messages[0].Text : "The activities could not be read.", false);
+
+        string ServerNameOf(string address) => headers.GetValueOrDefault(address) ?? address;
+        List<(ActivityOverviewRowViewModel Row, ActivityOverviewRowViewModel? Previous)> rows = [];
+        foreach (ActivityOverviewRowDto dto in overview.Value)
         {
-            if (shownDays.TryGetValue(day.Key, out RunsDayViewModel? shown))
-            {
-                shown.Show([.. day]);
-                days.Add(shown);
-            }
-            else
-                days.Add(new RunsDayViewModel(day.Key, [.. day]));
+            request.ShownRows.TryGetValue(dto.ActivitySummaryId, out ActivityOverviewRowViewModel? shown);
+            RunPublishProgress? progress = _autoPublisher?.ProgressFor(dto.GroupCode);
+            ActivityOverviewRowViewModel row = shown is not null && shown.IsShowing(dto, canPublish, progress)
+                ? shown
+                : new ActivityOverviewRowViewModel(dto, _NameOf, _LoadSubRunsAsync, _OpenDetailAsync,
+                    canPublish ? _PublishAsync : null, ServerNameOf, progress, _RetryPublishAsync, _facts, _FaceOf);
+            rows.Add((row, shown));
         }
 
-        tab.Days.ReconcileTo(days);
-
-        // Opens on the most recent day only (ET-199), so he never has to scroll through weeks of history to reach
-        // today; every older evening still says its piece collapsed, via RunsWindow's sectionsummary in the band
-        // itself. A day already on screen keeps whatever the reader set for it — this default only ever reaches a
-        // day this tab is showing for the first time, the evening's first save included. Applies the same way when
-        // browsing to a different month: that month's own most recent day opens, not "today".
-        if (days.MaxBy(day => day.Day) is { } latest && !shownDays.ContainsKey(latest.Day))
-            latest.IsExpanded = true;
-
-        tab.StatusMessage = tab.Days.Count > 0 ? null : _EmptyMessageFor(tab);
-        // The month total (ET-233): the same NetFor formula each day band already sums its own rows with, over
-        // every row this tab holds regardless of which days are folded — a month is always complete, so its total
-        // never depends on what the reader happens to have open.
-        tab.UpdateMonthSummary();
+        // Only worth asking when the fleet filter came up empty — a coverage query a full result already answers by
+        // existing (ET-185: GetFleetRunCoverageQuery is the "why is this empty" question, not the "what is here" one).
+        bool fleetHistoryKnownEmpty = overview.Value.Count > 0 || _fleetFilter is null
+            || await _IsFleetHistoryKnownEmptyAsync(_fleetFilter);
+        return new ScreenRead(runningFacts, unfinished.Value ?? [], newServers, canPublish, rows, null, fleetHistoryKnownEmpty);
     }
 
-    /// <summary>The row already on screen when it still says the same, a new one in its place when it does not. An
-    /// unchanged row that is open has its runs read again when the change reached them: a pilot's share or a
-    /// corrected time moves a run without moving the activity's figures.</summary>
-    private ActivityOverviewRowViewModel _RowFor(ActivityOverviewRowDto row,
-        IReadOnlyDictionary<Guid, ActivityOverviewRowViewModel> shownRows, RunChangeBatch? changed, List<Task> subRunReads)
+    /// <summary>Every coupled server, and a name for each one this screen has no tab for yet — never rebuilding the
+    /// strip, since the reader's chosen tab must survive a refresh. Which is also why a decoupled server keeps its tab
+    /// until the screen is reopened: the activities on it are still true.</summary>
+    private async Task<(bool CanPublish, IReadOnlyList<(string Address, string Header)> NewServers, IReadOnlyDictionary<string, string> Headers)>
+        _ReadServersAsync(IReadOnlyDictionary<string, string> knownHeaders)
     {
-        shownRows.TryGetValue(row.ActivitySummaryId, out ActivityOverviewRowViewModel? shown);
-        RunPublishProgress? progress = _autoPublisher?.ProgressFor(row.GroupCode);
-        if (shown is not null && shown.IsShowing(row, _canPublish, progress))
+        IClientSessionStore? sessionStore = _services.GetService<IClientSessionStore>();
+        if (sessionStore is null)
+            return (false, [], knownHeaders);
+
+        IServerRegistry? registry = _services.GetService<IServerRegistry>();
+        IReadOnlyList<string> servers = await sessionStore.ListServersAsync();
+        Dictionary<string, string> headers = new(knownHeaders);
+        List<(string Address, string Header)> added = [];
+        foreach (string address in servers)
         {
-            if (shown.IsExpanded && (changed is null || changed.Concerns(row.RunId is { } runId ? [runId] : [], row.GroupCode)))
-                subRunReads.Add(_LoadSubRunsAsync(shown));
-            return shown;
+            if (headers.ContainsKey(address))
+                continue;
+
+            string header = registry is null ? address : await registry.DisplayNameAsync(address);
+            headers[address] = header;
+            added.Add((address, header));
         }
 
-        var fresh = new ActivityOverviewRowViewModel(row, _NameOf, _LoadSubRunsAsync, _OpenDetailAsync,
-            _canPublish ? _PublishAsync : null, _ServerNameOf, progress, _RetryPublishAsync,
-            _services.GetService<ISdeAccessor>());
-        if (shown is not null)
-            subRunReads.Add(fresh.ContinueFromAsync(shown));
-        return fresh;
+        return (servers.Count > 0, added, headers);
+    }
+
+    private void _ShowRunning(IReadOnlyList<RunningRunFacts> running)
+    {
+        DateTime nowUtc = DateTime.UtcNow;
+        foreach (RunningLaneViewModel lane in Lanes)
+        {
+            RunningRunFacts? facts = running.FirstOrDefault(run => (long?)lane.Character.EsiCharacterId == run.Run.CharacterId);
+            lane.Attach(facts?.Run, nowUtc, facts?.TypeText ?? string.Empty, facts?.SystemText);
+        }
+
+        // Only groups one of this machine's own characters is on: a running row left behind for a character that is
+        // not local shows nothing (ET-203).
+        Dictionary<string, RunningGroupViewModel> shownGroups = RunningGroups.ToDictionary(group => group.Key);
+        List<RunningGroupViewModel> groups = [];
+        foreach (IGrouping<string, RunningLaneViewModel> group in Lanes
+                     .Where(lane => lane.Run is not null)
+                     .GroupBy(lane => lane.Run!.GroupCode ?? lane.Run.Id.ToString())
+                     .OrderBy(group => group.Min(lane => lane.Run!.StartedAtUtc)))
+        {
+            RunningGroupViewModel line = shownGroups.GetValueOrDefault(group.Key)
+                ?? new RunningGroupViewModel(group.Key, _OpenRunningGroupAsync);
+            line.Show([.. group], nowUtc);
+            groups.Add(line);
+        }
+
+        RunningGroups.ReconcileTo(groups);
+        for (int index = 0; index < groups.Count; index++)
+            groups[index].IsFirst = index == 0;
+        IdleLanes.ReconcileTo([.. Lanes.Where(lane => !lane.IsRunning)]);
+        HasRunning = groups.Count > 0;
+    }
+
+    private void _ShowUnfinished(IReadOnlyList<UnfinishedRunDto> unfinished)
+    {
+        Dictionary<Guid, UnfinishedRunViewModel> shown = UnfinishedRuns.ToDictionary(run => run.RunId);
+        UnfinishedRuns.ReconcileTo([.. unfinished.Select(run =>
+            shown.TryGetValue(run.RunId, out UnfinishedRunViewModel? same) && same.IsShowing(run)
+                ? same
+                : new UnfinishedRunViewModel(run, _NameOf(run.CharacterId), _SaveUnfinishedRunAsync,
+                    _DeleteUnfinishedRunAsync, _ResumeUnfinishedRunAsync))]);
+        HasUnfinishedRuns = UnfinishedRuns.Count > 0;
+    }
+
+    /// <summary>A row unfolded, folded, or its runs came in: the lists that hold it follow.</summary>
+    private void _OnRowLayoutChanged(ActivityOverviewRowViewModel row)
+    {
+        foreach (RunsTabViewModel tab in Tabs)
+            tab.RebuildItems();
     }
 
     /// <summary>Why a tab shows nothing. Unfiltered, that is just "nothing saved" or "nothing published" — but a
@@ -313,56 +453,11 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     /// <summary>Whether an empty fleet filter is a real zero: true when the fleet is confirmed to predate nothing
     /// (see <see cref="GetFleetRunCoverageQuery"/>), false when its age makes that unknowable.</summary>
-    private async Task<bool> _IsFleetHistoryKnownEmptyAsync(RunsFleetFilter filter, CancellationToken cancellationToken)
+    private async Task<bool> _IsFleetHistoryKnownEmptyAsync(RunsFleetFilter filter)
     {
         Result<FleetRunCoverageDto> coverage = await _dispatcher.Query(
-            new GetFleetRunCoverageQuery(filter.FleetId, filter.FleetCreatedAtUtc), cancellationToken);
+            new GetFleetRunCoverageQuery(filter.FleetId, filter.FleetCreatedAtUtc));
         return coverage.IsSuccess && coverage.Value is { IsKnown: true };
-    }
-
-    /// <summary>Adds a tab for a server coupled since this screen was built, never rebuilding the strip: the reader's
-    /// chosen tab must survive a refresh. Which is also why a decoupled server keeps its tab until the screen is
-    /// reopened — the activities on it are still true.</summary>
-    private async Task _RefreshServerTabsAsync(CancellationToken cancellationToken)
-    {
-        IClientSessionStore? sessionStore = _services.GetService<IClientSessionStore>();
-        if (sessionStore is null)
-            return;
-
-        IServerRegistry? registry = _services.GetService<IServerRegistry>();
-        IReadOnlyList<string> servers = await sessionStore.ListServersAsync(cancellationToken);
-        _canPublish = servers.Count > 0;
-        foreach (string address in servers)
-        {
-            if (Tabs.Any(tab => tab.ServerAddress == address))
-                continue;
-
-            string header = registry is null ? address : await registry.DisplayNameAsync(address);
-            Tabs.Add(new RunsTabViewModel(header, address));
-        }
-        HasServerTabs = Tabs.Count > 1;
-    }
-
-    private async Task _LoadLanesAsync(CancellationToken cancellationToken)
-    {
-        Result<IReadOnlyList<RunningRunDto>> running = await _dispatcher.Query(new GetRunningRunsQuery(), cancellationToken);
-        IReadOnlyList<RunningRunDto> runs = running.IsSuccess ? running.Value ?? [] : [];
-        DateTime nowUtc = DateTime.UtcNow;
-        foreach (RunningLaneViewModel lane in Lanes)
-            lane.Attach(runs.FirstOrDefault(run => (long?)lane.Character.EsiCharacterId == run.CharacterId), nowUtc);
-    }
-
-    private async Task _LoadUnfinishedRunsAsync(CancellationToken cancellationToken)
-    {
-        Result<IReadOnlyList<UnfinishedRunDto>> unfinished =
-            await _dispatcher.Query(new GetUnfinishedRunsQuery(), cancellationToken);
-        Dictionary<Guid, UnfinishedRunViewModel> shown = UnfinishedRuns.ToDictionary(run => run.RunId);
-        UnfinishedRuns.ReconcileTo([.. (unfinished.Value ?? []).Select(run =>
-            shown.TryGetValue(run.RunId, out UnfinishedRunViewModel? same) && same.IsShowing(run)
-                ? same
-                : new UnfinishedRunViewModel(run, _NameOf(run.CharacterId), _SaveUnfinishedRunAsync,
-                    _DeleteUnfinishedRunAsync, _ResumeUnfinishedRunAsync))]);
-        HasUnfinishedRuns = UnfinishedRuns.Count > 0;
     }
 
     /// <summary>Commit the run as it stands. Nothing is handed along: what the run window watched died with it, and
@@ -370,8 +465,9 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private async Task _SaveUnfinishedRunAsync(UnfinishedRunViewModel run)
     {
         DateTime nowUtc = DateTime.UtcNow;
-        Result saved = await _dispatcher.Send(
-            new SaveRunCommand(run.RunId, run.StoppedAtUtc ?? nowUtc, nowUtc, [], [], [], []));
+        Guid runId = run.RunId;
+        DateTime stoppedAtUtc = run.StoppedAtUtc ?? nowUtc;
+        Result saved = await Task.Run(() => _dispatcher.Send(new SaveRunCommand(runId, stoppedAtUtc, nowUtc, [], [], [], [])));
         await _AfterFinishingAsync(saved, "The run could not be saved.");
     }
 
@@ -382,7 +478,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
                 + "Saving keeps it instead.", "Delete"))
             return;
 
-        Result deleted = await _dispatcher.Send(new DeleteRunCommand(run.RunId, DateTime.UtcNow));
+        Guid runId = run.RunId;
+        Result deleted = await Task.Run(() => _dispatcher.Send(new DeleteRunCommand(runId, DateTime.UtcNow)));
         await _AfterFinishingAsync(deleted, "The run could not be thrown away.");
     }
 
@@ -438,7 +535,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         if (sessionStore is null)
             return;
 
-        IReadOnlyList<string> servers = await sessionStore.ListServersAsync();
+        IReadOnlyList<string> servers = await Task.Run(() => sessionStore.ListServersAsync());
         if (servers.Count == 0)
         {
             _ReportPublish("Not coupled to any server — couple a character first.", ToastKind.Warning);
@@ -459,14 +556,15 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             return;
         }
 
-        Result<ActivityDetailDto> detail = await _dispatcher.Query(new GetActivityDetailQuery(row.ActivitySummaryId));
+        Guid activityId = row.ActivitySummaryId;
+        Result<ActivityDetailDto> detail = await Task.Run(() => _dispatcher.Query(new GetActivityDetailQuery(activityId)));
         if (!detail.IsSuccess || detail.Value is null)
         {
             _ReportPublish(detail.Messages.Count > 0 ? detail.Messages[0].Text : "The activity could not be read.", ToastKind.Error);
             return;
         }
 
-        IReadOnlyList<ClientSessionTokens> coupled = await sessionStore.LoadAllAsync(targetAddress);
+        IReadOnlyList<ClientSessionTokens> coupled = await Task.Run(() => sessionStore.LoadAllAsync(targetAddress));
         List<ActivityRunDetailDto> ownRuns = [.. detail.Value.Runs
             .Where(run => coupled.Any(session => session.CharacterId == run.CharacterId))];
         if (ownRuns.Count == 0)
@@ -482,17 +580,24 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             return;
         }
 
-        foreach (ActivityRunDetailDto run in ownRuns)
+        Result? refused = await Task.Run(async () =>
         {
-            Result queued = await _dispatcher.Send(new QueueRunForServerSyncCommand(run.RunId, targetAddress));
-            if (queued.IsSuccess)
-                continue;
+            foreach (ActivityRunDetailDto run in ownRuns)
+            {
+                Result queued = await _dispatcher.Send(new QueueRunForServerSyncCommand(run.RunId, targetAddress));
+                if (!queued.IsSuccess)
+                    return queued;
+            }
 
-            _ReportPublish(queued.Messages.Count > 0 ? queued.Messages[0].Text : "The run could not be queued.", ToastKind.Error);
+            return (Result?)null;
+        });
+        if (refused is not null)
+        {
+            _ReportPublish(refused.Messages.Count > 0 ? refused.Messages[0].Text : "The run could not be queued.", ToastKind.Error);
             return;
         }
 
-        (bool accepted, string message) = await _SynchronizeAsync(targetAddress, ownRuns);
+        (bool accepted, string message) = await Task.Run(() => _SynchronizeAsync(targetAddress, ownRuns));
 
         // Read back first and report second: the runs changed either way — queued, or queued and accepted — and a
         // reload after the report would clear the status line that carries the outcome.
@@ -527,10 +632,6 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// published it without asking is the pilot's answer already, and the row reports the outcome itself.</summary>
     private Task _RetryPublishAsync(ActivityOverviewRowViewModel row) =>
         row.GroupCode is { } groupCode && _autoPublisher is { } publisher ? publisher.RetryAsync(groupCode) : Task.CompletedTask;
-
-    /// <summary>A server by the name its tab carries, so a row and the tab it is filed under say the same thing.</summary>
-    private string _ServerNameOf(string serverAddress) =>
-        Tabs.FirstOrDefault(tab => tab.ServerAddress == serverAddress)?.Header ?? serverAddress;
 
     private async Task<string?> _SelectServerAsync(
         IReadOnlyList<string> servers, IServerRegistry? registry, ActivityOverviewRowViewModel row)
@@ -570,7 +671,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private Task _GoToMonthAsync(DateTime monthLocal)
     {
         ViewedMonthLocal = monthLocal;
-        return _FillTabsAsync(null, CancellationToken.None);
+        return _ReadAsync(null, withAutoSave: false);
     }
 
     private static DateTime _MonthStart(DateTime local) => new(local.Year, local.Month, 1, 0, 0, 0, DateTimeKind.Local);
@@ -582,36 +683,47 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private static (DateTime FromUtc, DateTime ToUtcExclusive) _MonthRangeUtc(DateTime monthStartLocal) =>
         (monthStartLocal.ToUniversalTime(), monthStartLocal.AddMonths(1).ToUniversalTime());
 
+    /// <summary>Text only, never a read: the clocks count from starts the last read already brought.</summary>
     private void _OnClockTick(object? sender, EventArgs e)
     {
         DateTime nowUtc = DateTime.UtcNow;
         foreach (RunningLaneViewModel lane in Lanes)
             lane.Tick(nowUtc);
+        foreach (RunningGroupViewModel group in RunningGroups)
+            group.Tick(nowUtc);
     }
 
     private string _NameOf(long characterId) =>
         _namesById.TryGetValue(characterId, out string? name) ? name : $"character {characterId}";
 
-    /// <summary>The deelruns behind one row, read through the detail query rather than a read path of this screen's
-    /// own — ET-160 owns what an activity's runs are, and a second answer here could disagree with the detail
-    /// screen the same row opens.</summary>
+    /// <summary>One face per character for the whole screen: this machine's own come with a portrait, anyone else
+    /// with their initial.</summary>
+    private CharacterFaceViewModel _FaceOf(long characterId, string name) =>
+        _faces.GetOrAdd(characterId, id => new CharacterFaceViewModel(id, name));
+
+    /// <summary>The pilots' runs behind one row, read through the detail query rather than a read path of this screen's
+    /// own — ET-160 owns what an activity's runs are, and a second answer here could disagree with the detail screen
+    /// the same row opens. Off the UI thread: that query is several round trips and a price lookup.</summary>
     private async Task _LoadSubRunsAsync(ActivityOverviewRowViewModel row)
     {
-        Result<ActivityDetailDto> detail = await _dispatcher.Query(new GetActivityDetailQuery(row.ActivitySummaryId));
-        row.SubRuns.Clear();
-        if (!detail.IsSuccess || detail.Value is null)
-        {
-            row.SubRunsStatus = detail.Messages.Count > 0 ? detail.Messages[0].Text : "The runs could not be read.";
-            return;
-        }
+        Guid activityId = row.ActivitySummaryId;
+        (IReadOnlyList<ActivityRunRowViewModel> runs, string? status) =
+            await Task.Run<(IReadOnlyList<ActivityRunRowViewModel>, string?)>(async () =>
+            {
+                Result<ActivityDetailDto> detail = await _dispatcher.Query(new GetActivityDetailQuery(activityId));
+                if (!detail.IsSuccess || detail.Value is not { } activity)
+                    return ([], detail.Messages.Count > 0 ? detail.Messages[0].Text : "The runs could not be read.");
 
-        row.SubRunsStatus = null;
-        foreach (ActivityRunDetailDto run in detail.Value.Runs.OrderBy(run => run.StartedAtUtc))
-            row.SubRuns.Add(new ActivityRunRowViewModel(run, _NameOf));
+                return ([.. activity.Runs.OrderBy(run => run.StartedAtUtc).Select(run => new ActivityRunRowViewModel(run, _NameOf,
+                    _FaceOf(run.CharacterId, CharacterNameResolver.Resolve(run.CharacterNameSnapshot, run.CharacterId, _NameOf)),
+                    activity.IskByCharacter?.GetValueOrDefault(run.CharacterId), row))], null);
+            });
+
+        row.ShowSubRuns(runs, status);
     }
 
-    /// <summary>The row is the only way into ET-162's detail screen; nothing else in the app reaches it. The screen
-    /// reads itself once it is routed, so nothing is fetched here.</summary>
+    /// <summary>A row is the way into ET-162's detail screen. The screen reads itself once it is routed, so nothing is
+    /// fetched here.</summary>
     private Task _OpenDetailAsync(ActivityOverviewRowViewModel row)
     {
         _dialogs.ShowActivityDetail(
@@ -629,27 +741,62 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// A character's avatar in RUNNING, or their running line's OPEN. Idle, it is the one-click start (Jithran,
+    /// ET-290): the manual start screen with exactly this character in it and no picker. Type and site are chosen
+    /// there — the type comes preset from that screen's own memory — because a run needs both, and one started on a
+    /// guessed site gets the wrong name. This screen never starts a run itself.
+    /// </summary>
     private async Task _ActOnLaneAsync(RunningLaneViewModel lane)
     {
         if (lane.Run is { } run)
         {
-            // The run window adopts the stored running run itself, so it only has to be opened; it is also the one
-            // place that owns STOP and SAVE, which is why this lane does not carry a second copy of either.
-            _dialogs.ShowActivityWindow(new ActivityWindowViewModel(run.ActivityKind, _services));
+            _OpenRunWindow(run, lane.CharacterText);
+            return;
         }
-        else if (_services.GetService<ISdeAccessor>() is { } sde)
-        {
-            // Every registered character is offered (ET-221), same as Tools → Start run — but this lane's own
-            // character starts ticked, so the dialog opens on the card the operator pressed rather than on
-            // whoever happens to sort first, and others can still be added alongside it.
-            IReadOnlyList<Character> characters =
-                await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
-            await _dialogs.ShowManualRunStartAsync(new ManualRunStartViewModel(_dispatcher, sde, _dialogs,
-                kind => new ActivityWindowViewModel(kind, _services), characters,
-                preselectedCharacter: lane.Character, toasts: _services.GetService<IToastService>(),
-                fleetParticipation: _services.GetService<IFleetParticipation>(),
-                localPresence: _services.GetService<ILocalCharacterPresence>()));
-        }
+
+        if (_services.GetService<ISdeAccessor>() is not { } sde)
+            return;
+
+        await _dialogs.ShowManualRunStartAsync(new ManualRunStartViewModel(_dispatcher, sde, _dialogs,
+            kind => new ActivityWindowViewModel(kind, _services), [lane.Character],
+            preselectedCharacter: lane.Character, toasts: _services.GetService<IToastService>(),
+            fleetParticipation: _services.GetService<IFleetParticipation>(),
+            localPresence: _services.GetService<ILocalCharacterPresence>(), isCharacterFixed: true));
+    }
+
+    private Task _OpenRunningGroupAsync(RunningGroupViewModel group)
+    {
+        if (group.Lanes.FirstOrDefault(lane => lane.Run is not null) is { Run: { } run } first)
+            _OpenRunWindow(run, first.CharacterText);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>The run window adopts the stored running run itself, so it only has to be opened; it is also the one
+    /// place that owns STOP and SAVE. Named first (ET-221): with two groups running, a window left to find "the one run
+    /// running" would find neither.</summary>
+    private void _OpenRunWindow(RunningRunDto run, string characterName)
+    {
+        var window = new ActivityWindowViewModel(run.ActivityKind, _services);
+        window.UseCharacter(checked((int)run.CharacterId), characterName);
+        _dialogs.ShowActivityWindow(window);
+    }
+
+    /// <summary>START RUN ▾: the general start, the same as Tools → Start run — every character offered (ET-221), none
+    /// preselected, so the screen's own default applies: the fleet, or the team last picked (ET-270).</summary>
+    [RelayCommand]
+    private async Task OpenRunStartAsync()
+    {
+        if (_services.GetService<ISdeAccessor>() is not { } sde)
+            return;
+
+        ICharacterRegistry registry = _services.GetRequiredService<ICharacterRegistry>();
+        IReadOnlyList<Character> characters = await Task.Run(() => registry.GetAllAsync());
+        await _dialogs.ShowManualRunStartAsync(new ManualRunStartViewModel(_dispatcher, sde, _dialogs,
+            kind => new ActivityWindowViewModel(kind, _services), characters,
+            toasts: _services.GetService<IToastService>(),
+            fleetParticipation: _services.GetService<IFleetParticipation>(),
+            localPresence: _services.GetService<ILocalCharacterPresence>()));
     }
 
     public void Dispose()
@@ -661,4 +808,21 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         _clock.Stop();
         _clock.Tick -= _OnClockTick;
     }
+
+    private sealed record ScreenReadRequest(
+        DateTime MonthLocal,
+        IReadOnlyDictionary<Guid, ActivityOverviewRowViewModel> ShownRows,
+        IReadOnlyDictionary<string, string> ServerHeaders,
+        bool WithAutoSave);
+
+    private sealed record RunningRunFacts(RunningRunDto Run, string TypeText, string? SystemText);
+
+    private sealed record ScreenRead(
+        IReadOnlyList<RunningRunFacts> Running,
+        IReadOnlyList<UnfinishedRunDto> Unfinished,
+        IReadOnlyList<(string Address, string Header)> NewServers,
+        bool CanPublish,
+        IReadOnlyList<(ActivityOverviewRowViewModel Row, ActivityOverviewRowViewModel? Previous)>? Rows,
+        string? OverviewError,
+        bool FleetHistoryKnownEmpty);
 }

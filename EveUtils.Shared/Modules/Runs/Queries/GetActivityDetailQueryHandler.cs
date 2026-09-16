@@ -86,13 +86,14 @@ internal sealed class GetActivityDetailQueryHandler(
             foreach (RunMiningEntry entry in miningByRun[run.Id])
                 run.MiningEntries.Add(entry);
         }
+        MiningOreTypes ores = RunIskFactsReader.OresOf(runs, sde);
         IReadOnlyDictionary<int, double> prices = await marketPrices.GetAveragePricesAsync(
-            [.. RunIskFactsReader.PricedTypeIds(runs, parameters, sde)], cancellationToken);
+            [.. RunIskFactsReader.PricedTypeIds(runs, parameters, ores)], cancellationToken);
         DateTime nowUtc = DateTime.UtcNow;
         Dictionary<long, IskBreakdown> iskByCharacter = runs
             .GroupBy(run => run.CharacterId)
             .ToDictionary(character => character.Key, character => IskContributors.Breakdown(
-                [.. character.Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices, sde))], nowUtc));
+                [.. character.Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices, ores))], nowUtc));
 
         return Result<ActivityDetailDto>.Success(new ActivityDetailDto(
             summary.Id, summary.GroupCode, summary.ActivityKind, summary.SiteName, summary.SignatureGroupSnapshot,

@@ -58,7 +58,7 @@ public sealed class RunsLiveRefreshTests
         Assert.Empty(overview.UnfinishedRuns);
 
         await dispatcher.Send(new SetRunStoppedCommand(runId, DateTime.UtcNow), Token);
-        Dispatcher.UIThread.RunJobs();
+        await ActivityWindowHarness.WaitUntil(() => overview.UnfinishedRuns.Count == 1); // read off the UI thread (ET-290)
 
         Assert.Equal(runId, Assert.Single(overview.UnfinishedRuns).RunId);
         Assert.All(overview.Lanes, lane => Assert.False(lane.IsRunning));
@@ -77,7 +77,7 @@ public sealed class RunsLiveRefreshTests
         Assert.Single(overview.UnfinishedRuns);
 
         await dispatcher.Send(new SaveRunCommand(runId, DateTime.UtcNow.AddMinutes(-5), DateTime.UtcNow, [], [], [], []), Token);
-        Dispatcher.UIThread.RunJobs();
+        await ActivityWindowHarness.WaitUntil(() => overview.UnfinishedRuns.Count == 0 && overview.Tabs[0].Days.Count == 1);
 
         Assert.Empty(overview.UnfinishedRuns);
         Assert.Single(Assert.Single(overview.Tabs[0].Days).Rows);
@@ -97,7 +97,7 @@ public sealed class RunsLiveRefreshTests
         string before = Assert.Single(overview.UnfinishedRuns).TotalIskText;
 
         await dispatcher.Send(new AddRunBountyEntryCommand(Pilot, DateTime.UtcNow, 1_250_000m), Token);
-        Dispatcher.UIThread.RunJobs();
+        await ActivityWindowHarness.WaitUntil(() => overview.UnfinishedRuns.Single().TotalIskText != before);
 
         string after = Assert.Single(overview.UnfinishedRuns).TotalIskText;
         Assert.NotEqual(before, after);
@@ -114,7 +114,7 @@ public sealed class RunsLiveRefreshTests
         Assert.Empty(overview.Tabs[0].Days);
 
         await _PullCrewmateRunAsync(instance);
-        Dispatcher.UIThread.RunJobs();
+        await ActivityWindowHarness.WaitUntil(() => overview.Tabs[0].Days.Count == 1);
 
         ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(overview.Tabs[0].Days).Rows);
         Assert.Equal("Homefront", row.SiteText);
@@ -132,7 +132,8 @@ public sealed class RunsLiveRefreshTests
         Assert.False(_OnlyRow(overview).IsQueuedForServer);
 
         await dispatcher.Send(new QueueRunForServerSyncCommand(runId, ServerAddress), Token);
-        Dispatcher.UIThread.RunJobs();
+        await ActivityWindowHarness.WaitUntil(() =>
+            overview.Tabs[0].Days.SelectMany(day => day.Rows).Any(row => row.IsQueuedForServer));
 
         Assert.True(_OnlyRow(overview).IsQueuedForServer);
     }

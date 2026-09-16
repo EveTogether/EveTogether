@@ -21,7 +21,14 @@ public static class ObservableCollectionReconciliation
                 continue;
 
             int current = _IndexOf(shown, item, index + 1);
-            if (current >= 0)
+            if (current >= 0 && !wanted.Contains(shown[index]))
+            {
+                // A block that is going (a folded day's rows): taken out where it stands, rather than every item after
+                // it moved up past it one by one.
+                shown.RemoveAt(index);
+                index--;
+            }
+            else if (current >= 0)
                 shown.Move(current, index);
             else if (index < shown.Count && !wanted.Contains(shown[index]))
                 // Replaced in place rather than inserted beside a row about to go: the row after it does not move.

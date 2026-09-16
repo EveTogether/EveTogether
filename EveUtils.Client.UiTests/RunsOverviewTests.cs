@@ -19,6 +19,7 @@ using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Queries;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -162,7 +163,7 @@ public sealed class RunsOverviewTests
         List<string> texts = RenderedText.VisibleTexts(root);
 
         Assert.DoesNotContain(texts, text => text.Contains("0 ISK"));        // the criterion's own point, asserted first
-        Assert.Contains(texts, text => text == "no loot or bounty recorded");
+        Assert.Contains(texts, text => text == "nothing valued");
         Assert.Contains(texts, text => text.EndsWith("nothing recorded to value"));  // the day band holds the same line
     }
 
@@ -192,7 +193,15 @@ public sealed class RunsOverviewTests
         root.UpdateLayout();
 
         Assert.Equal(6, row.SubRuns.Count);
-        Assert.Equal(6, RenderedText.VisibleTexts(root).Count(text => text.StartsWith("flew it")));
+        // On screen as well as in the row: six lines of their own under it, one per pilot, each naming its own
+        // character. The old count of texts starting with "flew it" could not read anything — no screen in this app
+        // has said that since ET-272 replaced it with what is out of the ordinary about a pilot's run — so it counted
+        // zero on main too, and proved nothing about the six lines being there.
+        Assert.Equal(6, root.GetVisualDescendants().OfType<Control>()
+            .Count(control => control.DataContext is ActivityRunRowViewModel && control is ListBoxItem && control.IsEffectivelyVisible));
+        List<string> texts = RenderedText.VisibleTexts(root);
+        foreach (Character character in Crew)
+            Assert.Contains(texts, text => text == character.Name);
     }
 
     /// <summary>ET-247: a fleet mate synced in from a server never logged in on this machine, so
@@ -218,11 +227,12 @@ public sealed class RunsOverviewTests
         Assert.DoesNotContain("character 883434905", row.CrewText);
     }
 
-    /// <summary>AC-6: a pilot with nothing running keeps their lane and their START. Counter-proof: filter the band
-    /// on "has a running run" and the idle lane disappears, which this goes red on. A toon that drops out of the
-    /// band is a toon you forget.</summary>
+    /// <summary>AC-6, as ET-290 draws RUNNING: a pilot with nothing running keeps a face in the band — their avatar,
+    /// named on hover — beside the line of the character who is running, which still reads as running: its site and
+    /// OPEN. Counter-proof: draw avatars for the running lanes instead of the idle ones and Torv Kesh has no face. A toon
+    /// that drops out of the band is a toon you forget.</summary>
     [AvaloniaFact]
-    public async Task PilotWithNothingRunning_KeepsTheirLaneAndAStart()
+    public async Task PilotWithNothingRunning_KeepsTheirAvatar_BesideTheRunningLine()
     {
         using var instance = TestClientInstance.Create();
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
@@ -232,11 +242,12 @@ public sealed class RunsOverviewTests
         Window root = (await _PresentAsync(instance, 758, cancellationToken, characters: [Crew[0], Crew[5]])).Root;
         List<string> texts = RenderedText.VisibleTexts(root);
 
-        Assert.Contains(texts, text => text == "Torv Kesh");
-        Assert.Contains(texts, text => text == "nothing running");
-        Assert.Contains(texts, text => text == "START");
-        Assert.Contains(texts, text => text == "Homefront");   // and the busy lane still reads as busy
+        Button avatar = Assert.Single(root.GetVisualDescendants().OfType<Button>(),
+            button => button.Classes.Contains("avatar") && button.IsEffectivelyVisible);
+        Assert.Equal("Torv Kesh · start a run", ToolTip.GetTip(avatar));
+        Assert.Contains(texts, text => text == "Homefront");   // and the busy character still reads as busy
         Assert.Contains(texts, text => text == "OPEN");
+        Assert.DoesNotContain(texts, text => text == "nothing running");
     }
 
     /// <summary>ET-203, AC-2/ET-130: two characters running at once each get their own lane rather than the band
@@ -314,7 +325,7 @@ public sealed class RunsOverviewTests
 
         await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
             1234, "Homefront", 30000142), cancellationToken);
-        Dispatcher.UIThread.RunJobs(); // the refresh is posted to the UI thread, not run inline
+        await ActivityWindowHarness.WaitUntil(() => lane.IsRunning); // the refresh reads off the UI thread (ET-290)
 
         Assert.True(lane.IsRunning);
         Assert.Equal("Homefront", lane.StateText);
@@ -339,19 +350,46 @@ public sealed class RunsOverviewTests
         Assert.True(lane.IsRunning);
 
         await dispatcher.Send(new SetRunStoppedCommand(started.Value, DateTime.UtcNow), cancellationToken);
-        Dispatcher.UIThread.RunJobs(); // the refresh is posted to the UI thread, not run inline
+        await ActivityWindowHarness.WaitUntil(() => !lane.IsRunning); // the refresh reads off the UI thread (ET-290)
 
         Assert.False(lane.IsRunning);
         Assert.Equal("nothing running", lane.StateText);
         Assert.Equal("START", lane.ActionText);
     }
 
-    /// <summary>ET-221 AC-2's counterproof: pressing START on an idle character card opens the manual-start dialog
-    /// with every registered character offered — not just the one card's own character, which is all the dialog
-    /// could ever take before ET-221 — and that card's own character ticked, so hitting START without touching the
-    /// picker still starts exactly that one character's run.</summary>
+    /// <summary>ET-290, Jithran's one-click start: an idle character's avatar opens the start screen with exactly that
+    /// character in it and no way to pick others — and starts nothing by itself, since type and site are chosen there.
+    /// Counter-proof: hand the dialog every character, as a card's START did under ET-221, and Characters counts 2.</summary>
     [AvaloniaFact]
-    public async Task StartOnALane_OffersEveryCharacter_WithThatLanesCharacterPreselected()
+    public async Task AvatarClick_OpensTheStartScreen_FixedOnThatCharacter_AndStartsNothing()
+    {
+        using var instance = TestClientInstance.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var dialogs = new RecordingDialogService();
+
+        (_, RunsOverviewViewModel viewModel) = await _WindowAsync(
+            instance, 758, cancellationToken, characters: Crew.Take(2).ToList(), dialogs: dialogs);
+        RunningLaneViewModel avatar = Assert.Single(viewModel.IdleLanes,
+            lane => lane.Character.EsiCharacterId == Crew[1].EsiCharacterId);
+
+        await avatar.ActCommand.ExecuteAsync(null);
+
+        ManualRunStartViewModel opened = dialogs.LastManualRunStart!;
+        Assert.NotNull(opened);
+        Assert.Equal(Crew[1].EsiCharacterId, Assert.Single(opened.Characters).EsiCharacterId);
+        Assert.Equal(Crew[1].EsiCharacterId, Assert.Single(opened.SelectedCharacters).EsiCharacterId);
+        Assert.True(opened.IsCharacterFixed);
+        Assert.False(opened.PickCharactersCommand.CanExecute(null));
+        Result<IReadOnlyList<RunningRunDto>> running =
+            await _Dispatcher(instance).Query(new GetRunningRunsQuery(), cancellationToken);
+        Assert.Empty(running.Value!);
+    }
+
+    /// <summary>ET-221, kept by ET-290: START RUN ▾ is the general start — every registered character offered and none
+    /// fixed, so several can still be picked. Counter-proof: route it through the avatar's fixed start and Characters
+    /// counts 1.</summary>
+    [AvaloniaFact]
+    public async Task StartRun_OffersEveryCharacter_WithNoneFixed()
     {
         using var instance = TestClientInstance.Create();
         ICharacterRegistry registry = instance.Services.GetRequiredService<ICharacterRegistry>();
@@ -361,15 +399,14 @@ public sealed class RunsOverviewTests
 
         (_, RunsOverviewViewModel viewModel) = await _WindowAsync(
             instance, 758, TestContext.Current.CancellationToken, characters: Crew.Take(2).ToList(), dialogs: dialogs);
-        RunningLaneViewModel lane = viewModel.Lanes.Single(l => l.Character.EsiCharacterId == Crew[1].EsiCharacterId);
 
-        await lane.ActCommand.ExecuteAsync(null);
+        await viewModel.OpenRunStartCommand.ExecuteAsync(null);
 
         ManualRunStartViewModel opened = dialogs.LastManualRunStart!;
         Assert.NotNull(opened);
         Assert.Equal(2, opened.Characters.Count);
-        Character selected = Assert.Single(opened.SelectedCharacters);
-        Assert.Equal(Crew[1].EsiCharacterId, selected.EsiCharacterId);
+        Assert.False(opened.IsCharacterFixed);
+        Assert.True(opened.PickCharactersCommand.CanExecute(null));
     }
 
     /// <summary>ET-220: DISCARD stops a running lane exactly like STOP does, but nothing told this screen so — the
@@ -392,7 +429,7 @@ public sealed class RunsOverviewTests
 
         await dispatcher.Send(
             new DiscardRunCommand(started.Value, DateTime.UtcNow, DeleteAfterDiscard: true), cancellationToken);
-        Dispatcher.UIThread.RunJobs(); // the refresh is posted to the UI thread, not run inline
+        await ActivityWindowHarness.WaitUntil(() => !lane.IsRunning); // the refresh reads off the UI thread (ET-290)
 
         Assert.False(lane.IsRunning);
         Assert.Equal("nothing running", lane.StateText);
@@ -420,7 +457,7 @@ public sealed class RunsOverviewTests
         Assert.Empty(viewModel.UnfinishedRuns);
 
         await dispatcher.Send(new RestoreRunCommand(started.Value), cancellationToken);
-        Dispatcher.UIThread.RunJobs(); // the refresh is posted to the UI thread, not run inline
+        await ActivityWindowHarness.WaitUntil(() => viewModel.UnfinishedRuns.Count > 0); // read off the UI thread (ET-290)
 
         UnfinishedRunViewModel run = Assert.Single(viewModel.UnfinishedRuns);
         Assert.Equal("Homefront", run.SiteText);
@@ -458,9 +495,12 @@ public sealed class RunsOverviewTests
 
         List<string> texts = RenderedText.VisibleTexts(presented.Root);
         Assert.Contains(texts, text => text == "+1.26M ISK");
-        Assert.DoesNotContain(texts, text => text == "no loot or bounty recorded");
+        Assert.DoesNotContain(texts, text => text == "nothing valued");
     }
 
+    /// <summary>ET-191 in the virtualised list (ET-290): folding a day takes its activity out of the list rather than
+    /// hiding it, and unfolding puts it back. Counter-proof: fold by hiding the rows, the way nested expanders did,
+    /// and the list's item count never moves.</summary>
     [AvaloniaFact]
     public async Task DayToggle_HidesAndRestoresItsActivityRows()
     {
@@ -469,22 +509,26 @@ public sealed class RunsOverviewTests
         await _SaveSiteRunAsync(_Dispatcher(instance), 90000001, groupCode: null, cancellationToken: cancellationToken);
 
         Presented presented = await _PresentAsync(instance, 758, cancellationToken);
-        ToggleButton toggle = presented.Root.GetVisualDescendants().OfType<ToggleButton>()
-            .Single(control => control.Classes.Contains("dayband"));
-        Control row = presented.Root.GetVisualDescendants().OfType<Control>()
-            .Single(control => control.Classes.Contains("activityrow"));
+        ListBox list = presented.Root.GetVisualDescendants().OfType<ListBox>().Single(control => control.Name == "ActivityList");
+        Button toggle = presented.Root.GetVisualDescendants().OfType<Button>()
+            .Single(control => control.Classes.Contains("dayband") && control.IsEffectivelyVisible);
+        int unfolded = list.ItemCount;
 
-        toggle.IsChecked = false;
+        toggle.Command!.Execute(null);
         Dispatcher.UIThread.RunJobs();
         presented.Root.UpdateLayout();
 
-        Assert.False(row.IsEffectivelyVisible);
+        Assert.Equal(unfolded - 1, list.ItemCount);
+        Assert.DoesNotContain(presented.Root.GetVisualDescendants().OfType<Control>(),
+            control => control.Classes.Contains("activityrow") && control.IsEffectivelyVisible);
 
-        toggle.IsChecked = true;
+        toggle.Command.Execute(null);
         Dispatcher.UIThread.RunJobs();
         presented.Root.UpdateLayout();
 
-        Assert.True(row.IsEffectivelyVisible);
+        Assert.Equal(unfolded, list.ItemCount);
+        Assert.Contains(presented.Root.GetVisualDescendants().OfType<Control>(),
+            control => control.Classes.Contains("activityrow") && control.IsEffectivelyVisible);
     }
 
     /// <summary>ET-179 AC-1: three runs on <c>Stopped</c> and two on <c>Saved</c> — all five are on screen, and the
@@ -845,7 +889,7 @@ public sealed class RunsOverviewTests
         Assert.Empty(viewModel.Tabs[0].Days);
 
         await _SaveSiteRunAsync(dispatcher, 90000001, groupCode: null, cancellationToken: cancellationToken);
-        Dispatcher.UIThread.RunJobs(); // the refresh is posted to the UI thread, not run inline (ET-189 review)
+        await ActivityWindowHarness.WaitUntil(() => viewModel.Tabs[0].Days.Count > 0); // read off the UI thread (ET-290)
 
         ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(viewModel.Tabs[0].Days).Rows);
         Assert.Equal("Homefront", row.SiteText);
@@ -873,7 +917,7 @@ public sealed class RunsOverviewTests
         await detail.LoadAsync(cancellationToken);
 
         await detail.DeleteCommand.ExecuteAsync(null);
-        Dispatcher.UIThread.RunJobs(); // the refresh is posted to the UI thread, not run inline (ET-189 review)
+        await ActivityWindowHarness.WaitUntil(() => presented.ViewModel.Tabs[0].Days.Count == 0); // read off the UI thread
 
         Assert.Empty(presented.ViewModel.Tabs[0].Days);
     }
@@ -895,7 +939,7 @@ public sealed class RunsOverviewTests
         day.IsExpanded = false;
 
         await _SaveSiteRunAsync(dispatcher, 90000002, groupCode: null, cancellationToken: cancellationToken);
-        Dispatcher.UIThread.RunJobs(); // the refresh is posted to the UI thread, not run inline (ET-189 review)
+        await ActivityWindowHarness.WaitUntil(() => viewModel.Tabs[0].Days.Single().Rows.Count == 2); // read off the UI thread
 
         RunsDayViewModel refreshedDay = Assert.Single(viewModel.Tabs[0].Days);
         Assert.False(refreshedDay.IsExpanded);

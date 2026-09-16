@@ -24,6 +24,14 @@
         <SolidColorBrush x:Key="TextDimBrush" Color="#FF8A7E6B"/>
         <SolidColorBrush x:Key="TextBrightBrush" Color="#FFF3ECE0"/>
 
+        <!-- Where ISK came from (ET-290, IskSourceBar): one fixed ink per source, the same in every faction theme, so
+             a colour names the same source wherever it is drawn. -->
+        <SolidColorBrush x:Key="IskBountyBrush" Color="#FFC98500"/>
+        <SolidColorBrush x:Key="IskLootBrush" Color="#FF3987E5"/>
+        <SolidColorBrush x:Key="IskPayoutBrush" Color="#FF199E70"/>
+        <SolidColorBrush x:Key="IskRewardBrush" Color="#FFD55181"/>
+        <SolidColorBrush x:Key="IskMiningBrush" Color="#FF9085E9"/>
+
         <SolidColorBrush x:Key="ValueBrush" Color="#FFF5B042"/>
         <SolidColorBrush x:Key="GreenBrush" Color="#FF4ADE80"/>
         <SolidColorBrush x:Key="RedBrush" Color="#FFEF5A5A"/>
@@ -335,6 +343,18 @@
     <Style Selector="Border.chip mi|MaterialIcon">
         <Setter Property="Width" Value="11"/>
         <Setter Property="Height" Value="11"/>
+    </Style>
+
+    <!-- A pilot's hexagon without a portrait: the initial on the soft accent, re-tinted live with the faction. -->
+    <Style Selector="ctl|HexPortrait">
+        <Setter Property="Fill" Value="{DynamicResource AccentSoftBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+    </Style>
+    <!-- A stack keeps a thin gap of the panel's own colour between two faces that overlap. -->
+    <Style Selector="ctl|HexStack">
+        <Setter Property="Fill" Value="{DynamicResource AccentSoftBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        <Setter Property="Ring" Value="#FF0C100E"/>
     </Style>
 
     <!-- ── Combat meters (ET-277, design D): the rows of CombatMeters, the UNDER FIRE / NEUTED flags and the

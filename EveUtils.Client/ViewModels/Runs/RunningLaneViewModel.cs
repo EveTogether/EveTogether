@@ -1,32 +1,35 @@
 using System;
-using System.Threading;
 using System.Threading.Tasks;
-using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using EveUtils.Client.Imaging;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Runs.Dtos;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
 /// <summary>
-/// One lane per local character, whether or not anything is running on it. A pilot who is sitting still keeps their
-/// lane and gets a START, because a toon that disappears from the band is a toon you forget (ET-161 AC-6) — the
-/// band is a roster, and filtering it down to "has a running run" is what that criterion catches.
+/// One local character's place in RUNNING: the run it is on, or nothing. The band draws a line per running group from
+/// these (<see cref="RunningGroupViewModel"/>, ET-290) and an avatar for every character with nothing running — a
+/// pilot sitting still keeps a face in the band, because a toon that disappears from it is a toon you forget
+/// (ET-161 AC-6).
 ///
-/// The lane sends the pilot to the screen that owns the action rather than carrying a second copy of it: START goes
-/// to the manual run-start screen with this character already chosen (ET-163), and a running lane opens the run
-/// window, which is where STOP lives. A STOP here would be a second idea of what stopping is — putting the clock to
-/// rest without ending the fleet announcement, the enemy observations or the loot refresh the run window does — and
-/// that split is the exact bug <c>SetRunStoppedCommand</c> was written to close.
+/// The lane sends the pilot to the screen that owns the action rather than carrying a second copy of it. An idle
+/// avatar opens the manual run-start screen fixed on this character (the one-click start of ET-200): type and site are
+/// chosen there, since a run started on a remembered guess gets the wrong name. A running line opens the run window,
+/// which is where STOP lives. A STOP here would be a second idea of what stopping is — putting the clock to rest without
+/// ending the fleet announcement, the enemy observations or the loot refresh the run window does — and that split is
+/// the exact bug <c>SetRunStoppedCommand</c> was written to close.
 /// </summary>
-public sealed partial class RunningLaneViewModel(Character character, Func<RunningLaneViewModel, Task> act)
-    : ViewModelBase
+public sealed partial class RunningLaneViewModel(Character character, CharacterFaceViewModel face,
+    Func<RunningLaneViewModel, Task> act) : ViewModelBase
 {
     public Character Character { get; } = character;
 
     public string CharacterText { get; } = character.Name;
+
+    public CharacterFaceViewModel Face { get; } = face;
+
+    public string StartTooltip => $"{CharacterText} · start a run";
 
     /// <summary>The run on this lane, or null when the pilot is sitting still.</summary>
     public RunningRunDto? Run { get; private set; }
@@ -43,28 +46,13 @@ public sealed partial class RunningLaneViewModel(Character character, Func<Runni
 
     [ObservableProperty] private string _actionText = "START";
 
-    /// <summary>The pilot's ESI portrait for the card's hex — same source and pattern as the fleet roster leaf and
-    /// the character picker (ET-184): reuse the existing portrait route rather than a new one. Null until loaded or
-    /// when images are off/offline, so the hex falls back to the initial glyph below.</summary>
-    [ObservableProperty] private Bitmap? _portrait;
+    /// <summary>TYPE of the run, from the catalogue every run list reads (ET-226).</summary>
+    [ObservableProperty] private string _typeText = string.Empty;
 
-    public bool HasPortrait => Portrait is not null;
-    partial void OnPortraitChanged(Bitmap? value) => OnPropertyChanged(nameof(HasPortrait));
+    /// <summary>The run's solar system, when it recorded one the static data knows.</summary>
+    [ObservableProperty] private string? _systemText;
 
-    /// <summary>First letter of the name, shown in the hex when no portrait render is available — the same fallback
-    /// as every other hex in the app, so "no ESI link", "images off" and "still loading" all read the same way
-    /// instead of one of them looking like a broken image.</summary>
-    public string Initial => string.IsNullOrEmpty(CharacterText) ? "?" : CharacterText[..1].ToUpperInvariant();
-
-    /// <summary>Loads the ESI portrait best-effort (opt-in image setting); a failure leaves the glyph fallback.</summary>
-    public async Task LoadPortraitAsync(ICharacterPortraitProvider portraits, CancellationToken cancellationToken = default)
-    {
-        if (Character.EsiCharacterId is not > 0)
-            return;
-        Portrait = await portraits.GetPortraitAsync(Character.EsiCharacterId.Value, 64, cancellationToken);
-    }
-
-    public void Attach(RunningRunDto? run, DateTime nowUtc)
+    public void Attach(RunningRunDto? run, DateTime nowUtc, string typeText = "", string? systemText = null)
     {
         Run = run;
         IsRunning = run is not null;
@@ -72,6 +60,8 @@ public sealed partial class RunningLaneViewModel(Character character, Func<Runni
         StateText = run is null
             ? "nothing running"
             : string.IsNullOrWhiteSpace(run.SiteName) ? "unnamed site" : run.SiteName;
+        TypeText = run is null ? string.Empty : typeText;
+        SystemText = run is null ? null : systemText;
         Tick(nowUtc);
     }
 

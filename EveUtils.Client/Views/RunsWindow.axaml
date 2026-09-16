@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
         xmlns:ctl="using:EveUtils.Client.Controls"
-        xmlns:sys="using:System"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="758" d:DesignHeight="720"
@@ -13,89 +13,168 @@
         Title="Runs">
 
     <!-- One layout, drawn from the space it is handed and never from the window: ModuleHostService moves this very
-         Content between a docked tab (758px) and a floating window, and there is no pop-out variant beside it.
-         758 is the width this is designed at — see RunsOverviewViewModel for why that, and not the window as it
-         happens to stand. Nothing folds behind a "⋯": the chips wrap onto a second line instead, because a reward
-         that disappears at the default width is exactly what ET-161 AC-3 forbids. -->
+         Content between a docked tab (1303) and a floating window (758), and both are the same compact list with more
+         or less room for a site's name (ET-290). A row has one height at every width: what does not fit trims, chips
+         included, and the activity pane (RO-2) is where all of it can be read. -->
     <DockPanel>
 
         <!-- On the content root, not on the window: Window.Styles stay behind with the (never shown) window once
              the module host re-parents this content into a tab. -->
         <DockPanel.Styles>
-            <!-- The day band. Not a stored thing — an evening is the rows already on screen added up. -->
-            <Style Selector="ToggleButton.dayband">
+            <!-- ══ The list ══ one ListBox over the tab's flat Items: day headers, activity rows, pilots' runs. -->
+            <Style Selector="ListBox.runslist">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+            </Style>
+            <Style Selector="ListBox.runslist ListBoxItem">
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+            </Style>
+            <!-- Every state fill goes on the presenter, and every state Fluent paints there is named: a rule one level up
+                 loses to Fluent's accent blue, which is what turned the old day band solid blue (ET-198). Hover and
+                 selection cover the whole row this way — caret and sync cell included — not only the part a button
+                 happens to occupy. -->
+            <Style Selector="ListBox.runslist ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+            </Style>
+            <Style Selector="ListBox.runslist ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            </Style>
+            <Style Selector="ListBox.runslist ListBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            </Style>
+            <Style Selector="ListBox.runslist ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+            </Style>
+            <Style Selector="ListBox.runslist ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+            </Style>
+            <Style Selector="ListBox.runslist ListBoxItem:selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+            </Style>
+            <Style Selector="ListBox.runslist ListBoxItem:selected:focus-within /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+            </Style>
+
+            <!-- Secondary text is dim at rest and lifts to the text colour on hover and selection: dim on those fills
+                 measured 3.3–4.4:1 in the v2 contrast check, the text colour 8.6 and up. Every secondary text and glyph
+                 in a row inherits that ink from the row's own button, so one rule per row switches all of them — a rule
+                 per text would be an ancestor watch per text, built again for every row the list scrolls in. -->
+            <Style Selector="Button.activityrow">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            </Style>
+            <Style Selector="ListBoxItem:pointerover Button.activityrow, ListBoxItem:selected Button.activityrow">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            </Style>
+
+            <!-- The row and the day header are buttons that fill their item: a click opens the detail (ET-162) or folds
+                 the day. Their own fills stay out of it — the item's presenter above draws hover for the whole row. -->
+            <Style Selector="Button.activityrow, Button.dayband, Button.caretbtn, Button.syncaction, Button.avatar">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+            </Style>
+            <Style Selector="Button.activityrow, Button.dayband">
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+            </Style>
+            <Style Selector="Button.activityrow:pointerover /template/ ContentPresenter, Button.activityrow:pressed /template/ ContentPresenter, Button.dayband:pointerover /template/ ContentPresenter, Button.dayband:pressed /template/ ContentPresenter, Button.caretbtn:pointerover /template/ ContentPresenter, Button.caretbtn:pressed /template/ ContentPresenter, Button.avatar:pointerover /template/ ContentPresenter, Button.avatar:pressed /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+            </Style>
+            <Style Selector="Button.activityrow:pointerover /template/ ContentPresenter, Button.activityrow:pressed /template/ ContentPresenter">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            </Style>
+            <Style Selector="Button.activityrow:pressed, Button.dayband:pressed, Button.caretbtn:pressed, Button.avatar:pressed">
+                <Setter Property="RenderTransform" Value="none"/>
+            </Style>
+
+            <Style Selector="TextBlock.caret">
+                <Setter Property="FontSize" Value="9"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+                <Setter Property="HorizontalAlignment" Value="Center"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.caret.expanded">
+                <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+            </Style>
+            <Style Selector="Button.caretbtn:pointerover TextBlock.caret, Button.dayband:pointerover TextBlock.caret">
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+
+            <!-- Day header -->
+            <Style Selector="Border.dayhead">
                 <Setter Property="Background" Value="{StaticResource BgRowBrush}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
                 <Setter Property="BorderThickness" Value="0,0,0,1"/>
-                <Setter Property="Padding" Value="14,7"/>
-                <Setter Property="CornerRadius" Value="0"/>
-                <Setter Property="HorizontalAlignment" Value="Stretch"/>
-                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                <Setter Property="Height" Value="28"/>
             </Style>
-            <!-- State ink goes on the presenter: the stock Fluent theme fills :pointerover and :checked with its own
-                 accent there, and a rule one level up (Background on the ToggleButton itself, above) loses to it.
-                 Without this, an expanded day band turned solid accent blue and the dim date/summary text — tuned
-                 for the near-transparent BgRowBrush — nearly disappeared into it (ET-198). Same brushes and the same
-                 "hover on an active row stays active" rule as Button.fleetrow.open in FleetsWindow.axaml. -->
-            <Style Selector="ToggleButton.dayband:pointerover /template/ ContentPresenter">
-                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            <Style Selector="TextBlock.dayweek">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="LetterSpacing" Value="1.8"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
-            <Style Selector="ToggleButton.dayband:checked /template/ ContentPresenter">
-                <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
-            </Style>
-            <Style Selector="ToggleButton.dayband:checked:pointerover /template/ ContentPresenter">
-                <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
-            </Style>
-            <Style Selector="TextBlock.daytitle">
+            <Style Selector="TextBlock.daydate">
                 <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
                 <Setter Property="FontSize" Value="10"/>
                 <Setter Property="LetterSpacing" Value="1.8"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
-
-            <!-- The whole row is the way into the detail (ET-162), so it is a button that fills its column rather
-                 than a link somewhere inside it. -->
-            <Style Selector="Button.activityrow">
-                <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="BorderThickness" Value="0"/>
-                <Setter Property="CornerRadius" Value="0"/>
-                <Setter Property="Padding" Value="0,8,14,8"/>
-                <Setter Property="HorizontalAlignment" Value="Stretch"/>
-                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-            </Style>
-            <Style Selector="Button.activityrow:pointerover /template/ ContentPresenter">
-                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
-            </Style>
-            <Style Selector="Button.caretbtn">
-                <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="BorderThickness" Value="0"/>
-                <Setter Property="Padding" Value="14,8,6,8"/>
-                <Setter Property="VerticalAlignment" Value="Top"/>
-            </Style>
-            <Style Selector="TextBlock.caret.expanded">
-                <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+            <Style Selector="TextBlock.daysum">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
 
+            <!-- Activity row -->
+            <Style Selector="TextBlock.rowtime">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.rowsite">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="TextBlock.rowline">
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="TextWrapping" Value="NoWrap"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.rowkind">
+                <Setter Property="LetterSpacing" Value="1"/>
+            </Style>
             <Style Selector="TextBlock.rowfigure">
                 <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
                 <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
                 <Setter Property="FontSize" Value="11.5"/>
                 <Setter Property="TextAlignment" Value="Right"/>
-                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
             </Style>
             <Style Selector="TextBlock.rowfigure.dim">
                 <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
             </Style>
-            <Style Selector="TextBlock.rowsite">
-                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
-                <Setter Property="FontSize" Value="12"/>
+            <Style Selector="TextBlock.rowsmall">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="TextAlignment" Value="Right"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
-            <Style Selector="TextBlock.rowkind">
-                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Style Selector="TextBlock.rownone">
                 <Setter Property="FontSize" Value="9.5"/>
-                <Setter Property="LetterSpacing" Value="1.4"/>
-                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
             </Style>
             <!-- One line under the figures, never wrapped: it explains the row, it does not double its height. -->
             <Style Selector="TextBlock.rowsub">
@@ -105,10 +184,87 @@
                 <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
+            <Style Selector="ctl|IconGlyph.typeicon">
+                <Setter Property="Width" Value="14"/>
+                <Setter Property="Height" Value="14"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            </Style>
+            <Style Selector="ctl|IconGlyph.syncstate">
+                <Setter Property="Width" Value="13"/>
+                <Setter Property="Height" Value="13"/>
+            </Style>
+            <Style Selector="ctl|IconGlyph.syncstate.attention">
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+            <Style Selector="ctl|IconGlyph.syncstate.failed">
+                <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+            </Style>
+            <!-- Until RO-2 moves them to the pane, PUBLISH and RETRY wait in the sync cell and come forward on hover or
+                 focus, taking the state glyph's place. -->
+            <Style Selector="Button.syncaction">
+                <Setter Property="Opacity" Value="0"/>
+            </Style>
+            <Style Selector="ListBoxItem:pointerover Button.syncaction, ListBoxItem:focus-within Button.syncaction">
+                <Setter Property="Opacity" Value="1"/>
+            </Style>
+            <Style Selector="ListBoxItem:pointerover ctl|IconGlyph.syncstate.actionable, ListBoxItem:focus-within ctl|IconGlyph.syncstate.actionable">
+                <Setter Property="Opacity" Value="0"/>
+            </Style>
+            <Style Selector="Button.syncaction">
+                <Setter Property="Width" Value="24"/>
+                <Setter Property="Height" Value="24"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+            <Style Selector="Button.syncaction:pointerover /template/ ContentPresenter, Button.syncaction:focus-visible /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="Button.syncaction.retry">
+                <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+            </Style>
 
-            <!-- The month bar's own total (ET-266) — bolder and bigger than the plain .sectionsummary the day bands
-                 below keep using, so the two never look like the same kind of text. ISK carries .isk on top for the
-                 heavier weight; the day bands are untouched. -->
+            <!-- ══ RUNNING ══ -->
+            <Style Selector="TextBlock.runwho">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11.5"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.runsite">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="TextBlock.runclock">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="FontSize" Value="15"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.runidle">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <!-- An idle character's avatar: a 28 px target around a 22 px hex, ringed in the bright accent on hover and
+                 on keyboard focus. -->
+            <Style Selector="Button.avatar">
+                <Setter Property="Width" Value="28"/>
+                <Setter Property="Height" Value="28"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Button.avatar:pointerover ctl|HexPortrait, Button.avatar:focus-visible ctl|HexPortrait">
+                <Setter Property="Ring" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+
+            <!-- The month bar's own total (ET-266) — bolder and bigger than the day headers' summary below, so the two
+                 never look like the same kind of text. ISK carries .isk on top for the heavier weight. -->
             <Style Selector="TextBlock.monthfigure">
                 <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
                 <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
@@ -121,15 +277,6 @@
                 <Setter Property="FontWeight" Value="Bold"/>
             </Style>
         </DockPanel.Styles>
-
-        <!-- The narrowest a running-card may get. A MINIMUM, not a size: FillGridPanel divides whatever is left
-             over the columns that fit. A card here carries far less than a Fleets lane (no role chip, no second
-             text line, no second button, no foot chips) plus one thing Fleets' lane does not — the portrait — so
-             it earns a smaller floor than Fleets' 236, not a bigger one; see RunsOverviewViewModel for why 758 is
-             the width this screen is designed at. -->
-        <DockPanel.Resources>
-            <sys:Double x:Key="RunningCardMinWidth">190</sys:Double>
-        </DockPanel.Resources>
 
         <!-- ══ Header ══ -->
         <Border DockPanel.Dock="Top" Padding="14,12" BorderThickness="0,0,0,1"
@@ -169,75 +316,68 @@
             </ListBox>
         </Border>
 
-        <!-- ══ Running ══ one lane per local character, running or not. A pilot sitting still keeps their lane and
-             their START: a toon that drops out of the band is a toon you forget (AC-6). Built for n lanes; today
-             at most one of them carries a run, because RunningRunLookup answers only for exactly one (ET-130).
-             Local only: a running clock belongs to this machine, not to a server. -->
-        <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1"
+        <!-- ══ Running ══ a line per running group (ET-290): the faces on it, who, the site, its type and system, and
+             one clock from the group's earliest stored start. Under it, one line with every local character that has
+             nothing running as an avatar — a click opens the start screen fixed on that character — and START RUN ▾
+             for the general start. Local only: a running clock belongs to this machine, not to a server. -->
+        <Border DockPanel.Dock="Top" Padding="14,4" BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource BorderBrush}"
                 IsVisible="{Binding IsLocalTabSelected}">
-            <StackPanel Spacing="5">
-                <TextBlock Classes="label" Text="RUNNING"/>
-                <!-- Cards, as many per row as fit at RunningCardMinWidth, filling the width — the same grid Fleets'
-                     own "who is active right now" band uses (FillGridPanel, ET-108), and the same card style
-                     (Border.statuscard and friends, Themes/EveUtils.axaml) rather than a second one grown next to
-                     it (ET-200). The portrait is the one thing this card carries that Fleets' lane does not; it is
-                     added here, on top of the shared style, rather than forked into it. -->
-                <ItemsControl x:Name="LaneList" ItemsSource="{Binding Lanes}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <ctl:FillGridPanel MinItemWidth="{StaticResource RunningCardMinWidth}"
-                                                ColumnSpacing="6" RowSpacing="6"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
+            <StackPanel>
+                <ItemsControl x:Name="RunningList" ItemsSource="{Binding RunningGroups}">
                     <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="vr:RunningLaneViewModel">
-                            <!-- IsRunning maps to the shared style's default-vs-idle pair the same way Fleets uses
-                                 it: the state worth drawing the eye to (a fleet active right now / a run tracking
-                                 right now) is the bright default, "nothing running" is the quiet .idle look. -->
-                            <Border Classes="statuscard" Classes.idle="{Binding !IsRunning}">
-                                <Grid ColumnDefinitions="Auto,*">
-                                    <Border Grid.Column="0" Classes="statuscardedge" Classes.idle="{Binding !IsRunning}"/>
-                                    <Grid Grid.Column="1" ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                                        <!-- Hex ESI portrait + glyph fallback: same shape and the same 64px cache key
-                                             as the fleet roster leaf and the character picker (ET-184) — reusing the
-                                             existing portrait route rather than standing up a new one. -->
-                                        <Panel Grid.Column="0" Width="34" Height="39" VerticalAlignment="Top">
-                                            <Panel.Clip>
-                                                <PathGeometry Figures="M17,0 L34,9.75 L34,29.25 L17,39 L0,29.25 L0,9.75 Z"/>
-                                            </Panel.Clip>
-                                            <Border Background="{DynamicResource AccentSoftBrush}"
-                                                    IsVisible="{Binding !HasPortrait}">
-                                                <TextBlock Text="{Binding Initial}" FontSize="14" FontWeight="Bold"
-                                                           Foreground="{DynamicResource AccentBrightBrush}"
-                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <Image Source="{Binding Portrait}" Stretch="UniformToFill"
-                                                   IsVisible="{Binding HasPortrait}"/>
-                                        </Panel>
-                                        <StackPanel Grid.Column="1">
-                                            <TextBlock Classes="statuscardname" Text="{Binding CharacterText}"/>
-                                            <TextBlock Classes="statuscardwhat" Margin="0,2,0,0" Text="{Binding StateText}"/>
-                                            <!-- FontSize 15, not the shared style's default 19: that size is tuned
-                                                 for Fleets' wider lane, and this card is deliberately narrower
-                                                 (less information belongs on it) — the same reduction Fleets' own
-                                                 .slim variant makes when it runs short of room, applied here as a
-                                                 fixed size rather than a second condition to compute. -->
-                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" Margin="0,5,0,0">
-                                                <TextBlock Grid.Column="0" Classes="statuscardclock" FontSize="15"
-                                                           Text="{Binding ClockText}"/>
-                                                <Button Grid.Column="1" Classes="rowaction" VerticalAlignment="Bottom"
-                                                        MinWidth="56" Content="{Binding ActionText}"
-                                                        Command="{Binding ActCommand}"/>
-                                            </Grid>
-                                        </StackPanel>
-                                    </Grid>
-                                </Grid>
-                            </Border>
+                        <DataTemplate DataType="vr:RunningGroupViewModel">
+                            <Grid Height="34" ColumnDefinitions="66,64,110,*,74,64" ColumnSpacing="10">
+                                <TextBlock Grid.Column="0" Classes="label" Text="RUNNING" VerticalAlignment="Center"
+                                           IsVisible="{Binding IsFirst}"/>
+                                <ctl:HexStack Grid.Column="1" Size="22" Overlap="7" HorizontalAlignment="Left"
+                                              VerticalAlignment="Center" Faces="{Binding Faces}"
+                                              ToolTip.Tip="{Binding WhoTooltip}"/>
+                                <TextBlock Grid.Column="2" Classes="runwho" Text="{Binding WhoText}"
+                                           ToolTip.Tip="{Binding WhoTooltip}"/>
+                                <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                                    <TextBlock Classes="runsite" Text="{Binding SiteText}"/>
+                                    <TextBlock Classes="rowsub" Text="{Binding KindText}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="4" Classes="runclock" Text="{Binding ClockText}"/>
+                                <Button Grid.Column="5" Classes="rowaction" VerticalAlignment="Center" Content="OPEN"
+                                        Command="{Binding OpenCommand}" ToolTip.Tip="Open the run window"/>
+                            </Grid>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <TextBlock x:Name="LanesEmpty" Classes="hint" Margin="0" TextWrapping="Wrap"
+                <Grid MinHeight="28" ColumnDefinitions="66,*,96" ColumnSpacing="10">
+                    <TextBlock Grid.Column="0" Classes="label" Text="RUNNING" VerticalAlignment="Center"
+                               IsVisible="{Binding !HasRunning}"/>
+                    <DockPanel Grid.Column="1">
+                        <TextBlock DockPanel.Dock="Left" Classes="runidle" Margin="0,0,10,0" Text="nothing running"
+                                   IsVisible="{Binding !HasRunning}"/>
+                        <ItemsControl x:Name="IdleAvatars" ItemsSource="{Binding IdleLanes}" VerticalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:RunningLaneViewModel">
+                                    <Button Classes="avatar" Command="{Binding ActCommand}"
+                                            ToolTip.Tip="{Binding StartTooltip}">
+                                        <ctl:HexPortrait Size="22" Source="{Binding Face.Portrait}"
+                                                         Initial="{Binding Face.Initial}"/>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </DockPanel>
+                    <Button Grid.Column="2" Classes="rowaction" VerticalAlignment="Center" HorizontalAlignment="Right"
+                            Command="{Binding OpenRunStartCommand}" ToolTip.Tip="Start a run for one or more characters">
+                        <StackPanel Orientation="Horizontal" Spacing="3">
+                            <TextBlock Text="START RUN" VerticalAlignment="Center"/>
+                            <mi:MaterialIcon Classes="icon-sm" Kind="MenuDown"/>
+                        </StackPanel>
+                    </Button>
+                </Grid>
+                <TextBlock x:Name="LanesEmpty" Classes="hint" Margin="0,0,0,4" TextWrapping="Wrap"
                            IsVisible="{Binding LanesEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
                            Text="{Binding LanesEmptyText}"/>
             </StackPanel>
@@ -265,9 +405,10 @@
                                                    Text="{Binding TitleText}"/>
                                         <TextBlock Classes="rowsub" Text="{Binding StoppedText}"/>
                                     </StackPanel>
-                                    <TextBlock Grid.Column="1" Classes="rowfigure" Text="{Binding DurationText}"/>
-                                    <TextBlock Grid.Column="2" Classes="rowfigure" Classes.dim="{Binding TotalIskUnknown}"
-                                               Text="{Binding TotalIskText}"/>
+                                    <TextBlock Grid.Column="1" Classes="rowfigure" VerticalAlignment="Center"
+                                               Text="{Binding DurationText}"/>
+                                    <TextBlock Grid.Column="2" Classes="rowfigure" VerticalAlignment="Center"
+                                               Classes.dim="{Binding TotalIskUnknown}" Text="{Binding TotalIskText}"/>
                                     <!-- Disabled rather than hidden for an abyssal whose pocket already collapsed
                                          (ET-254 AC-5, CanResume): SAVE and DELETE still apply to it, so the row
                                          keeps its usual shape instead of one button's absence shifting the rest. -->
@@ -286,9 +427,9 @@
             </StackPanel>
         </Border>
 
-        <!-- ══ Month ══ the page (ET-233): one month at a time, previous/next either side, its own total — the
-             same source the day bands below already sum, so the two can never disagree. Shown for every source
-             (Local, a fleet filter, a server tab): all three page the same way. -->
+        <!-- ══ Month ══ the page (ET-233): one month at a time, previous/next either side, its own total and where it
+             came from — the same rows the day headers below already sum, so the two can never disagree. Shown for every
+             source (Local, a fleet filter, a server tab): all three page the same way. RO-3 replaces it. -->
         <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource BorderBrush}">
             <Grid ColumnDefinitions="Auto,Auto,*,Auto">
@@ -302,6 +443,8 @@
                                Text="{Binding SelectedTab.MonthActivitiesText}"/>
                     <TextBlock Classes="monthfigure" VerticalAlignment="Center"
                                Foreground="{StaticResource TextDimBrush}" FontWeight="Normal" Text="&#x00B7;"/>
+                    <ctl:IskSourceBar Width="48" Height="6" VerticalAlignment="Center"
+                                      Isk="{Binding SelectedTab.MonthIsk}"/>
                     <TextBlock Classes="monthfigure isk" VerticalAlignment="Center"
                                Text="{Binding SelectedTab.MonthNetText}"/>
                 </StackPanel>
@@ -310,161 +453,168 @@
             </Grid>
         </Border>
 
-        <!-- ══ Finished activities ══ one row per activity, under the day it belongs to. The days belong to the
-             selected source: Local holds every activity, a server tab the ones published to it. -->
-        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-          <StackPanel>
-            <TextBlock x:Name="TabStatus" Classes="hint" Margin="14,10" TextWrapping="Wrap"
+        <!-- ══ Finished activities ══ the one undocked child (ET-285). The days belong to the selected source: Local
+             holds every activity, a server tab the ones published to it. -->
+        <Grid RowDefinitions="Auto,*">
+            <Grid.DataTemplates>
+                <!-- A day: caret, the weekday bright and the date dim, and its summary — still there while it is
+                     folded (ET-199 AC-4). A click anywhere on it folds or unfolds it. -->
+                <DataTemplate DataType="vr:RunsDayViewModel">
+                    <Button Classes="dayband" Command="{Binding ToggleCommand}"
+                            ToolTip.Tip="Show or hide this day's activities">
+                        <Border Classes="dayhead">
+                            <Grid Margin="14,0" ColumnDefinitions="18,*,24" ColumnSpacing="8">
+                                <TextBlock Grid.Column="0" Classes="caret" Classes.expanded="{Binding IsExpanded}"
+                                           Text="&#x25B6;"/>
+                                <DockPanel Grid.Column="1">
+                                    <TextBlock DockPanel.Dock="Left" Classes="dayweek" Text="{Binding WeekdayText}"/>
+                                    <TextBlock DockPanel.Dock="Left" Classes="daydate" Margin="8,0,12,0"
+                                               Text="{Binding DateText}"/>
+                                    <TextBlock DockPanel.Dock="Right" Classes="daysum" Margin="8,0,0,0" MinWidth="60"
+                                               Text="{Binding NetText}"/>
+                                    <ctl:IskSourceBar DockPanel.Dock="Right" Width="48" Height="6" Margin="8,0,0,0"
+                                                      VerticalAlignment="Center" Isk="{Binding Isk}"/>
+                                    <TextBlock Classes="daysum" Text="{Binding CountAndFlownText}"/>
+                                </DockPanel>
+                            </Grid>
+                        </Border>
+                    </Button>
+                </DataTemplate>
+
+                <!-- An activity: 36 px, one control. The row button opens the detail (ET-162); the caret and the sync
+                     actions sit on top of it rather than inside, so a click aimed at the detail can never fold a group
+                     or publish anything. -->
+                <DataTemplate DataType="vr:ActivityOverviewRowViewModel">
+                    <Border Height="36" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+                        <Panel>
+                            <Button Classes="activityrow" Command="{Binding OpenDetailCommand}">
+                                <Grid Margin="14,0" ColumnDefinitions="18,40,18,*,84,100,24" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="1" Classes="rowtime" Text="{Binding TimeText}"/>
+                                    <ctl:IconGlyph Grid.Column="2" Classes="typeicon" Kind="{Binding TypeIcon}"
+                                                   ToolTip.Tip="{Binding TypeText}"/>
+                                    <StackPanel Grid.Column="3" VerticalAlignment="Center" Spacing="1">
+                                        <TextBlock Classes="rowsite" Text="{Binding SiteText}"/>
+                                        <DockPanel Height="15">
+                                            <TextBlock DockPanel.Dock="Left" Classes="rowline rowkind"
+                                                       Text="{Binding TypeText}"/>
+                                            <TextBlock DockPanel.Dock="Left" Classes="rowline" Margin="7,0,0,0"
+                                                       ToolTip.Tip="{Binding SystemTooltip}" Text="{Binding SystemLineText}"/>
+                                            <!-- Only on a row nobody committed themselves (ET-179): an activity auto-saved
+                                                 a day after it stopped must not read as one a pilot stood behind. -->
+                                            <Border DockPanel.Dock="Left" Classes="chip dim" Margin="7,0,0,0"
+                                                    IsVisible="{Binding HasAutoSavedRun}">
+                                                <TextBlock Text="{Binding AutoSavedText}"/>
+                                            </Border>
+                                            <ItemsControl Margin="7,0,0,0" ItemsSource="{Binding Chips}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <ctl:ChipLinePanel Spacing="4"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="vr:ActivityRewardChipViewModel">
+                                                        <Border Classes="chip" Classes.dim="{Binding IsKnownKind}"
+                                                                Classes.warn="{Binding IsUnknownKind}">
+                                                            <TextBlock Text="{Binding Text}"/>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </DockPanel>
+                                    </StackPanel>
+                                    <!-- One pilot by name, several as a stack of faces; every name on hover. -->
+                                    <Panel Grid.Column="4" ToolTip.Tip="{Binding CrewText}">
+                                        <TextBlock Classes="rowline" HorizontalAlignment="Right" FontSize="10"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   IsVisible="{Binding !HasCrewStack}" Text="{Binding SoloCrewText}"/>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="3"
+                                                    VerticalAlignment="Center" IsVisible="{Binding HasCrewStack}">
+                                            <ctl:HexStack Size="16" Overlap="5" VerticalAlignment="Center"
+                                                          Faces="{Binding CrewFaces}"/>
+                                            <TextBlock Classes="rowsmall" Text="{Binding CrewCountText}"/>
+                                        </StackPanel>
+                                    </Panel>
+                                    <StackPanel Grid.Column="5" VerticalAlignment="Center">
+                                        <TextBlock Classes="rowfigure" IsVisible="{Binding HasNet}" Text="{Binding NetText}"/>
+                                        <!-- Never a "0 ISK" where nothing was valued: a zero reads as a valuation that
+                                             came out at nothing. -->
+                                        <TextBlock Classes="rownone" IsVisible="{Binding !HasNet}"
+                                                   Text="{Binding NoNetText}"/>
+                                        <TextBlock Classes="rowsmall" Text="{Binding DurationText}"/>
+                                    </StackPanel>
+                                    <!-- A run knows where it stands towards a server, so the row says it. -->
+                                    <ctl:IconGlyph Grid.Column="6" Classes="syncstate"
+                                                   Classes.attention="{Binding IsSyncAttention}"
+                                                   Classes.failed="{Binding IsSyncFailed}"
+                                                   Classes.actionable="{Binding HasSyncAction}"
+                                                   Kind="{Binding SyncIcon}" IsVisible="{Binding HasSyncText}"
+                                                   ToolTip.Tip="{Binding SyncText}"/>
+                                </Grid>
+                            </Button>
+                            <Button Classes="caretbtn" Width="18" Height="36" Margin="14,0,0,0" HorizontalAlignment="Left"
+                                    IsVisible="{Binding HasCrewStack}" Command="{Binding ToggleCommand}"
+                                    ToolTip.Tip="Show the pilots on this activity">
+                                <TextBlock Classes="caret" Classes.expanded="{Binding IsExpanded}" Text="&#x25B6;"/>
+                            </Button>
+                            <Button Classes="syncaction" Classes.retry="{Binding HasPublishFailure}" Margin="0,0,14,0"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                                    IsVisible="{Binding HasSyncAction}" Command="{Binding SyncActionCommand}"
+                                    ToolTip.Tip="{Binding SyncActionTooltip}">
+                                <ctl:IconGlyph Width="14" Height="14" Kind="{Binding SyncActionIcon}"/>
+                            </Button>
+                        </Panel>
+                    </Border>
+                </DataTemplate>
+
+                <!-- A pilot's own run under an unfolded activity: face and name, their own time and ISK, their own
+                     standing towards a server. Six pilots on one site are six of these under one row (ET-161 AC-5). -->
+                <DataTemplate DataType="vr:ActivityRunRowViewModel">
+                    <Button Classes="activityrow" Height="26" Command="{Binding Activity.OpenDetailCommand}"
+                            Background="{StaticResource BgRowBrush}">
+                        <Grid Margin="14,0" ColumnDefinitions="18,40,18,*,84,100,24" ColumnSpacing="8">
+                            <DockPanel Grid.Column="3">
+                                <ctl:HexPortrait DockPanel.Dock="Left" Size="14" VerticalAlignment="Center"
+                                                 Source="{Binding Face.Portrait}" Initial="{Binding Face.Initial}"/>
+                                <TextBlock DockPanel.Dock="Right" Classes="rowline" Margin="8,0,0,0"
+                                           TextTrimming="CharacterEllipsis" Text="{Binding StandingText}"/>
+                                <TextBlock Margin="6,0,0,0" FontSize="11" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{StaticResource TextBrush}" Text="{Binding CharacterText}"/>
+                            </DockPanel>
+                            <TextBlock Grid.Column="4" Classes="rowsmall" Text="{Binding DurationText}"
+                                       ToolTip.Tip="{Binding TimeSourceText}"/>
+                            <TextBlock Grid.Column="5" Classes="rowsmall" Foreground="{StaticResource TextBrightBrush}"
+                                       Text="{Binding IskText}"/>
+                            <ctl:IconGlyph Grid.Column="6" Classes="syncstate" Kind="{Binding SyncIcon}"
+                                           IsVisible="{Binding HasSyncIcon}" ToolTip.Tip="{Binding SyncText}"/>
+                        </Grid>
+                    </Button>
+                </DataTemplate>
+
+                <DataTemplate DataType="vr:RunsListNote">
+                    <TextBlock Classes="hint" Margin="102,4,14,6" Text="{Binding Text}"/>
+                </DataTemplate>
+            </Grid.DataTemplates>
+
+            <TextBlock x:Name="TabStatus" Grid.Row="0" Classes="hint" Margin="14,10" TextWrapping="Wrap"
                        IsVisible="{Binding SelectedTab.StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
                        Text="{Binding SelectedTab.StatusMessage}"/>
-            <ItemsControl x:Name="DayList" ItemsSource="{Binding SelectedTab.Days}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="vr:RunsDayViewModel">
-                        <StackPanel>
-                            <ToggleButton Classes="dayband" IsChecked="{Binding IsExpanded, Mode=TwoWay}"
-                                          ToolTip.Tip="Show or hide this day's activities">
-                                <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
-                                    <TextBlock Classes="caret" Classes.expanded="{Binding IsExpanded}" Text="&#x25B6;"/>
-                                    <TextBlock Grid.Column="1" Classes="daytitle" Text="{Binding DayText}"/>
-                                    <TextBlock Grid.Column="2" Classes="sectionsummary" Text="{Binding SummaryText}"/>
-                                </Grid>
-                            </ToggleButton>
-                            <ItemsControl ItemsSource="{Binding Rows}" IsVisible="{Binding IsExpanded}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="vr:ActivityOverviewRowViewModel">
-                                        <StackPanel>
-                                            <Grid ColumnDefinitions="Auto,*,Auto"
-                                                  Background="Transparent">
-                                                <Button Grid.Column="0" Classes="caretbtn"
-                                                        Command="{Binding ToggleCommand}"
-                                                        ToolTip.Tip="Show the runs behind this activity">
-                                                    <TextBlock Classes="caret" Classes.expanded="{Binding IsExpanded}"
-                                                               Text="&#x25B6;"/>
-                                                </Button>
-                                                <!-- Outside the row button, not inside it: the row opens the detail,
-                                                     and a publish that fired because someone aimed for the detail is
-                                                     exactly the click this data must not have. -->
-                                                <StackPanel Grid.Column="2" VerticalAlignment="Top" Margin="0,8,14,0"
-                                                            Spacing="4">
-                                                    <Button Classes="rowaction" Content="PUBLISH"
-                                                            IsVisible="{Binding CanPublish}"
-                                                            Command="{Binding PublishCommand}"
-                                                            ToolTip.Tip="Send this activity's runs to a coupled server"/>
-                                                    <!-- Only after an automatic publish failed: it tries again without
-                                                         asking, as the save that queued it did. -->
-                                                    <Button Classes="rowaction" Content="RETRY"
-                                                            IsVisible="{Binding HasPublishFailure}"
-                                                            Command="{Binding RetryPublishCommand}"
-                                                            ToolTip.Tip="{Binding PublishFailureText}"/>
-                                                </StackPanel>
-                                                <Button Grid.Column="1" Classes="activityrow"
-                                                        Command="{Binding OpenDetailCommand}">
-                                                    <StackPanel Spacing="3">
-                                                        <!-- The two figures the eye runs down a column for stay on
-                                                             the first line at every width; what explains them goes
-                                                             under it. -->
-                                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
-                                                            <TextBlock Classes="rowfigure dim" Text="{Binding TimeText}"/>
-                                                            <!-- Name and kind in one run of text, so the kind stays
-                                                                 against the name at every width instead of drifting
-                                                                 to the far side of a star column, and the two trim
-                                                                 together when the name is long. -->
-                                                            <TextBlock Grid.Column="1" Classes="rowsite"
-                                                                       TextTrimming="CharacterEllipsis">
-                                                                <Run Text="{Binding SiteText}"/>
-                                                                <Run Text="{Binding KindText}" FontSize="9.5"
-                                                                     Foreground="{StaticResource TextDimBrush}"/>
-                                                            </TextBlock>
-                                                            <TextBlock Grid.Column="2" Classes="rowfigure"
-                                                                       Text="{Binding DurationText}"/>
-                                                            <TextBlock Grid.Column="3" Classes="rowfigure"
-                                                                       IsVisible="{Binding HasNet}"
-                                                                       Text="{Binding NetText}"/>
-                                                            <!-- Never a "0 ISK" where nothing was captured: a zero
-                                                                 reads as a valuation that came out at nothing. -->
-                                                            <TextBlock Grid.Column="3" Classes="rowsub"
-                                                                       IsVisible="{Binding !HasNet}"
-                                                                       Text="{Binding NoNetText}"/>
-                                                        </Grid>
-                                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                                                            <TextBlock Classes="rowsub" Text="{Binding CrewText}"/>
-                                                            <!-- Only on a row nobody committed themselves: an
-                                                                 activity that was auto-saved a day after it stopped
-                                                                 must not read as one a pilot stood behind. -->
-                                                            <TextBlock Grid.Column="1" Classes="rowsub"
-                                                                       IsVisible="{Binding HasAutoSavedRun}"
-                                                                       Text="{Binding AutoSavedText}"/>
-                                                            <!-- A run knows where it stands towards a server, so the
-                                                                 row says it. A fit row has no such line because a fit
-                                                                 keeps no trace of having been shared. -->
-                                                            <TextBlock Grid.Column="1" Classes="rowsub"
-                                                                       Margin="0,0,64,0" HorizontalAlignment="Right"
-                                                                       IsVisible="{Binding HasSyncText}"
-                                                                       Text="{Binding SyncText}"/>
-                                                            <TextBlock Grid.Column="2" Classes="rowsub"
-                                                                       Text="{Binding EnemiesText}"/>
-                                                        </Grid>
-                                                        <!-- Wraps rather than truncates: the strip grows a line, it
-                                                             never drops a reward form. -->
-                                                        <ItemsControl ItemsSource="{Binding Chips}">
-                                                            <ItemsControl.ItemsPanel>
-                                                                <ItemsPanelTemplate>
-                                                                    <WrapPanel/>
-                                                                </ItemsPanelTemplate>
-                                                            </ItemsControl.ItemsPanel>
-                                                            <ItemsControl.ItemTemplate>
-                                                                <DataTemplate DataType="vr:ActivityRewardChipViewModel">
-                                                                    <Border Classes="chip" Margin="0,2,6,0"
-                                                                            Classes.dim="{Binding IsKnownKind}"
-                                                                            Classes.warn="{Binding IsUnknownKind}">
-                                                                        <TextBlock Text="{Binding Text}"/>
-                                                                    </Border>
-                                                                </DataTemplate>
-                                                            </ItemsControl.ItemTemplate>
-                                                        </ItemsControl>
-                                                    </StackPanel>
-                                                </Button>
-                                            </Grid>
-                                            <!-- The deelruns: six pilots on one site are six rows here and one row
-                                                 above, which is the whole of AC-5. -->
-                                            <Border Classes="sectionbody" IsVisible="{Binding IsExpanded}">
-                                                <StackPanel>
-                                                    <ItemsControl ItemsSource="{Binding SubRuns}">
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate DataType="vr:ActivityRunRowViewModel">
-                                                                <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto"
-                                                                      ColumnSpacing="10">
-                                                                    <StackPanel>
-                                                                        <TextBlock Text="{Binding CharacterText}"
-                                                                                   FontSize="11.5"
-                                                                                   Foreground="{StaticResource TextBrightBrush}"/>
-                                                                        <TextBlock Classes="rowsub"
-                                                                                   IsVisible="{Binding StandingText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                                                                   Text="{Binding StandingText}"/>
-                                                                    </StackPanel>
-                                                                    <TextBlock Grid.Column="1" Classes="rowsub"
-                                                                               Text="{Binding TimeSourceText}"/>
-                                                                    <TextBlock Grid.Column="2" Classes="rowfigure"
-                                                                               Text="{Binding DurationText}"/>
-                                                                </Grid>
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
-                                                    <TextBlock Classes="hint" Margin="0" TextWrapping="Wrap"
-                                                               IsVisible="{Binding SubRunsStatus, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                                               Text="{Binding SubRunsStatus}"/>
-                                                </StackPanel>
-                                            </Border>
-                                            <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </StackPanel>
-        </ScrollViewer>
+            <!-- Virtualised: a month of a thousand activities realises only the rows on screen. No selection
+                 behaviour yet — the row's own button takes the click (RO-2 makes a click select). -->
+            <ctl:RecyclingListBox x:Name="ActivityList" Grid.Row="1" Classes="runslist"
+                                  ItemsSource="{Binding SelectedTab.Items}"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ctl:RecyclingListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <VirtualizingStackPanel/>
+                    </ItemsPanelTemplate>
+                </ctl:RecyclingListBox.ItemsPanel>
+            </ctl:RecyclingListBox>
+            <!-- The day of the topmost row, pinned while its own header is scrolled away (RunsWindow.axaml.cs). -->
+            <Border x:Name="StickyDay" Grid.Row="1" VerticalAlignment="Top" IsVisible="False"
+                    Background="#FF0C100E">
+                <ContentControl x:Name="StickyDayContent"/>
+            </Border>
+        </Grid>
     </DockPanel>
 </v:ChromedWindow>

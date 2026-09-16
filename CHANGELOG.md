@@ -13,6 +13,17 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Changed: the runs overview is a compact list, and RUNNING is one line.** Every activity is one row — its start
+  time, the type's icon, the site with its type, solar system and rewards under it, the crew as a stack of portraits,
+  and ISK over the time flown — and pointing at a row or selecting it lights up the whole row. A homefront your
+  characters flew together unfolds into one line per pilot, each with their own ISK and time. Days still fold: only
+  the newest day opens, every other day keeps its totals (now with a small bar showing where the ISK came from), a day
+  you fold stays folded when a run lands on it, and the day you are scrolling through stays pinned at the top. Where
+  an activity stands towards a server is a small icon with a tooltip; PUBLISH or RETRY appears in its place when you
+  point at the row. RUNNING shows one line per running group — faces, site, type and one clock — and every character
+  with nothing running as a portrait: click one to open the start screen for just that character, or use START RUN for
+  several. The overview now reads the database in the background, so opening it or a run being saved no longer holds
+  up the app, and a month of hundreds of activities only builds the rows you can see.
 - **Fixed: MINING's "remaining in the site" figure now lands on 0 at the end of a full run, and is a progress bar.**
   A crit yield costs the asteroid nothing extra, but the figure subtracted it from the site's capacity anyway — once
   folded into the mined total, once more never given back — so a Metaliminal Meteoroid always read as depleted before
