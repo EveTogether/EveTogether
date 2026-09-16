@@ -14,7 +14,8 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// on it would take the whole row down and a silent <c>default</c> would drop a reward the pilot really earned —
 /// both are what ET-161 AC-3 forbids, and both are what a closed <c>switch</c> over a growing enum ends up doing.
 /// </summary>
-public sealed class ActivityRewardChipViewModel(RunParameterKey key, decimal? amount, bool isExpected = false)
+public sealed class ActivityRewardChipViewModel(
+    RunParameterKey key, decimal? amount, string? typedValue = null, DateTime? expiresAtUtc = null, bool isExpected = false)
 {
     /// <summary>Whether the key came from outside what this screen was taught. Drives the chip's tint, so an
     /// unnamed form is visibly set apart instead of passing for a known one.</summary>
@@ -27,9 +28,24 @@ public sealed class ActivityRewardChipViewModel(RunParameterKey key, decimal? am
     /// is built from the confirmed amount instead.</summary>
     public bool IsExpected { get; } = isExpected;
 
-    public string Text { get; } = amount is { } value
-        ? $"{_Figure(key, value)} {_Label(key)}" + (isExpected ? " (expected)" : string.Empty)
-        : _Label(key);
+    /// <summary>Drives the value-coloured <c>.chip.esc</c> style (ET-289): an escalation is a site handed to the
+    /// pilot, not a figure — its own tint apart from the plain accent every other known chip uses.</summary>
+    public bool IsEscalation { get; } = key == RunParameterKey.Escalation;
+
+    public string Text { get; } = key == RunParameterKey.Escalation
+        // The destination site's own name (ET-289) — never the raw key, and never "ESCALATION" once a site is
+        // known: the mockup's own wording, "→ Sansha's Command Relay Outpost", is what tells one escalation from
+        // another at a glance, which the bare label never did.
+        ? $"→ {(!string.IsNullOrWhiteSpace(typedValue) ? typedValue : "escalation")}"
+        : amount is { } value
+            ? $"{_Figure(key, value)} {_Label(key)}" + (isExpected ? " (expected)" : string.Empty)
+            : _Label(key);
+
+    /// <summary>The escalation's expiry, in the reader's own time zone — there is no room on the chip itself, so it
+    /// is on hover (ET-289).</summary>
+    public string? Tooltip { get; } = key == RunParameterKey.Escalation && expiresAtUtc is { } expires
+        ? $"Expires {expires.ToLocalTime():HH:mm} on {expires.ToLocalTime():d MMM}"
+        : null;
 
     private static string _Label(RunParameterKey key) => key switch
     {
@@ -46,7 +62,6 @@ public sealed class ActivityRewardChipViewModel(RunParameterKey key, decimal? am
         RunParameterKey.Loot => "LOOT",
         RunParameterKey.Standings => "STANDINGS",
         RunParameterKey.Filament => "FILAMENT",
-        RunParameterKey.Escalation => "ESCALATION",
         // A member added after this screen was written still names itself; a value that is in no enum at all says
         // which one it was, because "KIND 41" is answerable and a dropped chip is not.
         _ => Enum.IsDefined(key) ? key.ToString().ToUpperInvariant() : $"KIND {(int)key}"

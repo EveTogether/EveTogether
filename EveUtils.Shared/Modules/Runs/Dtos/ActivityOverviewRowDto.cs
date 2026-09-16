@@ -5,8 +5,14 @@ namespace EveUtils.Shared.Modules.Runs.Dtos;
 
 /// <summary>One reward figure by kind, summed across the activity's runs. Never collapsed into a single ISK total:
 /// <see cref="RunParameterKey"/> keeps growing and some of its members (LP, Evermarks) have no ISK rate to convert
-/// against. Null when none of the underlying rows carried an amount (e.g. a bare <c>Escalation</c> observation).</summary>
-public sealed record ActivityRewardDto(RunParameterKey ParameterKey, decimal? Amount);
+/// against. Null when none of the underlying rows carried an amount (e.g. a bare <c>Escalation</c> observation).
+///
+/// <see cref="TypedValue"/> and <see cref="ExpiresAtUtc"/> carry an <c>Escalation</c> chip's own destination site
+/// (its own <c>TypedValue</c>) and its sibling <c>EscalationExpiresAtUtc</c> row's value (ET-289) — the accounting
+/// keys an escalation is written alongside (<c>EscalationDungeonId</c>, <c>EscalationSystem</c>,
+/// <c>EscalationSolarSystemId</c>, <c>EscalationExpiresAtUtc</c>) never become rewards of their own. Null for every
+/// other kind.</summary>
+public sealed record ActivityRewardDto(RunParameterKey ParameterKey, decimal? Amount, string? TypedValue = null, DateTime? ExpiresAtUtc = null);
 
 /// <summary>Where one activity stands towards one server. <see cref="IsPending"/> is true while any of its runs is
 /// still queued for that server. <see cref="IsOutdated"/> is true when one of its runs had its loot corrected after

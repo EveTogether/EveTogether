@@ -1,3 +1,4 @@
+using System.Globalization;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
@@ -141,9 +142,21 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
         // ET-260: every own toon's run under one mission group used to carry an identical copy of the same reward
         // line (fixed at the source now, and swept once for activities saved before that fix) — Distinct still
         // guards this chip against reading double for a group this repair has not reached yet.
+        //
+        // The escalation's own accounting keys (ET-289) never become chips of their own — a raw ESCALATIONDUNGEONID
+        // or ESCALATIONSYSTEM chip names nothing a pilot earned, only bookkeeping the Escalation chip below already
+        // carries the one useful fact of (the destination site, on its own TypedValue; the expiry, read separately
+        // below). MissionLocation is the same kind of bookkeeping, for a mission's own detail screen only.
         RunParameter[] rewards = [.. all.Where(parameter => parameter.ParameterKey is not (
-            RunParameterKey.AbyssalFilament or RunParameterKey.AbyssalFilamentTypeId or RunParameterKey.AbyssalFilamentCount))
+            RunParameterKey.AbyssalFilament or RunParameterKey.AbyssalFilamentTypeId or RunParameterKey.AbyssalFilamentCount
+            or RunParameterKey.EscalationDungeonId or RunParameterKey.EscalationSystem or RunParameterKey.EscalationSolarSystemId
+            or RunParameterKey.EscalationExpiresAtUtc or RunParameterKey.MissionLocation))
             .DistinctBy(parameter => (parameter.ParameterKey, parameter.TypedValue, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))];
+        DateTime? escalationExpiresAtUtc = all
+            .FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.EscalationExpiresAtUtc)?.TypedValue is { } expiresAt
+            && DateTime.TryParse(expiresAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTime expiresAtUtc)
+                ? expiresAtUtc
+                : null;
         ActivityCrewMemberDto[] members = [.. flewIt.GroupBy(member => member.CharacterId)
             .Select(group => new ActivityCrewMemberDto(
                 group.Key,
@@ -155,7 +168,11 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             summary.StartedAtUtc, summary.DurationSeconds, summary.RunsIncluded, summary.ParticipantCount,
             members,
             [.. rewards.GroupBy(reward => reward.ParameterKey)
-                .Select(group => new ActivityRewardDto(group.Key, _SumOrNull(group.Select(reward => reward.Amount))))],
+                .Select(group => new ActivityRewardDto(group.Key, _SumOrNull(group.Select(reward => reward.Amount)),
+                    group.Key == RunParameterKey.Escalation
+                        ? group.Select(reward => reward.TypedValue).FirstOrDefault(value => !string.IsNullOrEmpty(value))
+                        : null,
+                    group.Key == RunParameterKey.Escalation ? escalationExpiresAtUtc : null))],
             summary.BountyIsk, summary.LootIskNet, summary.EnemyTypeCount,
             rewards.Any(reward => reward.ParameterKey == RunParameterKey.Escalation),
             hasAutoSavedRun,

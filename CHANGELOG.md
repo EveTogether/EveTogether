@@ -13,6 +13,10 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: an escalation on the runs list now shows the site it leads to, not four raw internal names.** An
+  escalated activity used to carry ESCALATIONDUNGEONID, ESCALATIONSYSTEM, ESCALATIONSOLARSYSTEMID and
+  ESCALATIONEXPIRESATUTC as their own chips alongside a bare "ESCALATION". It is now one chip, "→ <the site's own
+  name>", with the expiry in local time on hover.
 - **Added: publish a whole day, or everything the runs list currently shows, in one go.** A day header with local
   activities on it now shows "n local ↑" — click it and, after one confirmation naming what travels, every local
   activity that day is queued and sent in a single synchronise per character. PUBLISH n LOCAL on the range line does
