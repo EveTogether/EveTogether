@@ -467,7 +467,14 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
         && _source.Crew.SequenceEqual(row.Crew)
         && _source.Rewards.SequenceEqual(row.Rewards)
         && _source.ServerSyncStates.SequenceEqual(row.ServerSyncStates)
-        && _source.OtherEarners.SequenceEqual(row.OtherEarners);
+        && _source.OtherEarners.SequenceEqual(row.OtherEarners)
+        && _SameSplit(_source.OwnIskByCharacter, row.OwnIskByCharacter);
+
+    private static bool _SameSplit(IReadOnlyDictionary<long, IskBreakdown>? first, IReadOnlyDictionary<long, IskBreakdown>? second) =>
+        first is null || second is null
+            ? first is null && second is null
+            : first.Count == second.Count
+              && first.All(pair => second.TryGetValue(pair.Key, out IskBreakdown? other) && pair.Value.Equals(other));
 
     /// <summary>Takes over from the row this one replaces on a refresh: open stays open, with its runs read again
     /// rather than left showing the figures that made the old row out of date.</summary>
@@ -487,7 +494,8 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
         ServerSyncStates = Array.Empty<ActivityServerSyncDto>(),
         // A list compares by reference on a record, and every read builds a new one — left in, no row would ever
         // be held onto across a refresh (ET-222), and the whole list would be rebuilt on every tick (ET-287).
-        OtherEarners = Array.Empty<ActivityCrewMemberDto>()
+        OtherEarners = Array.Empty<ActivityCrewMemberDto>(),
+        OwnIskByCharacter = null
     };
 
     /// <summary>TYPE, from the same catalogue every other run list reads (ET-226) — "Data Site", "Mission run", …,
