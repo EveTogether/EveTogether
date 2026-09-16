@@ -41,6 +41,8 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     private readonly Func<ActivityOverviewRowViewModel, Task>? _retryPublish;
     private readonly ActivityOverviewRowDto _source;
     private readonly RunPublishProgress? _publishProgress;
+    private readonly string[] _otherEarnerNames;
+    private readonly string _groupNetText;
     private bool _subRunsLoaded;
 
     /// <param name="serverNameOf">A server's name as its tab shows it; the bare address when null.</param>
@@ -113,6 +115,19 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         NetText = NetIsk is { } net
             ? (net < 0 ? string.Empty : "+") + IskFormat.Compact(net) + " ISK" + IskFormat.ExpectedPart(row.OwnIsk)
             : string.Empty;
+        // He flew it himself and recorded nothing on it, while the activity was valued all the same: every figure of
+        // it sits on a fleet mate's run. Measured on his own store (11 Sep 2026): five abyssal duos whose loot his
+        // mate pasted, every one of which used to read "nothing valued" — which says nobody could price it, where
+        // the truth is that it was priced and the money is someone else's.
+        IsRecordedOnFleetMate = row.IsFlownByOwnCharacter && !row.OwnIsk.HasFigure && row.Isk.HasFigure;
+        // Only a mate whose own run recorded a name (ET-212) is named: a bare character id reads worse in a money
+        // tooltip than the plain "a fleet mate's run" it falls back to.
+        _otherEarnerNames = IsRecordedOnFleetMate
+            ? [.. row.OtherEarners
+                .Where(member => !string.IsNullOrWhiteSpace(member.CharacterNameSnapshot))
+                .Select(member => CharacterNameResolver.Resolve(member.CharacterNameSnapshot, member.CharacterId, nameOf))]
+            : [];
+        _groupNetText = IskFormat.Compact(row.Isk.Total) + " ISK";
 
         // Snapshot first, then the live roster, then the bare id (ET-212, ET-247) — the exact chain the expanded
         // row already follows, so this line and that one can never name the same pilot two different ways.
@@ -188,6 +203,10 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     /// <summary>Whether any of this machine's own characters flew it — false on a row a server tab holds for a
     /// group this pilot has no run in, and on one whose character has been taken out of the registry.</summary>
     public bool IsFlownByOwnCharacter { get; }
+
+    /// <summary>He flew it, his own run records nothing of value, and the activity was valued all the same: the
+    /// proceeds are booked on a fleet mate's run (ET-296).</summary>
+    public bool IsRecordedOnFleetMate { get; }
 
     public string TimeText { get; }
     public string SiteText { get; }
@@ -316,15 +335,24 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
 
     /// <summary>What stands where the ISK would be when nothing on the activity was valued. Never a "0 ISK": a zero
     /// here reads as a valuation that was taken and came out at nothing (ET-161 AC-4, ET-65 AC-7). Not "no loot or
-    /// bounty" any more — since ET-256 ISK also counts rewards and payouts. A dash where none of this pilot's own
-    /// characters flew it (ET-296): there is nothing of his to value, which is not the same as nothing having been
-    /// valued, and the group's total is one click away on the detail.</summary>
-    public string NoNetText => IsFlownByOwnCharacter ? "nothing valued" : "—";
+    /// bounty" any more — since ET-256 ISK also counts rewards and payouts. Three different silences, told apart
+    /// (ET-296): a dash where none of this pilot's own characters flew it, "on a fleet mate's run" where he flew it
+    /// but every figure of it was recorded on somebody else's run, and only otherwise the plain "nothing valued".</summary>
+    public string NoNetText =>
+        !IsFlownByOwnCharacter ? "—"
+        : IsRecordedOnFleetMate ? "on a fleet mate's run"
+        : "nothing valued";
 
-    /// <summary>Why the dash, where the figure would be — said on hover rather than on the row, which has no room
-    /// for it. Null while the row is simply unvalued, which <see cref="NoNetText"/> already says in words.</summary>
+    /// <summary>The figure and, where the runs recorded a name, whose run it sits on — said on hover, since the ISK
+    /// column has no room for it. Null on a plain unvalued row, which <see cref="NoNetText"/> already says in
+    /// words.</summary>
     public string? NoNetTooltip =>
-        IsFlownByOwnCharacter ? null : "none of your characters flew this — the group total is in the detail";
+        !IsFlownByOwnCharacter ? "none of your characters flew this — the group total is in the detail"
+        : !IsRecordedOnFleetMate ? null
+        : _otherEarnerNames.Length == 0
+            ? $"{_groupNetText} recorded on a fleet mate's run"
+            : $"{_groupNetText} recorded on {string.Join(" and ", _otherEarnerNames)}'s "
+              + (_otherEarnerNames.Length == 1 ? "run" : "runs");
 
     public ObservableCollection<ActivityRewardChipViewModel> Chips { get; }
 
@@ -389,7 +417,8 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
         && _WithoutLists(_source) == _WithoutLists(row)
         && _source.Crew.SequenceEqual(row.Crew)
         && _source.Rewards.SequenceEqual(row.Rewards)
-        && _source.ServerSyncStates.SequenceEqual(row.ServerSyncStates);
+        && _source.ServerSyncStates.SequenceEqual(row.ServerSyncStates)
+        && _source.OtherEarners.SequenceEqual(row.OtherEarners);
 
     /// <summary>Takes over from the row this one replaces on a refresh: open stays open, with its runs read again
     /// rather than left showing the figures that made the old row out of date.</summary>
@@ -406,7 +435,10 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase
     {
         Crew = Array.Empty<ActivityCrewMemberDto>(),
         Rewards = Array.Empty<ActivityRewardDto>(),
-        ServerSyncStates = Array.Empty<ActivityServerSyncDto>()
+        ServerSyncStates = Array.Empty<ActivityServerSyncDto>(),
+        // A list compares by reference on a record, and every read builds a new one — left in, no row would ever
+        // be held onto across a refresh (ET-222), and the whole list would be rebuilt on every tick (ET-287).
+        OtherEarners = Array.Empty<ActivityCrewMemberDto>()
     };
 
     /// <summary>TYPE, from the same catalogue every other run list reads (ET-226) — "Data Site", "Mission run", …,

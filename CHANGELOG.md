@@ -19,8 +19,9 @@ taken from the matching `## vX.Y.Z` section below.
   your own characters made: their bounty, their mining, their payout, and the loot on their own runs, whole and
   unsplit. What the rest of the fleet made is still there, on the activity's detail screen, whose TOTAL ISK stays the
   group's and now says "your share" under it; FLEET goes on listing every pilot. A row none of your characters flew —
-  one on a server tab — reads a dash with the reason on hover instead of somebody else's money. Every saved activity
-  is added up once more at the next start to fill this in.
+  one on a server tab — reads a dash with the reason on hover instead of somebody else's money, and a run you flew
+  yourself whose proceeds were all recorded on a fleet mate's run says "on a fleet mate's run", with the amount and
+  whose run it is on hover. Every saved activity is added up once more at the next start to fill this in.
 - **Changed: the runs overview is a compact list, and RUNNING is one line.** Every activity is one row — its start
   time, the type's icon, the site with its type, solar system and rewards under it, the crew as a stack of portraits,
   and ISK over the time flown — and pointing at a row or selecting it lights up the whole row. A homefront your

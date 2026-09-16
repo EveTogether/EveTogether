@@ -71,6 +71,11 @@ public sealed record ActivityOverviewRowDto(
     /// server tab holds it, or because a character was taken out of the registry — its <see cref="OwnIsk"/> is empty
     /// for a reason worth saying, rather than because nothing on it could be valued.</summary>
     bool IsFlownByOwnCharacter,
+    /// <summary>The fleet mates whose own runs carry a figure — everyone outside this machine's characters with a
+    /// share of their own. What lets a row this pilot flew himself, but recorded nothing on, say where the money
+    /// actually went instead of passing for unvalued: an abyssal duo where his mate pasted every loot capture
+    /// (measured on his own store, 11 Sep 2026). Empty when the caller named no characters of its own.</summary>
+    IReadOnlyList<ActivityCrewMemberDto> OtherEarners,
     /// <summary>The abyssal pocket's own stored tier and weather (ET-241), raw as <c>RunParameterKey.AbyssalFilament</c>
     /// wrote it — null on every non-abyssal activity, and on an abyssal saved before this ticket. Not a member of
     /// <see cref="Rewards"/>: it names what the run was, it is not something the pilot earned. Read into a name (e.g.

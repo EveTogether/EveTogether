@@ -112,6 +112,20 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             .Select(character => character.Value));
     }
 
+    /// <summary>The fleet mates who took something out of this activity — read off the same stored split the own
+    /// share is, so a row whose value all sits on somebody else's run can name them rather than read unvalued.</summary>
+    private static IReadOnlyList<ActivityCrewMemberDto> _OtherEarnersOf(
+        ActivitySummary summary, IReadOnlySet<long>? ownCharacterIds, IReadOnlyList<ActivityCrewMemberDto> crew)
+    {
+        if (ownCharacterIds is null || StoredIskBreakdown.ReadByCharacter(summary.IskContributionsByCharacter) is not { } byCharacter)
+            return [];
+
+        HashSet<long> earners = [.. byCharacter
+            .Where(character => !ownCharacterIds.Contains(character.Key) && character.Value.HasFigure)
+            .Select(character => character.Key)];
+        return [.. crew.Where(member => earners.Contains(member.CharacterId))];
+    }
+
     private static ActivityOverviewRowDto _ToDto(
         ActivitySummary summary, IEnumerable<RunParameter> rewardRows,
         IEnumerable<(long CharacterId, string? CharacterNameSnapshot)> crew, bool hasAutoSavedRun,
@@ -130,15 +144,16 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
         RunParameter[] rewards = [.. all.Where(parameter => parameter.ParameterKey is not (
             RunParameterKey.AbyssalFilament or RunParameterKey.AbyssalFilamentTypeId or RunParameterKey.AbyssalFilamentCount))
             .DistinctBy(parameter => (parameter.ParameterKey, parameter.TypedValue, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))];
+        ActivityCrewMemberDto[] members = [.. flewIt.GroupBy(member => member.CharacterId)
+            .Select(group => new ActivityCrewMemberDto(
+                group.Key,
+                group.Select(member => member.CharacterNameSnapshot).FirstOrDefault(name => !string.IsNullOrEmpty(name))))
+            .OrderBy(member => member.CharacterId)];
         return new ActivityOverviewRowDto(
             summary.Id, summary.GroupCode, summary.RunId, summary.ActivityKind, summary.SiteName,
             summary.SignatureGroupSnapshot, summary.SiteTypeId, summary.SolarSystemId,
             summary.StartedAtUtc, summary.DurationSeconds, summary.RunsIncluded, summary.ParticipantCount,
-            [.. flewIt.GroupBy(member => member.CharacterId)
-                .Select(group => new ActivityCrewMemberDto(
-                    group.Key,
-                    group.Select(member => member.CharacterNameSnapshot).FirstOrDefault(name => !string.IsNullOrEmpty(name))))
-                .OrderBy(member => member.CharacterId)],
+            members,
             [.. rewards.GroupBy(reward => reward.ParameterKey)
                 .Select(group => new ActivityRewardDto(group.Key, _SumOrNull(group.Select(reward => reward.Amount))))],
             summary.BountyIsk, summary.LootIskNet, summary.EnemyTypeCount,
@@ -148,6 +163,7 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             StoredIskBreakdown.Read(summary.IskContributions),
             _OwnShareOf(summary, ownCharacterIds),
             ownCharacterIds is null || flewIt.Any(member => ownCharacterIds.Contains(member.CharacterId)),
+            _OtherEarnersOf(summary, ownCharacterIds, members),
             abyssalFilamentText);
     }
 

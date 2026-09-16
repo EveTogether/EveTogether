@@ -234,6 +234,55 @@ public sealed class RunOwnShareTests
         Assert.Equal("nothing recorded to value", RunsActivitySummaryText.NetFor([screenRow]));
     }
 
+    /// <summary>Three silences on the ISK column, told apart. Measured on Jithran's own store (11 Sep 2026): five
+    /// abyssal duos whose loot his mate pasted read "nothing valued" — which says nobody could price it, where the
+    /// truth is that it was priced at 47M and the money is somebody else's. Counter-proof: one rule for all three
+    /// makes any two of these assertions collide.</summary>
+    [AvaloniaFact]
+    public async Task TheThreeSilencesOnTheIskColumn_SayDifferentThings()
+    {
+        using TestClientInstance instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await _RegisterAsync(instance, A);
+        await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
+            [new LocalMarketPrice { TypeId = Tritanium, AveragePrice = 1, AdjustedPrice = 1, UpdatedAt = DateTimeOffset.UtcNow }]);
+
+        // 1. He flew it and pasted nothing; his mate pasted all of it.
+        await _SaveOwnRunAsync(dispatcher, A, StartedAtUtc, groupCode: "AB-DUO");
+        await instance.Services.GetRequiredService<RunSynchronizationApplier>().ApplyAsync(ServerAddress,
+            [_MatesRun(D, bounty: 0m, loot: 2_000_000, groupCode: "AB-DUO", name: "RaymondKrah")], new HashSet<Guid>());
+        // 2. He flew it alone and there was nothing on it to value.
+        await _SaveOwnRunAsync(dispatcher, A, StartedAtUtc.AddHours(1), groupCode: "AB-EMPTY");
+        // 3. A group he has no run in at all, the way a server tab holds one.
+        await instance.Services.GetRequiredService<RunSynchronizationApplier>().ApplyAsync(ServerAddress,
+            [_MatesRun(E, bounty: 750_000m, groupCode: "AB-THEIRS", name: "Kav Orn")], new HashSet<Guid>());
+        await dispatcher.Send(new RebuildActivitySummariesCommand());
+
+        Dictionary<string, ActivityOverviewRowViewModel> rows = (await _RowsAsync(instance, A))
+            .ToDictionary(row => row.GroupCode!, row => _RowViewModel(row));
+
+        ActivityOverviewRowViewModel onAMatesRun = rows["AB-DUO"];
+        Assert.False(onAMatesRun.HasNet);
+        Assert.True(onAMatesRun.IsRecordedOnFleetMate);
+        Assert.Equal("on a fleet mate's run", onAMatesRun.NoNetText);
+        // 15M payout for the one character ticked into the site, plus the 2M he pasted — all of it his, none of it mine.
+        Assert.Equal("17M ISK recorded on RaymondKrah's run", onAMatesRun.NoNetTooltip);
+
+        ActivityOverviewRowViewModel nothingThere = rows["AB-EMPTY"];
+        Assert.False(nothingThere.IsRecordedOnFleetMate);
+        Assert.Equal("nothing valued", nothingThere.NoNetText);
+        Assert.Null(nothingThere.NoNetTooltip);
+
+        ActivityOverviewRowViewModel notHis = rows["AB-THEIRS"];
+        Assert.False(notHis.IsFlownByOwnCharacter);
+        Assert.False(notHis.IsRecordedOnFleetMate);
+        Assert.Equal("—", notHis.NoNetText);
+        Assert.Equal("none of your characters flew this — the group total is in the detail", notHis.NoNetTooltip);
+
+        // None of the three adds anything to the day around them.
+        Assert.Equal("nothing recorded to value", RunsActivitySummaryText.NetFor([.. rows.Values]));
+    }
+
     // ── The fixture ─────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>The ticket's worked example. A, B and C are this machine's own; D and E come in over server sync, as
@@ -267,10 +316,11 @@ public sealed class RunOwnShareTests
     }
 
     private static async Task _SaveOwnRunAsync(IDispatcher dispatcher, long characterId, DateTime startedAtUtc,
-        decimal bounty = 0m, long? loot = null, IReadOnlyList<RunParameterInput>? parameters = null)
+        decimal bounty = 0m, long? loot = null, IReadOnlyList<RunParameterInput>? parameters = null,
+        string? groupCode = null)
     {
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site, startedAtUtc,
-            RaidDungeonId, "Raid: Hall of Sacrifice", 30000142, GroupCode));
+            RaidDungeonId, "Raid: Hall of Sacrifice", 30000142, groupCode ?? GroupCode));
         await dispatcher.Send(new SaveRunCommand(_Value(started), startedAtUtc.AddMinutes(20), startedAtUtc.AddMinutes(21),
             loot is { } quantity ? [_Capture(quantity)] : [],
             bounty > 0m ? [new RunBountyEntryInput { OccurredAtUtc = startedAtUtc.AddMinutes(5), Isk = bounty }] : [],
@@ -279,14 +329,15 @@ public sealed class RunOwnShareTests
 
     /// <summary>A group mate's run as server sync hands it over: their own character id, their own bounty and loot,
     /// and the same homefront facts every run of the site carries.</summary>
-    private static RunWirePayload _MatesRun(long characterId, decimal bounty, long? loot = null)
+    private static RunWirePayload _MatesRun(long characterId, decimal bounty, long? loot = null,
+        string? groupCode = null, string? name = null)
     {
         Run run = new()
         {
-            Id = Guid.CreateVersion7(), CharacterId = characterId, GroupCode = GroupCode, ActivityKind = ActivityKind.Site,
+            Id = Guid.CreateVersion7(), CharacterId = characterId, GroupCode = groupCode ?? GroupCode, ActivityKind = ActivityKind.Site,
             State = RunState.Saved, StartedAtUtc = StartedAtUtc, StoppedAtUtc = StartedAtUtc.AddMinutes(20),
             SavedAtUtc = StartedAtUtc.AddMinutes(21), SiteTypeId = RaidDungeonId, SiteName = "Raid: Hall of Sacrifice",
-            SolarSystemId = 30000142, InSiteAtCompletion = true, AttendanceCount = 5,
+            SolarSystemId = 30000142, InSiteAtCompletion = true, AttendanceCount = 5, CharacterNameSnapshot = name,
             HomefrontOutcome = HomefrontOutcome.Completed, IsPayoutEligible = true, Revision = 1
         };
         run.BountyEntries.Add(new RunBountyEntry
@@ -329,8 +380,12 @@ public sealed class RunOwnShareTests
     }
 
     private static async Task<ActivityOverviewRowDto> _RowAsync(TestClientInstance instance, params long[] ownCharacterIds) =>
-        Assert.Single(_Value(await instance.Services.GetRequiredService<IDispatcher>()
-            .Query(new GetActivityOverviewQuery(OwnCharacterIds: ownCharacterIds))));
+        Assert.Single(await _RowsAsync(instance, ownCharacterIds));
+
+    private static async Task<IReadOnlyList<ActivityOverviewRowDto>> _RowsAsync(
+        TestClientInstance instance, params long[] ownCharacterIds) =>
+        _Value(await instance.Services.GetRequiredService<IDispatcher>()
+            .Query(new GetActivityOverviewQuery(OwnCharacterIds: ownCharacterIds)));
 
     private static ActivityOverviewRowViewModel _RowViewModel(ActivityOverviewRowDto row) =>
         new(row, id => $"character {id}", _ => Task.CompletedTask, _ => Task.CompletedTask);
