@@ -13,6 +13,15 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Added: the run you click now reads out beside the list, instead of taking over the screen.** On a wide runs
+  window it opens in a panel down the right-hand side: the site and when and where you flew it, the ISK written out
+  in full and split by where it came from, every pilot on it with their own time and their own share, the enemy count
+  and the loot. On a narrow window the same panel slides in from the right over the list, which dims behind it — close
+  it with ✕, with Esc, or by clicking the list you can still see. Up and down arrow step through the runs with the
+  panel following along, skipping the pilot lines under an unfolded run and stepping over a folded day without
+  unfolding it; folding the day a selected run is in leaves the panel showing it. A single click no longer opens the
+  full detail screen — that is a double-click, ↵, or OPEN DETAIL at the bottom of the panel, which is also where
+  PUBLISH and RETRY now live instead of the small button that used to appear at the end of a row on hover.
 - **Added: a "Week starts on" setting, Monday or Sunday.** In Settings → Interface, right under TOAST
   NOTIFICATIONS. It defaults to whatever your Windows/system region already uses (Monday for a Dutch-region
   computer) — leave it alone and nothing changes. Choosing the other one and saving takes effect at once, no
