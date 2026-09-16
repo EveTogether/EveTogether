@@ -98,6 +98,11 @@ public sealed partial class RunsTabViewModel(string header, string? serverAddres
         RebuildItems();
     }
 
+    /// <summary>Raised once the flat sequence is whole again, never per change inside a rebuild (ET-291): the screen's
+    /// own selection is settled against it, and a <c>ListBox</c> half way through a reconcile still moves its
+    /// <c>SelectedItem</c> around on its own.</summary>
+    public event Action<RunsTabViewModel>? ItemsRebuilt;
+
     /// <summary>Brings <see cref="Items"/> in line with what is folded and unfolded right now.</summary>
     public void RebuildItems()
     {
@@ -121,6 +126,7 @@ public sealed partial class RunsTabViewModel(string header, string? serverAddres
         }
 
         Items.ReconcileTo(items);
+        ItemsRebuilt?.Invoke(this);
     }
 
     /// <summary>Unfolds one day and leaves every other as the reader set it — for the activity strip (RO-3), which

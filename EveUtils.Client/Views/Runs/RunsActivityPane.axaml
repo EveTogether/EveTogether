@@ -1,0 +1,344 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:ctl="using:EveUtils.Client.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="720"
+             x:Class="EveUtils.Client.Views.Runs.RunsActivityPane"
+             x:DataType="vr:RunsActivityPaneViewModel">
+
+    <!-- The selected run, read out (ET-291). The same control in both hosts: the 400 px column beside the list at
+         1303, and the 430 px drawer over the list at 758. Its own styles rather than the runs screen's, since it is
+         also handed to a drawer that is not inside that screen's list. -->
+    <UserControl.Styles>
+        <!-- Secondary ink on an OPAQUE surface. TextDimBrush is 4.69:1 on #0C100E in theory and 4.2–4.4 measured off
+             a render, because the labels here are 9–10 px and an antialiased glyph that small never reaches its own
+             colour. This one is 6.6:1 nominal, which leaves the room the antialiasing takes on the banded crew rows too and still reads a clear
+             step below TextBrush. Local to the pane: the same ink over the app's translucent panels would be too
+             bright, and this surface is the only opaque one (ET-291). -->
+        <Style Selector="TextBlock.pk, TextBlock.pth, TextBlock.plocal, TextBlock.pherononne">
+            <Setter Property="Foreground">
+                <SolidColorBrush Color="#FFA0958A"/>
+            </Setter>
+        </Style>
+        <!-- The pane's own sections re-use the app's label and hint, on a surface neither was measured against. -->
+        <Style Selector="TextBlock.label">
+            <Setter Property="Foreground">
+                <SolidColorBrush Color="#FFA0958A"/>
+            </Setter>
+        </Style>
+        <Style Selector="TextBlock.hint">
+            <Setter Property="Foreground">
+                <SolidColorBrush Color="#FFA0958A"/>
+            </Setter>
+        </Style>
+        <!-- PUBLISH, outlined rather than filled — the mockup's own .btn.primary. The app's Classes="accent" lands on
+             Fluent's built-in accent-button theme, whose white-on-accent fill measured 2.0:1 on Amarr and 3.0 on
+             Caldari against the 4.5 this ticket owes. -->
+        <Style Selector="Button.paneprimary">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.paneprimary:pointerover /template/ ContentPresenter, Button.paneprimary:focus-visible /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.pk">
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="LetterSpacing" Value="1.4"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.ptitle">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="TextBlock.pmeta">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <!-- The one big figure, the same weight the run window gives its clock. -->
+        <Style Selector="TextBlock.phero">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="TextBlock.pherononne">
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+        <Style Selector="TextBlock.pdur">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+        </Style>
+        <Style Selector="Border.psec">
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="0,8,0,10"/>
+        </Style>
+        <Style Selector="TextBlock.psum">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <!-- Source line: its name on the left, its whole figure on the right, both readable on the drawer's opaque
+             surface (4.7:1 for the dim ink on #0C100E). -->
+        <Style Selector="TextBlock.pkvk">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="TextBlock.pkvv">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <!-- CREW table: banded, and lifting to the row hover fill under the pointer. Both fills keep the mono ink
+             above 4.5:1 — they are 4 % and 6 % whites over an opaque surface, not a second background. -->
+        <Style Selector="TextBlock.pth">
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="LetterSpacing" Value="1.2"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.ptd">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.ptname">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.ptrow">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Height" Value="22"/>
+        </Style>
+        <Style Selector="Border.ptrow.alt">
+            <Setter Property="Background" Value="{StaticResource BgRowAltBrush}"/>
+        </Style>
+        <Style Selector="Border.ptrow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.plocal">
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Panel>
+        <!-- Nothing picked, on the wide layout. A placeholder for RO-5's own summary, never an empty rectangle: the
+             reader has to be told the space is waiting for a click. -->
+        <StackPanel x:Name="PaneEmpty" Margin="14" Spacing="2" VerticalAlignment="Top"
+                    IsVisible="{Binding !HasActivity}">
+            <TextBlock Classes="label" Text="{Binding EmptyLineText}"/>
+            <TextBlock Classes="hint" Margin="0,4,0,0" Text="{Binding EmptyHint}"/>
+        </StackPanel>
+
+        <DockPanel x:Name="PaneBody" IsVisible="{Binding HasActivity}">
+
+            <!-- ══ Actions ══ pinned under the pane rather than scrolled past: PUBLISH is why a pilot came here.
+                 Two explicit columns (ET-285), so OPEN DETAIL sits at the right edge whether or not PUBLISH is
+                 there at all. -->
+            <Border x:Name="PaneActions" DockPanel.Dock="Bottom" Padding="14,10" BorderThickness="0,1,0,0"
+                    BorderBrush="{DynamicResource BorderBrush}" Background="{StaticResource BgPanelBrush}">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                        <Button x:Name="PanePublish" Classes="paneprimary rowaction"
+                                IsVisible="{Binding Row.CanPublishNow}"
+                                Command="{Binding Row.PublishCommand}"
+                                Content="{Binding PublishText}"
+                                ToolTip.Tip="Publish this activity to a coupled server"/>
+                        <!-- RETRY stands beside PUBLISH rather than in its place: an automatic publish that failed
+                             (ET-245) is a different act from publishing by hand, and it is the one with a reason
+                             on it. -->
+                        <Button x:Name="PaneRetry" Classes="danger rowaction" Content="RETRY"
+                                IsVisible="{Binding Row.HasPublishFailure}"
+                                Command="{Binding Row.RetryPublishCommand}"
+                                ToolTip.Tip="{Binding Row.RetryTooltip}"/>
+                    </StackPanel>
+                    <Button x:Name="PaneOpenDetail" Grid.Column="1" Classes="rowaction"
+                            Command="{Binding Row.OpenDetailCommand}"
+                            Content="OPEN DETAIL &#x21B5;"
+                            ToolTip.Tip="Open the full detail screen for this activity"/>
+                </Grid>
+            </Border>
+
+            <ScrollViewer x:Name="PaneScroll" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
+
+                    <!-- ══ Head ══ everything here is on the row already and is drawn the moment it is clicked. -->
+                    <Border x:Name="PaneHead" Padding="14,12,14,10" BorderThickness="0,0,0,1"
+                            BorderBrush="{DynamicResource BorderBrush}">
+                        <StackPanel Spacing="2">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                                <ctl:IconGlyph Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextAccentBrush}" Kind="{Binding TypeIcon}"/>
+                                <TextBlock Grid.Column="1" Classes="pk" Text="{Binding TypeText}"/>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="5">
+                                    <Border Classes="chip dim" IsVisible="{Binding HasAutoSavedRun}">
+                                        <TextBlock Text="auto-saved"/>
+                                    </Border>
+                                    <Border Classes="chip dim" IsVisible="{Binding HasSyncState}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <ctl:IconGlyph Width="11" Height="11" VerticalAlignment="Center"
+                                                           Kind="{Binding SyncIcon}"/>
+                                            <TextBlock Text="{Binding SyncText}"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Classes="ptitle" Margin="0,3,0,0" Text="{Binding SiteText}"
+                                       ToolTip.Tip="{Binding SiteText}"/>
+                            <TextBlock Classes="pmeta" Text="{Binding MetaText}"/>
+                            <Grid Margin="0,8,0,0" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
+                                <TextBlock Grid.Column="0" Classes="phero" IsVisible="{Binding HasNet}"
+                                           Text="{Binding NetText}"/>
+                                <TextBlock Grid.Column="0" Classes="pherononne" VerticalAlignment="Center"
+                                           IsVisible="{Binding !HasNet}" ToolTip.Tip="{Binding NoNetTooltip}"
+                                           Text="{Binding NoNetText}"/>
+                                <ctl:IskSourceBar Grid.Column="1" Width="80" Height="10" VerticalAlignment="Center"
+                                                  Isk="{Binding Isk}"/>
+                                <TextBlock Grid.Column="2" Classes="pdur" VerticalAlignment="Center"
+                                           Text="{Binding DurationText}"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ══ ISK ══ the whole figure, the split as a bar, and a line per source with its own ink. -->
+                    <Border Classes="psec">
+                        <StackPanel>
+                            <Grid Margin="14,0,14,4" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                <TextBlock Grid.Column="0" Classes="label" Text="ISK" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Classes="psum" Text="{Binding IskWholeText}"/>
+                            </Grid>
+                            <StackPanel Margin="14,2,14,0" IsVisible="{Binding HasIskParts}">
+                                <ctl:IskSourceBar Height="10" Isk="{Binding Isk}"/>
+                                <ItemsControl x:Name="PaneIskParts" Margin="0,5,0,0" ItemsSource="{Binding IskParts}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="vr:RunsIskPartViewModel">
+                                            <Grid Height="17" ColumnDefinitions="8,*,Auto" ColumnSpacing="7">
+                                                <ctl:IskSourceBar Grid.Column="0" Width="8" Height="8"
+                                                                  VerticalAlignment="Center"
+                                                                  IsVisible="{Binding HasInk}" Isk="{Binding Ink}"/>
+                                                <TextBlock Grid.Column="1" Classes="pkvk" Text="{Binding Label}"/>
+                                                <TextBlock Grid.Column="2" Classes="pkvv" Text="{Binding AmountText}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                            <TextBlock x:Name="PaneIskEmpty" Classes="hint" Margin="14,0" IsVisible="{Binding !HasIskParts}"
+                                       Text="No loot capture and no bounty line on this activity — a zero would claim a valuation nobody took."/>
+                            <ItemsControl x:Name="PaneChips" Margin="14,6,14,0" ItemsSource="{Binding Chips}"
+                                          IsVisible="{Binding HasChips}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vr:ActivityRewardChipViewModel">
+                                        <Border Classes="chip" Margin="0,0,4,4" Classes.dim="{Binding IsKnownKind}"
+                                                Classes.warn="{Binding IsUnknownKind}">
+                                            <TextBlock Text="{Binding Text}"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ══ CREW ══ the runs behind the activity: each pilot's own time, their own share and where
+                         their run stands towards a server. -->
+                    <Border Classes="psec">
+                        <StackPanel>
+                            <Grid Margin="14,0,14,4" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                <TextBlock Grid.Column="0" Classes="label" Text="CREW" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Classes="psum" Text="{Binding CrewSummaryText}"/>
+                            </Grid>
+                            <Grid Margin="14,0" Height="16" ColumnDefinitions="*,58,92,44" ColumnSpacing="4">
+                                <TextBlock Grid.Column="0" Classes="pth" TextAlignment="Left" Text="PILOT"/>
+                                <TextBlock Grid.Column="1" Classes="pth" Text="TIME"/>
+                                <TextBlock Grid.Column="2" Classes="pth" Text="OWN ISK"/>
+                                <TextBlock Grid.Column="3" Classes="pth" Text="SERVER"/>
+                            </Grid>
+                            <Border Height="1" Margin="14,0" Background="{DynamicResource DividerBrush}"/>
+                            <ItemsControl x:Name="PaneCrew" ItemsSource="{Binding Crew}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vr:ActivityRunRowViewModel">
+                                        <Border Classes="ptrow" Classes.alt="{Binding IsAlternate}"
+                                                ToolTip.Tip="{Binding StandingText}">
+                                            <Grid Margin="14,0" ColumnDefinitions="*,58,92,44" ColumnSpacing="4">
+                                                <DockPanel Grid.Column="0">
+                                                    <ctl:HexPortrait DockPanel.Dock="Left" Size="16"
+                                                                     VerticalAlignment="Center"
+                                                                     Source="{Binding Face.Portrait}"
+                                                                     Initial="{Binding Face.Initial}"/>
+                                                    <TextBlock Classes="ptname" Margin="6,0,0,0"
+                                                               Text="{Binding CharacterText}"/>
+                                                </DockPanel>
+                                                <TextBlock Grid.Column="1" Classes="ptd" Text="{Binding DurationText}"
+                                                           ToolTip.Tip="{Binding TimeSourceText}"/>
+                                                <TextBlock Grid.Column="2" Classes="ptd" Text="{Binding IskText}"/>
+                                                <ctl:IconGlyph Grid.Column="3" Width="13" Height="13"
+                                                               HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                               IsVisible="{Binding HasSyncIcon}"
+                                                               Kind="{Binding SyncIcon}"
+                                                               ToolTip.Tip="{Binding SyncText}"/>
+                                                <TextBlock Grid.Column="3" Classes="plocal" IsVisible="{Binding !HasSyncIcon}"
+                                                           Text="{Binding ServerText}"
+                                                           ToolTip.Tip="{Binding SyncText}"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock x:Name="PaneCrewStatus" Classes="hint" Margin="14,0"
+                                       IsVisible="{Binding CrewStatus, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                       Text="{Binding CrewStatus}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ══ ENEMIES ══ the count, and where the species behind it can be read. -->
+                    <Border Classes="psec">
+                        <StackPanel>
+                            <Grid Margin="14,0,14,4" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                <TextBlock Grid.Column="0" Classes="label" Text="ENEMIES" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Classes="psum" Text="{Binding EnemiesSummaryText}"/>
+                            </Grid>
+                            <TextBlock x:Name="PaneEnemies" Classes="hint" Margin="14,0" Text="{Binding EnemiesText}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ══ LOOT ══ only where lines were actually captured. -->
+                    <Border Classes="psec" IsVisible="{Binding HasLoot}">
+                        <Grid Margin="14,0" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                            <TextBlock Grid.Column="0" Classes="label" Text="LOOT" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="PaneLoot" Grid.Column="1" Classes="psum" Text="{Binding LootSummaryText}"/>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+    </Panel>
+</UserControl>

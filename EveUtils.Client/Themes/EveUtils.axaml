@@ -20,6 +20,16 @@
         <SolidColorBrush x:Key="BgRowBrush" Color="#05FFFFFF"/>
         <SolidColorBrush x:Key="BgRowAltBrush" Color="#0AFFFFFF"/>
 
+        <!-- A surface that lies OVER the screen rather than in it (ET-291): the runs drawer, and the pinned day
+             header that floats above the list. Opaque, unlike BgPanelBrush's 94 %, which let the list show through
+             a drawer and took its dim labels below 4.5:1. Neutral in all four factions, like the ink of the ISK
+             sources above: what a surface means must not change when the accent does. -->
+        <SolidColorBrush x:Key="DrawerSurfaceBrush" Color="#FF0C100E"/>
+        <!-- What dims the list behind the drawer. Dark enough that the drawer's own edge reads against it in every
+             theme, sheer enough that the selected row stays visible underneath — closing by clicking the list you
+             can still see is the whole reason the drawer is 430 px and not the full width (Jithran, 15 Sep). -->
+        <SolidColorBrush x:Key="ScrimBrush" Color="#AD02050A"/>
+
         <SolidColorBrush x:Key="TextBrush" Color="#FFD8D0C4"/>
         <SolidColorBrush x:Key="TextDimBrush" Color="#FF8A7E6B"/>
         <SolidColorBrush x:Key="TextBrightBrush" Color="#FFF3ECE0"/>
