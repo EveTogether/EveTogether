@@ -3589,7 +3589,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// registry the saved detail screen, the runs overview and UNFINISHED read (ET-256), so what each source counts —
     /// a mission's bonus judged at STOP, never its stated Bounty line — is decided there and nowhere here.
     ///
-    /// Bounty is summed per participant through <see cref="GamelogClientService.GetFleetRunBounty"/> when a real
+    /// Bounty is summed per participant through <see cref="GamelogClientService.GetRunBounty"/> when a real
     /// fleet is involved — the same switch-independent, synchronous source SAVE already uses for a group — rather
     /// than the acting character's own <see cref="BountyIsk"/>, which only ever holds whichever character the
     /// column was showing while it came in. An own-toon group with no fleet at all (ET-257) has no fleet tally to
@@ -3622,19 +3622,17 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         var homefront = _sections.GetValueOrDefault(RunSectionId.Homefront) as HomefrontWindowSectionViewModel;
         RunAttendanceDecision? homefrontDecision = homefront?.LiveDecision;
 
-        // The fleet tally is one per character, so it is read once per character (ET-274) — HF-DYB4's window counted it
-        // on each of a character's two runs.
-        HashSet<long> tallied = [];
         List<(long CharacterId, RunIskFacts Facts)> runs = isGroup
-            ? [.. Participants.Select(participant =>
+            ? [.. Participants.OrderBy(participant => participant.RunId).Select(participant =>
                 {
-                    // A real fleet's own bounty comes from GamelogClientService's per-fleet tally (synchronous,
-                    // and the only place a fleet mate's own bounty ever lands, since their gamelog is never this
-                    // machine's own to watch). An own-toon group with no fleet at all (ET-257) has no such tally —
-                    // every toon's own bounty already lives in its own run's RunBountyEntry rows (ET-219), read back
-                    // through Participants' own cache instead.
-                    decimal bountyIsk = FleetId is { } fleetId && _gamelog is not null
-                        ? tallied.Add(participant.CharacterId) ? _gamelog.GetFleetRunBounty(fleetId, participant.CharacterId) : 0m
+                    // A real fleet's own bounty comes from GamelogClientService's tally of this very run (synchronous,
+                    // where the RunBountyEntry rows behind participant.BountyIsk only catch up on the next participants
+                    // refresh). Keyed by the run (ET-309), so a character's other run — HF-DYB4's duplicate (ET-274), or
+                    // yesterday's in the same fleet — reads nothing here. The larger of the two, because after a restart
+                    // the tally starts empty while the rows still hold what the run earned. An own-toon group with no
+                    // fleet at all (ET-257) reads the rows alone.
+                    decimal bountyIsk = FleetId is not null && _gamelog is not null
+                        ? Math.Max(_gamelog.GetRunBounty(participant.RunId), participant.BountyIsk)
                         : participant.BountyIsk;
                     RunLootViewModel? loot = LootOverview?.Characters
                         .FirstOrDefault(character => character.RunId == participant.RunId)?.Loot;
@@ -3663,11 +3661,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         HasGroupTotalIsk = isk.HasFigure;
         GroupTotalIskText = IskFormat.Whole(isk.Total) + IskFormat.ExpectedPart(isk);
         // Per character, from the very same facts: FLEET's rows (ET-272) can then never tell a different story than
-        // the total they sit above.
-        CharacterIsk = runs
-            .GroupBy(run => run.CharacterId)
-            .ToDictionary(character => character.Key,
-                character => IskContributors.Breakdown([.. character.Select(run => run.Facts)], nowUtc));
+        // the total they sit above. Split the way a saved activity is (ET-296), so the mission reward every own toon's
+        // run carries a copy of lands on one row only, the earliest run's — ordered as the saved side orders them, a
+        // run id being time-ordered — and the rows add up to TOTAL (ET-309: HF-RKM8's 3,430,000 reward and bonus were in
+        // TOTAL but on no row).
+        CharacterIsk = IskContributors.BreakdownByCharacter([.. runs.Select(run => run.Facts)], nowUtc);
         OnPropertyChanged(nameof(CharacterIsk));
     }
 

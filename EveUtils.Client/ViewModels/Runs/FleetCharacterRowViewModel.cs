@@ -74,6 +74,7 @@ public sealed partial class FleetCharacterRowViewModel(long characterId, Func<Fl
         List<FleetFigure> figures = [];
         _Add(figures, "bounty", isk.Of(IskSource.Bounty));
         _Add(figures, "loot", isk.Of(IskSource.Loot));
+        _Add(figures, "reward", isk.Of(IskSource.Rewards));
         _Add(figures, "ore", isk.Of(IskSource.Mining));
         _Add(figures, "payout", isk.Of(IskSource.HomefrontPayout));
         _Add(figures, "costs", isk.Of(IskSource.Consumables));

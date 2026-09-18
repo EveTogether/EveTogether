@@ -12,6 +12,8 @@ using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Events;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Gamelog.Repositories;
+using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Settings.Commands;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -86,9 +88,9 @@ public static class ClientGamelogTest
             ok &= Check("an unmapped character id yields no fleet DPS", FleetDps(gamelog, UnmappedId) == 0);
 
             // --- Metrics: bounty + location + notify + miss + mining + remote-rep land in the snapshot. ---
-            // TestPilot is participating in the fleet before the bounty lands → the fleet meter counts it as run bounty.
-            var participation = services.GetRequiredService<IFleetParticipation>();
-            participation.Set([new FleetParticipant(KnownId, FleetId, ClientOnly: false)]);
+            // TestPilot is flying a run in the fleet before the bounty lands → the fleet meter counts it as run bounty.
+            await bus.PublishAsync(new RunStartedEvent(Guid.NewGuid(), KnownId, ActivityKind.Site, DateTime.UtcNow,
+                FleetId, groupCode: null, isFleetCommander: false));
             var blockAt = DateTime.UtcNow;
             await File.AppendAllTextAsync(logPath,
                 $"[ {Ts(blockAt)} ] (bounty) 4,875 ISK added to next bounty payout\n" +
@@ -120,14 +122,15 @@ public static class ClientGamelogTest
             ok &= Check("fleet sample emits a live cap rate (> 0)", FleetMetric(gamelog, KnownId, MetricKind.Cap) > 0);
             ok &= Check("fleet bounty = run bounty since joining (4,875)", FleetMetric(gamelog, KnownId, MetricKind.Bounty) == 4875);
 
-            // Per-RUN scope: bounty earned BEFORE joining a fleet is not in the fleet meter; only what's earned during the run.
+            // Per-RUN scope: bounty earned BEFORE the run started is not in the fleet meter; only what's earned during the run.
             const int runPilotId = 95001;
             const long runFleet = 77;
             gamelog.MapCharacter(runPilotId, "RunPilot");
             await gamelog.AddBountyAsync("RunPilot", new BountyEvent(DateTime.UtcNow, 1_000_000)); // earned before participating
-            ok &= Check("bounty before joining the fleet is not in the fleet meter",
+            ok &= Check("bounty before the run started is not in the fleet meter",
                 FleetMetric(gamelog, runPilotId, MetricKind.Bounty, runFleet) == 0);
-            participation.Set([new FleetParticipant(runPilotId, runFleet, ClientOnly: false)]);
+            await bus.PublishAsync(new RunStartedEvent(Guid.NewGuid(), runPilotId, ActivityKind.Site, DateTime.UtcNow,
+                runFleet, groupCode: null, isFleetCommander: false));
             await gamelog.AddBountyAsync("RunPilot", new BountyEvent(DateTime.UtcNow, 2_500_000)); // earned during the run
             ok &= Check("only bounty earned during the run counts (2.5M)",
                 FleetMetric(gamelog, runPilotId, MetricKind.Bounty, runFleet) == 2_500_000);
