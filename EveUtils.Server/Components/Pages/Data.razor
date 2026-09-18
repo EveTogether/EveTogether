@@ -173,11 +173,8 @@
 @code {
     private record Pending(string Kind, long Id, string Label, string? Warning = null);
 
-    /// <summary>Two missed 30s heartbeats: attached right now rather than merely refreshable.</summary>
-    private static readonly TimeSpan LiveWindow = TimeSpan.FromSeconds(60);
-
     private static TimeSpan Silence(ServerSession s) => DateTimeOffset.UtcNow - s.LastHeartbeat;
-    private static bool IsLive(ServerSession s) => Silence(s) <= LiveWindow;
+    private static bool IsLive(ServerSession s) => Silence(s) <= ServerSessionService.LiveWindow;
 
     /// <summary>Past the idle window, so the next cleanup sweep removes it. Says why a row is about to vanish.</summary>
     private static bool IsLapsing(ServerSession s) => Silence(s) >= ServerSessionService.IdleLifetime;

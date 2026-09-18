@@ -1,0 +1,116 @@
+@using EveUtils.Server.Components.Fleets
+@using EveUtils.Server.DataExplorer
+@using EveUtils.Server.Grpc
+@implements IDisposable
+@inject DashboardOverviewService Overview
+@inject ConnectedClients ConnectedClients
+@* The one part of the Dashboard that moves. It ticks on its own timer and re-renders only itself, so the tiles and the
+   attention list above are not rebuilt every couple of seconds. Clients are read from memory every tick; the fleets come
+   from the database, so they refresh on a slower beat. *@
+
+<Card Title="Right now">
+    @if (ShowFleets)
+    {
+        <div class="nowlist">
+            @if (_fleets.Count == 0)
+            {
+                <p class="dim nowempty">No fleet is forming or in op.</p>
+            }
+            @foreach (var fleet in _fleets.Take(MaxFleets))
+            {
+                <div class="lrow">
+                    <div class="nm"><RecordLink Href="@DataLinks.Fleet(fleet.Id)">@fleet.Name</RecordLink> <FleetStatusPill Status="fleet.Status" /></div>
+                    <div class="rt"><RelativeTime At="fleet.LastActivityAt" /></div>
+                    <div class="sub">
+                        <PortraitStack CharacterIds="fleet.MemberCharacterIds" Names="_names" Max="6" />
+                        @foreach (var ship in fleet.Ships.Take(3))
+                        {
+                            <span class="shipchip"><ShipCell TypeId="ship.Key" ShowId="false" /> <span class="cnt">×@ship.Value</span></span>
+                        }
+                        <span>@(fleet.CompositionName ?? "no composition")</span>
+                    </div>
+                    <div class="rt">@fleet.MembersInShips/@fleet.MemberCharacterIds.Count in ships</div>
+                </div>
+            }
+            @if (_fleets.Count > MaxFleets)
+            {
+                <div class="lrow more"><a class="lnk" href="@DataLinks.FleetsPath">@(_fleets.Count - MaxFleets) more forming or in op</a></div>
+            }
+        </div>
+    }
+    <div class="nowlist clients">
+        <div class="lrow head"><div class="nm">Connected clients</div><div class="rt">@_clients.Count</div></div>
+        @if (_clients.Count == 0)
+        {
+            <p class="dim nowempty">No clients attached to the event bus.</p>
+        }
+        @foreach (var client in _clients)
+        {
+            <div class="lrow">
+                <div class="nm"><CharacterCell Id="client.CharacterId" Name="@client.CharacterName" ShowId="false" />@(client.Connections > 1 ? $" ×{client.Connections}" : null)</div>
+                <div class="rt">connected <RelativeTime At="client.Since" /></div>
+            </div>
+        }
+    </div>
+</Card>
+
+@code {
+    private const int MaxFleets = 8;
+    private const int FleetsEveryTicks = 10;
+
+    /// <summary>Fleets are shown to whoever may view data; connected clients need only the Dashboard.</summary>
+    [Parameter] public bool ShowFleets { get; set; }
+
+    private sealed record ClientRow(int CharacterId, string CharacterName, int Connections, DateTimeOffset Since);
+
+    private readonly CancellationTokenSource _cts = new();
+    private IReadOnlyList<RightNowFleet> _fleets = [];
+    private IReadOnlyDictionary<long, string> _names = new Dictionary<long, string>();
+    private IReadOnlyList<ClientRow> _clients = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _ReadClients();
+        if (ShowFleets)
+            await _ReadFleetsAsync();
+        _ = _TickAsync();
+    }
+
+    private async Task _TickAsync()
+    {
+        var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+        var ticks = 0;
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_cts.Token))
+            {
+                _ReadClients();
+                if (ShowFleets && ++ticks % FleetsEveryTicks == 0)
+                    await _ReadFleetsAsync();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void _ReadClients() => _clients = ConnectedClients.Snapshot()
+        .GroupBy(c => c.CharacterId)
+        .Select(g => new ClientRow(g.Key, g.First().CharacterName, g.Count(), g.Min(c => c.ConnectedAt)))
+        .OrderBy(c => c.CharacterName)
+        .ToList();
+
+    private async Task _ReadFleetsAsync()
+    {
+        RightNowSnapshot snapshot = await Overview.GetRightNowAsync(_cts.Token);
+        _fleets = snapshot.Fleets;
+        _names = snapshot.Names;
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

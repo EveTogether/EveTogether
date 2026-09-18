@@ -1,0 +1,92 @@
+@using EveUtils.Server.DataExplorer
+@* How the tables connect, and which links the database does not hold. Static SVG: the shape never changes, only the counts
+   on the boxes and the dangling counts on the weak edges do. Every box with a list opens it. *@
+@if (Overview is { } overview)
+{
+<Card Title="How the data connects">
+    <div class="relmap">
+        <svg viewBox="0 28 560 232" role="img" aria-label="Characters own fleets, sessions, run groups and shared fits. Fleets use compositions and compositions reference shared fits. Run groups are matched to fleets through their members.">
+            <path class="edge fk" d="M64 88 L64 196" />
+            <text class="el" x="72" y="142">have</text>
+            <text class="el" x="72" y="156">FK</text>
+
+            <path class="edge nofk" d="M128 64 L216 64" />
+            <text class="elw" x="172" y="56" text-anchor="middle">in rosters</text>
+            <text class="elw" x="172" y="82" text-anchor="middle">@_Count(_unpaired, "unpaired")</text>
+
+
+            <path class="edge nofk" d="M344 64 L432 64" />
+            <text class="elw" x="388" y="56" text-anchor="middle">uses</text>
+            <text class="elw" x="388" y="82" text-anchor="middle">@_Count(_missingCompositions, "missing")</text>
+
+
+            <path class="edge nofk" d="M496 88 L496 196" />
+            <text class="elw" x="504" y="138">references</text>
+            <text class="elw" x="504" y="152">@_Count(_deletedFits, "deleted")</text>
+
+
+            <path class="edge nofk" d="M128 88 L432 220" />
+            <text class="elw" x="372" y="186">share</text>
+
+            <path class="edge nofk" d="M96 88 L216 220" />
+            <text class="elw" x="150" y="172" text-anchor="end">fly</text>
+
+            <path class="edge derived" d="M280 196 L280 88" />
+            <text class="el" x="288" y="108">flown by members</text>
+            <text class="el" x="288" y="122">derived, not stored</text>
+
+            @_Node(DataEntity.Characters, 0, 40, "CHARACTERS", overview.Characters.Total)
+            @_Node(DataEntity.Fleets, 216, 40, "FLEETS", overview.Fleets.Total)
+            @_Node(DataEntity.Compositions, 432, 40, "COMPOSITIONS", overview.Compositions.Total)
+            @_Node(DataEntity.Sessions, 0, 196, "SESSIONS", overview.Sessions.Total)
+            @_Node(DataEntity.Runs, 216, 196, "RUN GROUPS", overview.RunGroups.Total)
+            @_Node(DataEntity.SharedFits, 432, 196, "SHARED FITS", overview.SharedFits.Total)
+        </svg>
+        <p class="maplegend">
+            <span><i class="lg fk"></i> foreign key</span>
+            <span><i class="lg nofk"></i> id only, no foreign key: can dangle</span>
+            <span><i class="lg derived"></i> derived when read</span>
+        </p>
+    </div>
+</Card>
+}
+
+@code {
+    [Parameter, EditorRequired] public DashboardOverview? Overview { get; set; }
+
+    private int _unpaired;
+    private int _missingCompositions;
+    private int _deletedFits;
+
+    protected override void OnParametersSet()
+    {
+        var kinds = Overview?.Attention.ToLookup(a => a.Kind);
+        _unpaired = kinds?[AttentionKind.ReferencesUnpairedCharacter].Count() ?? 0;
+        _missingCompositions = kinds?[AttentionKind.FleetCompositionMissing].Count() ?? 0;
+        _deletedFits = kinds?[AttentionKind.CompositionFitMissing].Count() ?? 0;
+    }
+
+    private static string? _Count(int count, string what) => count > 0 ? $"{count} {what}" : null;
+
+    private static RenderFragment _Node(DataEntity entity, int x, int y, string name, int count) => __builder =>
+    {
+        var href = DataLinks.List(entity);
+        if (href is null)
+        {
+            @_Box(x, y, name, count, "node static")
+        }
+        else
+        {
+            <a href="@href">@_Box(x, y, name, count, "node")</a>
+        }
+    };
+
+    private static RenderFragment _Box(int x, int y, string name, int count, string cssClass) => __builder =>
+    {
+        <g class="@cssClass">
+            <rect x="@x" y="@y" width="128" height="48" />
+            <text class="nn" x="@(x + 12)" y="@(y + 20)">@name</text>
+            <text class="nc" x="@(x + 12)" y="@(y + 39)">@count</text>
+        </g>
+    };
+}

@@ -8,13 +8,13 @@
 <div class="seclbl">Data</div>
 @if (_counts is { } counts)
 {
-    @_Entry(DataLinks.RecordsPath + "#characters", "characters", "Characters", counts.Characters, 0)
+    @_Entry(DataLinks.CharactersPath, "characters", "Characters", counts.Characters, 0)
     <NavLink href="@DataLinks.FleetsPath" ActiveClass="active" title="Fleets">
         <NavIcon Name="fleets" /><span class="t">Fleets</span>@_Count(counts.Fleets, counts.FleetsNeedingAttention)
     </NavLink>
-    @_Entry(DataLinks.RecordsPath + "#compositions", "compositions", "Compositions", counts.Compositions, 0)
-    @_Entry(DataLinks.RecordsPath + "#fits", "fits", "Shared fits", counts.SharedFits, 0)
-    @_Entry(DataLinks.RecordsPath + "#sessions", "sessions", "Sessions", counts.Sessions, 0)
+    @_Entry(DataLinks.CompositionsPath, "compositions", "Compositions", counts.Compositions, 0)
+    @_Entry(DataLinks.SharedFitsPath, "fits", "Shared fits", counts.SharedFits, 0)
+    @_Entry(DataLinks.SessionsPath, "sessions", "Sessions", counts.Sessions, 0)
 }
 
 @code {

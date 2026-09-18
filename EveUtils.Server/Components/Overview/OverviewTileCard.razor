@@ -1,0 +1,58 @@
+@using EveUtils.Server.DataExplorer
+@* One count tile: the total, a thin bar split by state and the same split spelled out, so no state is told by colour alone.
+   It opens the entity's list; while an entity has no list (runs, until ET-317) it is a plain block. *@
+@if (Tile is not null)
+{
+    @if (Href is not null)
+    {
+        <a class="kpi" href="@Href">@_Body(Tile)</a>
+    }
+    else
+    {
+        <div class="kpi" title="This list is not built yet">@_Body(Tile)</div>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public OverviewTile? Tile { get; set; }
+    [Parameter] public string? Href { get; set; }
+
+    /// <summary>Replaces the spelled-out split, for a tile whose story is not its states.</summary>
+    [Parameter] public string? Caption { get; set; }
+
+    private RenderFragment _Body(OverviewTile tile) => __builder =>
+    {
+        var present = tile.Segments.Where(s => s.Count > 0).ToList();
+        <span class="kl">@Label</span>
+        @if (tile.NeedsAttention > 0)
+        {
+            <span class="flag" title="@tile.NeedsAttention need attention">⚠ @tile.NeedsAttention</span>
+        }
+        <span class="kv">@tile.Total</span>
+        <span class="segbar" aria-hidden="true">
+            @foreach (var segment in present)
+            {
+                <i class="tone-@segment.Tone.ToString().ToLowerInvariant()" style="flex:@segment.Count"></i>
+            }
+        </span>
+        <span class="ks">
+            @if (Caption is not null)
+            {
+                @Caption
+            }
+            else if (present.Count == 0)
+            {
+                <span>none yet</span>
+            }
+            else
+            {
+                @for (var i = 0; i < present.Count; i++)
+                {
+                    @(i > 0 ? " · " : null)
+                    <b class="tone-@present[i].Tone.ToString().ToLowerInvariant()">@present[i].Count</b>@(" " + present[i].Label)
+                }
+            }
+        </span>
+    };
+}

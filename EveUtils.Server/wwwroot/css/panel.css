@@ -315,3 +315,86 @@ tbody tr.targeted .dim { color:var(--text); }
   .dt th:first-child, .dt td:first-child { padding-left:16px; }
   .search { width:180px; }
 }
+
+/* ── dashboard overview (ET-315): count tiles, needs attention, right now, relation map ── */
+.ov { padding:16px 20px 22px; display:flex; flex-direction:column; gap:16px; }
+.ovgrid { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,1fr); gap:16px; align-items:start; }
+.ovcol { min-width:0; }
+.ov .card { margin:0 0 16px; }
+.ovcol > .card:last-child { margin-bottom:0; }
+.kpis { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:10px; }
+.kpi { position:relative; display:flex; flex-direction:column; gap:6px; padding:10px 12px 11px; text-align:left; color:var(--text);
+  background:#0A0E0C; border:1px solid var(--border); border-radius:3px; }
+a.kpi { color:var(--text); }
+a.kpi:hover { border-color:var(--border-strong); background:var(--row-hover); }
+a.kpi:hover .kl { color:var(--text-accent); }
+a.kpi:focus-visible { outline:1px solid var(--accent-bright); outline-offset:1px; }
+.kpi .kl { font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--text); }
+.kpi .kv { font:600 26px/1 var(--mono); color:var(--text-bright); }
+.kpi .ks { font-size:11px; color:var(--text); }
+.kpi .ks b { font-weight:600; }
+.kpi .flag { position:absolute; top:8px; right:9px; font:700 11px var(--mono); color:#1A1305; background:var(--isk); padding:1px 5px; }
+.segbar { display:flex; height:5px; gap:2px; min-height:5px; }
+.segbar i { display:block; height:100%; }
+.segbar .tone-good { background:var(--green); } .segbar .tone-accent { background:var(--accent); } .segbar .tone-neutral { background:var(--text-dim); }
+.segbar .tone-warning { background:var(--isk); } .segbar .tone-bad { background:var(--red); }
+.ks b.tone-good { color:var(--green); } .ks b.tone-accent { color:var(--text-accent); } .ks b.tone-neutral { color:var(--text-bright); }
+.ks b.tone-warning { color:var(--isk); } .ks b.tone-bad { color:var(--red); }
+/* --text-dim is 4.8:1 on the tile but 4.0 on its hover fill: the neutral segment lifts to --text there, like dim text does. */
+a.kpi:hover .segbar .tone-neutral { background:var(--text); }
+
+.attn { list-style:none; margin:0; padding:0; }
+.attn li { display:grid; grid-template-columns:64px minmax(0,1fr) auto; gap:10px; align-items:start; padding:9px 12px; border-bottom:1px solid rgba(255,255,255,.06); }
+.attn li:last-child { border-bottom:0; }
+.attn li:hover { background:var(--row-hover); }
+.attn .what { color:var(--text-bright); }
+.attn .why { color:var(--text); font-size:11.5px; margin-top:2px; }
+.attn .go { white-space:nowrap; align-self:center; font-size:12px; }
+.attn li:hover .nolist { color:var(--text); }
+.nolist { color:var(--text-dim); font-size:11.5px; }
+.sevtag { display:inline-block; text-align:center; padding:1px 0; border:1px solid currentColor; font-size:9.5px; letter-spacing:.1em; text-transform:uppercase; margin-top:2px; }
+.sev-problem { color:var(--red); } .sev-warning { color:var(--isk); } .sev-info { color:var(--blue); }
+.attnmore { border-top:1px solid rgba(255,255,255,.06); }
+.attnmore summary { cursor:pointer; padding:9px 12px; color:var(--text-accent); font-size:12px; }
+.attnmore summary:hover { color:var(--text-bright); background:var(--row-hover); }
+.allclear { margin:0; padding:18px 14px; color:var(--text); }
+.allclear b { color:var(--green); font-weight:600; }
+
+.nowlist { display:flex; flex-direction:column; }
+.lrow { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 12px; padding:9px 12px; border-bottom:1px solid rgba(255,255,255,.06); }
+.lrow:last-child { border-bottom:0; }
+.lrow:hover { background:var(--row-hover); }
+.lrow:hover .dim { color:var(--text); }
+.lrow .nm { color:var(--text-bright); font-weight:500; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.lrow .sub { color:var(--text); font-size:11.5px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.lrow .rt { text-align:right; font-size:11px; color:var(--text); }
+.lrow.head { background:#08100C; }
+.lrow.head .nm { font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--text-accent); font-weight:600; }
+.lrow.more { grid-template-columns:1fr; font-size:12px; }
+.nowempty { margin:0; padding:12px; }
+.shipchip { display:inline-flex; align-items:center; gap:4px; }
+.shipchip .cnt { font-family:var(--mono); color:var(--text); }
+.fplabel { margin:0 0 6px; }
+.card .bd.pad .fp { margin:0 0 10px; }
+
+.relmap { padding:14px 12px 12px; }
+.relmap svg { width:100%; height:auto; display:block; }
+.relmap .node rect { fill:#0E1512; stroke:rgba(126,224,187,.4); }
+.relmap a:hover .node rect { fill:var(--row-hover); stroke:var(--accent-bright); }
+.relmap a:focus-visible .node rect { stroke:var(--accent-bright); stroke-width:2; }
+.relmap .node .nn { font:600 12px "Segoe UI",sans-serif; fill:var(--text-bright); letter-spacing:.12em; }
+.relmap .node .nc { font:700 15px var(--mono); fill:var(--accent-bright); }
+.relmap .edge { fill:none; stroke-width:1.4; }
+.relmap .edge.fk { stroke:rgba(126,224,187,.6); }
+.relmap .edge.nofk { stroke:var(--isk); }
+.relmap .edge.derived { stroke:var(--text); stroke-dasharray:4 4; }
+.relmap .el { font:12px "Segoe UI",sans-serif; fill:var(--text); }
+.relmap .elw { font:12px "Segoe UI",sans-serif; fill:var(--isk); }
+.relmap .el, .relmap .elw { paint-order:stroke; stroke:#0A0E0C; stroke-width:4px; stroke-linejoin:round; }
+.maplegend { display:flex; flex-wrap:wrap; gap:6px 18px; margin:10px 0 0; font-size:11.5px; color:var(--text); }
+.maplegend .lg { display:inline-block; width:22px; height:0; border-top:2px solid; vertical-align:middle; margin-right:6px; }
+.lg.fk { border-color:rgba(126,224,187,.6); } .lg.nofk { border-color:var(--isk); } .lg.derived { border-color:var(--text); border-top-style:dashed; }
+
+@media (max-width: 1279.98px) { .kpis { grid-template-columns:repeat(3, minmax(0,1fr)); } }
+@media (max-width: 1099.98px) { .ovgrid { grid-template-columns:minmax(0,1fr); } }
+@media (max-width: 699.98px) { .kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } }

@@ -38,7 +38,7 @@ public sealed class ConnectedClients
     }
 
     public IReadOnlyList<ConnectedClientInfo> Snapshot() =>
-        _clients.Values.Select(c => new ConnectedClientInfo(c.CharacterName, c.ConnectedAt)).ToList();
+        _clients.Values.Select(c => new ConnectedClientInfo(c.CharacterId, c.CharacterName, c.ConnectedAt)).ToList();
 
     /// <summary>The distinct characters currently connected (id + name), for invite discovery.
     /// Skips empty index buckets left behind by a disconnect.</summary>

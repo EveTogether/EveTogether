@@ -9,6 +9,21 @@ public static class DataLinks
 {
     public const string FleetsPath = "/data/fleets";
     public const string RecordsPath = "/data";
+    public const string CharactersPath = RecordsPath + "#characters";
+    public const string CompositionsPath = RecordsPath + "#compositions";
+    public const string SharedFitsPath = RecordsPath + "#fits";
+    public const string SessionsPath = RecordsPath + "#sessions";
+
+    /// <summary>Where an entity's own list is, or null while it has none (runs, until ET-317).</summary>
+    public static string? List(DataEntity entity) => entity switch
+    {
+        DataEntity.Characters => CharactersPath,
+        DataEntity.Fleets => FleetsPath,
+        DataEntity.Compositions => CompositionsPath,
+        DataEntity.SharedFits => SharedFitsPath,
+        DataEntity.Sessions => SessionsPath,
+        _ => null,
+    };
 
     public static string Fleet(long id) => $"{FleetsPath}?sel={id}";
     public static string Character(int esiCharacterId) => $"{RecordsPath}#character-{esiCharacterId}";
