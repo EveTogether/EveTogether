@@ -762,5 +762,12 @@ public sealed class RunStorageTests
             PulledSinceUtc = sinceUtc;
             return Task.FromResult((true, "accepted", (IReadOnlyList<RunWirePayload>)[]));
         }
+
+        public Task<(bool Accepted, string Message, IReadOnlyList<RunWirePayload> Runs)> ListPublishedAsync(
+            string serverAddress, DateTime fromUtc, DateTime toUtc, long actingCharacterId, CancellationToken cancellationToken = default)
+        {
+            Calls.Add("list");
+            return Task.FromResult((true, "accepted", (IReadOnlyList<RunWirePayload>)[]));
+        }
     }
 }

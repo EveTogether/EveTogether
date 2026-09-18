@@ -56,7 +56,7 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
         (IskSource.Mining, "MINING")
     ];
 
-    private readonly Func<Guid, CancellationToken, Task<RunsPaneDetail>> _readDetail;
+    private readonly Func<ActivityOverviewRowViewModel, CancellationToken, Task<RunsPaneDetail>> _readDetail;
     private readonly Func<string?> _publishTargetName;
     private readonly TimeSpan _readDelay;
     private CancellationTokenSource? _reading;
@@ -66,7 +66,7 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
     /// none is coupled or several are, which the button's own text then leaves unnamed.</param>
     /// <param name="readDelay">Zero in a test that wants the read to have happened by the time it looks.</param>
     public RunsActivityPaneViewModel(
-        Func<Guid, CancellationToken, Task<RunsPaneDetail>> readDetail,
+        Func<ActivityOverviewRowViewModel, CancellationToken, Task<RunsPaneDetail>> readDetail,
         Func<string?>? publishTargetName = null,
         TimeSpan? readDelay = null)
     {
@@ -175,7 +175,7 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
 
         var reading = new CancellationTokenSource();
         _reading = reading;
-        _ = _ReadDetailAsync(row.ActivitySummaryId, reading.Token);
+        _ = _ReadDetailAsync(row, reading.Token);
     }
 
     /// <summary>The same read again for the run on show — after a change reached it (ET-222), without the head
@@ -189,7 +189,7 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
         _reading?.Dispose();
         var reading = new CancellationTokenSource();
         _reading = reading;
-        _ = _ReadDetailAsync(row.ActivitySummaryId, reading.Token);
+        _ = _ReadDetailAsync(row, reading.Token);
     }
 
     private void _ShowHead(ActivityOverviewRowViewModel row)
@@ -253,17 +253,17 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
         LootSummaryText = string.Empty;
     }
 
-    private async Task _ReadDetailAsync(Guid activitySummaryId, CancellationToken cancellationToken)
+    private async Task _ReadDetailAsync(ActivityOverviewRowViewModel row, CancellationToken cancellationToken)
     {
         try
         {
             if (_readDelay > TimeSpan.Zero)
                 await Task.Delay(_readDelay, cancellationToken);
 
-            RunsPaneDetail detail = await _readDetail(activitySummaryId, cancellationToken);
-            // Two guards, not one: the token catches a selection that moved while the query was out, the id catches
+            RunsPaneDetail detail = await _readDetail(row, cancellationToken);
+            // Two guards, not one: the token catches a selection that moved while the query was out, the row catches
             // a reply that raced its own cancellation.
-            if (cancellationToken.IsCancellationRequested || Row?.ActivitySummaryId != activitySummaryId)
+            if (cancellationToken.IsCancellationRequested || !ReferenceEquals(Row, row))
                 return;
 
             for (int index = 0; index < detail.Crew.Count; index++)

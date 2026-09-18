@@ -171,6 +171,7 @@
                     </StackPanel>
                     <Button x:Name="PaneOpenDetail" Grid.Column="1" Classes="rowaction"
                             Command="{Binding Row.OpenDetailCommand}"
+                            IsVisible="{Binding Row.CanOpenDetail}"
                             Content="OPEN DETAIL &#x21B5;"
                             ToolTip.Tip="Open the full detail screen for this activity"/>
                 </Grid>

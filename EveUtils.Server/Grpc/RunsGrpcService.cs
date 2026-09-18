@@ -74,7 +74,23 @@ public sealed class RunsGrpcService(ServerSessionService sessions, IRunSyncRepos
 
         long characterId = session.SyncedCharacter?.EsiCharacterId ?? 0;
         IReadOnlyList<Run> runs = await repository.ListChangedAsync(characterId, request.GroupCodes, sinceUtc, context.CancellationToken);
-        var reply = new PullRunsReply { Accepted = true, Message = "Runs synchronized." };
+        return _ToReply(runs, "Runs synchronized.");
+    }
+
+    public override async Task<PullRunsReply> ListPublishedRuns(ListPublishedRunsRequest request, ServerCallContext context)
+    {
+        ServerSession session = await _AuthenticateAsync(context);
+        if (!DateTime.TryParse(request.FromUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime fromUtc)
+            || !DateTime.TryParse(request.ToUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime toUtc))
+            return new PullRunsReply { Accepted = false, Message = "Invalid read window." };
+
+        long characterId = session.SyncedCharacter?.EsiCharacterId ?? 0;
+        return _ToReply(await repository.ListPublishedAsync(characterId, fromUtc, toUtc, context.CancellationToken), "Runs read.");
+    }
+
+    private static PullRunsReply _ToReply(IReadOnlyList<Run> runs, string message)
+    {
+        var reply = new PullRunsReply { Accepted = true, Message = message };
         long sentAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         reply.PayloadJson.AddRange(runs.Select(run => JsonSerializer.Serialize(new RunWirePayload
         {

@@ -117,6 +117,11 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// and never a read of its own.</summary>
     private IReadOnlyList<ActivityOverviewRowViewModel> _loadedRows = [];
 
+    /// <summary>What each server tab last read from its server (ET-311), by address — rows for the month and facts for
+    /// the strip, or why the read gave none. Read again only on a full read: a live change says nothing about a
+    /// server, and a tab switch or a filter toggle re-shows what is here.</summary>
+    private IReadOnlyDictionary<string, ServerTabRead> _serverReads = new Dictionary<string, ServerTabRead>();
+
     /// <summary>Types and characters a tile turned off. Empty means every tile is on, which this screen treats as no
     /// filter at all rather than "everything present is selected" — the difference matters for CHARACTERS: with
     /// nothing excluded, a group-mate's activity with none of this machine's own characters on it still shows (Jithran,
@@ -582,11 +587,11 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     /// <summary>The pane's own read (ET-291): the pilots' runs and the loot lines behind the selected activity. Off
     /// the UI thread — this is the same eight-to-ten round trips plus a market lookup the detail screen makes.</summary>
-    private async Task<RunsPaneDetail> _ReadPaneDetailAsync(Guid activitySummaryId, CancellationToken cancellationToken)
+    private async Task<RunsPaneDetail> _ReadPaneDetailAsync(ActivityOverviewRowViewModel row, CancellationToken cancellationToken)
     {
         return await Task.Run<RunsPaneDetail>(async () =>
         {
-            Result<ActivityDetailDto> detail = await _dispatcher.Query(new GetActivityDetailQuery(activitySummaryId));
+            Result<ActivityDetailDto> detail = await _DetailOfAsync(row);
             if (!detail.IsSuccess || detail.Value is not { } activity)
                 return new RunsPaneDetail([], 0, null,
                     detail.Messages.Count > 0 ? detail.Messages[0].Text : "The runs could not be read.");
@@ -607,6 +612,13 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             return new RunsPaneDetail(crew, lootItems, activity.LootIskNet, null);
         }, cancellationToken);
     }
+
+    /// <summary>A server row carries its detail from the read that built it (ET-311): there is nothing of it in the
+    /// local store to ask for. A local row reads ET-160's own query, as before.</summary>
+    private Task<Result<ActivityDetailDto>> _DetailOfAsync(ActivityOverviewRowViewModel row) =>
+        row.ServerDetail is { } detail
+            ? Task.FromResult(Result<ActivityDetailDto>.Success(detail))
+            : _dispatcher.Query(new GetActivityDetailQuery(row.ActivitySummaryId));
 
     /// <summary>Brings the selection back in line with what the tab now holds — after a read, a tab switch, or a day
     /// being folded or unfolded. An activity that is gone from the tab altogether takes the selection and the drawer
@@ -726,8 +738,12 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private async Task _ReadOnceAsync(RunChangeBatch? changed, bool withAutoSave)
     {
         (DateOnly readFrom, DateOnly readTo) = _ReadRange();
+        Dictionary<string, IReadOnlyDictionary<Guid, ActivityOverviewRowViewModel>> shownServerRows = [];
+        foreach (RunsTabViewModel tab in Tabs)
+            if (tab.ServerAddress is { } address)
+                shownServerRows[address] = tab.Days.SelectMany(day => day.Rows).ToDictionary(row => row.ActivitySummaryId);
         var request = new ScreenReadRequest(ViewedMonthLocal, readFrom, readTo,
-            LocalTab.Days.SelectMany(day => day.Rows).ToDictionary(row => row.ActivitySummaryId),
+            LocalTab.Days.SelectMany(day => day.Rows).ToDictionary(row => row.ActivitySummaryId), shownServerRows,
             Tabs.Where(tab => tab.ServerAddress is not null).ToDictionary(tab => tab.ServerAddress!, tab => tab.Header),
             withAutoSave, changed);
         ScreenRead read = await Task.Run(() => _ReadScreenAsync(request));
@@ -760,24 +776,14 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         StatusMessage = null;
         _fleetHistoryKnownEmpty = read.FleetHistoryKnownEmpty;
         List<Task> subRunReads = [];
-        foreach ((ActivityOverviewRowViewModel row, ActivityOverviewRowViewModel? previous) in read.Rows)
-        {
-            if (ReferenceEquals(row, previous))
-            {
-                // An unchanged row that is open has its runs read again when the change reached them: a pilot's share
-                // or a corrected time moves a run without moving the activity's figures.
-                if (row.IsExpanded && (changed is null || changed.Concerns(row.RunId is { } runId ? [runId] : [], row.GroupCode)))
-                    subRunReads.Add(_LoadSubRunsAsync(row));
-                continue;
-            }
-
-            row.LayoutChanged += _OnRowLayoutChanged;
-            row.SelectRequested += selected => Select(selected);
-            if (previous is not null)
-                subRunReads.Add(row.ContinueFromAsync(previous));
-        }
-
+        _AdoptRows(read.Rows, changed, subRunReads);
         _loadedRows = [.. read.Rows.Select(pair => pair.Row)];
+        if (read.ServerReads is { } serverReads)
+        {
+            foreach (ServerTabRead serverRead in serverReads.Values)
+                _AdoptRows(serverRead.Rows, changed, subRunReads);
+            _serverReads = serverReads;
+        }
         _ApplyFiltersToTabs();
 
         _loadedFacts = read.Facts;
@@ -798,6 +804,28 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             Pane.RereadDetail();
 
         await Task.WhenAll(subRunReads);
+    }
+
+    /// <summary>The rows one read built, taken onto the screen: a new row is wired up and takes over from the one it
+    /// replaces; an unchanged row that is open has its runs read again when the change reached them, since a pilot's
+    /// share or a corrected time moves a run without moving the activity's figures.</summary>
+    private void _AdoptRows(IReadOnlyList<(ActivityOverviewRowViewModel Row, ActivityOverviewRowViewModel? Previous)> rows,
+        RunChangeBatch? changed, List<Task> subRunReads)
+    {
+        foreach ((ActivityOverviewRowViewModel row, ActivityOverviewRowViewModel? previous) in rows)
+        {
+            if (ReferenceEquals(row, previous))
+            {
+                if (row.IsExpanded && (changed is null || changed.Concerns(row.RunId is { } runId ? [runId] : [], row.GroupCode)))
+                    subRunReads.Add(_LoadSubRunsAsync(row));
+                continue;
+            }
+
+            row.LayoutChanged += _OnRowLayoutChanged;
+            row.SelectRequested += selected => Select(selected);
+            if (previous is not null)
+                subRunReads.Add(row.ContinueFromAsync(previous));
+        }
     }
 
     /// <summary>Off the UI thread: every read one pass needs, and the rows built from them. A row already on screen
@@ -851,31 +879,97 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         ActivityOverviewRowDto[] monthRows = [.. overview.Value
             .Where(dto => dto.StartedAtUtc >= monthFromUtc && dto.StartedAtUtc < monthToUtc)];
 
-        // Every crew member and other earner the month's rows name, resolved once here — off the UI thread, this read
-        // already is — rather than one row at a time turning up its own fallback the moment it is built (ET-306).
-        await _characterNames.HydrateAsync(monthRows
-            .SelectMany(dto => dto.Crew.Select(member => member.CharacterId)
-                .Concat(dto.OtherEarners.Select(member => member.CharacterId))));
-
-        string ServerNameOf(string address) => headers.GetValueOrDefault(address) ?? address;
-        List<(ActivityOverviewRowViewModel Row, ActivityOverviewRowViewModel? Previous)> rows = [];
-        foreach (ActivityOverviewRowDto dto in monthRows)
-        {
-            request.ShownRows.TryGetValue(dto.ActivitySummaryId, out ActivityOverviewRowViewModel? shown);
-            RunPublishProgress? progress = _autoPublisher?.ProgressFor(dto.GroupCode);
-            ActivityOverviewRowViewModel row = shown is not null && shown.IsShowing(dto, canPublish, progress)
-                ? shown
-                : new ActivityOverviewRowViewModel(dto, _NameOf, _LoadSubRunsAsync, _OpenDetailAsync,
-                    canPublish ? _PublishAsync : null, ServerNameOf, progress, _RetryPublishAsync, _facts, _FaceOf);
-            rows.Add((row, shown));
-        }
+        Func<string, string> serverNameOf = address => headers.GetValueOrDefault(address) ?? address;
+        List<(ActivityOverviewRowViewModel Row, ActivityOverviewRowViewModel? Previous)> rows =
+            await _BuildRowsAsync(monthRows, request.ShownRows, canPublish, serverNameOf, null);
+        // The server tabs read their servers on a full read only (ET-311): a live change is a change to the local
+        // store, and says nothing about what a server holds.
+        IReadOnlyDictionary<string, ServerTabRead>? serverReads = request.Changed is null
+            ? await _ReadServerTabsAsync(request, headers, fromUtc, toUtc, monthFromUtc, monthToUtc, serverNameOf)
+            : null;
 
         // Only worth asking when the fleet filter came up empty — a coverage query a full result already answers by
         // existing (ET-185: GetFleetRunCoverageQuery is the "why is this empty" question, not the "what is here" one).
         bool fleetHistoryKnownEmpty = monthRows.Length > 0 || _fleetFilter is null
             || await _IsFleetHistoryKnownEmptyAsync(_fleetFilter);
         return new ScreenRead(runningFacts, unfinished.Value ?? [], newServers, canPublish, rows, null, fleetHistoryKnownEmpty,
-            facts, firstTracked, OverviewSkipped: false);
+            facts, firstTracked, OverviewSkipped: false, serverReads);
+    }
+
+    /// <summary>Rows for the month's activities, built off the UI thread. A row already on screen that still says the
+    /// same is handed back as itself (ET-222). Every crew member and other earner is resolved once here rather than one
+    /// row at a time turning up its own fallback the moment it is built (ET-306).</summary>
+    /// <param name="serverDetails">A server tab's detail per activity, carried on its rows; null on Local, whose rows
+    /// read the store.</param>
+    private async Task<List<(ActivityOverviewRowViewModel Row, ActivityOverviewRowViewModel? Previous)>> _BuildRowsAsync(
+        IReadOnlyList<ActivityOverviewRowDto> monthRows, IReadOnlyDictionary<Guid, ActivityOverviewRowViewModel> shownRows,
+        bool canPublish, Func<string, string> serverNameOf, IReadOnlyDictionary<Guid, ActivityDetailDto>? serverDetails)
+    {
+        await _characterNames.HydrateAsync(monthRows
+            .SelectMany(dto => dto.Crew.Select(member => member.CharacterId)
+                .Concat(dto.OtherEarners.Select(member => member.CharacterId))));
+
+        List<(ActivityOverviewRowViewModel Row, ActivityOverviewRowViewModel? Previous)> rows = [];
+        foreach (ActivityOverviewRowDto dto in monthRows)
+        {
+            shownRows.TryGetValue(dto.ActivitySummaryId, out ActivityOverviewRowViewModel? shown);
+            ActivityDetailDto? serverDetail = serverDetails?.GetValueOrDefault(dto.ActivitySummaryId);
+            // A server row is published by definition: nothing to publish from it, no automatic publish to report on it.
+            bool publishable = canPublish && serverDetail is null;
+            RunPublishProgress? progress = serverDetail is null ? _autoPublisher?.ProgressFor(dto.GroupCode) : null;
+            // A server row is never kept: its detail travels on it and is not part of what IsShowing compares, and a
+            // server read is a full read only, so ET-287's per-tick cost does not apply; fold and selection carry over.
+            ActivityOverviewRowViewModel row = shown is not null && serverDetails is null && shown.IsShowing(dto, publishable, progress)
+                ? shown
+                : new ActivityOverviewRowViewModel(dto, _NameOf, _LoadSubRunsAsync, _OpenDetailAsync,
+                    publishable ? _PublishAsync : null, serverNameOf, progress, _RetryPublishAsync, _facts, _FaceOf, serverDetail);
+            rows.Add((row, shown));
+        }
+
+        return rows;
+    }
+
+    /// <summary>Each server tab's own read (ET-311), over the window Local was read for, through the characters
+    /// connected to it: a server none of them is connected to is not asked and says so on its tab, a read that fails
+    /// says why there, and Local is untouched either way. Rows for the month, facts for the strip, like Local's.</summary>
+    private async Task<IReadOnlyDictionary<string, ServerTabRead>> _ReadServerTabsAsync(ScreenReadRequest request,
+        IReadOnlyDictionary<string, string> headers, DateTime fromUtc, DateTime toUtc, DateTime monthFromUtc, DateTime monthToUtc,
+        Func<string, string> serverNameOf)
+    {
+        Dictionary<string, ServerTabRead> reads = [];
+        IRemoteBusConnector? connector = _services.GetService<IRemoteBusConnector>();
+        foreach ((string address, string header) in headers)
+        {
+            long[] connected = [.. _namesById.Keys
+                .Where(characterId => connector?.StateFor(address, (int)characterId) == ServerConnectionState.Connected)];
+            if (connected.Length == 0)
+            {
+                reads[address] = new ServerTabRead([], [], $"Not connected to {header}.");
+                continue;
+            }
+
+            Result<IReadOnlyList<ServerActivityDto>> read;
+            using (IServiceScope scope = _services.CreateScope())
+                read = await scope.ServiceProvider.GetRequiredService<ServerRunsReader>()
+                    .ReadAsync(address, connected, fromUtc, toUtc, _fleetFilter?.FleetId, [.. _namesById.Keys]);
+            if (!read.IsSuccess || read.Value is not { } activities)
+            {
+                reads[address] = new ServerTabRead([], [],
+                    read.Messages.Count > 0 ? read.Messages[0].Text : $"{header} could not be read.");
+                continue;
+            }
+
+            ActivityOverviewRowDto[] monthRows = [.. activities.Select(activity => activity.Row)
+                .Where(dto => dto.StartedAtUtc >= monthFromUtc && dto.StartedAtUtc < monthToUtc)];
+            reads[address] = new ServerTabRead(
+                await _BuildRowsAsync(monthRows,
+                    request.ShownServerRows.GetValueOrDefault(address) ?? new Dictionary<Guid, ActivityOverviewRowViewModel>(),
+                    canPublish: false, serverNameOf,
+                    activities.ToDictionary(activity => activity.Row.ActivitySummaryId, activity => activity.Detail)),
+                [.. activities.Select(activity => RunsActivityFacts.From(activity.Row, _facts))], null);
+        }
+
+        return reads;
     }
 
     /// <summary>Every coupled server, and a name for each one this screen has no tab for yet — never rebuilding the
@@ -960,6 +1054,9 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// either way. Reading the second case as the first is exactly the false zero this ticket exists to rule out.</summary>
     private string _EmptyMessageFor(RunsTabViewModel tab)
     {
+        if (tab.ServerAddress is { } address && _serverReads.GetValueOrDefault(address)?.Error is { } error)
+            return error;
+
         if (_fleetFilter is null)
             return tab.IsLocal
                 ? "No activity has been saved yet. A run shows up here the moment you save it."
@@ -1475,8 +1572,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         RunsTabViewModel? tab = SelectedTab;
         _tabDays = tab is null
             ? new Dictionary<DateOnly, IReadOnlyList<RunsActivityFacts>>()
-            : _loadedFacts
-                .Where(tab.Holds)
+            : _FactsOf(tab)
                 .Where(_PassesFilters)
                 .GroupBy(activity => activity.Day)
                 .ToDictionary(day => day.Key, day => (IReadOnlyList<RunsActivityFacts>)[.. day]);
@@ -1546,19 +1642,23 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private bool _PassesFilters(RunsActivityFacts facts) =>
         _PassesTypeFilter(facts.TypeId) && _PassesCharacterFilter(facts.CrewCharacterIds);
 
-    /// <summary>Every tab's days, rebuilt from <see cref="_loadedRows"/> with the TYPES/CHARACTERS filter applied —
+    /// <summary>Local holds every activity the local read built; a server tab what its own read brought (ET-311) — a
+    /// group mate's run included, as that server's own rule hands it to anyone holding a run in the group.</summary>
+    private IEnumerable<ActivityOverviewRowViewModel> _RowsOf(RunsTabViewModel tab) =>
+        tab.ServerAddress is { } address
+            ? _serverReads.GetValueOrDefault(address)?.Rows.Select(pair => pair.Row) ?? []
+            : _loadedRows;
+
+    private IEnumerable<RunsActivityFacts> _FactsOf(RunsTabViewModel tab) =>
+        tab.ServerAddress is { } address ? _serverReads.GetValueOrDefault(address)?.Facts ?? [] : _loadedFacts;
+
+    /// <summary>Every tab's days, rebuilt from its own rows with the TYPES/CHARACTERS filter applied —
     /// never a read of its own, so a tile toggle is as cheap as folding a day (ET-287).</summary>
     private void _ApplyFiltersToTabs()
     {
         foreach (RunsTabViewModel tab in Tabs)
         {
-            // Local holds every activity; a server tab the ones whose runs carry that server's address — including a
-            // group-mate's run, which the sync merged into the local database as its own row under their character id.
-            // A run someone else flew SOLO on that server is not here, and that is the server's own rule:
-            // ServerRunSyncRepository.ListChangedAsync hands a run only to a character who holds a run in its group.
-            ActivityOverviewRowViewModel[] tabRows = [.. (tab.ServerAddress is { } address
-                ? _loadedRows.Where(row => row.IsPublishedTo(address))
-                : _loadedRows)];
+            ActivityOverviewRowViewModel[] tabRows = [.. _RowsOf(tab)];
             tab.Show([.. tabRows.Where(_PassesFilters)], _canPublish, IsPublishingMany);
             tab.StatusMessage = tab.Days.Count > 0
                 ? null
@@ -1620,11 +1720,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private void _RefreshFilterTiles()
     {
         RunsTabViewModel? tab = SelectedTab;
-        ActivityOverviewRowViewModel[] tabRows = tab is null
-            ? []
-            : [.. (tab.ServerAddress is { } address
-                ? _loadedRows.Where(row => row.IsPublishedTo(address))
-                : _loadedRows)];
+        ActivityOverviewRowViewModel[] tabRows = tab is null ? [] : [.. _RowsOf(tab)];
 
         _ShowTypeTiles(tabRows);
         _ShowCharacterTiles(tabRows);
@@ -1724,11 +1820,10 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// the same row opens. Off the UI thread: that query is several round trips and a price lookup.</summary>
     private async Task _LoadSubRunsAsync(ActivityOverviewRowViewModel row)
     {
-        Guid activityId = row.ActivitySummaryId;
         (IReadOnlyList<ActivityRunRowViewModel> runs, string? status) =
             await Task.Run<(IReadOnlyList<ActivityRunRowViewModel>, string?)>(async () =>
             {
-                Result<ActivityDetailDto> detail = await _dispatcher.Query(new GetActivityDetailQuery(activityId));
+                Result<ActivityDetailDto> detail = await _DetailOfAsync(row);
                 if (!detail.IsSuccess || detail.Value is not { } activity)
                     return ([], detail.Messages.Count > 0 ? detail.Messages[0].Text : "The runs could not be read.");
 
@@ -1745,6 +1840,10 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// fetched here.</summary>
     private Task _OpenDetailAsync(ActivityOverviewRowViewModel row)
     {
+        // A server copy is nobody's to correct or delete there (ET-214/215); the expanded row and the pane are its detail.
+        if (!row.CanOpenDetail)
+            return Task.CompletedTask;
+
         _dialogs.ShowActivityDetail(
             new ActivityDetailViewModel(_dispatcher, row.ActivitySummaryId,
                 _services.GetService<IAppraisalProvider>(), _NameOf,
@@ -1835,6 +1934,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         DateOnly ReadFrom,
         DateOnly ReadTo,
         IReadOnlyDictionary<Guid, ActivityOverviewRowViewModel> ShownRows,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<Guid, ActivityOverviewRowViewModel>> ShownServerRows,
         IReadOnlyDictionary<string, string> ServerHeaders,
         bool WithAutoSave,
         RunChangeBatch? Changed);
@@ -1851,5 +1951,14 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         bool FleetHistoryKnownEmpty,
         IReadOnlyList<RunsActivityFacts> Facts,
         DateOnly? FirstTracked,
-        bool OverviewSkipped);
+        bool OverviewSkipped,
+        /// <summary>Each server tab's own read (ET-311), when this pass read the servers; null keeps what they showed.</summary>
+        IReadOnlyDictionary<string, ServerTabRead>? ServerReads = null);
+
+    /// <summary>What one server tab shows (ET-311): its rows for the month, its facts for the strip, or the reason it
+    /// shows neither — that nobody is connected to it, or what its read said.</summary>
+    private sealed record ServerTabRead(
+        IReadOnlyList<(ActivityOverviewRowViewModel Row, ActivityOverviewRowViewModel? Previous)> Rows,
+        IReadOnlyList<RunsActivityFacts> Facts,
+        string? Error);
 }

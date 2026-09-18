@@ -118,6 +118,22 @@ public sealed class RunsGrpcServiceTests
         Assert.Empty(raymond.Written);
     }
 
+    /// <summary>ET-311: a server tab's read names its window as two ISO instants, like the pull names its waterline;
+    /// one it cannot parse is refused as such rather than read as "everything" or as an empty window.</summary>
+    [Fact]
+    public async Task ListPublishedRuns_UnreadableWindow_IsRefused()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var repository = new ServerRunSyncRepository((IDbContextFactory<ServerDbContext>)_factory);
+        (RunsGrpcService service, string accessToken) = await _ServiceAsync(repository, new ConnectedClients(), cancellationToken);
+
+        PullRunsReply reply = await service.ListPublishedRuns(
+            new ListPublishedRunsRequest { FromUtc = "last tuesday", ToUtc = DateTime.UtcNow.ToString("O") }, Context(accessToken));
+
+        Assert.False(reply.Accepted);
+        Assert.Empty(reply.PayloadJson);
+    }
+
     private const long Jithran = 90250177;
     private const long Raymond = 90000002;
     private const long Stranger = 90000003;

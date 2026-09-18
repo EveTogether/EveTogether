@@ -1,6 +1,7 @@
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Modules.Runs.Entities;
+using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Repositories;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,19 +31,12 @@ internal sealed class ServerRunSyncRepository(IDbContextFactory<ServerDbContext>
         long characterId, IReadOnlyCollection<string> groupCodes, DateTime sinceUtc, CancellationToken cancellationToken = default)
     {
         await using ServerDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        return await db.Set<Run>()
-            .AsNoTracking()
-            .Where(run => run.GroupCode != null && groupCodes.Contains(run.GroupCode) &&
-                          run.LastPushedAtUtc.HasValue && run.LastPushedAtUtc.Value > sinceUtc &&
-                          db.Set<Run>().Any(member => member.CharacterId == characterId &&
-                              member.GroupCode == run.GroupCode && !member.DeletedAtUtc.HasValue))
-            .Include(run => run.LootCaptures)
-                .ThenInclude(capture => capture.Entries)
-            .Include(run => run.BountyEntries)
-            .Include(run => run.EnemyObservations)
-            .Include(run => run.Parameters)
-            .Include(run => run.MiningEntries)
-            .Include(run => run.AttendanceEntries)
+        return await _WithChildren(db.Set<Run>()
+                .AsNoTracking()
+                .Where(run => run.GroupCode != null && groupCodes.Contains(run.GroupCode) &&
+                              run.LastPushedAtUtc.HasValue && run.LastPushedAtUtc.Value > sinceUtc &&
+                              db.Set<Run>().Any(member => member.CharacterId == characterId &&
+                                  member.GroupCode == run.GroupCode && !member.DeletedAtUtc.HasValue)))
             .ToListAsync(cancellationToken);
     }
 
@@ -56,4 +50,30 @@ internal sealed class ServerRunSyncRepository(IDbContextFactory<ServerDbContext>
             .Distinct()
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<Run>> ListPublishedAsync(
+        long characterId, DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken = default)
+    {
+        await using ServerDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        return await _WithChildren(db.Set<Run>()
+                .AsNoTracking()
+                .Where(run => run.State == RunState.Saved && !run.DeletedAtUtc.HasValue &&
+                              run.StartedAtUtc >= fromUtc && run.StartedAtUtc < toUtc &&
+                              (run.CharacterId == characterId ||
+                               (run.GroupCode != null && db.Set<Run>().Any(member => member.CharacterId == characterId &&
+                                   member.GroupCode == run.GroupCode && !member.DeletedAtUtc.HasValue)))))
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>One query per collection: in one join the six collections multiply into each other (ET-287), and the
+    /// tab read hands back a whole window rather than a delta.</summary>
+    private static IQueryable<Run> _WithChildren(IQueryable<Run> runs) => runs
+        .AsSplitQuery()
+        .Include(run => run.LootCaptures)
+            .ThenInclude(capture => capture.Entries)
+        .Include(run => run.BountyEntries)
+        .Include(run => run.EnemyObservations)
+        .Include(run => run.Parameters)
+        .Include(run => run.MiningEntries)
+        .Include(run => run.AttendanceEntries);
 }

@@ -48,12 +48,7 @@ public sealed class ServerRunSyncClient(
                 request.GroupCodes.AddRange(groupCodes);
                 return client.PullRunsAsync(request, headers, cancellationToken: cancellationToken);
             }, cancellationToken);
-            IReadOnlyList<RunWirePayload> runs = reply.PayloadJson
-                .Select(payloadJson => JsonSerializer.Deserialize<RunWirePayload>(payloadJson, SerializerOptions))
-                .Where(payload => payload is not null)
-                .Cast<RunWirePayload>()
-                .ToList();
-            return (reply.Accepted, reply.Message, runs);
+            return (reply.Accepted, reply.Message, _Runs(reply));
         }
         catch (RpcException exception)
         {
@@ -64,6 +59,30 @@ public sealed class ServerRunSyncClient(
             return (false, $"Run sync failed: {exception.Message}", []);
         }
     }
+
+    public async Task<(bool Accepted, string Message, IReadOnlyList<RunWirePayload> Runs)> ListPublishedAsync(
+        string serverAddress, DateTime fromUtc, DateTime toUtc, long actingCharacterId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            PullRunsReply reply = await _InvokeAsync(serverAddress, actingCharacterId, (client, headers) =>
+                client.ListPublishedRunsAsync(new ListPublishedRunsRequest { FromUtc = fromUtc.ToString("O"), ToUtc = toUtc.ToString("O") },
+                    headers, cancellationToken: cancellationToken), cancellationToken);
+            return (reply.Accepted, reply.Message, _Runs(reply));
+        }
+        catch (RpcException exception)
+        {
+            return (false, $"Server read failed: {exception.Status.Detail}", []);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return (false, $"Server read failed: {exception.Message}", []);
+        }
+    }
+
+    private static IReadOnlyList<RunWirePayload> _Runs(PullRunsReply reply) => [.. reply.PayloadJson
+        .Select(payloadJson => JsonSerializer.Deserialize<RunWirePayload>(payloadJson, SerializerOptions))
+        .OfType<RunWirePayload>()];
 
     private async Task<TReply> _InvokeAsync<TReply>(string serverAddress, long actingCharacterId,
         Func<RunsGrpc.RunsClient, Metadata, AsyncUnaryCall<TReply>> rpc, CancellationToken cancellationToken)

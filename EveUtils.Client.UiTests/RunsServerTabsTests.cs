@@ -60,7 +60,7 @@ public sealed class RunsServerTabsTests
     [InlineData(false)]
     public async Task Publish_QueuesTheActivitysRuns_OnlyAfterAConfirmationThatNamesWhatTravels(bool confirmed)
     {
-        using var instance = _ConnectedInstance(out RecordingDialogService dialogs, accepted: true);
+        using var instance = _ConnectedInstance(out RecordingDialogService dialogs, new InMemoryRunServer(accepts: true));
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         dialogs.OnConfirm = (_, _) => Task.FromResult(confirmed);
         await _CoupleAsync(instance, ServerAddress, cancellationToken);
@@ -86,7 +86,7 @@ public sealed class RunsServerTabsTests
     [AvaloniaFact]
     public async Task Publish_RejectedByTheServer_KeepsTheRunsQueuedAndSaysWhy()
     {
-        using var instance = _ConnectedInstance(out RecordingDialogService dialogs, accepted: false);
+        using var instance = _ConnectedInstance(out RecordingDialogService dialogs, new InMemoryRunServer(accepts: false));
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         dialogs.OnConfirm = (_, _) => Task.FromResult(true);
         await _CoupleAsync(instance, ServerAddress, cancellationToken);
@@ -101,44 +101,69 @@ public sealed class RunsServerTabsTests
         Assert.Contains("The server said no.", viewModel.StatusMessage);
     }
 
-    /// <summary>A server tab holds the activities published to that server and no others; Local holds all three.
-    /// Counter-proof: filter on "has any server" rather than on this one and the other-server row appears under the
-    /// wrong tab.</summary>
+    /// <summary>A server tab is a read of that server (ET-311), not a filter over the local database: what the server
+    /// holds is on its tab after a publish it accepted, and nothing is there after one it refused — the run is queued
+    /// on Local, where it still shows. Counter-proof: file rows by the address their local runs carry and the refused
+    /// row lands on the server tab, since a queued run already carries it.</summary>
     [AvaloniaTheory]
-    [InlineData(null, false)]
-    [InlineData(OtherServerAddress, false)]
-    [InlineData(ServerAddress, true)]
-    public async Task ServerTab_HoldsOnlyTheActivitiesPublishedToIt(string? publishedTo, bool onTheServerTab)
+    [InlineData(false, true, false)]
+    [InlineData(true, true, true)]
+    [InlineData(true, false, false)]
+    public async Task ServerTab_HoldsOnlyTheActivitiesPublishedToIt(bool confirmed, bool serverAccepts, bool onTheServerTab)
     {
-        using var instance = TestClientInstance.Create();
+        using var instance = _ConnectedInstance(out RecordingDialogService dialogs, new InMemoryRunServer(serverAccepts));
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        dialogs.OnConfirm = (_, _) => Task.FromResult(confirmed);
         await _CoupleAsync(instance, ServerAddress, cancellationToken);
-        Guid runId = await _SaveSiteRunAsync(instance, cancellationToken);
-        if (publishedTo is not null)
-            await _Dispatcher(instance).Send(new QueueRunForServerSyncCommand(runId, publishedTo), cancellationToken);
+        await _SaveSiteRunAsync(instance, cancellationToken);
 
-        RunsOverviewViewModel viewModel = await _LoadAsync(instance, cancellationToken);
+        RunsOverviewViewModel viewModel = await _LoadAsync(instance, cancellationToken, dialogs);
+        await _RowOf(viewModel).PublishCommand.ExecuteAsync(null);
         RunsTabViewModel serverTab = viewModel.Tabs.Single(tab => tab.ServerAddress == ServerAddress);
 
         Assert.Single(viewModel.Tabs[0].Days);
         Assert.Equal(onTheServerTab ? 1 : 0, serverTab.Days.Count);
     }
 
+    /// <summary>The acceptance of ET-311: a clean installation whose character has runs on the server shows them on
+    /// that server's tab, with nothing in the local database and Local empty. Red on main, where the server tab was
+    /// the local rows filtered by address — and there were none. The row is read-only there: the pane's OPEN DETAIL
+    /// is for a local activity a pilot can correct (ET-214/215).</summary>
+    [AvaloniaFact]
+    public async Task ServerTab_CleanClient_ShowsWhatTheServerHolds_AndLocalStaysEmpty()
+    {
+        var server = new InMemoryRunServer(accepts: true);
+        server.Hold(ServerAddress, 90000001);
+        using var instance = _ConnectedInstance(out RecordingDialogService dialogs, server);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _CoupleAsync(instance, ServerAddress, cancellationToken);
+
+        RunsOverviewViewModel viewModel = await _LoadAsync(instance, cancellationToken, dialogs);
+        RunsTabViewModel serverTab = viewModel.Tabs.Single(tab => tab.ServerAddress == ServerAddress);
+
+        Assert.Empty(viewModel.Tabs[0].Days);
+        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(serverTab.Days).Rows);
+        Assert.False(row.CanOpenDetail);
+        Assert.False(row.IsLocal);
+    }
+
     private static ICqrsDispatcher _Dispatcher(TestClientInstance instance) =>
         instance.Services.GetRequiredService<ICqrsDispatcher>();
 
-    /// <summary>An instance whose server answers: connected on the bus, and a run-sync client that accepts or refuses
-    /// on demand. No network is touched — only the decision branches around it.</summary>
-    private static TestClientInstance _ConnectedInstance(out RecordingDialogService dialogs, bool accepted)
+    /// <summary>An instance whose server answers: connected on the bus — the server as a whole for a publish, and
+    /// Ra Vinter's own link for a server tab's read (ET-311) — and a run-sync client that accepts or refuses on
+    /// demand. No network is touched — only the decision branches around it.</summary>
+    private static TestClientInstance _ConnectedInstance(out RecordingDialogService dialogs, IServerRunSyncClient server)
     {
         var connector = new FakeRemoteBusConnector();
         connector.RaiseStateChanged(ServerAddress, ServerConnectionState.Connected);
+        connector.RaiseCharacterStateChanged(ServerAddress, 90000001, ServerConnectionState.Connected);
         var recording = new RecordingDialogService();
         dialogs = recording;
         return TestClientInstance.Create(services =>
         {
             services.AddSingleton<IRemoteBusConnector>(connector);
-            services.AddSingleton<IServerRunSyncClient>(new StubRunSyncClient(accepted));
+            services.AddSingleton(server);
         });
     }
 
@@ -178,16 +203,42 @@ public sealed class RunsServerTabsTests
         return await db.Set<Run>().SingleAsync(run => run.Id == runId, cancellationToken);
     }
 
-    private sealed class StubRunSyncClient(bool accepted) : IServerRunSyncClient
+    /// <summary>The server as far as the client can tell: it takes or refuses a push, keeps what it took, and answers
+    /// a server tab's read from that — per address, so a run pushed to one server is never on another's tab.</summary>
+    private sealed class InMemoryRunServer(bool accepts) : IServerRunSyncClient
     {
+        private readonly List<(string Server, RunWireData Run)> _held = [];
+
+        /// <summary>A saved run of <paramref name="characterId"/> the server holds before this client ever saw it.</summary>
+        public void Hold(string serverAddress, long characterId) =>
+            _held.Add((serverAddress, RunWireData.FromEntity(new Run
+            {
+                Id = Guid.CreateVersion7(), CharacterId = characterId, ActivityKind = ActivityKind.Site, State = RunState.Saved,
+                StartedAtUtc = StartedAtUtc, StoppedAtUtc = StartedAtUtc.AddMinutes(15), SavedAtUtc = StartedAtUtc.AddMinutes(16),
+                SiteTypeId = 1234, SiteName = "Homefront", SolarSystemId = 30000142, SyncState = RunSyncState.Synced, Revision = 2
+            })));
+
         public Task<(bool Accepted, string Message, DateTime? LastPushedAtUtc)> PushAsync(
-            string serverAddress, RunWirePayload payload, long actingCharacterId, CancellationToken cancellationToken = default) =>
-            Task.FromResult((accepted, accepted ? "Run synced." : "The server said no.",
-                accepted ? (DateTime?)StartedAtUtc.AddMinutes(20) : null));
+            string serverAddress, RunWirePayload payload, long actingCharacterId, CancellationToken cancellationToken = default)
+        {
+            if (accepts)
+                _held.Add((serverAddress, payload.Run));
+            return Task.FromResult((accepts, accepts ? "Run synced." : "The server said no.",
+                accepts ? (DateTime?)StartedAtUtc.AddMinutes(20) : null));
+        }
 
         public Task<(bool Accepted, string Message, IReadOnlyList<RunWirePayload> Runs)> PullAsync(
             string serverAddress, IReadOnlyCollection<string> groupCodes, DateTime sinceUtc, long actingCharacterId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult((true, "Runs synchronized.", (IReadOnlyList<RunWirePayload>)[]));
+
+        public Task<(bool Accepted, string Message, IReadOnlyList<RunWirePayload> Runs)> ListPublishedAsync(
+            string serverAddress, DateTime fromUtc, DateTime toUtc, long actingCharacterId, CancellationToken cancellationToken = default) =>
+            Task.FromResult((true, "Runs synchronized.", (IReadOnlyList<RunWirePayload>)[.. _held
+                .Where(held => held.Server == serverAddress && held.Run.StartedAtUtc >= fromUtc && held.Run.StartedAtUtc < toUtc)
+                .Select(held => new RunWirePayload
+                {
+                    Run = held.Run, SentAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                })]));
     }
 }

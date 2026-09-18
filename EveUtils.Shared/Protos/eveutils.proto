@@ -41,10 +41,14 @@ service Fittings {
 service Runs {
   rpc PushRun (PushRunRequest) returns (RunActionReply);
   rpc PullRuns (PullRunsRequest) returns (PullRunsReply);
+  // A server tab's own read (ET-311): the saved runs the acting character may see in a window — its own, and its
+  // group mates' under the holder rule PullRuns applies — regardless of what the client holds locally.
+  rpc ListPublishedRuns (ListPublishedRunsRequest) returns (PullRunsReply);
 }
 
 message PushRunRequest { string payload_json = 1; }
 message PullRunsRequest { repeated string group_codes = 1; string since_utc = 2; }
+message ListPublishedRunsRequest { string from_utc = 1; string to_utc = 2; }
 message RunActionReply { bool accepted = 1; string message = 2; string last_pushed_at_utc = 3; }
 message PullRunsReply { bool accepted = 1; string message = 2; repeated string payload_json = 3; }
 
