@@ -1,0 +1,14 @@
+@* A character as the panel shows it: portrait + name, with the id kept as selectable mono text and in the tooltip.
+   The portrait is loaded by the admin's browser from images.evetech.net; the server never fetches it. *@
+<span class="ent" title="@Tooltip">
+    <img class="ent-img round" src="https://images.evetech.net/characters/@Id/portrait?size=64" width="26" height="26" loading="lazy" alt="" onerror="this.style.visibility='hidden'" />
+    <span class="ent-name @(Name is null ? "unresolved" : "bright")">@(Name ?? "Unknown character")</span>
+    <code class="idchip">@Id</code>
+</span>
+
+@code {
+    [Parameter, EditorRequired] public long Id { get; set; }
+    [Parameter] public string? Name { get; set; }
+
+    private string Tooltip => Name is null ? $"Name could not be resolved · character id {Id}" : $"{Name} · character id {Id}";
+}
