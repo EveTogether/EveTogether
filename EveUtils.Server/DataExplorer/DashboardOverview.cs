@@ -10,7 +10,4 @@ public sealed class DashboardOverview
     public required OverviewTile RunGroups { get; init; }
     public required OverviewTile Sessions { get; init; }
     public required IReadOnlyList<AttentionItem> Attention { get; init; }
-
-    /// <summary>Individual runs across all groups, for the run tile's caption.</summary>
-    public required int RunCount { get; init; }
 }

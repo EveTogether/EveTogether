@@ -1,0 +1,19 @@
+@using EveUtils.Server.DataExplorer
+@if (Item.UsedBy.Count == 0)
+{
+    <span class="dim">no fleet</span>
+}
+else
+{
+    <span class="usedby">
+        <RecordLink Href="@DataLinks.Fleet(Item.UsedBy[0].Fleet.Id)" Title="@Item.UsedBy[0].Fleet.Name">@Item.UsedBy[0].Fleet.Name</RecordLink>
+        @if (Item.UsedBy.Count > 1)
+        {
+            <span class="dim" title="@string.Join(", ", Item.UsedBy.Skip(1).Select(f => f.Fleet.Name))"> +@(Item.UsedBy.Count - 1)</span>
+        }
+    </span>
+}
+
+@code {
+    [Parameter, EditorRequired] public CompositionListItem Item { get; set; } = null!;
+}

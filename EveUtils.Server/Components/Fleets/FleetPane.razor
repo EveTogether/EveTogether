@@ -1,3 +1,4 @@
+@using EveUtils.Server.Components.Runs
 @using EveUtils.Server.DataExplorer
 @using EveUtils.Server.DataExplorer.Destructive
 @using EveUtils.Shared.Modules.Fleet.Entities
@@ -148,7 +149,7 @@ else
                                 }
                             </td>
                             <td>@_Ship(member)</td>
-                            <td><span class="dim">@_RoleLabel(member.Role)</span><span class="flag">@_MemberFlag(member)</span></td>
+                            <td><span class="dim">@FleetRoleText.Label(member.Role)</span><span class="flag">@_MemberFlag(member)</span></td>
                         </tr>
                     }
                 </tbody>
@@ -157,12 +158,41 @@ else
     </section>
 }
 
+<section class="dsec">
+    <div class="sh">
+        Runs flown in this fleet <span class="n">@Runs.Count</span>
+        <span class="derived" title="@RunFleetCell.DerivedTitle">derived</span>
+    </div>
+    @if (Runs.Count == 0)
+    {
+        <p class="dim">No synced run matches this fleet's pilots and the time it was running.</p>
+    }
+    else
+    {
+        <table class="mini">
+            <tbody>
+                @foreach (var run in Runs)
+                {
+                    <tr>
+                        <td><RecordLink Href="@DataLinks.RunGroup(run.Key)">@run.Title</RecordLink></td>
+                        <td><span class="dim">@UtcText.Minutes(run.StartedAtUtc)</span></td>
+                        <td class="num">@(run.Flown is { } flown ? DurationText.HoursMinutes(flown) : "running")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
 <DestructiveActions @key="Fleet.Id" Load="() => Catalog.ForFleetAsync(Fleet.Id)" OnDone="_ReloadAfterActionAsync" />
 
 @code {
     [Parameter, EditorRequired] public FleetListItem Item { get; set; } = null!;
     [Parameter, EditorRequired] public IReadOnlyDictionary<long, string> Names { get; set; } = new Dictionary<long, string>();
     [Parameter, EditorRequired] public IReadOnlySet<int> Paired { get; set; } = new HashSet<int>();
+
+    /// <summary>The run groups matched to this fleet from their pilots and its running window, newest first.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<RunGroupListItem> Runs { get; set; } = [];
 
     /// <summary>Raised after a disband or purge, so the list reloads what changed.</summary>
     [Parameter] public EventCallback OnChanged { get; set; }
@@ -264,14 +294,5 @@ else
         {
             <span class="ok" title="The pilot's own client reports they can fly the assigned fit">can fly</span>
         }
-    };
-
-    private static string _RoleLabel(FleetRole role) => role switch
-    {
-        FleetRole.FleetCommander => "Fleet commander",
-        FleetRole.WingCommander => "Wing commander",
-        FleetRole.SquadCommander => "Squad commander",
-        FleetRole.SquadMember => "Member",
-        _ => "No position",
     };
 }

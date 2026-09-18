@@ -86,7 +86,12 @@
                         if (_grouping.GroupOf is { } groupOf && groupOf(row) is var group && group != currentGroup)
                         {
                             currentGroup = group;
-                            <tr class="grp"><td colspan="@Definition.Columns.Count">@group<span class="n">@_groupSizes[group]</span></td></tr>
+                            <tr class="grp">
+                                <td colspan="@Definition.Columns.Count">@group<span class="n">@_groupSizes[group]</span>@if (_groupSummaries.GetValueOrDefault(group) is { } summary)
+                                    {
+                                        <span class="gsum">@summary</span>
+                                    }</td>
+                            </tr>
                         }
                         var key = Definition.KeyOf(row);
                         var selectUrl = _SelectUrl(key);
@@ -168,6 +173,7 @@
     private List<TRow> _ordered = [];
     private List<TRow> _pageRows = [];
     private Dictionary<string, int> _groupSizes = [];
+    private Dictionary<string, string> _groupSummaries = [];
     private int _pageCount;
     private TRow? _selected;
     private string? _previous;
@@ -205,8 +211,10 @@
             .Where(r => needle.Length == 0 || Definition.SearchTextOf(r).Contains(needle, StringComparison.OrdinalIgnoreCase));
         _ordered = _Order(matching).ToList();
 
-        _groupSizes = _grouping.GroupOf is { } groupOf
-            ? _ordered.GroupBy(groupOf).ToDictionary(g => g.Key, g => g.Count())
+        List<IGrouping<string, TRow>> groups = _grouping.GroupOf is { } groupOf ? _ordered.GroupBy(groupOf).ToList() : [];
+        _groupSizes = groups.ToDictionary(g => g.Key, g => g.Count());
+        _groupSummaries = _grouping.Summary is { } summarize
+            ? groups.ToDictionary(g => g.Key, g => summarize(g.ToList()))
             : [];
         _pageCount = Math.Max(1, (int)Math.Ceiling(_ordered.Count / (double)Definition.PageSize));
         _state = _state with { Page = Math.Min(_state.Page, _pageCount) };

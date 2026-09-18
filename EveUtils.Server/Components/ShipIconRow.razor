@@ -1,0 +1,28 @@
+@using EveUtils.Shared.Modules.Sde
+@inject ISdeAccessor Sde
+@* The distinct hulls in something (a composition's entries), as icons only; each names itself on hover. *@
+@if (TypeIds.Count == 0)
+{
+    <span class="dim">none</span>
+}
+else
+{
+    <span class="shipicons">
+        @foreach (var typeId in TypeIds.Take(Max))
+        {
+            <img class="ent-img" src="https://images.evetech.net/types/@typeId/icon?size=64" width="22" height="22" loading="lazy"
+                 alt="" title="@_Title(typeId)" onerror="this.style.visibility='hidden'" />
+        }
+        @if (TypeIds.Count > Max)
+        {
+            <span class="more">+@(TypeIds.Count - Max)</span>
+        }
+    </span>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<int> TypeIds { get; set; } = [];
+    [Parameter] public int Max { get; set; } = 4;
+
+    private string _Title(int typeId) => Sde.TryGetTypeName(typeId, out var name) ? $"{name} · type id {typeId}" : $"Type {typeId} is not in the loaded SDE";
+}

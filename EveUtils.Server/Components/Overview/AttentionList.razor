@@ -48,16 +48,7 @@
                 <div class="what">@item.Title</div>
                 <div class="why">@item.Detail</div>
             </div>
-            <span class="go">
-                @if (item.Href is not null)
-                {
-                    <a class="lnk" href="@item.Href">Open</a>
-                }
-                else
-                {
-                    <span class="nolist" title="Runs get their own list in a later release">No list yet</span>
-                }
-            </span>
+            <span class="go"><a class="lnk" href="@item.Href">Open</a></span>
         </li>
     };
 }

@@ -1,0 +1,130 @@
+@using EveUtils.Server.DataExplorer
+@using EveUtils.Server.DataExplorer.Destructive
+@using EveUtils.Shared.Modules.Runs.Entities
+@using EveUtils.Shared.Modules.Runs.Enums
+@inject DataAdminService DataAdmin
+@* One run group: when and where it was flown, what it paid in bounties, each pilot's own run, and the fleet it was most
+   likely flown in. Read only: the pilots' clients own their runs and push them back, so the panel offers no delete. *@
+
+<div class="dhead">
+    <div class="dtitle">
+        <div class="ti">@Item.Title</div>
+        <div class="st">
+            @if (Item.Outcome is not null)
+            {
+                <RunOutcomePill Outcome="Item.Outcome" />
+            }
+            <span>@RunGroupListItem.KindLabel(Item.Kind)</span>
+            <span class="dim">·</span>
+            <span>@(SystemName ?? "System not recorded")</span>
+            <code class="idchip" title="@(Item.GroupCode is null ? "Run id: flown without a group" : "Group code")">@(Item.GroupCode ?? Item.Key)</code>
+        </div>
+    </div>
+</div>
+
+<dl class="facts">
+    <dt>Started</dt>
+    <dd>@UtcText.Minutes(Item.StartedAtUtc) <span class="dim">UTC · <RelativeTime At="UtcText.AsOffset(Item.StartedAtUtc)" /></span></dd>
+    <dt>Stopped</dt>
+    <dd>
+        @if (Item.StoppedAtUtc is { } stopped)
+        {
+            @UtcText.Minutes(stopped) <span class="dim">UTC · flown @(Item.Flown is { } flown ? DurationText.HoursMinutes(flown) : "—")</span>
+        }
+        else
+        {
+            <span class="dim">A pilot's run is still on the clock.</span>
+        }
+    </dd>
+    <dt>Fleet</dt>
+    <dd>
+        <RunFleetCell Group="Item" />
+        <span class="dim">@(Item.DerivedFleet is null ? RunFleetCell.NoMatchTitle : RunFleetCell.DerivedTitle)</span>
+    </dd>
+    <dt>Bounties</dt>
+    <dd>@(Item.BountyIsk > 0 ? IskText.Format(Item.BountyIsk) : "none logged") <span class="dim">sum of every pilot's bounty entries</span></dd>
+    <dt>Synced</dt>
+    <dd>revision @Item.Revision <span class="dim">· pushed <RelativeTime At="Item.LastPushedAtUtc is { } pushed ? UtcText.AsOffset(pushed) : null" /></span></dd>
+</dl>
+
+<section class="dsec">
+    <div class="sh">Pilots <span class="n">@Item.Pilots.Count</span> <span class="more dim">one run each</span></div>
+    <table class="mini">
+        <tbody>
+            @foreach (var pilot in Item.Pilots)
+            {
+                var run = _runs?.FirstOrDefault(r => r.Id == pilot.RunId);
+                <tr>
+                    <td><CharacterCell Id="pilot.CharacterId" Name="@Names.GetValueOrDefault(pilot.CharacterId)" Href="@_CharacterHref(pilot.CharacterId)" ShowId="false" /></td>
+                    <td><span class="dim">@_StateLabel(pilot.State)</span>@_InSite(run)</td>
+                    <td class="num">@(pilot.BountyIsk > 0 ? IskText.Format(pilot.BountyIsk) : "—")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</section>
+
+@if (_runs is not null && _Attendance() is { Count: > 0 } attendance)
+{
+    <section class="dsec">
+        <div class="sh">Attendance <span class="n">@attendance.Count(a => a.IsInSite) / @attendance.Count</span> <span class="more dim">in the site at completion</span></div>
+        <table class="mini">
+            <tbody>
+                @foreach (var entry in attendance)
+                {
+                    <tr>
+                        <td><CharacterCell Id="entry.CharacterId" Name="@(entry.CharacterName ?? Names.GetValueOrDefault(entry.CharacterId))" Href="@_CharacterHref(entry.CharacterId)" ShowId="false" /></td>
+                        <td>@(entry.IsInSite ? "in site" : "not in site")@(entry.IsExternal ? " · external" : null)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+}
+
+<DestructiveActions NoActionsReason="@DestructiveActionCatalog.RunsHaveNoActions" />
+
+@code {
+    [Parameter, EditorRequired] public RunGroupListItem Item { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyDictionary<long, string> Names { get; set; } = new Dictionary<long, string>();
+    [Parameter, EditorRequired] public IReadOnlySet<int> Paired { get; set; } = new HashSet<int>();
+    [Parameter] public string? SystemName { get; set; }
+
+    private IReadOnlyList<Run>? _runs;
+    private string? _loadedKey;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedKey == Item.Key && _runs is not null)
+            return;
+        _loadedKey = Item.Key;
+        _runs = null;
+        _runs = await DataAdmin.GetRunGroupRunsAsync(Item.Key);
+    }
+
+    private string? _CharacterHref(long characterId) =>
+        characterId is > 0 and <= int.MaxValue && Paired.Contains((int)characterId) ? DataLinks.Character((int)characterId) : null;
+
+    /// <summary>The list the homefront was decided with. Every run of the group carries the same copy, so the newest
+    /// decision stands for all of them.</summary>
+    private IReadOnlyList<RunAttendanceEntry> _Attendance() =>
+        _runs?.Where(r => r.AttendanceEntries.Count > 0)
+            .OrderByDescending(r => r.AttendanceSetAtUtc)
+            .Select(r => r.AttendanceEntries.OrderBy(a => a.CharacterName).ToList())
+            .FirstOrDefault() ?? [];
+
+    private static string _StateLabel(RunState state) => state switch
+    {
+        RunState.Running => "running",
+        RunState.Stopped => "stopped, not saved",
+        _ => "saved",
+    };
+
+    private static RenderFragment _InSite(Run? run) => __builder =>
+    {
+        if (run?.InSiteAtCompletion is { } inSite)
+        {
+            <span class="dim"> · @(inSite ? "in site at completion" : "not in site at completion")</span>
+        }
+    };
+}

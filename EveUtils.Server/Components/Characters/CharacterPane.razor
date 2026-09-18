@@ -1,0 +1,178 @@
+@using EveUtils.Server.Components.Fleets
+@using EveUtils.Server.Components.Sessions
+@using EveUtils.Server.DataExplorer
+@using EveUtils.Server.DataExplorer.Destructive
+@using EveUtils.Shared.Modules.ServerAuth.Entities
+@inject DestructiveActionCatalog Catalog
+@* One paired character with everything that hangs off it here: its sessions (each opens in Sessions, which links
+   back), the fleets it is rostered in, the fits it shared, the compositions it owns and the runs it flew. *@
+
+<div class="dhead">
+    <div class="dtitle">
+        <div class="ti"><CharacterCell Id="Character.EsiCharacterId" Name="@Character.CharacterName" ShowId="false" /></div>
+        <div class="st">
+            <CharacterStatusPill Status="Item.Status" />
+            <span>@(Corporation ?? "Corporation unknown")</span>
+            <code class="idchip" title="ESI character id">@Character.EsiCharacterId</code>
+        </div>
+    </div>
+</div>
+
+<dl class="facts">
+    <dt>Paired</dt>
+    <dd>@UtcText.Minutes(Character.PairedAt) <span class="dim">UTC · <RelativeTime At="Character.PairedAt" /></span></dd>
+    <dt>ESI token</dt>
+    <dd>
+        @if (Item.IsTokenRevoked)
+        {
+            <span class="bad">ESI refused the refresh token. The pilot has to pair again.</span>
+        }
+        else if (Character.FailureCount > 0)
+        {
+            <span class="bad">@Character.FailureCount failed @(Character.FailureCount == 1 ? "refresh" : "refreshes"), the last <RelativeTime At="Character.LastFailedAt" /></span>
+        }
+        else if (Character.LastRefreshedAt is { } refreshed)
+        {
+            <span>refreshed <RelativeTime At="refreshed" /></span>
+        }
+        else
+        {
+            <span class="dim">never refreshed</span>
+        }
+    </dd>
+    <dt>Scopes</dt>
+    <dd>@Character.GrantedScopes.Count granted <span class="dim">· the token itself is never shown</span></dd>
+    <dt>Row</dt>
+    <dd><code class="idchip" title="Paired character row id">#@Character.Id</code></dd>
+</dl>
+
+<section class="dsec">
+    <div class="sh">Sessions <span class="n">@Item.Sessions.Count</span></div>
+    @if (Item.Sessions.Count == 0)
+    {
+        <p class="dim">No sessions. Paired, but no client has connected for this character.</p>
+    }
+    else
+    {
+        <table class="mini">
+            <tbody>
+                @foreach (var session in Item.Sessions)
+                {
+                    <tr>
+                        <td><SessionStatusPill Status="session.Status" /></td>
+                        <td>seen <RelativeTime At="session.Session.LastHeartbeat" /></td>
+                        <td><span class="dim">issued @UtcText.Minutes(session.Session.IssuedAt)</span></td>
+                        <td class="num"><RecordLink Href="@DataLinks.Session(session.Session.Id)">#@session.Session.Id</RecordLink></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+<section class="dsec">
+    <div class="sh">Fleets <span class="n">@Item.Fleets.Count</span></div>
+    @if (Item.Fleets.Count == 0)
+    {
+        <p class="dim">Not on any fleet's roster.</p>
+    }
+    else
+    {
+        <table class="mini">
+            <tbody>
+                @foreach (var seat in Item.Fleets)
+                {
+                    <tr>
+                        <td><RecordLink Href="@DataLinks.Fleet(seat.Fleet.Fleet.Id)">@seat.Fleet.Fleet.Name</RecordLink></td>
+                        <td><FleetStatusPill Status="seat.Fleet.Status" /></td>
+                        <td><span class="dim">@FleetRoleText.Label(seat.Role)</span></td>
+                        <td class="num">
+                            @if (seat.ShipTypeId is { } shipTypeId)
+                            {
+                                <ShipCell TypeId="shipTypeId" ShowId="false" />
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+<section class="dsec">
+    <div class="sh">Shared fits <span class="n">@Item.SharedFits.Count</span></div>
+    @if (Item.SharedFits.Count == 0)
+    {
+        <p class="dim">None.</p>
+    }
+    else
+    {
+        <div class="reltags">
+            @foreach (var fit in Item.SharedFits)
+            {
+                <span class="fitchip"><RecordLink Href="@DataLinks.SharedFit(fit.Id)"><ShipCell TypeId="fit.ShipTypeId" Caption="@fit.Name" ShowId="false" /></RecordLink></span>
+            }
+        </div>
+    }
+</section>
+
+@if (Item.OwnedCompositions.Count > 0)
+{
+    <section class="dsec">
+        <div class="sh">Compositions owned <span class="n">@Item.OwnedCompositions.Count</span></div>
+        <div class="reltags">
+            @foreach (var composition in Item.OwnedCompositions)
+            {
+                <span class="fitchip text"><RecordLink Href="@DataLinks.Composition(composition.Id)">@composition.Name</RecordLink></span>
+            }
+        </div>
+    </section>
+}
+
+<section class="dsec">
+    <div class="sh">
+        Runs <span class="n">@RunGroups.Count</span>
+        @if (RunGroups.Count > 0)
+        {
+            <span class="more"><RecordLink Href="@DataLinks.RunsOf(Character.EsiCharacterId)">Open in Runs</RecordLink></span>
+        }
+    </div>
+    @if (RunGroups.Count == 0)
+    {
+        <p class="dim">No runs synced to this server.</p>
+    }
+    else
+    {
+        <table class="mini">
+            <tbody>
+                @foreach (var group in RunGroups.Take(MaxRuns))
+                {
+                    <tr>
+                        <td><RecordLink Href="@DataLinks.RunGroup(group.Key)">@group.Title</RecordLink></td>
+                        <td><span class="dim">@UtcText.Minutes(group.StartedAtUtc)</span></td>
+                        <td class="num">@(group.Flown is { } flown ? DurationText.HoursMinutes(flown) : "running")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (RunGroups.Count > MaxRuns)
+        {
+            <p class="dim">@(RunGroups.Count - MaxRuns) more in Runs.</p>
+        }
+    }
+</section>
+
+<DestructiveActions @key="Character.Id" Load="() => Catalog.ForCharacterAsync(Character.Id)" OnDone="OnChanged" />
+
+@code {
+    private const int MaxRuns = 5;
+
+    [Parameter, EditorRequired] public CharacterListItem Item { get; set; } = null!;
+    [Parameter] public string? Corporation { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<RunGroupListItem> RunGroups { get; set; } = [];
+
+    /// <summary>Raised after a delete, so the list reloads what changed.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private SyncedCharacter Character => Item.Character;
+}

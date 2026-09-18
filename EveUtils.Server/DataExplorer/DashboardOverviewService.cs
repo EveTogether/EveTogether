@@ -62,11 +62,6 @@ public sealed class DashboardOverviewService(
             .GroupBy(r => r.CharacterId)
             .Select(g => new RunCharacterRow(g.Key, g.Count()))
             .ToListAsync(ct);
-        int runGroups = await db.Set<Run>().AsNoTracking()
-            .Where(r => r.DeletedAtUtc == null && r.GroupCode != null)
-            .Select(r => r.GroupCode)
-            .Distinct()
-            .CountAsync(ct);
 
         HashSet<int> paired = characters.Select(c => c.EsiCharacterId).ToHashSet();
         HashSet<int> fitIds = fits.Select(f => f.Id).ToHashSet();
@@ -155,9 +150,13 @@ public sealed class DashboardOverviewService(
             },
             RunGroups = new OverviewTile
             {
-                Total = runGroups,
+                Total = counts.RunRows,
                 NeedsAttention = needsAttention(DataEntity.Runs),
-                Segments = [new("groups", runGroups, SegmentTone.Accent)],
+                Segments =
+                [
+                    new("in a group", counts.RunGroups, SegmentTone.Accent),
+                    new("solo", counts.SoloRuns, SegmentTone.Neutral),
+                ],
             },
             Sessions = new OverviewTile
             {
@@ -171,7 +170,6 @@ public sealed class DashboardOverviewService(
                 ],
             },
             Attention = ordered,
-            RunCount = runsByCharacter.Sum(r => r.Runs),
         };
     }
 
@@ -275,9 +273,9 @@ public sealed class DashboardOverviewService(
             }.OfType<string>());
 
             // The link opens the first record that has a list to land on; the counts in the detail say how many more there are.
-            (DataEntity entity, string? href) = sharedFits.Count > 0 ? (DataEntity.SharedFits, DataLinks.SharedFit(sharedFits[0].Id))
+            (DataEntity entity, string href) = sharedFits.Count > 0 ? (DataEntity.SharedFits, DataLinks.SharedFit(sharedFits[0].Id))
                 : fleetIds.Count > 0 ? (DataEntity.Fleets, DataLinks.Fleet(fleetIds[0]))
-                : (DataEntity.Runs, null);
+                : (DataEntity.Runs, DataLinks.RunsOf(id));
             return new AttentionItem
             {
                 Kind = AttentionKind.ReferencesUnpairedCharacter,

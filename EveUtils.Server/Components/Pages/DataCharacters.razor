@@ -1,0 +1,129 @@
+@page "/data/characters"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = PanelPermissions.DataView)]
+@using EveUtils.Server.Components.Characters
+@using EveUtils.Server.Components.DataList
+@using EveUtils.Server.DataExplorer
+@using EveUtils.Server.Esi
+@inject DataAdminService DataAdmin
+@inject EsiCorporationLookup Corporations
+
+@if (_rows is null)
+{
+    <p class="dim loading">Loading characters…</p>
+}
+else
+{
+    <DataList TRow="CharacterListItem" Definition="_definition" Rows="_rows">
+        <Detail Context="item">
+            <CharacterPane Item="item" Corporation="@_CorporationOf(item)" RunGroups="_RunGroupsOf(item)" OnChanged="_LoadAsync" />
+        </Detail>
+    </DataList>
+}
+
+@code {
+    private DataListDefinition<CharacterListItem> _definition = null!;
+    private IReadOnlyList<CharacterListItem>? _rows;
+    private ILookup<long, RunGroupListItem> _runGroupsByPilot = Enumerable.Empty<RunGroupListItem>().ToLookup(g => 0L);
+    private IReadOnlyDictionary<int, string>? _corporations;
+    private bool _askingCorporations;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _definition = _Definition();
+        await _LoadAsync();
+    }
+
+    // The corporations come from public ESI, one character at a time on a cold cache, so the list shows first and
+    // regroups once they are in. After a render, so only the interactive circuit asks; the prerender never does.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_rows is null || _corporations is not null || _askingCorporations)
+            return;
+        _askingCorporations = true;
+        _corporations = await Corporations.ResolveAsync(_rows.Select(c => c.Character.EsiCharacterId));
+        StateHasChanged();
+    }
+
+    private async Task _LoadAsync()
+    {
+        var runGroups = await DataAdmin.ListRunGroupsAsync();
+        _runGroupsByPilot = runGroups
+            .SelectMany(g => g.Pilots.Select(p => p.CharacterId).Distinct().Select(id => (Pilot: id, Group: g)))
+            .ToLookup(x => x.Pilot, x => x.Group);
+        _rows = await DataAdmin.ListCharacterItemsAsync();
+    }
+
+    private IReadOnlyList<RunGroupListItem> _RunGroupsOf(CharacterListItem c) =>
+        _runGroupsByPilot[c.Character.EsiCharacterId].OrderByDescending(g => g.StartedAtUtc).ToList();
+
+    private string? _CorporationOf(CharacterListItem c) => _corporations?.GetValueOrDefault(c.Character.EsiCharacterId);
+
+    private string _CorporationGroup(CharacterListItem c) =>
+        _CorporationOf(c) ?? (_corporations is null ? "Looking up corporations…" : "Corporation unknown");
+
+    private DataListDefinition<CharacterListItem> _Definition() => new()
+    {
+        Title = "Paired characters",
+        Kind = "Character",
+        KeyOf = c => c.Character.EsiCharacterId.ToString(),
+        DefaultGrouping = "corporation",
+        DefaultSort = "-seen",
+        EmptyText = "No characters are paired with this server.",
+        SearchTextOf = c => $"{c.Character.CharacterName} {c.Character.EsiCharacterId} {_CorporationOf(c)}",
+        Filters =
+        [
+            new() { Key = "all", Label = "All", Matches = _ => true },
+            new() { Key = "live", Label = "Live", Matches = c => c.Status == CharacterPanelStatus.Live },
+            new() { Key = "idle", Label = "Idle", Matches = c => c.Status == CharacterPanelStatus.Idle },
+            new()
+            {
+                Key = "attention", Label = "Needs attention",
+                Matches = c => c.Status is CharacterPanelStatus.Failing or CharacterPanelStatus.NeverConnected,
+            },
+        ],
+        Groupings =
+        [
+            new() { Key = "corporation", Label = "Corporation", GroupOf = _CorporationGroup },
+            new() { Key = "status", Label = "Status", GroupOf = c => CharacterStatusPill.Label(c.Status), Rank = c => (int)c.Status },
+            new() { Key = "none", Label = "None" },
+        ],
+        Columns =
+        [
+            new()
+            {
+                Key = "name", Label = "Character", SortBy = c => c.Character.CharacterName,
+                Cell = c => @<span class="ent">
+                                <img class="ent-img round" src="https://images.evetech.net/characters/@c.Character.EsiCharacterId/portrait?size=64" width="22" height="22" loading="lazy" alt="" onerror="this.style.visibility='hidden'" />
+                                <span class="cellstack"><span class="nm1">@c.Character.CharacterName</span><span class="dim">@(_CorporationOf(c) ?? "—")</span></span>
+                            </span>,
+            },
+            new()
+            {
+                Key = "status", Label = "Status", SortBy = c => (int)c.Status,
+                Cell = c => @<CharacterStatusPill Status="c.Status" />,
+            },
+            new()
+            {
+                Key = "seen", Label = "Last seen", SortBy = c => c.LastSeen, SortDescendingFirst = true,
+                Cell = c => @<RelativeTime At="c.LastSeen" />,
+            },
+            new()
+            {
+                Key = "sessions", Label = "Sessions", SortBy = c => c.Sessions.Count, SortDescendingFirst = true, Numeric = true,
+                Cell = c => @<span class="@(c.Sessions.Count == 0 ? "dim" : null)">@c.Sessions.Count</span>,
+            },
+            new()
+            {
+                Key = "fleets", Label = "Fleets", SortBy = c => c.Fleets.Count, SortDescendingFirst = true, Numeric = true,
+                Cell = c => @<span class="@(c.Fleets.Count == 0 ? "dim" : null)">@c.Fleets.Count</span>,
+            },
+            new()
+            {
+                Key = "runs", Label = "Runs", SortBy = c => _runGroupsByPilot[c.Character.EsiCharacterId].Count(), SortDescendingFirst = true,
+                Numeric = true, HideWhenNarrow = true,
+                Cell = c => @<span class="@(_runGroupsByPilot[c.Character.EsiCharacterId].Any() ? null : "dim")">@_runGroupsByPilot[c.Character.EsiCharacterId].Count()</span>,
+            },
+        ],
+    };
+}

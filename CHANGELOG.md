@@ -13,9 +13,20 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Changed (server panel): every kind of data now has its own list, and the records link to each other.** The one
+  long Data page is gone. Characters, Compositions, Shared fits, Runs and Sessions each get a list like Fleets
+  already had, opened grouped the way you usually look for things: characters by corporation, shared fits by who
+  shared them, runs by day with a line for what the day added up to, sessions by character. Select a row and the
+  pane beside it shows the record with everything it touches, each one a link: a composition's roles and the shared
+  fits they use and back, a shared fit's modules and which compositions and pilots took a copy, a character's
+  sessions, fleets, fits and runs, and a session's other machines. A shared fit whose stored contents cannot be read
+  says so in its pane instead of breaking the list. Runs are shown for the first time, with their pilots, bounties
+  and outcome, and with the fleet they were most likely flown in, marked as derived because a run does not store
+  its fleet. Runs cannot be deleted from the panel: the pilots' clients would only push them back. The Dashboard's
+  run tile and its run-only orphan now open that list.
 - **Changed (server panel): deleting something can no longer happen by one stray click in a long list.** The red
   Delete, Disband, Purge and Revoke buttons are gone from the rows. They now sit in a collapsed Destructive actions
-  block under the record they belong to (on Data, open a row first), and each one says what it will take with it,
+  block under the record they belong to (open the record first), and each one says what it will take with it,
   counted from the server at that moment: how many members a fleet still has and whether it is in op, how many of a
   character's sessions are live, which fleets still point at a composition. Disbanding a fleet, revoking a session,
   deleting a shared fit or an unused composition takes two steps; purging a fleet, deleting a paired character or a

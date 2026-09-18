@@ -1,0 +1,116 @@
+@page "/data/fits"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = PanelPermissions.DataView)]
+@using EveUtils.Server.Components.DataList
+@using EveUtils.Server.Components.SharedFits
+@using EveUtils.Server.DataExplorer
+@using EveUtils.Server.Esi
+@using EveUtils.Shared.Modules.Sde
+@inject DataAdminService DataAdmin
+@inject EsiNameLookup NameLookup
+@inject ISdeAccessor Sde
+
+@if (_rows is null)
+{
+    <p class="dim loading">Loading shared fits…</p>
+}
+else
+{
+    <DataList TRow="SharedFitListItem" Definition="_definition" Rows="_rows">
+        <Detail Context="item">
+            <SharedFitPane Item="item" Names="_names" Paired="_paired" OnChanged="_LoadAsync" />
+        </Detail>
+    </DataList>
+}
+
+@code {
+    private DataListDefinition<SharedFitListItem> _definition = null!;
+    private IReadOnlyList<SharedFitListItem>? _rows;
+    private IReadOnlyDictionary<long, string> _names = new Dictionary<long, string>();
+    private IReadOnlySet<int> _paired = new HashSet<int>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _definition = _Definition();
+        await _LoadAsync();
+    }
+
+    private async Task _LoadAsync()
+    {
+        var rows = await DataAdmin.ListSharedFitItemsAsync();
+        var synced = await DataAdmin.ListSyncedCharactersAsync();
+        // The sharer's name travels with the fit, so only assigned pilots can need ESI.
+        var names = (await CharacterNames.ResolveAsync(synced, rows.SelectMany(f => f.Assignments).Select(a => (long)a.CharacterId), NameLookup))
+            .ToDictionary();
+        foreach (var fit in rows.Select(f => f.Fit).Where(f => f.SharedByCharacterName.Length > 0))
+            names.TryAdd(fit.SharedByCharacterId, fit.SharedByCharacterName);
+        _names = names;
+        _paired = synced.Select(c => c.EsiCharacterId).ToHashSet();
+        _rows = rows;
+    }
+
+    private string? _NameOf(int characterId) => _names.GetValueOrDefault(characterId);
+
+    private string? _CharacterHref(int characterId) => _paired.Contains(characterId) ? DataLinks.Character(characterId) : null;
+
+    private string _HullOf(SharedFitListItem f) => Sde.TryGetTypeName(f.Fit.ShipTypeId, out var name) ? name : $"Type {f.Fit.ShipTypeId}";
+
+    private static string _Usage(SharedFitListItem f) => f.IsUsed
+        ? $"{f.Compositions.Count} {(f.Compositions.Count == 1 ? "composition" : "compositions")} · {f.Assignments.Count} {(f.Assignments.Count == 1 ? "pilot" : "pilots")}"
+        : "unused";
+
+    private DataListDefinition<SharedFitListItem> _Definition() => new()
+    {
+        Title = "Shared fits",
+        Kind = "Shared fit",
+        KeyOf = f => f.Fit.Id.ToString(),
+        DefaultGrouping = "sharer",
+        DefaultSort = "-shared",
+        EmptyText = "No fits are shared to this server.",
+        SearchTextOf = f => $"{f.Fit.Name} {_HullOf(f)} {f.Fit.Id} {f.Fit.ShipTypeId} {f.Fit.SharedByCharacterId} {_NameOf(f.Fit.SharedByCharacterId)}",
+        Filters =
+        [
+            new() { Key = "all", Label = "All", Matches = _ => true },
+            new() { Key = "used", Label = "In use", Matches = f => f.IsUsed },
+            new() { Key = "unused", Label = "Unused", Matches = f => !f.IsUsed },
+            new() { Key = "unpaired", Label = "Sharer not paired", Matches = f => !_paired.Contains(f.Fit.SharedByCharacterId) },
+        ],
+        Groupings =
+        [
+            new() { Key = "sharer", Label = "Shared by", GroupOf = f => _NameOf(f.Fit.SharedByCharacterId) ?? $"Character {f.Fit.SharedByCharacterId}" },
+            new() { Key = "ship", Label = "Ship", GroupOf = _HullOf },
+            new() { Key = "none", Label = "None" },
+        ],
+        Columns =
+        [
+            new()
+            {
+                Key = "name", Label = "Fit", SortBy = f => f.Fit.Name,
+                Cell = f => @<span class="ent">
+                                <img class="ent-img" src="https://images.evetech.net/types/@f.Fit.ShipTypeId/icon?size=64" width="22" height="22" loading="lazy" alt="" onerror="this.style.visibility='hidden'" />
+                                <span class="cellstack"><span class="nm1">@f.Fit.Name</span><span class="dim">@_HullOf(f)</span></span>
+                            </span>,
+            },
+            new()
+            {
+                Key = "sharer", Label = "Shared by", SortBy = f => _NameOf(f.Fit.SharedByCharacterId),
+                Cell = f => @<CharacterCell Id="f.Fit.SharedByCharacterId" Name="@_NameOf(f.Fit.SharedByCharacterId)" Href="@_CharacterHref(f.Fit.SharedByCharacterId)" ShowId="false" />,
+            },
+            new()
+            {
+                Key = "used", Label = "Used in", SortBy = f => f.Compositions.Count * 1000 + f.Assignments.Count, SortDescendingFirst = true,
+                Cell = f => @<span class="@(f.IsUsed ? null : "dim")">@_Usage(f)</span>,
+            },
+            new()
+            {
+                Key = "shared", Label = "Shared", SortBy = f => f.Fit.SharedAt, SortDescendingFirst = true,
+                Cell = f => @<RelativeTime At="f.Fit.SharedAt" />,
+            },
+            new()
+            {
+                Key = "hash", Label = "Content hash", HideWhenNarrow = true,
+                Cell = f => @<span class="idm" title="@f.Fit.ContentHash">@(f.Fit.ContentHash.Length == 0 ? "—" : f.Fit.ContentHash[..Math.Min(8, f.Fit.ContentHash.Length)] + "…")</span>,
+            },
+        ],
+    };
+}

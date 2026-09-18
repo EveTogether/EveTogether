@@ -1,0 +1,72 @@
+@using EveUtils.Server.DataExplorer
+@using EveUtils.Server.DataExplorer.Destructive
+@using EveUtils.Shared.Modules.ServerAuth.Entities
+@inject DestructiveActionCatalog Catalog
+@* One session: when it was last heard from, when its tokens run out, and the character's other machines. Revoking
+   it is its own task (a lost laptop), which is why sessions have a list and not only a section under Characters. *@
+
+<div class="dhead">
+    <div class="dtitle">
+        <div class="ti"><SessionOwnerCell Session="Session" /></div>
+        <div class="st">
+            <SessionStatusPill Status="Item.Status" />
+            <span>session</span>
+            <code class="idchip" title="Session id">#@Session.Id</code>
+        </div>
+    </div>
+</div>
+
+<dl class="facts">
+    <dt>Last seen</dt>
+    <dd><RelativeTime At="Session.LastHeartbeat" /> <span class="dim">@UtcText.Minutes(Session.LastHeartbeat) UTC</span></dd>
+    <dt>Issued</dt>
+    <dd>@UtcText.Minutes(Session.IssuedAt) <span class="dim">UTC</span></dd>
+    <dt>Access expires</dt>
+    <dd>@UtcText.Minutes(Session.ExpiresAt) <span class="dim">UTC</span></dd>
+    <dt>Refresh expires</dt>
+    <dd>@UtcText.Minutes(Session.RefreshExpiresAt) <span class="dim">UTC</span></dd>
+    <dt>Tokens</dt>
+    <dd><span class="dim">Stored as hashes only and never shown.</span></dd>
+</dl>
+
+<section class="dsec">
+    <div class="sh">
+        Other sessions of this character <span class="n">@Siblings.Count</span>
+        @if (Session.SyncedCharacter is { } owner)
+        {
+            <span class="more"><RecordLink Href="@DataLinks.Character(owner.EsiCharacterId)">Open character</RecordLink></span>
+        }
+    </div>
+    @if (Siblings.Count == 0)
+    {
+        <p class="dim">None. This is the only machine this character is paired on.</p>
+    }
+    else
+    {
+        <table class="mini">
+            <tbody>
+                @foreach (var sibling in Siblings)
+                {
+                    <tr>
+                        <td><SessionStatusPill Status="sibling.Status" /></td>
+                        <td>seen <RelativeTime At="sibling.Session.LastHeartbeat" /></td>
+                        <td><span class="dim">issued @UtcText.Minutes(sibling.Session.IssuedAt)</span></td>
+                        <td class="num"><RecordLink Href="@DataLinks.Session(sibling.Session.Id)">#@sibling.Session.Id</RecordLink></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+<DestructiveActions @key="Session.Id" Load="() => Catalog.ForSessionAsync(Session.Id)" OnDone="OnChanged" />
+
+@code {
+    [Parameter, EditorRequired] public SessionListItem Item { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyList<SessionListItem> Siblings { get; set; } = [];
+
+    /// <summary>Raised after a revoke, so the list reloads what changed.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private ServerSession Session => Item.Session;
+}
