@@ -78,10 +78,16 @@ public sealed partial class GamelogClientService : IFleetMetricSource, ISingleto
     private readonly ConcurrentDictionary<string, WeaponApplicationTracker> _application = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, WeaponClass> _weaponClasses = new(StringComparer.Ordinal);
 
-    // Per-RUN bounty per (fleet, character): only ISK earned while the character is participating in that fleet — the
-    // fleet meter is "this run", not the persisted lifetime total. Populated by AddBountyAsync when a kill lands while
-    // participating; read by the fleet sampler.
-    private readonly ConcurrentDictionary<(long FleetId, int CharacterId), long> _fleetRunBounty = new();
+    // Bounty per RUN, keyed by the run itself (ET-309). It used to be keyed by (fleet, character) and reset when that
+    // character started a run — so a fleet member who did NOT start the next run was never reset, and the FLEET rows of
+    // HF-RKM8 showed three offline alts with the 67,500 each had earned in HF-KKCW the day before. A new run is a new
+    // key: there is nothing to reset, and nothing an earlier run left behind can be read under it.
+    private readonly ConcurrentDictionary<Guid, long> _runBounty = new();
+
+    // The run each character is flying right now, and in which fleet, from its RunStartedEvent until that run is saved
+    // or deleted — one per character, the same rule OneRunPerCharacter holds the store to. A character without one
+    // has no run bounty to show, whatever it earned before.
+    private readonly ConcurrentDictionary<int, (Guid RunId, long? FleetId)> _currentRun = new();
 
     // One-shot persisted-state load per character: bounty + mined survive restarts.
     private readonly ConcurrentDictionary<string, Task> _seeding = new(StringComparer.OrdinalIgnoreCase);
@@ -174,16 +180,10 @@ public sealed partial class GamelogClientService : IFleetMetricSource, ISingleto
         // re-confirming a healthy token, so this cannot turn into a rebuild storm of its own.
         _eventBus.Subscribe<TokenRefreshedEvent>(evt => _ = MapRegisteredCharacterAsync(evt.Data.CharacterId));
 
-        // A run's own bounty meter is meant to count only what THIS run earned — the doc on Sample() below has
-        // always said so — but _fleetRunBounty was never reset anywhere, so it kept accumulating for as long as a
-        // character stayed in the fleet. A second run in the same fleet inherited the first run's bounty on top of
-        // its own (found 2026-09-09 testing ET-210: one pilot who had been in the fleet since an earlier run showed
-        // several million ISK more than four alts who had only just joined it). Reset per run, not per membership.
         _eventBus.Subscribe<RunStartedEvent>(evt =>
-        {
-            if (evt.Data.FleetId is { } fleetId)
-                _fleetRunBounty[(fleetId, checked((int)evt.Data.CharacterId))] = 0;
-        });
+            _currentRun[checked((int)evt.Data.CharacterId)] = (evt.Data.RunId, evt.Data.FleetId));
+        _eventBus.Subscribe<RunSavedEvent>(evt => EndRun(evt.Data));
+        _eventBus.Subscribe<RunDeletedEvent>(evt => EndRun(evt.Data));
 
         _ = Task.Run(() => RemotePublishLoopAsync(CancellationToken.None)); // steady remote sample stream
     }
@@ -507,9 +507,11 @@ public sealed partial class GamelogClientService : IFleetMetricSource, ISingleto
             }
         }
 
-        // Bounty is per fleet RUN: only ISK earned since THIS run started (reset on RunStartedEvent, in the
-        // constructor) — the persisted lifetime total stays out of the fleet meter, and so does an earlier run's.
-        var bounty = (double)_fleetRunBounty.GetValueOrDefault((fleetId, characterId));
+        // Bounty is the character's own run in THIS fleet, and zero without one (ET-309) — a zero every tick rather than
+        // silence, so a figure a receiver already holds comes down instead of standing on their FLEET row.
+        var bounty = _currentRun.TryGetValue(characterId, out var current) && current.FleetId == fleetId
+            ? (double)GetRunBounty(current.RunId)
+            : 0;
 
         // Every combat rate every tick — including zero — so each live graph line decays back to zero when it stops.
         yield return new MetricSample(characterId, fleetId, MetricKind.Dps, rates.Dealt, unixMs);
@@ -561,17 +563,17 @@ public sealed partial class GamelogClientService : IFleetMetricSource, ISingleto
     private static double CurrentRate(ConcurrentDictionary<string, LiveRateTracker> rates, string name, DateTime now) =>
         rates.TryGetValue(name, out var rate) ? rate.Sample(now) : 0;
 
-    /// <summary>Record a bounty payout (one kill); persisted across restarts. If the character is
-    /// participating in a fleet right now, the payout is also added to that fleet's per-run bounty (fleet meter).
+    /// <summary>Record a bounty payout (one kill); persisted across restarts. If the character is flying a run
+    /// right now, the payout is also added to that run's own bounty (<see cref="GetRunBounty"/>).
     /// Also hangs a <see cref="RunBountyEntry"/> straight on whichever run is running now for this character
-    /// (ET-219) — until this, a run's bounty lived only in <see cref="_fleetRunBounty"/> and the caller's own
+    /// (ET-219) — until this, a run's bounty lived only in this service's in-memory tally and the caller's own
     /// SAVE, so a crash, a closed window, or the 24h auto-save of an unfinished run lost it outright.</summary>
     public async Task AddBountyAsync(string characterName, BountyEvent bounty)
     {
         var name = Resolve(characterName);
         await EnsureSeededAsync(name);
         Metrics(name).RecordBounty(bounty.Isk);
-        AddFleetRunBounty(name, bounty.Isk);
+        AddRunBounty(name, bounty.Isk);
         BountyObserved?.Invoke(name, bounty);
         MetricsChanged?.Invoke();
         await PersistAsync(name);
@@ -584,25 +586,25 @@ public sealed partial class GamelogClientService : IFleetMetricSource, ISingleto
         }
     }
 
-    /// <summary>This character's own bounty for the run currently going in this fleet — the same figure
-    /// <see cref="Sample"/> publishes, read directly and synchronously (unlike <see cref="RunParticipantViewModel.BountyIsk"/>,
-    /// which only catches up on the next async participants refresh). A real, multi-machine fleet's own window
-    /// still reads this per participant (ET-257): a fleet mate's bounty never lands in this machine's own
-    /// <c>RunBountyEntry</c> table, since nothing here watches their gamelog.</summary>
-    public long GetFleetRunBounty(long fleetId, int characterId) => _fleetRunBounty.GetValueOrDefault((fleetId, characterId));
+    /// <summary>This run's own bounty so far — the same figure <see cref="Sample"/> publishes for it, read directly and
+    /// synchronously (unlike <see cref="RunParticipantViewModel.BountyIsk"/>, which only catches up on the next async
+    /// participants refresh). Keyed by the run, so another run's ISK cannot be read under it (ET-309). Zero for a run
+    /// this session never saw start: after a restart the run's own <c>RunBountyEntry</c> total is the one to trust.</summary>
+    public long GetRunBounty(Guid runId) => _runBounty.GetValueOrDefault(runId);
 
-    // Attribute a kill's bounty to every fleet this character is participating in right now, so the fleet meter counts
-    // only ISK earned during the run — a kill landed before joining (not participating) is never added.
-    private void AddFleetRunBounty(string name, long isk)
+    private void AddRunBounty(string name, long isk)
     {
-        if (!_idByName.TryGetValue(name, out var characterId))
-            return;
-        var participation = _services.GetService<IFleetParticipation>();
-        if (participation is null)
-            return;
-        foreach (var participant in participation.Current)
-            if (participant.CharacterId == characterId)
-                _fleetRunBounty.AddOrUpdate((participant.FleetId, characterId), isk, (_, previous) => previous + isk);
+        if (_idByName.TryGetValue(name, out var characterId) && _currentRun.TryGetValue(characterId, out var current))
+            _runBounty.AddOrUpdate(current.RunId, isk, (_, previous) => previous + isk);
+    }
+
+    // The run's own tally stays readable after SAVE — the window goes on showing what it made — only the character is
+    // no longer flying it.
+    private void EndRun(Guid runId)
+    {
+        foreach (var entry in _currentRun)
+            if (entry.Value.RunId == runId)
+                _currentRun.TryRemove(entry);
     }
 
     /// <summary>Record a mining cycle; mined units per ore persisted across restarts (the lifetime total, unchanged

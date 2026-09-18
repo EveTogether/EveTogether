@@ -224,7 +224,7 @@ public class MultipleConcurrentRunsTests
     /// missing, and the runs-overview row and the day total (which sum <c>ActivitySummary.BountyIsk</c>, itself
     /// correctly summed over every run in the group) both showed that same undercounted figure. The window only
     /// ever watches the ACTING character's gamelog directly; a sibling's own bounty has to come from
-    /// <c>GamelogClientService.GetFleetRunBounty</c> or SAVE has nothing to write for them at all.
+    /// <c>GamelogClientService.GetRunBounty</c> or SAVE has nothing to write for them at all.
     /// </summary>
     [AvaloniaFact]
     public async Task SavedActivity_CarriesBountyForEveryParticipant_NotJustTheActingCharacter()
@@ -248,7 +248,7 @@ public class MultipleConcurrentRunsTests
         // The acting character's own kill — captured the way it always was, through this window's gamelog watch.
         await gamelog.AddBountyAsync(ActivityWindowHarness.CharacterName, new BountyEvent(DateTime.UtcNow, 675_000));
         // The second character's own kill — this window never watches their gamelog directly; only
-        // GamelogClientService's own per-run tally (GetFleetRunBounty) knows about it.
+        // GamelogClientService's own per-run tally (GetRunBounty) knows about it.
         await gamelog.AddBountyAsync("Second Pilot", new BountyEvent(DateTime.UtcNow, 675_000));
 
         model.StopRun(DateTime.UtcNow);
@@ -308,7 +308,7 @@ public class MultipleConcurrentRunsTests
 
         // The starter's SECOND kill, landing on his own gamelog WHILE the window is showing someone else — the
         // half of the bug _bounties alone (filtered on whichever name is "acting" right now) can never fix, no
-        // matter whether it is cleared on switch: GamelogClientService.GetFleetRunBounty is what still has this,
+        // matter whether it is cleared on switch: GamelogClientService.GetRunBounty is what still has this,
         // because it tracks every character's own tally independently of which one this window is looking at.
         await gamelog.AddBountyAsync(ActivityWindowHarness.CharacterName, new BountyEvent(DateTime.UtcNow, 337_500));
 
@@ -389,7 +389,7 @@ public class MultipleConcurrentRunsTests
     /// beside ELAPSED but the acting character's own "135,000 ISK — own character" bounty figure — wrong for a
     /// group, and Jithran's own screenshot showed exactly that during a five-character run). Must include a
     /// character this window never watches directly (the second pilot's bounty only lives in
-    /// <c>GamelogClientService.GetFleetRunBounty</c>), and must not move when the character column is switched —
+    /// <c>GamelogClientService.GetRunBounty</c>), and must not move when the character column is switched —
     /// the same kind of confusion the round 3 bounty/enemies fix already cleaned up for the saved screen.
     /// </summary>
     [AvaloniaFact]

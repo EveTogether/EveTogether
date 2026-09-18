@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Gamelog;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Runs;
@@ -19,6 +20,9 @@ using EveUtils.Shared.Data;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Events;
+using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
@@ -538,6 +542,97 @@ public sealed class HomefrontMoneyScenarioTests
         await group.AssertOneStoryAsync(HomefrontOutcome.Completed, n: 5, payout: 5 * FivePilots, bounty: 84_375m + 67_500m);
     }
 
+    /// <summary>
+    /// ET-309, HF-RKM8 as Jithran flew it on 2026-09-18: his five own toons in his own fleet since the day before, where
+    /// each of them earned 67,500 in HF-KKCW. Today he starts a run with two of them. FLEET went on listing the other
+    /// three with that 67,500 each — the fleet tally was never cleared for a member who did not start the new run.
+    /// Now the three show "not in this run" and no ISK, the two who fly keep their own live figures, and nothing of
+    /// yesterday reaches TOTAL or the saved activity.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ARunWithTwoOfFiveToons_ShowsNoBountyFromTheFleetsEarlierRun_ForTheThreeWhoAreNotInIt()
+    {
+        using Group group = await Group.StartAsync(toons: 5, fleetId: 7, picked: 2,
+            earlierRun: async (services, fleetId, ids) =>
+            {
+                IDispatcher dispatcher = services.GetRequiredService<IDispatcher>();
+                GamelogClientService gamelog = services.GetRequiredService<GamelogClientService>();
+                DateTime startedAtUtc = DateTime.UtcNow.AddDays(-1);
+                foreach (int id in ids)
+                {
+                    string name = _NameOf(id);
+                    gamelog.MapCharacter(id, name);
+                    Guid run = (await dispatcher.Send(new StartRunCommand(id, ActivityKind.Site, startedAtUtc,
+                        Raid.DungeonId, Raid.Name, 30002193, GroupCode: "HF-KKCW", FleetId: fleetId))).Value;
+                    await gamelog.AddBountyAsync(name, new BountyEvent(startedAtUtc.AddMinutes(2), 67_500));
+                    Assert.True((await dispatcher.Send(new SaveRunCommand(run, startedAtUtc.AddMinutes(4),
+                        startedAtUtc.AddMinutes(4), [], [], [], []))).IsSuccess);
+                }
+            },
+            settledWhen: started => started.Window.Participants.Count == 2);
+        GamelogClientService gamelog = group.Services.GetRequiredService<GamelogClientService>();
+        long fleetId = Assert.IsType<long>(group.Window.FleetId);
+        long[] flying = [.. group.Own.Take(2)];
+        long[] docked = [.. group.Own.Skip(2)];
+        Assert.Equal(flying.Order(), group.Window.Participants.Select(participant => (long)participant.CharacterId).Order());
+
+        await gamelog.AddBountyAsync(_NameOf(flying[0]), new BountyEvent(DateTime.UtcNow, 13_046_750));
+        await _PublishFleetStreamAsync(group, gamelog, fleetId);
+
+        foreach (long id in docked)
+            Assert.Equal(0, gamelog.Sample(fleetId, (int)id, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+                .First(sample => sample.Kind == MetricKind.Bounty).Value);
+        // Whatever the stream last carried — an older client, a sample from before this fix — this client knows its own
+        // runs and takes its own word over it.
+        await group.Services.GetRequiredService<IEventBus>().PublishAsync(new FleetMetricEvent(
+            new MetricSample((int)docked[0], fleetId, MetricKind.Bounty, 67_500, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())));
+        await group.SettleAsync();
+
+        foreach (long id in docked)
+        {
+            FleetCharacterRowViewModel row = group.Window.Fleet().Rows.Single(candidate => candidate.CharacterId == id);
+            Assert.True(row.IsLocal);
+            Assert.Equal(["not in this run"], row.Figures.Select(figure => figure.Label));
+            Assert.False(group.Window.CharacterIsk.ContainsKey(id));
+        }
+
+        Assert.Equal("13,046,750", _Figure(group, flying[0], "bounty"));
+        Assert.Null(_Figure(group, flying[1], "bounty"));
+
+        await gamelog.AddBountyAsync(_NameOf(flying[1]), new BountyEvent(DateTime.UtcNow, 337_500));
+        await group.SettleAsync();
+        Assert.Equal("337,500", _Figure(group, flying[1], "bounty"));
+        Assert.Equal(13_384_250m, group.Window.CharacterIsk.Values.Sum(isk => isk.Of(IskSource.Bounty)?.Amount ?? 0m));
+
+        await group.StopAndSaveAsync();
+        List<Run> saved = await group.RunsAsync(includeBounty: true);
+        Assert.Equal(13_384_250m, saved.SelectMany(run => run.BountyEntries).Sum(entry => entry.Isk));
+        Assert.Equal(13_384_250m, (await group.RowAsync()).Isk.Of(IskSource.Bounty)?.Amount);
+    }
+
+    private static string _NameOf(long id) =>
+        id == ActivityWindowHarness.CharacterId ? ActivityWindowHarness.CharacterName : $"Toon {id}";
+
+    private static string? _Figure(Group group, long characterId, string label) =>
+        group.Window.Fleet().Rows.Single(row => row.CharacterId == characterId).Figures
+            .FirstOrDefault(figure => figure.Label == label)?.Value;
+
+    /// <summary>What <c>FleetMetricPublisher</c> puts on the bus each tick for every own toon in the fleet: the
+    /// gamelog's own samples, location included so the member shows up on FLEET at all.</summary>
+    private static async Task _PublishFleetStreamAsync(Group group, GamelogClientService gamelog, long fleetId)
+    {
+        IEventBus bus = group.Services.GetRequiredService<IEventBus>();
+        long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        foreach (long id in group.Own)
+        {
+            foreach (MetricSample sample in gamelog.Sample(fleetId, (int)id, nowMs).Where(sample => sample.Kind is MetricKind.Bounty))
+                await bus.PublishAsync(new FleetMetricEvent(sample));
+            await bus.PublishAsync(new FleetMetricEvent(new MetricSample((int)id, fleetId, MetricKind.Location, 0, nowMs, "Pala")));
+        }
+
+        await group.SettleAsync();
+    }
+
     // ── The group ───────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>One pilot's machine flying a Raid: Hall of Sacrifice on <c>toons</c> own characters, every one ticked
@@ -576,8 +671,12 @@ public sealed class HomefrontMoneyScenarioTests
         /// <param name="picked">How many of the toons the multi-pick ticks; the rest are in the fleet, not in the start.</param>
         /// <param name="isStartRaced">HF-DYB4 as it happened (ET-274): fleet runs open by themselves, and the siblings'
         /// own starts wait while the window ticks and while the open window is handed a reload.</param>
+        /// <param name="earlierRun">Whatever happened in the fleet before this run (ET-309), given the fleet's id and every
+        /// toon — run once the fleet stands, before the window opens.</param>
+        /// <param name="settledWhen">When the started group counts as settled; by default HOMEFRONT listing every toon.</param>
         public static async Task<Group> StartAsync(int toons, long? fleetId = null, bool isRosterFleet = false,
-            int? picked = null, bool isStartRaced = false)
+            int? picked = null, bool isStartRaced = false, Func<IServiceProvider, long, int[], Task>? earlierRun = null,
+            Func<Group, bool>? settledWhen = null)
         {
             int[] ids = [.. Enumerable.Range(0, toons).Select(index => ActivityWindowHarness.CharacterId + index)];
             int[] pickedIds = [.. ids.Take(picked ?? toons)];
@@ -597,6 +696,9 @@ public sealed class HomefrontMoneyScenarioTests
                     [.. ids.Select(id => new FleetParticipant(id, fleet, ClientOnly: true, ActivityWindowHarness.CharacterId))]);
             if (isRosterFleet || isStartRaced)
                 await _CommandARosterFleetAsync(harness, ids);
+            if (earlierRun is not null)
+                await earlierRun(harness.Services,
+                    harness.Services.GetRequiredService<IFleetParticipation>().Current.First().FleetId, ids);
             if (isStartRaced)
             {
                 await harness.Services.GetRequiredService<IDispatcher>().Send(
@@ -613,7 +715,8 @@ public sealed class HomefrontMoneyScenarioTests
             await ActivityWindowHarness.WaitUntil(() => window.Participants.Count >= pickedIds.Length, timeoutMs: 10_000);
 
             await group.SettleAsync();
-            await group.TickUntilAsync(() => group.Section.CanDecide && group.Section.Rows.Count(row => row.IsLocal) == toons);
+            await group.TickUntilAsync(() => settledWhen?.Invoke(group)
+                                             ?? (group.Section.CanDecide && group.Section.Rows.Count(row => row.IsLocal) == toons));
             return group;
         }
 

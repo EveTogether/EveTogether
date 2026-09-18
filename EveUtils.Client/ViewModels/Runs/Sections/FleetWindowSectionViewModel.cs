@@ -100,8 +100,12 @@ public sealed partial class FleetWindowSectionViewModel(IRunWindowContext contex
             row.Name = member.Name;
             row.IsLocal = _own.Contains(member.CharacterId);
             row.SubText = member.LocationText;
-            _ShowFigures(row, FleetCharacterRowViewModel.FiguresOf(member.BountyIsk, member.LootIsk,
-                isBountyWithheld: share is { SharesBounty: false }, isLootWithheld: share is { SharesLoot: false }));
+            // An own character with no run here made nothing in it, whatever the fleet stream last said about it
+            // (ET-309) — this client knows every run of its own, so it takes its own word over the stream's.
+            _ShowFigures(row, row.IsLocal
+                ? [new FleetFigure("not in this run", string.Empty, IsQuiet: true)]
+                : FleetCharacterRowViewModel.FiguresOf(member.BountyIsk, member.LootIsk,
+                    isBountyWithheld: share is { SharesBounty: false }, isLootWithheld: share is { SharesLoot: false }));
             row.IsSharing = true;
             row.CanToggleShare = false;
             rows.Add(row);

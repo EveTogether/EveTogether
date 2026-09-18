@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
@@ -18,7 +19,7 @@ namespace EveUtils.Client.UiTests;
 /// Review finding on PR #253, 2026-09-09: Jithran ran a site with five of his own toons in one fleet. Four alts,
 /// freshly joined that fleet, showed the site's true bounty share (286,875 ISK each). His own long-running toon
 /// showed 5,286,875 — exactly 5,000,000 too much. Measured, not guessed: <c>GamelogClientService._fleetRunBounty</c>
-/// is keyed by <c>(FleetId, CharacterId)</c> and was never reset anywhere — despite <c>Sample()</c>'s own doc comment
+/// was keyed by <c>(FleetId, CharacterId)</c> and was never reset anywhere — despite <c>Sample()</c>'s own doc comment
 /// promising "only ISK earned since this character started participating in this fleet". His toon had been in that
 /// fleet since an EARLIER run (an unrelated 5,000,000 ISK kill), so the SECOND run's meter inherited it; the four
 /// alts had just joined and started clean. The bug is in the recording (this dictionary never resetting), not in the
@@ -109,4 +110,123 @@ public class FleetRunBountyResetTests
         // actually saw (which included the veteran's stale 5,000,000 from a run that had nothing to do with this one).
         Assert.Equal(1_350_000, veteranBounty + freshAltBounty);
     }
+
+    /// <summary>
+    /// ET-309, HF-RKM8 as Jithran flew it on 2026-09-18: five own characters in one fleet since the day before, where
+    /// each earned 67,500 in HF-KKCW. Today only two of them started the mission. Counter-proof, red against the code
+    /// before this fix: the reset only ran for a character that STARTED a run, so the three who stayed docked still
+    /// published yesterday's 67,500 as this run's bounty.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task FleetMembersWhoDidNotStartTheNewRun_PublishNoBountyFromTheirEarlierRun()
+    {
+        int[] five = [90000201, 90000202, 90000203, 90000204, 90000205];
+        using var instance = TestClientInstance.Create();
+        var gamelog = instance.Services.GetRequiredService<GamelogClientService>();
+        var eventBus = instance.Services.GetRequiredService<IEventBus>();
+        instance.Services.GetRequiredService<IFleetParticipation>()
+            .Set([.. five.Select(id => new FleetParticipant(id, FleetId, ClientOnly: true))]);
+
+        Dictionary<int, Guid> yesterday = [];
+        foreach (int id in five)
+        {
+            gamelog.MapCharacter(id, $"Toon {id}");
+            yesterday[id] = Guid.NewGuid();
+            await eventBus.PublishAsync(new RunStartedEvent(yesterday[id], id, ActivityKind.Site, DateTime.UtcNow,
+                FleetId, "HF-KKCW", isFleetCommander: false));
+            await gamelog.AddBountyAsync($"Toon {id}", new BountyEvent(DateTime.UtcNow, 67_500));
+            await eventBus.PublishAsync(new RunSavedEvent(yesterday[id]));
+        }
+
+        Guid jithranToday = Guid.NewGuid();
+        Guid abnobaToday = Guid.NewGuid();
+        await eventBus.PublishAsync(new RunStartedEvent(jithranToday, five[0], ActivityKind.Mission, DateTime.UtcNow,
+            FleetId, "HF-RKM8", isFleetCommander: true));
+        await eventBus.PublishAsync(new RunStartedEvent(abnobaToday, five[1], ActivityKind.Mission, DateTime.UtcNow,
+            FleetId, "HF-RKM8", isFleetCommander: false));
+        await gamelog.AddBountyAsync($"Toon {five[0]}", new BountyEvent(DateTime.UtcNow, 13_046_750));
+
+        long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        Assert.Equal(13_046_750, BountyOf(gamelog, five[0], nowMs));
+        Assert.Equal(0, BountyOf(gamelog, five[1], nowMs));
+        foreach (int docked in five.Skip(2))
+            Assert.Equal(0, BountyOf(gamelog, docked, nowMs));
+
+        Assert.Equal(13_046_750, gamelog.GetRunBounty(jithranToday));
+        Assert.Equal(0, gamelog.GetRunBounty(abnobaToday));
+        // Yesterday's figures are still yesterday's runs' own — kept, and readable only under those runs.
+        Assert.All(five, id => Assert.Equal(67_500, gamelog.GetRunBounty(yesterday[id])));
+    }
+
+    /// <summary>ET-309: a run's tally belongs to that run from its first payout — a new run is a new key, so it starts at
+    /// zero without anything having to reset it, and the earlier run keeps its own figure.</summary>
+    [AvaloniaFact]
+    public async Task ANewRun_StartsAtZero_AndTheEarlierRunKeepsItsOwnTally()
+    {
+        using var instance = TestClientInstance.Create();
+        var gamelog = instance.Services.GetRequiredService<GamelogClientService>();
+        var eventBus = instance.Services.GetRequiredService<IEventBus>();
+        gamelog.MapCharacter(CharacterId, "Pilot");
+
+        Guid first = Guid.NewGuid();
+        await eventBus.PublishAsync(new RunStartedEvent(first, CharacterId, ActivityKind.Site, DateTime.UtcNow,
+            FleetId, "HF-FIRST", isFleetCommander: false));
+        await gamelog.AddBountyAsync("Pilot", new BountyEvent(DateTime.UtcNow, 400_000));
+
+        Guid second = Guid.NewGuid();
+        await eventBus.PublishAsync(new RunStartedEvent(second, CharacterId, ActivityKind.Site, DateTime.UtcNow,
+            FleetId, "HF-SECOND", isFleetCommander: false));
+
+        Assert.Equal(0, gamelog.GetRunBounty(second));
+        Assert.Equal(0, BountyOf(gamelog, CharacterId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
+
+        await gamelog.AddBountyAsync("Pilot", new BountyEvent(DateTime.UtcNow, 120_000));
+        await gamelog.AddBountyAsync("Pilot", new BountyEvent(DateTime.UtcNow, 30_000));
+
+        Assert.Equal(150_000, gamelog.GetRunBounty(second));
+        Assert.Equal(400_000, gamelog.GetRunBounty(first));
+        Assert.Equal(150_000, BountyOf(gamelog, CharacterId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
+    }
+
+    /// <summary>ET-309: once a run is saved its pilot is flying nothing, so what they earn next belongs to no run and the
+    /// fleet meter reads zero — the saved run's own figure stays as it was.</summary>
+    [AvaloniaFact]
+    public async Task AfterSave_ThePilotPublishesZero_AndLaterPayoutsLandOnNoRun()
+    {
+        using var instance = TestClientInstance.Create();
+        var gamelog = instance.Services.GetRequiredService<GamelogClientService>();
+        var eventBus = instance.Services.GetRequiredService<IEventBus>();
+        gamelog.MapCharacter(CharacterId, "Pilot");
+
+        Guid run = Guid.NewGuid();
+        await eventBus.PublishAsync(new RunStartedEvent(run, CharacterId, ActivityKind.Site, DateTime.UtcNow,
+            FleetId, "HF-SAVED", isFleetCommander: false));
+        await gamelog.AddBountyAsync("Pilot", new BountyEvent(DateTime.UtcNow, 250_000));
+        await eventBus.PublishAsync(new RunSavedEvent(run));
+        await gamelog.AddBountyAsync("Pilot", new BountyEvent(DateTime.UtcNow, 90_000));
+
+        Assert.Equal(0, BountyOf(gamelog, CharacterId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
+        Assert.Equal(250_000, gamelog.GetRunBounty(run));
+    }
+
+    /// <summary>ET-309: a run is filed under one fleet. The same character's sample for another fleet has no run there.</summary>
+    [AvaloniaFact]
+    public async Task ARunInOneFleet_IsNotPublishedAsBountyInAnother()
+    {
+        using var instance = TestClientInstance.Create();
+        var gamelog = instance.Services.GetRequiredService<GamelogClientService>();
+        var eventBus = instance.Services.GetRequiredService<IEventBus>();
+        gamelog.MapCharacter(CharacterId, "Pilot");
+
+        await eventBus.PublishAsync(new RunStartedEvent(Guid.NewGuid(), CharacterId, ActivityKind.Site, DateTime.UtcNow,
+            FleetId, "HF-HERE", isFleetCommander: false));
+        await gamelog.AddBountyAsync("Pilot", new BountyEvent(DateTime.UtcNow, 75_000));
+
+        long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        Assert.Equal(75_000, BountyOf(gamelog, CharacterId, nowMs));
+        Assert.Equal(0, gamelog.Sample(FleetId + 1, CharacterId, nowMs).First(s => s.Kind == MetricKind.Bounty).Value);
+    }
+
+    private static double BountyOf(GamelogClientService gamelog, int characterId, long nowMs) =>
+        gamelog.Sample(FleetId, characterId, nowMs).First(sample => sample.Kind == MetricKind.Bounty).Value;
 }
