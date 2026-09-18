@@ -87,12 +87,19 @@ public sealed class EsiLocationMonitor(
     /// (ET-96: the log alone cannot tell "running fine" from "never started", since a healthy watch logs nothing).</summary>
     public bool IsWatching(int characterId) => _running.ContainsKey(characterId);
 
+    /// <summary>
+    /// Forgets this character's warnings, and takes a card down that no longer names anyone — a pilot who signed in
+    /// again should not have to dismiss a message about a problem that is already gone (ET-308).
+    /// </summary>
     private void ClearWarned(int characterId)
     {
         lock (_warnGate)
-            foreach (var byId in _warned.Values)
-                byId.Remove(characterId);
+            foreach (var (reason, byId) in _warned)
+                if (byId.Remove(characterId) && byId.Count == 0)
+                    toasts.Dismiss(ReplacementKey(reason));
     }
+
+    private static string ReplacementKey(EsiErrorKind reason) => "location-access-" + reason;
 
     /// <summary>The watch itself. <see cref="Watch"/> is only the fire-and-forget wrapper; tests drive this.</summary>
     internal async Task WatchAsync(int characterId, string characterName, Action<EsiLocationReading> onReading,
@@ -125,7 +132,11 @@ public sealed class EsiLocationMonitor(
                 // budget always ran out first. The abyssal clock and ET-63's location bootstrap went with it for the
                 // rest of the session, which is what ET-81 reported. Same distinction EsiClient's outage detector
                 // already makes, for the same reason.
-                else if (result.Error?.Kind is not EsiErrorKind.Unavailable && ++failures > MaxConsecutiveFailures)
+                // A token that is being renewed is the same kind of non-read: the pre-flight held the call back, or ESI
+                // refused a token whose renewal is still under way. The watch waits it out and polls again — stopping
+                // here is what put "ESI sign-in expired" on screen for six characters at every wake-up (ET-308).
+                else if (result.Error?.Kind is not (EsiErrorKind.Unavailable or EsiErrorKind.AuthPending)
+                         && ++failures > MaxConsecutiveFailures)
                 {
                     logger.LogWarning("Abyssal monitor for {CharacterId} gave up after {Failures} failed location reads.",
                         characterId, failures);
@@ -147,9 +158,10 @@ public sealed class EsiLocationMonitor(
         }
     }
 
-    // Only a refusal that the next poll cannot fix: no scope, and no working token. Real trouble that the next poll
-    // might — 5xx, timeouts, rate limits — is transient and goes through the failure counter instead. ESI being down
-    // is neither: the local gate answers those without sending anything, so they are not counted at all (ET-81).
+    // Only a refusal that the next poll cannot fix: no scope, and a sign-in EVE SSO itself refused. Real trouble that
+    // the next poll might — 5xx, timeouts, rate limits — is transient and goes through the failure counter instead. ESI
+    // being down is neither: the local gate answers those without sending anything, so they are not counted at all
+    // (ET-81); nor is a token still being renewed (ET-308).
     private static bool Fatal(EsiErrorKind? kind) => kind is EsiErrorKind.ScopeMissing or EsiErrorKind.AuthRequired;
 
     /// <summary>
@@ -204,7 +216,7 @@ public sealed class EsiLocationMonitor(
         [
             new ToastAction("Not now", () => { }),
             new ToastAction(fix, () => _ = GrantLocationAsync(affected), ToastActionStyle.Affirmative),
-        ], onClosed: null, replacementKey: "location-access-" + reason);
+        ], onClosed: null, replacementKey: ReplacementKey(reason));
     }
 
     private static string Names(IReadOnlyList<(int Id, string Name)> affected) => affected.Count switch

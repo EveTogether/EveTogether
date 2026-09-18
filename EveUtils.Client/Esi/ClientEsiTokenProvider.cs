@@ -30,14 +30,15 @@ public sealed class ClientEsiTokenProvider(
                 return EsiAuthorization.ScopeMissing(scope);
 
         var status = await refreshService.EnsureValidAsync(characterId, cancellationToken);
-        // TemporarilyUnavailable (refresh produced an unusable token, e.g. clock skew) is treated like "needs auth"
-        // for this call: it fails cleanly with AuthRequired instead of throwing, so background pollers skip the cycle
-        // quietly rather than logging an error on every tick.
-        // Rejected joins them: ESI refused this token moments ago and the forced refresh is still on cooldown, so
-        // sending it again would just collect another 401.
-        if (status is TokenStatus.NoToken or TokenStatus.NeedsReauth or TokenStatus.TemporarilyUnavailable
-            or TokenStatus.Rejected)
+        // Two different answers, and the difference is the whole of ET-308. Only a missing token or a refresh the SSO
+        // refused means "sign in again". Everything else is a renewal still in progress — SSO unreachable, a
+        // clock-skew back-off, or a token ESI refused moments ago whose forced refresh is on cooldown — and reads as
+        // AuthPending: the call is skipped cleanly (no 401 collected, no error logged per tick) and the consumer tries
+        // again later instead of telling the pilot their sign-in expired.
+        if (status is TokenStatus.NoToken or TokenStatus.NeedsReauth)
             return EsiAuthorization.AuthRequired;
+        if (status is TokenStatus.TemporarilyUnavailable or TokenStatus.Rejected or TokenStatus.Reconnecting)
+            return EsiAuthorization.AuthPending;
 
         var tokens = await tokenStore.LoadAsync(characterId, cancellationToken);
         return tokens is null

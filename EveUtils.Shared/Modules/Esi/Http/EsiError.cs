@@ -32,6 +32,7 @@ public sealed record EsiError(
     {
         EsiErrorKind.BadRequest => MessageCodes.BadRequest,
         EsiErrorKind.AuthRequired => MessageCodes.AuthRequired,
+        EsiErrorKind.AuthPending => MessageCodes.AuthPending,
         EsiErrorKind.ScopeMissing => MessageCodes.ScopeMissing,
         EsiErrorKind.ScopeForbidden => MessageCodes.ScopeForbidden,
         EsiErrorKind.NotFound => MessageCodes.NotFound,

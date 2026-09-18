@@ -6,6 +6,7 @@ public static class MessageCodes
     public const string ScopeMissing = "SCOPE_MISSING";
     public const string ScopeForbidden = "SCOPE_FORBIDDEN";
     public const string AuthRequired = "AUTH_REQUIRED";
+    public const string AuthPending = "AUTH_PENDING";
     public const string PermissionDenied = "PERMISSION_DENIED";
     public const string RateLimited = "RATE_LIMITED";
     public const string SdeOutdated = "SDE_OUTDATED";

@@ -24,5 +24,11 @@ public enum TokenStatus
     /// call was being refused still showed a green badge — the local expiry clock said the token was fine and
     /// nothing carried ESI's opinion back (ET-121).
     /// </summary>
-    Rejected
+    Rejected,
+    /// <summary>
+    /// The token needs renewing but EVE SSO could not be reached — no network yet, DNS not answering, the SSO itself
+    /// down (5xx/429). Says nothing about the sign-in, so it must never read as "sign in again": the refresh service
+    /// retries on a short cadence and at once when the network or the machine comes back (ET-308).
+    /// </summary>
+    Reconnecting
 }
