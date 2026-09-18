@@ -1,6 +1,7 @@
 using EveUtils.Shared.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace EveUtils.Server.Tests;
 
@@ -16,13 +17,14 @@ internal sealed class SqliteServerDbContextFactory : IDbContextFactory<SharedDbC
     private readonly SqliteConnection _connection;
     private readonly DbContextOptions<ServerDbContext> _options;
 
-    public SqliteServerDbContextFactory()
+    public SqliteServerDbContextFactory(IInterceptor? interceptor = null)
     {
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
-        _options = new DbContextOptionsBuilder<ServerDbContext>()
-            .UseSqlite(_connection)
-            .Options;
+        var builder = new DbContextOptionsBuilder<ServerDbContext>().UseSqlite(_connection);
+        if (interceptor is not null)
+            builder.AddInterceptors(interceptor);
+        _options = builder.Options;
 
         using var context = new ServerDbContext(_options);
         context.Database.EnsureCreated();

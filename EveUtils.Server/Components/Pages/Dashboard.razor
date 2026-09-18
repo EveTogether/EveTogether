@@ -1,42 +1,60 @@
 @page "/"
 @rendermode InteractiveServer
 @attribute [Authorize(Policy = PanelPermissions.DashboardView)]
+@using EveUtils.Server.Components.Overview
+@using EveUtils.Server.DataExplorer
 
-<div class="crumb">Overview / <b>Dashboard</b></div>
-
-<Card Title="Server identity" Pad="true">
-    <p class="dim" style="margin:0 0 6px;">TLS cert fingerprint — pin this in the client during pairing (TOFU):</p>
-    <p class="fp" style="margin:0;">@Fingerprint</p>
-</Card>
-
-<Card Title="Connected clients" Count="@Connected.Count.ToString()">
-    @if (Connected.Count == 0)
-    {
-        <p class="dim" style="padding:14px;margin:0;">No clients attached to the event bus.</p>
-    }
-    else
-    {
-        <table>
-            <thead><tr><th>Character</th><th>Connected at (UTC)</th></tr></thead>
-            <tbody>
-                @foreach (var client in Connected)
-                {
-                    <tr><td class="bright"><span class="ok">●</span> @client.CharacterName</td><td class="dim">@client.ConnectedAt.ToString("HH:mm:ss")</td></tr>
-                }
-            </tbody>
-        </table>
-    }
-</Card>
-
-<Card Title="Permissions">
-    <div class="switchrow">
-        <div class="lbl"><span class="c">fit.sync</span> — allow clients to share fittings via this server</div>
-        <label class="switch"><input type="checkbox" @bind="FitSyncEnabled" /><span class="track"><span class="knob"></span></span></label>
+<div class="explorer">
+    <div class="crumbs">Overview / <b>Dashboard</b></div>
+    <div class="ph">
+        <h2>Server data</h2>
+        <span class="meta">What exists, what is live right now, and what needs cleaning up.</span>
     </div>
-    <div class="switchrow">
-        <div class="lbl"><span class="c">fit.manage</span> — allow clients to delete fits from the shared library</div>
-        <label class="switch"><input type="checkbox" @bind="FitManageEnabled" /><span class="track"><span class="knob"></span></span></label>
+    <div class="listcol">
+        <div class="ov">
+            @if (_overview is { } overview)
+            {
+                <div class="kpis">
+                    <OverviewTileCard Label="Characters" Tile="overview.Characters" Href="@DataLinks.List(DataEntity.Characters)" />
+                    <OverviewTileCard Label="Fleets" Tile="overview.Fleets" Href="@DataLinks.List(DataEntity.Fleets)" />
+                    <OverviewTileCard Label="Compositions" Tile="overview.Compositions" Href="@DataLinks.List(DataEntity.Compositions)" />
+                    <OverviewTileCard Label="Shared fits" Tile="overview.SharedFits" Href="@DataLinks.List(DataEntity.SharedFits)" />
+                    <OverviewTileCard Label="Run groups" Tile="overview.RunGroups" Href="@DataLinks.List(DataEntity.Runs)"
+                                      Caption="@($"{overview.RunCount} runs")" />
+                    <OverviewTileCard Label="Sessions" Tile="overview.Sessions" Href="@DataLinks.List(DataEntity.Sessions)" />
+                </div>
+            }
+            <div class="ovgrid">
+                <div class="ovcol">
+                    @if (_overview is { } data)
+                    {
+                        <AttentionList Items="data.Attention" />
+                    }
+                    else if (_canViewData)
+                    {
+                        <p class="dim loading">Loading…</p>
+                    }
+                </div>
+                <div class="ovcol">
+                    <RightNow ShowFleets="_canViewData" />
+                    @if (_overview is not null)
+                    {
+                        <RelationMap Overview="_overview" />
+                    }
+                    <Card Title="Server" Pad="true">
+                        <p class="dim fplabel">TLS cert fingerprint — pin this in the client during pairing (TOFU):</p>
+                        <p class="fp">@Fingerprint</p>
+                        <div class="switchrow">
+                            <div class="lbl"><span class="c">fit.sync</span> — allow clients to share fittings via this server</div>
+                            <label class="switch"><input type="checkbox" aria-label="fit.sync" @bind="FitSyncEnabled" /><span class="track"><span class="knob"></span></span></label>
+                        </div>
+                        <div class="switchrow">
+                            <div class="lbl"><span class="c">fit.manage</span> — allow clients to delete fits from the shared library</div>
+                            <label class="switch"><input type="checkbox" aria-label="fit.manage" @bind="FitManageEnabled" /><span class="track"><span class="knob"></span></span></label>
+                        </div>
+                    </Card>
+                </div>
+            </div>
+        </div>
     </div>
-</Card>
-
-<p class="dim">Sessions, shared fittings, fleets and paired characters are on the <a href="/data">Data</a> page.</p>
+</div>

@@ -13,6 +13,13 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Changed (server panel): the Dashboard now tells you how the server is doing.** Six tiles count characters, fleets,
+  compositions, shared fits, run groups and sessions, each split by state with a warning count, and each opens its
+  list. Needs attention lists what has gone stale or lost its partner (a failing ESI refresh, a fleet whose composition
+  is gone, a fit or roster entry left behind by a removed character, an idle session, a fleet that has been silent for
+  two weeks, an archived fleet and how long it has left) and each line opens that record. Right now shows the fleets
+  that are forming or in op with their members and ships, and the connected clients. A small map shows how the
+  data connects and which links can dangle. The server identity and the fit permissions moved into one card.
 - **Changed (server panel): fleets get their own list, with everything a fleet relates to beside it.** Data is now
   a section in the sidebar, and Fleets opens grouped by status (in op, forming, concluded, archived), newest
   activity first, with a count on each status button, sortable columns and a filter that also matches ids. Click a

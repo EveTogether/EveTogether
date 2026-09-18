@@ -1,0 +1,63 @@
+@using EveUtils.Server.DataExplorer
+@* Stale and orphaned records. Each row opens its own record; a clean server says so instead of showing an empty card. *@
+<Card Title="Needs attention" Count="@Items.Count.ToString()">
+    @if (Items.Count == 0)
+    {
+        <p class="allclear"><b>All clear.</b> No failing refresh, no orphaned reference and no stale record.</p>
+    }
+    else
+    {
+        <ul class="attn">
+            @foreach (var item in Items.Take(Visible))
+            {
+                @_Row(item)
+            }
+        </ul>
+        @if (Items.Count > Visible)
+        {
+            <details class="attnmore">
+                <summary>Show @(Items.Count - Visible) more</summary>
+                <ul class="attn">
+                    @foreach (var item in Items.Skip(Visible))
+                    {
+                        @_Row(item)
+                    }
+                </ul>
+            </details>
+        }
+    }
+</Card>
+
+@code {
+    private const int Visible = 12;
+
+    [Parameter, EditorRequired] public IReadOnlyList<AttentionItem> Items { get; set; } = [];
+
+    private static string _Tag(AttentionSeverity severity) => severity switch
+    {
+        AttentionSeverity.Problem => "Problem",
+        AttentionSeverity.Warning => "Warning",
+        _ => "Notice",
+    };
+
+    private static RenderFragment _Row(AttentionItem item) => __builder =>
+    {
+        <li>
+            <span class="sevtag sev-@item.Severity.ToString().ToLowerInvariant()">@_Tag(item.Severity)</span>
+            <div>
+                <div class="what">@item.Title</div>
+                <div class="why">@item.Detail</div>
+            </div>
+            <span class="go">
+                @if (item.Href is not null)
+                {
+                    <a class="lnk" href="@item.Href">Open</a>
+                }
+                else
+                {
+                    <span class="nolist" title="Runs get their own list in a later release">No list yet</span>
+                }
+            </span>
+        </li>
+    };
+}

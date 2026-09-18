@@ -35,6 +35,9 @@ public sealed class ServerSessionService(IServerAuthRepository repository, ILogg
     // cutting an abandoned row's life as a usable credential from RefreshLifetime (a year) down to two months.
     public static readonly TimeSpan IdleLifetime = TimeSpan.FromDays(60);
 
+    /// <summary>Two missed 30s heartbeats: attached right now rather than merely refreshable.</summary>
+    public static readonly TimeSpan LiveWindow = TimeSpan.FromSeconds(60);
+
     public async Task<IssuedSession> IssueAsync(int syncedCharacterId, CancellationToken cancellationToken = default)
     {
         var access = TokenSecurity.GenerateToken();
