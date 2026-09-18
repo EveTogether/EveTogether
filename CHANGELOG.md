@@ -13,6 +13,11 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: SAVE on a fleet run of several of your own characters no longer crashes with a database error.** The
+  window's own recount of that activity and the recount automatic publishing sets off right after the save could run
+  at the same time, and both tried to add the activity's summary line; the second one failed. The runs themselves
+  were saved, but the error was in your face and the runs list could miss the activity until the next recount.
+  Recounts now take turns.
 - **Fixed: a server's tab on the runs screen now shows what that server holds, not what this machine remembers
   publishing to it.** After a fresh installation the tab of a server you had pushed months of runs to read "Nothing
   published to this server yet", because it only ever filtered the local list by server. It now asks the server itself
