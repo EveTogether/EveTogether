@@ -158,6 +158,12 @@ public sealed class ClientTokenRefreshService(
         if (tokens is null) return TokenStatus.NoToken;
 
         var now = DateTimeOffset.UtcNow;
+        // While backing off from a failed refresh, skip the SSO round-trip and answer with the verdict that started it
+        // — so the 5s ESI consumers don't re-refresh + re-log every tick during a clock-skew window or an outage.
+        // Checked before a pending refusal is taken, so the refusal survives the back-off and is acted on after it.
+        if (_backoffs.TryGetValue(charId, out var backoff) && now < backoff.RetryAfter)
+            return backoff.Status;
+
         // A token ESI has refused gets refreshed even though its own clock says it is still good — that clock is
         // exactly what was wrong. Honoured at most once per cooldown so a persistently refused token cannot turn
         // every ESI call into an SSO round-trip.
@@ -182,11 +188,6 @@ public sealed class ClientTokenRefreshService(
             await tokenStore.RemoveAsync(charId, cancellationToken);
             return TokenStatus.NeedsReauth;
         }
-
-        // While backing off from a failed refresh, skip the SSO round-trip and answer with the verdict that started it
-        // — so the 5s ESI consumers don't re-refresh + re-log every tick during a clock-skew window or an outage.
-        if (_backoffs.TryGetValue(charId, out var backoff) && DateTimeOffset.UtcNow < backoff.RetryAfter)
-            return backoff.Status;
 
         var character = (await registry.GetAllAsync(cancellationToken))
             .FirstOrDefault(c => c.EsiCharacterId == charId);
@@ -232,6 +233,13 @@ public sealed class ClientTokenRefreshService(
             // The refresh never got an answer from EVE SSO — at wake-up DNS is not back yet for a few seconds. This
             // used to fall into the branch below and be logged as a token that "was refreshed but failed validation",
             // which sent the next diagnosis looking for a clock skew (ET-308). Nothing is wrong with the sign-in.
+            // A forced refresh that never got through has not answered ESI's refusal: keep the refusal pending and
+            // give the cooldown back, or the stale token would be trusted again — and refused again — for a minute.
+            if (forced)
+            {
+                _refused[charId] = true;
+                _forcedRefreshAfter.TryRemove(charId, out _);
+            }
             if (EnterBackoff(charId, TokenStatus.Reconnecting, UnreachableBackoff))
                 logger.LogWarning("Could not reach EVE SSO to renew the ESI token for character {CharacterId}: {Reason}. " +
                     "The sign-in is kept; retrying in {Backoff}, or as soon as the network comes back.",
