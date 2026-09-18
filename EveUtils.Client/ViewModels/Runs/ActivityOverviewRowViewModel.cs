@@ -59,6 +59,8 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
     /// distinct question; null reads TYPE without that fallback and the system as unknown.</param>
     /// <param name="faceOf">The shared face for a crew member by id and name, so an own character's portrait is loaded
     /// once for the whole screen; null gives every member an initial.</param>
+    /// <param name="serverDetail">The detail a server tab's read built beside this row (ET-311) — what its runs and the
+    /// pane show, since nothing of a server row is in the local store; null on a local row.</param>
     public ActivityOverviewRowViewModel(
         ActivityOverviewRowDto row,
         Func<long, string> nameOf,
@@ -69,9 +71,11 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
         RunPublishProgress? publishProgress = null,
         Func<ActivityOverviewRowViewModel, Task>? retryPublish = null,
         RunRowFacts? facts = null,
-        Func<long, string, CharacterFaceViewModel>? faceOf = null)
+        Func<long, string, CharacterFaceViewModel>? faceOf = null,
+        ActivityDetailDto? serverDetail = null)
     {
         _loadSubRuns = loadSubRuns;
+        ServerDetail = serverDetail;
         _openDetail = openDetail;
         _publish = publish;
         _retryPublish = retryPublish;
@@ -208,6 +212,12 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
 
     public Guid ActivitySummaryId { get; }
 
+    public ActivityDetailDto? ServerDetail { get; }
+
+    /// <summary>Only a local activity opens ET-162's screen: it is where a pilot corrects, deletes or republishes his
+    /// own runs (ET-214/215), and a server copy is none of his to change there.</summary>
+    public bool CanOpenDetail => ServerDetail is null;
+
     public string? GroupCode { get; }
 
     public Guid? RunId { get; }
@@ -329,11 +339,6 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
     public string RetryTooltip => PublishFailureText is { } reason
         ? $"Publishing failed: {reason} — try again"
         : "Publishing failed — try again";
-
-    /// <summary>Whether this activity is filed under that server's tab: some of its runs were queued for it or went
-    /// there.</summary>
-    public bool IsPublishedTo(string serverAddress) =>
-        _source.ServerSyncStates.Any(state => state.ServerAddress == serverAddress);
 
     /// <summary>Never queued for, or on, any server (RO-6) — what the day header's "n local" and the range line's
     /// PUBLISH n LOCAL count. The server sync states it reads are already compared field-by-field in

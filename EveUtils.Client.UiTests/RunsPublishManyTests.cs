@@ -185,5 +185,9 @@ public sealed class RunsPublishManyTests
             PullCalls++;
             return Task.FromResult((true, "Runs synchronized.", (IReadOnlyList<RunWirePayload>)[]));
         }
+
+        public Task<(bool Accepted, string Message, IReadOnlyList<RunWirePayload> Runs)> ListPublishedAsync(
+            string serverAddress, DateTime fromUtc, DateTime toUtc, long actingCharacterId, CancellationToken cancellationToken = default) =>
+            Task.FromResult((true, "Runs synchronized.", (IReadOnlyList<RunWirePayload>)[]));
     }
 }

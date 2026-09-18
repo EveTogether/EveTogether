@@ -1,12 +1,15 @@
 using Avalonia.Headless.XUnit;
 using EveUtils.Shared.Cqrs;
+using EveUtils.Shared.Data;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -310,6 +313,69 @@ public sealed class ActivityQueriesTests
             .Single(candidate => candidate.RunId == started.Value);
         Assert.Equal(row.ActivitySummaryId, found.Value);
     }
+
+    /// <summary>ET-311: a server tab builds its rows from the runs the server hands back through the very builders
+    /// Local's stored summaries come from, so the same runs read the same on both tabs — the row id included — with
+    /// only the server address telling them apart. Whatever the wire made of the start's Kind: a column round trip
+    /// hands it back Unspecified, and taken as local time it would land hours off (ET-244).</summary>
+    [AvaloniaTheory]
+    [InlineData(DateTimeKind.Utc)]
+    [InlineData(DateTimeKind.Unspecified)]
+    public async Task ServerOverview_SameRunsAsLocal_ReadsTheSameRowAndDetail(DateTimeKind kindOnTheWire)
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveRunAsync(dispatcher, 90000001, "HF-7QK2", cancellationToken);
+        await _SaveRunAsync(dispatcher, 90000002, "HF-7QK2", cancellationToken);
+        await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
+        ActivityOverviewRowDto local = Assert.Single(_Value(
+            await dispatcher.Query(new GetActivityOverviewQuery(OwnCharacterIds: [90000001]), cancellationToken)));
+        ActivityDetailDto localDetail = _Value(await dispatcher.Query(new GetActivityDetailQuery(local.ActivitySummaryId), cancellationToken));
+
+        IReadOnlyList<RunWirePayload> wire = await _OnTheWireAsync(instance, kindOnTheWire, cancellationToken);
+        Result<IReadOnlyList<ServerActivityDto>> server = await dispatcher.Query(
+            new GetServerActivityOverviewQuery("https://alpha.invalid", wire, OwnCharacterIds: [90000001]), cancellationToken);
+
+        ServerActivityDto activity = Assert.Single(_Value(server));
+        Assert.Equal(_WithoutListsOrStart(local), _WithoutListsOrStart(activity.Row));
+        Assert.InRange(activity.Row.StartedAtUtc, local.StartedAtUtc.AddSeconds(-5), local.StartedAtUtc.AddSeconds(5));
+        Assert.Equal(DateTimeKind.Utc, activity.Row.StartedAtUtc.Kind);
+        Assert.Equal(local.Crew, activity.Row.Crew);
+        Assert.Equal(local.Rewards, activity.Row.Rewards);
+        Assert.Equal([new ActivityServerSyncDto("https://alpha.invalid", IsPending: false)], activity.Row.ServerSyncStates);
+        Assert.Equal(localDetail.Runs.Select(run => run.RunId), activity.Detail.Runs.Select(run => run.RunId));
+        Assert.Equal(localDetail.Isk, activity.Detail.Isk);
+        Assert.Equal(localDetail.IskByCharacter, activity.Detail.IskByCharacter);
+    }
+
+    /// <summary>The saved runs as a server would hand them back: the wire form of the stored graph, the start's Kind
+    /// as the wire made it, sent just now.</summary>
+    private static async Task<IReadOnlyList<RunWirePayload>> _OnTheWireAsync(
+        TestClientInstance instance, DateTimeKind kind, CancellationToken cancellationToken)
+    {
+        await using ClientDbContext db = await instance.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        List<Run> runs = await db.Set<Run>().AsNoTracking()
+            .Include(run => run.LootCaptures).ThenInclude(capture => capture.Entries)
+            .Include(run => run.BountyEntries)
+            .Include(run => run.EnemyObservations)
+            .Include(run => run.Parameters)
+            .Include(run => run.MiningEntries)
+            .Include(run => run.AttendanceEntries)
+            .ToListAsync(cancellationToken);
+        long sentAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        foreach (Run run in runs)
+            run.StartedAtUtc = DateTime.SpecifyKind(run.StartedAtUtc, kind);
+        return [.. runs.Select(run => new RunWirePayload { Run = RunWireData.FromEntity(run), SentAtUnixMilliseconds = sentAt })];
+    }
+
+    /// <summary>The row with its lists and its start taken out: a record compares a list by reference, and the start
+    /// is anchored on the wire's own clock, so both are compared on their own above.</summary>
+    private static ActivityOverviewRowDto _WithoutListsOrStart(ActivityOverviewRowDto row) => row with
+    {
+        StartedAtUtc = default, Crew = [], Rewards = [], ServerSyncStates = [], OtherEarners = [], OwnIskByCharacter = null
+    };
 
     private static async Task _SaveRunAsync(IDispatcher dispatcher, long characterId, string? groupCode, CancellationToken cancellationToken)
     {

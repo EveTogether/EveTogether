@@ -15,10 +15,9 @@ public sealed record RunsListNote(string Text);
 /// One source on the runs screen: the local history, or one coupled server. Mirrors the fit browser's tab strip
 /// (Local first, then a tab per coupled server, none at all when no server is coupled).
 ///
-/// Unlike a fit-browser server tab this one does not load lazily and has no address of its own to fetch from: every
-/// row here is a local activity, filtered on the server its runs were published to. The rows are handed in by
-/// <see cref="RunsOverviewViewModel"/> from the one overview read, so a server tab cannot disagree with Local about
-/// an activity they both show.
+/// Like the fit browser's, a server tab reads its own server (ET-311): its rows are what that server holds, built
+/// without being stored, while Local's are the local database's. The rows are handed in by
+/// <see cref="RunsOverviewViewModel"/>, which owns both reads.
 /// </summary>
 public sealed partial class RunsTabViewModel(string header, string? serverAddress, Func<RunsDayViewModel, Task> publishLocal)
     : ObservableObject
@@ -44,11 +43,6 @@ public sealed partial class RunsTabViewModel(string header, string? serverAddres
     /// <summary>Why this tab is empty, when it is. A server tab and the local tab are empty for different reasons and
     /// say so.</summary>
     [ObservableProperty] private string? _statusMessage;
-
-    /// <summary>Whether an activity belongs under this tab: every one on Local, the ones published to it on a server
-    /// tab — the rule <see cref="RunsOverviewViewModel"/> hands rows over by, applied to what the strip counts.</summary>
-    public bool Holds(RunsActivityFacts activity) =>
-        ServerAddress is not { } address || activity.ServerAddresses.Contains(address);
 
     /// <summary>
     /// This tab's activities as they now stand, grouped under their local day. A day already on screen is the same day

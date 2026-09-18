@@ -448,6 +448,10 @@ public sealed class RunsChangedSignalCoverageTests
             string serverAddress, IReadOnlyCollection<string> groupCodes, DateTime sinceUtc, long actingCharacterId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult((true, "accepted", pulled));
+
+        public Task<(bool Accepted, string Message, IReadOnlyList<RunWirePayload> Runs)> ListPublishedAsync(
+            string serverAddress, DateTime fromUtc, DateTime toUtc, long actingCharacterId, CancellationToken cancellationToken = default) =>
+            Task.FromResult((true, "accepted", (IReadOnlyList<RunWirePayload>)[]));
     }
 
     /// <summary>Builds the state a command needs and hands back the command itself, not yet sent.</summary>

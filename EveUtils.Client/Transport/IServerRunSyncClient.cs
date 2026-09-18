@@ -10,4 +10,9 @@ public interface IServerRunSyncClient
     Task<(bool Accepted, string Message, IReadOnlyList<RunWirePayload> Runs)> PullAsync(
         string serverAddress, IReadOnlyCollection<string> groupCodes, DateTime sinceUtc, long actingCharacterId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>The runs the server holds for <paramref name="actingCharacterId"/> started in [<paramref name="fromUtc"/>,
+    /// <paramref name="toUtc"/>) (ET-311) — a server tab's own read, never written to the local store.</summary>
+    Task<(bool Accepted, string Message, IReadOnlyList<RunWirePayload> Runs)> ListPublishedAsync(
+        string serverAddress, DateTime fromUtc, DateTime toUtc, long actingCharacterId, CancellationToken cancellationToken = default);
 }

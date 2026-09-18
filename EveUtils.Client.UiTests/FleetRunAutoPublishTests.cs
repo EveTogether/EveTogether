@@ -371,5 +371,9 @@ public sealed class FleetRunAutoPublishTests
                 return Task.FromResult((true, "Runs synchronized.", runs));
             }
         }
+
+        public Task<(bool Accepted, string Message, IReadOnlyList<RunWirePayload> Runs)> ListPublishedAsync(
+            string serverAddress, DateTime fromUtc, DateTime toUtc, long actingCharacterId, CancellationToken cancellationToken = default) =>
+            Task.FromResult((true, "Runs synchronized.", (IReadOnlyList<RunWirePayload>)[]));
     }
 }

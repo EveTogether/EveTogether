@@ -13,6 +13,13 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: a server's tab on the runs screen now shows what that server holds, not what this machine remembers
+  publishing to it.** After a fresh installation the tab of a server you had pushed months of runs to read "Nothing
+  published to this server yet", because it only ever filtered the local list by server. It now asks the server itself
+  for the runs your connected characters may see there — your own, and your fleet mates' in the same activity — and
+  shows them even when nothing is saved locally; Local stays the local database. A run that is queued for a server but
+  not yet accepted by it no longer appears on that server's tab until it is there. A server row unfolds and reads out
+  in the panel like any other, but has no OPEN DETAIL: correcting, deleting and republishing stay with your local copy.
 - **Changed (server panel): the Dashboard now tells you how the server is doing.** Six tiles count characters, fleets,
   compositions, shared fits, run groups and sessions, each split by state with a warning count, and each opens its
   list. Needs attention lists what has gone stale or lost its partner (a failing ESI refresh, a fleet whose composition
