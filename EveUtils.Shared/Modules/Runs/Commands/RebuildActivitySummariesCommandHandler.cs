@@ -17,7 +17,25 @@ internal sealed class RebuildActivitySummariesCommandHandler(
     IDbContextFactory<ClientDbContext> contextFactory, IMarketPriceRepository marketPrices, ISdeAccessor sde, IEventBus eventBus)
     : ICommandHandler<RebuildActivitySummariesCommand, Result<int>>
 {
+    // One rebuild at a time, whoever asks for it (ET-318): a group SAVE's own rebuild and the full one the auto-publisher
+    // sets off after its pull both read "no summary yet" for the new group and both insert it — the second hits the
+    // UNIQUE index. Static because the handler is scoped, so every Send gets a fresh instance.
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+
     public async Task<Result<int>> Handle(RebuildActivitySummariesCommand command, CancellationToken cancellationToken = default)
+    {
+        await Gate.WaitAsync(cancellationToken);
+        try
+        {
+            return await _RebuildAsync(command, cancellationToken);
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    private async Task<Result<int>> _RebuildAsync(RebuildActivitySummariesCommand command, CancellationToken cancellationToken)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
         if (command.OnlyWhenOutdated && !await db.Set<ActivitySummary>()

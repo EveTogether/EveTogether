@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Text.Json;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.Runs;
@@ -13,6 +14,7 @@ using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Transport;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -413,6 +415,35 @@ public sealed class RunStorageTests
         Assert.True(summary.CompletenessUnknown);
     }
 
+    /// <summary>ET-318: a group SAVE's own rebuild of its activity and the full rebuild the auto-publisher sets off
+    /// after its pull ran at the same time; both read "no summary yet" for the new group and both inserted one, and
+    /// the second insert failed on the unique group code. The barrier holds the first write until both have read —
+    /// the interleaving the crash had — so without the gate this fails on the unique index.</summary>
+    [AvaloniaFact]
+    public async Task Rebuild_TargetedAndFullRebuildRacingOnOneNewGroup_LeaveOneSummary()
+    {
+        var barrier = new RebuildRaceBarrier();
+        using var instance = TestClientInstance.Create(services => _InterceptStoreWrites(services, barrier));
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142, "HF-7QK2"), cancellationToken);
+        // Saved the way a group SAVE saves each run (ET-210): without a rebuild, so the group has no summary yet.
+        Result saved = await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15),
+            StartedAtUtc.AddMinutes(16), [], [], [], [], RebuildSummaries: false), cancellationToken);
+
+        Task<Result<int>> targeted = dispatcher.Send(new RebuildActivitySummariesCommand(started.Value), cancellationToken);
+        Task<Result<int>> full = dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
+        Result<int>[] rebuilt = await Task.WhenAll(targeted, full);
+
+        Assert.True(saved.IsSuccess);
+        Assert.All(rebuilt, result => Assert.True(result.IsSuccess));
+        Assert.True(barrier.BothRead.IsCompleted);
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        ActivitySummary summary = Assert.Single(await db.Set<ActivitySummary>().ToListAsync(cancellationToken));
+        Assert.Equal("HF-7QK2", summary.GroupCode);
+    }
+
     [AvaloniaFact]
     public async Task QueueRunForServerSync_ExplicitlyMovesLocalRunToPending()
     {
@@ -768,6 +799,44 @@ public sealed class RunStorageTests
         {
             Calls.Add("list");
             return Task.FromResult((true, "accepted", (IReadOnlyList<RunWirePayload>)[]));
+        }
+    }
+
+    /// <summary>The store's own options with one interceptor added: every context the factory hands out reports to it.</summary>
+    private static void _InterceptStoreWrites(IServiceCollection services, IInterceptor interceptor)
+    {
+        ServiceDescriptor composed = services.Last(service => service.ServiceType == typeof(DbContextOptions<ClientDbContext>));
+        services.AddSingleton(provider => new DbContextOptionsBuilder<ClientDbContext>(
+                (DbContextOptions<ClientDbContext>)(composed.ImplementationFactory?.Invoke(provider)
+                    ?? throw new InvalidOperationException("The store's options are not registered by factory")))
+            .AddInterceptors(interceptor)
+            .Options);
+    }
+
+    /// <summary>Holds every summary write until two rebuilds have read the summary table (ET-318). With the gate in
+    /// place the second read cannot come before the first write, so a write waits out a short bound instead.</summary>
+    private sealed class RebuildRaceBarrier : IDbCommandInterceptor, ISaveChangesInterceptor
+    {
+        private readonly TaskCompletionSource _bothRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _summaryReads;
+
+        public Task BothRead => _bothRead.Task;
+
+        public ValueTask<DbDataReader> ReaderExecutedAsync(DbCommand command, CommandExecutedEventData eventData,
+            DbDataReader result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("FROM \"ActivitySummary\"", StringComparison.Ordinal)
+                && Interlocked.Increment(ref _summaryReads) == 2)
+                _bothRead.TrySetResult();
+            return ValueTask.FromResult(result);
+        }
+
+        public async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context?.ChangeTracker.Entries<ActivitySummary>().Any() is true)
+                await Task.WhenAny(_bothRead.Task, Task.Delay(TimeSpan.FromSeconds(1), cancellationToken));
+            return result;
         }
     }
 }
