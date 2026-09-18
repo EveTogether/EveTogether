@@ -26,6 +26,10 @@
         {
             <span class="warn">⚠ Removes the paired character + its sessions. Leaves orphan references and breaks any connected client's session.</span>
         }
+        @if (p.Warning is not null)
+        {
+            <span class="warn">⚠ @p.Warning</span>
+        }
         <button class="danger" @onclick="ConfirmAsync">Confirm</button>
         <button @onclick="Cancel">Cancel</button>
     </div>
@@ -146,7 +150,11 @@
 </Card>
 
 <Card Title="Sessions" Count="@CountLabel(Sessions.Count, _sessions.Count)">
-    <p class="dim" style="padding:11px 14px 2px;margin:0;">Metadata only — token hashes are never shown.</p>
+    <p class="dim" style="padding:11px 14px 2px;margin:0;">
+        Metadata only — token hashes are never shown. One session per machine a character is paired on, so several at once is normal.
+        <span class="ok">@_sessions.Count(IsLive) live</span>,
+        @(_sessions.Count - _sessions.Count(IsLive)) silent@(_sessions.Any(IsLapsing) ? $", of which {_sessions.Count(IsLapsing)} past the idle window and due to be cleaned up" : "").
+    </p>
     @if (Sessions.Count == 0)
     {
         <p class="dim" style="padding:0 14px 14px;margin:0;">@EmptyText("No sessions.")</p>
@@ -154,7 +162,7 @@
     else
     {
         <table>
-            <thead><tr><th>Character</th><th>Issued (UTC)</th><th>Expires (UTC)</th><th>Last seen (UTC)</th><th></th></tr></thead>
+            <thead><tr><th>Character</th><th>Issued (UTC)</th><th>Expires (UTC)</th><th>Last seen (UTC)</th><th>Silent for</th><th>State</th><th></th></tr></thead>
             <tbody>
                 @foreach (var s in Sessions)
                 {
@@ -173,8 +181,10 @@
                         </td>
                         <td class="dim">@s.IssuedAt.ToString("yyyy-MM-dd HH:mm")</td><td class="dim">@s.ExpiresAt.ToString("yyyy-MM-dd HH:mm")</td>
                         <td class="dim">@s.LastHeartbeat.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td class="dim">@SilenceLabel(s)</td>
+                        <td class="@StateClass(s)">@State(s)</td>
                         <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
-                            <button class="danger" @onclick="() => AskSession(s)">Delete</button>
+                            <button class="danger" @onclick="() => AskSession(s)">Revoke</button>
                         </AuthorizeView></td>
                     </tr>
                 }
@@ -184,7 +194,29 @@
 </Card>
 
 @code {
-    private record Pending(string Kind, long Id, string Label);
+    private record Pending(string Kind, long Id, string Label, string? Warning = null);
+
+    /// <summary>Two missed 30s heartbeats: attached right now rather than merely refreshable.</summary>
+    private static readonly TimeSpan LiveWindow = TimeSpan.FromSeconds(60);
+
+    private static TimeSpan Silence(ServerSession s) => DateTimeOffset.UtcNow - s.LastHeartbeat;
+    private static bool IsLive(ServerSession s) => Silence(s) <= LiveWindow;
+
+    /// <summary>Past the idle window, so the next cleanup sweep removes it. Says why a row is about to vanish.</summary>
+    private static bool IsLapsing(ServerSession s) => Silence(s) >= ServerSessionService.IdleLifetime;
+
+    private static string State(ServerSession s) => IsLive(s) ? "live" : IsLapsing(s) ? "lapsing" : "idle";
+    private static string StateClass(ServerSession s) => IsLive(s) ? "ok" : IsLapsing(s) ? "stale" : "dim";
+
+    /// <summary>How long since anything used this session, at the coarsest unit that still reads at a glance.</summary>
+    private static string SilenceLabel(ServerSession s)
+    {
+        var silence = Silence(s);
+        return silence < TimeSpan.FromMinutes(1) ? $"{silence.TotalSeconds:0}s"
+            : silence < TimeSpan.FromHours(1) ? $"{silence.TotalMinutes:0}m"
+            : silence < TimeSpan.FromDays(1) ? $"{silence.TotalHours:0}h"
+            : $"{silence.TotalDays:0}d";
+    }
 
     private IReadOnlyList<SharedFit> _fits = [];
     private IReadOnlyList<Fleet> _fleets = [];
@@ -245,7 +277,9 @@
     private void AskSynced(SyncedCharacter c) => _pending = new Pending("synced", c.Id, $"Delete paired character '{c.CharacterName}'?");
     // The issue date is in the label because a character has one session per machine it is paired on, and
     // without it the confirm bar cannot say which of them you are about to delete.
-    private void AskSession(ServerSession s) => _pending = new Pending("session", s.Id, $"Delete session for '{s.SyncedCharacter?.CharacterName ?? "?"}' issued {s.IssuedAt:yyyy-MM-dd HH:mm} UTC?");
+    private void AskSession(ServerSession s) => _pending = new Pending("session", s.Id,
+        $"Revoke session for '{s.SyncedCharacter?.CharacterName ?? "?"}' issued {s.IssuedAt:yyyy-MM-dd HH:mm} UTC?",
+        IsLive(s) ? "This one is live — the machine holding it is attached right now and will have to pair again." : null);
     private void Cancel() => _pending = null;
 
     private async Task ConfirmAsync()
