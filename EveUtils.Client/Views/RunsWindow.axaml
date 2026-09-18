@@ -872,8 +872,9 @@
                         <!-- ET-293: a check box, a type icon or a character's HexPortrait, the full name and the
                              count — shared between the TYPES and CHARACTERS ItemsControl below. -->
                         <DataTemplate x:Key="FilterTileTemplate" DataType="vr:RunFilterTileViewModel">
+                            <!-- Click and PointerPressed are bound once on Band, not here (ET-310) — see
+                                 RunsWindow._OnFilterTileClick. -->
                             <Button Classes="tile" Classes.on="{Binding IsOn}" Focusable="True"
-                                    PointerReleased="_OnFilterTilePointerReleased" KeyDown="_OnFilterTileKeyDown"
                                     ToolTip.Tip="{Binding Name}">
                                 <Panel>
                                     <Border Classes="tilefill"/>
