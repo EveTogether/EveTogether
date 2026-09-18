@@ -60,6 +60,10 @@ public partial class RunsWindow : ChromedWindow
         // wherever the rows after it happen to land.
         _stickyDay.AddHandler(Button.ClickEvent, (_, _) => Dispatcher.UIThread.Post(_ScrollPinnedDayIntoView),
             handledEventsToo: true);
+        // ET-310: bound on the band, handledEventsToo, not on each tile — see _OnFilterTileClick.
+        _band.AddHandler(InputElement.PointerPressedEvent, _OnFilterTilePointerPressed, handledEventsToo: true);
+        _band.AddHandler(Button.ClickEvent, _OnFilterTileClick, handledEventsToo: true);
+        _band.AddHandler(KeyDownEvent, _OnFilterTileKeyDown, handledEventsToo: true);
 
         // The width the content root reports — the module host's column when docked, the window when floating.
         // Subscribed on the root and not on the window because the host lifts the root out of the window (ET-42):
@@ -268,29 +272,47 @@ public partial class RunsWindow : ChromedWindow
             _ = viewModel.OpenSelectedDetailAsync();
     }
 
-    /// <summary>A TYPES/CHARACTERS tile (ET-293): PointerReleased carries key modifiers where <c>Button.Click</c> does
-    /// not, so a plain click and an alt-click (solo) are both settled here rather than needing a second path just to
-    /// see Alt. Handled on every left-button release this handler sees, so Alt never reaches Button's own access-key
-    /// handling either — the pitfall the ticket calls out by name.</summary>
-    private void _OnFilterTilePointerReleased(object? sender, PointerReleasedEventArgs e)
+    // ET-310: which tile a click means to solo — read off the press, not the release. Button's own class handling
+    // (OnPointerPressed/OnPointerReleased/OnKeyDown, then Click) always marks the input event Handled before a plain
+    // XAML "PointerReleased="/"KeyDown=" instance handler on that same Button gets a turn — class handlers run first,
+    // and a handler without handledEventsToo is skipped once Handled is already true — so ET-293's click, alt-click
+    // and Space all landed on an already-Handled event and never reached its own logic. That is what broke here, not
+    // any one visual change to the band. Click is what actually fires reliably for a pointer click, because it is
+    // Button's own class handler raising it rather than competing with it — the same reason _stickyDay's ClickEvent
+    // handler above already asks for handledEventsToo; Space needs its own KeyDown handler below for the same reason.
+    // Both are bound once on the band rather than per tile, the same shape _OnFilterTilePointerReleased had, so TYPES
+    // and CHARACTERS share the one set of handlers.
+    private bool _tileAltHeld;
+
+    private void _OnFilterTilePointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (e.InitialPressMouseButton != MouseButton.Left || sender is not Button { DataContext: RunFilterTileViewModel tile })
+        if ((e.Source as Control)?.FindAncestorOfType<Button>(includeSelf: true) is { DataContext: RunFilterTileViewModel })
+            _tileAltHeld = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
+    }
+
+    /// <summary>A TYPES/CHARACTERS tile (ET-293): a click toggles it, alt-click solos it.</summary>
+    private void _OnFilterTileClick(object? sender, RoutedEventArgs e)
+    {
+        bool altHeld = _tileAltHeld;
+        _tileAltHeld = false;
+        if ((e.Source as Control)?.FindAncestorOfType<Button>(includeSelf: true) is not { DataContext: RunFilterTileViewModel tile })
             return;
 
-        e.Handled = true;
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+        if (altHeld)
             tile.Solo();
         else
             tile.Toggle();
     }
 
-    /// <summary>Space togglet the focused tile — the one gesture the pointer handler above cannot cover.</summary>
+    /// <summary>Space toggles the focused tile — Button's own keyboard handling does not raise Click for it here
+    /// (only a real pointer click does), so this needs the same handledEventsToo wiring as the click path above.</summary>
     private void _OnFilterTileKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Space || sender is not Button { DataContext: RunFilterTileViewModel tile })
+        if (e.Key != Key.Space)
+            return;
+        if ((e.Source as Control)?.FindAncestorOfType<Button>(includeSelf: true) is not { DataContext: RunFilterTileViewModel tile })
             return;
 
-        e.Handled = true;
         tile.Toggle();
     }
 
