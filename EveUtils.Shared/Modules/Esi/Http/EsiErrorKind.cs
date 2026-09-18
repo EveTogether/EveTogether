@@ -38,5 +38,12 @@ public enum EsiErrorKind
     Network,
 
     /// <summary>The body could not be deserialized into the expected shape (empty/HTML/garbage).</summary>
-    ParseError
+    ParseError,
+
+    /// <summary>
+    /// The character's token is being renewed and cannot be used this moment — the renewal could not reach EVE SSO,
+    /// is backing off, or ESI refused a token whose renewal is still pending. Transient: pause and retry, never ask
+    /// the pilot to sign in again for it (ET-308). Appended last so no existing ordinal moves.
+    /// </summary>
+    AuthPending
 }

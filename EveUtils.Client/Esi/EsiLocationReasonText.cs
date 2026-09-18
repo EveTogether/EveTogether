@@ -15,6 +15,7 @@ public static class EsiLocationReasonText
         null => null,
         EsiErrorKind.ScopeMissing => "no location access",
         EsiErrorKind.AuthRequired => "sign-in expired",
+        EsiErrorKind.AuthPending => "reconnecting…",
         _ => "location unavailable",
     };
 }

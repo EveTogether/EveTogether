@@ -348,26 +348,26 @@ sealed class Program
     /// its own 60 s tick, and on the morning this ticket came from that added up to watches that stayed dead for
     /// hours. Nudging both is idempotent, so a false positive costs one reconnect.
     /// </summary>
+    /// <para>The network is usually a few seconds behind the resume — DNS still failing when the first recheck runs —
+    /// so the tokens are also rechecked the moment the network reports back, instead of the renewal waiting out a
+    /// back-off while ESI refuses the stale token and the pilot is told their sign-in expired (ET-308).</para>
     static void StartResumeRecovery(CancellationToken cancellationToken)
     {
+        var refresh = Services.GetRequiredService<ClientTokenRefreshService>();
         var watcher = Services.GetRequiredService<EveUtils.Client.Platform.SystemResumeWatcher>();
         watcher.Resumed += _ =>
         {
             RunResilient(Services.GetRequiredService<RemoteBusConnectionManager>()
                 .ReconnectAllAsync(cancellationToken), "resume-reconnect");
-            RunResilient(RecheckEsiTokensAsync(cancellationToken), "resume-token-recheck");
+            refresh.RetryNow();
         };
+        System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged += (_, e) =>
+        {
+            if (e.IsAvailable)
+                refresh.RetryNow();
+        };
+        System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (_, _) => refresh.RetryNow();
         RunResilient(watcher.StartAsync(cancellationToken), "system-resume-watch");
-    }
-
-    /// <summary>Re-checks every known character's ESI token now rather than on the refresh loop's next tick.</summary>
-    static async Task RecheckEsiTokensAsync(CancellationToken cancellationToken)
-    {
-        var registry = Services.GetRequiredService<ICharacterRegistry>();
-        var refresh = Services.GetRequiredService<ClientTokenRefreshService>();
-        foreach (var character in await registry.GetAllAsync(cancellationToken))
-            if (character.EsiCharacterId is { } characterId)
-                await refresh.EnsureValidAsync(characterId, cancellationToken);
     }
 
     /// <summary>One-off backfill of the fit content-hash for rows predating the column (idempotent dedup).</summary>

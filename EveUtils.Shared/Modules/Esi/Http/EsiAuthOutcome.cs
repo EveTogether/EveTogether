@@ -9,6 +9,10 @@ public enum EsiAuthOutcome
     /// <summary>The character was never granted a required scope — do not send the call.</summary>
     ScopeMissing,
 
-    /// <summary>No token, or refresh failed — the character must re-authenticate.</summary>
-    AuthRequired
+    /// <summary>No token, or EVE SSO refused the refresh — the character must re-authenticate.</summary>
+    AuthRequired,
+
+    /// <summary>The token is being renewed and cannot be used right now (SSO unreachable, backing off, or just refused
+    /// by ESI with its renewal pending) — skip this call and try again, no re-authentication needed (ET-308).</summary>
+    AuthPending
 }

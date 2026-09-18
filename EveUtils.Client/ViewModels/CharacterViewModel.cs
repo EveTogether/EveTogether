@@ -91,6 +91,9 @@ public partial class CharacterViewModel : ObservableObject
                                                       + "again will not help",
         TokenStatus.Rejected                       => "ESI: refusing this character's token — trying to renew it. "
                                                       + "Signing in again is not needed yet",
+        TokenStatus.Reconnecting                   => "ESI: reconnecting… — EVE's sign-in server cannot be reached "
+                                                      + "right now (network not back yet?); retrying automatically, "
+                                                      + "signing in again is not needed",
         _                                          => "ESI: not signed in",
     };
 
@@ -107,6 +110,7 @@ public partial class CharacterViewModel : ObservableObject
         TokenStatus.NeedsReauth                    => MaterialIconKind.AlertOutline,
         TokenStatus.TemporarilyUnavailable         => MaterialIconKind.ClockOutline,
         TokenStatus.Rejected                       => MaterialIconKind.LockAlertOutline,
+        TokenStatus.Reconnecting                   => MaterialIconKind.Sync,
         _                                          => MaterialIconKind.Minus,
     };
 
@@ -118,6 +122,9 @@ public partial class CharacterViewModel : ObservableObject
     /// answering 401 to, right up until the pilot noticed their location had stopped updating (ET-121).</summary>
     public bool EsiWarn => EsiTokenStatus
         is TokenStatus.NeedsReauth or TokenStatus.TemporarilyUnavailable or TokenStatus.Rejected;
+
+    // Reconnecting deliberately carries none of the three variants: the plain chip with a sync icon. Neither green
+    // (nothing works yet) nor amber — it was the amber-and-alarm at every wake-up that made people panic (ET-308).
 
     /// <summary>Inert chip: not signed in at all (mutually exclusive with ok/warn, so the variants never stack).</summary>
     public bool EsiDim => EsiTokenStatus is TokenStatus.NoToken;

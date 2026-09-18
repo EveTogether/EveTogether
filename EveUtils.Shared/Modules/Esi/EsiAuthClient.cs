@@ -89,7 +89,7 @@ public sealed class EsiAuthClient(IHttpClientFactory httpClientFactory) : IEsiAu
         using var response = await httpClient.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"ESI token exchange failed ({(int)response.StatusCode}): {body}");
+            throw new EsiTokenExchangeException((int)response.StatusCode, body);
 
         using var document = JsonDocument.Parse(body);
         var root = document.RootElement;

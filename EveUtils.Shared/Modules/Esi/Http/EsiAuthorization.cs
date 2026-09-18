@@ -10,4 +10,5 @@ public sealed record EsiAuthorization(EsiAuthOutcome Outcome, string? AccessToke
     public static EsiAuthorization Authorized(string accessToken) => new(EsiAuthOutcome.Authorized, accessToken);
     public static EsiAuthorization ScopeMissing(string scope) => new(EsiAuthOutcome.ScopeMissing, MissingScope: scope);
     public static readonly EsiAuthorization AuthRequired = new(EsiAuthOutcome.AuthRequired);
+    public static readonly EsiAuthorization AuthPending = new(EsiAuthOutcome.AuthPending);
 }

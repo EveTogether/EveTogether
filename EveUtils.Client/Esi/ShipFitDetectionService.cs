@@ -170,6 +170,10 @@ public sealed class ShipFitDetectionService(
         {
             if (result.Error?.Kind == EsiErrorKind.ScopeMissing)
                 _readings[characterId] = ShipFitDetectionReading.ScopeMissing;
+            // The token is being renewed (ET-308): keep the last reading and ask again next cycle. Not a warning —
+            // every wake-up produced one per character, and nothing is wrong.
+            else if (result.Error?.Kind == EsiErrorKind.AuthPending)
+                logger.LogDebug("Current ship for {CharacterId} waits for its ESI token to be renewed.", characterId);
             else
                 logger.LogWarning("Could not read current ship for {CharacterId}: {ErrorCode}", characterId, result.Error?.Code);
             return;

@@ -23,10 +23,29 @@ public static class CrashLog
 
         TaskScheduler.UnobservedTaskException += (_, e) =>
         {
-            Write("TaskScheduler.UnobservedTaskException", e.Exception);
+            if (IsAbandonedGrpcRetry(e.Exception))
+                AppendLine(new LogEntry(DateTimeOffset.Now, LogLevel.Warning, "Transport",
+                    "A gRPC retry left a connection failure unobserved (network down); the bus reconnect loop already "
+                    + "handles this outage, so it is recorded here rather than as a crash",
+                    e.Exception.InnerException?.Message));
+            else
+                Write("TaskScheduler.UnobservedTaskException", e.Exception);
             e.SetObserved(); // already on record; don't let it re-surface via the finalizer thread
         };
     }
+
+    /// <summary>
+    /// A task Grpc.Net.Client's own retry machinery faulted and then let go of: every inner exception is an
+    /// <see cref="global::Grpc.Core.RpcException"/> with <see cref="global::Grpc.Core.StatusCode.Unavailable"/>. The stack ends inside
+    /// <c>RetryCall.StartRetry</c> with no frame of ours, and the call shapes the app makes — unary awaited, duplex
+    /// read, duplex write under the 2 s write deadline, channel connect, dispose mid-retry — each observed its fault when
+    /// probed against an unresolvable host with the app's retry policy. With no task of ours to await, what is left is
+    /// not to call a network outage a crash, which is what three of these did at every wake-up (ET-308). Anything
+    /// else — any other status, any other exception — stays Critical.
+    /// </summary>
+    internal static bool IsAbandonedGrpcRetry(AggregateException exception) =>
+        exception.InnerExceptions.Count > 0
+        && exception.InnerExceptions.All(inner => inner is global::Grpc.Core.RpcException { StatusCode: global::Grpc.Core.StatusCode.Unavailable });
 
     /// <summary>
     /// Call once, as the last line on a clean exit path. Its absence after a session is itself the signal (ET-197

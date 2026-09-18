@@ -26,24 +26,68 @@ public sealed class EsiClient(
         {
             var authorization = await tokenProvider
                 .AuthorizeAsync(characterId, request.Scopes, cancellationToken);
-
-            switch (authorization.Outcome)
-            {
-                case EsiAuthOutcome.ScopeMissing:
-                    return EsiResult<T>.Fail(EsiError.Of(
-                        EsiErrorKind.ScopeMissing,
-                        $"Character {characterId} is missing the required scope '{authorization.MissingScope}'."));
-                case EsiAuthOutcome.AuthRequired:
-                    return EsiResult<T>.Fail(EsiError.Of(
-                        EsiErrorKind.AuthRequired,
-                        $"Character {characterId} needs to re-authenticate.",
-                        httpStatus: 401));
-                default:
-                    bearer = authorization.AccessToken;
-                    break;
-            }
+            if (NotAuthorized<T>(characterId, authorization) is { } notAuthorized)
+                return notAuthorized;
+            bearer = authorization.AccessToken;
         }
 
+        var result = await SendAsync<T>(request, bearer, cancellationToken);
+        return result.Error?.Kind == EsiErrorKind.AuthRequired && request.CharacterId is { } refusedCharacter
+            ? await RetryAfterRefusalAsync(request, refusedCharacter, bearer, result, cancellationToken)
+            : result;
+    }
+
+    private static EsiResult<T>? NotAuthorized<T>(int characterId, EsiAuthorization authorization) =>
+        authorization.Outcome switch
+        {
+            EsiAuthOutcome.ScopeMissing => EsiResult<T>.Fail(EsiError.Of(
+                EsiErrorKind.ScopeMissing,
+                $"Character {characterId} is missing the required scope '{authorization.MissingScope}'.")),
+            EsiAuthOutcome.AuthRequired => EsiResult<T>.Fail(EsiError.Of(
+                EsiErrorKind.AuthRequired,
+                $"Character {characterId} needs to re-authenticate.",
+                httpStatus: 401)),
+            EsiAuthOutcome.AuthPending => EsiResult<T>.Fail(EsiError.Of(
+                EsiErrorKind.AuthPending,
+                $"Character {characterId}'s ESI sign-in is being renewed; try again shortly.")),
+            _ => null
+        };
+
+    /// <summary>
+    /// ESI refused the bearer the pre-flight just vouched for. A 401 on its own says the token is stale, not that the
+    /// sign-in is gone — after a wake-up it is simply the old token, sent while its renewal was still waiting for the
+    /// network (ET-308). So: tell the provider (the next check refreshes instead of trusting the clock, and the badge
+    /// shows it — ET-121), ask again, and let the renewal decide. A new token gets one retry; a renewal that is still
+    /// pending reads as <see cref="EsiErrorKind.AuthPending"/>; only a provider that says the sign-in itself is dead
+    /// turns this into <see cref="EsiErrorKind.AuthRequired"/>.
+    /// </summary>
+    private async Task<EsiResult<T>> RetryAfterRefusalAsync<T>(
+        EsiRequest request, int characterId, string? refusedBearer, EsiResult<T> refusal,
+        CancellationToken cancellationToken)
+    {
+        await tokenProvider.TokenRefusedAsync(characterId, cancellationToken);
+
+        var again = await tokenProvider.AuthorizeAsync(characterId, request.Scopes, cancellationToken);
+        if (NotAuthorized<T>(characterId, again) is { } notAuthorized)
+            return notAuthorized;
+        // A provider with nothing to reconsider hands the same token back — ESI's answer stands as it was.
+        if (again.AccessToken == refusedBearer)
+            return refusal;
+
+        var retried = await SendAsync<T>(request, again.AccessToken, cancellationToken);
+        if (retried.Error?.Kind != EsiErrorKind.AuthRequired)
+            return retried;
+
+        // Refused again, straight after a renewal the SSO accepted: whatever this is, it is not an expired sign-in.
+        await tokenProvider.TokenRefusedAsync(characterId, cancellationToken);
+        return EsiResult<T>.Fail(EsiError.Of(
+            EsiErrorKind.AuthPending,
+            $"ESI refused character {characterId}'s freshly renewed token; it will be renewed again shortly.",
+            httpStatus: 401));
+    }
+
+    private async Task<EsiResult<T>> SendAsync<T>(EsiRequest request, string? bearer, CancellationToken cancellationToken)
+    {
         using var message = BuildRequest(request, bearer);
 
         var httpClient = httpClientFactory.CreateClient(EsiHttpClients.Data);
@@ -80,13 +124,6 @@ public sealed class EsiClient(
             var error = MapError(request, response, body);
             RecordOutcome(error.Kind);
 
-            // ESI rejected the bearer the pre-flight just vouched for. Tell the provider, so the character's next
-            // call refreshes instead of re-sending the same refused token — and so the badge can say something is
-            // wrong. Left unsaid, this was invisible: a token whose local expiry still looked fine kept a green
-            // badge while every call came back 401 (ET-121).
-            if (error.Kind == EsiErrorKind.AuthRequired && request.CharacterId is { } refusedCharacter)
-                await tokenProvider.TokenRefusedAsync(refusedCharacter, cancellationToken);
-
             var status = (int)response.StatusCode;
             // A 404 means the resource isn't there — an expected outcome the caller handles via EsiErrorKind.NotFound
             // (e.g. "character is not in a fleet"), not a transport/server failure. Log it at Warning so it stays
@@ -114,6 +151,12 @@ public sealed class EsiClient(
                 logger.LogDebug(
                     "ESI status poll returned {Status} {Reason} — Tranquility appears down.",
                     status, response.ReasonPhrase);
+            // A refused bearer on an authed call is handled right after this — renewed and retried — so it is worth a
+            // Warning, not an Error: on its own it no longer means anything is broken (ET-308).
+            else if (status == 401 && request.CharacterId is not null)
+                logger.LogWarning(
+                    "ESI {Method} {Path} refused the access token (401); renewing it. Body: {Body}",
+                    request.Method, request.Path, Trim(body));
             else
                 logger.LogError(
                     "ESI {Method} {Path} failed: {Status} {Reason}. Body: {Body}",
