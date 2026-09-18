@@ -6,9 +6,17 @@
 @using EveUtils.Shared.Modules.Fleet.Composition
 @using EveUtils.Shared.Modules.Fleet.Entities
 @using EveUtils.Shared.Modules.ServerAuth.Entities
+@using EveUtils.Server.Esi
+@using EveUtils.Shared.Modules.Sde
 @inject DataAdminService DataAdmin
+@inject EsiNameLookup NameLookup
+@inject ISdeAccessor Sde
 
 <div class="crumb">Access / <b>Data</b></div>
+
+<div class="filterbar">
+    <input type="search" placeholder="Filter by name or id…" aria-label="Filter data by name or id" @bind="Filter" @bind:event="oninput" />
+</div>
 
 @if (_pending is { } p)
 {
@@ -17,6 +25,10 @@
         @if (p.Kind == "synced")
         {
             <span class="warn">⚠ Removes the paired character + its sessions. Leaves orphan references and breaks any connected client's session.</span>
+        }
+        @if (p.Warning is not null)
+        {
+            <span class="warn">⚠ @p.Warning</span>
         }
         <button class="danger" @onclick="ConfirmAsync">Confirm</button>
         <button @onclick="Cancel">Cancel</button>
@@ -32,21 +44,21 @@
     </NotAuthorized>
 </AuthorizeView>
 
-<Card Title="Shared fittings" Count="@_fits.Count.ToString()">
-    @if (_fits.Count == 0)
+<Card Title="Shared fittings" Count="@CountLabel(Fits.Count, _fits.Count)">
+    @if (Fits.Count == 0)
     {
-        <p class="dim" style="padding:14px;margin:0;">No fits shared to this server.</p>
+        <p class="dim" style="padding:14px;margin:0;">@EmptyText("No fits shared to this server.")</p>
     }
     else
     {
         <table>
             <thead><tr><th>Name</th><th>Ship type</th><th>Shared by</th><th>Shared at</th><th></th></tr></thead>
             <tbody>
-                @foreach (var f in _fits)
+                @foreach (var f in Fits)
                 {
                     <tr>
-                        <td class="bright">@f.Name</td><td class="dim">@f.ShipTypeId</td>
-                        <td>@f.SharedByCharacterName</td><td class="dim">@f.SharedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td class="bright">@f.Name</td><td><ShipCell TypeId="f.ShipTypeId" /></td>
+                        <td><CharacterCell Id="f.SharedByCharacterId" Name="@f.SharedByCharacterName" /></td><td class="dim">@f.SharedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
                         <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
                             <button class="danger" @onclick="() => AskFit(f)">Delete</button>
                         </AuthorizeView></td>
@@ -57,20 +69,20 @@
     }
 </Card>
 
-<Card Title="Fleets" Count="@_fleets.Count.ToString()">
-    @if (_fleets.Count == 0)
+<Card Title="Fleets" Count="@CountLabel(Fleets.Count, _fleets.Count)">
+    @if (Fleets.Count == 0)
     {
-        <p class="dim" style="padding:14px;margin:0;">No fleets on this server.</p>
+        <p class="dim" style="padding:14px;margin:0;">@EmptyText("No fleets on this server.")</p>
     }
     else
     {
         <table>
-            <thead><tr><th>Name</th><th>Owner (char id)</th><th>Visibility</th><th>State</th><th>Activation</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Owner</th><th>Visibility</th><th>State</th><th>Activation</th><th></th></tr></thead>
             <tbody>
-                @foreach (var fleet in _fleets)
+                @foreach (var fleet in Fleets)
                 {
                     <tr>
-                        <td class="bright">@fleet.Name</td><td class="dim">@fleet.CreatorCharacterId</td>
+                        <td class="bright">@fleet.Name</td><td><CharacterCell Id="fleet.CreatorCharacterId" Name="@NameOf(fleet.CreatorCharacterId)" /></td>
                         <td>@(fleet.Visibility == FleetVisibility.Public ? "Public" : "Invite-only")</td>
                         <td>@fleet.State</td><td class="dim">@fleet.Activation</td>
                         <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
@@ -84,20 +96,20 @@
     }
 </Card>
 
-<Card Title="Fleet compositions" Count="@_compositions.Count.ToString()">
-    @if (_compositions.Count == 0)
+<Card Title="Fleet compositions" Count="@CountLabel(Compositions.Count, _compositions.Count)">
+    @if (Compositions.Count == 0)
     {
-        <p class="dim" style="padding:14px;margin:0;">No compositions shared to this server.</p>
+        <p class="dim" style="padding:14px;margin:0;">@EmptyText("No compositions shared to this server.")</p>
     }
     else
     {
         <table>
-            <thead><tr><th>Name</th><th>Owner (char id)</th><th>Description</th><th>Updated</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Owner</th><th>Description</th><th>Updated</th><th></th></tr></thead>
             <tbody>
-                @foreach (var comp in _compositions)
+                @foreach (var comp in Compositions)
                 {
                     <tr>
-                        <td class="bright">@comp.Name</td><td class="dim">@comp.OwnerCharacterId</td>
+                        <td class="bright">@comp.Name</td><td><CharacterCell Id="comp.OwnerCharacterId" Name="@NameOf(comp.OwnerCharacterId)" /></td>
                         <td class="dim">@(string.IsNullOrWhiteSpace(comp.Description) ? "—" : comp.Description)</td>
                         <td class="dim">@comp.UpdatedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
                         <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
@@ -110,21 +122,21 @@
     }
 </Card>
 
-<Card Title="Paired characters" Count="@_synced.Count.ToString()">
-    <p class="dim" style="padding:11px 14px 2px;margin:0;">Metadata only — refresh tokens are never shown (Iron Law #8).</p>
-    @if (_synced.Count == 0)
+<Card Title="Paired characters" Count="@CountLabel(Characters.Count, _synced.Count)">
+    <p class="dim" style="padding:11px 14px 2px;margin:0;">Metadata only — refresh tokens are never shown.</p>
+    @if (Characters.Count == 0)
     {
-        <p class="dim" style="padding:0 14px 14px;margin:0;">No paired characters.</p>
+        <p class="dim" style="padding:0 14px 14px;margin:0;">@EmptyText("No paired characters.")</p>
     }
     else
     {
         <table>
-            <thead><tr><th>Character</th><th>ESI id</th><th>Scopes</th><th>Paired at</th><th></th></tr></thead>
+            <thead><tr><th>Character</th><th>Scopes</th><th>Paired at</th><th></th></tr></thead>
             <tbody>
-                @foreach (var c in _synced)
+                @foreach (var c in Characters)
                 {
                     <tr>
-                        <td class="bright">@c.CharacterName</td><td class="dim">@c.EsiCharacterId</td>
+                        <td><CharacterCell Id="c.EsiCharacterId" Name="@c.CharacterName" /></td>
                         <td class="dim">@(c.GrantedScopes?.Count ?? 0) scopes</td>
                         <td class="dim">@c.PairedAt.ToString("yyyy-MM-dd HH:mm")</td>
                         <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
@@ -137,27 +149,42 @@
     }
 </Card>
 
-<Card Title="Sessions" Count="@_sessions.Count.ToString()">
-    <p class="dim" style="padding:11px 14px 2px;margin:0;">Metadata only — token hashes are never shown (Iron Law #8).</p>
-    @if (_sessions.Count == 0)
+<Card Title="Sessions" Count="@CountLabel(Sessions.Count, _sessions.Count)">
+    <p class="dim" style="padding:11px 14px 2px;margin:0;">
+        Metadata only — token hashes are never shown. One session per machine a character is paired on, so several at once is normal.
+        <span class="ok">@_sessions.Count(IsLive) live</span>,
+        @(_sessions.Count - _sessions.Count(IsLive)) silent@(_sessions.Any(IsLapsing) ? $", of which {_sessions.Count(IsLapsing)} past the idle window and due to be cleaned up" : "").
+    </p>
+    @if (Sessions.Count == 0)
     {
-        <p class="dim" style="padding:0 14px 14px;margin:0;">No sessions.</p>
+        <p class="dim" style="padding:0 14px 14px;margin:0;">@EmptyText("No sessions.")</p>
     }
     else
     {
         <table>
-            <thead><tr><th>Character</th><th>Issued (UTC)</th><th>Expires (UTC)</th><th>Last seen (UTC)</th><th></th></tr></thead>
+            <thead><tr><th>Character</th><th>Issued (UTC)</th><th>Expires (UTC)</th><th>Last seen (UTC)</th><th>Silent for</th><th>State</th><th></th></tr></thead>
             <tbody>
-                @foreach (var s in _sessions)
+                @foreach (var s in Sessions)
                 {
                     <tr>
                         @* Dates, not just a clock: sessions here go back months, and HH:mm made a June row
                            indistinguishable from one issued this morning. *@
-                        <td class="bright">@(s.SyncedCharacter?.CharacterName ?? "—")</td>
+                        <td>
+                            @if (s.SyncedCharacter is { } owner)
+                            {
+                                <CharacterCell Id="owner.EsiCharacterId" Name="@owner.CharacterName" />
+                            }
+                            else
+                            {
+                                <span class="dim">—</span>
+                            }
+                        </td>
                         <td class="dim">@s.IssuedAt.ToString("yyyy-MM-dd HH:mm")</td><td class="dim">@s.ExpiresAt.ToString("yyyy-MM-dd HH:mm")</td>
                         <td class="dim">@s.LastHeartbeat.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td class="dim">@SilenceLabel(s)</td>
+                        <td class="@StateClass(s)">@State(s)</td>
                         <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
-                            <button class="danger" @onclick="() => AskSession(s)">Delete</button>
+                            <button class="danger" @onclick="() => AskSession(s)">Revoke</button>
                         </AuthorizeView></td>
                     </tr>
                 }
@@ -167,15 +194,45 @@
 </Card>
 
 @code {
-    private record Pending(string Kind, long Id, string Label);
+    private record Pending(string Kind, long Id, string Label, string? Warning = null);
+
+    /// <summary>Two missed 30s heartbeats: attached right now rather than merely refreshable.</summary>
+    private static readonly TimeSpan LiveWindow = TimeSpan.FromSeconds(60);
+
+    private static TimeSpan Silence(ServerSession s) => DateTimeOffset.UtcNow - s.LastHeartbeat;
+    private static bool IsLive(ServerSession s) => Silence(s) <= LiveWindow;
+
+    /// <summary>Past the idle window, so the next cleanup sweep removes it. Says why a row is about to vanish.</summary>
+    private static bool IsLapsing(ServerSession s) => Silence(s) >= ServerSessionService.IdleLifetime;
+
+    private static string State(ServerSession s) => IsLive(s) ? "live" : IsLapsing(s) ? "lapsing" : "idle";
+    private static string StateClass(ServerSession s) => IsLive(s) ? "ok" : IsLapsing(s) ? "stale" : "dim";
+
+    /// <summary>How long since anything used this session, at the coarsest unit that still reads at a glance.</summary>
+    private static string SilenceLabel(ServerSession s)
+    {
+        var silence = Silence(s);
+        return silence < TimeSpan.FromMinutes(1) ? $"{silence.TotalSeconds:0}s"
+            : silence < TimeSpan.FromHours(1) ? $"{silence.TotalMinutes:0}m"
+            : silence < TimeSpan.FromDays(1) ? $"{silence.TotalHours:0}h"
+            : $"{silence.TotalDays:0}d";
+    }
 
     private IReadOnlyList<SharedFit> _fits = [];
     private IReadOnlyList<Fleet> _fleets = [];
     private IReadOnlyList<FleetComposition> _compositions = [];
     private IReadOnlyList<SyncedCharacter> _synced = [];
     private IReadOnlyList<ServerSession> _sessions = [];
+    private IReadOnlyDictionary<long, string> _names = new Dictionary<long, string>();
     private Pending? _pending;
     private string? _message;
+
+    private string Filter { get; set; } = string.Empty;
+    private IReadOnlyList<SharedFit> Fits => _fits.Where(f => Matches(f.Name, f.ShipTypeId, TypeName(f.ShipTypeId), f.SharedByCharacterId, f.SharedByCharacterName)).ToList();
+    private IReadOnlyList<Fleet> Fleets => _fleets.Where(f => Matches(f.Name, f.CreatorCharacterId, NameOf(f.CreatorCharacterId), f.State, f.Activation)).ToList();
+    private IReadOnlyList<FleetComposition> Compositions => _compositions.Where(c => Matches(c.Name, c.Description, c.OwnerCharacterId, NameOf(c.OwnerCharacterId))).ToList();
+    private IReadOnlyList<SyncedCharacter> Characters => _synced.Where(c => Matches(c.CharacterName, c.EsiCharacterId)).ToList();
+    private IReadOnlyList<ServerSession> Sessions => _sessions.Where(s => Matches(s.SyncedCharacter?.CharacterName, s.SyncedCharacter?.EsiCharacterId)).ToList();
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -186,7 +243,32 @@
         _compositions = await DataAdmin.ListFleetCompositionsAsync();
         _synced = await DataAdmin.ListSyncedCharactersAsync();
         _sessions = await DataAdmin.ListSessionsAsync();
+        await ResolveNamesAsync();
     }
+
+    /// <summary>Paired characters name themselves; only creators/owners nobody paired here go to ESI. A failed lookup
+    /// leaves the id unnamed rather than failing the page.</summary>
+    private async Task ResolveNamesAsync()
+    {
+        var names = _synced.ToDictionary(c => (long)c.EsiCharacterId, c => c.CharacterName);
+        var unpaired = _fleets.Select(f => (long)f.CreatorCharacterId)
+            .Concat(_compositions.Select(c => (long)c.OwnerCharacterId))
+            .Where(id => !names.ContainsKey(id));
+        foreach (var (id, name) in await NameLookup.ResolveAsync(unpaired))
+            names[id] = name;
+        _names = names;
+    }
+
+    private string? NameOf(int characterId) => _names.GetValueOrDefault(characterId);
+
+    private string TypeName(int typeId) => Sde.TryGetTypeName(typeId, out var name) ? name : string.Empty;
+
+    /// <summary>Case-insensitive substring over the displayed names and the ids behind them, so a pasted id still finds its row.</summary>
+    private bool Matches(params object?[] fields) =>
+        Filter.Length == 0 || fields.Any(f => f?.ToString()?.Contains(Filter.Trim(), StringComparison.OrdinalIgnoreCase) == true);
+
+    private string CountLabel(int shown, int total) => shown == total ? total.ToString() : $"{shown} of {total}";
+    private string EmptyText(string none) => Filter.Length > 0 ? "Nothing matches the filter." : none;
 
     private void AskFit(SharedFit f) => _pending = new Pending("fit", f.Id, $"Delete fit '{f.Name}'?");
     private void AskComposition(FleetComposition c) => _pending = new Pending("composition", c.Id, $"Delete composition '{c.Name}' (its roles + fits cascade)?");
@@ -195,7 +277,9 @@
     private void AskSynced(SyncedCharacter c) => _pending = new Pending("synced", c.Id, $"Delete paired character '{c.CharacterName}'?");
     // The issue date is in the label because a character has one session per machine it is paired on, and
     // without it the confirm bar cannot say which of them you are about to delete.
-    private void AskSession(ServerSession s) => _pending = new Pending("session", s.Id, $"Delete session for '{s.SyncedCharacter?.CharacterName ?? "?"}' issued {s.IssuedAt:yyyy-MM-dd HH:mm} UTC?");
+    private void AskSession(ServerSession s) => _pending = new Pending("session", s.Id,
+        $"Revoke session for '{s.SyncedCharacter?.CharacterName ?? "?"}' issued {s.IssuedAt:yyyy-MM-dd HH:mm} UTC?",
+        IsLive(s) ? "This one is live — the machine holding it is attached right now and will have to pair again." : null);
     private void Cancel() => _pending = null;
 
     private async Task ConfirmAsync()

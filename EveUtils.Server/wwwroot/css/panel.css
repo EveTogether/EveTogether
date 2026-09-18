@@ -91,6 +91,19 @@ tbody tr { background:var(--row); }
 tbody tr:nth-child(even) { background:var(--row-alt); }
 tbody tr:hover { background:var(--row-hover); }
 table.disabled { opacity:.45; }
+/* --text-dim is 4.85:1 on a rest row but 4.11 on hover and 3.93 on selected: secondary text lifts to --text there. */
+tbody tr:hover .dim, tbody tr.sel .dim { color:var(--text); }
+
+/* ── entity cells: portrait/icon + name, id kept as selectable mono text ── */
+.filterbar { margin:0 0 14px; }
+.filterbar input { width:340px; max-width:100%; }
+input::placeholder { color:var(--text-dim); opacity:1; }
+.ent { display:inline-flex; align-items:center; gap:8px; min-width:0; }
+.ent-img { flex:none; width:26px; height:26px; background:#080B09; border:1px solid var(--border); }
+.ent-img.round { border-radius:50%; }
+.ent-name.unresolved { color:var(--isk); }
+.idchip { font-family:var(--mono); font-size:11px; color:var(--text-accent); background:rgba(78,199,158,.08);
+  border:1px solid var(--border); padding:1px 5px; user-select:all; cursor:text; }
 
 /* ── buttons / inputs ── */
 button { font-family:inherit; font-size:11px; letter-spacing:.04em; background:rgba(255,255,255,.10);

@@ -28,50 +28,6 @@
     }
 </Card>
 
-<Card Title="Sessions" Count="@Sessions.Count.ToString()">
-    @if (PendingRevoke is { } pending)
-    {
-        <div class="confirmbar">
-            <span>Revoke @pending.CharacterName's session issued @pending.Session.IssuedAt.ToString("yyyy-MM-dd HH:mm") UTC?</span>
-            @if (pending.IsLive)
-            {
-                <span class="warn">⚠ This one is live — the machine holding it is attached right now and will have to pair again.</span>
-            }
-            <button class="danger" @onclick="RevokeAsync">Confirm</button>
-            <button @onclick="() => PendingRevoke = null">Cancel</button>
-        </div>
-    }
-    @if (Sessions.Count == 0)
-    {
-        <p class="dim" style="padding:14px;margin:0;">No server sessions issued yet.</p>
-    }
-    else
-    {
-        <p class="dim" style="padding:11px 14px 2px;margin:0;">
-            One session per machine a character is paired on — several at once is normal. <span class="ok">@LiveSessions live</span>,
-            @(Sessions.Count - LiveSessions) silent@(LapsingSessions > 0 ? $", of which {LapsingSessions} past the idle window and due to be cleaned up" : "").
-        </p>
-        <table>
-            <thead><tr><th>Character</th><th>Issued (UTC)</th><th>Last seen (UTC)</th><th>Silent for</th><th>State</th><th></th></tr></thead>
-            <tbody>
-                @foreach (var row in Sessions)
-                {
-                    <tr>
-                        <td class="bright">@row.CharacterName</td>
-                        <td class="dim">@row.Session.IssuedAt.ToString("yyyy-MM-dd HH:mm")</td>
-                        <td class="dim">@row.Session.LastHeartbeat.ToString("yyyy-MM-dd HH:mm")</td>
-                        <td class="dim">@row.SilenceLabel</td>
-                        <td class="@row.StateClass">@row.State</td>
-                        <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="del">
-                            <button class="danger" @onclick="() => PendingRevoke = row">Revoke</button>
-                        </AuthorizeView></td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
-</Card>
-
 <Card Title="Permissions">
     <div class="switchrow">
         <div class="lbl"><span class="c">fit.sync</span> — allow clients to share fittings via this server</div>
@@ -83,40 +39,4 @@
     </div>
 </Card>
 
-<Card Title="Shared fittings" Count="@SharedFits.Count.ToString()">
-    @if (SharedFits.Count == 0)
-    {
-        <p class="dim" style="padding:14px;margin:0;">No fits shared to this server yet.</p>
-    }
-    else
-    {
-        <table>
-            <thead><tr><th>Name</th><th>Ship type</th><th>Shared by</th><th>Shared at</th></tr></thead>
-            <tbody>
-                @foreach (var fit in SharedFits)
-                {
-                    <tr><td class="bright">@fit.Name</td><td class="dim">@fit.ShipTypeId</td><td>@fit.SharedByCharacterName</td><td class="dim">@fit.SharedAt.LocalDateTime.ToString("HH:mm:ss")</td></tr>
-                }
-            </tbody>
-        </table>
-    }
-</Card>
-
-<Card Title="Paired characters" Count="@Synced.Count.ToString()">
-    @if (Synced.Count == 0)
-    {
-        <p class="dim" style="padding:14px;margin:0;">No characters paired (Mode B) yet.</p>
-    }
-    else
-    {
-        <table>
-            <thead><tr><th>Character</th><th>ESI id</th><th>Paired at (UTC)</th></tr></thead>
-            <tbody>
-                @foreach (var character in Synced)
-                {
-                    <tr><td class="bright">@character.CharacterName</td><td class="dim">@character.EsiCharacterId</td><td class="dim">@character.PairedAt.ToString("yyyy-MM-dd HH:mm:ss")</td></tr>
-                }
-            </tbody>
-        </table>
-    }
-</Card>
+<p class="dim">Sessions, shared fittings, fleets and paired characters are on the <a href="/data">Data</a> page.</p>
