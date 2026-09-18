@@ -1,10 +1,15 @@
 @using EveUtils.Shared.Modules.Sde
 @inject ISdeAccessor Sde
 @* A ship type as the panel shows it: icon + SDE name, id as selectable mono text and in the tooltip. A type the SDE
-   does not know (stale build, unavailable store) is marked rather than left blank. *@
+   does not know (stale build, unavailable store) is marked rather than left blank. A Caption (a fit's name) replaces
+   the type name in the text but not in the tooltip, so the hull stays readable on hover. *@
 <span class="ent" title="@Tooltip">
     <img class="ent-img" src="https://images.evetech.net/types/@TypeId/icon?size=64" width="26" height="26" loading="lazy" alt="" onerror="this.style.visibility='hidden'" />
-    @if (_known)
+    @if (Caption is not null)
+    {
+        <span class="ent-name">@Caption</span>
+    }
+    else if (_known)
     {
         <span class="ent-name bright">@_name</span>
     }
@@ -12,11 +17,16 @@
     {
         <span class="ent-name unresolved">⚠ Not in SDE</span>
     }
-    <code class="idchip">@TypeId</code>
+    @if (ShowId)
+    {
+        <code class="idchip">@TypeId</code>
+    }
 </span>
 
 @code {
     [Parameter, EditorRequired] public int TypeId { get; set; }
+    [Parameter] public string? Caption { get; set; }
+    [Parameter] public bool ShowId { get; set; } = true;
 
     private string _name = string.Empty;
     private bool _known;

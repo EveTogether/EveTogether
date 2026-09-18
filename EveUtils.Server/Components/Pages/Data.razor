@@ -4,15 +4,17 @@
 @using EveUtils.Server.Auth
 @using EveUtils.Shared.Modules.Fittings.Entities
 @using EveUtils.Shared.Modules.Fleet.Composition
-@using EveUtils.Shared.Modules.Fleet.Entities
 @using EveUtils.Shared.Modules.ServerAuth.Entities
+@using EveUtils.Server.DataExplorer
 @using EveUtils.Server.Esi
 @using EveUtils.Shared.Modules.Sde
 @inject DataAdminService DataAdmin
 @inject EsiNameLookup NameLookup
 @inject ISdeAccessor Sde
+@inject NavigationManager Navigation
+@implements IDisposable
 
-<div class="crumb">Access / <b>Data</b></div>
+<div class="crumb">Data / <b>Records</b></div>
 
 <div class="filterbar">
     <input type="search" placeholder="Filter by name or id…" aria-label="Filter data by name or id" @bind="Filter" @bind:event="oninput" />
@@ -44,7 +46,7 @@
     </NotAuthorized>
 </AuthorizeView>
 
-<Card Title="Shared fittings" Count="@CountLabel(Fits.Count, _fits.Count)">
+<Card Id="fits" Title="Shared fittings" Count="@CountLabel(Fits.Count, _fits.Count)">
     @if (Fits.Count == 0)
     {
         <p class="dim" style="padding:14px;margin:0;">@EmptyText("No fits shared to this server.")</p>
@@ -56,7 +58,7 @@
             <tbody>
                 @foreach (var f in Fits)
                 {
-                    <tr>
+                    <tr id="@DataLinks.SharedFitAnchor(f.Id)" class="@TargetClass(DataLinks.SharedFitAnchor(f.Id))">
                         <td class="bright">@f.Name</td><td><ShipCell TypeId="f.ShipTypeId" /></td>
                         <td><CharacterCell Id="f.SharedByCharacterId" Name="@f.SharedByCharacterName" /></td><td class="dim">@f.SharedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
                         <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
@@ -69,34 +71,7 @@
     }
 </Card>
 
-<Card Title="Fleets" Count="@CountLabel(Fleets.Count, _fleets.Count)">
-    @if (Fleets.Count == 0)
-    {
-        <p class="dim" style="padding:14px;margin:0;">@EmptyText("No fleets on this server.")</p>
-    }
-    else
-    {
-        <table>
-            <thead><tr><th>Name</th><th>Owner</th><th>Visibility</th><th>State</th><th>Activation</th><th></th></tr></thead>
-            <tbody>
-                @foreach (var fleet in Fleets)
-                {
-                    <tr>
-                        <td class="bright">@fleet.Name</td><td><CharacterCell Id="fleet.CreatorCharacterId" Name="@NameOf(fleet.CreatorCharacterId)" /></td>
-                        <td>@(fleet.Visibility == FleetVisibility.Public ? "Public" : "Invite-only")</td>
-                        <td>@fleet.State</td><td class="dim">@fleet.Activation</td>
-                        <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
-                            <button @onclick="() => AskDisband(fleet)">Disband</button>
-                            <button class="danger" @onclick="() => AskPurge(fleet)">Purge now</button>
-                        </AuthorizeView></td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
-</Card>
-
-<Card Title="Fleet compositions" Count="@CountLabel(Compositions.Count, _compositions.Count)">
+<Card Id="compositions" Title="Fleet compositions" Count="@CountLabel(Compositions.Count, _compositions.Count)">
     @if (Compositions.Count == 0)
     {
         <p class="dim" style="padding:14px;margin:0;">@EmptyText("No compositions shared to this server.")</p>
@@ -108,7 +83,7 @@
             <tbody>
                 @foreach (var comp in Compositions)
                 {
-                    <tr>
+                    <tr id="@DataLinks.CompositionAnchor(comp.Id)" class="@TargetClass(DataLinks.CompositionAnchor(comp.Id))">
                         <td class="bright">@comp.Name</td><td><CharacterCell Id="comp.OwnerCharacterId" Name="@NameOf(comp.OwnerCharacterId)" /></td>
                         <td class="dim">@(string.IsNullOrWhiteSpace(comp.Description) ? "—" : comp.Description)</td>
                         <td class="dim">@comp.UpdatedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
@@ -122,7 +97,7 @@
     }
 </Card>
 
-<Card Title="Paired characters" Count="@CountLabel(Characters.Count, _synced.Count)">
+<Card Id="characters" Title="Paired characters" Count="@CountLabel(Characters.Count, _synced.Count)">
     <p class="dim" style="padding:11px 14px 2px;margin:0;">Metadata only — refresh tokens are never shown.</p>
     @if (Characters.Count == 0)
     {
@@ -131,14 +106,16 @@
     else
     {
         <table>
-            <thead><tr><th>Character</th><th>Scopes</th><th>Paired at</th><th></th></tr></thead>
+            <thead><tr><th>Character</th><th>Scopes</th><th>Paired at</th><th class="num">Fleets</th><th class="num">Shared fits</th><th class="num">Sessions</th><th></th></tr></thead>
             <tbody>
                 @foreach (var c in Characters)
                 {
-                    <tr>
+                    var usage = _usage.GetValueOrDefault(c.EsiCharacterId, CharacterUsage.None);
+                    <tr id="@DataLinks.CharacterAnchor(c.EsiCharacterId)" class="@TargetClass(DataLinks.CharacterAnchor(c.EsiCharacterId))">
                         <td><CharacterCell Id="c.EsiCharacterId" Name="@c.CharacterName" /></td>
                         <td class="dim">@(c.GrantedScopes?.Count ?? 0) scopes</td>
                         <td class="dim">@c.PairedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td class="num">@usage.Fleets</td><td class="num">@usage.SharedFits</td><td class="num">@_sessions.Count(s => s.SyncedCharacterId == c.Id)</td>
                         <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
                             <button class="danger" @onclick="() => AskSynced(c)">Delete</button>
                         </AuthorizeView></td>
@@ -149,7 +126,7 @@
     }
 </Card>
 
-<Card Title="Sessions" Count="@CountLabel(Sessions.Count, _sessions.Count)">
+<Card Id="sessions" Title="Sessions" Count="@CountLabel(Sessions.Count, _sessions.Count)">
     <p class="dim" style="padding:11px 14px 2px;margin:0;">
         Metadata only — token hashes are never shown. One session per machine a character is paired on, so several at once is normal.
         <span class="ok">@_sessions.Count(IsLive) live</span>,
@@ -166,7 +143,7 @@
             <tbody>
                 @foreach (var s in Sessions)
                 {
-                    <tr>
+                    <tr id="@DataLinks.SessionAnchor(s.Id)" class="@TargetClass(DataLinks.SessionAnchor(s.Id))">
                         @* Dates, not just a clock: sessions here go back months, and HH:mm made a June row
                            indistinguishable from one issued this morning. *@
                         <td>
@@ -219,40 +196,59 @@
     }
 
     private IReadOnlyList<SharedFit> _fits = [];
-    private IReadOnlyList<Fleet> _fleets = [];
     private IReadOnlyList<FleetComposition> _compositions = [];
     private IReadOnlyList<SyncedCharacter> _synced = [];
     private IReadOnlyList<ServerSession> _sessions = [];
     private IReadOnlyDictionary<long, string> _names = new Dictionary<long, string>();
+    private IReadOnlyDictionary<int, CharacterUsage> _usage = new Dictionary<int, CharacterUsage>();
     private Pending? _pending;
     private string? _message;
 
     private string Filter { get; set; } = string.Empty;
-    private IReadOnlyList<SharedFit> Fits => _fits.Where(f => Matches(f.Name, f.ShipTypeId, TypeName(f.ShipTypeId), f.SharedByCharacterId, f.SharedByCharacterName)).ToList();
-    private IReadOnlyList<Fleet> Fleets => _fleets.Where(f => Matches(f.Name, f.CreatorCharacterId, NameOf(f.CreatorCharacterId), f.State, f.Activation)).ToList();
-    private IReadOnlyList<FleetComposition> Compositions => _compositions.Where(c => Matches(c.Name, c.Description, c.OwnerCharacterId, NameOf(c.OwnerCharacterId))).ToList();
+    private IReadOnlyList<SharedFit> Fits => _fits.Where(f => Matches(f.Name, f.Id, f.ShipTypeId, TypeName(f.ShipTypeId), f.SharedByCharacterId, f.SharedByCharacterName)).ToList();
+    private IReadOnlyList<FleetComposition> Compositions => _compositions.Where(c => Matches(c.Name, c.Id, c.Description, c.OwnerCharacterId, NameOf(c.OwnerCharacterId))).ToList();
     private IReadOnlyList<SyncedCharacter> Characters => _synced.Where(c => Matches(c.CharacterName, c.EsiCharacterId)).ToList();
     private IReadOnlyList<ServerSession> Sessions => _sessions.Where(s => Matches(s.SyncedCharacter?.CharacterName, s.SyncedCharacter?.EsiCharacterId)).ToList();
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    /// <summary>The row a link from another list pointed at (<c>/data#fit-12</c>). Marked here rather than with CSS
+    /// <c>:target</c>, which Blazor's pushState navigation never updates.</summary>
+    private string _target = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _target = TargetOf(Navigation.Uri);
+        Navigation.LocationChanged += OnLocationChanged;
+        await LoadAsync();
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        _target = TargetOf(e.Location);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private static string TargetOf(string uri) => new Uri(uri).Fragment.TrimStart('#');
+
+    private string? TargetClass(string anchor) => anchor == _target ? "targeted" : null;
 
     private async Task LoadAsync()
     {
         _fits = await DataAdmin.ListSharedFitsAsync();
-        _fleets = await DataAdmin.ListFleetsAsync();
         _compositions = await DataAdmin.ListFleetCompositionsAsync();
         _synced = await DataAdmin.ListSyncedCharactersAsync();
         _sessions = await DataAdmin.ListSessionsAsync();
+        _usage = await DataAdmin.CountUsageByCharacterAsync();
         await ResolveNamesAsync();
     }
 
-    /// <summary>Paired characters name themselves; only creators/owners nobody paired here go to ESI. A failed lookup
+    /// <summary>Paired characters name themselves; only owners nobody paired here go to ESI. A failed lookup
     /// leaves the id unnamed rather than failing the page.</summary>
     private async Task ResolveNamesAsync()
     {
         var names = _synced.ToDictionary(c => (long)c.EsiCharacterId, c => c.CharacterName);
-        var unpaired = _fleets.Select(f => (long)f.CreatorCharacterId)
-            .Concat(_compositions.Select(c => (long)c.OwnerCharacterId))
+        var unpaired = _compositions.Select(c => (long)c.OwnerCharacterId)
             .Where(id => !names.ContainsKey(id));
         foreach (var (id, name) in await NameLookup.ResolveAsync(unpaired))
             names[id] = name;
@@ -272,8 +268,6 @@
 
     private void AskFit(SharedFit f) => _pending = new Pending("fit", f.Id, $"Delete fit '{f.Name}'?");
     private void AskComposition(FleetComposition c) => _pending = new Pending("composition", c.Id, $"Delete composition '{c.Name}' (its roles + fits cascade)?");
-    private void AskDisband(Fleet fleet) => _pending = new Pending("disband", fleet.Id, $"Disband fleet '{fleet.Name}' (soft-delete → Archived)?");
-    private void AskPurge(Fleet fleet) => _pending = new Pending("purge", fleet.Id, $"Purge fleet '{fleet.Name}' permanently?");
     private void AskSynced(SyncedCharacter c) => _pending = new Pending("synced", c.Id, $"Delete paired character '{c.CharacterName}'?");
     // The issue date is in the label because a character has one session per machine it is paired on, and
     // without it the confirm bar cannot say which of them you are about to delete.
@@ -290,8 +284,6 @@
         {
             case "fit": await DataAdmin.DeleteSharedFitAsync((int)p.Id); break;
             case "composition": await DataAdmin.DeleteFleetCompositionAsync(p.Id); break;
-            case "disband": await DataAdmin.DisbandFleetAsync(p.Id); break;
-            case "purge": await DataAdmin.PurgeFleetAsync(p.Id); break;
             case "synced": await DataAdmin.DeleteSyncedCharacterAsync((int)p.Id); break;
             case "session": await DataAdmin.DeleteSessionAsync((int)p.Id); break;
         }

@@ -1,0 +1,24 @@
+@* Sidebar icon. Under 1000 px the sidebar folds to an icon rail, so every entry needs one. *@
+<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">@((MarkupString)(Paths.GetValueOrDefault(Name) ?? string.Empty))</svg>
+
+@code {
+    [Parameter, EditorRequired] public string Name { get; set; } = string.Empty;
+
+    private static readonly Dictionary<string, string> Paths = new()
+    {
+        ["dashboard"] = """<path d="M3 3h7v8H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 15h7v6H3z"/>""",
+        ["esi"] = """<path d="M3 12h4l3-8 4 16 3-8h4"/>""",
+        ["logs"] = """<path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/>""",
+        ["characters"] = """<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>""",
+        ["fleets"] = """<path d="M12 3l3 6-3 2-3-2zM5 13l3 5-3 2-2-2zM19 13l2 5-2 2-3-2z"/>""",
+        ["compositions"] = """<path d="M4 5h16M4 12h10M4 19h13"/><circle cx="18" cy="12" r="2"/>""",
+        ["fits"] = """<path d="M12 2l8 5v10l-8 5-8-5V7z"/><path d="M12 7v10M7 9.5l10 5M17 9.5l-10 5"/>""",
+        ["sessions"] = """<rect x="4" y="10" width="16" height="11" rx="1"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>""",
+        ["allowed"] = """<path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>""",
+        ["keys"] = """<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/>""",
+        ["users"] = """<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5c2 .7 3.2 2.6 3.6 5.5"/>""",
+        ["roles"] = """<path d="M4 7h16M4 12h16M4 17h10"/><circle cx="18" cy="17" r="2.5"/>""",
+        ["backup"] = """<path d="M4 7c0-2 16-2 16 0v10c0 2-16 2-16 0z"/><path d="M4 7c0 2 16 2 16 0M4 12c0 2 16 2 16 0"/>""",
+        ["live"] = """<circle cx="12" cy="12" r="3"/><path d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/>""",
+    };
+}

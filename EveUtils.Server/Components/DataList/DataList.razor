@@ -1,0 +1,301 @@
+@typeparam TRow
+@implements IDisposable
+@inject NavigationManager Navigation
+@*
+    A list with a detail pane beside it (a 430 px drawer under 1000 px). Every state change is a link or a NavigateTo
+    to the same page with a different query string, so the browser's back button, a reload and a shared URL all land
+    on the same view. The keyboard handler in js/panel.js only clicks the links rendered here (data-dl-*); without it
+    every one of them still works by mouse, touch and Tab + Enter.
+*@
+
+<div class="explorer" data-dl>
+    <div class="crumbs">@Section / <b>@Definition.Title</b></div>
+    <div class="ph">
+        <h2>@Definition.Title</h2>
+        <span class="meta"><b>@_ordered.Count</b> of <b>@Rows.Count</b> shown</span>
+    </div>
+    <div class="split">
+        <div class="listcol">
+            <div class="toolbar">
+                <label class="search">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
+                    <input type="search" placeholder="Filter by name or id" aria-label="Filter @Definition.Title.ToLowerInvariant() by name or id"
+                           @bind="_queryText" @bind:event="oninput" @bind:after="_ApplyQuery" />
+                </label>
+                <nav class="seg" aria-label="Show">
+                    @foreach (var filter in Definition.Filters)
+                    {
+                        <a class="@(filter.Key == _state.Filter ? "on" : null)" href="@_UrlFor(_state with { Filter = filter.Key, Page = 1 })"
+                           aria-current="@(filter.Key == _state.Filter ? "true" : null)">
+                            @filter.Label <span class="n">@Rows.Count(filter.Matches)</span>
+                        </a>
+                    }
+                </nav>
+                <span class="spacer"></span>
+                @if (Definition.Groupings.Count > 1)
+                {
+                    <span class="tgroup">
+                        <span class="tlbl">Group</span>
+                        <nav class="seg" aria-label="Group by">
+                            @foreach (var grouping in Definition.Groupings)
+                            {
+                                <a class="@(grouping.Key == _state.Group ? "on" : null)" href="@_UrlFor(_state with { Group = grouping.Key, Page = 1 })"
+                                   aria-current="@(grouping.Key == _state.Group ? "true" : null)">@grouping.Label</a>
+                            }
+                        </nav>
+                    </span>
+                }
+            </div>
+            <table class="dt">
+                <thead>
+                    <tr>
+                        @foreach (var column in Definition.Columns)
+                        {
+                            <th class="@_ColumnClass(column)" aria-sort="@_AriaSort(column)">
+                                @if (column.SortBy is null)
+                                {
+                                    @column.Label
+                                }
+                                else
+                                {
+                                    <a href="@_UrlFor(_state with { Sort = _NextSort(column), Page = 1 })">@column.Label<span class="ar" aria-hidden="true">@_SortArrow(column)</span></a>
+                                }
+                            </th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_pageRows.Count == 0)
+                    {
+                        <tr class="none">
+                            <td colspan="@Definition.Columns.Count">
+                                @if (Rows.Count == 0)
+                                {
+                                    @Definition.EmptyText
+                                }
+                                else
+                                {
+                                    <text>Nothing matches. </text><a href="@_UrlFor(_state with { Filter = Definition.Filters[0].Key, Query = string.Empty, Page = 1 })">Clear the filter</a>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @{ string? currentGroup = null; }
+                    @foreach (var row in _pageRows)
+                    {
+                        if (_grouping.GroupOf is { } groupOf && groupOf(row) is var group && group != currentGroup)
+                        {
+                            currentGroup = group;
+                            <tr class="grp"><td colspan="@Definition.Columns.Count">@group<span class="n">@_groupSizes[group]</span></td></tr>
+                        }
+                        var key = Definition.KeyOf(row);
+                        var selectUrl = _SelectUrl(key);
+                        <tr @key="key" class="r@(key == _state.Sel ? " sel" : null)" @onclick="() => Navigation.NavigateTo(selectUrl)">
+                            @for (var i = 0; i < Definition.Columns.Count; i++)
+                            {
+                                var column = Definition.Columns[i];
+                                <td class="@_ColumnClass(column)">
+                                    @if (i == 0)
+                                    {
+                                        <a class="rowlink" href="@selectUrl" data-dl-row @onclick:stopPropagation="true"
+                                           aria-current="@(key == _state.Sel ? "true" : null)">@column.Cell(row)</a>
+                                    }
+                                    else
+                                    {
+                                        @column.Cell(row)
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (_pageCount > 1)
+            {
+                <nav class="pager" aria-label="Pages">
+                    @if (_state.Page > 1)
+                    {
+                        <a href="@_UrlFor(_state with { Page = _state.Page - 1 })">‹ Previous</a>
+                    }
+                    <span>Page <b>@_state.Page</b> of <b>@_pageCount</b></span>
+                    @if (_state.Page < _pageCount)
+                    {
+                        <a href="@_UrlFor(_state with { Page = _state.Page + 1 })">Next ›</a>
+                    }
+                </nav>
+            }
+        </div>
+        @if (_state.Sel is not null)
+        {
+            <a class="backdrop" href="@_CloseUrl" tabindex="-1" aria-label="Close the detail pane"></a>
+        }
+        <aside class="detail@(_state.Sel is not null ? " open" : null)" aria-label="@Definition.Kind details">
+            <div class="dbar">
+                <span class="k">@Definition.Kind</span>
+                @if (_state.Sel is not null)
+                {
+                    <span class="nav">
+                        @_StepLink(_previous, "Previous (↑)", "▲", "prev")
+                        @_StepLink(_next, "Next (↓)", "▼", "next")
+                        <a class="xbtn close" href="@_CloseUrl" data-dl-close title="Close (Esc)" aria-label="Close">✕</a>
+                    </span>
+                }
+            </div>
+            @if (_state.Sel is null)
+            {
+                <div class="dempty">@Definition.SelectPrompt</div>
+            }
+            else if (_selected is null)
+            {
+                <div class="dempty">There is no @Definition.Kind.ToLowerInvariant() with id <code class="idchip">@_state.Sel</code> on this server. It may have been deleted.</div>
+            }
+            else
+            {
+                <div class="dbody">@Detail(_selected)</div>
+            }
+        </aside>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public DataListDefinition<TRow> Definition { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyList<TRow> Rows { get; set; } = [];
+    [Parameter, EditorRequired] public RenderFragment<TRow> Detail { get; set; } = null!;
+    [Parameter] public string Section { get; set; } = "Data";
+
+    private DataListState _state = null!;
+    private DataListGrouping<TRow> _grouping = null!;
+    private List<TRow> _ordered = [];
+    private List<TRow> _pageRows = [];
+    private Dictionary<string, int> _groupSizes = [];
+    private int _pageCount;
+    private TRow? _selected;
+    private string? _previous;
+    private string? _next;
+    private string _queryText = string.Empty;
+    private bool _typing;
+
+    private string _CloseUrl => _UrlFor(_state with { Sel = null });
+
+    protected override void OnInitialized() => Navigation.LocationChanged += _OnLocationChanged;
+
+    protected override void OnParametersSet() => _Apply();
+
+    public void Dispose() => Navigation.LocationChanged -= _OnLocationChanged;
+
+    private void _OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        _Apply();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void _Apply()
+    {
+        _state = DataListState.Parse(Navigation.Uri, Definition);
+        // While the admin types, the URL trails the input by a round trip; writing it back would eat the keystrokes
+        // typed in between.
+        if (!_typing)
+            _queryText = _state.Query;
+        _typing = false;
+
+        _grouping = Definition.Groupings.First(g => g.Key == _state.Group);
+        var filter = Definition.Filters.First(f => f.Key == _state.Filter);
+        var needle = _state.Query.Trim();
+        var matching = Rows.Where(filter.Matches)
+            .Where(r => needle.Length == 0 || Definition.SearchTextOf(r).Contains(needle, StringComparison.OrdinalIgnoreCase));
+        _ordered = _Order(matching).ToList();
+
+        _groupSizes = _grouping.GroupOf is { } groupOf
+            ? _ordered.GroupBy(groupOf).ToDictionary(g => g.Key, g => g.Count())
+            : [];
+        _pageCount = Math.Max(1, (int)Math.Ceiling(_ordered.Count / (double)Definition.PageSize));
+        _state = _state with { Page = Math.Min(_state.Page, _pageCount) };
+        _pageRows = _ordered.Skip((_state.Page - 1) * Definition.PageSize).Take(Definition.PageSize).ToList();
+
+        _selected = _state.Sel is null ? default : Rows.FirstOrDefault(r => Definition.KeyOf(r) == _state.Sel);
+        var index = _state.Sel is null ? -1 : _ordered.FindIndex(r => Definition.KeyOf(r) == _state.Sel);
+        _previous = index > 0 ? Definition.KeyOf(_ordered[index - 1]) : null;
+        _next = index >= 0 && index < _ordered.Count - 1 ? Definition.KeyOf(_ordered[index + 1]) : null;
+    }
+
+    /// <summary>Groups first (so a group never splits across pages out of order), then the chosen column, then the key
+    /// so equal values keep one stable order between renders.</summary>
+    private IEnumerable<TRow> _Order(IEnumerable<TRow> rows)
+    {
+        var column = Definition.Columns.First(c => c.Key == _state.SortKey);
+        var sortBy = column.SortBy ?? (_ => null);
+        IOrderedEnumerable<TRow> ordered = _grouping.GroupOf is { } groupOf
+            ? _grouping.Rank is { } rank
+                ? rows.OrderBy(rank).ThenBy(groupOf, StringComparer.OrdinalIgnoreCase)
+                : rows.OrderBy(groupOf, StringComparer.OrdinalIgnoreCase)
+            : rows.OrderBy(_ => 0);
+        ordered = _state.SortDescending
+            ? ordered.ThenByDescending(sortBy, ValueComparer.Instance)
+            : ordered.ThenBy(sortBy, ValueComparer.Instance);
+        return ordered.ThenBy(Definition.KeyOf, StringComparer.Ordinal);
+    }
+
+    private void _ApplyQuery()
+    {
+        _typing = true;
+        Navigation.NavigateTo(_UrlFor(_state with { Query = _queryText, Page = 1 }), replace: true);
+    }
+
+    private string _UrlFor(DataListState state) => Navigation.GetUriWithQueryParameters(state.ToQuery(Definition));
+
+    /// <summary>Selecting also moves to the page the row is on, so stepping past the end of a page follows the row.</summary>
+    private string _SelectUrl(string key)
+    {
+        var index = _ordered.FindIndex(r => Definition.KeyOf(r) == key);
+        var page = index < 0 ? _state.Page : index / Definition.PageSize + 1;
+        return _UrlFor(_state with { Sel = key, Page = page });
+    }
+
+    private string _NextSort(DataListColumn<TRow> column) =>
+        column.Key == _state.SortKey
+            ? (_state.SortDescending ? column.Key : "-" + column.Key)
+            : (column.SortDescendingFirst ? "-" + column.Key : column.Key);
+
+    private string _SortArrow(DataListColumn<TRow> column) =>
+        column.Key != _state.SortKey ? "▲▼" : _state.SortDescending ? "▼" : "▲";
+
+    private string? _AriaSort(DataListColumn<TRow> column) =>
+        column.Key != _state.SortKey ? null : _state.SortDescending ? "descending" : "ascending";
+
+    private string? _ColumnClass(DataListColumn<TRow> column)
+    {
+        var classes = new List<string>();
+        if (column.Numeric)
+            classes.Add("num");
+        if (column.HideWhenNarrow)
+            classes.Add("hide-narrow");
+        if (column.Key == _state.SortKey)
+            classes.Add("sorted");
+        return classes.Count == 0 ? null : string.Join(' ', classes);
+    }
+
+    private RenderFragment _StepLink(string? key, string title, string glyph, string step) => __builder =>
+    {
+        if (key is null)
+        {
+            <span class="xbtn off" aria-hidden="true">@glyph</span>
+            return;
+        }
+        <a class="xbtn" href="@_SelectUrl(key)" title="@title" aria-label="@title" data-dl-step="@step">@glyph</a>
+    };
+
+    /// <summary>Nulls sort first; strings compare case-insensitively so "alpha" and "Beta" land where a reader expects.</summary>
+    private sealed class ValueComparer : IComparer<IComparable?>
+    {
+        public static readonly ValueComparer Instance = new();
+
+        public int Compare(IComparable? x, IComparable? y) => (x, y) switch
+        {
+            (null, null) => 0,
+            (null, _) => -1,
+            (_, null) => 1,
+            (string a, string b) => StringComparer.OrdinalIgnoreCase.Compare(a, b),
+            _ => x.CompareTo(y),
+        };
+    }
+}

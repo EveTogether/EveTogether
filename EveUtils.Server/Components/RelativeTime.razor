@@ -1,0 +1,17 @@
+@* "3h ago" with the exact UTC time on hover: the list is scanned for recency, the exact time is only looked up. *@
+<span class="reltime" title="@(At is { } at ? $"{at.UtcDateTime:yyyy-MM-dd HH:mm:ss} UTC" : null)">@Label(At, DateTimeOffset.UtcNow)</span>
+
+@code {
+    [Parameter, EditorRequired] public DateTimeOffset? At { get; set; }
+
+    public static string Label(DateTimeOffset? at, DateTimeOffset now)
+    {
+        if (at is not { } value)
+            return "never";
+        var elapsed = now - value;
+        return elapsed < TimeSpan.FromMinutes(1) ? "just now"
+            : elapsed < TimeSpan.FromHours(1) ? $"{elapsed.TotalMinutes:0}m ago"
+            : elapsed < TimeSpan.FromDays(1) ? $"{elapsed.TotalHours:0}h ago"
+            : $"{elapsed.TotalDays:0}d ago";
+    }
+}

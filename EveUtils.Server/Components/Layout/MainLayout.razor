@@ -29,19 +29,21 @@
             <Authorized>
                 <nav class="sidebar">
                     <div class="seclbl">Overview</div>
-                    <NavLink href="/" Match="NavLinkMatch.All" ActiveClass="active">Dashboard</NavLink>
-                    <NavLink href="/esi" ActiveClass="active">ESI metrics</NavLink>
-                    <NavLink href="/logs" ActiveClass="active">Logs</NavLink>
+                    <NavLink href="/" Match="NavLinkMatch.All" ActiveClass="active" title="Dashboard"><NavIcon Name="dashboard" /><span class="t">Dashboard</span></NavLink>
+                    <NavLink href="/esi" ActiveClass="active" title="ESI metrics"><NavIcon Name="esi" /><span class="t">ESI metrics</span></NavLink>
+                    <NavLink href="/logs" ActiveClass="active" title="Logs"><NavIcon Name="logs" /><span class="t">Logs</span></NavLink>
+                    <AuthorizeView Policy="@PanelPermissions.DataView" Context="data">
+                        <DataNav />
+                    </AuthorizeView>
                     <div class="seclbl">Access</div>
-                    <NavLink href="/allowed" ActiveClass="active">Allowed-list</NavLink>
-                    <NavLink href="/data" ActiveClass="active">Data</NavLink>
-                    <NavLink href="/api-keys" ActiveClass="active">API keys</NavLink>
+                    <NavLink href="/allowed" ActiveClass="active" title="Allowed-list"><NavIcon Name="allowed" /><span class="t">Allowed-list</span></NavLink>
+                    <NavLink href="/api-keys" ActiveClass="active" title="API keys"><NavIcon Name="keys" /><span class="t">API keys</span></NavLink>
                     <div class="seclbl">Administration</div>
-                    <NavLink href="/users" ActiveClass="active">Users</NavLink>
-                    <NavLink href="/roles" ActiveClass="active">Roles</NavLink>
-                    <NavLink href="/backup" ActiveClass="active">Backup</NavLink>
+                    <NavLink href="/users" ActiveClass="active" title="Users"><NavIcon Name="users" /><span class="t">Users</span></NavLink>
+                    <NavLink href="/roles" ActiveClass="active" title="Roles"><NavIcon Name="roles" /><span class="t">Roles</span></NavLink>
+                    <NavLink href="/backup" ActiveClass="active" title="Backup"><NavIcon Name="backup" /><span class="t">Backup</span></NavLink>
                     <div class="seclbl">Live</div>
-                    <a href="/stream/dps" target="_blank">DPS stream ↗</a>
+                    <a href="/stream/dps" target="_blank" title="DPS stream"><NavIcon Name="live" /><span class="t">DPS stream ↗</span></a>
                 </nav>
             </Authorized>
         </AuthorizeView>
