@@ -13,6 +13,15 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Changed (server panel): deleting something can no longer happen by one stray click in a long list.** The red
+  Delete, Disband, Purge and Revoke buttons are gone from the rows. They now sit in a collapsed Destructive actions
+  block under the record they belong to (on Data, open a row first), and each one says what it will take with it,
+  counted from the server at that moment: how many members a fleet still has and whether it is in op, how many of a
+  character's sessions are live, which fleets still point at a composition. Disbanding a fleet, revoking a session,
+  deleting a shared fit or an unused composition takes two steps; purging a fleet, deleting a paired character or a
+  composition a fleet still uses asks you to type its name exactly. The top bar shows whether you hold Data · View and
+  Data · Delete. Without Data · Delete you still see the actions, locked, with the reason, and the server refuses them
+  whatever the page does.
 - **Fixed: SAVE on a fleet run of several of your own characters no longer crashes with a database error.** The
   window's own recount of that activity and the recount automatic publishing sets off right after the save could run
   at the same time, and both tried to add the activity's summary line; the second one failed. The runs themselves

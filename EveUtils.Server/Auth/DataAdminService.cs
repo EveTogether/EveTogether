@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using EveUtils.Server.DataExplorer;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
@@ -7,6 +8,8 @@ using EveUtils.Shared.Modules.Fittings.Repositories;
 using EveUtils.Shared.Modules.Fleet.Commands;
 using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
+using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.AdminAuth.Permissions;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.ServerAuth.Entities;
 using EveUtils.Shared.Modules.ServerAuth.Repositories;
@@ -19,6 +22,8 @@ namespace EveUtils.Server.Auth;
 /// (SharedFit / ServerSession / FleetComposition), soft-deletes fleets via the lifecycle command (with a raw
 /// "purge now" option), and falls back to raw removal for entities without a seam. Token-holding entities are
 /// only ever shown as metadata (Iron Law #8) — the UI never surfaces token values.
+/// Every delete takes the acting admin and refuses without <see cref="PanelPermissions.DataDelete"/> itself: a
+/// disabled or hidden button only decides what the page offers, not what a crafted circuit event can reach.
 /// </summary>
 public sealed class DataAdminService(
     IDbContextFactory<ServerDbContext> contextFactory,
@@ -31,8 +36,12 @@ public sealed class DataAdminService(
     public Task<IReadOnlyList<SharedFit>> ListSharedFitsAsync(CancellationToken ct = default) =>
         sharedFits.ListAsync(ct);
 
-    public Task DeleteSharedFitAsync(int id, CancellationToken ct = default) =>
-        sharedFits.RemoveAsync(id, ct);
+    public async Task<Result> DeleteSharedFitAsync(ClaimsPrincipal actor, int id, CancellationToken ct = default)
+    {
+        if (!_MayDelete(actor))
+            return _Denied();
+        return await sharedFits.RemoveAsync(id, ct) ? Result.Success() : _NotFound("shared fit");
+    }
 
     // ── Fleets (soft-disband via command default; raw purge optional) ─────────────────────────────
     /// <summary>Every fleet with its member ids and its composition's name: three flat reads joined in memory, because
@@ -139,25 +148,29 @@ public sealed class DataAdminService(
     /// <summary>Soft-delete (→ Archived) via the lifecycle command, dispatched as the fleet's own creator so the
     /// creator-gate passes and the full disband lifecycle runs (members freed, etc.). The cleanup sweep hard-
     /// deletes archived fleets after 24h.</summary>
-    public async Task<bool> DisbandFleetAsync(long id, CancellationToken ct = default)
+    public async Task<Result> DisbandFleetAsync(ClaimsPrincipal actor, long id, CancellationToken ct = default)
     {
+        if (!_MayDelete(actor))
+            return _Denied();
         await using var db = await contextFactory.CreateDbContextAsync(ct);
         var fleet = await db.Set<Fleet>().AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
         if (fleet is null)
-            return false;
-        var result = await dispatcher.Send(new DisbandFleetCommand(id, fleet.CreatorCharacterId), ct);
-        return result.IsSuccess;
+            return _NotFound("fleet");
+        return await dispatcher.Send(new DisbandFleetCommand(id, fleet.CreatorCharacterId), ct);
     }
 
     /// <summary>Hard purge — raw removal; child FKs (wings/squads/members/invites) cascade.</summary>
-    public async Task PurgeFleetAsync(long id, CancellationToken ct = default)
+    public async Task<Result> PurgeFleetAsync(ClaimsPrincipal actor, long id, CancellationToken ct = default)
     {
+        if (!_MayDelete(actor))
+            return _Denied();
         await using var db = await contextFactory.CreateDbContextAsync(ct);
         var fleet = await db.Set<Fleet>().FirstOrDefaultAsync(f => f.Id == id, ct);
         if (fleet is null)
-            return;
+            return _NotFound("fleet");
         db.Remove(fleet);
         await db.SaveChangesAsync(ct);
+        return Result.Success();
     }
 
     // ── Fleet compositions (shared doctrines; seam: IFleetCompositionRepository) ───────────────────
@@ -169,8 +182,13 @@ public sealed class DataAdminService(
     /// <summary>Hard-deletes a shared composition via the repository seam; its roles and fit-entries cascade (FK).
     /// The panel's own DataDelete RBAC is the gate here (like the shared-fit delete), so this bypasses the
     /// per-character owner-or-manage check the client mutations use.</summary>
-    public Task DeleteFleetCompositionAsync(long id, CancellationToken ct = default) =>
-        compositions.DeleteAsync(id, ct);
+    public async Task<Result> DeleteFleetCompositionAsync(ClaimsPrincipal actor, long id, CancellationToken ct = default)
+    {
+        if (!_MayDelete(actor))
+            return _Denied();
+        await compositions.DeleteAsync(id, ct);
+        return Result.Success();
+    }
 
     // ── Paired characters (metadata only; raw delete — no seam, orphan-aware) ──────────────────────
     public Task<IReadOnlyList<SyncedCharacter>> ListSyncedCharactersAsync(CancellationToken ct = default) =>
@@ -179,24 +197,32 @@ public sealed class DataAdminService(
     /// <summary>Removes a paired character + its sessions (cascade). Leaves loose scalar references
     /// (FleetMember.CharacterId / QueuedMessage.RecipientCharacterId / SharedFit.SharedByCharacterId) as
     /// orphans by design — the UI warns first. Breaks any connected client's session for that character.</summary>
-    public async Task DeleteSyncedCharacterAsync(int id, CancellationToken ct = default)
+    public async Task<Result> DeleteSyncedCharacterAsync(ClaimsPrincipal actor, int id, CancellationToken ct = default)
     {
+        if (!_MayDelete(actor))
+            return _Denied();
         await using var db = await contextFactory.CreateDbContextAsync(ct);
         var synced = await db.Set<SyncedCharacter>().FirstOrDefaultAsync(c => c.Id == id, ct);
         if (synced is null)
-            return;
+            return _NotFound("paired character");
         var sessions = await db.Set<ServerSession>().Where(s => s.SyncedCharacterId == id).ToListAsync(ct);
         db.RemoveRange(sessions);
         db.Remove(synced);
         await db.SaveChangesAsync(ct);
+        return Result.Success();
     }
 
     // ── Sessions (metadata only; seam: IServerAuthRepository) ──────────────────────────────────────
     public Task<IReadOnlyList<ServerSession>> ListSessionsAsync(CancellationToken ct = default) =>
         serverAuth.ListSessionsAsync(ct);
 
-    public Task DeleteSessionAsync(int id, CancellationToken ct = default) =>
-        serverAuth.DeleteSessionAsync(id, ct);
+    public async Task<Result> DeleteSessionAsync(ClaimsPrincipal actor, int id, CancellationToken ct = default)
+    {
+        if (!_MayDelete(actor))
+            return _Denied();
+        await serverAuth.DeleteSessionAsync(id, ct);
+        return Result.Success();
+    }
 
     // ── Cross-entity reads ─────────────────────────────────────────────────────────────────────────
     public async Task<DataCounts> CountAsync(CancellationToken ct = default)
@@ -231,4 +257,12 @@ public sealed class DataAdminService(
             id => id,
             id => new CharacterUsage { Fleets = fleets.GetValueOrDefault(id), SharedFits = fits.GetValueOrDefault(id) });
     }
+
+    private static bool _MayDelete(ClaimsPrincipal actor) => actor.HasPanelPermission(PanelPermissions.DataDelete);
+
+    private static Result _Denied() => Result.Failure(new ResultMessage(
+        MessageSeverity.Error, MessageCodes.PermissionDenied, "This needs the Data · Delete permission.", "Panel"));
+
+    private static Result _NotFound(string what) => Result.Failure(new ResultMessage(
+        MessageSeverity.Error, MessageCodes.NotFound, $"The {what} is already gone.", "Panel"));
 }

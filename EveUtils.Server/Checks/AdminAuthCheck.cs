@@ -97,14 +97,21 @@ public static class AdminAuthCheck
         var createFleet = await dispatcher.Send(new EveUtils.Shared.Modules.Fleet.Commands.CreateFleetCommand(
             "DataTest Fleet", null, EveUtils.Shared.Modules.Fleet.Entities.FleetVisibility.Public,
             null, null, EveUtils.Shared.Modules.Fleet.Entities.FleetOfflineBehavior.StayOffline, 4242), ct);
+        var deleter = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
+            [new System.Security.Claims.Claim(AdminClaims.Permission, PanelPermissions.DataDelete)], "check"));
+        var dataViewer = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
+            [new System.Security.Claims.Claim(AdminClaims.Permission, PanelPermissions.DataView)], "check"));
         if (createFleet.IsSuccess)
         {
             var fleetId = createFleet.Value;
+            ok &= Check("data: purge without DataDelete is refused",
+                !(await data.PurgeFleetAsync(dataViewer, fleetId, ct)).IsSuccess
+                && await dispatcher.Query(new EveUtils.Shared.Modules.Fleet.Queries.GetFleetQuery(fleetId), ct) is not null);
             ok &= Check("data: disband sets fleet → Archived",
-                await data.DisbandFleetAsync(fleetId, ct)
+                (await data.DisbandFleetAsync(deleter, fleetId, ct)).IsSuccess
                 && (await dispatcher.Query(new EveUtils.Shared.Modules.Fleet.Queries.GetFleetQuery(fleetId), ct))?.State
                     == EveUtils.Shared.Modules.Fleet.Entities.FleetState.Archived);
-            await data.PurgeFleetAsync(fleetId, ct);
+            await data.PurgeFleetAsync(deleter, fleetId, ct);
             ok &= Check("data: purge removes the fleet row",
                 await dispatcher.Query(new EveUtils.Shared.Modules.Fleet.Queries.GetFleetQuery(fleetId), ct) is null);
         }

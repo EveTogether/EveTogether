@@ -1,6 +1,8 @@
 @using EveUtils.Server.DataExplorer
+@using EveUtils.Server.DataExplorer.Destructive
 @using EveUtils.Shared.Modules.Fleet.Entities
 @inject DataAdminService DataAdmin
+@inject DestructiveActionCatalog Catalog
 @* The opened fleet with everything it relates to. Every related record that has a place of its own is a link to it. *@
 
 <div class="dhead">
@@ -155,33 +157,7 @@ else
     </section>
 }
 
-<AuthorizeView Policy="@PanelPermissions.DataDelete" Context="delete">
-    <section class="dsec actions">
-        <div class="sh">Actions</div>
-        @if (_message is not null)
-        {
-            <p class="warn">@_message</p>
-        }
-        @if (_armed is { } armed)
-        {
-            <div class="confirmbar">
-                <span>@(armed == FleetAction.Disband ? $"Disband fleet '{Fleet.Name}' (soft-delete → Archived)?" : $"Purge fleet '{Fleet.Name}' permanently?")</span>
-                <button class="danger" @onclick="_ConfirmAsync">Confirm</button>
-                <button @onclick="() => _armed = null">Cancel</button>
-            </div>
-        }
-        else
-        {
-            <div class="btnrow">
-                @if (Item.Status != FleetPanelStatus.Archived)
-                {
-                    <button @onclick="() => _armed = FleetAction.Disband">Disband</button>
-                }
-                <button class="danger" @onclick="() => _armed = FleetAction.Purge">Purge now</button>
-            </div>
-        }
-    </section>
-</AuthorizeView>
+<DestructiveActions @key="Fleet.Id" Load="() => Catalog.ForFleetAsync(Fleet.Id)" OnDone="_ReloadAfterActionAsync" />
 
 @code {
     [Parameter, EditorRequired] public FleetListItem Item { get; set; } = null!;
@@ -191,12 +167,8 @@ else
     /// <summary>Raised after a disband or purge, so the list reloads what changed.</summary>
     [Parameter] public EventCallback OnChanged { get; set; }
 
-    private enum FleetAction { Disband, Purge }
-
     private FleetDetail? _detail;
     private long _loadedFleetId;
-    private FleetAction? _armed;
-    private string? _message;
 
     private Fleet Fleet => Item.Fleet;
 
@@ -206,25 +178,11 @@ else
             return;
         _loadedFleetId = Fleet.Id;
         _detail = null;
-        _armed = null;
-        _message = null;
         _detail = await DataAdmin.GetFleetDetailAsync(Fleet.Id);
     }
 
-    private async Task _ConfirmAsync()
+    private async Task _ReloadAfterActionAsync()
     {
-        if (_armed is not { } action)
-            return;
-        if (action == FleetAction.Disband && !await DataAdmin.DisbandFleetAsync(Fleet.Id))
-        {
-            _message = "Disband failed; the fleet is unchanged. See Logs.";
-            _armed = null;
-            return;
-        }
-        if (action == FleetAction.Purge)
-            await DataAdmin.PurgeFleetAsync(Fleet.Id);
-
-        _armed = null;
         _detail = null;
         await OnChanged.InvokeAsync();
     }

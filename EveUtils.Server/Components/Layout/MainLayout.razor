@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@using System.Security.Claims
 @inject NavigationManager Navigation
 
 <div class="appshell">
@@ -11,6 +12,10 @@
         <AuthorizeView>
             <Authorized>
                 <div class="acct">
+                    <span class="perm">
+                        @_PermissionChip(context.User, PanelPermissions.DataView, "DATA · VIEW", "Data · View", null)
+                        @_PermissionChip(context.User, PanelPermissions.DataDelete, "DATA · DELETE", "Data · Delete", "del")
+                    </span>
                     <span class="who">
                         <span class="u">@context.User.Identity?.Name</span>
                         <span class="r">@(context.User.IsSuperAdmin() ? "Administrator · superadmin" : "Admin")</span>
@@ -69,4 +74,13 @@
                 Navigation.NavigateTo("/account/password");
         }
     }
+
+    /// <summary>A missing permission stays in the bar, struck through, so the split between looking and deleting is always
+    /// visible rather than discovered at a disabled button.</summary>
+    private static RenderFragment _PermissionChip(ClaimsPrincipal user, string code, string label, string name, string? tone) => __builder =>
+    {
+        var has = user.HasPanelPermission(code);
+        <span class="pchip @(has ? $"has {tone}" : "no")" title="@(has ? $"You have {name}" : $"You do not have {name}")"
+              aria-label="@(has ? $"{name}: granted" : $"{name}: not granted")">@label</span>
+    };
 }
