@@ -1,0 +1,97 @@
+@page "/data/sessions"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = PanelPermissions.DataView)]
+@using EveUtils.Server.Components.DataList
+@using EveUtils.Server.Components.Sessions
+@using EveUtils.Server.DataExplorer
+@inject DataAdminService DataAdmin
+
+@if (_rows is null)
+{
+    <p class="dim loading">Loading sessions…</p>
+}
+else
+{
+    <DataList TRow="SessionListItem" Definition="_definition" Rows="_rows">
+        <Detail Context="item">
+            <SessionPane Item="item" Siblings="_SiblingsOf(item)" OnChanged="_LoadAsync" />
+        </Detail>
+    </DataList>
+}
+
+@code {
+    private DataListDefinition<SessionListItem> _definition = null!;
+    private IReadOnlyList<SessionListItem>? _rows;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _definition = _Definition();
+        await _LoadAsync();
+    }
+
+    private async Task _LoadAsync() => _rows = await DataAdmin.ListSessionItemsAsync();
+
+    private IReadOnlyList<SessionListItem> _SiblingsOf(SessionListItem item) =>
+        (_rows ?? []).Where(s => s.Session.SyncedCharacterId == item.Session.SyncedCharacterId && s.Session.Id != item.Session.Id)
+            .OrderByDescending(s => s.Session.LastHeartbeat)
+            .ToList();
+
+    private static string _OwnerName(SessionListItem s) => s.Session.SyncedCharacter?.CharacterName ?? $"Paired character #{s.Session.SyncedCharacterId}";
+
+    private DataListDefinition<SessionListItem> _Definition() => new()
+    {
+        Title = "Sessions",
+        Kind = "Session",
+        KeyOf = s => s.Session.Id.ToString(),
+        DefaultGrouping = "character",
+        DefaultSort = "-seen",
+        EmptyText = "No sessions. A session appears when a client pairs a character with this server.",
+        SearchTextOf = s => $"{_OwnerName(s)} {s.Session.SyncedCharacter?.EsiCharacterId} {s.Session.Id}",
+        Filters =
+        [
+            new() { Key = "all", Label = "All", Matches = _ => true },
+            new() { Key = "live", Label = "Live", Matches = s => s.Status == SessionPanelStatus.Live },
+            new() { Key = "idle", Label = "Idle", Matches = s => s.Status == SessionPanelStatus.Idle },
+            new() { Key = "lapsing", Label = "Lapsing", Matches = s => s.Status == SessionPanelStatus.Lapsing },
+        ],
+        Groupings =
+        [
+            new() { Key = "character", Label = "Character", GroupOf = _OwnerName },
+            new() { Key = "state", Label = "State", GroupOf = s => SessionStatusPill.Label(s.Status), Rank = s => (int)s.Status },
+            new() { Key = "none", Label = "None" },
+        ],
+        Columns =
+        [
+            new()
+            {
+                Key = "character", Label = "Character", SortBy = _OwnerName,
+                Cell = s => @<SessionOwnerCell Session="s.Session" />,
+            },
+            new()
+            {
+                Key = "state", Label = "State", SortBy = s => (int)s.Status,
+                Cell = s => @<SessionStatusPill Status="s.Status" />,
+            },
+            new()
+            {
+                Key = "seen", Label = "Last seen", SortBy = s => s.Session.LastHeartbeat, SortDescendingFirst = true,
+                Cell = s => @<RelativeTime At="s.Session.LastHeartbeat" />,
+            },
+            new()
+            {
+                Key = "issued", Label = "Issued (UTC)", SortBy = s => s.Session.IssuedAt, SortDescendingFirst = true,
+                Cell = s => @<span class="dim">@UtcText.Minutes(s.Session.IssuedAt)</span>,
+            },
+            new()
+            {
+                Key = "refresh", Label = "Refresh expires", SortBy = s => s.Session.RefreshExpiresAt, HideWhenNarrow = true,
+                Cell = s => @<span class="dim">@UtcText.Minutes(s.Session.RefreshExpiresAt)</span>,
+            },
+            new()
+            {
+                Key = "id", Label = "Session", SortBy = s => s.Session.Id, Numeric = true,
+                Cell = s => @<span class="idm">#@s.Session.Id</span>,
+            },
+        ],
+    };
+}

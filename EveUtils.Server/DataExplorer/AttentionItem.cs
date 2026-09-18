@@ -9,6 +9,6 @@ public sealed class AttentionItem
     public required string Title { get; init; }
     public required string Detail { get; init; }
 
-    /// <summary>The record in its own list. Null while the entity has no list to land on (runs, until ET-317).</summary>
-    public string? Href { get; init; }
+    /// <summary>The record in its own list.</summary>
+    public required string Href { get; init; }
 }

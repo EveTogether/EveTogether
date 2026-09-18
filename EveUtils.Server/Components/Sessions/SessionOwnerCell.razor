@@ -1,0 +1,16 @@
+@using EveUtils.Server.DataExplorer
+@using EveUtils.Shared.Modules.ServerAuth.Entities
+@* The paired character a session belongs to, linked to its own record. The session cascades with its character, so a
+   missing owner means the row was read mid-delete. *@
+@if (Session.SyncedCharacter is { } owner)
+{
+    <CharacterCell Id="owner.EsiCharacterId" Name="@owner.CharacterName" Href="@DataLinks.Character(owner.EsiCharacterId)" ShowId="false" />
+}
+else
+{
+    <span class="dim">Paired character #@Session.SyncedCharacterId</span>
+}
+
+@code {
+    [Parameter, EditorRequired] public ServerSession Session { get; set; } = null!;
+}

@@ -11,5 +11,15 @@ public sealed class DataCounts
 
     public required int Compositions { get; init; }
     public required int SharedFits { get; init; }
+
+    /// <summary>Distinct group codes among the runs that are not deleted.</summary>
+    public required int RunGroups { get; init; }
+
+    /// <summary>Runs flown without a group. Each is a row of its own in the Runs list.</summary>
+    public required int SoloRuns { get; init; }
+
     public required int Sessions { get; init; }
+
+    /// <summary>The rows of the Runs list: every group plus every run flown alone.</summary>
+    public int RunRows => RunGroups + SoloRuns;
 }

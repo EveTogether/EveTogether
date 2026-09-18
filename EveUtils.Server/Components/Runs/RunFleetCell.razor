@@ -1,0 +1,24 @@
+@using EveUtils.Server.DataExplorer
+@* The fleet a run group was flown in. It is inferred, never stored (there is no Run.FleetId), so it always carries the
+   "derived" mark, and a group nothing matches says so instead of showing a blank. *@
+@if (Group.DerivedFleet is { } fleet)
+{
+    <span class="derivedlink">
+        <RecordLink Href="@DataLinks.Fleet(fleet.Fleet.Id)" Title="@fleet.Fleet.Name">@fleet.Fleet.Name</RecordLink>
+        <span class="derived" title="@DerivedTitle">derived</span>
+    </span>
+}
+else
+{
+    <span class="dim" title="@NoMatchTitle">none matched</span>
+}
+
+@code {
+    public const string DerivedTitle =
+        "Not stored: a run has no fleet id. Matched because a pilot of this run was on this fleet's roster while the fleet was running.";
+
+    public const string NoMatchTitle =
+        "No fleet on this server had one of these pilots on its roster while the run started. Fleets are deleted a day after they are archived, so older runs match nothing.";
+
+    [Parameter, EditorRequired] public RunGroupListItem Group { get; set; } = null!;
+}

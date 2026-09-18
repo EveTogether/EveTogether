@@ -1,0 +1,142 @@
+@using EveUtils.Server.DataExplorer
+@using EveUtils.Server.DataExplorer.Destructive
+@using EveUtils.Shared.Messaging
+@using EveUtils.Shared.Modules.Fittings.Entities
+@inject DestructiveActionCatalog Catalog
+@* One shared fit: what it holds, read from its stored ESI JSON, and who took a copy of it. A fit whose JSON cannot be read
+   says so here; the list around it stays as it is. *@
+
+<div class="dhead">
+    <div class="dtitle">
+        <div class="ti">@Fit.Name</div>
+        <div class="st">
+            <ShipCell TypeId="Fit.ShipTypeId" ShowId="false" />
+            <code class="idchip" title="Ship type id">type @Fit.ShipTypeId</code>
+            <code class="idchip" title="Shared fit id">#@Fit.Id</code>
+        </div>
+    </div>
+</div>
+
+<dl class="facts">
+    <dt>Shared by</dt>
+    <dd>
+        <CharacterCell Id="Fit.SharedByCharacterId" Name="@Names.GetValueOrDefault(Fit.SharedByCharacterId)" Href="@_CharacterHref(Fit.SharedByCharacterId)" />
+        @if (!Paired.Contains(Fit.SharedByCharacterId))
+        {
+            <span class="warn" title="Character @Fit.SharedByCharacterId is not paired on this server; the name is the one stored with the fit.">⚠ not paired</span>
+        }
+    </dd>
+    <dt>Shared</dt>
+    <dd>@UtcText.Minutes(Fit.SharedAt) <span class="dim">UTC · <RelativeTime At="Fit.SharedAt" /></span></dd>
+    <dt>ESI fitting</dt>
+    <dd><code class="idchip" title="The fitting id in the sharer's own ESI fittings">@Fit.EsiFittingId</code></dd>
+    <dt>Content hash</dt>
+    <dd><span class="idm hash">@(Fit.ContentHash.Length == 0 ? "not computed yet" : Fit.ContentHash)</span></dd>
+</dl>
+
+<section class="dsec">
+    <div class="sh">Fitting <span class="more dim">from the stored ESI JSON</span></div>
+    @if (!_contents.IsSuccess || _contents.Value is not { } contents)
+    {
+        <p class="warn" role="alert">⚠ This fit's contents cannot be shown. @(_contents.Messages.FirstOrDefault()?.Text)</p>
+    }
+    else if (contents.Items.Count == 0)
+    {
+        <p class="dim">The fit has no modules, drones or cargo.</p>
+    }
+    else
+    {
+        <table class="mini fitting">
+            <tbody>
+                @foreach (var slot in contents.Items.GroupBy(i => i.Slot))
+                {
+                    <tr>
+                        <td class="slot">@_SlotLabel(slot.Key)</td>
+                        <td>
+                            @foreach (var item in slot)
+                            {
+                                <div class="fititem">
+                                    @if (item.Quantity > 1)
+                                    {
+                                        <span class="idm">@(item.Quantity)×</span>
+                                    }
+                                    <ShipCell TypeId="item.TypeId" ShowId="false" />
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+<section class="dsec">
+    <div class="sh">Used in <span class="n">@(Item.Compositions.Count + Item.Assignments.Count)</span></div>
+    @if (!Item.IsUsed)
+    {
+        <p class="dim">No composition links to it and no pilot has it assigned.</p>
+    }
+    else
+    {
+        <table class="mini">
+            <tbody>
+                @foreach (var use in Item.Compositions)
+                {
+                    <tr>
+                        <td><span class="dim">composition</span></td>
+                        <td><RecordLink Href="@DataLinks.Composition(use.CompositionId)">@use.CompositionName</RecordLink></td>
+                        <td class="num"><span class="dim">@string.Join(", ", use.RoleNames)</span></td>
+                    </tr>
+                }
+                @foreach (var assignment in Item.Assignments)
+                {
+                    <tr>
+                        <td><span class="dim">assigned</span></td>
+                        <td><CharacterCell Id="assignment.CharacterId" Name="@Names.GetValueOrDefault(assignment.CharacterId)" Href="@_CharacterHref(assignment.CharacterId)" ShowId="false" /></td>
+                        <td class="num"><RecordLink Href="@DataLinks.Fleet(assignment.FleetId)">@assignment.FleetName</RecordLink></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+<DestructiveActions @key="Fit.Id" Load="() => Catalog.ForSharedFitAsync(Fit.Id)" OnDone="OnChanged" />
+
+@code {
+    [Parameter, EditorRequired] public SharedFitListItem Item { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyDictionary<long, string> Names { get; set; } = new Dictionary<long, string>();
+    [Parameter, EditorRequired] public IReadOnlySet<int> Paired { get; set; } = new HashSet<int>();
+
+    /// <summary>Raised after a delete, so the list reloads what changed.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private Result<FitContents> _contents = Result<FitContents>.Failure();
+    private int? _parsedFitId;
+
+    private SharedFit Fit => Item.Fit;
+
+    protected override void OnParametersSet()
+    {
+        if (_parsedFitId == Fit.Id)
+            return;
+        _parsedFitId = Fit.Id;
+        _contents = FitContents.Parse(Fit.RawJson);
+    }
+
+    private string? _CharacterHref(int characterId) => Paired.Contains(characterId) ? DataLinks.Character(characterId) : null;
+
+    private static string _SlotLabel(FitSlot slot) => slot switch
+    {
+        FitSlot.High => "High",
+        FitSlot.Mid => "Mid",
+        FitSlot.Low => "Low",
+        FitSlot.Rig => "Rigs",
+        FitSlot.Subsystem => "Subsystems",
+        FitSlot.Drones => "Drones",
+        FitSlot.Fighters => "Fighters",
+        FitSlot.Cargo => "Cargo",
+        _ => "Other",
+    };
+}

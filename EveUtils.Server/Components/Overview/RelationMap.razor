@@ -39,7 +39,7 @@
             @_Node(DataEntity.Fleets, 216, 40, "FLEETS", overview.Fleets.Total)
             @_Node(DataEntity.Compositions, 432, 40, "COMPOSITIONS", overview.Compositions.Total)
             @_Node(DataEntity.Sessions, 0, 196, "SESSIONS", overview.Sessions.Total)
-            @_Node(DataEntity.Runs, 216, 196, "RUN GROUPS", overview.RunGroups.Total)
+            @_Node(DataEntity.Runs, 216, 196, "RUNS", overview.RunGroups.Total)
             @_Node(DataEntity.SharedFits, 432, 196, "SHARED FITS", overview.SharedFits.Total)
         </svg>
         <p class="maplegend">
@@ -70,23 +70,12 @@
 
     private static RenderFragment _Node(DataEntity entity, int x, int y, string name, int count) => __builder =>
     {
-        var href = DataLinks.List(entity);
-        if (href is null)
-        {
-            @_Box(x, y, name, count, "node static")
-        }
-        else
-        {
-            <a href="@href">@_Box(x, y, name, count, "node")</a>
-        }
-    };
-
-    private static RenderFragment _Box(int x, int y, string name, int count, string cssClass) => __builder =>
-    {
-        <g class="@cssClass">
-            <rect x="@x" y="@y" width="128" height="48" />
-            <text class="nn" x="@(x + 12)" y="@(y + 20)">@name</text>
-            <text class="nc" x="@(x + 12)" y="@(y + 39)">@count</text>
-        </g>
+        <a href="@DataLinks.List(entity)">
+            <g class="node">
+                <rect x="@x" y="@y" width="128" height="48" />
+                <text class="nn" x="@(x + 12)" y="@(y + 20)">@name</text>
+                <text class="nc" x="@(x + 12)" y="@(y + 39)">@count</text>
+            </g>
+        </a>
     };
 }

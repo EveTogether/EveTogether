@@ -1,0 +1,23 @@
+@using EveUtils.Server.DataExplorer
+@if (Item.Roles.Count == 0)
+{
+    <span class="dim">no roles</span>
+}
+else
+{
+    <span class="roles" title="@string.Join(" · ", Item.Roles.Select(r => r.Role.RoleName))">
+        @for (var i = 0; i < Item.Roles.Count; i++)
+        {
+            var role = Item.Roles[i];
+            @(i > 0 ? " · " : null)@role.Role.RoleName
+            @if (role.Target is { } target)
+            {
+                <span class="dim">@($" {target}+")</span>
+            }
+        }
+    </span>
+}
+
+@code {
+    [Parameter, EditorRequired] public CompositionListItem Item { get; set; } = null!;
+}

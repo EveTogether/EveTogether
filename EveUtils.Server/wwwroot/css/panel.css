@@ -334,16 +334,33 @@ button.gbtn:hover { border-color:var(--border-strong); color:var(--text-bright);
 .confirm .typ input:focus { border-color:var(--red-bright); }
 .confirm .btns { display:flex; gap:8px; justify-content:flex-end; }
 .dzfail { margin:0; padding:0 12px 12px; color:var(--red-bright); font-size:11.5px; }
-/* On /data the opened row carries its block in a row of its own, which keeps the pane's background in every row state. */
-tbody tr.dzhost, tbody tr.dzhost:nth-child(even), tbody tr.dzhost:hover { background:var(--bg-panel); }
-tbody tr.dzhost > td { padding:6px 12px 12px; }
-a.rowopen { font-size:11.5px; }
 
-/* A row another list linked to (/data#fit-12) reads as selected. */
-tbody tr.targeted { background:var(--row-sel); }
-tbody tr.targeted td { color:var(--text-bright); }
-tbody tr.targeted td:first-child { box-shadow:inset 3px 0 0 var(--accent-bright); }
-tbody tr.targeted .dim { color:var(--text); }
+/* ── the other lists (ET-316, ET-317) ── */
+.pill.warn { color:var(--isk); border-color:rgba(245,176,66,.45); }
+.pill.bad { color:var(--red-bright); border-color:rgba(239,90,90,.5); }
+.bad { color:var(--red-bright); }
+.idm { font-family:var(--mono); font-size:11px; color:var(--text); }
+.dt tbody tr.grp td .gsum { margin-left:14px; font-family:inherit; letter-spacing:.02em; text-transform:none; font-size:11px; color:var(--text); }
+.derivedlink { display:inline-flex; align-items:center; gap:6px; }
+/* In a list row the mark goes under the name, like every cell's second line, so the column stays narrow. */
+.dt .derivedlink { flex-direction:column; align-items:flex-start; gap:2px; }
+.dt .derivedlink .lnk, .dt .usedby .lnk { display:inline-block; vertical-align:middle; max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* A mark that tells an inferred relation from a stored one; dashed like the derived edge on the Dashboard's map. */
+.derived { font:10px var(--mono); letter-spacing:.04em; color:var(--text); border:1px dashed var(--text-dim); padding:0 4px; text-transform:lowercase; }
+.dsec .sh .derived { letter-spacing:.04em; }
+.shipicons { display:inline-flex; align-items:center; gap:2px; }
+.dt .shipicons .ent-img { width:20px; height:20px; }
+.shipicons .more { font:11px var(--mono); color:var(--text); margin-left:4px; }
+.roles { display:inline-block; max-width:170px; overflow:hidden; text-overflow:ellipsis; vertical-align:middle; }
+.reltags { display:flex; flex-wrap:wrap; gap:6px; }
+.fitchip.text { padding:2px 8px; }
+.fitchip.broken { border-style:dashed; border-color:rgba(245,176,66,.55); }
+.fitchip .warn { font-size:11px; }
+.fitting td { vertical-align:top; white-space:normal; }
+.fitting .slot { width:78px; color:var(--text); font-size:10px; letter-spacing:.12em; text-transform:uppercase; padding-top:9px; }
+.fititem { display:flex; align-items:center; gap:6px; padding:1px 0; }
+.fititem .ent-img { width:20px; height:20px; }
+.hash { word-break:break-all; }
 
 @media (max-width: 999.98px) {
   .sidebar { width:56px; }
@@ -400,8 +417,6 @@ a.kpi:hover .segbar .tone-neutral { background:var(--text); }
 .attn .what { color:var(--text-bright); }
 .attn .why { color:var(--text); font-size:11.5px; margin-top:2px; }
 .attn .go { white-space:nowrap; align-self:center; font-size:12px; }
-.attn li:hover .nolist { color:var(--text); }
-.nolist { color:var(--text-dim); font-size:11.5px; }
 .sevtag { display:inline-block; text-align:center; padding:1px 0; border:1px solid currentColor; font-size:9.5px; letter-spacing:.1em; text-transform:uppercase; margin-top:2px; }
 .sev-problem { color:var(--red); } .sev-warning { color:var(--isk); } .sev-info { color:var(--blue); }
 .attnmore { border-top:1px solid rgba(255,255,255,.06); }

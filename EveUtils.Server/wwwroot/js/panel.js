@@ -44,8 +44,8 @@
         if (press(e.key)) e.preventDefault();
     });
 
-    // Also scrolls a row another page linked to (/data#fit-12) into view; the server marks it once its data has
-    // loaded, which is likewise after the navigation.
+    // Also scrolls a row another list linked to (/data/fits?sel=12) into view the first time it shows up selected; its
+    // list renders once its data has loaded, which is likewise after the navigation.
     new MutationObserver(mutations => {
         if (rendering && mutations.some(m => m.target instanceof Element && m.target.closest('[data-dl]'))) {
             rendering = false;
@@ -54,10 +54,10 @@
             if (followSelection && selected) selected.scrollIntoView({ block: 'nearest' });
             while (queuedKeys.length > 0 && !press(queuedKeys.shift())) { /* a key with nothing to click is dropped */ }
         }
-        const target = document.querySelector('tr.targeted:not([data-scrolled])');
-        if (target) {
-            target.setAttribute('data-scrolled', '');
-            target.scrollIntoView({ block: 'center' });
+        const arrived = document.querySelector('[data-dl] tr.sel:not([data-scrolled])');
+        if (arrived) {
+            arrived.setAttribute('data-scrolled', '');
+            arrived.scrollIntoView({ block: 'nearest' });
         }
     }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'href'] });
 })();

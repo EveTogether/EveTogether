@@ -16,7 +16,7 @@ else
 {
     <DataList TRow="FleetListItem" Definition="_definition" Rows="_rows">
         <Detail Context="item">
-            <FleetPane Item="item" Names="_names" Paired="_paired" OnChanged="_LoadAsync" />
+            <FleetPane Item="item" Names="_names" Paired="_paired" Runs="_RunsOf(item)" OnChanged="_LoadAsync" />
         </Detail>
     </DataList>
 }
@@ -26,6 +26,7 @@ else
     private IReadOnlyList<FleetListItem>? _rows;
     private IReadOnlyDictionary<long, string> _names = new Dictionary<long, string>();
     private IReadOnlySet<int> _paired = new HashSet<int>();
+    private ILookup<long, RunGroupListItem> _runsByFleet = Enumerable.Empty<RunGroupListItem>().ToLookup(g => 0L);
 
     protected override async Task OnInitializedAsync()
     {
@@ -37,18 +38,17 @@ else
     {
         var fleets = await DataAdmin.ListFleetItemsAsync();
         var synced = await DataAdmin.ListSyncedCharactersAsync();
-        var names = synced.ToDictionary(c => (long)c.EsiCharacterId, c => c.CharacterName);
-        var unpaired = fleets
-            .SelectMany(f => f.MemberCharacterIds.Append(f.Fleet.CreatorCharacterId))
-            .Select(id => (long)id)
-            .Where(id => !names.ContainsKey(id));
-        foreach (var (id, name) in await NameLookup.ResolveAsync(unpaired))
-            names[id] = name;
-
-        _names = names;
+        var shown = fleets.SelectMany(f => f.MemberCharacterIds.Append(f.Fleet.CreatorCharacterId)).Select(id => (long)id);
+        _names = await CharacterNames.ResolveAsync(synced, shown, NameLookup);
         _paired = synced.Select(c => c.EsiCharacterId).ToHashSet();
+        _runsByFleet = (await DataAdmin.ListRunGroupsAsync())
+            .Where(g => g.DerivedFleet is not null)
+            .ToLookup(g => g.DerivedFleet?.Fleet.Id ?? 0);
         _rows = fleets;
     }
+
+    private IReadOnlyList<RunGroupListItem> _RunsOf(FleetListItem fleet) =>
+        _runsByFleet[fleet.Fleet.Id].OrderByDescending(g => g.StartedAtUtc).ToList();
 
     private string? _NameOf(int characterId) => _names.GetValueOrDefault(characterId);
 

@@ -1,0 +1,29 @@
+@using EveUtils.Shared.Modules.Runs.Enums
+@* A homefront's outcome as the pilot or fleet commander said it at STOP. Nothing said is a dash, not "Unknown": Unknown
+   is an answer somebody gave. *@
+@if (Outcome is { } outcome)
+{
+    <span class="pill @_Class(outcome)">@_Label(outcome)</span>
+}
+else
+{
+    <span class="dim" title="Nobody said how it ended, or it is not a homefront">—</span>
+}
+
+@code {
+    [Parameter, EditorRequired] public HomefrontOutcome? Outcome { get; set; }
+
+    private static string _Label(HomefrontOutcome outcome) => outcome switch
+    {
+        HomefrontOutcome.Completed => "Completed",
+        HomefrontOutcome.Failed => "Failed",
+        _ => "Unknown",
+    };
+
+    private static string _Class(HomefrontOutcome outcome) => outcome switch
+    {
+        HomefrontOutcome.Completed => "live",
+        HomefrontOutcome.Failed => "bad",
+        _ => "off",
+    };
+}

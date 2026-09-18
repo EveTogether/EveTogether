@@ -9,11 +9,10 @@
 @if (_counts is { } counts)
 {
     @_Entry(DataLinks.CharactersPath, "characters", "Characters", counts.Characters, 0)
-    <NavLink href="@DataLinks.FleetsPath" ActiveClass="active" title="Fleets">
-        <NavIcon Name="fleets" /><span class="t">Fleets</span>@_Count(counts.Fleets, counts.FleetsNeedingAttention)
-    </NavLink>
+    @_Entry(DataLinks.FleetsPath, "fleets", "Fleets", counts.Fleets, counts.FleetsNeedingAttention)
     @_Entry(DataLinks.CompositionsPath, "compositions", "Compositions", counts.Compositions, 0)
     @_Entry(DataLinks.SharedFitsPath, "fits", "Shared fits", counts.SharedFits, 0)
+    @_Entry(DataLinks.RunsPath, "runs", "Runs", counts.RunRows, 0)
     @_Entry(DataLinks.SessionsPath, "sessions", "Sessions", counts.Sessions, 0)
 }
 
@@ -34,9 +33,9 @@
         StateHasChanged();
     });
 
-    private RenderFragment _Entry(string href, string icon, string label, int count, int attention) => __builder =>
+    private static RenderFragment _Entry(string href, string icon, string label, int count, int attention) => __builder =>
     {
-        <a href="@href" title="@label"><NavIcon Name="@icon" /><span class="t">@label</span>@_Count(count, attention)</a>
+        <NavLink href="@href" ActiveClass="active" title="@label"><NavIcon Name="@icon" /><span class="t">@label</span>@_Count(count, attention)</NavLink>
     };
 
     private static RenderFragment _Count(int count, int attention) => __builder =>

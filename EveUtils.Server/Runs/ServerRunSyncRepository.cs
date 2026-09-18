@@ -31,7 +31,7 @@ internal sealed class ServerRunSyncRepository(IDbContextFactory<ServerDbContext>
         long characterId, IReadOnlyCollection<string> groupCodes, DateTime sinceUtc, CancellationToken cancellationToken = default)
     {
         await using ServerDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        return await _WithChildren(db.Set<Run>()
+        return await WithChildren(db.Set<Run>()
                 .AsNoTracking()
                 .Where(run => run.GroupCode != null && groupCodes.Contains(run.GroupCode) &&
                               run.LastPushedAtUtc.HasValue && run.LastPushedAtUtc.Value > sinceUtc &&
@@ -55,7 +55,7 @@ internal sealed class ServerRunSyncRepository(IDbContextFactory<ServerDbContext>
         long characterId, DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken = default)
     {
         await using ServerDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        return await _WithChildren(db.Set<Run>()
+        return await WithChildren(db.Set<Run>()
                 .AsNoTracking()
                 .Where(run => run.State == RunState.Saved && !run.DeletedAtUtc.HasValue &&
                               run.StartedAtUtc >= fromUtc && run.StartedAtUtc < toUtc &&
@@ -66,8 +66,8 @@ internal sealed class ServerRunSyncRepository(IDbContextFactory<ServerDbContext>
     }
 
     /// <summary>One query per collection: in one join the six collections multiply into each other (ET-287), and the
-    /// tab read hands back a whole window rather than a delta.</summary>
-    private static IQueryable<Run> _WithChildren(IQueryable<Run> runs) => runs
+    /// tab read hands back a whole window rather than a delta. The panel's run pane reads through it too.</summary>
+    internal static IQueryable<Run> WithChildren(IQueryable<Run> runs) => runs
         .AsSplitQuery()
         .Include(run => run.LootCaptures)
             .ThenInclude(capture => capture.Entries)

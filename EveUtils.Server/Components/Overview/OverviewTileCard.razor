@@ -1,25 +1,15 @@
 @using EveUtils.Server.DataExplorer
 @* One count tile: the total, a thin bar split by state and the same split spelled out, so no state is told by colour alone.
-   It opens the entity's list; while an entity has no list (runs, until ET-317) it is a plain block. *@
+   It opens the entity's list. *@
 @if (Tile is not null)
 {
-    @if (Href is not null)
-    {
-        <a class="kpi" href="@Href">@_Body(Tile)</a>
-    }
-    else
-    {
-        <div class="kpi" title="This list is not built yet">@_Body(Tile)</div>
-    }
+    <a class="kpi" href="@Href">@_Body(Tile)</a>
 }
 
 @code {
     [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
     [Parameter, EditorRequired] public OverviewTile? Tile { get; set; }
-    [Parameter] public string? Href { get; set; }
-
-    /// <summary>Replaces the spelled-out split, for a tile whose story is not its states.</summary>
-    [Parameter] public string? Caption { get; set; }
+    [Parameter, EditorRequired] public string Href { get; set; } = string.Empty;
 
     private RenderFragment _Body(OverviewTile tile) => __builder =>
     {
@@ -37,11 +27,7 @@
             }
         </span>
         <span class="ks">
-            @if (Caption is not null)
-            {
-                @Caption
-            }
-            else if (present.Count == 0)
+            @if (present.Count == 0)
             {
                 <span>none yet</span>
             }

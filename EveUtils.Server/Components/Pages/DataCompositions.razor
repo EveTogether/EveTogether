@@ -1,0 +1,106 @@
+@page "/data/compositions"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = PanelPermissions.DataView)]
+@using EveUtils.Server.Components.Compositions
+@using EveUtils.Server.Components.DataList
+@using EveUtils.Server.DataExplorer
+@using EveUtils.Server.Esi
+@inject DataAdminService DataAdmin
+@inject EsiNameLookup NameLookup
+
+@if (_rows is null)
+{
+    <p class="dim loading">Loading compositions…</p>
+}
+else
+{
+    <DataList TRow="CompositionListItem" Definition="_definition" Rows="_rows">
+        <Detail Context="item">
+            <CompositionPane Item="item" Names="_names" Paired="_paired" OnChanged="_LoadAsync" />
+        </Detail>
+    </DataList>
+}
+
+@code {
+    private DataListDefinition<CompositionListItem> _definition = null!;
+    private IReadOnlyList<CompositionListItem>? _rows;
+    private IReadOnlyDictionary<long, string> _names = new Dictionary<long, string>();
+    private IReadOnlySet<int> _paired = new HashSet<int>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _definition = _Definition();
+        await _LoadAsync();
+    }
+
+    private async Task _LoadAsync()
+    {
+        var rows = await DataAdmin.ListCompositionItemsAsync();
+        var synced = await DataAdmin.ListSyncedCharactersAsync();
+        var shown = rows.SelectMany(c => c.UsedBy.SelectMany(f => f.MemberCharacterIds).Append(c.Composition.OwnerCharacterId)).Select(id => (long)id);
+        _names = await CharacterNames.ResolveAsync(synced, shown, NameLookup);
+        _paired = synced.Select(c => c.EsiCharacterId).ToHashSet();
+        _rows = rows;
+    }
+
+    private string? _NameOf(int characterId) => _names.GetValueOrDefault(characterId);
+
+    private string? _CharacterHref(int characterId) => _paired.Contains(characterId) ? DataLinks.Character(characterId) : null;
+
+    private DataListDefinition<CompositionListItem> _Definition() => new()
+    {
+        Title = "Fleet compositions",
+        Kind = "Composition",
+        KeyOf = c => c.Composition.Id.ToString(),
+        DefaultGrouping = "none",
+        DefaultSort = "-updated",
+        EmptyText = "No compositions are shared to this server.",
+        SearchTextOf = c => $"{c.Composition.Name} {c.Composition.Id} {c.Composition.OwnerCharacterId} {_NameOf(c.Composition.OwnerCharacterId)} " +
+                            string.Join(' ', c.Roles.Select(r => r.Role.RoleName)),
+        Filters =
+        [
+            new() { Key = "all", Label = "All", Matches = _ => true },
+            new() { Key = "used", Label = "In use", Matches = c => c.UsedBy.Count > 0 },
+            new() { Key = "unused", Label = "Unused", Matches = c => c.UsedBy.Count == 0 },
+            new() { Key = "broken", Label = "Broken fit link", Matches = c => c.BrokenFitLinks > 0 },
+        ],
+        Groupings =
+        [
+            new() { Key = "none", Label = "None" },
+            new() { Key = "owner", Label = "Owner", GroupOf = c => _NameOf(c.Composition.OwnerCharacterId) ?? $"Character {c.Composition.OwnerCharacterId}" },
+        ],
+        Columns =
+        [
+            new()
+            {
+                Key = "name", Label = "Composition", SortBy = c => c.Composition.Name,
+                Cell = c => @<span class="cellstack"><span class="nm1">@c.Composition.Name</span><span class="dim">@(string.IsNullOrWhiteSpace(c.Composition.Description) ? "—" : c.Composition.Description)</span></span>,
+            },
+            new()
+            {
+                Key = "owner", Label = "Owner", SortBy = c => _NameOf(c.Composition.OwnerCharacterId),
+                Cell = c => @<CharacterCell Id="c.Composition.OwnerCharacterId" Name="@_NameOf(c.Composition.OwnerCharacterId)" Href="@_CharacterHref(c.Composition.OwnerCharacterId)" ShowId="false" />,
+            },
+            new()
+            {
+                Key = "roles", Label = "Roles", SortBy = c => c.Roles.Count, SortDescendingFirst = true,
+                Cell = c => @<CompositionRolesCell Item="c" />,
+            },
+            new()
+            {
+                Key = "ships", Label = "Ships", SortBy = c => c.Entries.Count(), SortDescendingFirst = true,
+                Cell = c => @<ShipIconRow TypeIds="c.Entries.Select(e => e.Entry.Fit.ShipTypeId).Distinct().ToList()" />,
+            },
+            new()
+            {
+                Key = "used", Label = "Used by", SortBy = c => c.UsedBy.Count, SortDescendingFirst = true,
+                Cell = c => @<CompositionUsedByCell Item="c" />,
+            },
+            new()
+            {
+                Key = "updated", Label = "Updated", SortBy = c => c.Composition.UpdatedAt, SortDescendingFirst = true, HideWhenNarrow = true,
+                Cell = c => @<RelativeTime At="c.Composition.UpdatedAt" />,
+            },
+        ],
+    };
+}

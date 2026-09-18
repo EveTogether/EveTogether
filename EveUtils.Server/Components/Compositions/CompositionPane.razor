@@ -1,0 +1,130 @@
+@using EveUtils.Server.Components.Fleets
+@using EveUtils.Server.DataExplorer
+@using EveUtils.Server.DataExplorer.Destructive
+@using EveUtils.Shared.Modules.Fleet.Composition
+@inject DestructiveActionCatalog Catalog
+@* One composition: its roles with the fits each allows, and the fleets coupled to it. Each fit that still links to the
+   shared library opens that shared fit; the fit's own list links back here. *@
+
+<div class="dhead">
+    <div class="dtitle">
+        <div class="ti">@Composition.Name</div>
+        <div class="st">
+            <span>@(string.IsNullOrWhiteSpace(Composition.Description) ? "No description" : Composition.Description)</span>
+            <code class="idchip" title="Composition id">#@Composition.Id</code>
+        </div>
+    </div>
+</div>
+
+<dl class="facts">
+    <dt>Owner</dt>
+    <dd>
+        <CharacterCell Id="Composition.OwnerCharacterId" Name="@Names.GetValueOrDefault(Composition.OwnerCharacterId)" Href="@_CharacterHref(Composition.OwnerCharacterId)" />
+        @if (!Paired.Contains(Composition.OwnerCharacterId))
+        {
+            <span class="warn" title="Character @Composition.OwnerCharacterId is not paired on this server; the name comes from a public ESI lookup.">⚠ not paired</span>
+        }
+    </dd>
+    <dt>Created</dt>
+    <dd>@UtcText.Minutes(Composition.CreatedAt) <span class="dim">UTC · <RelativeTime At="Composition.CreatedAt" /></span></dd>
+    <dt>Updated</dt>
+    <dd>@UtcText.Minutes(Composition.UpdatedAt) <span class="dim">UTC · <RelativeTime At="Composition.UpdatedAt" /></span></dd>
+</dl>
+
+<section class="dsec">
+    <div class="sh">Roles and fits <span class="n">@Item.Roles.Count</span></div>
+    @if (Item.Roles.Count == 0)
+    {
+        <p class="dim">The composition has no roles yet.</p>
+    }
+    else
+    {
+        <div class="cov">
+            @foreach (var role in Item.Roles)
+            {
+                <span class="rl">@role.Role.RoleName</span>
+                <span class="num">@(role.Target is { } target ? $"at least {target}" : "no minimum")</span>
+                <span class="fits">
+                    @if (role.Entries.Count == 0)
+                    {
+                        <span class="dim">No fits in this role.</span>
+                    }
+                    @foreach (var entry in role.Entries)
+                    {
+                        @_FitChip(entry)
+                    }
+                </span>
+            }
+        </div>
+    }
+</section>
+
+<section class="dsec">
+    <div class="sh">Used by fleets <span class="n">@Item.UsedBy.Count</span></div>
+    @if (Item.UsedBy.Count == 0)
+    {
+        <p class="dim">No fleet uses this composition.</p>
+    }
+    else
+    {
+        <table class="mini">
+            <tbody>
+                @foreach (var fleet in Item.UsedBy)
+                {
+                    <tr>
+                        <td><RecordLink Href="@DataLinks.Fleet(fleet.Fleet.Id)">@fleet.Fleet.Name</RecordLink></td>
+                        <td><FleetStatusPill Status="fleet.Status" /></td>
+                        <td class="num"><PortraitStack CharacterIds="fleet.MemberCharacterIds" Names="Names" /></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+<DestructiveActions @key="Composition.Id" Load="() => Catalog.ForCompositionAsync(Composition.Id)" OnDone="OnChanged" />
+
+@code {
+    [Parameter, EditorRequired] public CompositionListItem Item { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyDictionary<long, string> Names { get; set; } = new Dictionary<long, string>();
+    [Parameter, EditorRequired] public IReadOnlySet<int> Paired { get; set; } = new HashSet<int>();
+
+    /// <summary>Raised after a delete, so the list reloads what changed.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private FleetComposition Composition => Item.Composition;
+
+    private string? _CharacterHref(int characterId) => Paired.Contains(characterId) ? DataLinks.Character(characterId) : null;
+
+    private static RenderFragment _FitChip(CompositionEntryItem entry) => __builder =>
+    {
+        var fit = entry.Entry.Fit;
+        var minimum = entry.Entry.EntryMinCount is { } min ? $"at least {min}" : null;
+        if (entry.LinkedSharedFitId is { } fitId)
+        {
+            <span class="fitchip" title="Linked to shared fit #@fitId">
+                <RecordLink Href="@DataLinks.SharedFit(fitId)"><ShipCell TypeId="fit.ShipTypeId" Caption="@fit.FitName" ShowId="false" /></RecordLink>
+                @if (minimum is not null)
+                {
+                    <span class="cnt">@minimum</span>
+                }
+            </span>
+            return;
+        }
+        if (entry.IsLinkBroken)
+        {
+            <span class="fitchip broken" title="The entry keeps its own copy of the fit. The shared fit it came from (#@fit.ServerSharedFitId) is gone.">
+                <ShipCell TypeId="fit.ShipTypeId" Caption="@fit.FitName" ShowId="false" />
+                <span class="warn">⚠ link broken</span>
+            </span>
+            return;
+        }
+        <span class="fitchip" title="Not taken from the shared library; the entry carries its own copy of the fit">
+            <ShipCell TypeId="fit.ShipTypeId" Caption="@fit.FitName" ShowId="false" />
+            @if (minimum is not null)
+            {
+                <span class="cnt">@minimum</span>
+            }
+        </span>
+    };
+}

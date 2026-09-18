@@ -1,0 +1,22 @@
+@using EveUtils.Server.DataExplorer
+<span class="pill @Class">@Label(Status)</span>
+
+@code {
+    [Parameter, EditorRequired] public CharacterPanelStatus Status { get; set; }
+
+    public static string Label(CharacterPanelStatus status) => status switch
+    {
+        CharacterPanelStatus.Live => "Live",
+        CharacterPanelStatus.Idle => "Idle",
+        CharacterPanelStatus.NeverConnected => "Never connected",
+        _ => "Refresh failing",
+    };
+
+    private string Class => Status switch
+    {
+        CharacterPanelStatus.Live => "live",
+        CharacterPanelStatus.Idle => "off",
+        CharacterPanelStatus.NeverConnected => "warn",
+        _ => "bad",
+    };
+}

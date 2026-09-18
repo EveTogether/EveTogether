@@ -1,0 +1,9 @@
+@page "/data"
+@attribute [Authorize(Policy = PanelPermissions.DataView)]
+@using EveUtils.Server.DataExplorer
+@inject NavigationManager Navigation
+@* The old stacked /data page. Every entity has its own list now; an old bookmark lands on the first. *@
+
+@code {
+    protected override void OnInitialized() => Navigation.NavigateTo(DataLinks.CharactersPath, replace: true);
+}

@@ -1,0 +1,133 @@
+@page "/data/runs"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = PanelPermissions.DataView)]
+@using System.Globalization
+@using EveUtils.Server.Components.DataList
+@using EveUtils.Server.Components.Runs
+@using EveUtils.Server.DataExplorer
+@using EveUtils.Server.Esi
+@using EveUtils.Shared.Modules.Runs.Enums
+@using EveUtils.Shared.Modules.Sde
+@inject DataAdminService DataAdmin
+@inject EsiNameLookup NameLookup
+@inject ISdeAccessor Sde
+
+@if (_rows is null)
+{
+    <p class="dim loading">Loading runs…</p>
+}
+else
+{
+    <DataList TRow="RunGroupListItem" Definition="_definition" Rows="_rows">
+        <Detail Context="item">
+            <RunGroupPane Item="item" Names="_names" Paired="_paired" SystemName="@_SystemOf(item)" />
+        </Detail>
+    </DataList>
+}
+
+@code {
+    private DataListDefinition<RunGroupListItem> _definition = null!;
+    private IReadOnlyList<RunGroupListItem>? _rows;
+    private IReadOnlyDictionary<long, string> _names = new Dictionary<long, string>();
+    private IReadOnlySet<int> _paired = new HashSet<int>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _definition = _Definition();
+        var rows = await DataAdmin.ListRunGroupsAsync();
+        var synced = await DataAdmin.ListSyncedCharactersAsync();
+        var snapshots = rows.SelectMany(g => g.Pilots)
+            .Where(p => p.NameSnapshot is not null)
+            .GroupBy(p => p.CharacterId)
+            .ToDictionary(g => g.Key, g => g.First().NameSnapshot ?? string.Empty);
+        var unnamed = rows.SelectMany(g => g.Pilots).Select(p => p.CharacterId).Where(id => !snapshots.ContainsKey(id));
+        var names = (await CharacterNames.ResolveAsync(synced, unnamed, NameLookup)).ToDictionary();
+        foreach (var (id, name) in snapshots)
+            names.TryAdd(id, name);
+        _names = names;
+        _paired = synced.Select(c => c.EsiCharacterId).ToHashSet();
+        _rows = rows;
+    }
+
+    private string? _SystemOf(RunGroupListItem g) =>
+        g.SolarSystemId is { } id ? Sde.GetSolarSystem(id)?.Name ?? $"System {id}" : null;
+
+    private static IReadOnlyList<int> _PortraitIds(RunGroupListItem g) =>
+        g.Pilots.Select(p => p.CharacterId).Distinct().Where(id => id is > 0 and <= int.MaxValue).Select(id => (int)id).ToList();
+
+    private static string _DayLabel(RunGroupListItem g) => g.Day.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture);
+
+    private static string _DaySummary(IReadOnlyList<RunGroupListItem> day)
+    {
+        var runs = day.Sum(g => g.Pilots.Count);
+        var flown = TimeSpan.FromTicks(day.Sum(g => g.Flown?.Ticks ?? 0));
+        var bounties = day.Sum(g => g.BountyIsk);
+        return $"{runs} {(runs == 1 ? "run" : "runs")} · {DurationText.HoursMinutes(flown)} flown" +
+               (bounties > 0 ? $" · {IskText.Format(bounties)} in bounties" : string.Empty);
+    }
+
+    private DataListDefinition<RunGroupListItem> _Definition() => new()
+    {
+        Title = "Runs",
+        Kind = "Run",
+        KeyOf = g => g.Key,
+        DefaultGrouping = "day",
+        DefaultSort = "-start",
+        EmptyText = "No runs are synced to this server. Clients push a run here when it is saved.",
+        SelectPrompt = "Select a run to see its pilots, bounties and the fleet it was most likely flown in.",
+        SearchTextOf = g => $"{g.Key} {g.Title} {_SystemOf(g)} " +
+                            string.Join(' ', g.Pilots.Select(p => $"{p.CharacterId} {_names.GetValueOrDefault(p.CharacterId)}")),
+        Filters =
+        [
+            new() { Key = "all", Label = "All", Matches = _ => true },
+            new() { Key = "site", Label = "Site", Matches = g => g.Kind == ActivityKind.Site },
+            new() { Key = "mission", Label = "Mission", Matches = g => g.Kind == ActivityKind.Mission },
+            new() { Key = "abyssal", Label = "Abyssal", Matches = g => g.Kind == ActivityKind.Abyssal },
+            new() { Key = "mining", Label = "Mining", Matches = g => g.Kind == ActivityKind.Mining },
+        ],
+        Groupings =
+        [
+            new() { Key = "day", Label = "Day", GroupOf = _DayLabel, Rank = g => -g.Day.DayNumber, Summary = _DaySummary },
+            new() { Key = "site", Label = "Site", GroupOf = g => g.Title },
+            new() { Key = "none", Label = "None" },
+        ],
+        Columns =
+        [
+            new()
+            {
+                Key = "run", Label = "Run", SortBy = g => g.Title,
+                Cell = g => @<span class="cellstack"><span class="nm1">@g.Title</span><span class="dim"><span class="idm">@(g.GroupCode ?? "solo")</span> · @RunGroupListItem.KindLabel(g.Kind)</span></span>,
+            },
+            new()
+            {
+                Key = "system", Label = "System", SortBy = _SystemOf, HideWhenNarrow = true,
+                Cell = g => @<span class="@(g.SolarSystemId is null ? "dim" : null)">@(_SystemOf(g) ?? "—")</span>,
+            },
+            new()
+            {
+                Key = "pilots", Label = "Pilots", SortBy = g => g.Pilots.Count, SortDescendingFirst = true,
+                Cell = g => @<PortraitStack CharacterIds="_PortraitIds(g)" Names="_names" />,
+            },
+            new()
+            {
+                Key = "start", Label = "Started", SortBy = g => g.StartedAtUtc, SortDescendingFirst = true,
+                Cell = g => @<span title="@UtcText.Minutes(g.StartedAtUtc) UTC">@g.StartedAtUtc.ToString("HH:mm", CultureInfo.InvariantCulture) <span class="dim">@g.StartedAtUtc.ToString("d MMM", CultureInfo.InvariantCulture)</span></span>,
+            },
+            new()
+            {
+                Key = "flown", Label = "Flown", SortBy = g => g.Flown, SortDescendingFirst = true, Numeric = true,
+                Cell = g => @<span class="@(g.Flown is null ? "dim" : null)">@(g.Flown is { } flown ? DurationText.HoursMinutes(flown) : "running")</span>,
+            },
+            new()
+            {
+                Key = "outcome", Label = "Outcome", SortBy = g => (int?)g.Outcome, HideWhenNarrow = true,
+                Cell = g => @<RunOutcomePill Outcome="g.Outcome" />,
+            },
+            new()
+            {
+                Key = "fleet", Label = "Fleet", SortBy = g => g.DerivedFleet?.Fleet.Name,
+                Cell = g => @<RunFleetCell Group="g" />,
+            },
+        ],
+    };
+}
