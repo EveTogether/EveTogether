@@ -7,7 +7,7 @@
   --border:#1E3A30; --border-strong:#2E6EC8A0;
   --text-bright:#F3ECE0; --text:#D8D0C4; --text-dim:#8A7E6B; --text-accent:#9BE8C9;
   --accent:#4EC79E; --accent-bright:#7EE0BB; --accent-soft:rgba(78,199,158,.12);
-  --isk:#F5B042; --green:#4ADE80; --red:#EF5A5A; --blue:#38BDF8;
+  --isk:#F5B042; --green:#4ADE80; --red:#EF5A5A; --red-bright:#FF8A8A; --blue:#38BDF8;
   --mono:Consolas,"Cascadia Mono",monospace;
   color-scheme: dark;
 }
@@ -36,6 +36,12 @@ a { color: var(--text-accent); text-decoration: none; }
 .acct .who .r { color:var(--accent); font-size:10px; letter-spacing:.05em; }
 .acct .acctlink { color:var(--text-dim); font-size:11px; }
 .acct .acctlink:hover { color:var(--text-accent); }
+.perm { display:inline-flex; gap:4px; }
+.pchip { font:600 9.5px/1 var(--mono); letter-spacing:.04em; padding:3px 6px; border:1px solid var(--border); color:var(--text); white-space:nowrap; }
+.pchip.has { border-color:var(--accent); color:var(--accent-bright); background:var(--accent-soft); }
+.pchip.del.has { border-color:rgba(239,90,90,.6); color:var(--red-bright); background:rgba(239,90,90,.1); }
+/* Struck through and dashed rather than dimmed: --text-dim drops to 4.38:1 on the hatched destructive block. */
+.pchip.no { color:var(--text); text-decoration:line-through; border-style:dashed; }
 .navlogout { display:inline; margin:0; }
 .navlogout button { background:transparent; border:1px solid var(--border); color:var(--text-dim);
   padding:5px 11px; font-size:11px; cursor:pointer; }
@@ -70,7 +76,8 @@ h2:first-child { margin-top:0; }
 .card > .hd .t { display:flex; align-items:center; gap:8px; font-size:11px; letter-spacing:.2em;
   text-transform:uppercase; color:var(--text-bright); font-weight:500; }
 .card > .hd .t .dia { color:var(--accent); font-size:9px; }
-.card > .hd .cnt { color:var(--text-dim); font-size:11px; letter-spacing:.04em; }
+/* --text-dim is 4.37:1 on the header gradient's top edge. */
+.card > .hd .cnt { color:var(--text); font-size:11px; letter-spacing:.04em; }
 .card > .hd .hdaction { margin-left:auto; display:flex; gap:8px; }
 .card > .bd.pad { padding:14px; }
 .card table { margin:0; }
@@ -139,8 +146,6 @@ input[type=checkbox] { vertical-align:middle; accent-color:var(--accent); }
 .permgrid { display:grid; grid-template-columns:repeat(2,minmax(220px,1fr)); gap:4px 18px; }
 .permchk { color:var(--text); }
 .permchk code { color:var(--text-accent); font-family:var(--mono); }
-.confirmbar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:10px 12px;
-  border:1px solid var(--border-strong); background:#0F1512; margin:0 0 14px; }
 .warn { color:var(--isk); font-size:12px; }
 .switchrow { display:flex; align-items:center; justify-content:space-between; gap:14px;
   padding:12px 14px; border-bottom:1px solid #11160F; }
@@ -287,8 +292,52 @@ table.mini { margin:0 0 4px; }
 .bar i { display:block; height:100%; background:var(--accent); }
 .bar.full i { background:var(--green); }
 .bar.low i { background:var(--isk); }
-.dsec.actions .btnrow { display:flex; gap:8px; }
-.dsec.actions .confirmbar { margin:0; }
+
+/* ── destructive actions (ET-314): collapsed and hatched at the bottom of a record, never in a row ── */
+.dzone { border:1px solid rgba(239,90,90,.35); background:repeating-linear-gradient(135deg, rgba(239,90,90,.03) 0 8px, transparent 8px 16px), var(--bg-panel); }
+.dzone > summary { list-style:none; display:flex; align-items:center; gap:8px; padding:8px 12px; cursor:pointer;
+  font-size:9.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--red-bright); }
+.dzone > summary::-webkit-details-marker { display:none; }
+.dzone > summary:hover { background:rgba(239,90,90,.07); }
+.dzone > summary .ic { width:12px; height:12px; flex:none; fill:var(--red-bright); }
+.dzone > summary .car { margin-left:auto; font-size:10px; letter-spacing:0; text-transform:none; color:var(--text); }
+.dzone[open] > summary .car::after { content:" ▴"; }
+.dzone:not([open]) > summary .car::after { content:" ▾"; }
+.dzone.none { border-color:var(--border); }
+.dzone.none > summary, .dzone.none > summary:hover { color:var(--text); background:transparent; }
+.dzone .ic.lock { fill:none; stroke:var(--text); stroke-width:1.6; }
+.dzone.none > summary .ic.lock { width:12px; height:12px; }
+.dzone .dz { padding:4px 12px 12px; display:flex; flex-direction:column; gap:10px; }
+.dzrow { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 14px; align-items:center; }
+.dzrow .dt1 { color:var(--text-bright); font-weight:500; font-size:12.5px; }
+.dzrow .dd1 { color:var(--text); font-size:11.5px; }
+.locked { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; color:var(--text); font-size:11.5px; line-height:1.5; }
+.locked .ic { width:14px; height:14px; flex:none; margin-top:1px; }
+.locked b { color:var(--text-bright); font-weight:600; }
+button.dbtn { background:transparent; border:1px solid rgba(239,90,90,.7); color:var(--red-bright); padding:5px 12px; white-space:nowrap; }
+button.dbtn:hover { background:rgba(239,90,90,.15); color:var(--text-bright); border-color:var(--red); }
+button.dbtn.soft { border-color:rgba(245,176,66,.6); color:var(--isk); }
+button.dbtn.soft:hover { background:rgba(245,176,66,.13); color:var(--text-bright); }
+button.dbtn:disabled, button.dbtn:disabled:hover { border-color:#3A3232; color:#8C8480; background:transparent; cursor:not-allowed; }
+button.dbtn.go { background:var(--red); border-color:var(--red); color:#1A0606; font-weight:600; }
+button.dbtn.go:hover { background:var(--red-bright); border-color:var(--red-bright); color:#1A0606; }
+button.gbtn { background:transparent; border:1px solid var(--border); color:var(--text); padding:5px 10px; }
+button.gbtn:hover { border-color:var(--border-strong); color:var(--text-bright); background:var(--accent-soft); }
+.confirm { border-top:1px solid rgba(239,90,90,.3); padding-top:10px; display:flex; flex-direction:column; gap:8px; }
+.confirm .q { color:var(--text-bright); font-size:12.5px; }
+.confirm .cons { color:var(--text); font-size:11.5px; margin:0; padding-left:16px; }
+.confirm .cons li { margin:2px 0; }
+.confirm .cons li.w { color:var(--isk); }
+.confirm .typ { display:flex; flex-direction:column; gap:4px; font-size:11.5px; color:var(--text); }
+.confirm .typ b { color:var(--text-bright); font-family:var(--mono); font-weight:400; }
+.confirm .typ input { background:#080B09; border:1px solid rgba(239,90,90,.45); color:var(--text-bright); font:12px var(--mono); padding:6px 8px; }
+.confirm .typ input:focus { border-color:var(--red-bright); }
+.confirm .btns { display:flex; gap:8px; justify-content:flex-end; }
+.dzfail { margin:0; padding:0 12px 12px; color:var(--red-bright); font-size:11.5px; }
+/* On /data the opened row carries its block in a row of its own, which keeps the pane's background in every row state. */
+tbody tr.dzhost, tbody tr.dzhost:nth-child(even), tbody tr.dzhost:hover { background:var(--bg-panel); }
+tbody tr.dzhost > td { padding:6px 12px 12px; }
+a.rowopen { font-size:11.5px; }
 
 /* A row another list linked to (/data#fit-12) reads as selected. */
 tbody tr.targeted { background:var(--row-sel); }
@@ -314,6 +363,7 @@ tbody tr.targeted .dim { color:var(--text); }
   .dt thead th, .dt tbody td { padding-left:8px; padding-right:8px; }
   .dt th:first-child, .dt td:first-child { padding-left:16px; }
   .search { width:180px; }
+  .acct .perm { display:none; }
 }
 
 /* ── dashboard overview (ET-315): count tiles, needs attention, right now, relation map ── */

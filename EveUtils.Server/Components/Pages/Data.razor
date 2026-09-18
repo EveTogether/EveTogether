@@ -6,11 +6,13 @@
 @using EveUtils.Shared.Modules.Fleet.Composition
 @using EveUtils.Shared.Modules.ServerAuth.Entities
 @using EveUtils.Server.DataExplorer
+@using EveUtils.Server.DataExplorer.Destructive
 @using EveUtils.Server.Esi
 @using EveUtils.Shared.Modules.Sde
 @inject DataAdminService DataAdmin
 @inject EsiNameLookup NameLookup
 @inject ISdeAccessor Sde
+@inject DestructiveActionCatalog Catalog
 @inject NavigationManager Navigation
 @implements IDisposable
 
@@ -19,32 +21,6 @@
 <div class="filterbar">
     <input type="search" placeholder="Filter by name or id…" aria-label="Filter data by name or id" @bind="Filter" @bind:event="oninput" />
 </div>
-
-@if (_pending is { } p)
-{
-    <div class="confirmbar">
-        <span>@p.Label</span>
-        @if (p.Kind == "synced")
-        {
-            <span class="warn">⚠ Removes the paired character + its sessions. Leaves orphan references and breaks any connected client's session.</span>
-        }
-        @if (p.Warning is not null)
-        {
-            <span class="warn">⚠ @p.Warning</span>
-        }
-        <button class="danger" @onclick="ConfirmAsync">Confirm</button>
-        <button @onclick="Cancel">Cancel</button>
-    </div>
-}
-@if (_message is not null)
-{
-    <p class="ok">@_message</p>
-}
-<AuthorizeView Policy="@PanelPermissions.DataDelete" Context="del">
-    <NotAuthorized>
-        <p class="dim">You can view this data but not delete it.</p>
-    </NotAuthorized>
-</AuthorizeView>
 
 <Card Id="fits" Title="Shared fittings" Count="@CountLabel(Fits.Count, _fits.Count)">
     @if (Fits.Count == 0)
@@ -61,10 +37,12 @@
                     <tr id="@DataLinks.SharedFitAnchor(f.Id)" class="@TargetClass(DataLinks.SharedFitAnchor(f.Id))">
                         <td class="bright">@f.Name</td><td><ShipCell TypeId="f.ShipTypeId" /></td>
                         <td><CharacterCell Id="f.SharedByCharacterId" Name="@f.SharedByCharacterName" /></td><td class="dim">@f.SharedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
-                        <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
-                            <button class="danger" @onclick="() => AskFit(f)">Delete</button>
-                        </AuthorizeView></td>
+                        <td class="num">@_OpenLink(DataLinks.SharedFitAnchor(f.Id), DataLinks.SharedFitsPath)</td>
                     </tr>
+                    @if (_IsTarget(DataLinks.SharedFitAnchor(f.Id)))
+                    {
+                        <tr class="dzhost"><td colspan="5"><DestructiveActions @key="DataLinks.SharedFitAnchor(f.Id)" Load="() => Catalog.ForSharedFitAsync(f.Id)" OnDone="() => _AfterActionAsync(DataLinks.SharedFitsPath)" /></td></tr>
+                    }
                 }
             </tbody>
         </table>
@@ -87,10 +65,12 @@
                         <td class="bright">@comp.Name</td><td><CharacterCell Id="comp.OwnerCharacterId" Name="@NameOf(comp.OwnerCharacterId)" /></td>
                         <td class="dim">@(string.IsNullOrWhiteSpace(comp.Description) ? "—" : comp.Description)</td>
                         <td class="dim">@comp.UpdatedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
-                        <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
-                            <button class="danger" @onclick="() => AskComposition(comp)">Delete</button>
-                        </AuthorizeView></td>
+                        <td class="num">@_OpenLink(DataLinks.CompositionAnchor(comp.Id), DataLinks.CompositionsPath)</td>
                     </tr>
+                    @if (_IsTarget(DataLinks.CompositionAnchor(comp.Id)))
+                    {
+                        <tr class="dzhost"><td colspan="5"><DestructiveActions @key="DataLinks.CompositionAnchor(comp.Id)" Load="() => Catalog.ForCompositionAsync(comp.Id)" OnDone="() => _AfterActionAsync(DataLinks.CompositionsPath)" /></td></tr>
+                    }
                 }
             </tbody>
         </table>
@@ -116,10 +96,12 @@
                         <td class="dim">@(c.GrantedScopes?.Count ?? 0) scopes</td>
                         <td class="dim">@c.PairedAt.ToString("yyyy-MM-dd HH:mm")</td>
                         <td class="num">@usage.Fleets</td><td class="num">@usage.SharedFits</td><td class="num">@_sessions.Count(s => s.SyncedCharacterId == c.Id)</td>
-                        <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
-                            <button class="danger" @onclick="() => AskSynced(c)">Delete</button>
-                        </AuthorizeView></td>
+                        <td class="num">@_OpenLink(DataLinks.CharacterAnchor(c.EsiCharacterId), DataLinks.CharactersPath)</td>
                     </tr>
+                    @if (_IsTarget(DataLinks.CharacterAnchor(c.EsiCharacterId)))
+                    {
+                        <tr class="dzhost"><td colspan="7"><DestructiveActions @key="DataLinks.CharacterAnchor(c.EsiCharacterId)" Load="() => Catalog.ForCharacterAsync(c.Id)" OnDone="() => _AfterActionAsync(DataLinks.CharactersPath)" /></td></tr>
+                    }
                 }
             </tbody>
         </table>
@@ -160,10 +142,12 @@
                         <td class="dim">@s.LastHeartbeat.ToString("yyyy-MM-dd HH:mm")</td>
                         <td class="dim">@SilenceLabel(s)</td>
                         <td class="@StateClass(s)">@State(s)</td>
-                        <td style="text-align:right"><AuthorizeView Policy="@PanelPermissions.DataDelete" Context="d">
-                            <button class="danger" @onclick="() => AskSession(s)">Revoke</button>
-                        </AuthorizeView></td>
+                        <td class="num">@_OpenLink(DataLinks.SessionAnchor(s.Id), DataLinks.SessionsPath)</td>
                     </tr>
+                    @if (_IsTarget(DataLinks.SessionAnchor(s.Id)))
+                    {
+                        <tr class="dzhost"><td colspan="7"><DestructiveActions @key="DataLinks.SessionAnchor(s.Id)" Load="() => Catalog.ForSessionAsync(s.Id)" OnDone="() => _AfterActionAsync(DataLinks.SessionsPath)" /></td></tr>
+                    }
                 }
             </tbody>
         </table>
@@ -171,8 +155,6 @@
 </Card>
 
 @code {
-    private record Pending(string Kind, long Id, string Label, string? Warning = null);
-
     private static TimeSpan Silence(ServerSession s) => DateTimeOffset.UtcNow - s.LastHeartbeat;
     private static bool IsLive(ServerSession s) => Silence(s) <= ServerSessionService.LiveWindow;
 
@@ -182,15 +164,7 @@
     private static string State(ServerSession s) => IsLive(s) ? "live" : IsLapsing(s) ? "lapsing" : "idle";
     private static string StateClass(ServerSession s) => IsLive(s) ? "ok" : IsLapsing(s) ? "stale" : "dim";
 
-    /// <summary>How long since anything used this session, at the coarsest unit that still reads at a glance.</summary>
-    private static string SilenceLabel(ServerSession s)
-    {
-        var silence = Silence(s);
-        return silence < TimeSpan.FromMinutes(1) ? $"{silence.TotalSeconds:0}s"
-            : silence < TimeSpan.FromHours(1) ? $"{silence.TotalMinutes:0}m"
-            : silence < TimeSpan.FromDays(1) ? $"{silence.TotalHours:0}h"
-            : $"{silence.TotalDays:0}d";
-    }
+    private static string SilenceLabel(ServerSession s) => DurationText.Coarse(Silence(s));
 
     private IReadOnlyList<SharedFit> _fits = [];
     private IReadOnlyList<FleetComposition> _compositions = [];
@@ -198,8 +172,6 @@
     private IReadOnlyList<ServerSession> _sessions = [];
     private IReadOnlyDictionary<long, string> _names = new Dictionary<long, string>();
     private IReadOnlyDictionary<int, CharacterUsage> _usage = new Dictionary<int, CharacterUsage>();
-    private Pending? _pending;
-    private string? _message;
 
     private string Filter { get; set; } = string.Empty;
     private IReadOnlyList<SharedFit> Fits => _fits.Where(f => Matches(f.Name, f.Id, f.ShipTypeId, TypeName(f.ShipTypeId), f.SharedByCharacterId, f.SharedByCharacterName)).ToList();
@@ -207,8 +179,9 @@
     private IReadOnlyList<SyncedCharacter> Characters => _synced.Where(c => Matches(c.CharacterName, c.EsiCharacterId)).ToList();
     private IReadOnlyList<ServerSession> Sessions => _sessions.Where(s => Matches(s.SyncedCharacter?.CharacterName, s.SyncedCharacter?.EsiCharacterId)).ToList();
 
-    /// <summary>The row a link from another list pointed at (<c>/data#fit-12</c>). Marked here rather than with CSS
-    /// <c>:target</c>, which Blazor's pushState navigation never updates.</summary>
+    /// <summary>The row a link pointed at (<c>/data#fit-12</c>), from another list or its own Open link. Marked here rather
+    /// than with CSS <c>:target</c>, which Blazor's pushState navigation never updates. It is the one row that shows its
+    /// destructive actions, until these lists get a detail pane of their own.</summary>
     private string _target = string.Empty;
 
     protected override async Task OnInitializedAsync()
@@ -228,7 +201,40 @@
 
     private static string TargetOf(string uri) => new Uri(uri).Fragment.TrimStart('#');
 
-    private string? TargetClass(string anchor) => anchor == _target ? "targeted" : null;
+    private string? TargetClass(string anchor) => _IsTarget(anchor) ? "targeted" : null;
+
+    private bool _IsTarget(string anchor) => anchor == _target;
+
+    private RenderFragment _OpenLink(string anchor, string closeHref) => __builder =>
+    {
+        if (_IsTarget(anchor))
+        {
+            <a class="rowopen" href="@closeHref" aria-expanded="true" @onclick="() => _Close(closeHref)" @onclick:preventDefault="true">Close</a>
+            return;
+        }
+        <a class="rowopen" href="@($"{DataLinks.RecordsPath}#{anchor}")" aria-expanded="false"
+           @onclick="() => _Open(anchor)" @onclick:preventDefault="true">Open</a>
+    };
+
+    // A fragment-only link on the same page raises no LocationChanged, so the row is marked here before navigating.
+    private void _Open(string anchor)
+    {
+        _target = anchor;
+        Navigation.NavigateTo($"{DataLinks.RecordsPath}#{anchor}");
+    }
+
+    // Every action here removes the row it was opened on, so the page goes back to that row's card.
+    private async Task _AfterActionAsync(string cardHref)
+    {
+        _Close(cardHref);
+        await LoadAsync();
+    }
+
+    private void _Close(string cardHref)
+    {
+        _target = string.Empty;
+        Navigation.NavigateTo(cardHref);
+    }
 
     private async Task LoadAsync()
     {
@@ -262,30 +268,4 @@
 
     private string CountLabel(int shown, int total) => shown == total ? total.ToString() : $"{shown} of {total}";
     private string EmptyText(string none) => Filter.Length > 0 ? "Nothing matches the filter." : none;
-
-    private void AskFit(SharedFit f) => _pending = new Pending("fit", f.Id, $"Delete fit '{f.Name}'?");
-    private void AskComposition(FleetComposition c) => _pending = new Pending("composition", c.Id, $"Delete composition '{c.Name}' (its roles + fits cascade)?");
-    private void AskSynced(SyncedCharacter c) => _pending = new Pending("synced", c.Id, $"Delete paired character '{c.CharacterName}'?");
-    // The issue date is in the label because a character has one session per machine it is paired on, and
-    // without it the confirm bar cannot say which of them you are about to delete.
-    private void AskSession(ServerSession s) => _pending = new Pending("session", s.Id,
-        $"Revoke session for '{s.SyncedCharacter?.CharacterName ?? "?"}' issued {s.IssuedAt:yyyy-MM-dd HH:mm} UTC?",
-        IsLive(s) ? "This one is live — the machine holding it is attached right now and will have to pair again." : null);
-    private void Cancel() => _pending = null;
-
-    private async Task ConfirmAsync()
-    {
-        if (_pending is not { } p)
-            return;
-        switch (p.Kind)
-        {
-            case "fit": await DataAdmin.DeleteSharedFitAsync((int)p.Id); break;
-            case "composition": await DataAdmin.DeleteFleetCompositionAsync(p.Id); break;
-            case "synced": await DataAdmin.DeleteSyncedCharacterAsync((int)p.Id); break;
-            case "session": await DataAdmin.DeleteSessionAsync((int)p.Id); break;
-        }
-        _message = "Done.";
-        _pending = null;
-        await LoadAsync();
-    }
 }

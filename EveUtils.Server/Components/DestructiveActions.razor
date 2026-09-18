@@ -1,0 +1,158 @@
+@using System.Security.Claims
+@using EveUtils.Server.DataExplorer.Destructive
+@*
+    The collapsed, hatched block at the bottom of a record's detail. Nothing in it runs on one click: a two-step action
+    arms first and shows its consequences inline, a type-name action also waits for the record's name, typed exactly.
+    Without Data · Delete the block still lists the actions, locked, so an admin can see what exists and why it is out of
+    reach. The buttons then carry no handler at all, and the service behind each action checks the permission again.
+*@
+
+@if (NoActionsReason is not null)
+{
+    <details class="dzone none">
+        <summary>@_LockIcon <span class="lbl">No destructive actions</span><span class="car">why</span></summary>
+        <div class="locked"><span>@NoActionsReason</span></div>
+    </details>
+}
+else if (_actions.Count > 0)
+{
+    <details class="dzone" open="@_expanded">
+        <summary>
+            @_WarnIcon Destructive actions
+            <span class="pchip @(_canDelete ? "del has" : "no")" title="@(_canDelete ? "You have this permission" : "You do not have this permission")">DATA · DELETE</span>
+            <span class="car">@_actions.Count @(_actions.Count == 1 ? "action" : "actions")</span>
+        </summary>
+        @if (!_canDelete)
+        {
+            <div class="locked">@_LockIcon<span>You have <b>Data · View</b>. These actions need <b>Data · Delete</b>, which a superadmin grants under Roles.</span></div>
+        }
+        <div class="dz">
+            @foreach (var action in _actions)
+            {
+                var armed = _canDelete && action.Title == _armedTitle;
+                <div class="dzrow">
+                    <div>
+                        <div class="dt1">@action.Title</div>
+                        <div class="dd1">@action.Summary</div>
+                    </div>
+                    @if (!_canDelete)
+                    {
+                        <button type="button" class="dbtn @_ToneClass(action)" disabled title="Needs Data · Delete">@action.ButtonLabel…</button>
+                    }
+                    else if (!armed)
+                    {
+                        <button type="button" class="dbtn @_ToneClass(action)" disabled="@_busy" @onclick="() => _ArmAsync(action.Title)">@action.ButtonLabel…</button>
+                    }
+                </div>
+                @if (armed)
+                {
+                    <div class="confirm" role="group" aria-label="Confirm @action.Title.ToLowerInvariant()">
+                        <div class="q">@action.Question</div>
+                        <ul class="cons">
+                            @foreach (var consequence in action.Consequences)
+                            {
+                                <li class="@(consequence.Weight == ConsequenceWeight.Warning ? "w" : null)">@consequence.Text</li>
+                            }
+                        </ul>
+                        @if (action.Tier == ConfirmTier.TypeName)
+                        {
+                            <label class="typ">
+                                <span>Type <b>@action.NameToType</b> to confirm</span>
+                                <input type="text" autocomplete="off" spellcheck="false" placeholder="@action.NameToType"
+                                       @bind="_typed" @bind:event="oninput" />
+                            </label>
+                        }
+                        <div class="btns">
+                            <button type="button" class="gbtn" disabled="@_busy" @onclick="_Cancel">Cancel</button>
+                            <button type="button" class="dbtn go" disabled="@(_busy || !_Confirmed(action))" @onclick="() => _RunAsync(action)">@action.ConfirmLabel</button>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+        @if (_failure is not null)
+        {
+            <p class="dzfail" role="alert">@_failure</p>
+        }
+    </details>
+}
+
+@code {
+    /// <summary>Counts the record's consequences now. Called when the pane opens and again when an action is armed.</summary>
+    [Parameter] public Func<Task<IReadOnlyList<DestructiveAction>>>? Load { get; set; }
+
+    /// <summary>For a record that has no destructive actions on purpose: the block says so, with this reason.</summary>
+    [Parameter] public string? NoActionsReason { get; set; }
+
+    /// <summary>Raised after an action succeeded, so the page reloads what changed.</summary>
+    [Parameter] public EventCallback OnDone { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private IReadOnlyList<DestructiveAction> _actions = [];
+    private bool _canDelete;
+    private bool _expanded;
+    private bool _busy;
+    private string? _armedTitle;
+    private string _typed = string.Empty;
+    private string? _failure;
+
+    // The parent keys this component by record, so the actions load once per record rather than on every re-render.
+    protected override async Task OnInitializedAsync() => await _ReloadAsync();
+
+    protected override async Task OnParametersSetAsync() =>
+        _canDelete = (await _UserAsync()).HasPanelPermission(PanelPermissions.DataDelete);
+
+    private async Task _ReloadAsync()
+    {
+        if (Load is not null)
+            _actions = await Load();
+    }
+
+    private async Task<ClaimsPrincipal> _UserAsync() => AuthState is null ? new ClaimsPrincipal() : (await AuthState).User;
+
+    private async Task _ArmAsync(string title)
+    {
+        await _ReloadAsync();
+        _armedTitle = title;
+        _typed = string.Empty;
+        _failure = null;
+        _expanded = true;
+    }
+
+    private void _Cancel()
+    {
+        _armedTitle = null;
+        _typed = string.Empty;
+    }
+
+    // Ordinal on purpose: "metaliminal mining" or a trailing space is not the name, and accepting it would turn the
+    // typed confirm back into a click.
+    private bool _Confirmed(DestructiveAction action) =>
+        action.Tier == ConfirmTier.TwoStep || string.Equals(_typed, action.NameToType, StringComparison.Ordinal);
+
+    private async Task _RunAsync(DestructiveAction action)
+    {
+        if (_busy || !_Confirmed(action))
+            return;
+        _busy = true;
+        var result = await action.RunAsync(await _UserAsync());
+        _busy = false;
+        _Cancel();
+        if (!result.IsSuccess)
+        {
+            _failure = result.Messages.FirstOrDefault()?.Text ?? "The action failed; nothing was changed. See Logs.";
+            return;
+        }
+        await OnDone.InvokeAsync();
+        await _ReloadAsync();
+    }
+
+    private static string? _ToneClass(DestructiveAction action) => action.Tone == DestructiveTone.Recoverable ? "soft" : null;
+
+    private static readonly RenderFragment _WarnIcon =
+        @<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20L12 3zm-1 7h2v5h-2v-5zm0 7h2v2h-2v-2z" /></svg>;
+
+    private static readonly RenderFragment _LockIcon =
+        @<svg class="ic lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="1" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>;
+}
