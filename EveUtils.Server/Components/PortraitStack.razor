@@ -1,0 +1,22 @@
+@* A few overlapping portraits and the total, for "who is in this" at a glance; the names are in each tooltip. *@
+@if (CharacterIds.Count == 0)
+{
+    <span class="dim">none</span>
+}
+else
+{
+    <span class="stack">
+        @foreach (var id in CharacterIds.Take(Max))
+        {
+            <img class="ent-img round" src="https://images.evetech.net/characters/@id/portrait?size=64" width="22" height="22" loading="lazy"
+                 alt="" title="@(Names.GetValueOrDefault(id) ?? "Unknown character") · character id @id" onerror="this.style.visibility='hidden'" />
+        }
+        <span class="more">@CharacterIds.Count</span>
+    </span>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<int> CharacterIds { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyDictionary<long, string> Names { get; set; } = new Dictionary<long, string>();
+    [Parameter] public int Max { get; set; } = 3;
+}

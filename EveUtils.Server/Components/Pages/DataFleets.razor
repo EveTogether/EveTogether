@@ -1,0 +1,117 @@
+@page "/data/fleets"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = PanelPermissions.DataView)]
+@using EveUtils.Server.Components.DataList
+@using EveUtils.Server.Components.Fleets
+@using EveUtils.Server.DataExplorer
+@using EveUtils.Server.Esi
+@inject DataAdminService DataAdmin
+@inject EsiNameLookup NameLookup
+
+@if (_rows is null)
+{
+    <p class="dim loading">Loading fleets…</p>
+}
+else
+{
+    <DataList TRow="FleetListItem" Definition="_definition" Rows="_rows">
+        <Detail Context="item">
+            <FleetPane Item="item" Names="_names" Paired="_paired" OnChanged="_LoadAsync" />
+        </Detail>
+    </DataList>
+}
+
+@code {
+    private DataListDefinition<FleetListItem> _definition = null!;
+    private IReadOnlyList<FleetListItem>? _rows;
+    private IReadOnlyDictionary<long, string> _names = new Dictionary<long, string>();
+    private IReadOnlySet<int> _paired = new HashSet<int>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _definition = _Definition();
+        await _LoadAsync();
+    }
+
+    private async Task _LoadAsync()
+    {
+        var fleets = await DataAdmin.ListFleetItemsAsync();
+        var synced = await DataAdmin.ListSyncedCharactersAsync();
+        var names = synced.ToDictionary(c => (long)c.EsiCharacterId, c => c.CharacterName);
+        var unpaired = fleets
+            .SelectMany(f => f.MemberCharacterIds.Append(f.Fleet.CreatorCharacterId))
+            .Select(id => (long)id)
+            .Where(id => !names.ContainsKey(id));
+        foreach (var (id, name) in await NameLookup.ResolveAsync(unpaired))
+            names[id] = name;
+
+        _names = names;
+        _paired = synced.Select(c => c.EsiCharacterId).ToHashSet();
+        _rows = fleets;
+    }
+
+    private string? _NameOf(int characterId) => _names.GetValueOrDefault(characterId);
+
+    private string? _CharacterHref(int characterId) => _paired.Contains(characterId) ? DataLinks.Character(characterId) : null;
+
+    private DataListDefinition<FleetListItem> _Definition() => new()
+    {
+        Title = "Fleets",
+        Kind = "Fleet",
+        KeyOf = f => f.Fleet.Id.ToString(),
+        DefaultGrouping = "status",
+        DefaultSort = "-last",
+        EmptyText = "No fleets on this server.",
+        SearchTextOf = f => $"{f.Fleet.Name} {f.Fleet.Id} {f.Fleet.CreatorCharacterId} {_NameOf(f.Fleet.CreatorCharacterId)} {f.CompositionName}",
+        Filters =
+        [
+            new() { Key = "all", Label = "All", Matches = _ => true },
+            new() { Key = "inop", Label = "In op", Matches = f => f.Status == FleetPanelStatus.InOp },
+            new() { Key = "forming", Label = "Forming", Matches = f => f.Status == FleetPanelStatus.Forming },
+            new() { Key = "concluded", Label = "Concluded", Matches = f => f.Status == FleetPanelStatus.Concluded },
+            new() { Key = "archived", Label = "Archived", Matches = f => f.Status == FleetPanelStatus.Archived },
+        ],
+        Groupings =
+        [
+            new() { Key = "status", Label = "Status", GroupOf = f => FleetStatusPill.Label(f.Status), Rank = f => (int)f.Status },
+            new() { Key = "owner", Label = "Owner", GroupOf = f => _NameOf(f.Fleet.CreatorCharacterId) ?? $"Character {f.Fleet.CreatorCharacterId}" },
+            new() { Key = "none", Label = "None" },
+        ],
+        Columns =
+        [
+            new()
+            {
+                Key = "name", Label = "Fleet", SortBy = f => f.Fleet.Name,
+                Cell = f => @<span class="cellstack"><span class="nm1">@f.Fleet.Name</span><span class="dim">@(f.Fleet.Description ?? f.Fleet.Motd ?? "—")</span></span>,
+            },
+            new()
+            {
+                Key = "owner", Label = "Owner", SortBy = f => _NameOf(f.Fleet.CreatorCharacterId),
+                Cell = f => @<CharacterCell Id="f.Fleet.CreatorCharacterId" Name="@_NameOf(f.Fleet.CreatorCharacterId)" Href="@_CharacterHref(f.Fleet.CreatorCharacterId)" ShowId="false" />,
+            },
+            new()
+            {
+                Key = "members", Label = "Members", SortBy = f => f.MemberCharacterIds.Count, SortDescendingFirst = true,
+                Cell = f => @<PortraitStack CharacterIds="f.MemberCharacterIds" Names="_names" />,
+            },
+            new()
+            {
+                Key = "composition", Label = "Composition", SortBy = f => f.CompositionName,
+                Cell = f => @<FleetCompositionCell Item="f" />,
+            },
+            new()
+            {
+                Key = "status", Label = "Status", SortBy = f => (int)f.Status,
+                Cell = f => @<FleetStatusPill Status="f.Status" />,
+            },
+            new()
+            {
+                Key = "last", Label = "Last activity", SortBy = f => f.Fleet.LastActivityAt, SortDescendingFirst = true,
+                Cell = f => @<span><RelativeTime At="f.Fleet.LastActivityAt" />@if (f.IsStale(DateTimeOffset.UtcNow))
+                    {
+                        <span class="warn stale-flag" title="Not archived, but silent for more than @FleetListItem.StaleAfter.TotalDays days"> ⚠ stale</span>
+                    }</span>,
+            },
+        ],
+    };
+}

@@ -1,0 +1,54 @@
+@using EveUtils.Server.DataExplorer
+@implements IDisposable
+@inject DataAdminService DataAdmin
+@inject NavigationManager Navigation
+@* The sidebar's Data section: one entry per entity, with its count and — where something needs an admin — a ⚠ count
+   that the folded icon rail keeps as a badge. Recounted on every navigation, so a delete shows up on the next click. *@
+
+<div class="seclbl">Data</div>
+@if (_counts is { } counts)
+{
+    @_Entry(DataLinks.RecordsPath + "#characters", "characters", "Characters", counts.Characters, 0)
+    <NavLink href="@DataLinks.FleetsPath" ActiveClass="active" title="Fleets">
+        <NavIcon Name="fleets" /><span class="t">Fleets</span>@_Count(counts.Fleets, counts.FleetsNeedingAttention)
+    </NavLink>
+    @_Entry(DataLinks.RecordsPath + "#compositions", "compositions", "Compositions", counts.Compositions, 0)
+    @_Entry(DataLinks.RecordsPath + "#fits", "fits", "Shared fits", counts.SharedFits, 0)
+    @_Entry(DataLinks.RecordsPath + "#sessions", "sessions", "Sessions", counts.Sessions, 0)
+}
+
+@code {
+    private DataCounts? _counts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += _OnLocationChanged;
+        _counts = await DataAdmin.CountAsync();
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= _OnLocationChanged;
+
+    private void _OnLocationChanged(object? sender, LocationChangedEventArgs e) => InvokeAsync(async () =>
+    {
+        _counts = await DataAdmin.CountAsync();
+        StateHasChanged();
+    });
+
+    private RenderFragment _Entry(string href, string icon, string label, int count, int attention) => __builder =>
+    {
+        <a href="@href" title="@label"><NavIcon Name="@icon" /><span class="t">@label</span>@_Count(count, attention)</a>
+    };
+
+    private static RenderFragment _Count(int count, int attention) => __builder =>
+    {
+        if (attention > 0)
+        {
+            <span class="n alert" title="@attention need attention">⚠ @attention · @count</span>
+            <span class="nb" title="@attention need attention">@attention</span>
+        }
+        else
+        {
+            <span class="n">@count</span>
+        }
+    };
+}

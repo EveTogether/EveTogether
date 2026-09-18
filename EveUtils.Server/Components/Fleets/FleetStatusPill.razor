@@ -1,0 +1,21 @@
+@using EveUtils.Server.DataExplorer
+<span class="pill @Class">@Label(Status)</span>
+
+@code {
+    [Parameter, EditorRequired] public FleetPanelStatus Status { get; set; }
+
+    public static string Label(FleetPanelStatus status) => status switch
+    {
+        FleetPanelStatus.InOp => "In op",
+        FleetPanelStatus.Forming => "Forming",
+        FleetPanelStatus.Concluded => "Concluded",
+        _ => "Archived",
+    };
+
+    private string Class => Status switch
+    {
+        FleetPanelStatus.InOp => "live",
+        FleetPanelStatus.Forming => "idle",
+        _ => "off",
+    };
+}

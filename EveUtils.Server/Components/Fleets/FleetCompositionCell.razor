@@ -1,0 +1,17 @@
+@using EveUtils.Server.DataExplorer
+@if (Item.Fleet.FleetCompositionId is not { } compositionId)
+{
+    <span class="dim">none</span>
+}
+else if (Item.CompositionName is { } name)
+{
+    <RecordLink Href="@DataLinks.Composition(compositionId)">@name</RecordLink>
+}
+else
+{
+    <span class="warn" title="FleetCompositionId @compositionId has no composition. There is no foreign key, so deleting the composition left the fleet pointing at it.">⚠ #@compositionId missing</span>
+}
+
+@code {
+    [Parameter, EditorRequired] public FleetListItem Item { get; set; } = null!;
+}

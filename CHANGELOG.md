@@ -13,6 +13,14 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Changed (server panel): fleets get their own list, with everything a fleet relates to beside it.** Data is now
+  a section in the sidebar, and Fleets opens grouped by status (in op, forming, concluded, archived), newest
+  activity first, with a count on each status button, sortable columns and a filter that also matches ids. Click a
+  fleet to see its owner, composition coverage per role and its roster by wing and squad in a pane beside the list;
+  the owner, members, composition and fits in it are links to their own records. The address holds the whole view,
+  so a copied link opens exactly what you were looking at. ↑/↓ step through the fleets and Esc closes the pane.
+  Below 1000 px the sidebar folds to icons and the pane becomes a drawer. Paired characters on the Data page now show
+  how many fleets, shared fits and sessions each one has.
 - **Fixed: an escalation on the runs list now shows the site it leads to, not four raw internal names.** An
   escalated activity used to carry ESCALATIONDUNGEONID, ESCALATIONSYSTEM, ESCALATIONSOLARSYSTEMID and
   ESCALATIONEXPIRESATUTC as their own chips alongside a bare "ESCALATION". It is now one chip, "→ <the site's own

@@ -1,0 +1,319 @@
+@using EveUtils.Server.DataExplorer
+@using EveUtils.Shared.Modules.Fleet.Entities
+@inject DataAdminService DataAdmin
+@* The opened fleet with everything it relates to. Every related record that has a place of its own is a link to it. *@
+
+<div class="dhead">
+    <div class="dtitle">
+        <div class="ti">@Fleet.Name</div>
+        <div class="st">
+            <FleetStatusPill Status="Item.Status" />
+            <span>@(Fleet.Visibility == FleetVisibility.Public ? "Public" : "Invite-only")</span>
+            <span class="dim">·</span>
+            <span>ESI @(Fleet.EsiSyncState == EsiFleetSyncState.Linked ? "linked" : "not linked")</span>
+            <code class="idchip" title="Fleet id">#@Fleet.Id</code>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Fleet.Motd))
+{
+    <div class="motd"><span class="lbl">MOTD</span> @Fleet.Motd</div>
+}
+@if (!string.IsNullOrWhiteSpace(Fleet.Description))
+{
+    <p class="desc">@Fleet.Description</p>
+}
+
+<dl class="facts">
+    <dt>Owner</dt>
+    <dd>
+        <CharacterCell Id="Fleet.CreatorCharacterId" Name="@_NameOf(Fleet.CreatorCharacterId)" Href="@_CharacterHref(Fleet.CreatorCharacterId)" />
+        @if (!Paired.Contains(Fleet.CreatorCharacterId))
+        {
+            <span class="warn" title="Character @Fleet.CreatorCharacterId is not paired on this server; the name comes from a public ESI lookup.">⚠ not paired</span>
+        }
+    </dd>
+    <dt>Created</dt>
+    <dd>@_Utc(Fleet.CreatedAt) <span class="dim">UTC · <RelativeTime At="Fleet.CreatedAt" /></span></dd>
+    <dt>Started</dt>
+    <dd>@if (Fleet.ActivatedAt is { } activated)
+        {
+            @_Utc(activated) <span class="dim">UTC</span>
+        }
+        else
+        {
+            <span class="dim">not yet</span>
+        }</dd>
+    <dt>Last activity</dt>
+    <dd><RelativeTime At="Fleet.LastActivityAt" /> <span class="dim">@_Utc(Fleet.LastActivityAt) UTC</span></dd>
+    @if (Fleet.FromTime is not null || Fleet.ToTime is not null)
+    {
+        <dt>Planned</dt>
+        <dd>@(Fleet.FromTime is { } from ? _Utc(from) : "…") – @(Fleet.ToTime is { } to ? _Utc(to) : "…") <span class="dim">UTC</span></dd>
+    }
+    <dt>Offline</dt>
+    <dd>@(Fleet.OfflineBehavior == FleetOfflineBehavior.AutoLeave ? "Leaves the roster when offline" : "Stays on the roster when offline")</dd>
+</dl>
+
+@if (_detail is null)
+{
+    <p class="dim">Loading roster…</p>
+}
+else
+{
+    <section class="dsec">
+        <div class="sh">
+            Composition coverage
+            @if (_detail.Composition is { } composition)
+            {
+                <span class="more"><RecordLink Href="@DataLinks.Composition(composition.Id)">@composition.Name</RecordLink></span>
+            }
+        </div>
+        @if (_detail.Composition is null && Fleet.FleetCompositionId is { } missingId)
+        {
+            <p class="warn">⚠ Composition #@missingId does not exist. The fleet keeps working, but its coverage cannot be shown.</p>
+        }
+        else if (_detail.Composition is null)
+        {
+            <p class="dim">No composition is coupled to this fleet.</p>
+        }
+        else if (_detail.Coverage.Count == 0)
+        {
+            <p class="dim">The composition has no roles yet.</p>
+        }
+        else
+        {
+            <div class="cov">
+                @foreach (var role in _detail.Coverage)
+                {
+                    <span class="rl">@role.RoleName</span>
+                    <span class="num">
+                        @if (role.Target is { } target)
+                        {
+                            <span class="bar @(role.IsMet ? "full" : "low")"><i style="width:@_Percent(role.Assigned, target)%"></i></span>
+                            @($"{role.Assigned} / {target}")
+                        }
+                        else
+                        {
+                            @($"{role.Assigned} assigned") <span class="dim">· no minimum</span>
+                        }
+                    </span>
+                    <span class="fits">
+                        @foreach (var entry in role.Entries)
+                        {
+                            <span class="fitchip" title="@entry.Assigned assigned@(entry.Minimum is { } min ? $" · at least {min}" : "")">
+                                @if (entry.ServerSharedFitId is { } fitId && _detail.ExistingSharedFitIds.Contains(fitId))
+                                {
+                                    <RecordLink Href="@DataLinks.SharedFit(fitId)"><ShipCell TypeId="entry.ShipTypeId" Caption="@entry.FitName" ShowId="false" /></RecordLink>
+                                }
+                                else
+                                {
+                                    <ShipCell TypeId="entry.ShipTypeId" Caption="@entry.FitName" ShowId="false" />
+                                }
+                                <span class="cnt">@(entry.Minimum is { } minimum ? $"{entry.Assigned}/{minimum}" : entry.Assigned.ToString())</span>
+                            </span>
+                        }
+                    </span>
+                }
+            </div>
+        }
+    </section>
+
+    <section class="dsec">
+        <div class="sh">Roster <span class="n">@_detail.Members.Count</span></div>
+        @if (_detail.Members.Count == 0)
+        {
+            <p class="dim">Nobody is on the roster.</p>
+        }
+        @foreach (var (title, members) in _RosterGroups())
+        {
+            <div class="wing">@title <span class="n">@members.Count</span></div>
+            <table class="mini">
+                <tbody>
+                    @foreach (var member in members)
+                    {
+                        <tr>
+                            <td>
+                                <CharacterCell Id="member.CharacterId" Name="@_NameOf(member.CharacterId)" Href="@_CharacterHref(member.CharacterId)" ShowId="false" />
+                                @if (member.IsExternal)
+                                {
+                                    <span class="mark dim" title="Added by the owner on trust; has no client on this server">external</span>
+                                }
+                                else if (!Paired.Contains(member.CharacterId))
+                                {
+                                    <span class="mark warn" title="Character @member.CharacterId is not paired on this server">⚠ not paired</span>
+                                }
+                            </td>
+                            <td>@_Ship(member)</td>
+                            <td><span class="dim">@_RoleLabel(member.Role)</span><span class="flag">@_MemberFlag(member)</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+}
+
+<AuthorizeView Policy="@PanelPermissions.DataDelete" Context="delete">
+    <section class="dsec actions">
+        <div class="sh">Actions</div>
+        @if (_message is not null)
+        {
+            <p class="warn">@_message</p>
+        }
+        @if (_armed is { } armed)
+        {
+            <div class="confirmbar">
+                <span>@(armed == FleetAction.Disband ? $"Disband fleet '{Fleet.Name}' (soft-delete → Archived)?" : $"Purge fleet '{Fleet.Name}' permanently?")</span>
+                <button class="danger" @onclick="_ConfirmAsync">Confirm</button>
+                <button @onclick="() => _armed = null">Cancel</button>
+            </div>
+        }
+        else
+        {
+            <div class="btnrow">
+                @if (Item.Status != FleetPanelStatus.Archived)
+                {
+                    <button @onclick="() => _armed = FleetAction.Disband">Disband</button>
+                }
+                <button class="danger" @onclick="() => _armed = FleetAction.Purge">Purge now</button>
+            </div>
+        }
+    </section>
+</AuthorizeView>
+
+@code {
+    [Parameter, EditorRequired] public FleetListItem Item { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyDictionary<long, string> Names { get; set; } = new Dictionary<long, string>();
+    [Parameter, EditorRequired] public IReadOnlySet<int> Paired { get; set; } = new HashSet<int>();
+
+    /// <summary>Raised after a disband or purge, so the list reloads what changed.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private enum FleetAction { Disband, Purge }
+
+    private FleetDetail? _detail;
+    private long _loadedFleetId;
+    private FleetAction? _armed;
+    private string? _message;
+
+    private Fleet Fleet => Item.Fleet;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFleetId == Fleet.Id && _detail is not null)
+            return;
+        _loadedFleetId = Fleet.Id;
+        _detail = null;
+        _armed = null;
+        _message = null;
+        _detail = await DataAdmin.GetFleetDetailAsync(Fleet.Id);
+    }
+
+    private async Task _ConfirmAsync()
+    {
+        if (_armed is not { } action)
+            return;
+        if (action == FleetAction.Disband && !await DataAdmin.DisbandFleetAsync(Fleet.Id))
+        {
+            _message = "Disband failed; the fleet is unchanged. See Logs.";
+            _armed = null;
+            return;
+        }
+        if (action == FleetAction.Purge)
+            await DataAdmin.PurgeFleetAsync(Fleet.Id);
+
+        _armed = null;
+        _detail = null;
+        await OnChanged.InvokeAsync();
+    }
+
+    private string? _NameOf(int characterId) => Names.GetValueOrDefault(characterId);
+
+    private string? _CharacterHref(int characterId) => Paired.Contains(characterId) ? DataLinks.Character(characterId) : null;
+
+    private static string _Utc(DateTimeOffset at) => at.UtcDateTime.ToString("yyyy-MM-dd HH:mm");
+
+    private static int _Percent(int assigned, int target) => target <= 0 ? 100 : Math.Min(100, assigned * 100 / target);
+
+    /// <summary>Fleet command first, then each wing's command and squads in structure order, then whoever holds no
+    /// position — the same order the in-game fleet window uses.</summary>
+    private IEnumerable<(string Title, List<FleetMember> Members)> _RosterGroups()
+    {
+        if (_detail is null)
+            yield break;
+        var members = _detail.Members.OrderBy(m => m.Role).ThenBy(m => _NameOf(m.CharacterId)).ToList();
+        var placed = new HashSet<long>();
+
+        List<FleetMember> Take(Func<FleetMember, bool> where)
+        {
+            var taken = members.Where(m => !placed.Contains(m.Id) && where(m)).ToList();
+            placed.UnionWith(taken.Select(m => m.Id));
+            return taken;
+        }
+
+        var command = Take(m => m.Role == FleetRole.FleetCommander);
+        if (command.Count > 0)
+            yield return ("Fleet command", command);
+
+        foreach (var wing in _detail.Wings)
+        {
+            var wingCommand = Take(m => m.WingId == wing.Id && m.SquadId == -1 && m.Role != FleetRole.Unassigned);
+            if (wingCommand.Count > 0)
+                yield return ($"{wing.Name} · command", wingCommand);
+            foreach (var squad in _detail.Squads.Where(s => s.WingId == wing.Id))
+            {
+                var squadMembers = Take(m => m.SquadId == squad.Id && m.Role != FleetRole.Unassigned);
+                if (squadMembers.Count > 0)
+                    yield return ($"{wing.Name} · {squad.Name}", squadMembers);
+            }
+        }
+
+        var rest = Take(_ => true);
+        if (rest.Count > 0)
+            yield return ("No position", rest);
+    }
+
+    private RenderFragment _Ship(FleetMember member) => __builder =>
+    {
+        var typeId = member.ShipTypeId ?? member.AssignedFit?.ShipTypeId;
+        if (typeId is not { } shipTypeId)
+        {
+            <span class="dim" title="The member has no ship reported and no fit assigned">no ship</span>
+            return;
+        }
+        var fit = member.AssignedFit;
+        if (fit?.ServerSharedFitId is { } fitId && _detail?.ExistingSharedFitIds.Contains(fitId) == true)
+        {
+            <RecordLink Href="@DataLinks.SharedFit(fitId)"><ShipCell TypeId="shipTypeId" Caption="@fit.FitName" ShowId="false" /></RecordLink>
+            return;
+        }
+        <ShipCell TypeId="shipTypeId" Caption="@fit?.FitName" ShowId="false" />
+    };
+
+    private RenderFragment _MemberFlag(FleetMember member) => __builder =>
+    {
+        if (member.FitSkillVerdict == FitSkillVerdict.MissingSkills)
+        {
+            <span class="warn" title="The pilot's own client reports missing skills for the assigned fit">⚠ skills</span>
+        }
+        else if (member.Availability == FleetMemberAvailability.SignedOff)
+        {
+            <span class="dim" title="@(member.AvailabilityNote ?? "Signed off for the next start")">signed off</span>
+        }
+        else if (member.FitSkillVerdict == FitSkillVerdict.CanFly)
+        {
+            <span class="ok" title="The pilot's own client reports they can fly the assigned fit">can fly</span>
+        }
+    };
+
+    private static string _RoleLabel(FleetRole role) => role switch
+    {
+        FleetRole.FleetCommander => "Fleet commander",
+        FleetRole.WingCommander => "Wing commander",
+        FleetRole.SquadCommander => "Squad commander",
+        FleetRole.SquadMember => "Member",
+        _ => "No position",
+    };
+}
