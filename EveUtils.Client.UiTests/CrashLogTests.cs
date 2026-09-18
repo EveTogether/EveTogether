@@ -101,6 +101,21 @@ public class CrashLogTests
         while (!faulting.IsCompleted) Thread.Sleep(10);
     }
 
+    /// <summary>ET-308: the gRPC retry's abandoned connection failure is a network outage, not a crash — but only that
+    /// exact shape; any other status or exception type is still written as Critical.</summary>
+    [Fact]
+    public void AnAbandonedGrpcRetryFailure_IsAnOutage_AnythingElseIsStillACrash()
+    {
+        var unavailable = new global::Grpc.Core.RpcException(new global::Grpc.Core.Status(global::Grpc.Core.StatusCode.Unavailable,
+            "Error connecting to subchannel.", new System.Net.Sockets.SocketException(11001)));
+        var internalError = new global::Grpc.Core.RpcException(new global::Grpc.Core.Status(global::Grpc.Core.StatusCode.Internal, "boom"));
+
+        Assert.True(CrashLog.IsAbandonedGrpcRetry(new AggregateException(unavailable)));
+        Assert.False(CrashLog.IsAbandonedGrpcRetry(new AggregateException(internalError)));
+        Assert.False(CrashLog.IsAbandonedGrpcRetry(new AggregateException(unavailable, new InvalidOperationException())));
+        Assert.False(CrashLog.IsAbandonedGrpcRetry(new AggregateException()));
+    }
+
     private static bool FileContains(string dir, string text)
     {
         var path = Path.Combine(dir, "app-errors.jsonl");
