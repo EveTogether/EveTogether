@@ -55,6 +55,9 @@ public sealed class DialogService : IDialogService, ISingletonService
         remove => _moduleHost.ModuleClosed -= value;
     }
 
+    /// <inheritdoc/>
+    public event Action<ActivityWindowViewModel?>? ActivityWindowChanged;
+
     /// <summary>Wires the docked module host (the main view-model): the tab sink for hosted modules.</summary>
     public void SetHost(IModuleHostDisplay host) => _moduleHost.SetHost(host);
 
@@ -205,8 +208,13 @@ public sealed class DialogService : IDialogService, ISingletonService
     private ActivityWindow _Open(ActivityWindowViewModel viewModel, bool showActivated)
     {
         var window = new ActivityWindow(viewModel) { ShowActivated = showActivated };
-        window.Closed += (_, _) => _activityWindow = null;
+        window.Closed += (_, _) =>
+        {
+            _activityWindow = null;
+            ActivityWindowChanged?.Invoke(null);
+        };
         window.Show();
+        ActivityWindowChanged?.Invoke(viewModel);
         return window;
     }
 

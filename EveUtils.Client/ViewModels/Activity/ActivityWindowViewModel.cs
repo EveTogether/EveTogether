@@ -2624,6 +2624,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         ? "Stops and saves this run right now. Loot copied a moment after this click will not be recorded — add it by hand on the saved activity if it lands late."
         : null;
 
+    /// <summary>The one route every SaveRun shortcut takes — the SAVE button's own <see cref="SaveRunCommand"/>,
+    /// guarded exactly as the button itself is (ET-319, widened by ET-320 to the system-wide shortcut): a run that
+    /// cannot be saved right now, or a save already in flight, is a silent no-op rather than a second, overlapping
+    /// <see cref="SaveRunAsync"/>.</summary>
+    public void SaveRunFromShortcut()
+    {
+        if (IsSaveButtonVisible && !IsSaving)
+            SaveRunCommand.Execute(null);
+    }
+
     private RunSaveDraft _SaveDraftFor(Guid runId, int? characterId, bool isActingRun)
     {
         var draft = new RunSaveDraft(runId, characterId, isActingRun);

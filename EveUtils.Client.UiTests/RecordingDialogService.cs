@@ -251,7 +251,15 @@ public sealed class RecordingDialogService : IDialogService
     {
         ShownActivityWindows.Add(viewModel);
         ShownActivityWindowTriggers.Add(trigger);
+        ActivityWindowChanged?.Invoke(viewModel);
     }
+
+    /// <inheritdoc/>
+    public event Action<ActivityWindowViewModel?>? ActivityWindowChanged;
+
+    /// <summary>Stands in for the real window's Closed handler, since nothing here opens one — a test drives the
+    /// "the run window went away" half of <see cref="ActivityWindowChanged"/> with this.</summary>
+    public void CloseActivityWindow() => ActivityWindowChanged?.Invoke(null);
     public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, EveUtils.Client.Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, EveUtils.Client.Notifications.ToastPosition toastPosition = EveUtils.Client.Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = EveUtils.Client.LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", EveUtils.Client.LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, EveUtils.Client.Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday) => throw NotUsed();
 
     /// <summary>

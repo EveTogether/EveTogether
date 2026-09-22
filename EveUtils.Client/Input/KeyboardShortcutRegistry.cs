@@ -95,6 +95,11 @@ public sealed class KeyboardShortcutRegistry : ISingletonService
     /// <summary>Resolves a key press to the action it fires, if any.</summary>
     public bool TryResolve(KeyGesture pressed, out ShortcutAction action) => _reverseLookup.TryGetValue(pressed, out action);
 
+    /// <summary>Raised whenever an action's effective gesture(s) change — recorded, disabled or reset back to
+    /// default. A global claim on one action's gesture (ET-320) has to move with a rebind rather than keep holding
+    /// the combination the pilot just gave up.</summary>
+    public event Action<ShortcutAction>? Changed;
+
     /// <summary>The other action already bound to <paramref name="gesture"/>, if any — used to refuse a silent
     /// double assignment rather than let two actions answer to the same key (ET-209 acceptance 5).</summary>
     public ShortcutAction? FindConflict(KeyGesture gesture, ShortcutAction excluding) =>
@@ -136,6 +141,7 @@ public sealed class KeyboardShortcutRegistry : ISingletonService
         }
 
         RebuildReverseLookup();
+        Changed?.Invoke(action);
         return Result.Success();
     }
 
@@ -148,6 +154,7 @@ public sealed class KeyboardShortcutRegistry : ISingletonService
         await scope.ServiceProvider.GetRequiredService<IDispatcher>().Send(new DeleteSettingCommand(KeyFor(action)), cancellationToken);
         _overrides.Remove(action);
         RebuildReverseLookup();
+        Changed?.Invoke(action);
     }
 
     public async Task ResetAllToDefaultAsync(CancellationToken cancellationToken = default)

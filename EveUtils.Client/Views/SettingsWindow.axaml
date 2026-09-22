@@ -260,6 +260,21 @@
                     <TextBlock x:Name="ShortcutMessageBlock" FontSize="10" TextWrapping="Wrap"
                                Foreground="{DynamicResource RedBrush}" IsVisible="False"/>
                     <Button Content="Reset all to defaults" Click="OnResetAllShortcuts" HorizontalAlignment="Left"/>
+
+                    <!-- ET-320: "Save the current run" alone can also work without focus, so pasting a site's
+                         signature and pressing the key saves it with EVE Online still in front. -->
+                    <StackPanel Spacing="3" Margin="0,10,0,0">
+                        <TextBlock Text="GLOBAL SHORTCUT" Classes="label" FontSize="9"/>
+                        <CheckBox x:Name="GlobalSaveRunBox" Content="&quot;Save the current run&quot; also works while EVE Together isn't focused"
+                                  Click="OnToggleGlobalSaveRun"/>
+                        <TextBlock x:Name="GlobalSaveRunUnsupportedBlock" IsVisible="False" FontSize="10" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextAccentBrush}"
+                                   Text="Windows only. Elsewhere the shortcut still works, but only while the run window itself has focus."/>
+                        <TextBlock FontSize="10" Opacity="0.6" TextWrapping="Wrap"
+                                   Text="On by default. The combination is only claimed system-wide while a run is actually open and can be saved, and released the moment it isn't — the rest of the time it is free for whatever else on your system uses it."/>
+                        <TextBlock x:Name="GlobalSaveRunMessageBlock" FontSize="10" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource RedBrush}" IsVisible="False"/>
+                    </StackPanel>
                 </StackPanel>
 
             </Panel>

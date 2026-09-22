@@ -17,6 +17,11 @@ taken from the matching `## vX.Y.Z` section below.
   does, and does nothing if SAVE isn't available right now (no run going, or a save already in progress) — no
   error, no popup. Shows up in Settings under Keyboard shortcuts like every other shortcut, where it can be
   rebound.
+- **Added: Ctrl+Shift+S now also saves the run without EVE Together being focused (Windows).** So a signature
+  pasted straight from the game can be saved without switching windows first. It only holds the combination while
+  a run is actually open and savable, and lets go the rest of the time, so it never takes it away from anything
+  else unless it's needed. A toggle in Settings under Keyboard shortcuts turns this off (on by default); if another
+  program already holds the combination, Settings says so and the shortcut still works with the window focused.
 - **Changed (server panel): every kind of data now has its own list, and the records link to each other.** The one
   long Data page is gone. Characters, Compositions, Shared fits, Runs and Sessions each get a list like Fleets
   already had, opened grouped the way you usually look for things: characters by corporation, shared fits by who

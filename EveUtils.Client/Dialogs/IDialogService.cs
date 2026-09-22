@@ -167,6 +167,13 @@ public interface IDialogService
     void ShowActivityWindow(ActivityWindowViewModel viewModel,
         RunWindowOpenTrigger trigger = RunWindowOpenTrigger.LocalUser);
 
+    /// <summary>Raised with the activity window's view model the moment it opens, and with null the moment it
+    /// closes — never twice for the same window opening (the window keeps the one view model it was built with for
+    /// its whole life; a copied signature arriving while it is already up updates that same instance in place
+    /// rather than swapping it out). Lets a listener that only cares about "is there a run to save right now"
+    /// (ET-320's global shortcut) follow the window without reaching for the <c>Window</c> type itself.</summary>
+    event Action<ActivityWindowViewModel?>? ActivityWindowChanged;
+
     /// <summary>Whether the activity window is up right now, so a caller can tell there is nothing left to offer —
     /// the same "leave it alone" answer <see cref="RunWindowPresentation"/> gives once one is open.</summary>
     bool IsActivityWindowOpen { get; }
