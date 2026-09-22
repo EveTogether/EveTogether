@@ -60,6 +60,8 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private StackPanel _generalPanel = null!, _interfacePanel = null!, _privacyPanel = null!, _integrationsPanel = null!;
     private StackPanel _keyboardShortcutsPanel = null!, _shortcutRowsPanel = null!;
     private TextBlock _shortcutMessageBlock = null!;
+    private CheckBox _globalSaveRunBox = null!;
+    private TextBlock _globalSaveRunUnsupportedBlock = null!, _globalSaveRunMessageBlock = null!;
 
     // Keyboard shortcuts (ET-209): each row persists itself the moment it changes, independent of this window's own
     // Save/Cancel — conflicts have to be visible immediately, not deferred to a batch Save the user might cancel.
@@ -67,6 +69,10 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private readonly Dictionary<ShortcutAction, Button> _shortcutGestureButtons = new();
     private readonly Dictionary<ShortcutAction, Button> _shortcutResetButtons = new();
     private ShortcutAction? _recordingAction;
+
+    // Same immediate-persist convention as the rows above (ET-320): a claim already held by another program has
+    // to be visible right away, not after a Save the pilot might still cancel.
+    private GlobalSaveRunHotKeyService? _globalSaveRunHotKey;
 
     /// <summary>Set by the module host so Save/Cancel dismiss the docked tab; null when floating (then we Close()).</summary>
     public Action? CloseRequested { get; set; }
@@ -130,7 +136,11 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _keyboardShortcutsPanel = this.FindControl<StackPanel>("KeyboardShortcutsPanel")!;
         _shortcutRowsPanel = this.FindControl<StackPanel>("ShortcutRowsPanel")!;
         _shortcutMessageBlock = this.FindControl<TextBlock>("ShortcutMessageBlock")!;
+        _globalSaveRunBox = this.FindControl<CheckBox>("GlobalSaveRunBox")!;
+        _globalSaveRunUnsupportedBlock = this.FindControl<TextBlock>("GlobalSaveRunUnsupportedBlock")!;
+        _globalSaveRunMessageBlock = this.FindControl<TextBlock>("GlobalSaveRunMessageBlock")!;
         BuildShortcutRows();
+        SetUpGlobalSaveRunToggle();
 
         _gamelogDirBox.Text = string.IsNullOrWhiteSpace(currentDirectory) ? detectedDefault : currentDirectory;
         _gamelogDirBox.TextChanged += (_, _) => UpdateHint();
@@ -457,6 +467,41 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     {
         _shortcutMessageBlock.Text = message ?? "";
         _shortcutMessageBlock.IsVisible = !string.IsNullOrEmpty(message);
+    }
+
+    // ET-320: mirrors ApplyClipboardDisclosure's shape — a live service reflected here, not something this
+    // window's own Save/Cancel decides.
+    private void SetUpGlobalSaveRunToggle()
+    {
+        _globalSaveRunHotKey = Program.Services?.GetService<GlobalSaveRunHotKeyService>();
+        if (_globalSaveRunHotKey is not null)
+        {
+            _globalSaveRunHotKey.StateChanged += OnGlobalSaveRunStateChanged;
+            Closed += (_, _) => _globalSaveRunHotKey.StateChanged -= OnGlobalSaveRunStateChanged;
+        }
+
+        ApplyGlobalSaveRunDisclosure();
+    }
+
+    private void OnGlobalSaveRunStateChanged() => Dispatcher.UIThread.Post(ApplyGlobalSaveRunDisclosure);
+
+    private void ApplyGlobalSaveRunDisclosure()
+    {
+        var supported = _globalSaveRunHotKey?.IsSupported ?? false;
+        _globalSaveRunBox.IsChecked = _globalSaveRunHotKey?.IsEnabled ?? true;
+        _globalSaveRunBox.IsEnabled = supported;
+        _globalSaveRunUnsupportedBlock.IsVisible = _globalSaveRunHotKey is not null && !supported;
+
+        var failure = _globalSaveRunHotKey?.LastFailure;
+        _globalSaveRunMessageBlock.Text = failure ?? "";
+        _globalSaveRunMessageBlock.IsVisible = !string.IsNullOrEmpty(failure);
+    }
+
+    private async void OnToggleGlobalSaveRun(object? sender, RoutedEventArgs e)
+    {
+        if (_globalSaveRunHotKey is null) return;
+        await _globalSaveRunHotKey.SetEnabledAsync(_globalSaveRunBox.IsChecked ?? false);
+        ApplyGlobalSaveRunDisclosure();
     }
 
     private SettingsResult BuildResult(bool reimportSde)

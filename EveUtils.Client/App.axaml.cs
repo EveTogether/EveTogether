@@ -47,6 +47,12 @@ public partial class App : Application
             // key press.
             _ = Program.Services.GetRequiredService<Input.KeyboardShortcutRegistry>().InitializeAsync();
 
+            // Global save-run shortcut (ET-320): reads the opt-in, then arms/disarms itself around the run
+            // window's own lifecycle — nothing to start eagerly here beyond that read.
+            var globalSaveRunHotKey = Program.Services.GetRequiredService<Input.GlobalSaveRunHotKeyService>();
+            _ = globalSaveRunHotKey.InitializeAsync();
+            desktop.Exit += (_, _) => globalSaveRunHotKey.Dispose();
+
             // Global safety net: surface unhandled UI-thread errors as a message box instead of crashing.
             InstallGlobalErrorHandler();
 

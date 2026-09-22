@@ -97,9 +97,9 @@ public partial class ActivityWindow : OverlayWindow
     private void OnHeaderPressed(object? sender, PointerPressedEventArgs e) => BeginHeaderDrag(e);
 
     // ET-319: Ctrl+Shift+S saves the running run, the exact route the SAVE button's own Command already takes — not
-    // a second save path. Guarded the same way the button is (IsSaveButtonVisible + !IsSaving) so a run that can't
-    // be saved right now, or a second press while one is already in flight, is a silent no-op rather than a queued
-    // second save (ET-210's own group-save race the button already avoids).
+    // a second save path. While ET-320's global registration holds this same combination, Windows delivers it here
+    // as WM_HOTKEY instead, so this handler only ever sees the key while the combination is not (or cannot be)
+    // claimed system-wide — with focus is exactly then the one path left, never a second one racing the global fire.
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
@@ -109,9 +109,7 @@ public partial class ActivityWindow : OverlayWindow
         if (registry is null || !registry.TryResolve(new KeyGesture(e.Key, e.KeyModifiers), out var action)) return;
         if (action != ShortcutAction.SaveRun) return;
 
-        if (_viewModel.IsSaveButtonVisible && !_viewModel.IsSaving)
-            _viewModel.SaveRunCommand.Execute(null);
-
+        _viewModel.SaveRunFromShortcut();
         e.Handled = true;
     }
 }
