@@ -44,4 +44,7 @@ public enum ShortcutAction
 
     /// <summary>Cancel/close the focused modal dialog — never a tab, never the run window.</summary>
     CloseDialog,
+
+    /// <summary>Save the running run — the run window's own SAVE button, same command (ET-319).</summary>
+    SaveRun,
 }

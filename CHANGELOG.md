@@ -13,6 +13,10 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Added: Ctrl+Shift+S saves the run you're flying.** Works in the run window, does exactly what clicking SAVE
+  does, and does nothing if SAVE isn't available right now (no run going, or a save already in progress) — no
+  error, no popup. Shows up in Settings under Keyboard shortcuts like every other shortcut, where it can be
+  rebound.
 - **Changed (server panel): every kind of data now has its own list, and the records link to each other.** The one
   long Data page is gone. Characters, Compositions, Shared fits, Runs and Sessions each get a list like Fleets
   already had, opened grouped the way you usually look for things: characters by corporation, shared fits by who

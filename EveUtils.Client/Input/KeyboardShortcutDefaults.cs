@@ -33,6 +33,7 @@ public static class KeyboardShortcutDefaults
             [ShortcutAction.FocusSearch] = [new KeyGesture(Key.F, KeyModifiers.Control)],
             [ShortcutAction.OpenSettings] = [new KeyGesture(Key.OemComma, KeyModifiers.Control)],
             [ShortcutAction.CloseDialog] = [new KeyGesture(Key.Escape, KeyModifiers.None)],
+            [ShortcutAction.SaveRun] = [new KeyGesture(Key.S, KeyModifiers.Control | KeyModifiers.Shift)],
         };
 
     /// <summary>Label shown in the Settings list — what the action does, not its key.</summary>
@@ -55,5 +56,6 @@ public static class KeyboardShortcutDefaults
         [ShortcutAction.FocusSearch] = "Focus the current module's search box",
         [ShortcutAction.OpenSettings] = "Open Settings",
         [ShortcutAction.CloseDialog] = "Cancel/close a dialog",
+        [ShortcutAction.SaveRun] = "Save the current run",
     };
 }

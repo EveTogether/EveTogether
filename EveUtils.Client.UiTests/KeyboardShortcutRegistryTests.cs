@@ -27,6 +27,17 @@ public class KeyboardShortcutRegistryTests
     }
 
     [AvaloniaFact]
+    public void SaveRunDefault_ResolvesWithoutAnyOverride_AndDoesNotConflictWithAnyOtherDefault()
+    {
+        var registry = new KeyboardShortcutRegistry(TestClientInstance.Create().Services);
+        var gesture = new KeyGesture(Key.S, KeyModifiers.Control | KeyModifiers.Shift);
+
+        Assert.True(registry.TryResolve(gesture, out var action));
+        Assert.Equal(ShortcutAction.SaveRun, action);
+        Assert.Null(registry.FindConflict(gesture, ShortcutAction.SaveRun));
+    }
+
+    [AvaloniaFact]
     public async Task SetOverrideAsync_RecordingTheExactDefault_PersistsNoRow()
     {
         using var instance = TestClientInstance.Create();
