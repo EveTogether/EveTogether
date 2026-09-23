@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
@@ -20,7 +21,7 @@ namespace EveUtils.Client.Controls;
 /// </summary>
 public sealed class IskSourceBar : Control
 {
-    private static readonly IBrush Track = new SolidColorBrush(Color.Parse("#0FFFFFFF"));
+    private static readonly IBrush Track = new ImmutableSolidColorBrush(Color.Parse("#0FFFFFFF"));
 
     private static readonly (IskSource Source, string BrushKey, string Label)[] Sources =
     [

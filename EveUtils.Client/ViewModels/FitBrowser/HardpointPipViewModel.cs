@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 
 namespace EveUtils.Client.ViewModels.FitBrowser;
 
@@ -10,7 +11,7 @@ namespace EveUtils.Client.ViewModels.FitBrowser;
 public sealed class HardpointPipViewModel
 {
     // The in-game hardpoint indicators are a subtle grey (sampled ~#ADB1B5), not bright white.
-    private static readonly SolidColorBrush UsedBrush = new(Color.Parse("#B4B8BC"));
+    private static readonly IBrush UsedBrush = new ImmutableSolidColorBrush(Color.Parse("#B4B8BC"));
 
     public Geometry Dot { get; }
     public IBrush Fill { get; }
