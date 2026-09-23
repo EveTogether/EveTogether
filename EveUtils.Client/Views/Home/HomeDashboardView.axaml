@@ -453,7 +453,10 @@
                     </Border>
                 </StackPanel>
                 <Border x:Name="RightColumn" Grid.Column="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
-                    <StackPanel x:Name="RightBlocks"/>
+                    <StackPanel x:Name="RightBlocks">
+                        <home:HomeFleetsBlock DataContext="{Binding Fleets}"/>
+                        <home:HomeFitsBlock DataContext="{Binding Fits}"/>
+                    </StackPanel>
                 </Border>
             </Grid>
 

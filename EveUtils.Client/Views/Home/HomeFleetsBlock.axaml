@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vh="using:EveUtils.Client.ViewModels.Home"
+             xmlns:vm="using:EveUtils.Client.ViewModels"
+             xmlns:ctl="using:EveUtils.Client.Controls"
+             x:Class="EveUtils.Client.Views.Home.HomeFleetsBlock"
+             x:DataType="vh:HomeFleetsViewModel">
+
+    <!-- FLEETS: a card per forming or active fleet. Roles show their fill against the doctrine's minimum — green when
+         met, amber when short, plain when the role sets none. START and NEW FLEET run the fleets screen's own flow. -->
+    <Border Classes="block">
+        <StackPanel>
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12" Margin="14,10,14,4">
+                <TextBlock Classes="kicker" Text="FLEETS"/>
+                <TextBlock Grid.Column="1" Classes="mono" FontSize="10.5" VerticalAlignment="Center" Text="{Binding CountText}"/>
+                <Button Grid.Column="2" Classes="link" Content="Fleets →" Command="{Binding OpenFleetsCommand}"/>
+            </Grid>
+            <TextBlock Classes="none" Margin="14,2,14,8" Text="No forming or active fleet right now." IsVisible="{Binding !HasCards}"/>
+            <ItemsControl ItemsSource="{Binding Cards}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vh:HomeFleetCardViewModel">
+                        <Border Padding="14,8" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+                            <StackPanel Spacing="5">
+                                <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="8">
+                                    <TextBlock Classes="cellmain" FontSize="12.5" FontWeight="SemiBold" Text="{Binding Name}"
+                                               VerticalAlignment="Center" MaxWidth="200"/>
+                                    <Border Grid.Column="1" Classes="chip ok"><TextBlock Text="{Binding StateText}"/></Border>
+                                    <Border Grid.Column="2" Classes="chip"><TextBlock Text="{Binding SourceText}"/></Border>
+                                    <Button Grid.Column="4" Classes="rowaction" Content="START" IsVisible="{Binding CanStart}"
+                                            Command="{Binding StartCommand}"
+                                            ToolTip.Tip="Start the fleet — through the fleets screen, with its checks and confirmation"/>
+                                </Grid>
+                                <TextBlock Classes="sub" Text="{Binding MetaText}" ToolTip.Tip="{Binding FlyTooltip}"/>
+                                <WrapPanel>
+                                    <Border Classes="chip dim" Margin="0,0,5,3" IsVisible="{Binding !HasComposition}">
+                                        <TextBlock Text="NO COMPOSITION"/>
+                                    </Border>
+                                    <ItemsControl ItemsSource="{Binding Roles}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:CompositionRoleCount">
+                                                <Border Classes="chip" Classes.good="{Binding HasMinimum}" Classes.warn="{Binding IsShort}"
+                                                        Margin="0,0,5,3">
+                                                    <TextBlock Text="{Binding Text}"/>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </WrapPanel>
+                                <ItemsControl ItemsSource="{Binding Members}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vh:HomeFleetMemberViewModel">
+                                            <StackPanel Orientation="Horizontal" Spacing="2" Margin="0,0,8,0" Background="Transparent"
+                                                        ToolTip.Tip="{Binding Tooltip}">
+                                                <ctl:HexPortrait Size="18" Source="{Binding Face.Portrait}" Initial="{Binding Face.Initial}"/>
+                                                <Image Width="18" Height="18" Source="{Binding HullIcon}"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Grid ColumnDefinitions="*,Auto" Margin="14,8,14,10">
+                <TextBlock Classes="sub" VerticalAlignment="Center" Text="{Binding PendingText}"/>
+                <Button Grid.Column="1" Classes="rowaction" Content="NEW FLEET" Command="{Binding NewFleetCommand}"
+                        ToolTip.Tip="Form a new fleet on the fleets screen"/>
+            </Grid>
+        </StackPanel>
+    </Border>
+</UserControl>

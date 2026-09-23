@@ -98,7 +98,19 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         _presenceSubscription = _presence?.Subscribe(() => _ = RebuildOverviewAsync());
 
         StartClock(runClock);
-        _ = InitializeAsync();
+        _initialized = InitializeAsync();
+    }
+
+    private readonly Task _initialized;
+
+    /// <summary>START on one fleet from elsewhere (the home, ET-324), through this screen's own start — its checks and
+    /// confirmations included — once the screen has read its fleets.</summary>
+    public async Task StartFleetAsync(long fleetId, string? serverAddress)
+    {
+        await _initialized;
+        FleetViewModel? row = ServerGroups.SelectMany(group => group.Fleets).Concat(LocalFleets)
+            .FirstOrDefault(fleet => fleet.Id == fleetId && fleet.ServerAddress == serverAddress);
+        await StartRowAsync(row);
     }
 
     private void _OnRosterChanged(FleetRosterChange change)
@@ -663,7 +675,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
                 if (!fleet.IsClientOnly || fleet.State != FleetState.Active)
                     continue; // client-only and not archived; a concluded one goes to the FINISHED band (ET-170).
 
-                var info = ToInfo(fleet);
+                var info = FleetInfo.FromEntity(fleet);
                 var row = new FleetViewModel(info, ownerId, character.Name) { IsActive = active == fleet.Id };
                 row.StatusLabel = "Local · client-only";
                 row.IsParticipating = true; // a client-only fleet is always "yours" — you feed its metrics locally.
@@ -678,11 +690,6 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         await _participationRefresher.RefreshAsync();
         await RebuildOverviewAsync();
     }
-
-    private static FleetInfo ToInfo(FleetEntity fleet) => new(
-        fleet.Id, fleet.Name, fleet.Description, fleet.Visibility, fleet.State,
-        fleet.CreatorCharacterId, fleet.FromTime, fleet.ToTime, fleet.CreatedAt, fleet.Activation, fleet.FleetCompositionId,
-        fleet.EsiFleetId, fleet.EsiFleetBossId, fleet.EsiAutoApplyStructure, fleet.EsiAutoInviteMembers, fleet.ActivatedAt);
 
     /// <summary>Creates a client-only fleet: pick the owning local toon, name it, persist locally.</summary>
     [RelayCommand]

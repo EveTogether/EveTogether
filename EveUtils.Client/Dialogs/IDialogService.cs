@@ -125,7 +125,8 @@ public interface IDialogService
     Task<bool> ShowServerTrustAsync(string displayName, string address, string fingerprint, string statusLabel);
 
     /// <summary>Opens the Fleets window — non-modal so its live member graphs keep updating alongside the main window.</summary>
-    void ShowFleets(FleetsViewModel viewModel);
+    /// <returns>The fleets screen now showing — the one already open, when it was.</returns>
+    FleetsViewModel ShowFleets(FleetsViewModel viewModel);
 
     /// <summary>Opens the per-character metrics window — non-modal so its live graphs/stats keep updating.</summary>
     void ShowMetrics(MetricsWindowViewModel viewModel);

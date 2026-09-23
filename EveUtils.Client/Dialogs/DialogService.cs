@@ -408,8 +408,9 @@ public sealed class DialogService : IDialogService, ISingletonService
         return await _Over(dialog).ShowDialog<bool>(_owner);
     }
 
-    public void ShowFleets(FleetsViewModel viewModel) =>
-        Route(new FleetsWindow(viewModel), "FLEETS", "fleet", "fleets", MaterialIconKind.AccountGroupOutline);
+    public FleetsViewModel ShowFleets(FleetsViewModel viewModel) =>
+        Route(new FleetsWindow(viewModel), "FLEETS", "fleet", "fleets", MaterialIconKind.AccountGroupOutline)
+            as FleetsViewModel ?? viewModel;
 
     public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday)
     {

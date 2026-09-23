@@ -204,7 +204,11 @@ public sealed class RecordingDialogService : IDialogService
 
     public List<FleetMetricsViewModel> OpenedFleetMetrics { get; } = [];
 
-    public void ShowFleets(FleetsViewModel viewModel) => OpenedFleetOverviews.Add(viewModel);
+    public FleetsViewModel ShowFleets(FleetsViewModel viewModel)
+    {
+        OpenedFleetOverviews.Add(viewModel);
+        return viewModel;
+    }
     public void ShowMetrics(MetricsWindowViewModel viewModel) => throw NotUsed();
     public Task ShowAboutAsync(AboutViewModel viewModel) => throw NotUsed();
     public void ShowDpsOverlay(DpsViewModel tracker) => throw NotUsed();

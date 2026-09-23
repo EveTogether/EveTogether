@@ -420,11 +420,12 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         Home = new HomeDashboardViewModel(services, new HomeNavigation(
             OpenRunsAsync,
             id => _ = LaunchModule(id),
+            _OpenFleetsAsync,
             OpenCharacterSettings,
             OpenMetrics,
             OpenCharacterDpsOverlay,
             (characterId, scope) => ReAuthenticateAsync(characterId, [scope]),
-            () => ImportFittingsCommand.ExecuteAsync(null)), Characters);
+            () => ImportFittingsCommand.ExecuteAsync(null)), Characters, Fittings);
 
         SetupLocalFittingsTab();
 
@@ -587,11 +588,18 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
     /// <summary>Opens the Fleets window — non-modal so its live member graphs run alongside the main window.</summary>
     [RelayCommand]
-    private void OpenFleets()
+    private void OpenFleets() => _ = _OpenFleetsAsync(null);
+
+    /// <param name="then">What to do on the screen once it is showing — the home starts a fleet or makes a new one
+    /// through the screen's own flow, confirmations included.</param>
+    private async Task _OpenFleetsAsync(Func<FleetsViewModel, Task>? then)
     {
         if (_services is null || _dialogs is null)
             return;
-        _dialogs.ShowFleets(new FleetsViewModel(_services));
+
+        FleetsViewModel shown = _dialogs.ShowFleets(new FleetsViewModel(_services));
+        if (then is not null)
+            await then(shown);
     }
 
     /// <summary>Opens the Fleet Compositions library — the reusable-doctrine module, hosted like the
