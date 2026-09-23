@@ -13,6 +13,7 @@ namespace EveUtils.Client.ViewModels.Home;
 /// <param name="OpenMetrics">A character's metrics window.</param>
 /// <param name="OpenDpsOverlay">A character's live DPS overlay.</param>
 /// <param name="AllowScope">Re-authorise a character with one more scope ticked in the scope picker (D-21).</param>
+/// <param name="ReAuthorize">Re-authorise a character whose sign-in ESI refused, with its scopes as granted.</param>
 /// <param name="ImportFittings">IMPORT FROM EVE: the fit import with its own character picker.</param>
 public sealed record HomeNavigation(
     Func<Func<RunsOverviewViewModel, Task>?, Task> OpenRuns,
@@ -22,9 +23,10 @@ public sealed record HomeNavigation(
     Action<CharacterViewModel> OpenMetrics,
     Action<CharacterViewModel> OpenDpsOverlay,
     Func<int, string, Task> AllowScope,
+    Func<int, Task> ReAuthorize,
     Func<Task> ImportFittings)
 {
     public static readonly HomeNavigation None = new(
         _ => Task.CompletedTask, _ => { }, _ => Task.CompletedTask, _ => Task.CompletedTask, _ => { }, _ => { },
-        (_, _) => Task.CompletedTask, () => Task.CompletedTask);
+        (_, _) => Task.CompletedTask, _ => Task.CompletedTask, () => Task.CompletedTask);
 }

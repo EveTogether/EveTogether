@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vh="using:EveUtils.Client.ViewModels.Home"
+             x:Class="EveUtils.Client.Views.Home.HomeSystemStrip"
+             x:DataType="vh:HomeSystemStripViewModel">
+
+    <!-- The plumbing in one line: a green dot where it runs, a hollow one where it is off. Wraps when narrow. -->
+    <WrapPanel Margin="14,8">
+        <StackPanel Classes="strip">
+            <Ellipse Classes="dot" Classes.up="{Binding ArePricesFresh}"/>
+            <TextBlock Text="{Binding PricesText}"/>
+        </StackPanel>
+        <StackPanel Classes="strip">
+            <Ellipse Classes="dot" Classes.up="{Binding HasSde}"/>
+            <TextBlock Text="{Binding SdeText}"/>
+        </StackPanel>
+        <StackPanel Classes="strip" ToolTip.Tip="Settings → Privacy &amp; Sharing">
+            <Ellipse Classes="dot" Classes.up="{Binding IsClipboardWatching}"/>
+            <TextBlock><Run Text="Clipboard watch "/><Run Foreground="{StaticResource TextBrightBrush}" FontFamily="{StaticResource MonoFont}" Text="{Binding ClipboardText}"/></TextBlock>
+        </StackPanel>
+        <StackPanel Classes="strip">
+            <Ellipse Classes="dot" Classes.up="{Binding IsAutoSyncOn}"/>
+            <TextBlock><Run Text="EVE settings auto-sync "/><Run Foreground="{StaticResource TextBrightBrush}" FontFamily="{StaticResource MonoFont}" Text="{Binding AutoSyncText}"/></TextBlock>
+        </StackPanel>
+        <StackPanel Classes="strip">
+            <Ellipse Classes="dot" Classes.up="{Binding IsLocalApiRunning}"/>
+            <TextBlock><Run Text="Local API "/><Run Foreground="{StaticResource TextBrightBrush}" FontFamily="{StaticResource MonoFont}" Text="{Binding LocalApiText}"/></TextBlock>
+        </StackPanel>
+        <StackPanel Classes="strip">
+            <Ellipse Classes="dot up"/>
+            <TextBlock><Run Text="EVE Together "/><Run Foreground="{StaticResource TextBrightBrush}" FontFamily="{StaticResource MonoFont}" Text="{Binding VersionText}"/><Run Text="{Binding UpdateText, StringFormat=' · {0}'}"/></TextBlock>
+        </StackPanel>
+    </WrapPanel>
+</UserControl>

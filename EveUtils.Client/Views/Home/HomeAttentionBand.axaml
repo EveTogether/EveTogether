@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vh="using:EveUtils.Client.ViewModels.Home"
+             x:Class="EveUtils.Client.Views.Home.HomeAttentionBand"
+             x:DataType="vh:HomeAttentionViewModel"
+             IsVisible="{Binding HasLines}">
+
+    <!-- Only there when something needs the pilot: amber for a character, red for a server. ✕ hides a line until its
+         state changes. -->
+    <ItemsControl ItemsSource="{Binding Lines}">
+        <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vh:HomeAttentionLineViewModel">
+                <Border Classes="attention" Classes.server="{Binding IsServer}">
+                    <Grid ColumnDefinitions="72,*,Auto" ColumnSpacing="10">
+                        <TextBlock Classes="attnkind" Text="{Binding KindText}"/>
+                        <TextBlock Grid.Column="1" Classes="attntext" TextWrapping="Wrap">
+                            <Run Text="{Binding Subject}" FontWeight="SemiBold" Foreground="{StaticResource TextBrightBrush}"/>
+                            <Run Text=" — "/>
+                            <Run Text="{Binding Text}"/>
+                        </TextBlock>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <Button Classes="rowaction" Content="{Binding ActionText}" IsVisible="{Binding HasAction}"
+                                    Command="{Binding ActCommand}"/>
+                            <Button Classes="rowaction" Content="✕" Command="{Binding DismissCommand}"
+                                    ToolTip.Tip="Hide until this changes"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+</UserControl>

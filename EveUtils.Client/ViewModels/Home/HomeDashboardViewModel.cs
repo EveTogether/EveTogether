@@ -75,13 +75,18 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
         LatestRuns = new HomeLatestRunsViewModel(_ => Task.CompletedTask, () => { });
         Fleets = new HomeFleetsViewModel(null, HomeNavigation.None, _faces);
         Fits = new HomeFitsViewModel(null, HomeNavigation.None, null);
+        Activity = new HomeActivityViewModel(null, HomeNavigation.None);
+        SystemStrip = new HomeSystemStripViewModel(null);
+        Attention = new HomeAttentionViewModel(Pilots, null, null, HomeNavigation.None);
     }
 
     /// <param name="characters">The shell's own live character rows — presence, portraits and ESI state are kept
     /// there, and the pilot rows sit on top of them.</param>
     /// <param name="fitLibrary">The shell's own fit list, which the library line follows.</param>
+    /// <param name="inbox">The shell's own inbox — the activity block reads nothing of its own.</param>
     public HomeDashboardViewModel(IServiceProvider services, HomeNavigation navigation,
-        ObservableCollection<CharacterViewModel> characters, INotifyCollectionChanged? fitLibrary = null)
+        ObservableCollection<CharacterViewModel> characters, INotifyCollectionChanged? fitLibrary = null,
+        InboxViewModel? inbox = null)
     {
         _dispatcher = services.GetService<CqrsDispatcher>();
         _registry = services.GetService<ICharacterRegistry>();
@@ -101,6 +106,9 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
         LatestRuns = new HomeLatestRunsViewModel(_PublishAsync, () => _ = navigation.OpenRuns(null));
         Fleets = new HomeFleetsViewModel(services, navigation, _faces);
         Fits = new HomeFitsViewModel(services, navigation, fitLibrary);
+        Activity = new HomeActivityViewModel(inbox, navigation);
+        SystemStrip = new HomeSystemStripViewModel(services);
+        Attention = new HomeAttentionViewModel(Pilots, _busConnector, _serverRegistry, navigation);
         if (_dispatcher is not null && services.GetService<IDialogService>() is { } dialogs)
         {
             Running = new RunningBandViewModel(_dispatcher, dialogs, services, [], _faces.FaceOf);
@@ -136,6 +144,12 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
 
     public HomeFitsViewModel Fits { get; }
 
+    public HomeActivityViewModel Activity { get; }
+
+    public HomeSystemStripViewModel SystemStrip { get; }
+
+    public HomeAttentionViewModel Attention { get; }
+
     [ObservableProperty] private string _clockText = string.Empty;
     [ObservableProperty] private string _tranquilityText = "Tranquility";
     [ObservableProperty] private bool _isTranquilityUp;
@@ -146,7 +160,7 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
     /// <summary>Every block's first read — the one time the whole home is read.</summary>
     public async Task LoadAsync()
     {
-        await Task.WhenAll(ReadRunsAsync(null), Pilots.ReadQueuesAsync(), Fleets.ReadAsync(), Fits.LoadAsync());
+        await Task.WhenAll(ReadRunsAsync(null), Pilots.ReadQueuesAsync(), Fleets.ReadAsync(), Fits.LoadAsync(), SystemStrip.ReadAsync());
     }
 
     /// <summary>
@@ -368,6 +382,7 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
         _minuteShown = nowUtc;
         _ShowClock();
         _ShowIdleText();
+        _ = SystemStrip.ReadAsync();
         if (isNewDay)
             _ = ReadRunsAsync(null);
     }
@@ -381,6 +396,9 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
         Pilots.Dispose();
         Fleets.Dispose();
         Fits.Dispose();
+        Activity.Dispose();
+        SystemStrip.Dispose();
+        Attention.Dispose();
         if (_weekStart is not null)
             _weekStart.Changed -= _OnWeekStartChanged;
         if (_serverStatus is not null)

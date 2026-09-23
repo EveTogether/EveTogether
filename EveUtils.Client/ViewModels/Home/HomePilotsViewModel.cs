@@ -85,6 +85,9 @@ public sealed partial class HomePilotsViewModel : ObservableObject, IDisposable
     /// <summary>Raised after a queue read: the attention band lists the paused queues from it.</summary>
     public event Action? QueuesChanged;
 
+    /// <summary>A character's ESI sign-in state moved: the attention band asks for a re-authorisation from it.</summary>
+    public event Action? TokensChanged;
+
     /// <summary>Each own character's share today and this month, from the home's one runs read.</summary>
     public void ShowIsk(IReadOnlyDictionary<long, (decimal Today, decimal Month)> byCharacter, DateTime nowLocal)
     {
@@ -204,6 +207,8 @@ public sealed partial class HomePilotsViewModel : ObservableObject, IDisposable
 
     private void _OnCharacterPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(CharacterViewModel.EsiTokenStatus))
+            TokensChanged?.Invoke();
         if (e.PropertyName != nameof(CharacterViewModel.HasActiveClient) || sender is not CharacterViewModel character)
             return;
 

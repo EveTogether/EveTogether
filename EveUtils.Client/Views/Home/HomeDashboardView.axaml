@@ -321,6 +321,46 @@
             <Setter Property="LetterSpacing" Value="1.8"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+
+        <!-- ══ Attention, activity, status line ══ amber for a character, red for a server (WarnBrush 9.8:1, RedBrush on
+             the same tint); the status line's labels in text, its values bright. -->
+        <Style Selector="Border.attention">
+            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="Background" Value="#1AE0B341"/>
+            <Setter Property="BorderBrush" Value="{StaticResource WarnBrush}"/>
+            <Setter Property="BorderThickness" Value="3,0,0,1"/>
+        </Style>
+        <Style Selector="Border.attention.server">
+            <Setter Property="Background" Value="#1AEF5A5A"/>
+            <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.attnkind">
+            <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="LetterSpacing" Value="1.8"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.attention.server TextBlock.attnkind">
+            <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.attntext">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.cellmain.unread">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="StackPanel.strip">
+            <Setter Property="Orientation" Value="Horizontal"/>
+            <Setter Property="Spacing" Value="6"/>
+            <Setter Property="Margin" Value="0,2,18,2"/>
+        </Style>
+        <Style Selector="StackPanel.strip > TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
     </UserControl.Styles>
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
@@ -350,6 +390,9 @@
                     </StackPanel>
                 </Grid>
             </Border>
+
+            <!-- ══ Attention ══ -->
+            <home:HomeAttentionBand DataContext="{Binding Attention}"/>
 
             <!-- ══ Running ══ the runs overview's own band (RunningBand): running groups with their clocks, or nothing
                  running with when the last run ended; idle pilots as avatars, one click from a start. -->
@@ -456,9 +499,15 @@
                     <StackPanel x:Name="RightBlocks">
                         <home:HomeFleetsBlock DataContext="{Binding Fleets}"/>
                         <home:HomeFitsBlock DataContext="{Binding Fits}"/>
+                        <home:HomeActivityBlock DataContext="{Binding Activity}"/>
                     </StackPanel>
                 </Border>
             </Grid>
+
+            <!-- ══ Status line ══ -->
+            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+                <home:HomeSystemStrip DataContext="{Binding SystemStrip}"/>
+            </Border>
 
         </StackPanel>
     </ScrollViewer>

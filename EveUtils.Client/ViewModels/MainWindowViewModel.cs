@@ -425,7 +425,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             OpenMetrics,
             OpenCharacterDpsOverlay,
             (characterId, scope) => ReAuthenticateAsync(characterId, [scope]),
-            () => ImportFittingsCommand.ExecuteAsync(null)), Characters, Fittings);
+            characterId => ReAuthenticateAsync(characterId),
+            () => ImportFittingsCommand.ExecuteAsync(null)), Characters, Fittings, Inbox);
 
         SetupLocalFittingsTab();
 
@@ -2309,6 +2310,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// The restart banner: a package is downloaded and waiting, and stays waiting until it is applied.
     /// </summary>
     [ObservableProperty] private bool _isUpdateReady;
+
+    partial void OnIsUpdateReadyChanged(bool value) => Home.SystemStrip.ShowUpdateReady(value);
 
     [ObservableProperty] private string _updateReadyMessage = "";
 
