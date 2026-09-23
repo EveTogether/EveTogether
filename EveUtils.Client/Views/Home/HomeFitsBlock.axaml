@@ -1,0 +1,40 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vh="using:EveUtils.Client.ViewModels.Home"
+             x:Class="EveUtils.Client.Views.Home.HomeFitsBlock"
+             x:DataType="vh:HomeFitsViewModel">
+
+    <!-- FITS · SHARED ON ET: the newest shared fits, then the own library in one line with IMPORT FROM EVE. -->
+    <Border Classes="block">
+        <StackPanel>
+            <Grid ColumnDefinitions="*,Auto" Margin="14,10,14,4">
+                <TextBlock Classes="kicker" Text="FITS · SHARED ON ET"/>
+                <Button Grid.Column="1" Classes="link" Content="Fits →" Command="{Binding OpenFitsCommand}"/>
+            </Grid>
+            <TextBlock Classes="none" Margin="14,2,14,6" Text="No fits shared on your coupled servers yet." IsVisible="{Binding !HasLatest}"/>
+            <ItemsControl ItemsSource="{Binding Latest}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vh:HomeFitViewModel">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9" Margin="14,3" Background="Transparent"
+                              ToolTip.Tip="{Binding Tooltip}">
+                            <Image Width="26" Height="26" Source="{Binding HullIcon}" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Classes="cellmain" Text="{Binding Name}"/>
+                                <TextBlock Classes="cellsub" Text="{Binding DetailText}"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="2" Classes="figure" FontSize="10" Text="{Binding DateText}"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Grid ColumnDefinitions="*,Auto" Margin="14,8,14,10">
+                <TextBlock VerticalAlignment="Center" Classes="sub">
+                    <Run Text="Library" Foreground="{StaticResource TextDimBrush}"/>
+                    <Run Text="{Binding LibraryText}"/>
+                </TextBlock>
+                <Button Grid.Column="1" Classes="rowaction" Content="IMPORT FROM EVE" Command="{Binding ImportFromEveCommand}"
+                        ToolTip.Tip="Import fits from a character's in-game fittings (needs the fittings scope for that character)"/>
+            </Grid>
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -297,8 +297,8 @@ public sealed class RunsOverviewTests
         (_, RunsOverviewViewModel viewModel) = await _WindowAsync(
             instance, 758, cancellationToken, characters: [Crew[0], Crew[1]]);
 
-        RunningLaneViewModel first = viewModel.Lanes.Single(lane => lane.Character.EsiCharacterId == 90000001);
-        RunningLaneViewModel second = viewModel.Lanes.Single(lane => lane.Character.EsiCharacterId == 90000002);
+        RunningLaneViewModel first = viewModel.Running.Lanes.Single(lane => lane.Character.EsiCharacterId == 90000001);
+        RunningLaneViewModel second = viewModel.Running.Lanes.Single(lane => lane.Character.EsiCharacterId == 90000002);
         Assert.True(first.IsRunning);
         Assert.Equal("Homefront", first.StateText);
         Assert.True(second.IsRunning);
@@ -330,7 +330,7 @@ public sealed class RunsOverviewTests
         (_, RunsOverviewViewModel viewModel) = await _WindowAsync(
             instance, 758, cancellationToken, characters: [Crew[0]]);
 
-        RunningLaneViewModel running = Assert.Single(viewModel.Lanes);
+        RunningLaneViewModel running = Assert.Single(viewModel.Running.Lanes);
         Assert.True(running.IsRunning);
         Assert.Equal("Sanctum", running.StateText);
         Assert.Equal("OPEN", running.ActionText);
@@ -349,7 +349,7 @@ public sealed class RunsOverviewTests
 
         (_, RunsOverviewViewModel viewModel) = await _WindowAsync(
             instance, 758, cancellationToken, characters: [Crew[0]]);
-        RunningLaneViewModel lane = Assert.Single(viewModel.Lanes);
+        RunningLaneViewModel lane = Assert.Single(viewModel.Running.Lanes);
         Assert.False(lane.IsRunning);
 
         await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
@@ -375,7 +375,7 @@ public sealed class RunsOverviewTests
 
         (_, RunsOverviewViewModel viewModel) = await _WindowAsync(
             instance, 758, cancellationToken, characters: [Crew[0]]);
-        RunningLaneViewModel lane = Assert.Single(viewModel.Lanes);
+        RunningLaneViewModel lane = Assert.Single(viewModel.Running.Lanes);
         Assert.True(lane.IsRunning);
 
         await dispatcher.Send(new SetRunStoppedCommand(started.Value, DateTime.UtcNow), cancellationToken);
@@ -398,7 +398,7 @@ public sealed class RunsOverviewTests
 
         (_, RunsOverviewViewModel viewModel) = await _WindowAsync(
             instance, 758, cancellationToken, characters: Crew.Take(2).ToList(), dialogs: dialogs);
-        RunningLaneViewModel avatar = Assert.Single(viewModel.IdleLanes,
+        RunningLaneViewModel avatar = Assert.Single(viewModel.Running.IdleLanes,
             lane => lane.Character.EsiCharacterId == Crew[1].EsiCharacterId);
 
         await avatar.ActCommand.ExecuteAsync(null);
@@ -429,7 +429,7 @@ public sealed class RunsOverviewTests
         (_, RunsOverviewViewModel viewModel) = await _WindowAsync(
             instance, 758, TestContext.Current.CancellationToken, characters: Crew.Take(2).ToList(), dialogs: dialogs);
 
-        await viewModel.OpenRunStartCommand.ExecuteAsync(null);
+        await viewModel.Running.OpenRunStartCommand.ExecuteAsync(null);
 
         ManualRunStartViewModel opened = dialogs.LastManualRunStart!;
         Assert.NotNull(opened);
@@ -453,7 +453,7 @@ public sealed class RunsOverviewTests
 
         (_, RunsOverviewViewModel viewModel) = await _WindowAsync(
             instance, 758, cancellationToken, characters: [Crew[0]]);
-        RunningLaneViewModel lane = Assert.Single(viewModel.Lanes);
+        RunningLaneViewModel lane = Assert.Single(viewModel.Running.Lanes);
         Assert.True(lane.IsRunning);
 
         await dispatcher.Send(

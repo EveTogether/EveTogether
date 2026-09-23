@@ -125,7 +125,8 @@ public interface IDialogService
     Task<bool> ShowServerTrustAsync(string displayName, string address, string fingerprint, string statusLabel);
 
     /// <summary>Opens the Fleets window — non-modal so its live member graphs keep updating alongside the main window.</summary>
-    void ShowFleets(FleetsViewModel viewModel);
+    /// <returns>The fleets screen now showing — the one already open, when it was.</returns>
+    FleetsViewModel ShowFleets(FleetsViewModel viewModel);
 
     /// <summary>Opens the per-character metrics window — non-modal so its live graphs/stats keep updating.</summary>
     void ShowMetrics(MetricsWindowViewModel viewModel);
@@ -261,8 +262,9 @@ public interface IDialogService
     void ShowActivityDetail(ActivityDetailViewModel viewModel, Guid activitySummaryId);
 
     /// <summary>Opens the runs screen (ET-161) as a hosted module — a docked tab or a floating window, like the
-    /// other feature modules. One screen, not one per pilot: the running band already holds a lane each.</summary>
-    void ShowRuns(RunsOverviewViewModel viewModel);
+    /// other feature modules. One screen, not one per pilot: the running band already holds a lane each. Returns the
+    /// screen now showing — the one already open, when it was.</summary>
+    RunsOverviewViewModel ShowRuns(RunsOverviewViewModel viewModel);
 
     /// <summary>Save-a-preset dialog (ET-61): pick what goes in, name it, write it to one portable file. Modal — the
     /// file picker inside it belongs to the window, so the view-model never sees a path it did not ask for.</summary>

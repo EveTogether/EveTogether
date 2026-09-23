@@ -58,11 +58,13 @@ public sealed class ModuleHostService
     /// The icon defaults for the sake of the tests that drive this service straight, which open a module to check
     /// what the host does with it and have no opinion about its tab's symbol. <c>DialogService.Route</c>, the one
     /// production caller, passes it for every screen.</summary>
-    public void Open(Window window, string title, string? moduleKey, string moduleId,
+    /// <returns>The view-model of the module now on screen: the caller's own, or the one already standing under this
+    /// id — which is what a caller has to talk to after re-opening, since its own was just dropped.</returns>
+    public object? Open(Window window, string title, string? moduleKey, string moduleId,
         MaterialIconKind icon = MaterialIconKind.Application)
     {
-        if (_owner is null) return;
-        if (_host is null) { window.Show(_owner); return; }   // no host wired (e.g. some tests)
+        if (_owner is null) return null;
+        if (_host is null) { window.Show(_owner); return window.DataContext; }   // no host wired (e.g. some tests)
 
         var existing = _modules.FirstOrDefault(m => m.Id == moduleId);
         if (existing is not null)
@@ -75,11 +77,11 @@ public sealed class ModuleHostService
             if (!ReferenceEquals(window.DataContext, existing.Content.DataContext))
                 (window.DataContext as System.IDisposable)?.Dispose();
             Render(select: existing);
-            return;
+            return existing.Content.DataContext;
         }
 
         var content = window.Content as Control;
-        if (content is null) return;
+        if (content is null) return null;
 
         // Pin the content to its module VM + carry the window's NameScope so all bindings (plain {Binding} and
         // root-name {Binding #FleetsRoot...}) keep resolving wherever the content is parented.
@@ -99,6 +101,7 @@ public sealed class ModuleHostService
 
         _modules.Add(frame);
         Render(select: frame);
+        return window.DataContext;
     }
 
     /// <summary>Re-render after a dock/float switch — migrates the open modules to the other mode (no orphans).</summary>

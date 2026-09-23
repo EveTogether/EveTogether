@@ -38,6 +38,22 @@ public static class CompositionFillBuilder
         return fills;
     }
 
+    /// <summary>Every role of the doctrine with how many members fill it and its group minimum, if any — the home's
+    /// role chips (ET-324), which also name the roles that set no minimum.</summary>
+    public static IReadOnlyList<CompositionRoleCount> RoleCounts(
+        FleetCompositionDetail? composition, IReadOnlyList<FleetMemberInfo> members)
+    {
+        if (composition is null)
+            return [];
+
+        return [.. composition.Roles.Select(role =>
+        {
+            var entryIds = role.Entries.Select(e => e.Id).ToHashSet();
+            return new CompositionRoleCount(role.RoleName,
+                members.Count(m => m.AssignedCompositionEntryId is { } id && entryIds.Contains(id)), role.GroupMinCount);
+        })];
+    }
+
     /// <summary>Whether every group minimum and per-fit minimum of the doctrine is currently met by the fleet's
     /// members (stream B / B-5). True when there is no coupled composition (nothing to fall short of) — used
     /// to warn (not block) on Start when the fleet is under-strength.</summary>

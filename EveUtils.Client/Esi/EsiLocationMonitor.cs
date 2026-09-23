@@ -140,6 +140,8 @@ public sealed class EsiLocationMonitor(
                 {
                     logger.LogWarning("Abyssal monitor for {CharacterId} gave up after {Failures} failed location reads.",
                         characterId, failures);
+                    if (result.Error?.Kind is EsiErrorKind.ScopeForbidden)
+                        Warn(characterId, characterName, EsiErrorKind.ScopeForbidden);
                     Lost(characterId, result.Error?.Kind, onReading);
                     return;
                 }
@@ -176,7 +178,9 @@ public sealed class EsiLocationMonitor(
     {
         logger.LogWarning("Location watch for {CharacterId} stopped: {Kind}.", characterId, kind);
 
-        if (kind is not { } reason)
+        // A scope the pilot chose not to share is a choice, not a fault (ET-324): the home says "not shared" beside the
+        // field, quietly, and a toast on every start would nag about a decision already made.
+        if (kind is not { } reason || reason == EsiErrorKind.ScopeMissing)
             return;
 
         // Shown while the gate is held. Snapshotting first and showing after leaves no ordering between the two, so
@@ -203,10 +207,10 @@ public sealed class EsiLocationMonitor(
 
         // What the location is used for is deliberately left out: this watch feeds whatever reads it, and naming
         // today's reader would age the moment a second one arrives.
-        var (title, why, fix) = reason == EsiErrorKind.ScopeMissing
-            ? ("No location access",
-                $"EVE Together has not been given permission to read the location of {Names(affected)}.",
-                "Allow location")
+        var (title, why, fix) = reason == EsiErrorKind.ScopeForbidden
+            ? ("Location access refused",
+                $"ESI refuses the location of {Names(affected)} although the scope was granted. Signing in again "
+                + "usually restores it.", "Sign in again")
             : ("ESI sign-in expired", $"EVE Together can no longer sign in as {Names(affected)}, so it cannot read "
                                       + "their location.", "Sign in again");
 

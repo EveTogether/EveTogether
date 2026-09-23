@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vh="using:EveUtils.Client.ViewModels.Home"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             x:Class="EveUtils.Client.Views.Home.HomeActivityBlock"
+             x:DataType="vh:HomeActivityViewModel">
+
+    <!-- ACTIVITY: four lines from the inbox, one day's repeats of a title collapsed into one; the inbox has the rest. -->
+    <Border Classes="block">
+        <StackPanel>
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12" Margin="14,10,14,4">
+                <TextBlock Classes="kicker" Text="ACTIVITY"/>
+                <TextBlock Grid.Column="1" Classes="sub" VerticalAlignment="Center" Text="{Binding ReadText}"/>
+                <Button Grid.Column="2" Classes="link" Content="Inbox →" Command="{Binding OpenInboxCommand}"/>
+            </Grid>
+            <TextBlock Classes="none" Margin="14,2,14,10" Text="Nothing yet — invites, fleet news and mail show here."
+                       IsVisible="{Binding !HasLines}"/>
+            <ItemsControl ItemsSource="{Binding Lines}" Margin="0,0,0,8">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vh:HomeActivityLine">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9" Margin="14,3">
+                            <mi:MaterialIcon Kind="{Binding Icon}" Width="13" Height="13"
+                                             Foreground="{DynamicResource TextAccentBrush}"/>
+                            <TextBlock Grid.Column="1" Classes="cellmain" Classes.unread="{Binding IsUnread}">
+                                <Run Text="{Binding Title}"/>
+                                <Run Text="{Binding CountText}" FontSize="9.5" Foreground="{StaticResource TextBrush}"/>
+                            </TextBlock>
+                            <TextBlock Grid.Column="2" Classes="figure" FontSize="10" Text="{Binding DateText}"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+</UserControl>

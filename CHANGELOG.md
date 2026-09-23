@@ -13,6 +13,18 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Changed: a new home screen that shows the whole app at a glance.** What you made today, this week and this
+  month, each against the same point in the previous one, with where the ISK came from and the last 30 days as bars.
+  Below it one compact line per character: whether their EVE client runs on this PC, the system, the ship with its
+  recognised fit, the skill in training and how long the queue lasts, and what they made today and this month. Then
+  your latest runs and the week's best drops, your forming and active fleets with their roles, who can fly their
+  fit and a START, the newest shared fits with IMPORT FROM EVE, and what happened in your inbox. Anything that needs
+  you — a paused skill queue, an ESI sign-in to redo, a server that can't be reached — sits in a band at the top,
+  and only when it's there. A field whose ESI scope a character chose not to share reads "not shared" with an
+  ALLOW… on hover, never a made-up zero. The big character cards made way for a slim portrait rail beside every
+  screen; its dot means "running on this PC", since the app can't see another machine.
+- **Changed: no more warning pop-up for a location scope you chose not to share.** The home shows it quietly
+  instead. You still get a warning when ESI refuses a scope you did grant, or when a character has to sign in again.
 - **Fixed: the remote-rep rate (shield/armor/hull) could read wrong when a fleetmate's ship name or fit title
   contained a dash.** Only the text before the dash was used to tell one fleetmate's rep cycle apart from
   another's, so two different fleetmates with the same prefix could get merged into a single smoothed rate. The

@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vh="using:EveUtils.Client.ViewModels.Home"
+             xmlns:vw="using:EveUtils.Client.Views.Runs"
+             x:Class="EveUtils.Client.Views.Home.HomeLatestRunsBlock"
+             x:DataType="vh:HomeLatestRunsViewModel">
+
+    <!-- LATEST RUNS: the runs overview's own rows (ActivityRowView) under a day header with that whole day's totals.
+         A click opens the runs overview on the run. The rows' fold caret and spine belong to the overview's list and
+         stay out of it here. -->
+    <DockPanel>
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="14,10,14,6">
+            <TextBlock Classes="kicker" Text="LATEST RUNS"/>
+            <Button Grid.Column="1" Classes="link" Content="Runs overview →" Command="{Binding OpenOverviewCommand}"/>
+        </Grid>
+        <Border DockPanel.Dock="Bottom" Padding="14,8" IsVisible="{Binding ShowPublish}"
+                BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="sub" Text="{Binding LocalText}" VerticalAlignment="Center"/>
+                <Button Grid.Column="1" Classes="link" Content="{Binding PublishText}" Command="{Binding PublishCommand}"
+                        IsEnabled="{Binding !IsPublishing}"
+                        ToolTip.Tip="Publish every run that is only on this PC — the runs overview's PUBLISH, with the same confirmation of what travels."/>
+            </Grid>
+        </Border>
+        <StackPanel>
+            <TextBlock Classes="none" Margin="14,4,14,10" Text="No runs saved yet." IsVisible="{Binding !HasRuns}"/>
+            <ItemsControl ItemsSource="{Binding Items}">
+                <ItemsControl.DataTemplates>
+                    <DataTemplate DataType="vh:HomeRunDay">
+                        <Border Classes="homeday">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                                <TextBlock Classes="daytext" Text="{Binding DayText}"/>
+                                <TextBlock Grid.Column="1" Classes="figure" Text="{Binding SummaryText}"/>
+                                <TextBlock Grid.Column="2" Classes="figure" Text="{Binding IskText}"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                    <DataTemplate DataType="vh:HomeRunLine">
+                        <Border Classes="homerun" Classes.widecell="{Binding IsWideOnly}">
+                            <vw:ActivityRowView DataContext="{Binding Row}"/>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.DataTemplates>
+            </ItemsControl>
+        </StackPanel>
+    </DockPanel>
+</UserControl>

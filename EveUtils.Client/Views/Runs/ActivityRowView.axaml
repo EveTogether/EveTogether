@@ -1,0 +1,89 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:ctl="using:EveUtils.Client.Controls"
+             x:Class="EveUtils.Client.Views.Runs.ActivityRowView"
+             x:DataType="vr:ActivityOverviewRowViewModel">
+
+    <!-- One finished activity as the runs overview lists it (ET-290), and as the home's LATEST RUNS repeats it (ET-324):
+         time, type, site with its type and system, crew, own ISK and flown time, and where it stands towards a server.
+         Styles: RunRowStyles.axaml. -->
+    <Border Height="36" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+        <Panel>
+            <Border Classes="rowspine"/>
+            <Button Classes="activityrow" Command="{Binding SelectCommand}">
+                <Grid Margin="22,0,14,0" ColumnDefinitions="18,40,18,*,84,100,24" ColumnSpacing="8">
+                    <TextBlock Grid.Column="1" Classes="rowtime" Text="{Binding TimeText}"/>
+                    <ctl:IconGlyph Grid.Column="2" Classes="typeicon" Kind="{Binding TypeIcon}"
+                                   ToolTip.Tip="{Binding TypeText}"/>
+                    <StackPanel Grid.Column="3" VerticalAlignment="Center" Spacing="1">
+                        <TextBlock Classes="rowsite" Text="{Binding SiteText}"/>
+                        <DockPanel Height="15">
+                            <TextBlock DockPanel.Dock="Left" Classes="rowline rowkind"
+                                       Text="{Binding TypeText}"/>
+                            <TextBlock DockPanel.Dock="Left" Classes="rowline" Margin="7,0,0,0"
+                                       ToolTip.Tip="{Binding SystemTooltip}" Text="{Binding SystemLineText}"/>
+                            <!-- Only on a row nobody committed themselves (ET-179): an activity auto-saved
+                                 a day after it stopped must not read as one a pilot stood behind. -->
+                            <Border DockPanel.Dock="Left" Classes="chip dim" Margin="7,0,0,0"
+                                    IsVisible="{Binding HasAutoSavedRun}">
+                                <TextBlock Text="{Binding AutoSavedText}"/>
+                            </Border>
+                            <ItemsControl Margin="7,0,0,0" ItemsSource="{Binding Chips}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <ctl:ChipLinePanel Spacing="4"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vr:ActivityRewardChipViewModel">
+                                        <Border Classes="chip" Classes.dim="{Binding IsKnownKind}"
+                                                Classes.warn="{Binding IsUnknownKind}"
+                                                Classes.esc="{Binding IsEscalation}"
+                                                ToolTip.Tip="{Binding Tooltip}">
+                                            <TextBlock Text="{Binding Text}"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DockPanel>
+                    </StackPanel>
+                    <!-- One pilot by name, several as a stack of faces; every name on hover. -->
+                    <Panel Grid.Column="4" ToolTip.Tip="{Binding CrewText}">
+                        <TextBlock Classes="rowline" HorizontalAlignment="Right" FontSize="10"
+                                   TextTrimming="CharacterEllipsis"
+                                   IsVisible="{Binding !HasCrewStack}" Text="{Binding SoloCrewText}"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="3"
+                                    VerticalAlignment="Center" IsVisible="{Binding HasCrewStack}">
+                            <ctl:HexStack Size="16" Overlap="5" VerticalAlignment="Center"
+                                          Faces="{Binding CrewFaces}"/>
+                            <TextBlock Classes="rowsmall" Text="{Binding CrewCountText}"/>
+                        </StackPanel>
+                    </Panel>
+                    <StackPanel Grid.Column="5" VerticalAlignment="Center">
+                        <TextBlock Classes="rowfigure" IsVisible="{Binding HasNet}" Text="{Binding NetText}"/>
+                        <!-- Never a "0 ISK" where nothing was valued: a zero reads as a valuation that
+                             came out at nothing. A dash instead where none of this pilot's own
+                             characters flew it (ET-296) — the why is on hover, there is no room for
+                             it on the row. -->
+                        <TextBlock Classes="rownone" IsVisible="{Binding !HasNet}"
+                                   ToolTip.Tip="{Binding NoNetTooltip}"
+                                   Text="{Binding NoNetText}"/>
+                        <TextBlock Classes="rowsmall" Text="{Binding DurationText}"/>
+                    </StackPanel>
+                    <!-- A run knows where it stands towards a server, so the row says it. -->
+                    <ctl:IconGlyph Grid.Column="6" Classes="syncstate"
+                                   Classes.attention="{Binding IsSyncAttention}"
+                                   Classes.failed="{Binding IsSyncFailed}"
+                                   Kind="{Binding SyncIcon}" IsVisible="{Binding HasSyncText}"
+                                   ToolTip.Tip="{Binding SyncText}"/>
+                </Grid>
+            </Button>
+            <Button Classes="caretbtn" Width="18" Height="36" Margin="22,0,0,0" HorizontalAlignment="Left"
+                    IsVisible="{Binding HasCrewStack}" Command="{Binding ToggleCommand}"
+                    ToolTip.Tip="Show the pilots on this activity">
+                <TextBlock Classes="caret rowcaret" Classes.expanded="{Binding IsExpanded}" Text="&#x25B6;"/>
+            </Button>
+        </Panel>
+    </Border>
+</UserControl>

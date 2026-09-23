@@ -34,6 +34,7 @@ public static class KeyboardShortcutDefaults
             [ShortcutAction.OpenSettings] = [new KeyGesture(Key.OemComma, KeyModifiers.Control)],
             [ShortcutAction.CloseDialog] = [new KeyGesture(Key.Escape, KeyModifiers.None)],
             [ShortcutAction.SaveRun] = [new KeyGesture(Key.S, KeyModifiers.Control | KeyModifiers.Shift)],
+            [ShortcutAction.GoToHome] = [new KeyGesture(Key.D0, KeyModifiers.Control)],
         };
 
     /// <summary>Label shown in the Settings list — what the action does, not its key.</summary>
@@ -57,5 +58,6 @@ public static class KeyboardShortcutDefaults
         [ShortcutAction.OpenSettings] = "Open Settings",
         [ShortcutAction.CloseDialog] = "Cancel/close a dialog",
         [ShortcutAction.SaveRun] = "Save the current run",
+        [ShortcutAction.GoToHome] = "Go to the home screen",
     };
 }

@@ -1,0 +1,178 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ctl="using:EveUtils.Client.Controls">
+
+    <!-- A run row and the RUNNING band (ET-290, ET-307), as the runs overview draws them and the home repeats them
+         (ET-324). The list around the rows — its hover and selection fills — stays with each screen. -->
+
+    <!-- Secondary text is dim at rest and lifts to the text colour on hover and selection: dim on those fills
+         measured 3.3–4.4:1 in the v2 contrast check, the text colour 8.6 and up. Every secondary text and glyph
+         in a row inherits that ink from the row's own button, so one rule per row switches all of them — a rule
+         per text would be an ancestor watch per text, built again for every row the list scrolls in. -->
+    <Style Selector="Button.activityrow">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+    </Style>
+    <Style Selector="ListBoxItem:pointerover Button.activityrow, ListBoxItem:selected Button.activityrow">
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+    </Style>
+
+    <!-- The row and the day header are buttons that fill their item: a click opens the detail (ET-162) or folds
+         the day. Their own fills stay out of it — the item's presenter above draws hover for the whole row. -->
+    <Style Selector="Button.activityrow, Button.dayband, Button.caretbtn, Button.syncaction, Button.avatar">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+    </Style>
+    <Style Selector="Button.activityrow, Button.dayband">
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+    </Style>
+    <Style Selector="Button.activityrow:pointerover /template/ ContentPresenter, Button.activityrow:pressed /template/ ContentPresenter, Button.dayband:pointerover /template/ ContentPresenter, Button.dayband:pressed /template/ ContentPresenter, Button.caretbtn:pointerover /template/ ContentPresenter, Button.caretbtn:pressed /template/ ContentPresenter, Button.avatar:pointerover /template/ ContentPresenter, Button.avatar:pressed /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Button.activityrow:pointerover /template/ ContentPresenter, Button.activityrow:pressed /template/ ContentPresenter">
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+    </Style>
+    <Style Selector="Button.activityrow:pressed, Button.dayband:pressed, Button.caretbtn:pressed, Button.avatar:pressed">
+        <Setter Property="RenderTransform" Value="none"/>
+    </Style>
+
+    <Style Selector="TextBlock.caret">
+        <Setter Property="FontSize" Value="9"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.caret.expanded">
+        <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+    </Style>
+    <Style Selector="Button.caretbtn:pointerover TextBlock.caret, Button.dayband:pointerover TextBlock.caret">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+    </Style>
+    <!-- ET-307: a run's own fold caret reads lighter and smaller than a day's, and sits further right (see
+         the row Grid's own indent below) — the two never share a glyph, a size or an x position, which was
+         Jithran's exact complaint ("naast de dagen hebben we pijltjes, maar naast de runs ook"). -->
+    <Style Selector="TextBlock.caret.rowcaret">
+        <Setter Property="FontSize" Value="8"/>
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+    </Style>
+
+    <!-- Activity row -->
+    <!-- ET-307: the run rows under a day sit indented from it (see the row Grid's own Margin) and this bar
+         fills that indent — a spine down the left edge that reads as one group hanging under its day
+         header, per Jithran's own suggestion. Not hit-test visible: it must never steal a row's click.
+         Opaque enough (BorderStrongBrush, not the fainter DividerBrush/BorderBrush) that it survives both
+         the hover and the selected fill drawn behind it on the item's own ContentPresenter — it is part of
+         the row's content, painted above that fill, not a sibling of it. Day headers never get this class. -->
+    <Style Selector="Border.rowspine">
+        <Setter Property="Width" Value="3"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+        <Setter Property="Margin" Value="14,0,0,0"/>
+        <Setter Property="Background" Value="{DynamicResource BorderStrongBrush}"/>
+        <Setter Property="IsHitTestVisible" Value="False"/>
+    </Style>
+    <Style Selector="TextBlock.rowtime">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.rowsite">
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+    <Style Selector="TextBlock.rowline">
+        <Setter Property="FontSize" Value="9.5"/>
+        <Setter Property="TextWrapping" Value="NoWrap"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.rowkind">
+        <Setter Property="LetterSpacing" Value="1"/>
+    </Style>
+    <Style Selector="TextBlock.rowfigure">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="TextAlignment" Value="Right"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+    <Style Selector="TextBlock.rowfigure.dim">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+    </Style>
+    <Style Selector="TextBlock.rowsmall">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="TextAlignment" Value="Right"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.rownone">
+        <Setter Property="FontSize" Value="9.5"/>
+        <Setter Property="TextAlignment" Value="Right"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+    <!-- One line under the figures, never wrapped: it explains the row, it does not double its height. -->
+    <Style Selector="TextBlock.rowsub">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="FontSize" Value="9.5"/>
+        <Setter Property="TextWrapping" Value="NoWrap"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="ctl|IconGlyph.typeicon">
+        <Setter Property="Width" Value="14"/>
+        <Setter Property="Height" Value="14"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+    </Style>
+    <Style Selector="ctl|IconGlyph.syncstate">
+        <Setter Property="Width" Value="13"/>
+        <Setter Property="Height" Value="13"/>
+    </Style>
+    <Style Selector="ctl|IconGlyph.syncstate.attention">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+    </Style>
+    <Style Selector="ctl|IconGlyph.syncstate.failed">
+        <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+    </Style>
+
+    <!-- ══ RUNNING ══ -->
+    <Style Selector="TextBlock.runwho">
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.runsite">
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+    <Style Selector="TextBlock.runclock">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        <Setter Property="FontSize" Value="15"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="TextAlignment" Value="Right"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.runidle">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <!-- An idle character's avatar: a 28 px target around a 22 px hex, ringed in the bright accent on hover and
+         on keyboard focus. -->
+    <Style Selector="Button.avatar">
+        <Setter Property="Width" Value="28"/>
+        <Setter Property="Height" Value="28"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.avatar:pointerover ctl|HexPortrait, Button.avatar:focus-visible ctl|HexPortrait">
+        <Setter Property="Ring" Value="{DynamicResource AccentBrightBrush}"/>
+    </Style>
+
+</Styles>

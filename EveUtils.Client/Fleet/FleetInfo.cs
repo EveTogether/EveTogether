@@ -27,4 +27,11 @@ public sealed record FleetInfo(
     /// <summary>When the fleet was last started, or null when it never was — what "active for 01:26:27" is read
     /// from (ET-166). Only meaningful while <see cref="Activation"/> is Active; a Stop leaves it standing as the
     /// record of the last run and the next Start overwrites it.</summary>
-    DateTimeOffset? ActivatedAt = null);
+    DateTimeOffset? ActivatedAt = null)
+{
+    /// <summary>A client-only fleet read from the local store, in the shape a server fleet arrives in.</summary>
+    public static FleetInfo FromEntity(EveUtils.Shared.Modules.Fleet.Entities.Fleet fleet) => new(
+        fleet.Id, fleet.Name, fleet.Description, fleet.Visibility, fleet.State,
+        fleet.CreatorCharacterId, fleet.FromTime, fleet.ToTime, fleet.CreatedAt, fleet.Activation, fleet.FleetCompositionId,
+        fleet.EsiFleetId, fleet.EsiFleetBossId, fleet.EsiAutoApplyStructure, fleet.EsiAutoInviteMembers, fleet.ActivatedAt);
+}

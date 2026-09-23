@@ -68,7 +68,7 @@ public sealed class DialogService : IDialogService, ISingletonService
     // The icon is the tab's, and is chosen per SCREEN rather than per rail group (ET-171): one fleet can put three
     // tabs in the strip and they all read "FLEET…", so a symbol shared by the whole group would separate nothing.
     // Where a screen has a rail entry the rail's own icon is reused, so the strip and the rail agree.
-    private void Route(Window window, string title, string? moduleKey, string moduleId, MaterialIconKind icon) =>
+    private object? Route(Window window, string title, string? moduleKey, string moduleId, MaterialIconKind icon) =>
         _moduleHost.Open(window, title, moduleKey, moduleId, icon);
 
     /// <summary>
@@ -408,8 +408,9 @@ public sealed class DialogService : IDialogService, ISingletonService
         return await _Over(dialog).ShowDialog<bool>(_owner);
     }
 
-    public void ShowFleets(FleetsViewModel viewModel) =>
-        Route(new FleetsWindow(viewModel), "FLEETS", "fleet", "fleets", MaterialIconKind.AccountGroupOutline);
+    public FleetsViewModel ShowFleets(FleetsViewModel viewModel) =>
+        Route(new FleetsWindow(viewModel), "FLEETS", "fleet", "fleets", MaterialIconKind.AccountGroupOutline)
+            as FleetsViewModel ?? viewModel;
 
     public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday)
     {
@@ -516,10 +517,11 @@ public sealed class DialogService : IDialogService, ISingletonService
         return viewModel.Applied;   // the window's own buttons never decide this — what was written does
     }
 
-    public void ShowRuns(RunsOverviewViewModel viewModel)
+    public RunsOverviewViewModel ShowRuns(RunsOverviewViewModel viewModel)
     {
         _Observe(viewModel.LoadAsync(), "this screen could not be read");
-        Route(new RunsWindow(viewModel), "RUNS", "runs", "runs", MaterialIconKind.RocketLaunchOutline);
+        return Route(new RunsWindow(viewModel), "RUNS", "runs", "runs", MaterialIconKind.RocketLaunchOutline)
+            as RunsOverviewViewModel ?? viewModel;
     }
 
     /// <summary>A modal dialog rather than a docked module (ET-163 nazorg): filling in a run is a moment, not a

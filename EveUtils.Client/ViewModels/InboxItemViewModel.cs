@@ -28,6 +28,12 @@ public partial class InboxItemViewModel : ObservableObject
     public IReadOnlyList<long> LocalIds { get; }
 
     public string Title { get; }
+
+    /// <summary>What kind of news it is, and when its newest copy arrived — the home collapses one day's repeats of
+    /// one title into a single line with a count (ET-324).</summary>
+    public MessageKind Kind { get; }
+
+    public DateTimeOffset CreatedAt { get; }
     public string? Body { get; }
     public bool IsInvite { get; }
 
@@ -74,11 +80,13 @@ public partial class InboxItemViewModel : ObservableObject
         var head = messages[0]; // newest copy of the merged action (the list arrives newest-first)
         LocalIds = messages.Select(m => m.Id).ToArray();
         Title = head.Title;
+        Kind = head.Kind;
+        CreatedAt = messages.Max(m => m.CreatedAt);
         Body = head.Body;
         IsInvite = head.Kind == MessageKind.FleetInvite;
         IsSwitchRequest = head.Kind == MessageKind.FleetSwitchRequest;
         RecipientLabel = "To: " + string.Join(", ", recipientNames);
-        TimestampLabel = FormatTimestamp(messages.Max(m => m.CreatedAt));
+        TimestampLabel = FormatTimestamp(CreatedAt);
         _isRead = messages.All(m => m.IsRead);
         // A part-answered group still offers actions: stay Pending while any copy is unanswered.
         _status = messages.Any(m => m.Status == MessageStatus.Pending) ? MessageStatus.Pending : head.Status;

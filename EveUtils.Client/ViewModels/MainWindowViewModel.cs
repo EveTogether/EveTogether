@@ -17,6 +17,7 @@ using EveUtils.Client.Fittings;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.Home;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.EveSettings;
@@ -304,6 +305,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     // The rail highlight follows the selected host tab's module (null = home → nothing highlighted).
     partial void OnSelectedHostTabChanged(HostTab? value)
     {
+        OnPropertyChanged(nameof(IsHomeShown));
         OnPropertyChanged(nameof(ActiveModule));
         OnPropertyChanged(nameof(IsFitsActive));
         OnPropertyChanged(nameof(IsFleetActive));
@@ -326,7 +328,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         switch (id)
         {
             // FITS opens the full fit browser in both modes (consistent): hosted in docked, a window in floating.
-            // The home dashboard (live DPS) remains the landing shown at startup and when no tab is open.
+            // The home remains the landing shown at startup and when no tab is open.
             case "fits": await OpenFitBrowser(); break;
             case "fleet": OpenFleets(); break;
             case "compositions": OpenCompositions(); break;
@@ -367,8 +369,17 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// <summary>The active host tab (its content fills the host).</summary>
     [ObservableProperty] private HostTab? _selectedHostTab;
 
-    /// <summary>True when the host shows the home landing (no module tabs open).</summary>
-    public bool IsHomeShown => HostTabs.Count == 0;
+    /// <summary>True when the host shows the home: no module tab open, or none selected because HOME was chosen
+    /// (ET-324). The open tabs stay open either way, one click from coming back.</summary>
+    public bool IsHomeShown => HostTabs.Count == 0 || SelectedHostTab is null;
+
+    /// <summary>Whether the host has module tabs to show in its strip — independent of whether one is selected.</summary>
+    public bool HasHostTabs => HostTabs.Count > 0;
+
+    /// <summary>HOME on the rail (ET-324): the home in front, every open tab left as it is. No second path — the same
+    /// selection the tab strip drives, with nothing selected.</summary>
+    [RelayCommand]
+    private void GoHome() => SelectedHostTab = null;
 
     /// <summary>The remote bus connector, exposed so the character dialog can read per-server state and
     /// subscribe to live state changes while it is open.</summary>
@@ -382,8 +393,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// once here and shared with the non-modal log window so it keeps updating live while open.</summary>
     public ClientLogViewModel Logs { get; }
 
-    /// <summary>The home dashboard: your own characters' live DPS, your fleets, the latest shared fits and recent
-    /// activity. Replaces the old global live-DPS landing that showed every connected client's DPS.</summary>
+    /// <summary>The home screen (ET-324): earnings, pilots, latest runs, fleets, fits and activity at a glance.</summary>
     public HomeDashboardViewModel Home { get; }
 
     // ── Constructors ─────────────────────────────────────────────────────────────────────────────
@@ -417,7 +427,16 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _fleetClient = services.GetRequiredService<FleetClient>();
         Inbox = services.GetRequiredService<InboxViewModel>(); // subscribes to MessageDeliveredEvent on the bus
         Logs = services.GetRequiredService<ClientLogViewModel>(); // subscribes to ILogStore.EntryAdded
-        Home = new HomeDashboardViewModel(services, DpsTrackers); // tracks the self DPS subset + loads fleets/fits/stats
+        Home = new HomeDashboardViewModel(services, new HomeNavigation(
+            OpenRunsAsync,
+            id => _ = LaunchModule(id),
+            _OpenFleetsAsync,
+            OpenCharacterSettings,
+            OpenMetrics,
+            OpenCharacterDpsOverlay,
+            (characterId, scope) => ReAuthenticateAsync(characterId, [scope]),
+            characterId => ReAuthenticateAsync(characterId),
+            () => ImportFittingsCommand.ExecuteAsync(null)), Characters, Fittings, Inbox);
 
         SetupLocalFittingsTab();
 
@@ -575,16 +594,27 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _localFitsTab = new FittingsTabViewModel("Local", Fittings);
         FittingTabs.Add(_localFitsTab);
         SelectedFittingsTab = _localFitsTab;
-        HostTabs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsHomeShown));   // home shows when no tabs
+        HostTabs.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(IsHomeShown));
+            OnPropertyChanged(nameof(HasHostTabs));
+        };
     }
 
     /// <summary>Opens the Fleets window — non-modal so its live member graphs run alongside the main window.</summary>
     [RelayCommand]
-    private void OpenFleets()
+    private void OpenFleets() => _ = _OpenFleetsAsync(null);
+
+    /// <param name="then">What to do on the screen once it is showing — the home starts a fleet or makes a new one
+    /// through the screen's own flow, confirmations included.</param>
+    private async Task _OpenFleetsAsync(Func<FleetsViewModel, Task>? then)
     {
         if (_services is null || _dialogs is null)
             return;
-        _dialogs.ShowFleets(new FleetsViewModel(_services));
+
+        FleetsViewModel shown = _dialogs.ShowFleets(new FleetsViewModel(_services));
+        if (then is not null)
+            await then(shown);
     }
 
     /// <summary>Opens the Fleet Compositions library — the reusable-doctrine module, hosted like the
@@ -662,14 +692,17 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// <summary>Opens the runs screen (ET-161) — the only place in the app a saved run can be read back, and the
     /// only way into an activity's detail. The character list comes from the registry as it stands now, because the
     /// running band is a lane per character and a toon linked since app start would otherwise have none.</summary>
-    private async Task OpenRunsAsync()
+    /// <param name="then">What to do with the screen once it is showing — the home picks a day or a week on it.</param>
+    private async Task OpenRunsAsync(Func<RunsOverviewViewModel, Task>? then = null)
     {
         if (_dialogs is null || _services is null)
             return;
 
         IReadOnlyList<Character> characters = await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
-        _dialogs.ShowRuns(new RunsOverviewViewModel(
+        RunsOverviewViewModel shown = _dialogs.ShowRuns(new RunsOverviewViewModel(
             _services.GetRequiredService<IDispatcher>(), _dialogs, _services, characters));
+        if (then is not null)
+            await then(shown);
     }
 
     /// <summary>Opens the manual run-start dialog (ET-163) — modal, and closed again by START. A fresh view-model
@@ -1337,14 +1370,16 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// The popup is built from the scope registry, so it lists every scope the modules declare and scales as new
     /// scopes are added — replacing the former per-scope "+ ADD" buttons. Re-uses the SSO with the chosen set.
     /// </summary>
-    public async Task ReAuthenticateAsync(int characterId)
+    /// <param name="extraScopes">Ticked on top of what is granted — the home's ALLOW… for a scope a pilot chose not
+    /// to share (ET-324); still only a pre-tick, the picker has the last word.</param>
+    public async Task ReAuthenticateAsync(int characterId, IReadOnlyCollection<string>? extraScopes = null)
     {
         if (_login is null || _dialogs is null || _scopeRegistry is null || _registry is null) return;
 
         var granted = (await _registry.GetAllAsync())
             .FirstOrDefault(c => c.EsiCharacterId == characterId)?.GrantedScopes ?? [];
         var available = _scopeRegistry.GetRequirements(EsiScopeTarget.Client);
-        var selected = await _dialogs.SelectScopesAsync(available, granted);
+        var selected = await _dialogs.SelectScopesAsync(available, [.. granted.Union(extraScopes ?? [], StringComparer.OrdinalIgnoreCase)]);
         if (selected is null)
         {
             ActivityStatus = "Re-authentication cancelled.";
@@ -2238,7 +2273,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
         await LoadFittingsAsync();             // global Local fittings list (all characters)
         await RefreshFittingsTabsAsync();      // server tabs for the restored connections
-        await Home.RefreshAsync();             // home dashboard: your fleets, latest shared fits, character stats
+        await Home.LoadAsync();
     }
 
     /// <summary>
@@ -2289,6 +2324,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// The restart banner: a package is downloaded and waiting, and stays waiting until it is applied.
     /// </summary>
     [ObservableProperty] private bool _isUpdateReady;
+
+    partial void OnIsUpdateReadyChanged(bool value) => Home.SystemStrip.ShowUpdateReady(value);
 
     [ObservableProperty] private string _updateReadyMessage = "";
 

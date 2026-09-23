@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels;
+using EveUtils.Client.ViewModels.Home;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Data;
@@ -61,7 +62,7 @@ public sealed class RunsLiveRefreshTests
         await ActivityWindowHarness.WaitUntil(() => overview.UnfinishedRuns.Count == 1); // read off the UI thread (ET-290)
 
         Assert.Equal(runId, Assert.Single(overview.UnfinishedRuns).RunId);
-        Assert.All(overview.Lanes, lane => Assert.False(lane.IsRunning));
+        Assert.All(overview.Running.Lanes, lane => Assert.False(lane.IsRunning));
     }
 
     /// <summary>Table row 2: a run saved while the overview sits open leaves UNFINISHED and lands under its day. Red
@@ -207,8 +208,8 @@ public sealed class RunsLiveRefreshTests
         Assert.Single(after.SubRuns);
     }
 
-    /// <summary>Table rows 3 and 4 on the dashboard: deleting a saved activity, and undoing it, move "ISK today"
-    /// without a REFRESH. Red before: the dashboard listened to a save and a loot correction and nothing else.</summary>
+    /// <summary>Table rows 3 and 4 on the dashboard: deleting a saved activity, and undoing it, move the home's TODAY
+    /// without a REFRESH. Red before ET-222: the dashboard listened to a save and a loot correction and nothing else.</summary>
     [AvaloniaFact]
     public async Task DeletingAndRestoringASavedActivity_MovesIskToday_WithoutRefresh()
     {
@@ -217,17 +218,17 @@ public sealed class RunsLiveRefreshTests
         await instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character("Ra Vinter", (int)Pilot), Token);
         Guid runId = await _SaveAsync(dispatcher, Pilot, DateTime.UtcNow.AddMinutes(-30),
             bounties: [new RunBountyEntryInput { OccurredAtUtc = DateTime.UtcNow.AddMinutes(-20), Isk = 3_000_000m }]);
-        var home = new HomeDashboardViewModel(instance.Services, []);
-        await home.RebuildRosterAsync();
-        Assert.Equal("3.0M", home.IskTodayText);
+        using var home = new HomeDashboardViewModel(instance.Services, HomeNavigation.None, []);
+        await home.LoadAsync();
+        Assert.Equal("3M", home.Earnings.Today.IskText);
 
         await dispatcher.Send(new DeleteRunCommand(runId, DateTime.UtcNow), Token);
-        await ActivityWindowHarness.WaitUntil(() => home.IskTodayText == "0");
-        Assert.Equal("0", home.IskTodayText);
+        await ActivityWindowHarness.WaitUntil(() => home.Earnings.Today.IskText == "—");
+        Assert.Equal("—", home.Earnings.Today.IskText);
 
         await dispatcher.Send(new RestoreRunCommand(runId), Token);
-        await ActivityWindowHarness.WaitUntil(() => home.IskTodayText == "3.0M");
-        Assert.Equal("3.0M", home.IskTodayText);
+        await ActivityWindowHarness.WaitUntil(() => home.Earnings.Today.IskText == "3M");
+        Assert.Equal("3M", home.Earnings.Today.IskText);
     }
 
     /// <summary>The detail screen had no subscription at all: a loot correction made in a second window left it
