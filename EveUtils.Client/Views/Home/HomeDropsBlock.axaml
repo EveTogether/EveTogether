@@ -1,0 +1,26 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vh="using:EveUtils.Client.ViewModels.Home"
+             x:Class="EveUtils.Client.Views.Home.HomeDropsBlock"
+             x:DataType="vh:HomeLatestRunsViewModel">
+
+    <!-- BEST DROPS · 7 DAYS: valued at CCP's average price, and labelled so — it is nobody's sale price. -->
+    <StackPanel Margin="14,10,14,10" Spacing="4">
+        <TextBlock Classes="kicker" Text="BEST DROPS · 7 DAYS" Margin="0,0,0,4"/>
+        <TextBlock Classes="none" Text="No loot recorded this week." IsVisible="{Binding !HasDrops}"/>
+        <ItemsControl ItemsSource="{Binding Drops}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vh:HomeDropLine">
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,2" Background="Transparent" ToolTip.Tip="{Binding Tooltip}">
+                        <TextBlock Classes="sub" TextTrimming="CharacterEllipsis">
+                            <Run Foreground="{StaticResource TextBrightBrush}" Text="{Binding Name}"/>
+                            <Run Text="{Binding QuantityText}" FontSize="9.5"/>
+                        </TextBlock>
+                        <TextBlock Grid.Column="1" Classes="figure" Margin="10,0,0,0" Text="{Binding ValueText}"/>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Classes="none" FontSize="9.5" Text="valued at CCP's average price, hourly" IsVisible="{Binding HasDrops}"/>
+    </StackPanel>
+</UserControl>

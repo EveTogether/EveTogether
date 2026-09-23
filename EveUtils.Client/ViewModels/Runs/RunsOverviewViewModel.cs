@@ -79,7 +79,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private readonly FleetRunAutoPublisher? _autoPublisher;
     private readonly RunRowFacts _facts;
     private readonly RunPublisher _publisher;
-    private readonly ConcurrentDictionary<long, CharacterFaceViewModel> _faces = new();
+    private readonly CharacterFaceCache _faces;
     private bool _canPublish;
 
     /// <summary>Set once per load when <see cref="_fleetFilter"/> is active and turned up nothing: whether that
@@ -198,6 +198,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         Tabs = [new RunsTabViewModel("Local", null, _PublishDayAsync)];
         _facts = new RunRowFacts(services.GetService<ISdeAccessor>());
         _publisher = new RunPublisher(dispatcher, dialogs, services);
+        _faces = new CharacterFaceCache(services.GetService<ICharacterPortraitProvider>());
         _namesById = characters
             .Where(character => character.EsiCharacterId is > 0)
             .GroupBy(character => (long)character.EsiCharacterId!.Value)
@@ -356,22 +357,26 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     /// <summary>A TOP RUNS line: that run selected and shown — beside the list, or in the drawer — with its day unfolded
     /// and the row scrolled into view. A run from a week's other month brings that month into view first.</summary>
-    public async Task OpenSummaryRunAsync(RunsSummaryRunLine line)
+    public Task OpenSummaryRunAsync(RunsSummaryRunLine line) => OpenRunAsync(line.ActivitySummaryId, line.Day);
+
+    /// <summary>One run selected and shown, its day unfolded and the row scrolled into view — a TOP RUNS line, or a
+    /// run on the home (ET-324). A run from another month brings that month into view first.</summary>
+    public async Task OpenRunAsync(Guid activitySummaryId, DateOnly day)
     {
         IsSummaryChosen = false;
-        if (_RowOf(line.ActivitySummaryId) is null)
+        if (_RowOf(activitySummaryId) is null)
         {
-            var month = new DateOnly(line.Day.Year, line.Day.Month, 1);
+            var month = new DateOnly(day.Year, day.Month, 1);
             if (month == _MonthInView)
                 return;
 
             await _GoToMonthAsync(month, keepRange: true);
         }
 
-        if (SelectedTab is not { } tab || _RowOf(line.ActivitySummaryId) is not { } row)
+        if (SelectedTab is not { } tab || _RowOf(activitySummaryId) is not { } row)
             return;
 
-        tab.ExpandDays([line.Day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local)]);
+        tab.ExpandDays([day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local)]);
         Select(row);
         RowScrollRequested?.Invoke(row);
     }
@@ -1527,18 +1532,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     private string _NameOf(long characterId) => _characterNames.NameOf(characterId);
 
-    /// <summary>One face per character for the whole screen, own and external alike: the hex shows the initial until
-    /// the portrait lands, best-effort and fire-and-forget the same as a fleet roster leaf (ET-184, ET-306) — posted
-    /// to the UI thread regardless of which thread creates the face, since a crew face is as likely to be minted from
-    /// the pane's off-thread detail read as from the UI thread building the running lanes.</summary>
-    private CharacterFaceViewModel _FaceOf(long characterId, string name) =>
-        _faces.GetOrAdd(characterId, id =>
-        {
-            var face = new CharacterFaceViewModel(id, name);
-            if (_services.GetService<ICharacterPortraitProvider>() is { } portraits)
-                Dispatcher.UIThread.Post(() => _ = face.LoadPortraitAsync(portraits));
-            return face;
-        });
+    private CharacterFaceViewModel _FaceOf(long characterId, string name) => _faces.FaceOf(characterId, name);
 
     /// <summary>The pilots' runs behind one row, read through the detail query rather than a read path of this screen's
     /// own — ET-160 owns what an activity's runs are, and a second answer here could disagree with the detail screen

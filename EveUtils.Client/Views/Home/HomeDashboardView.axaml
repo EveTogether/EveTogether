@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vh="using:EveUtils.Client.ViewModels.Home"
              xmlns:home="using:EveUtils.Client.Views.Home"
+             xmlns:vw="using:EveUtils.Client.Views.Runs"
              xmlns:ctl="using:EveUtils.Client.Controls"
              xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -129,12 +130,6 @@
         </Style>
         <Style Selector="Grid#Earnings.narrow TextBlock.comparison">
             <Setter Property="IsVisible" Value="False"/>
-        </Style>
-        <Style Selector="Grid#Earnings.narrow Border#Chart">
-            <Setter Property="Grid.Row" Value="1"/>
-            <Setter Property="Grid.Column" Value="0"/>
-            <Setter Property="Grid.ColumnSpan" Value="3"/>
-            <Setter Property="BorderThickness" Value="0,1,0,0"/>
         </Style>
 
         <!-- The 30-day chart: accent-b in three strengths (today, this week, older), hatched before tracking began. -->
@@ -293,6 +288,39 @@
         <Style Selector="Grid#Body.narrow Control.narrowcell">
             <Setter Property="IsVisible" Value="True"/>
         </Style>
+
+        <!-- ══ Latest runs ══ the runs overview's rows (RunRowStyles); hover fills the whole row as the overview's list
+             does. The overview's fold caret and day spine have no list to work in here. -->
+        <StyleInclude Source="avares://EveUtils.Client/Views/Runs/RunRowStyles.axaml"/>
+        <Style Selector="Border.homerun">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.homerun:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        </Style>
+        <Style Selector="Border.homerun:pointerover Button.activityrow">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        </Style>
+        <Style Selector="Border.homerun Border.rowspine">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="Border.homerun Button.caretbtn">
+            <Setter Property="Opacity" Value="0"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+        </Style>
+        <Style Selector="Border.homeday">
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="Background" Value="{DynamicResource BgDayHeadBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0,1,0,1"/>
+        </Style>
+        <Style Selector="TextBlock.daytext">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="1.8"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
     </UserControl.Styles>
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
@@ -321,6 +349,12 @@
                         </Border>
                     </StackPanel>
                 </Grid>
+            </Border>
+
+            <!-- ══ Running ══ the runs overview's own band (RunningBand): running groups with their clocks, or nothing
+                 running with when the last run ended; idle pilots as avatars, one click from a start. -->
+            <Border Classes="block" Padding="14,4" IsVisible="{Binding Running, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <vw:RunningBand DataContext="{Binding Running}"/>
             </Border>
 
             <!-- ══ Earnings (3.A) ══ -->
@@ -409,6 +443,14 @@
             <Grid x:Name="Body" ColumnDefinitions="*,0" RowDefinitions="Auto,Auto">
                 <StackPanel x:Name="LeftColumn" Grid.Column="0">
                     <home:HomePilotsBlock DataContext="{Binding Pilots}"/>
+                    <Border Classes="block">
+                        <Grid x:Name="RunsRow" ColumnDefinitions="*,0" RowDefinitions="Auto,Auto">
+                            <home:HomeLatestRunsBlock DataContext="{Binding LatestRuns}"/>
+                            <Border x:Name="Drops" Grid.Column="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
+                                <home:HomeDropsBlock DataContext="{Binding LatestRuns}"/>
+                            </Border>
+                        </Grid>
+                    </Border>
                 </StackPanel>
                 <Border x:Name="RightColumn" Grid.Column="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
                     <StackPanel x:Name="RightBlocks"/>
