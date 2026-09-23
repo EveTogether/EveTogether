@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Linq;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
@@ -55,8 +56,8 @@ public partial class CharacterMetricsRowViewModel : ViewModelBase
     public long BountyValue { get; private set; }
     public long MinedValue { get; private set; }
 
-    private static readonly IBrush MissBrush = new SolidColorBrush(Color.Parse("#FFEF5A5A"));
-    private static readonly IBrush NotifyBrush = new SolidColorBrush(Color.Parse("#FFE0B25A"));
+    private static readonly IBrush MissBrush = new ImmutableSolidColorBrush(Color.Parse("#FFEF5A5A"));
+    private static readonly IBrush NotifyBrush = new ImmutableSolidColorBrush(Color.Parse("#FFE0B25A"));
     private int _lastMisses;
     private int _lastNotifyCount;
 

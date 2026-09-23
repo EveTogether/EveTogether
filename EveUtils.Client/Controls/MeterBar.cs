@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 
 namespace EveUtils.Client.Controls;
 
@@ -12,7 +13,7 @@ namespace EveUtils.Client.Controls;
 /// </summary>
 public sealed class MeterBar : Control
 {
-    private static readonly IBrush DefaultTrack = new SolidColorBrush(Color.Parse("#0FFFFFFF"));
+    private static readonly IBrush DefaultTrack = new ImmutableSolidColorBrush(Color.Parse("#0FFFFFFF"));
 
     public static readonly StyledProperty<double> FractionProperty =
         AvaloniaProperty.Register<MeterBar, double>(nameof(Fraction));
