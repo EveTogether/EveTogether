@@ -13,6 +13,13 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: an abyssal run's filament now shows up as what it cost.** CONSUMABLES lists the filament like any other
+  item, with its icon, name, count and value. In the loot block CONSUMED shows the filament's cost instead of "no
+  price", and NET is the loot minus what you spent, the same figure the run's total ISK already used. A saved run is
+  also valued again at today's prices when you open it, so its loot header no longer differs from the loot list under it.
+- **Changed: the filament count is proposed from the fit chosen for the run.** Frigate, destroyer and cruiser fits
+  suggest 3, 2 and 1 filaments even when the game has not shown the app your ship yet; without a chosen fit it still
+  follows the ship it last saw. You can still change the count yourself.
 - **Fixed: a character's system on the home screen no longer stays on "locating…".** When the app learned where a
   character is from ESI rather than from a jump, the home line never picked it up, while the DPS window showed it. Both
   now follow the same location and update as the character moves.

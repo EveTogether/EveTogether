@@ -93,7 +93,7 @@ public sealed partial class LootWindowSectionViewModel : RunWindowSection
     // while two items sat in it (Raymond, 2026-09-02). The whole group's, since the section under it is.
     public override void RefreshSummary() =>
         HeaderSummary = LootOverview is { HasCaptures: true } overview
-            ? $"{_LootItemCount()} · {overview.NetIskDisplay}"
+            ? $"{_LootItemCount()} · {overview.LootNetIskDisplay}"
             : RunLoot?.RunStatusMessage ?? "no loot captured";
 
     [RelayCommand]

@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Imaging;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Services;
@@ -35,6 +36,10 @@ public sealed partial class ConsumablesWindowSectionViewModel(IRunWindowContext 
     [ObservableProperty] private string? _filamentName;
 
     [ObservableProperty] private decimal? _unitPrice;
+
+    /// <summary>The filament as a loot line with its unit price — the same line LOOT draws, so the icon and name read
+    /// as they do everywhere else (ET-329). Null until the pocket's tier and weather resolve a type.</summary>
+    [ObservableProperty] private ActivityLootLineViewModel? _filamentLine;
 
     public override void Refresh(DateTime nowUtc)
     {
@@ -112,15 +117,17 @@ public sealed partial class ConsumablesWindowSectionViewModel(IRunWindowContext 
             RefreshSummary();
     }
 
-    /// <summary>A destroyer needs 2 (Jithran, ET-249) — every other hull class proposes nothing until someone
-    /// measures the SDE's own filament-access requirement for it, per the ticket's own instruction never to guess.</summary>
+    /// <summary>The count the hull class of the character's fit is known to need — the fit chosen for the run first,
+    /// the ship last seen only when there is none (ET-328). A hull class nobody has measured proposes nothing, per
+    /// ET-249's instruction never to guess.</summary>
     private int? _ProposedCount(int characterId)
     {
         if (Context.Services.GetService<IShipFitDetectionService>() is not { } detection
             || Context.Services.GetService<ISdeAccessor>() is not { } sde)
             return null;
 
-        int? shipTypeId = detection.GetReading(characterId).ShipTypeId;
+        ShipFitDetectionReading reading = detection.GetReading(characterId);
+        int? shipTypeId = reading.SelectedFit?.ShipTypeId ?? reading.ShipTypeId;
         string? hullClass = shipTypeId is { } typeId && sde.IsAvailable && sde.GetType(typeId) is { } type
             ? sde.GetGroup(type.GroupId)?.Name
             : null;
@@ -137,6 +144,7 @@ public sealed partial class ConsumablesWindowSectionViewModel(IRunWindowContext 
         {
             _filamentTypeId = null;
             FilamentName = null;
+            _ShowFilamentLine();
             RefreshSummary();
             return;
         }
@@ -144,6 +152,7 @@ public sealed partial class ConsumablesWindowSectionViewModel(IRunWindowContext 
         int? typeId = AbyssalConsumables.ResolveTypeId(sde, tier, weather.Name);
         _filamentTypeId = typeId;
         FilamentName = typeId is not null ? $"{AbyssalTiers.Names[tier]} {weather.Name} Filament" : null;
+        _ShowFilamentLine();
         RefreshSummary();
 
         if (typeId is null || typeId == _pricedForTypeId
@@ -157,7 +166,25 @@ public sealed partial class ConsumablesWindowSectionViewModel(IRunWindowContext 
                 ? (decimal)estimate
                 : null
             : null;
+        _ShowFilamentLine();
         RefreshSummary();
+    }
+
+    private void _ShowFilamentLine()
+    {
+        if (_filamentTypeId is not { } typeId || FilamentName is not { } name)
+        {
+            FilamentLine = null;
+            return;
+        }
+
+        if (FilamentLine is { } current && current.ItemTypeId == typeId && current.Name == name && current.Value == UnitPrice)
+            return;
+
+        var line = new ActivityLootLineViewModel(typeId, name, 1, UnitPrice, LootKind.Lost);
+        FilamentLine = line;
+        if (Context.Services.GetService<ITypeImageProvider>() is { } images)
+            _ = line.LoadIconAsync(images);
     }
 
     protected override void OnContextChanged(string? propertyName)

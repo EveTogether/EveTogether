@@ -2,12 +2,17 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
              xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             xmlns:vw="using:EveUtils.Client.Views.Runs"
              x:Class="EveUtils.Client.Views.Runs.Sections.ConsumablesWindowSectionView"
              x:DataType="vs:ConsumablesWindowSectionViewModel">
     <StackPanel>
         <Grid Classes="kv" ColumnDefinitions="Auto,*">
             <TextBlock Text="FILAMENT"/>
-            <TextBlock Grid.Column="1" Text="{Binding FilamentName, TargetNullValue='not set yet'}"/>
+            <TextBlock Grid.Column="1" Text="not set yet"
+                       IsVisible="{Binding FilamentLine, Converter={x:Static ObjectConverters.IsNull}}"/>
+            <Panel Grid.Column="1" IsVisible="{Binding FilamentLine, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <vw:ActivityLootLineView DataContext="{Binding FilamentLine}"/>
+            </Panel>
         </Grid>
         <!-- One row per participant (own toon or fleet member, ET-249): the count is a proposal from their fit's
              hull class, editable — someone who went in without a filament sets theirs to 0. -->
