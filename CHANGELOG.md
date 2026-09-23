@@ -13,6 +13,9 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: a character's system on the home screen no longer stays on "locating…".** When the app learned where a
+  character is from ESI rather than from a jump, the home line never picked it up, while the DPS window showed it. Both
+  now follow the same location and update as the character moves.
 - **Changed: a new home screen that shows the whole app at a glance.** What you made today, this week and this
   month, each against the same point in the previous one, with where the ISK came from and the last 30 days as bars.
   Below it one compact line per character: whether their EVE client runs on this PC, the system, the ship with its

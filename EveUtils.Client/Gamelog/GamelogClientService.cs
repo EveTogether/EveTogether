@@ -102,6 +102,10 @@ public sealed partial class GamelogClientService : IFleetMetricSource, ISingleto
 
     /// <summary>Raised when discrete metrics (bounty/location/notify) change; the UI also polls Snapshot on a timer.</summary>
     public event Action? MetricsChanged;
+
+    /// <summary>A character's known system was set — from a game log jump or from the ESI gap fill alike, so a listener
+    /// that wants the location never has to know which of the two answered.</summary>
+    public event Action<string>? LocationChanged;
     /// <summary>
     /// Character, target, the gamelog line's OWN time, and which way the damage went. The time is never the moment
     /// we read it, for the same reason the hit itself is placed at that time (see <see cref="AddHitAsync"/>): EVE
@@ -728,8 +732,10 @@ public sealed partial class GamelogClientService : IFleetMetricSource, ISingleto
     /// clock is driven by the ESI watch, which sees both ends of a run and cannot be handed a stale timestamp.</summary>
     public void SetLocation(string characterName, string system, DateTime at)
     {
-        Metrics(Resolve(characterName)).SetLocation(system, at);
+        string name = Resolve(characterName);
+        Metrics(name).SetLocation(system, at);
         MetricsChanged?.Invoke();
+        LocationChanged?.Invoke(name);
     }
 
     /// <summary>Record a notable notify/warning event (scramble, jam, neut, …).</summary>
