@@ -140,6 +140,11 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
 
     public HomeLatestRunsViewModel LatestRuns { get; }
 
+    /// <summary>Full runs reads and running-band-only reads so far — what the ET-324 measurement counts a storm in.</summary>
+    internal int RunsReadCount { get; private set; }
+
+    internal int RunningReadCount { get; private set; }
+
     public HomeFleetsViewModel Fleets { get; }
 
     public HomeFitsViewModel Fits { get; }
@@ -194,6 +199,10 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
                 bool readAll = isFull;
                 Dictionary<Guid, ActivityOverviewRowViewModel> shownRows = LatestRuns.Items.OfType<HomeRunLine>()
                     .ToDictionary(line => line.Row.ActivitySummaryId, line => line.Row);
+                if (readAll)
+                    RunsReadCount++;
+                else
+                    RunningReadCount++;
                 HomeRunsRead read = await Task.Run(() =>
                     _ReadRunsOffThreadAsync(dispatcher, registry, nowLocal, firstDay, readAll, shownRows));
                 _ShowRuns(read, nowLocal, firstDay);
