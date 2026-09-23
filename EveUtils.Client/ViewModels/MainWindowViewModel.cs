@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Clipboard;
@@ -192,10 +193,10 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     [ObservableProperty] private bool _isServerCertificateAlert;
     [ObservableProperty] private string _serverCertificateAlertMessage = "";
 
-    private static readonly IBrush OnlineStatusBrush = new SolidColorBrush(Color.Parse("#FF6FCF97"));
-    private static readonly IBrush VipStatusBrush = new SolidColorBrush(Color.Parse("#FFE0B341"));
-    private static readonly IBrush OfflineStatusBrush = new SolidColorBrush(Color.Parse("#FFCC4444"));
-    private static readonly IBrush UnknownStatusBrush = new SolidColorBrush(Color.Parse("#FF8A8A8A"));
+    private static readonly IBrush OnlineStatusBrush = new ImmutableSolidColorBrush(Color.Parse("#FF6FCF97"));
+    private static readonly IBrush VipStatusBrush = new ImmutableSolidColorBrush(Color.Parse("#FFE0B341"));
+    private static readonly IBrush OfflineStatusBrush = new ImmutableSolidColorBrush(Color.Parse("#FFCC4444"));
+    private static readonly IBrush UnknownStatusBrush = new ImmutableSolidColorBrush(Color.Parse("#FF8A8A8A"));
     [ObservableProperty] private FittingsTabViewModel? _selectedFittingsTab;
 
     // The character highlighted in the list. Selection only drives the list highlight; per-character
