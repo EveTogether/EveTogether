@@ -13,6 +13,10 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Fixed: the remote-rep rate (shield/armor/hull) could read wrong when a fleetmate's ship name or fit title
+  contained a dash.** Only the text before the dash was used to tell one fleetmate's rep cycle apart from
+  another's, so two different fleetmates with the same prefix could get merged into a single smoothed rate. The
+  full name is used now.
 - **Added: Ctrl+Shift+S saves the run you're flying.** Works in the run window, does exactly what clicking SAVE
   does, and does nothing if SAVE isn't available right now (no run going, or a save already in progress) — no
   error, no popup. Shows up in Settings under Keyboard shortcuts like every other shortcut, where it can be
