@@ -22,8 +22,9 @@ namespace EveUtils.Client.ViewModels.Home;
 /// PILOTS (ET-324): one compact row per own character, in place of the old cards.
 ///
 /// <para><b>What moves each field, and how often.</b> Presence, portrait and ESI state are the shell's own live
-/// <see cref="CharacterViewModel"/>. The system follows the game log, but a parsed line arrives many times a second in
-/// a fight: the characters it names are only marked, and read on the next clock tick. The ship is the fit detection's
+/// <see cref="CharacterViewModel"/>. The system is the game log's field — whether a jump line or the ESI gap fill set it —
+/// but a parsed line arrives many times a second in a fight: the characters it names are only marked, and read on the
+/// next clock tick. The ship is the fit detection's
 /// in-memory reading, looked at every 30 s — its own poll. The skill queue is read from storage every two minutes, the
 /// importer's cadence. Only the clock moves time-left texts.</para>
 ///
@@ -39,7 +40,6 @@ public sealed partial class HomePilotsViewModel : ObservableObject, IDisposable
     private readonly ObservableCollection<CharacterViewModel> _characters;
     private readonly HomeNavigation _navigation;
     private readonly GamelogClientService? _gamelog;
-    private readonly GamelogWatcherService? _watcher;
     private readonly IShipFitDetectionService? _ships;
     private readonly ICharacterSkillQueueRepository? _queues;
     private readonly ISdeAccessor? _sde;
@@ -62,15 +62,14 @@ public sealed partial class HomePilotsViewModel : ObservableObject, IDisposable
         _characters = characters;
         _navigation = navigation;
         _gamelog = services?.GetService<GamelogClientService>();
-        _watcher = services?.GetService<GamelogWatcherService>();
         _ships = services?.GetService<IShipFitDetectionService>();
         _queues = services?.GetService<ICharacterSkillQueueRepository>();
         _sde = services?.GetService<ISdeAccessor>();
         _typeImages = services?.GetService<ITypeImageProvider>();
 
         _characters.CollectionChanged += _OnCharactersChanged;
-        if (_watcher is not null)
-            _watcher.CharacterObserved += _OnCharacterObserved;
+        if (_gamelog is not null)
+            _gamelog.LocationChanged += _OnLocationChanged;
         _Reconcile();
     }
 
@@ -185,6 +184,7 @@ public sealed partial class HomePilotsViewModel : ObservableObject, IDisposable
                     row.Character.PropertyChanged -= _OnCharacterPropertyChanged;
                     row.Character = character;
                     character.PropertyChanged += _OnCharacterPropertyChanged;
+                    _shipsShownAt = DateTime.MinValue;
                 }
             }
             else
@@ -221,7 +221,7 @@ public sealed partial class HomePilotsViewModel : ObservableObject, IDisposable
         _ShowHeader();
     }
 
-    private void _OnCharacterObserved(string name) => _observed.TryAdd(name, 0);
+    private void _OnLocationChanged(string name) => _observed.TryAdd(name, 0);
 
     private void _ShowObservedSystems()
     {
@@ -302,8 +302,8 @@ public sealed partial class HomePilotsViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _characters.CollectionChanged -= _OnCharactersChanged;
-        if (_watcher is not null)
-            _watcher.CharacterObserved -= _OnCharacterObserved;
+        if (_gamelog is not null)
+            _gamelog.LocationChanged -= _OnLocationChanged;
         foreach (HomePilotRowViewModel row in Rows)
             row.Character.PropertyChanged -= _OnCharacterPropertyChanged;
     }
