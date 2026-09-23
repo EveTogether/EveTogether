@@ -4,6 +4,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 
 namespace EveUtils.Client.Controls;
 
@@ -23,11 +24,11 @@ namespace EveUtils.Client.Controls;
 /// </summary>
 public sealed class DpsGraph : Control
 {
-    private static readonly IBrush GridBrush = new SolidColorBrush(Color.Parse("#14FFFFFF"));
-    private static readonly IBrush LaneDividerBrush = new SolidColorBrush(Color.Parse("#26FFFFFF"));
-    private static readonly IBrush LabelBrush = new SolidColorBrush(Color.Parse("#FF8A7E6B"));
+    private static readonly IBrush GridBrush = new ImmutableSolidColorBrush(Color.Parse("#14FFFFFF"));
+    private static readonly IBrush LaneDividerBrush = new ImmutableSolidColorBrush(Color.Parse("#26FFFFFF"));
+    private static readonly IBrush LabelBrush = new ImmutableSolidColorBrush(Color.Parse("#FF8A7E6B"));
     private static readonly Typeface LabelTypeface = new("Consolas");
-    private static readonly IDashStyle GivenDash = new DashStyle([3, 2.2], 0);
+    private static readonly IDashStyle GivenDash = new ImmutableDashStyle([3, 2.2], 0);
 
     // Below this height two lanes cannot both be read: the graph keeps the hp/s lane alone and leaves the GJ/s lines out
     // rather than put them back on the hp/s axis. The figures above the graph still carry them.

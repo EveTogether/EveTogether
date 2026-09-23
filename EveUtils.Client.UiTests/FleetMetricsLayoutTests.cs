@@ -626,9 +626,10 @@ public class FleetMetricsLayoutTests
 
         // Five members over three columns at 1000: two rows of cards, shorter than the viewport. The operator's case.
         // Taller than this file's default 620 because ET-171's navigation bar took a strip off the top of this
-        // screen: at 620 the two rows of cards now reach the bottom, and the guard below would pass the test by
-        // making its premise false rather than by the panel behaving.
-        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Grid, shell, 1000, RosterOf(5), height: 700);
+        // screen, and taller still than the once-sufficient 700 because ET-277's three meter rows grew a card to
+        // 226px (FleetMetricsWindow.axaml:170): two rows of those plus the OwnWindow chrome no longer fit under 700,
+        // and the guard below would pass the test by making its premise false rather than by the panel behaving.
+        var (root, vm) = await ShowAsync(instance, FleetMetricsLayout.Grid, shell, 1000, RosterOf(5), height: 900);
 
         ItemsControl host = MemberHost(root, vm);
         FillGridPanel panel = Assert.Single(host.GetVisualDescendants().OfType<FillGridPanel>());
@@ -1296,10 +1297,11 @@ public class FleetMetricsLayoutTests
     }
 
     // The hint the operator reads above the list has to describe the density he is looking at. Since ET-114 the graph
-    // is the only thing a density drops, so neither line may go on promising the bounty somewhere else.
+    // is the only thing a density drops, so neither line may go on promising the bounty somewhere else. ET-277 added
+    // the CombatMeters/Application rows, which renamed "figure" to "meter" and put Reps on the Compact drop line.
     [AvaloniaTheory]
-    [InlineData(FleetMetricsLayout.Grid, "every figure plus the graph")]
-    [InlineData(FleetMetricsLayout.Compact, "Graphs show in the list and grid views")]
+    [InlineData(FleetMetricsLayout.Grid, "every meter plus the graph")]
+    [InlineData(FleetMetricsLayout.Compact, "Reps and graphs show in the list and grid")]
     public async Task LayoutHint_NamesWhatTheDensityDrops(FleetMetricsLayout layout, string dropped)
     {
         using var instance = CreateInstance();
