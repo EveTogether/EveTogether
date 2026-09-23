@@ -19,6 +19,7 @@ internal static class RunSectionAccess
     public static BountyWindowSectionViewModel Bounty(this ActivityWindowViewModel window) => window._Section<BountyWindowSectionViewModel>();
     public static LootWindowSectionViewModel Loot(this ActivityWindowViewModel window) => window._Section<LootWindowSectionViewModel>();
     public static MiningWindowSectionViewModel Mining(this ActivityWindowViewModel window) => window._Section<MiningWindowSectionViewModel>();
+    public static ConsumablesWindowSectionViewModel Consumables(this ActivityWindowViewModel window) => window._Section<ConsumablesWindowSectionViewModel>();
     public static HomefrontWindowSectionViewModel Homefront(this ActivityWindowViewModel window) => window._Section<HomefrontWindowSectionViewModel>();
     public static HomefrontDetailSectionViewModel Homefront(this ActivityDetailViewModel detail) => detail._Section<HomefrontDetailSectionViewModel>();
 
@@ -28,6 +29,7 @@ internal static class RunSectionAccess
     public static FleetDetailSectionViewModel Fleet(this ActivityDetailViewModel detail) => detail._Section<FleetDetailSectionViewModel>();
     public static BountyDetailSectionViewModel Bounty(this ActivityDetailViewModel detail) => detail._Section<BountyDetailSectionViewModel>();
     public static LootDetailSectionViewModel Loot(this ActivityDetailViewModel detail) => detail._Section<LootDetailSectionViewModel>();
+    public static ConsumablesDetailSectionViewModel Consumables(this ActivityDetailViewModel detail) => detail._Section<ConsumablesDetailSectionViewModel>();
     public static EscalationDetailSectionViewModel Escalation(this ActivityDetailViewModel detail) => detail._Section<EscalationDetailSectionViewModel>();
 
     private static T _Section<T>(this ActivityWindowViewModel window) where T : ActivitySection =>

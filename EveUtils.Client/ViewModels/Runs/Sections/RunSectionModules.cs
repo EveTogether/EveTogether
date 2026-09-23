@@ -70,7 +70,7 @@ public static class RunSectionModules
             HasLiveContent: context => context.Participants.Any(participant => participant.MiningEntries.Count > 0)),
         new(RunSectionId.Consumables,
             context => new ConsumablesWindowSectionViewModel(context),
-            _ => new ConsumablesDetailSectionViewModel(),
+            services => new ConsumablesDetailSectionViewModel(services),
             IskSource.Consumables),
         new(RunSectionId.Escalation, null, services => new EscalationDetailSectionViewModel(services))
     ];

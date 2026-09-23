@@ -193,6 +193,13 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     {
         Result<ActivityDetailDto> detail =
             await _dispatcher.Query(new GetActivityDetailQuery(_activitySummaryId), cancellationToken);
+        // The summary is valued at the prices of the day it was built, the loot table below at today's; when the
+        // prices moved since, it is added up again first so the header and the table cannot disagree (ET-329).
+        if (detail.Value?.Runs is [{ } first, ..]
+            && await _dispatcher.Send(new RebuildActivitySummariesCommand(first.RunId, OnlyWhenPricesChanged: true), cancellationToken)
+                is { IsSuccess: true, Value: > 0 })
+            detail = await _dispatcher.Query(new GetActivityDetailQuery(_activitySummaryId), cancellationToken);
+
         if (!detail.IsSuccess || detail.Value is null)
         {
             StatusMessage = detail.Messages.Count > 0 ? detail.Messages[0].Text : "The activity could not be read.";

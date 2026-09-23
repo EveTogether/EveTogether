@@ -58,6 +58,9 @@ internal sealed class RebuildActivitySummariesCommandHandler(
                 : replaced.Where(summary => summary.GroupCode == groupCode);
         }
 
+        if (command.OnlyWhenPricesChanged && !await _AnyValuedBeforeTheLastPriceRefreshAsync(replaced, cancellationToken))
+            return Result<int>.Success(0);
+
         List<Run> runs = await saved
             .Include(run => run.LootCaptures)
                 .ThenInclude(capture => capture.Entries)
@@ -108,5 +111,15 @@ internal sealed class RebuildActivitySummariesCommandHandler(
         // own right — and it is the only change that lands after a group SAVE (ET-210), whose runs each skip it.
         await eventBus.PublishAsync(new RunsChangedEvent(command.ActivityOfRunId, groupCode), EventTarget.Local, cancellationToken);
         return Result<int>.Success(runs.Count);
+    }
+
+    private async Task<bool> _AnyValuedBeforeTheLastPriceRefreshAsync(
+        IQueryable<ActivitySummary> summaries, CancellationToken cancellationToken)
+    {
+        if (await marketPrices.GetSnapshotTimeAsync(cancellationToken) is not { } snapshot)
+            return false;
+
+        DateTime refreshedAtUtc = snapshot.UtcDateTime;
+        return await summaries.AnyAsync(summary => summary.ComputedAtUtc < refreshedAtUtc, cancellationToken);
     }
 }

@@ -64,16 +64,37 @@ public sealed partial class ActivityLootViewModel : ObservableObject
 
     public decimal? LootIsk { get; private set; }
 
+    /// <summary>What the group spent: loot lost, and the abyssal filament its runs used (ET-329).</summary>
     public decimal? ConsumedIsk { get; private set; }
 
-    /// <summary>Null when no block has a priced figure — never 0 for "nothing priced" (ET-65 AC-5).</summary>
+    /// <summary>The loot gained less the loot lost — what the LOOT section itself is worth, before the filament.</summary>
+    public decimal? LootNetIsk { get; private set; }
+
+    /// <summary>The loot less everything the group consumed: TOTAL ISK's own loot-and-consumables part. Null when no
+    /// block has a priced figure — never 0 for "nothing priced" (ET-65 AC-5).</summary>
     public decimal? NetIsk { get; private set; }
+
+    /// <summary>The filament the group's runs used, as the CONSUMABLES section prices it — a positive cost. The
+    /// filament is never a loot line, so the owner hands it in: the window from its own rows, the detail screen from
+    /// the registry's share.</summary>
+    public decimal? FilamentIsk { get; private set; }
 
     public string LootIskDisplay => _Display(LootIsk);
 
-    public string ConsumedIskDisplay => _Display(ConsumedIsk);
+    public string ConsumedIskDisplay => IskFormat.WholeOrNoPrice(ConsumedIsk is { } consumed ? -consumed : null);
+
+    public string LootNetIskDisplay => _Display(LootNetIsk);
 
     public string NetIskDisplay => _Display(NetIsk);
+
+    public void SetFilament(decimal? cost)
+    {
+        if (FilamentIsk == cost)
+            return;
+
+        FilamentIsk = cost;
+        _RefreshFigures();
+    }
 
     /// <summary>"2 CHARACTERS · 9 ITEMS · 11 CAPTURES · 2 EXCLUDED" — what the section holds before any of it is
     /// opened, in the mockup's capitals. An item is a kind of item that counts, however many copies it came in.</summary>
@@ -196,13 +217,18 @@ public sealed partial class ActivityLootViewModel : ObservableObject
     private void _RefreshFigures()
     {
         LootIsk = _SumKnown(Characters.Select(block => block.Loot.LootIsk));
-        ConsumedIsk = _SumKnown(Characters.Select(block => block.Loot.ConsumedIsk));
-        NetIsk = _SumKnown(Characters.Select(block => block.Loot.NetIsk));
+        LootNetIsk = _SumKnown(Characters.Select(block => block.Loot.NetIsk));
+        decimal? lostIsk = _SumKnown(Characters.Select(block => block.Loot.ConsumedIsk));
+        ConsumedIsk = lostIsk is null && FilamentIsk is null ? null : lostIsk.GetValueOrDefault() + FilamentIsk.GetValueOrDefault();
+        NetIsk = LootNetIsk is null && FilamentIsk is null ? null : LootNetIsk.GetValueOrDefault() - FilamentIsk.GetValueOrDefault();
         OnPropertyChanged(nameof(LootIsk));
         OnPropertyChanged(nameof(ConsumedIsk));
+        OnPropertyChanged(nameof(LootNetIsk));
         OnPropertyChanged(nameof(NetIsk));
+        OnPropertyChanged(nameof(FilamentIsk));
         OnPropertyChanged(nameof(LootIskDisplay));
         OnPropertyChanged(nameof(ConsumedIskDisplay));
+        OnPropertyChanged(nameof(LootNetIskDisplay));
         OnPropertyChanged(nameof(NetIskDisplay));
         OnPropertyChanged(nameof(SummaryText));
         OnPropertyChanged(nameof(PricingProblemText));

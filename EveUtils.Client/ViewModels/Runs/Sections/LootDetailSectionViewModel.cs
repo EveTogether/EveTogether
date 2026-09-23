@@ -42,6 +42,11 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
             : "No loot capture was recorded for this activity — nothing was copied, so there is nothing to value.";
         // "no price" and not "0 ISK": a figure nobody has must not look like a figure that came out at zero (ET-65 AC-5).
         decimal? net = detail.Isk.Of(IskSource.Loot) is { Certainty: not IskCertainty.Unknown } loot ? loot.Amount : null;
+        // The filament is the CONSUMABLES section's own share (ET-329), handed to the loot totals so CONSUMED and NET
+        // say what the run really cost; the header above stays the loot's own share, so it is never taken off twice.
+        LootOverview.SetFilament(detail.Isk.Of(IskSource.Consumables) is { Certainty: not IskCertainty.Unknown } consumables
+            ? -consumables.Amount
+            : null);
         HeaderSummary = captures.Length > 0
             ? $"{IskFormat.WholeOrNoPrice(net)} · {captures.Length} captures · {captures.Count(capture => capture.IsExcluded)} excluded"
             : "nothing captured";

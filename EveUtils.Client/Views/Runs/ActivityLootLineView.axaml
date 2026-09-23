@@ -1,0 +1,43 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             x:Class="EveUtils.Client.Views.Runs.ActivityLootLineView"
+             x:DataType="vr:ActivityLootLineViewModel">
+
+    <!-- One item line: icon, name, count and value. The loot table draws every item with it, and CONSUMABLES draws
+         the filament a run spent with it (ET-329) — one line, one look. Styles: LootItemStyles.axaml. -->
+    <UserControl.Styles>
+        <StyleInclude Source="avares://EveUtils.Client/Views/Runs/LootItemStyles.axaml"/>
+    </UserControl.Styles>
+
+    <Border Classes="itemrow detailrow" Classes.alt="{Binding IsAlternate}"
+            Classes.top="{Binding IsTopValue}" Classes.excluded="{Binding IsExcluded}">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
+            <Border Classes="icontile">
+                <Panel>
+                    <TextBlock Text="{Binding Initial}" FontSize="10" FontWeight="SemiBold"
+                               Foreground="{DynamicResource AccentBrightBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsVisible="{Binding !HasIcon}"/>
+                    <Image Source="{Binding Icon}" IsVisible="{Binding HasIcon}"/>
+                </Panel>
+            </Border>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                        VerticalAlignment="Center" ClipToBounds="True">
+                <TextBlock Classes="itemname" Text="{Binding Name}"/>
+                <TextBlock Classes="meta" Text="{Binding CaptureCountText}"
+                           IsVisible="{Binding CaptureCountText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                <TextBlock Classes="meta" Text="{Binding OwnerText}"
+                           IsVisible="{Binding OwnerText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                <Border Classes="badge excluded" IsVisible="{Binding IsExcluded}">
+                    <TextBlock Text="EXCLUDED"/>
+                </Border>
+                <Border Classes="badge" IsVisible="{Binding IsLost}">
+                    <TextBlock Text="SPENT"/>
+                </Border>
+            </StackPanel>
+            <TextBlock Grid.Column="2" Classes="money" MinWidth="44" Text="{Binding QuantityText}"/>
+            <TextBlock Grid.Column="3" Classes="money" MinWidth="104" Text="{Binding AmountText}"/>
+        </Grid>
+    </Border>
+</UserControl>

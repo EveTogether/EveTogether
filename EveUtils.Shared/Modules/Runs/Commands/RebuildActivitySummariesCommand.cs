@@ -11,4 +11,8 @@ public sealed record RebuildActivitySummariesCommand(
     /// <summary>Rebuild only when a summary was built by another set of ISK sources than the one registered now
     /// (<c>IskContributors.Signature</c>) — the startup check that brings activities saved before a source existed up
     /// to date. Anything else leaves the store untouched and returns zero.</summary>
-    bool OnlyWhenOutdated = false) : ICommand<Result<int>>;
+    bool OnlyWhenOutdated = false,
+    /// <summary>Rebuild only when the price cache was refreshed after the summary was built: a summary is valued at
+    /// the prices of its day, so the loot on the detail screen — valued at today's — no longer agrees with it
+    /// (ET-329). Anything already valued at the current prices is left alone and returns zero.</summary>
+    bool OnlyWhenPricesChanged = false) : ICommand<Result<int>>;

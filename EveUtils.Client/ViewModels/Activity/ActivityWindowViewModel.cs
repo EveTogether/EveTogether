@@ -3667,6 +3667,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 })]
             : [_SoloRunIskFacts(consumables, mining, parameters, homefront)];
 
+        decimal[] filamentCosts = [.. runs.Select(run => run.Facts.ConsumableIskCost).OfType<decimal>()];
+        LootOverview?.SetFilament(filamentCosts.Length == 0 ? null : filamentCosts.Sum());
+
         IskBreakdown isk = IskContributors.Breakdown([.. runs.Select(run => run.Facts)], nowUtc);
         HasGroupTotalIsk = isk.HasFigure;
         GroupTotalIskText = IskFormat.Whole(isk.Total) + IskFormat.ExpectedPart(isk);
