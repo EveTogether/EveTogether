@@ -13,6 +13,7 @@ using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Settings.Entities;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace EveUtils.Client.Runs;
 
@@ -137,11 +138,22 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
         _ = _AutoAcceptAsync(offer);
     }
 
+    /// <summary>
+    /// Not awaited from <see cref="_OnCommanderOfferAsync"/>: <see cref="InProcessEventBus"/> awaits every
+    /// subscriber in turn, so blocking here on a human answering the multi-pilot picker would freeze delivery
+    /// of every other event in the app for as long as the picker stays open. Caught and logged instead of left
+    /// to fault the discarded task, the same background-work pattern <see cref="FleetRunAutoPublisher"/> uses.
+    /// </summary>
     private async Task _AutoAcceptAsync(Offer offer)
     {
         try
         {
             await _Accept(offer, announceJoin: true);
+        }
+        catch (Exception exception)
+        {
+            _services.GetService<ILogger<FleetRunWindowPresenter>>()?.LogError(
+                exception, "Auto-join failed for group code {GroupCode}", offer.Start.GroupCode);
         }
         finally
         {
