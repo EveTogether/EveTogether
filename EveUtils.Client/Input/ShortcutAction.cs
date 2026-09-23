@@ -47,4 +47,7 @@ public enum ShortcutAction
 
     /// <summary>Save the running run — the run window's own SAVE button, same command (ET-319).</summary>
     SaveRun,
+
+    /// <summary>Docked host only: the home in front, open tabs left open — the rail's HOME (ET-324).</summary>
+    GoToHome,
 }

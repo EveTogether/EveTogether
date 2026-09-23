@@ -2,12 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.ViewModels;
@@ -332,6 +334,34 @@ public class ModuleNavigationTests
         vm.LaunchModuleCommand.Execute("logs");             // re-opening selects the existing tab, no duplicate
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(2, vm.HostTabs.Count);
+        window.Close();
+    }
+
+    /// <summary>ET-324: with a module open there was no way back to the home — it only showed with no tab at all. HOME
+    /// on the rail brings the home to the front, leaves the tab open, and the tab brings the module back. Red before:
+    /// the home stayed hidden behind any open tab.</summary>
+    [AvaloniaFact]
+    public void Docked_Home_ShowsTheHome_KeepsTheTab_AndTheTabGoesBack()
+    {
+        using var instance = TestClientInstance.Create();
+        var (vm, window) = BuildHostedApp(instance.Services);
+        vm.LaunchModuleCommand.Execute("logs");
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(vm.IsHomeShown);
+
+        vm.GoHomeCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(vm.IsHomeShown);
+        Assert.Single(vm.HostTabs);
+        Assert.True(vm.HasHostTabs);
+        Assert.True(window.GetVisualDescendants().OfType<EveUtils.Client.Views.Home.HomeDashboardView>().Single().IsEffectivelyVisible);
+
+        vm.SelectedHostTab = vm.HostTabs[0];
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(vm.IsHomeShown);
+        Assert.Equal("APP LOGS", vm.SelectedHostTab?.Title);
         window.Close();
     }
 

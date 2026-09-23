@@ -464,6 +464,9 @@ public partial class MainWindow : Window
             case ShortcutAction.OpenSettings:
                 vm.LaunchModuleCommand.Execute("settings");
                 break;
+            case ShortcutAction.GoToHome:
+                vm.GoHomeCommand.Execute(null);
+                break;
             default:
                 return;
         }

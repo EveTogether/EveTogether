@@ -305,6 +305,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     // The rail highlight follows the selected host tab's module (null = home → nothing highlighted).
     partial void OnSelectedHostTabChanged(HostTab? value)
     {
+        OnPropertyChanged(nameof(IsHomeShown));
         OnPropertyChanged(nameof(ActiveModule));
         OnPropertyChanged(nameof(IsFitsActive));
         OnPropertyChanged(nameof(IsFleetActive));
@@ -368,8 +369,17 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// <summary>The active host tab (its content fills the host).</summary>
     [ObservableProperty] private HostTab? _selectedHostTab;
 
-    /// <summary>True when the host shows the home landing (no module tabs open).</summary>
-    public bool IsHomeShown => HostTabs.Count == 0;
+    /// <summary>True when the host shows the home: no module tab open, or none selected because HOME was chosen
+    /// (ET-324). The open tabs stay open either way, one click from coming back.</summary>
+    public bool IsHomeShown => HostTabs.Count == 0 || SelectedHostTab is null;
+
+    /// <summary>Whether the host has module tabs to show in its strip — independent of whether one is selected.</summary>
+    public bool HasHostTabs => HostTabs.Count > 0;
+
+    /// <summary>HOME on the rail (ET-324): the home in front, every open tab left as it is. No second path — the same
+    /// selection the tab strip drives, with nothing selected.</summary>
+    [RelayCommand]
+    private void GoHome() => SelectedHostTab = null;
 
     /// <summary>The remote bus connector, exposed so the character dialog can read per-server state and
     /// subscribe to live state changes while it is open.</summary>
@@ -584,7 +594,11 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _localFitsTab = new FittingsTabViewModel("Local", Fittings);
         FittingTabs.Add(_localFitsTab);
         SelectedFittingsTab = _localFitsTab;
-        HostTabs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsHomeShown));   // home shows when no tabs
+        HostTabs.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(IsHomeShown));
+            OnPropertyChanged(nameof(HasHostTabs));
+        };
     }
 
     /// <summary>Opens the Fleets window — non-modal so its live member graphs run alongside the main window.</summary>

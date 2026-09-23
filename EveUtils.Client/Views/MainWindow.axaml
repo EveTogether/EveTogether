@@ -228,6 +228,15 @@
                     <!-- Top: module launcher, scrollable so it shrinks instead of drawing over the bottom block when the window is short (ET-84). -->
                     <ScrollViewer x:Name="RailLauncherScroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Spacing="2">
+                        <!-- HOME (ET-324): the home in front, open tabs left open. Docked only — floating has no host. -->
+                        <Button Classes="railitem" Classes.active="{Binding IsHomeShown}" IsVisible="{Binding !IsFloating}"
+                                Command="{Binding GoHomeCommand}" ToolTip.Tip="Home (Ctrl+0) — open tabs stay open">
+                            <StackPanel HorizontalAlignment="Center" Spacing="5">
+                                <mi:MaterialIcon Classes="rail" Kind="HomeOutline"/>
+                                <TextBlock Text="HOME" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Border Classes="rail-divider" IsVisible="{Binding !IsFloating}"/>
                         <Button Classes="railitem" Classes.active="{Binding IsFitsActive}"
                                 Command="{Binding LaunchModuleCommand}" CommandParameter="fits" ToolTip.Tip="Fittings">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
@@ -515,7 +524,7 @@
                 <Border Classes="panel-header" DockPanel.Dock="Top" Height="40" Padding="12,0">
                     <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
-                                    IsVisible="{Binding IsHomeShown}">
+                                    IsVisible="{Binding !HasHostTabs}">
                             <TextBlock Classes="diamond" Text="◆"/>
                             <TextBlock Text="HOME" Classes="panel-title"/>
                         </StackPanel>
@@ -523,7 +532,7 @@
                              ListBox's own ScrollViewer and become unreachable (ET-157). The overflow button to its
                              right (below) tracks which tabs fall outside HostTabsList's own width and parks those
                              there instead, rather than adding horizontal scroll. -->
-                        <ListBox x:Name="HostTabsList" Grid.Column="0" Classes="hosttabs" IsVisible="{Binding !IsHomeShown}"
+                        <ListBox x:Name="HostTabsList" Grid.Column="0" Classes="hosttabs" IsVisible="{Binding HasHostTabs}"
                                  ItemsSource="{Binding HostTabs}" SelectedItem="{Binding SelectedHostTab}">
                             <ListBox.ItemsPanel>
                                 <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
@@ -547,7 +556,7 @@
                              so toggling it never changes HostTabsList's own available width — that would flip tabs in
                              and out of overflow on every layout pass. Dim + no count = nothing hidden right now. -->
                         <Button x:Name="TabOverflowButton" Grid.Column="1" Classes="winbtn" Width="30" Margin="6,0,0,0"
-                                IsVisible="{Binding !IsHomeShown}" IsEnabled="False" Opacity="0.35"
+                                IsVisible="{Binding HasHostTabs}" IsEnabled="False" Opacity="0.35"
                                 ToolTip.Tip="Tabs that don't fit in the strip">
                             <StackPanel Orientation="Horizontal" Spacing="2">
                                 <mi:MaterialIcon Classes="icon-sm" Kind="ChevronDown"/>
