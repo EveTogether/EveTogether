@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,6 +30,7 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
+using EveUtils.Shared.Modules.Settings.Commands;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -602,6 +604,13 @@ public sealed class HomefrontAttendanceTests
             await _RegisterAsync(instance, own);
             _Participate(instance, flying);
             _ = instance.Services.GetRequiredService<FleetRunAttendance>();
+            // A backfilled own run (ET-269) pulls its bounty lines from the gamelog directory (ImportRunBountyCommand):
+            // an unset setting falls back to the real OS default (GameLogLocations.Default), which on a machine that
+            // actually plays the game can hold hundreds of real gamelog files — turning that one read into a slow scan
+            // of unrelated real data instead of the empty, isolated one this test wants.
+            await instance.Services.GetRequiredService<IDispatcher>().Send(new SetSettingCommand(
+                GamelogWatcherService.GamelogDirectorySettingKey,
+                Path.Combine(Path.GetTempPath(), "eveutils-homefront-" + Guid.NewGuid().ToString("N"))));
 
             ActivityWindowViewModel window = new(ActivityKind.Site, instance.Services);
             await window.LoadAsync();
