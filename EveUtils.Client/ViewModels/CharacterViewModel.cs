@@ -45,15 +45,7 @@ public partial class CharacterViewModel : ObservableObject
         ? "EVE client running on this PC"
         : "No running EVE client detected on this PC";
 
-    partial void OnHasActiveClientChanged(bool value)
-    {
-        OnPropertyChanged(nameof(ClientStatusTooltip));
-        OnPropertyChanged(nameof(RailTooltip));
-    }
-
-    /// <summary>The docked portrait rail's hover (ET-324): who, whether a client runs on this PC — never "offline", the
-    /// probe cannot see another machine — and the ESI link.</summary>
-    public string RailTooltip => $"{Name}\n{(HasActiveClient ? "On this PC" : "Not on this PC")}\n{EsiStatus}";
+    partial void OnHasActiveClientChanged(bool value) => OnPropertyChanged(nameof(ClientStatusTooltip));
 
     /// <summary>Public corp/alliance label ("Corp [TICK] · Alliance [TICK]"), kept fresh from public ESI; "—" until resolved.</summary>
     [ObservableProperty] private string _affiliation = "—";
@@ -175,7 +167,6 @@ public partial class CharacterViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HasEsiToken));
         OnPropertyChanged(nameof(EsiStatus));
-        OnPropertyChanged(nameof(RailTooltip));
         OnPropertyChanged(nameof(EsiChipIcon));
         OnPropertyChanged(nameof(EsiOk));
         OnPropertyChanged(nameof(EsiWarn));

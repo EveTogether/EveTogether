@@ -36,8 +36,6 @@ public partial class MainWindow : Window
     private double _floatingWidth = 360;
     private const double RailOnlyWidth = 92;
 
-    /// <summary>The docked character rail (ET-324): a 26 px hex with its dot and a margin either side.</summary>
-    private const double PortraitRailWidth = 44;
     private bool _shellHooked;
     private bool _applyingShellState;   // guards our own Width writes from the resize-remember handler
 
@@ -332,7 +330,7 @@ public partial class MainWindow : Window
         var star = new GridLength(1, GridUnitType.Star);
         grid.ColumnDefinitions[0].Width = railOnly ? star : GridLength.Auto;                 // rail
         grid.ColumnDefinitions[1].Width = vm.IsCharsCollapsed ? new GridLength(0)            // chars
-            : vm.IsFloating ? star : new GridLength(PortraitRailWidth);
+            : vm.IsFloating ? star : new GridLength(250);
         grid.ColumnDefinitions[2].Width = vm.IsFloating ? new GridLength(0) : star;          // host
 
         // Rail-only: Windows enforces a minimum width on resizable window frames, which can exceed the rail's 92px —

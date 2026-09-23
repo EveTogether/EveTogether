@@ -32,26 +32,6 @@
 
              20 rather than the 22 the drawn Paths used: Material's outlines carry more ink than a 1.7 stroke, so at
              the old size the rail sat visibly heavier than the rest of the window. -->
-        <!-- A portrait on the docked character rail (ET-324): no fill of its own, the hex ringed in the bright accent
-             on hover and keyboard focus, the rail's "+" lit the same way. -->
-        <Style Selector="Button.railportrait">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="MinHeight" Value="0"/>
-            <Setter Property="HorizontalAlignment" Value="Center"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
-        </Style>
-        <Style Selector="Button.railportrait:pointerover /template/ ContentPresenter, Button.railportrait:pressed /template/ ContentPresenter">
-            <Setter Property="Background" Value="Transparent"/>
-        </Style>
-        <Style Selector="Button.railportrait:pointerover ctl|HexPortrait, Button.railportrait:focus-visible ctl|HexPortrait">
-            <Setter Property="Ring" Value="{DynamicResource AccentBrightBrush}"/>
-        </Style>
-        <Style Selector="Button.railportrait:pointerover Border, Button.railportrait:focus-visible Border">
-            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrightBrush}"/>
-        </Style>
-
         <Style Selector="mi|MaterialIcon.rail">
             <Setter Property="Width" Value="20"/>
             <Setter Property="Height" Value="20"/>
@@ -345,40 +325,9 @@
                 </DockPanel>
             </Border>
 
-            <!-- ── Characters ── Docked, a 44 px portrait rail beside every screen (ET-324): a hex per character with a
-                 green dot for a client on this PC — absent otherwise, never a grey "offline", since the probe only sees
-                 this machine. The cards themselves became the home's pilot rows. Floating has no home, so the narrow
-                 shell keeps the full cards. -->
+            <!-- ── Character column: hex ESI portraits + affiliation + badges + per-character actions ── -->
             <Border Grid.Column="1" Classes="rail" IsVisible="{Binding ShowChars}">
-                <Panel>
-                <DockPanel IsVisible="{Binding !IsFloating}">
-                    <Button DockPanel.Dock="Bottom" Classes="railportrait" Margin="0,6,0,10"
-                            Command="{Binding AddCharacterCommand}" IsEnabled="{Binding !IsSigningIn}"
-                            ToolTip.Tip="Add a character via EVE SSO. Pick which scopes to grant in the dialog.">
-                        <Border Width="26" Height="26" BorderThickness="1" BorderBrush="{DynamicResource BorderStrongBrush}">
-                            <mi:MaterialIcon Kind="Plus" Width="14" Height="14"/>
-                        </Border>
-                    </Button>
-                    <ScrollViewer VerticalScrollBarVisibility="Hidden">
-                        <ItemsControl ItemsSource="{Binding Characters}" Margin="0,8,0,0">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:CharacterViewModel">
-                                    <Button Classes="railportrait" Margin="0,0,0,6"
-                                            Command="{Binding #RootWindow.((vm:MainWindowViewModel)DataContext).OpenCharacterSettingsCommand}"
-                                            CommandParameter="{Binding}" ToolTip.Tip="{Binding RailTooltip}">
-                                        <Panel Width="30" Height="30">
-                                            <ctl:HexPortrait Size="26" Source="{Binding Portrait}" Initial="{Binding Initial}"/>
-                                            <Ellipse Width="8" Height="8" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                                     Fill="{StaticResource GreenBrush}" Stroke="{StaticResource BgDeepBrush}"
-                                                     StrokeThickness="1.5" IsVisible="{Binding HasActiveClient}"/>
-                                        </Panel>
-                                    </Button>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </DockPanel>
-                <DockPanel IsVisible="{Binding IsFloating}">
+                <DockPanel>
                     <Border Classes="panel-header" DockPanel.Dock="Top" Height="40">
                         <Grid ColumnDefinitions="Auto,*,Auto">
                             <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
@@ -513,7 +462,6 @@
                         </ItemsControl>
                     </ScrollViewer>
                 </DockPanel>
-                </Panel>
             </Border>
 
             <!-- ── Module host: tabbed header + the docked "fits" home (library + live DPS + shared demo) ── -->

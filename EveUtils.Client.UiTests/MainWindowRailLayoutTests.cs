@@ -58,6 +58,7 @@ public class MainWindowRailLayoutTests
     // that is the whole point of scrolling instead of clipping mid-button.
     private static bool IsOnScreen(Button button, Window window, ScrollViewer scroller, Rect scrollerRectInWindow)
     {
+        if (!button.IsEffectivelyVisible) return false;
         if (!button.GetVisualAncestors().Contains(scroller)) return true;
         var rect = RectIn(button, window);
         return rect.Top >= scrollerRectInWindow.Top - 0.5 && rect.Bottom <= scrollerRectInWindow.Bottom + 0.5;
