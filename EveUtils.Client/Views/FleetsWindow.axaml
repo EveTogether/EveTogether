@@ -97,6 +97,37 @@
                 <Setter Property="FontSize" Value="9.5"/>
                 <Setter Property="Margin" Value="0,0,3,0"/>
             </Style>
+
+            <!-- ── A clickable chip (ET-323): Themes/EveUtils.axaml's Border.chip look, but pressable. Lives beside
+                 the fleet name rather than in the actions cell, so it never costs FleetRowActionWidths anything. ── -->
+            <Style Selector="Button.chip">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="10"/>
+                <Setter Property="Padding" Value="7,1,7,2"/>
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Button.chip:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            </Style>
+            <Style Selector="Button.chip.ok">
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+            <Style Selector="Button.chip.warn">
+                <Setter Property="BorderBrush" Value="#8CE0B341"/>
+                <Setter Property="Foreground">
+                    <SolidColorBrush Color="#FFE0B341"/>
+                </Setter>
+            </Style>
+            <Style Selector="Button.chip.dim">
+                <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+            </Style>
+
             <!-- The toolbar's picks are one size at 758 and another when there is room. -->
             <Style Selector="Border.toolbar Button.pick">
                 <Setter Property="Padding" Value="7,3"/>
@@ -859,7 +890,20 @@
                                         <TextBlock Grid.Column="0" Classes="caret" Classes.expanded="{Binding IsExpanded}" Text="&#x25B6;"
                                                    Margin="0,0,6,0"/>
                                         <StackPanel Grid.Column="1">
-                                            <TextBlock Classes="nm" Text="{Binding Name}"/>
+                                            <!-- A Grid, not a horizontal StackPanel: the name needs a BOUNDED column for its
+                                                 CharacterEllipsis trimming to trigger at all — an unbounded stack never clips,
+                                                 so a long name would run straight under the chip instead of eliding. -->
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0" Classes="nm" Text="{Binding Name}"/>
+                                                <!-- ET-323: the AUTO-JOIN stand, beside the name rather than in the actions cell
+                                                     (FleetRowActionWidthTests measures that cell, and this must never cost it width). -->
+                                                <Button Grid.Column="1" Classes="chip" Classes.ok="{Binding AutoJoinChipIsOk}"
+                                                        Classes.warn="{Binding AutoJoinChipIsWarn}" Classes.dim="{Binding AutoJoinChipIsDim}"
+                                                        IsVisible="{Binding ShowAutoJoinChip}" Content="{Binding AutoJoinChipLabel}"
+                                                        ToolTip.Tip="{Binding AutoJoinChipTooltip}" Margin="6,0,0,0"
+                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).CycleAutoJoinCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                            </Grid>
                                             <TextBlock Classes="kind" Text="{Binding KindText}"
                                                        IsVisible="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).IsWide}"/>
                                             <TextBlock Classes="kind" Text="{Binding NarrowSubText}"

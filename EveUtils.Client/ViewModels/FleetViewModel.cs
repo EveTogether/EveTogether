@@ -479,6 +479,30 @@ public sealed partial class FleetViewModel : ObservableObject
     public double JoinActionWidth => CanRequest ? FleetRowActionWidths.Request : CanJoin ? FleetRowActionWidths.Join : 0;
 
     /// <summary>
+    /// Whether this row carries the AUTO-JOIN chip (ET-323). Set by the window, the only party that knows the
+    /// per-fleet setting — deliberately beside the fleet name rather than in the actions cell, so it never competes
+    /// with JOIN for the width <c>FleetsViewModel.BuildOverflow</c> measures.
+    /// </summary>
+    [ObservableProperty]
+    private bool _showAutoJoinChip;
+
+    /// <summary>
+    /// The chip's ink: dim for DEFAULT (an exception-free row should not shout), ok for ALWAYS, warn for NEVER.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AutoJoinChipIsOk))]
+    [NotifyPropertyChangedFor(nameof(AutoJoinChipIsWarn))]
+    [NotifyPropertyChangedFor(nameof(AutoJoinChipIsDim))]
+    private FleetChipTone _autoJoinChipTone = FleetChipTone.Dim;
+
+    public bool AutoJoinChipIsOk => AutoJoinChipTone == FleetChipTone.Ok;
+    public bool AutoJoinChipIsWarn => AutoJoinChipTone == FleetChipTone.Warn;
+    public bool AutoJoinChipIsDim => AutoJoinChipTone == FleetChipTone.Dim;
+
+    [ObservableProperty] private string _autoJoinChipLabel = "";
+    [ObservableProperty] private string _autoJoinChipTooltip = "";
+
+    /// <summary>
     /// What the buttons that always stand on this row already take. These are the ones scherm 1 draws, and none of
     /// them may be pushed off to make room for JOIN — so this sum is the budget JOIN has to fit beside.
     /// </summary>

@@ -236,10 +236,14 @@ public sealed class FleetRunOfferToastTests
         }
     }
 
-    // ── The other setting: the window, straight away, as before ─────────────────────────────────────
+    // ── The other setting: auto-join instead of an offer (ET-323) ───────────────────────────────────
 
+    /// <summary>
+    /// The window still opens straight away with auto-join on, but it is no longer silent: nobody clicked anything,
+    /// so a confirmation toast is the only proof the join happened at all.
+    /// </summary>
     [AvaloniaFact]
-    public async Task WithTheWindowSettingOn_TheWindowOpensStraightAway_AndNoOfferIsMade()
+    public async Task WithTheWindowSettingOn_TheWindowOpensStraightAway_WithAJoinedConfirmation()
     {
         var (instance, dialogs, toasts, bus, presenter) = _Harness();
         using (instance)
@@ -248,9 +252,121 @@ public sealed class FleetRunOfferToastTests
             await _SetAutoOpenAsync(instance, true);
 
             await _CommanderStartsAsync(bus);
+            await _SettleAsync(() => dialogs.ShownActivityWindowTriggers.Count > 0);
 
             Assert.Equal(RunWindowOpenTrigger.RemoteFleetCommander, Assert.Single(dialogs.ShownActivityWindowTriggers));
+            var toast = Assert.Single(toasts.Toasts);
+            Assert.Equal("Joined fleet run", toast.Title);
+            Assert.Empty(toasts.ActionToasts);
+        }
+    }
+
+    /// <summary>
+    /// Auto-join runs through the exact path "Join run" does, picker included — the old shortcut that opened the
+    /// window straight past that question is gone (ET-323). Two flying characters make the question real, so it
+    /// only appears if auto-join truly goes through <c>_Accept</c> rather than a second, cruder route.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task WithTheWindowSettingOn_AndTwoPilotsFlying_StillAsksWhoRegisters()
+    {
+        var (instance, dialogs, toasts, bus, presenter) = _Harness(Lionear, Maricadie);
+        using (instance)
+        using (presenter)
+        {
+            await _SeedCharactersAsync(instance);
+            await _SetAutoOpenAsync(instance, true);
+            dialogs.OnPickCharacters = (prompt, _) => prompt == "Who is registering this run?"
+                ? Task.FromResult<IReadOnlyList<int>?>([Maricadie])
+                : throw new InvalidOperationException($"the window asked again: '{prompt}'");
+
+            await _CommanderStartsAsync(bus);
+            await _SettleAsync(() => dialogs.ShownActivityWindows.Count > 0);
+
+            Assert.Equal("Who is registering this run?", dialogs.LastPrompt);
+            Assert.Equal(RunWindowOpenTrigger.RemoteFleetCommander, Assert.Single(dialogs.ShownActivityWindowTriggers));
+        }
+    }
+
+    /// <summary>
+    /// The guard against a second window has to sit ahead of BOTH branches, not just the offer's — before ET-323
+    /// the auto path had no such check at all and would have opened a second window here.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task WithTheWindowSettingOn_AndTheActivityWindowAlreadyUp_NothingHappens()
+    {
+        var (instance, dialogs, toasts, bus, presenter) = _Harness();
+        using (instance)
+        using (presenter)
+        {
+            await _SetAutoOpenAsync(instance, true);
+            dialogs.IsActivityWindowOpen = true;
+
+            await _CommanderStartsAsync(bus);
+
+            Assert.Empty(dialogs.ShownActivityWindowTriggers);
             Assert.Empty(toasts.Toasts);
+        }
+    }
+
+    /// <summary>
+    /// The effective choice for a fleet: its own override if one is set, else the central default — and an override
+    /// never leaks onto a fleet it was never set for.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(false, true, FleetId, true)]       // this fleet ALWAYS overrides a central default of off
+    [InlineData(true, false, FleetId, false)]      // this fleet NEVER overrides a central default of on
+    [InlineData(false, true, FleetId + 1, false)]  // ALWAYS set on a DIFFERENT fleet does not reach this one
+    public async Task EffectiveAutoJoin_FollowsThisFleetsOverride_ElseTheCentralDefault(
+        bool centralOn, bool overrideValue, long overrideFleetId, bool expectAutoJoin)
+    {
+        var (instance, dialogs, toasts, bus, presenter) = _Harness();
+        using (instance)
+        using (presenter)
+        {
+            await _SetAutoOpenAsync(instance, centralOn);
+            await _SetPerFleetAutoOpenAsync(instance, overrideFleetId, overrideValue);
+
+            await _CommanderStartsAsync(bus);
+            await _SettleAsync(() => dialogs.ShownActivityWindowTriggers.Count > 0 || toasts.ActionToasts.Count > 0);
+
+            Assert.Equal(expectAutoJoin, dialogs.ShownActivityWindowTriggers.Count > 0);
+            Assert.Equal(!expectAutoJoin, toasts.ActionToasts.Count > 0);
+        }
+    }
+
+    /// <summary>
+    /// A prepared offer (ET-246) and the real start it turns into are the same run, so an auto-join in progress
+    /// for one must not let the other open a second picker while the first is still waiting on an answer.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task WithTheWindowSettingOn_APreparedOfferFollowedByTheRealStart_OnlyAsksOnce()
+    {
+        var (instance, dialogs, toasts, bus, presenter) = _Harness(Lionear, Maricadie);
+        using (instance)
+        using (presenter)
+        {
+            await _SeedCharactersAsync(instance);
+            await _SetAutoOpenAsync(instance, true);
+
+            int pickCalls = 0;
+            var pending = new TaskCompletionSource<IReadOnlyList<int>?>();
+            dialogs.OnPickCharacters = (_, _) =>
+            {
+                pickCalls++;
+                return pending.Task;
+            };
+
+            await bus.PublishAsync(new FleetRunGroupPreparedEvent(_Start(startedAt: DateTime.UtcNow)));
+            Dispatcher.UIThread.RunJobs();
+            await bus.PublishAsync(new FleetRunGroupCodeEvent(_Start()));
+            Dispatcher.UIThread.RunJobs();
+            await _SettleAsync(() => pickCalls > 0);
+
+            Assert.Equal(1, pickCalls);
+
+            pending.SetResult([Maricadie]);
+            await _SettleAsync(() => dialogs.ShownActivityWindows.Count > 0);
+            Assert.Single(dialogs.ShownActivityWindows);
         }
     }
 
@@ -427,13 +543,13 @@ public sealed class FleetRunOfferToastTests
 
     // ── Harness ─────────────────────────────────────────────────────────────────────────────────────
 
-    private static RunGroupCodeStart _Start(bool isFleetCommander = true, DateTime? startedAt = null) => new(
-        FleetId, ActivityKind.Site, GroupCode, startedAt ?? DateTime.UtcNow, isFleetCommander,
+    private static RunGroupCodeStart _Start(bool isFleetCommander = true, DateTime? startedAt = null, long fleetId = FleetId) => new(
+        fleetId, ActivityKind.Site, GroupCode, startedAt ?? DateTime.UtcNow, isFleetCommander,
         SiteName: "Blood Watch", SolarSystemName: "Osmon");
 
-    private static async Task _CommanderStartsAsync(IEventBus bus)
+    private static async Task _CommanderStartsAsync(IEventBus bus, long fleetId = FleetId)
     {
-        await bus.PublishAsync(new FleetRunGroupCodeEvent(_Start()));
+        await bus.PublishAsync(new FleetRunGroupCodeEvent(_Start(fleetId: fleetId)));
         Dispatcher.UIThread.RunJobs();
     }
 
@@ -466,6 +582,13 @@ public sealed class FleetRunOfferToastTests
         using var scope = instance.Services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<IDispatcher>().Send(
             new SetSettingCommand(FleetRunWindowPresenter.AutoOpenSettingKey, on ? "true" : "false"));
+    }
+
+    private static async Task _SetPerFleetAutoOpenAsync(TestClientInstance instance, long fleetId, bool on)
+    {
+        using var scope = instance.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IDispatcher>().Send(new SetSettingCommand(
+            FleetRunWindowPresenter.PerFleetAutoOpenSettingKey(fleetId), on ? "true" : "false"));
     }
 
     private static async Task _SeedCharactersAsync(TestClientInstance instance)
