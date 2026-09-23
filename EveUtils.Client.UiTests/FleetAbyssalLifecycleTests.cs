@@ -136,12 +136,14 @@ public sealed class FleetAbyssalLifecycleTests
             await bus.PublishAsync(new FleetRunGroupCodeEvent(_Start(firstIn), Commander));
             await bus.PublishAsync(new FleetRunPilotStoppedEvent(
                 new RunGroupStop(FleetId, ActivityKind.Abyssal, GroupCode, firstIn.AddMinutes(5)), Commander));
+            Dispatcher.UIThread.RunJobs();
             window.Refresh(firstIn.AddMinutes(6));
 
             Assert.EndsWith("1 pilot in", window.FleetClockText);
 
             await bus.PublishAsync(new FleetRunPilotResumedEvent(
                 new RunGroupResume(FleetId, ActivityKind.Abyssal, GroupCode, firstIn.AddMinutes(7)), Commander));
+            Dispatcher.UIThread.RunJobs();
             window.Refresh(firstIn.AddMinutes(8));
 
             Assert.EndsWith("2 pilots in", window.FleetClockText);
@@ -275,6 +277,7 @@ public sealed class FleetAbyssalLifecycleTests
             dialogs.IsActivityWindowOpen = true;
 
             await bus.PublishAsync(new FleetRunGroupCodeEvent(_Start(firstIn), Commander));
+            Dispatcher.UIThread.RunJobs();
             window.StartManualRun(firstIn.AddMinutes(2));
             window.StopRun(firstIn.AddMinutes(5));
             window.Refresh(firstIn.AddMinutes(6));
@@ -286,6 +289,7 @@ public sealed class FleetAbyssalLifecycleTests
 
             await bus.PublishAsync(new FleetRunPilotStoppedEvent(
                 new RunGroupStop(FleetId, ActivityKind.Abyssal, GroupCode, firstIn.AddMinutes(8)), Commander));
+            Dispatcher.UIThread.RunJobs();
             window.Refresh(firstIn.AddMinutes(9));
 
             Assert.False(window.IsWaitingForFleet);
@@ -310,6 +314,7 @@ public sealed class FleetAbyssalLifecycleTests
             await bus.PublishAsync(new FleetRunGroupCodeEvent(_Start(firstIn), Commander));
             await bus.PublishAsync(new FleetRunPilotStoppedEvent(
                 new RunGroupStop(FleetId, ActivityKind.Abyssal, GroupCode, firstIn.AddMinutes(11)), Commander));
+            Dispatcher.UIThread.RunJobs();
             window.Refresh(DateTime.UtcNow);
 
             Assert.Null(window.GroupCode);
