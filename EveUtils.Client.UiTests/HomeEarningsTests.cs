@@ -104,7 +104,7 @@ public sealed class HomeEarningsTests
         await _SaveRunWithBountyAsync(dispatcher, localMidnightUtc.AddMinutes(-5), 9_000_000m);
         await _SaveRunWithBountyAsync(dispatcher, localMidnightUtc.AddMinutes(5), 2_000_000m);
 
-        using var home = new HomeDashboardViewModel(instance.Services, HomeNavigation.None);
+        using var home = new HomeDashboardViewModel(instance.Services, HomeNavigation.None, []);
         await home.LoadAsync();
 
         Assert.Equal("2M", home.Earnings.Today.IskText);
@@ -124,7 +124,7 @@ public sealed class HomeEarningsTests
         }
 
         using var restarted = TestClientInstance.Create(instanceName: instanceName);
-        using var home = new HomeDashboardViewModel(restarted.Services, HomeNavigation.None);
+        using var home = new HomeDashboardViewModel(restarted.Services, HomeNavigation.None, []);
         await home.LoadAsync();
 
         Assert.Equal("4.2M", home.Earnings.Today.IskText);

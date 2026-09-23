@@ -1,14 +1,16 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vh="using:EveUtils.Client.ViewModels.Home"
+             xmlns:home="using:EveUtils.Client.Views.Home"
              xmlns:ctl="using:EveUtils.Client.Controls"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1300" d:DesignHeight="900"
              x:Class="EveUtils.Client.Views.Home.HomeDashboardView"
              x:DataType="vh:HomeDashboardViewModel">
 
-    <!-- One layout, shaped by the width it is handed (ET-324): at and above HomeLayout.WideFrom the blocks stand in two
+    <!-- One layout, shaped by the width it is handed (ET-324): at and above HomeDashboardView.WideFrom the blocks stand in two
          columns, below it they stack in one — the runs overview's rule, read off this control's own bounds. -->
     <UserControl.Styles>
         <Style Selector="Border.block">
@@ -182,6 +184,115 @@
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
         </Style>
+
+        <!-- ══ Pilots ══ one 36 px row per own character. Secondary text is dim at rest and lifts on hover, as in the
+             runs rows; the three per-character actions and every ALLOW… only show on the row's hover. -->
+        <Style Selector="Border.pilot">
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        </Style>
+        <Style Selector="Border.pilot:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.cellmain">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="TextBlock.cellsub">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="TextBlock.cellsub.warn">
+            <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.none">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="Border.pilot:pointerover TextBlock.none">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.figure">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.figure.zero">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.colhead">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="LetterSpacing" Value="1.6"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.allow">
+            <Setter Property="IsVisible" Value="False"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            <Setter Property="Padding" Value="5,0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Height" Value="18"/>
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="Margin" Value="6,0,0,0"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                      BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}"
+                                      Foreground="{TemplateBinding Foreground}" Content="{TemplateBinding Content}"
+                                      VerticalContentAlignment="Center"/>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Border.pilot:pointerover Button.allow, Button.allow:focus-visible">
+            <Setter Property="IsVisible" Value="True"/>
+        </Style>
+        <Style Selector="Button.allow:pointerover, Button.allow:focus-visible">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="StackPanel.pilotactions">
+            <Setter Property="Opacity" Value="0"/>
+        </Style>
+        <Style Selector="Border.pilot:pointerover StackPanel.pilotactions, StackPanel.pilotactions:focus-within">
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <Style Selector="ProgressBar.qbar">
+            <Setter Property="Height" Value="3"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Minimum" Value="0"/>
+            <Setter Property="Maximum" Value="1"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Background" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="Margin" Value="0,2,24,0"/>
+        </Style>
+        <Style Selector="ProgressBar.qbar.warn">
+            <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+        </Style>
+        <Style Selector="Grid#Body.narrow Control.widecell">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="Control.narrowcell">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="Grid#Body.narrow Control.narrowcell">
+            <Setter Property="IsVisible" Value="True"/>
+        </Style>
     </UserControl.Styles>
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
@@ -214,7 +325,7 @@
 
             <!-- ══ Earnings (3.A) ══ -->
             <Border Classes="block">
-                <Grid x:Name="Earnings" ColumnDefinitions="*,*,*,1.35*" RowDefinitions="Auto,Auto">
+                <Grid x:Name="Earnings" ColumnDefinitions="*,*,*,0" RowDefinitions="Auto,Auto">
                     <Button Grid.Column="0" Classes="tile" DataContext="{Binding Earnings.Today}" Command="{Binding OpenCommand}"
                             ToolTip.Tip="Open the runs overview on today">
                         <ContentControl Content="{Binding}" ContentTemplate="{StaticResource EarningsTile}"/>
@@ -292,6 +403,17 @@
                     </Border>
                 </Grid>
             </Border>
+
+            <!-- ══ The two columns ══ left: pilots, latest runs and best drops; right: fleets, fits and activity. Below
+                 HomeDashboardView.WideFrom the right column stands under the left one. -->
+            <Grid x:Name="Body" ColumnDefinitions="*,0" RowDefinitions="Auto,Auto">
+                <StackPanel x:Name="LeftColumn" Grid.Column="0">
+                    <home:HomePilotsBlock DataContext="{Binding Pilots}"/>
+                </StackPanel>
+                <Border x:Name="RightColumn" Grid.Column="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
+                    <StackPanel x:Name="RightBlocks"/>
+                </Border>
+            </Grid>
 
         </StackPanel>
     </ScrollViewer>

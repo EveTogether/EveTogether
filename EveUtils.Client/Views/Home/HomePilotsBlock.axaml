@@ -1,0 +1,144 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vh="using:EveUtils.Client.ViewModels.Home"
+             xmlns:ctl="using:EveUtils.Client.Controls"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             x:Class="EveUtils.Client.Views.Home.HomePilotsBlock"
+             x:DataType="vh:HomePilotsViewModel">
+
+    <!-- A field the pilot chose not to share reads a dim "not shared" — no dash, no zero — with ALLOW… on the row's
+         hover. The scope ids are the catalogue constants (LocationScopeCatalog, SkillsScopeCatalog). -->
+    <Border Classes="block">
+        <StackPanel Grid.IsSharedSizeScope="True">
+            <Grid ColumnDefinitions="*,Auto" Margin="14,10,14,4">
+                <TextBlock Classes="kicker" Text="PILOTS"/>
+                <TextBlock Grid.Column="1" Classes="mono" FontSize="10.5" Text="{Binding OnThisPcText}"
+                           ToolTip.Tip="Only EVE clients running on this PC can be seen; a character playing elsewhere reads as not on this PC."/>
+            </Grid>
+            <Grid Margin="14,0,14,2" Height="18">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="PilotName"/>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="PilotWhere"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="PilotToday"/>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="PilotMonth"/>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="PilotActions"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Classes="colhead" Text="PILOT" Width="170" Padding="28,0,0,0"/>
+                <TextBlock Grid.Column="1" Classes="colhead widecell" Text="WHERE" Width="120" ToolTip.Tip="{Binding WhereTooltip}"/>
+                <TextBlock Grid.Column="2" Classes="colhead" Text="FLYING" ToolTip.Tip="{Binding FlyingTooltip}"/>
+                <TextBlock Grid.Column="3" Classes="colhead" Text="TRAINING" ToolTip.Tip="{Binding TrainingTooltip}"/>
+                <TextBlock Grid.Column="4" Classes="colhead widecell" Text="TODAY" Width="62" TextAlignment="Right"/>
+                <TextBlock Grid.Column="5" Classes="colhead" Text="{Binding MonthHeaderText}" Width="62" TextAlignment="Right"/>
+                <Panel Grid.Column="6" Width="84"/>
+            </Grid>
+            <ItemsControl ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vh:HomePilotRowViewModel">
+                        <Border Classes="pilot">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="PilotName"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="PilotWhere"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="PilotToday"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="PilotMonth"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="PilotActions"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" Width="170" Orientation="Horizontal" Spacing="8">
+                                    <ctl:HexPortrait Size="20" Source="{Binding Character.Portrait}" Initial="{Binding Character.Initial}"/>
+                                    <TextBlock Classes="cellmain" Text="{Binding Character.Name}" VerticalAlignment="Center" MaxWidth="124"/>
+                                    <Ellipse Classes="dot up" IsVisible="{Binding IsOnThisPc}" ToolTip.Tip="EVE client running on this PC"/>
+                                </StackPanel>
+
+                                <Panel Grid.Column="1" Width="120" Classes="widecell" VerticalAlignment="Center">
+                                    <StackPanel IsVisible="{Binding Where, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:WhereState.System}}">
+                                        <TextBlock Classes="cellmain" Text="{Binding SystemName}"/>
+                                        <TextBlock Classes="cellsub" Text="{Binding SystemDetailText}"/>
+                                    </StackPanel>
+                                    <TextBlock Classes="none" Text="locating…"
+                                               IsVisible="{Binding Where, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:WhereState.Locating}}"/>
+                                    <TextBlock Classes="none" Text="not on this PC" ToolTip.Tip="{Binding NotOnThisPcTooltip}"
+                                               IsVisible="{Binding Where, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:WhereState.NotOnThisPc}}"/>
+                                    <StackPanel Orientation="Horizontal" Background="Transparent" ToolTip.Tip="{Binding WhereNotSharedTooltip}"
+                                                IsVisible="{Binding Where, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:WhereState.NotShared}}">
+                                        <TextBlock Classes="none" Text="not shared"/>
+                                        <Button Classes="allow" Content="ALLOW…" Command="{Binding AllowCommand}"
+                                                CommandParameter="esi-location.read_location.v1"/>
+                                    </StackPanel>
+                                </Panel>
+
+                                <Panel Grid.Column="2" Margin="0,0,10,0" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal" Spacing="7"
+                                                IsVisible="{Binding Flying, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:FlyingState.Ship}}">
+                                        <Image Source="{Binding HullIcon}" Width="20" Height="20" VerticalAlignment="Center"/>
+                                        <StackPanel>
+                                            <TextBlock Classes="cellmain" Text="{Binding HullText}"/>
+                                            <TextBlock Classes="cellsub" Text="{Binding FitText}" ToolTip.Tip="{Binding FitTooltip}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <TextBlock Classes="none" Text="no ship seen yet"
+                                               IsVisible="{Binding Flying, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:FlyingState.Unknown}}"/>
+                                    <Panel IsVisible="{Binding Flying, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:FlyingState.NotOnThisPc}}">
+                                        <TextBlock Classes="none narrowcell" Text="not on this PC" ToolTip.Tip="{Binding NotOnThisPcTooltip}"/>
+                                    </Panel>
+                                    <StackPanel Orientation="Horizontal" Background="Transparent" ToolTip.Tip="{Binding ShipNotSharedTooltip}"
+                                                IsVisible="{Binding Flying, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:FlyingState.NotShared}}">
+                                        <TextBlock Classes="none" Text="not shared"/>
+                                        <Button Classes="allow" Content="ALLOW…" Command="{Binding AllowCommand}"
+                                                CommandParameter="esi-location.read_ship_type.v1"/>
+                                    </StackPanel>
+                                </Panel>
+
+                                <Panel Grid.Column="3" VerticalAlignment="Center">
+                                    <StackPanel Background="Transparent" ToolTip.Tip="{Binding TrainingTooltip}"
+                                                IsVisible="{Binding Training, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:TrainingState.Training}}">
+                                        <TextBlock Classes="cellmain" Text="{Binding SkillText}"/>
+                                        <TextBlock Classes="cellsub" Classes.warn="{Binding IsQueueShort}" Text="{Binding TrainingDetailText}"/>
+                                        <ProgressBar Classes="qbar" Classes.warn="{Binding IsQueueShort}" Value="{Binding QueueBarFraction}"/>
+                                    </StackPanel>
+                                    <StackPanel Background="Transparent" ToolTip.Tip="{Binding TrainingTooltip}"
+                                                IsVisible="{Binding Training, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:TrainingState.Paused}}">
+                                        <TextBlock Classes="cellmain" Text="{Binding SkillText}"/>
+                                        <TextBlock Classes="cellsub warn" Text="{Binding TrainingDetailText}"/>
+                                    </StackPanel>
+                                    <TextBlock Classes="none" Text="nothing in the queue"
+                                               IsVisible="{Binding Training, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:TrainingState.Empty}}"/>
+                                    <StackPanel Orientation="Horizontal" Background="Transparent" ToolTip.Tip="{Binding QueueNotSharedTooltip}"
+                                                IsVisible="{Binding Training, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:TrainingState.NotShared}}">
+                                        <TextBlock Classes="none" Text="not shared"/>
+                                        <Button Classes="allow" Content="ALLOW…" Command="{Binding AllowCommand}"
+                                                CommandParameter="esi-skills.read_skillqueue.v1"/>
+                                    </StackPanel>
+                                </Panel>
+
+                                <TextBlock Grid.Column="4" Width="62" Classes="figure widecell" Classes.zero="{Binding !HasIskToday}"
+                                           Text="{Binding IskTodayText}"/>
+                                <TextBlock Grid.Column="5" Width="62" Classes="figure" Classes.zero="{Binding !HasIskMonth}"
+                                           Text="{Binding IskMonthText}"/>
+                                <StackPanel Grid.Column="6" Width="84" Classes="pilotactions" Orientation="Horizontal"
+                                            Spacing="4" HorizontalAlignment="Right">
+                                    <Button Classes="rowaction" Padding="5,0" Command="{Binding OpenMetricsCommand}"
+                                            ToolTip.Tip="Open metrics: live DPS, bounty, location, enemies.">
+                                        <mi:MaterialIcon Kind="ChartBar"/>
+                                    </Button>
+                                    <Button Classes="rowaction" Padding="5,0" Command="{Binding OpenOverlayCommand}"
+                                            ToolTip.Tip="Pop this character's live DPS into a floating overlay.">
+                                        <mi:MaterialIcon Kind="ArrowExpand"/>
+                                    </Button>
+                                    <Button Classes="rowaction" Padding="5,0" Command="{Binding OpenSettingsCommand}"
+                                            ToolTip.Tip="Character settings: ESI scopes, coupled servers, couple/decouple.">
+                                        <mi:MaterialIcon Kind="CogOutline"/>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+</UserControl>

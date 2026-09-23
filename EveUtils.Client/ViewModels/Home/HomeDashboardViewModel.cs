@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
@@ -53,9 +54,13 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
     {
         _facts = new RunRowFacts(null);
         Earnings = new HomeEarningsViewModel((_, _) => { });
+        Pilots = new HomePilotsViewModel([], null, HomeNavigation.None);
     }
 
-    public HomeDashboardViewModel(IServiceProvider services, HomeNavigation navigation)
+    /// <param name="characters">The shell's own live character rows — presence, portraits and ESI state are kept
+    /// there, and the pilot rows sit on top of them.</param>
+    public HomeDashboardViewModel(IServiceProvider services, HomeNavigation navigation,
+        ObservableCollection<CharacterViewModel> characters)
     {
         _dispatcher = services.GetService<CqrsDispatcher>();
         _registry = services.GetService<ICharacterRegistry>();
@@ -65,6 +70,7 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
         _facts = new RunRowFacts(services.GetService<ISdeAccessor>());
 
         Earnings = new HomeEarningsViewModel((kind, start) => _ = navigation.OpenRuns(runs => _PickRangeAsync(runs, kind, start)));
+        Pilots = new HomePilotsViewModel(characters, services, navigation);
 
         _runChanges = services.GetService<RunChangeFeed>()?.Subscribe(_ => ReadRunsAsync());
         if (_weekStart is not null)
@@ -84,6 +90,8 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
 
     public HomeEarningsViewModel Earnings { get; }
 
+    public HomePilotsViewModel Pilots { get; }
+
     [ObservableProperty] private string _clockText = string.Empty;
     [ObservableProperty] private string _tranquilityText = "Tranquility";
     [ObservableProperty] private bool _isTranquilityUp;
@@ -92,7 +100,10 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
     [ObservableProperty] private bool _hasServer;
 
     /// <summary>Every block's first read — the one time the whole home is read.</summary>
-    public async Task LoadAsync() => await ReadRunsAsync();
+    public async Task LoadAsync()
+    {
+        await Task.WhenAll(ReadRunsAsync(), Pilots.ReadQueuesAsync());
+    }
 
     /// <summary>The runs, read once for every block that shows them. Owed rather than overlapped (ET-287).</summary>
     public async Task ReadRunsAsync()
@@ -116,6 +127,7 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
                 DayOfWeek firstDay = _weekStart?.FirstDay ?? WeekStartService.SystemDefault();
                 HomeRunsRead read = await Task.Run(() => _ReadRunsOffThreadAsync(nowLocal, firstDay));
                 Earnings.Show(new HomeEarningsInput(read.Activities, nowLocal, firstDay, read.FirstTracked));
+                Pilots.ShowIsk(EarningsPeriods.ByCharacter(read.Activities, nowLocal, read.OwnCharacterIds), nowLocal);
             }
             while (_isRunsReadOwed);
         }
@@ -128,7 +140,7 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
     private async Task<HomeRunsRead> _ReadRunsOffThreadAsync(DateTime nowLocal, DayOfWeek firstDay)
     {
         IReadOnlyList<Character> characters = await _registry!.GetAllAsync();
-        long[] ownIds = [.. characters.Where(character => character.EsiCharacterId is > 0).Select(character => (long)character.EsiCharacterId!.Value)];
+        long[] ownIds = [.. characters.Select(character => character.EsiCharacterId).OfType<int>().Where(id => id > 0).Select(id => (long)id)];
 
         DateOnly today = DateOnly.FromDateTime(nowLocal);
         DateTime fromUtc = EarningsPeriods.ReadFrom(today, firstDay).ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).ToUniversalTime();
@@ -140,7 +152,8 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
         IReadOnlyList<ActivityOverviewRowDto> rows = overview.IsSuccess ? overview.Value ?? [] : [];
         return new HomeRunsRead(
             [.. rows.Select(row => RunsActivityFacts.From(row, _facts))],
-            firstStart is { IsSuccess: true, Value: { } firstUtc } ? DateOnly.FromDateTime(firstUtc.ToLocalTime()) : null);
+            firstStart is { IsSuccess: true, Value: { } firstUtc } ? DateOnly.FromDateTime(firstUtc.ToLocalTime()) : null,
+            ownIds.ToHashSet());
     }
 
     private static async Task _PickRangeAsync(RunsOverviewViewModel runs, EarningsPeriodKind kind, DateOnly start)
@@ -183,7 +196,11 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
         ServerText = !HasServer ? "ET not coupled" : IsServerConnected ? "ET connected" : "ET unreachable";
     }
 
-    private void _OnClockTick(object? sender, EventArgs e) => _ShowClock();
+    private void _OnClockTick(object? sender, EventArgs e)
+    {
+        _ShowClock();
+        Pilots.Tick(DateTime.UtcNow);
+    }
 
     private void _ShowClock() =>
         ClockText = DateTime.Now.ToString("ddd d MMM · HH:mm", CultureInfo.InvariantCulture);
@@ -191,6 +208,7 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
     public void Dispose()
     {
         _runChanges?.Dispose();
+        Pilots.Dispose();
         if (_weekStart is not null)
             _weekStart.Changed -= _OnWeekStartChanged;
         if (_serverStatus is not null)
@@ -204,5 +222,6 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
         _clock.Tick -= _OnClockTick;
     }
 
-    private sealed record HomeRunsRead(IReadOnlyList<RunsActivityFacts> Activities, DateOnly? FirstTracked);
+    private sealed record HomeRunsRead(IReadOnlyList<RunsActivityFacts> Activities, DateOnly? FirstTracked,
+        IReadOnlySet<long> OwnCharacterIds);
 }

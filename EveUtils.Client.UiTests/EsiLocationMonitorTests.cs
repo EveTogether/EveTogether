@@ -91,15 +91,12 @@ public class EsiLocationMonitorTests
     }
 
     /// <summary>
-    /// No scope means the location cannot be read at all — there is no gamelog fallback left. That is worth saying
-    /// out loud, and the toast carries the one action that fixes it, which is also why it must not auto-dismiss.
+    /// ET-324: a location scope the pilot chose not to share is a choice, not a fault. The watch stops — nothing can
+    /// be read — but says nothing: the home shows "not shared" beside the field instead. Red before: a warning toast
+    /// with "Allow location" on every start.
     /// </summary>
-    /// <remarks>
-    /// The wording says what is wrong, not what the location happens to be used for: this watch feeds whatever reads
-    /// it, and naming today's reader would age the moment a second one arrives.
-    /// </remarks>
     [Fact]
-    public async Task WithoutTheLocationScope_ItStopsAndOffersToFixIt()
+    public async Task WithoutTheLocationScope_ItStopsQuietly()
     {
         var locations = new FakeLocationClient { Error = EsiErrorKind.ScopeMissing };
         var monitor = Build(locations, out var toasts);
@@ -112,12 +109,7 @@ public class EsiLocationMonitorTests
             reason = reading.Reason;
         }, CancellationToken.None);
 
-        var toast = Assert.Single(toasts.ActionToasts);
-        Assert.Equal("No location access", toast.Title);
-        Assert.DoesNotContain("abyssal", toast.Title + toast.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("RaymondKrah", toast.Message);
-        Assert.Equal(ToastKind.Warning, toast.Kind);
-        Assert.Contains(toast.Actions, a => a.Style == ToastActionStyle.Affirmative);
+        Assert.Empty(toasts.Toasts);
 
         // One call, not a poll loop: the pre-flight refuses a missing scope without sending anything, and repeating it
         // would only burn ESI budget. And the clock is cleared rather than left frozen on its last anchor.
@@ -130,12 +122,51 @@ public class EsiLocationMonitorTests
     }
 
     /// <summary>
-    /// Several characters without location access raise one message that names them all, not one message each.
+    /// A sign-in ESI refuses is a fault the pilot has to fix, so it still says so — with the one action that fixes it,
+    /// which is also why the toast must not auto-dismiss. The wording says what is wrong, not what the location
+    /// happens to be used for: this watch feeds whatever reads it.
+    /// </summary>
+    [Fact]
+    public async Task AnExpiredSignIn_StopsAndOffersToFixIt()
+    {
+        var locations = new FakeLocationClient { Error = EsiErrorKind.AuthRequired };
+        var monitor = Build(locations, out var toasts);
+
+        await monitor.WatchAsync(1, "RaymondKrah", _ => { }, CancellationToken.None);
+
+        var toast = Assert.Single(toasts.ActionToasts);
+        Assert.Equal("ESI sign-in expired", toast.Title);
+        Assert.DoesNotContain("abyssal", toast.Title + toast.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("RaymondKrah", toast.Message);
+        Assert.Equal(ToastKind.Warning, toast.Kind);
+        Assert.Contains(toast.Actions, a => a.Style == ToastActionStyle.Affirmative);
+        Assert.Equal(1, locations.Calls);
+    }
+
+    /// <summary>
+    /// ET-324: a scope that was granted but that ESI refuses (SCOPE_FORBIDDEN) is not the pilot's choice either, so a
+    /// watch that gives up on it keeps its warning. Red before: it gave up without a word.
+    /// </summary>
+    [Fact]
+    public async Task ARefusedScope_GivesUpWithAWarning()
+    {
+        var locations = new FakeLocationClient { Error = EsiErrorKind.ScopeForbidden };
+        var monitor = Build(locations, out var toasts);
+
+        await monitor.WatchAsync(1, "RaymondKrah", _ => { }, CancellationToken.None);
+
+        var toast = Assert.Single(toasts.ActionToasts);
+        Assert.Equal("Location access refused", toast.Title);
+        Assert.Contains("RaymondKrah", toast.Message);
+    }
+
+    /// <summary>
+    /// Several characters whose sign-in expired raise one message that names them all, not one message each.
     /// </summary>
     [Fact]
     public async Task SeveralCharactersWithoutAccess_RaiseOneMessageNamingThemAll()
     {
-        var locations = new FakeLocationClient { Error = EsiErrorKind.ScopeMissing };
+        var locations = new FakeLocationClient { Error = EsiErrorKind.AuthRequired };
         var monitor = Build(locations, out var toasts);
 
         await monitor.WatchAsync(1, "RaymondKrah", _ => { }, CancellationToken.None);
@@ -145,7 +176,7 @@ public class EsiLocationMonitorTests
         var latest = toasts.ActionToasts[^1];
         Assert.Contains("RaymondKrah", latest.Message);
         Assert.Contains("Catbank", latest.Message);
-        Assert.All(toasts.ActionToasts, toast => Assert.Equal("location-access-ScopeMissing", toast.ReplacementKey));
+        Assert.All(toasts.ActionToasts, toast => Assert.Equal("location-access-AuthRequired", toast.ReplacementKey));
     }
 
     /// <summary>
@@ -162,7 +193,7 @@ public class EsiLocationMonitorTests
         // flakes on a returning bug is worse than none. Each round is four pre-flight refusals, so this stays quick.
         for (var round = 0; round < 300; round++)
         {
-            var monitor = Build(new FakeLocationClient { Error = EsiErrorKind.ScopeMissing }, out var toasts);
+            var monitor = Build(new FakeLocationClient { Error = EsiErrorKind.AuthRequired }, out var toasts);
 
             await Task.WhenAll(names.Select((name, index) =>
                 Task.Run(() => monitor.WatchAsync(index + 1, name, _ => { }, CancellationToken.None))));
@@ -173,9 +204,9 @@ public class EsiLocationMonitorTests
     }
 
     [Fact]
-    public async Task TheScopeWarning_IsNotRepeatedForTheSameCharacter()
+    public async Task TheSignInWarning_IsNotRepeatedForTheSameCharacter()
     {
-        var locations = new FakeLocationClient { Error = EsiErrorKind.ScopeMissing };
+        var locations = new FakeLocationClient { Error = EsiErrorKind.AuthRequired };
         var monitor = Build(locations, out var toasts);
 
         for (var run = 0; run < 3; run++)
@@ -193,7 +224,7 @@ public class EsiLocationMonitorTests
     [Fact]
     public async Task ARestartedWatch_CanWarnAgain()
     {
-        var locations = new FakeLocationClient { Error = EsiErrorKind.ScopeMissing };
+        var locations = new FakeLocationClient { Error = EsiErrorKind.AuthRequired };
         var monitor = Build(locations, out var toasts);
 
         monitor.Watch(1, "RaymondKrah", _ => { });

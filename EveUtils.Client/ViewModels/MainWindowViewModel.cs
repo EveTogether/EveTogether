@@ -420,9 +420,11 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         Home = new HomeDashboardViewModel(services, new HomeNavigation(
             OpenRunsAsync,
             id => _ = LaunchModule(id),
-            _OpenCharacterSettingsByIdAsync,
+            OpenCharacterSettings,
+            OpenMetrics,
+            OpenCharacterDpsOverlay,
             (characterId, scope) => ReAuthenticateAsync(characterId, [scope]),
-            () => ImportFittingsCommand.ExecuteAsync(null)));
+            () => ImportFittingsCommand.ExecuteAsync(null)), Characters);
 
         SetupLocalFittingsTab();
 
@@ -1327,9 +1329,6 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         if (character is not null)
             _dialogs?.ShowDpsOverlay(GetOrCreateTracker(character.Name));
     }
-
-    private Task _OpenCharacterSettingsByIdAsync(int characterId) =>
-        OpenCharacterSettings(Characters.FirstOrDefault(character => character.CharacterId == characterId));
 
     /// <summary>Open the per-character settings dialog: ESI scopes, coupled servers, couple/decouple.</summary>
     [RelayCommand]

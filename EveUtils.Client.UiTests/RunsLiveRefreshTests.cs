@@ -218,7 +218,7 @@ public sealed class RunsLiveRefreshTests
         await instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character("Ra Vinter", (int)Pilot), Token);
         Guid runId = await _SaveAsync(dispatcher, Pilot, DateTime.UtcNow.AddMinutes(-30),
             bounties: [new RunBountyEntryInput { OccurredAtUtc = DateTime.UtcNow.AddMinutes(-20), Isk = 3_000_000m }]);
-        using var home = new HomeDashboardViewModel(instance.Services, HomeNavigation.None);
+        using var home = new HomeDashboardViewModel(instance.Services, HomeNavigation.None, []);
         await home.LoadAsync();
         Assert.Equal("3M", home.Earnings.Today.IskText);
 
