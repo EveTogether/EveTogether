@@ -4,7 +4,7 @@
              x:Class="EveUtils.Client.Views.Home.HomeSystemStrip"
              x:DataType="vh:HomeSystemStripViewModel">
 
-    <!-- The plumbing in one line: a green dot where it runs, a hollow one where it is off. Wraps when narrow. -->
+    <!-- The plumbing in one line: a green dot where it runs, a dim one where it is off; values bright. Wraps when narrow. -->
     <WrapPanel Margin="14,8">
         <StackPanel Classes="strip">
             <Ellipse Classes="dot" Classes.up="{Binding ArePricesFresh}"/>
@@ -16,19 +16,25 @@
         </StackPanel>
         <StackPanel Classes="strip" ToolTip.Tip="Settings → Privacy &amp; Sharing">
             <Ellipse Classes="dot" Classes.up="{Binding IsClipboardWatching}"/>
-            <TextBlock><Run Text="Clipboard watch "/><Run Foreground="{StaticResource TextBrightBrush}" FontFamily="{StaticResource MonoFont}" Text="{Binding ClipboardText}"/></TextBlock>
+            <TextBlock Text="Clipboard watch"/>
+            <TextBlock Classes="value" Text="{Binding ClipboardText}"/>
         </StackPanel>
         <StackPanel Classes="strip">
             <Ellipse Classes="dot" Classes.up="{Binding IsAutoSyncOn}"/>
-            <TextBlock><Run Text="EVE settings auto-sync "/><Run Foreground="{StaticResource TextBrightBrush}" FontFamily="{StaticResource MonoFont}" Text="{Binding AutoSyncText}"/></TextBlock>
+            <TextBlock Text="EVE settings auto-sync"/>
+            <TextBlock Classes="value" Text="{Binding AutoSyncText}"/>
         </StackPanel>
         <StackPanel Classes="strip">
             <Ellipse Classes="dot" Classes.up="{Binding IsLocalApiRunning}"/>
-            <TextBlock><Run Text="Local API "/><Run Foreground="{StaticResource TextBrightBrush}" FontFamily="{StaticResource MonoFont}" Text="{Binding LocalApiText}"/></TextBlock>
+            <TextBlock Text="Local API"/>
+            <TextBlock Classes="value" Text="{Binding LocalApiText}"/>
         </StackPanel>
         <StackPanel Classes="strip">
             <Ellipse Classes="dot up"/>
-            <TextBlock><Run Text="EVE Together "/><Run Foreground="{StaticResource TextBrightBrush}" FontFamily="{StaticResource MonoFont}" Text="{Binding VersionText}"/><Run Text="{Binding UpdateText, StringFormat=' · {0}'}"/></TextBlock>
+            <TextBlock Text="EVE Together"/>
+            <TextBlock Classes="value" Text="{Binding VersionText}"/>
+            <TextBlock Text="·"/>
+            <TextBlock Text="{Binding UpdateText}"/>
         </StackPanel>
     </WrapPanel>
 </UserControl>

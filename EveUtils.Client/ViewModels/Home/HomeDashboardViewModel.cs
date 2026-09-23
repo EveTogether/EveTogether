@@ -158,6 +158,7 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
     [ObservableProperty] private string _clockText = string.Empty;
     [ObservableProperty] private string _tranquilityText = "Tranquility";
     [ObservableProperty] private bool _isTranquilityUp;
+    [ObservableProperty] private bool _isTranquilityDown;
     [ObservableProperty] private string _serverText = "ET not coupled";
     [ObservableProperty] private bool _isServerConnected;
     [ObservableProperty] private bool _hasServer;
@@ -361,6 +362,7 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
     {
         EveServerStatusSnapshot? snapshot = _serverStatus?.Current;
         IsTranquilityUp = snapshot?.State is EveServerState.Online or EveServerState.Vip;
+        IsTranquilityDown = snapshot?.State is EveServerState.Offline;
         TranquilityText = snapshot switch
         {
             { State: EveServerState.Online, Players: { } players } => $"Tranquility {players.ToString("N0", CultureInfo.InvariantCulture)}",
