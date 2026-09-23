@@ -347,7 +347,7 @@ public sealed class RecordingDialogService : IDialogService
     /// module without standing up the real window.</summary>
     public RunsOverviewViewModel? LastRuns { get; private set; }
 
-    public void ShowRuns(RunsOverviewViewModel viewModel) => LastRuns = viewModel;
+    public RunsOverviewViewModel ShowRuns(RunsOverviewViewModel viewModel) => LastRuns = viewModel;
 
     /// <summary>The save-a-preset dialog the tool asked for, or null — and a hook to drive it (pick a path and
     /// export) without a window.</summary>

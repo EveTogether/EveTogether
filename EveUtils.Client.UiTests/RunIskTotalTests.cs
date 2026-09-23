@@ -9,6 +9,7 @@ using Avalonia.Headless.XUnit;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Client.ViewModels.Home;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Data;
@@ -106,9 +107,11 @@ public sealed class RunIskTotalTests
         Assert.True(detail.HasTotalIsk);
         Assert.Equal(IskFormat.Whole(sample.Total), detail.TotalIskText);
 
-        Result<decimal> today = await dispatcher.Query(new GetIskTodayQuery(DateTime.UtcNow.AddHours(-1),
-            [.. _Crew(sample).Select(character => (long)character.EsiCharacterId!.Value)]));
-        Assert.Equal(sample.Total, today.Value);
+        Result<IReadOnlyList<ActivityOverviewRowDto>> own = await dispatcher.Query(new GetActivityOverviewQuery(
+            OwnCharacterIds: [.. _Crew(sample).Select(character => (long)character.EsiCharacterId!.Value)]));
+        EarningsPeriodFigures today = EarningsPeriods.For(EarningsPeriodKind.Today,
+            [.. (own.Value ?? []).Select(dto => RunsActivityFacts.From(dto, new RunRowFacts(null)))], DateTime.Now, DayOfWeek.Monday, null);
+        Assert.Equal(sample.Total, today.Net);
     }
 
     /// <summary>A summary saved before this ticket has no total and no breakdown, and the runs overview would read it

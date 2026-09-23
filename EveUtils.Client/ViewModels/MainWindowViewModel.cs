@@ -17,6 +17,7 @@ using EveUtils.Client.Fittings;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.Home;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.EveSettings;
@@ -326,7 +327,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         switch (id)
         {
             // FITS opens the full fit browser in both modes (consistent): hosted in docked, a window in floating.
-            // The home dashboard (live DPS) remains the landing shown at startup and when no tab is open.
+            // The home remains the landing shown at startup and when no tab is open.
             case "fits": await OpenFitBrowser(); break;
             case "fleet": OpenFleets(); break;
             case "compositions": OpenCompositions(); break;
@@ -382,8 +383,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// once here and shared with the non-modal log window so it keeps updating live while open.</summary>
     public ClientLogViewModel Logs { get; }
 
-    /// <summary>The home dashboard: your own characters' live DPS, your fleets, the latest shared fits and recent
-    /// activity. Replaces the old global live-DPS landing that showed every connected client's DPS.</summary>
+    /// <summary>The home screen (ET-324): earnings, pilots, latest runs, fleets, fits and activity at a glance.</summary>
     public HomeDashboardViewModel Home { get; }
 
     // ── Constructors ─────────────────────────────────────────────────────────────────────────────
@@ -417,7 +417,12 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _fleetClient = services.GetRequiredService<FleetClient>();
         Inbox = services.GetRequiredService<InboxViewModel>(); // subscribes to MessageDeliveredEvent on the bus
         Logs = services.GetRequiredService<ClientLogViewModel>(); // subscribes to ILogStore.EntryAdded
-        Home = new HomeDashboardViewModel(services, DpsTrackers); // tracks the self DPS subset + loads fleets/fits/stats
+        Home = new HomeDashboardViewModel(services, new HomeNavigation(
+            OpenRunsAsync,
+            id => _ = LaunchModule(id),
+            _OpenCharacterSettingsByIdAsync,
+            (characterId, scope) => ReAuthenticateAsync(characterId, [scope]),
+            () => ImportFittingsCommand.ExecuteAsync(null)));
 
         SetupLocalFittingsTab();
 
@@ -662,14 +667,17 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// <summary>Opens the runs screen (ET-161) — the only place in the app a saved run can be read back, and the
     /// only way into an activity's detail. The character list comes from the registry as it stands now, because the
     /// running band is a lane per character and a toon linked since app start would otherwise have none.</summary>
-    private async Task OpenRunsAsync()
+    /// <param name="then">What to do with the screen once it is showing — the home picks a day or a week on it.</param>
+    private async Task OpenRunsAsync(Func<RunsOverviewViewModel, Task>? then = null)
     {
         if (_dialogs is null || _services is null)
             return;
 
         IReadOnlyList<Character> characters = await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
-        _dialogs.ShowRuns(new RunsOverviewViewModel(
+        RunsOverviewViewModel shown = _dialogs.ShowRuns(new RunsOverviewViewModel(
             _services.GetRequiredService<IDispatcher>(), _dialogs, _services, characters));
+        if (then is not null)
+            await then(shown);
     }
 
     /// <summary>Opens the manual run-start dialog (ET-163) — modal, and closed again by START. A fresh view-model
@@ -1320,6 +1328,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             _dialogs?.ShowDpsOverlay(GetOrCreateTracker(character.Name));
     }
 
+    private Task _OpenCharacterSettingsByIdAsync(int characterId) =>
+        OpenCharacterSettings(Characters.FirstOrDefault(character => character.CharacterId == characterId));
+
     /// <summary>Open the per-character settings dialog: ESI scopes, coupled servers, couple/decouple.</summary>
     [RelayCommand]
     private async Task OpenCharacterSettings(CharacterViewModel? character)
@@ -1337,14 +1348,16 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// The popup is built from the scope registry, so it lists every scope the modules declare and scales as new
     /// scopes are added — replacing the former per-scope "+ ADD" buttons. Re-uses the SSO with the chosen set.
     /// </summary>
-    public async Task ReAuthenticateAsync(int characterId)
+    /// <param name="extraScopes">Ticked on top of what is granted — the home's ALLOW… for a scope a pilot chose not
+    /// to share (ET-324); still only a pre-tick, the picker has the last word.</param>
+    public async Task ReAuthenticateAsync(int characterId, IReadOnlyCollection<string>? extraScopes = null)
     {
         if (_login is null || _dialogs is null || _scopeRegistry is null || _registry is null) return;
 
         var granted = (await _registry.GetAllAsync())
             .FirstOrDefault(c => c.EsiCharacterId == characterId)?.GrantedScopes ?? [];
         var available = _scopeRegistry.GetRequirements(EsiScopeTarget.Client);
-        var selected = await _dialogs.SelectScopesAsync(available, granted);
+        var selected = await _dialogs.SelectScopesAsync(available, [.. granted.Union(extraScopes ?? [], StringComparer.OrdinalIgnoreCase)]);
         if (selected is null)
         {
             ActivityStatus = "Re-authentication cancelled.";
@@ -2238,7 +2251,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
         await LoadFittingsAsync();             // global Local fittings list (all characters)
         await RefreshFittingsTabsAsync();      // server tabs for the restored connections
-        await Home.RefreshAsync();             // home dashboard: your fleets, latest shared fits, character stats
+        await Home.LoadAsync();
     }
 
     /// <summary>

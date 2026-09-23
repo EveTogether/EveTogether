@@ -51,6 +51,16 @@ internal static class RunsActivitySummaryText
         return known.Length == 0 ? null : known.Sum();
     }
 
+    /// <summary>The own share per flown hour, or null with nothing timed and valued. Only over what has a flown time:
+    /// an activity with a run left without a stop reads 0 flown, and counting its ISK over nobody's hours would
+    /// inflate the rate.</summary>
+    public static decimal? PerHour<T>(IEnumerable<T> activities) where T : IRunsActivityFigures
+    {
+        T[] timed = [.. activities.Where(activity => activity.Duration > TimeSpan.Zero)];
+        double hours = timed.Sum(activity => activity.Duration.TotalHours);
+        return hours > 0 && Net(timed) is { } net ? net / (decimal)hours : null;
+    }
+
     /// <summary>"+2.46B", "-3.1M": compact, with the plus a figure that was earned carries.</summary>
     public static string Signed(decimal value) => (value < 0 ? string.Empty : "+") + IskFormat.Compact(value);
 

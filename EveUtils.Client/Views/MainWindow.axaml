@@ -4,6 +4,7 @@
         xmlns:vm="using:EveUtils.Client.ViewModels"
         xmlns:dlg="using:EveUtils.Client.Dialogs"
         xmlns:ctl="using:EveUtils.Client.Controls"
+        xmlns:home="using:EveUtils.Client.Views.Home"
         xmlns:chrome="using:Avalonia.Controls.Chrome"
         xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         xmlns:ships="using:EveUtils.Shared.Modules.Ships.Dtos"
@@ -24,11 +25,6 @@
     </Design.DataContext>
 
     <Window.Styles>
-        <!-- Dim a home-dashboard character row that has no live combat (idle placeholder). -->
-        <Style Selector="Border.idlecard">
-            <Setter Property="Opacity" Value="0.5"/>
-        </Style>
-
         <!-- The rail's ten launcher icons were StreamGeometry in this window's resources (D-182); they come from the
              icon set now (ET-74). One size here rather than on each button, for the same reason it was one grid
              before: ten shapes that size themselves are ten weights. They take their colour by inheritance, so the
@@ -36,6 +32,26 @@
 
              20 rather than the 22 the drawn Paths used: Material's outlines carry more ink than a 1.7 stroke, so at
              the old size the rail sat visibly heavier than the rest of the window. -->
+        <!-- A portrait on the docked character rail (ET-324): no fill of its own, the hex ringed in the bright accent
+             on hover and keyboard focus, the rail's "+" lit the same way. -->
+        <Style Selector="Button.railportrait">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+        </Style>
+        <Style Selector="Button.railportrait:pointerover /template/ ContentPresenter, Button.railportrait:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.railportrait:pointerover ctl|HexPortrait, Button.railportrait:focus-visible ctl|HexPortrait">
+            <Setter Property="Ring" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.railportrait:pointerover Border, Button.railportrait:focus-visible Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+
         <Style Selector="mi|MaterialIcon.rail">
             <Setter Property="Width" Value="20"/>
             <Setter Property="Height" Value="20"/>
@@ -320,9 +336,40 @@
                 </DockPanel>
             </Border>
 
-            <!-- ── Character column: hex ESI portraits + affiliation + badges + per-character actions ── -->
+            <!-- ── Characters ── Docked, a 44 px portrait rail beside every screen (ET-324): a hex per character with a
+                 green dot for a client on this PC — absent otherwise, never a grey "offline", since the probe only sees
+                 this machine. The cards themselves became the home's pilot rows. Floating has no home, so the narrow
+                 shell keeps the full cards. -->
             <Border Grid.Column="1" Classes="rail" IsVisible="{Binding ShowChars}">
-                <DockPanel>
+                <Panel>
+                <DockPanel IsVisible="{Binding !IsFloating}">
+                    <Button DockPanel.Dock="Bottom" Classes="railportrait" Margin="0,6,0,10"
+                            Command="{Binding AddCharacterCommand}" IsEnabled="{Binding !IsSigningIn}"
+                            ToolTip.Tip="Add a character via EVE SSO. Pick which scopes to grant in the dialog.">
+                        <Border Width="26" Height="26" BorderThickness="1" BorderBrush="{DynamicResource BorderStrongBrush}">
+                            <mi:MaterialIcon Kind="Plus" Width="14" Height="14"/>
+                        </Border>
+                    </Button>
+                    <ScrollViewer VerticalScrollBarVisibility="Hidden">
+                        <ItemsControl ItemsSource="{Binding Characters}" Margin="0,8,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:CharacterViewModel">
+                                    <Button Classes="railportrait" Margin="0,0,0,6"
+                                            Command="{Binding #RootWindow.((vm:MainWindowViewModel)DataContext).OpenCharacterSettingsCommand}"
+                                            CommandParameter="{Binding}" ToolTip.Tip="{Binding RailTooltip}">
+                                        <Panel Width="30" Height="30">
+                                            <ctl:HexPortrait Size="26" Source="{Binding Portrait}" Initial="{Binding Initial}"/>
+                                            <Ellipse Width="8" Height="8" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                                     Fill="{StaticResource GreenBrush}" Stroke="{StaticResource BgDeepBrush}"
+                                                     StrokeThickness="1.5" IsVisible="{Binding HasActiveClient}"/>
+                                        </Panel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+                <DockPanel IsVisible="{Binding IsFloating}">
                     <Border Classes="panel-header" DockPanel.Dock="Top" Height="40">
                         <Grid ColumnDefinitions="Auto,*,Auto">
                             <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
@@ -457,6 +504,7 @@
                         </ItemsControl>
                     </ScrollViewer>
                 </DockPanel>
+                </Panel>
             </Border>
 
             <!-- ── Module host: tabbed header + the docked "fits" home (library + live DPS + shared demo) ── -->
@@ -537,276 +585,11 @@
                     </Grid>
                 </Border>
 
-                <!-- Host body: the "fits" home (default) with a navigated module hosted on top (D-182) -->
+                <!-- Host body: the home (default) with a navigated module hosted on top (D-182) -->
                 <Grid>
-                <ScrollViewer IsVisible="{Binding IsHomeShown}">
-                  <StackPanel Margin="14,12" Spacing="11">
-
-                    <!-- Header: title + Tranquility status + refresh -->
-                    <Grid ColumnDefinitions="*,Auto">
-                        <StackPanel>
-                            <TextBlock Classes="label" Text="HOME"/>
-                            <TextBlock Text="Dashboard" FontSize="18" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextBrightBrush}"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <Border Classes="panel" Padding="9,5" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding TranquilityStatus}" FontSize="11"
-                                           Foreground="{Binding TranquilityBrush}"/>
-                            </Border>
-                            <Border Classes="panel" Padding="9,5" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding Home.IskTodayText, StringFormat='◆ {0} ISK today'}" FontSize="11"
-                                           Foreground="{StaticResource ValueBrush}"/>
-                            </Border>
-                            <Button Content="REFRESH" FontSize="10" Command="{Binding Home.RefreshCommand}"/>
-                        </StackPanel>
-                    </Grid>
-
-                    <!-- Stat tiles -->
-                    <UniformGrid Columns="4">
-                        <Border Classes="panel" Margin="0,0,6,0" Padding="13,10">
-                            <StackPanel>
-                                <TextBlock Classes="label" Text="IN EVE"/>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Classes="mono" FontSize="21" Foreground="{StaticResource TextBrightBrush}"
-                                               Text="{Binding Home.CharactersInEve}"/>
-                                    <TextBlock Classes="label" VerticalAlignment="Bottom" Margin="0,0,0,3"
-                                               Text="{Binding Home.CharactersTotal, StringFormat='/ {0} chars'}"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
-                        <Border Classes="panel" Margin="3,0,3,0" Padding="13,10">
-                            <StackPanel>
-                                <TextBlock Classes="label" Text="ACTIVE FLEETS"/>
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Classes="mono" FontSize="21" Foreground="{DynamicResource AccentBrightBrush}"
-                                               Text="{Binding Home.ActiveFleetCount}"/>
-                                    <TextBlock Classes="label" VerticalAlignment="Bottom" Margin="0,0,0,3"
-                                               IsVisible="{Binding Home.FormingFleetCount}"
-                                               Text="{Binding Home.FormingFleetCount, StringFormat='{}{0} forming'}"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
-                        <Border Classes="panel" Margin="3,0,3,0" Padding="13,10">
-                            <StackPanel>
-                                <TextBlock Classes="label" Text="FITS SHARED TODAY"/>
-                                <TextBlock Classes="mono" FontSize="21" Foreground="{StaticResource TextBrightBrush}"
-                                           Text="{Binding Home.SharedFitCount}"/>
-                            </StackPanel>
-                        </Border>
-                        <Border Classes="panel" Margin="6,0,0,0" Padding="13,10">
-                            <StackPanel>
-                                <TextBlock Classes="label" Text="SERVER"/>
-                                <StackPanel Orientation="Horizontal" Spacing="7" Margin="0,3,0,0">
-                                    <Panel Width="11" Height="11" VerticalAlignment="Center">
-                                        <Ellipse Width="11" Height="11" Fill="{DynamicResource AccentBrightBrush}"
-                                                 IsVisible="{Binding Home.IsServerConnected}"/>
-                                        <Ellipse Width="11" Height="11" Fill="#6B7280"
-                                                 IsVisible="{Binding !Home.IsServerConnected}"/>
-                                    </Panel>
-                                    <TextBlock FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"
-                                               Foreground="{StaticResource TextBrightBrush}"
-                                               Text="{Binding Home.ServerStatusLabel}"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
-                    </UniformGrid>
-
-                    <!-- Two columns: your characters (live DPS) | fleets + fits + activity -->
-                    <Grid ColumnDefinitions="*,*">
-
-                        <Border Classes="panel" Grid.Column="0" Margin="0,0,6,0" VerticalAlignment="Top">
-                            <DockPanel>
-                                <Border Classes="panel-header" DockPanel.Dock="Top">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Classes="diamond" Text="◆"/>
-                                        <TextBlock Classes="panel-title" Text="YOUR CHARACTERS"/>
-                                    </StackPanel>
-                                </Border>
-                                <TextBlock DockPanel.Dock="Top" Classes="label" Margin="12,12"
-                                           IsVisible="{Binding !Home.HasCharacters}"
-                                           Text="No live combat yet — your characters appear here once their game log shows activity."/>
-                                <ItemsControl ItemsSource="{Binding Home.MyCharacters}" Margin="10,8">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:DpsViewModel">
-                                            <Border Classes="panel" Classes.idlecard="{Binding ShowOffline}" Margin="0,0,0,8" Height="104">
-                                                <Panel>
-                                                    <Grid ColumnDefinitions="Auto,150,*" Margin="10">
-                                                        <!-- hex ESI portrait + glyph fallback -->
-                                                        <Panel Grid.Column="0" Width="46" Height="52" VerticalAlignment="Center" Margin="0,0,10,0">
-                                                            <Panel.Clip><PathGeometry Figures="M23,0 L46,13 L46,39 L23,52 L0,39 L0,13 Z"/></Panel.Clip>
-                                                            <Border Background="{DynamicResource AccentSoftBrush}" IsVisible="{Binding !HasPortrait}">
-                                                                <TextBlock Text="{Binding Initial}" FontSize="18" FontWeight="Bold"
-                                                                           Foreground="{DynamicResource AccentBrightBrush}"
-                                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                            </Border>
-                                                            <Image Source="{Binding Portrait}" Stretch="UniformToFill" IsVisible="{Binding HasPortrait}"/>
-                                                        </Panel>
-                                                        <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
-                                                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                                                <TextBlock Text="{Binding Character}" FontWeight="SemiBold"
-                                                                           Foreground="{StaticResource TextBrightBrush}"/>
-                                                                <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="2"
-                                                                        Padding="5,1" IsVisible="{Binding IsSelf}">
-                                                                    <TextBlock Text="YOU" FontSize="9"
-                                                                               Foreground="{DynamicResource AccentBrightBrush}"/>
-                                                                </Border>
-                                                            </StackPanel>
-                                                            <StackPanel Orientation="Horizontal" Spacing="5">
-                                                                <Ellipse Width="7" Height="7" VerticalAlignment="Center"
-                                                                         Fill="{DynamicResource AccentBrightBrush}" IsVisible="{Binding InEve}"/>
-                                                                <Ellipse Width="7" Height="7" VerticalAlignment="Center"
-                                                                         Fill="#6B7280" IsVisible="{Binding !InEve}"/>
-                                                                <TextBlock Classes="label" Text="In EVE" IsVisible="{Binding InEve}"/>
-                                                                <TextBlock Classes="label" Text="Offline" IsVisible="{Binding !InEve}"/>
-                                                                <!-- SystemDisplay, not LocationDisplay: this card
-                                                                     already says "In EVE" / "Offline" right beside
-                                                                     it, so the shared readout would repeat itself
-                                                                     as "Offline · offline" (ET-71). -->
-                                                                <TextBlock Classes="label" Text="{Binding SystemDisplay, StringFormat='· {0}'}"
-                                                                           IsVisible="{Binding SystemDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                                                            </StackPanel>
-                                                            <TextBlock Classes="label" Text="DEALT / RECEIVED" Margin="0,2,0,0"
-                                                                       IsVisible="{Binding IsLive}"/>
-                                                            <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsLive}">
-                                                                <!-- The combat inks, not the faction accent (ET-277):
-                                                                     the same two colours as the lines beside them. -->
-                                                                <TextBlock Classes="mono" FontSize="19"
-                                                                           Foreground="{x:Static ctl:CombatInk.Out}" Text="{Binding Dealt, StringFormat='{}{0:N0}'}"/>
-                                                                <TextBlock Classes="mono" FontSize="19"
-                                                                           Foreground="{x:Static ctl:CombatInk.In}" Text="{Binding Received, StringFormat='{}{0:N0}'}"/>
-                                                            </StackPanel>
-                                                            <TextBlock Classes="label" Foreground="{StaticResource ValueBrush}"
-                                                                       IsVisible="{Binding HasBounty}" Text="{Binding BountyText}"/>
-                                                            <TextBlock Classes="label" Text="waiting for activity" Margin="0,2,0,0"
-                                                                       IsVisible="{Binding !IsLive}"/>
-                                                        </StackPanel>
-                                                        <ctl:DpsGraph Grid.Column="2" Margin="10,0,0,0"
-                                                                      IsVisible="{Binding IsLive}"
-                                                                      Series="{Binding Series}"
-                                                                      Revision="{Binding GraphRevision}"
-                                                                      HitPointsMax="{Binding HitPointsScale}"
-                                                                      CapacitorMax="{Binding CapacitorScale}"/>
-                                                        <TextBlock Grid.Column="2" Text="—" FontSize="26" Classes="label"
-                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                                   IsVisible="{Binding !IsLive}"/>
-                                                    </Grid>
-                                                    <Button Padding="6,1" Margin="0,4,6,0"
-                                                            HorizontalAlignment="Right" VerticalAlignment="Top"
-                                                            IsVisible="{Binding IsLive}"
-                                                            Command="{Binding #RootWindow.((vm:MainWindowViewModel)DataContext).OpenDpsOverlayCommand}"
-                                                            CommandParameter="{Binding}"
-                                                            ToolTip.Tip="Pop this character's DPS into a floating, pinnable overlay">
-                                                        <mi:MaterialIcon Classes="icon-sm" Kind="ArrowExpand"/>
-                                                    </Button>
-                                                </Panel>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </DockPanel>
-                        </Border>
-
-                        <StackPanel Grid.Column="1" Margin="6,0,0,0" Spacing="11">
-
-                            <Border Classes="panel">
-                                <DockPanel>
-                                    <Border Classes="panel-header" DockPanel.Dock="Top">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <TextBlock Classes="diamond" Text="◆"/>
-                                            <TextBlock Classes="panel-title" Text="YOUR FLEETS"/>
-                                        </StackPanel>
-                                    </Border>
-                                    <TextBlock DockPanel.Dock="Top" Classes="label" Margin="12,12"
-                                               IsVisible="{Binding !Home.HasFleets}"
-                                               Text="No formed fleets you own or fly in right now."/>
-                                    <ItemsControl ItemsSource="{Binding Home.Fleets}" Margin="12,6">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:DashboardFleetViewModel">
-                                                <Grid ColumnDefinitions="Auto,*" Margin="0,5">
-                                                    <Border CornerRadius="9" Padding="7,2" VerticalAlignment="Center"
-                                                            BorderThickness="1" BorderBrush="{DynamicResource BorderStrongBrush}">
-                                                        <TextBlock Text="{Binding StateLabel}" FontSize="9"
-                                                                   Foreground="{DynamicResource AccentBrightBrush}"/>
-                                                    </Border>
-                                                    <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"
-                                                                   Foreground="{StaticResource TextBrightBrush}" TextTrimming="CharacterEllipsis"/>
-                                                        <TextBlock Text="{Binding MetaLabel}" Classes="label"/>
-                                                    </StackPanel>
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </DockPanel>
-                            </Border>
-
-                            <Border Classes="panel">
-                                <DockPanel>
-                                    <Border Classes="panel-header" DockPanel.Dock="Top">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <TextBlock Classes="diamond" Text="◆"/>
-                                            <TextBlock Classes="panel-title" Text="LATEST FITS"/>
-                                        </StackPanel>
-                                    </Border>
-                                    <TextBlock DockPanel.Dock="Top" Classes="label" Margin="12,12"
-                                               IsVisible="{Binding !Home.HasFits}"
-                                               Text="No fits shared on your coupled servers yet."/>
-                                    <ItemsControl ItemsSource="{Binding Home.LatestFits}" Margin="12,6">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:DashboardFitViewModel">
-                                                <Grid ColumnDefinitions="Auto,*" Margin="0,5">
-                                                    <Panel Width="30" Height="30" VerticalAlignment="Center">
-                                                        <Border CornerRadius="6" Background="{DynamicResource AccentSoftBrush}"
-                                                                IsVisible="{Binding !HasHullIcon}">
-                                                            <TextBlock Text="{Binding Initial}" FontSize="12" FontWeight="Bold"
-                                                                       Foreground="{DynamicResource AccentBrightBrush}"
-                                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                        </Border>
-                                                        <Image Source="{Binding HullIcon}" Stretch="UniformToFill" IsVisible="{Binding HasHullIcon}"/>
-                                                    </Panel>
-                                                    <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding Display}" FontSize="12.5"
-                                                                   Foreground="{StaticResource TextBrightBrush}" TextTrimming="CharacterEllipsis"/>
-                                                        <TextBlock Text="{Binding SharedByLabel}" Classes="label"/>
-                                                    </StackPanel>
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </DockPanel>
-                            </Border>
-
-                            <Border Classes="panel">
-                                <DockPanel>
-                                    <Border Classes="panel-header" DockPanel.Dock="Top">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <TextBlock Classes="diamond" Text="◆"/>
-                                            <TextBlock Classes="panel-title" Text="ACTIVITY"/>
-                                        </StackPanel>
-                                    </Border>
-                                    <TextBlock DockPanel.Dock="Top" Classes="label" Margin="12,12"
-                                               IsVisible="{Binding Inbox.IsEmpty}"
-                                               Text="Nothing yet — invites, shared fits and fleet updates show here."/>
-                                    <ItemsControl ItemsSource="{Binding Inbox.Messages}" Margin="12,6">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:InboxItemViewModel">
-                                                <Grid ColumnDefinitions="*,Auto" Margin="0,5">
-                                                    <TextBlock Text="{Binding Title}" FontSize="12.5"
-                                                               Foreground="{StaticResource TextBrightBrush}" TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Grid.Column="1" Text="{Binding TimestampLabel}" Classes="label"
-                                                               Margin="8,0,0,0" VerticalAlignment="Center"/>
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </DockPanel>
-                            </Border>
-
-                        </StackPanel>
-                    </Grid>
-                  </StackPanel>
-                </ScrollViewer>
+                <Panel IsVisible="{Binding IsHomeShown}">
+                    <home:HomeDashboardView DataContext="{Binding Home}"/>
+                </Panel>
 
                 <!-- The active module tab's content, hosted over the home (docked tabs, D-182) -->
                 <ContentControl Content="{Binding SelectedHostTab.Content}" IsVisible="{Binding !IsHomeShown}"/>

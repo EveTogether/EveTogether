@@ -29,6 +29,16 @@ public sealed record RunsActivityFacts(
 {
     public DateOnly Day => DateOnly.FromDateTime(StartedAtLocal);
 
+    /// <summary>One own character's share: the stored split (ET-296), or with none stored the whole own share when
+    /// exactly one own character flew it (ET-294).</summary>
+    public decimal? ShareOf(long characterId, Func<long, bool> isOwn)
+    {
+        if (IskByOwnCharacter is { } split)
+            return split.TryGetValue(characterId, out IskBreakdown? share) && share.HasFigure ? share.Total : null;
+
+        return CrewCharacterIds.Count(isOwn) == 1 && CrewCharacterIds.Contains(characterId) ? NetIsk : null;
+    }
+
     /// <param name="facts">The same cache <see cref="ActivityOverviewRowViewModel"/> resolves TYPE through, so a
     /// site the row calls "Homefront" is never counted here under plain "Site" for want of the SDE fallback.</param>
     public static RunsActivityFacts From(ActivityOverviewRowDto row, RunRowFacts facts)

@@ -345,12 +345,8 @@ public sealed partial class RunsSummaryViewModel : ObservableObject
         HasNet = net.HasValue;
         NetText = net is { } value ? RunsActivitySummaryText.Signed(value) + " ISK" : "nothing recorded to value";
 
-        // Only over what has a flown time: an activity with a run left without a stop reads 0 flown, and counting its
-        // ISK over nobody's hours would inflate the rate.
-        RunsActivityFacts[] timed = [.. rows.Where(row => row.Duration > TimeSpan.Zero)];
-        double hours = timed.Sum(row => row.Duration.TotalHours);
-        PerHourText = hours > 0 && RunsActivitySummaryText.Net(timed) is { } timedNet
-            ? IskFormat.Compact(timedNet / (decimal)hours) + " ISK/h"
+        PerHourText = RunsActivitySummaryText.PerHour(rows) is { } perHour
+            ? IskFormat.Compact(perHour) + " ISK/h"
             : string.Empty;
     }
 
@@ -392,7 +388,7 @@ public sealed partial class RunsSummaryViewModel : ObservableObject
             if (flown.Length == 0)
                 continue;
 
-            decimal[] shares = [.. flown.Select(row => _ShareOf(row, characterId, ownCharacters)).OfType<decimal>()];
+            decimal[] shares = [.. flown.Select(row => row.ShareOf(characterId, ownCharacters.ContainsKey)).OfType<decimal>()];
             lines.Add(new RunsSummaryCharacterLine(_faceOf(characterId, name), name, flown.Length,
                 _IskText(shares.Length == 0 ? null : shares.Sum())));
         }
@@ -402,14 +398,6 @@ public sealed partial class RunsSummaryViewModel : ObservableObject
             : StringComparer.OrdinalIgnoreCase.Compare(first.Name, second.Name));
         ByCharacter.ReconcileTo(_Reuse(ByCharacter, lines));
         HasCharacters = lines.Count > 0;
-    }
-
-    private static decimal? _ShareOf(RunsActivityFacts row, long characterId, IReadOnlyDictionary<long, string> ownCharacters)
-    {
-        if (row.IskByOwnCharacter is { } split)
-            return split.TryGetValue(characterId, out IskBreakdown? share) && share.HasFigure ? share.Total : null;
-
-        return row.CrewCharacterIds.Count(ownCharacters.ContainsKey) == 1 ? row.NetIsk : null;
     }
 
     private static List<RunsSummarySiteLine> _TopSites(IReadOnlyList<RunsActivityFacts> rows) =>

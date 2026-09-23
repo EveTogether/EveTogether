@@ -1,0 +1,327 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vh="using:EveUtils.Client.ViewModels.Home"
+             xmlns:ctl="using:EveUtils.Client.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1300" d:DesignHeight="900"
+             x:Class="EveUtils.Client.Views.Home.HomeDashboardView"
+             x:DataType="vh:HomeDashboardViewModel">
+
+    <!-- One layout, shaped by the width it is handed (ET-324): at and above HomeLayout.WideFrom the blocks stand in two
+         columns, below it they stack in one — the runs overview's rule, read off this control's own bounds. -->
+    <UserControl.Styles>
+        <Style Selector="Border.block">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        </Style>
+        <Style Selector="TextBlock.kicker">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="2"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.dim">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.sub">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="Border.statuschip">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Ellipse.dot">
+            <Setter Property="Width" Value="7"/>
+            <Setter Property="Height" Value="7"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Fill" Value="{StaticResource TextDimBrush}"/>
+        </Style>
+        <Style Selector="Ellipse.dot.up">
+            <Setter Property="Fill" Value="{StaticResource GreenBrush}"/>
+        </Style>
+        <Style Selector="Ellipse.dot.down">
+            <Setter Property="Fill" Value="{StaticResource RedBrush}"/>
+        </Style>
+
+        <!-- A block's link or small action ("Runs overview →", PUBLISH …): accent text, no box, underline on hover. -->
+        <Style Selector="Button.link">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="Transparent" Content="{TemplateBinding Content}"
+                                      Foreground="{TemplateBinding Foreground}"/>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.link:pointerover, Button.link:focus-visible">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+
+        <!-- ══ Earnings ══ a tile is one button: a click opens the runs overview on its range. Its own template, so
+             Fluent's presenter states never paint over it (ET-198). Figures lift on hover, as in the runs rows. -->
+        <Style Selector="Button.tile">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0,0,1,0"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="{TemplateBinding Background}"
+                                      BorderBrush="{TemplateBinding BorderBrush}"
+                                      BorderThickness="{TemplateBinding BorderThickness}"
+                                      Padding="{TemplateBinding Padding}"
+                                      Content="{TemplateBinding Content}"
+                                      HorizontalContentAlignment="Stretch"/>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.tile:pointerover, Button.tile:focus-visible">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.tileisk">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="TextBlock.tileunit">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="VerticalAlignment" Value="Bottom"/>
+            <Setter Property="Margin" Value="3,0,0,4"/>
+        </Style>
+        <Style Selector="TextBlock.tilefacts">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="Button.tile:pointerover TextBlock.tilefacts">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="Grid#Earnings TextBlock.tilefacts.narrow">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="Grid#Earnings.narrow TextBlock.tilefacts.narrow">
+            <Setter Property="IsVisible" Value="True"/>
+        </Style>
+        <Style Selector="Grid#Earnings.narrow TextBlock.tilefacts.wide">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="Grid#Earnings.narrow TextBlock.comparison">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="Grid#Earnings.narrow Border#Chart">
+            <Setter Property="Grid.Row" Value="1"/>
+            <Setter Property="Grid.Column" Value="0"/>
+            <Setter Property="Grid.ColumnSpan" Value="3"/>
+            <Setter Property="BorderThickness" Value="0,1,0,0"/>
+        </Style>
+
+        <!-- The 30-day chart: accent-b in three strengths (today, this week, older), hatched before tracking began. -->
+        <Style Selector="Button.bar">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="1,0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Bottom"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="Transparent" Padding="{TemplateBinding Padding}"
+                                      Content="{TemplateBinding Content}"
+                                      HorizontalContentAlignment="Stretch" VerticalContentAlignment="Bottom"/>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.bar:pointerover Border.barfill">
+            <Setter Property="Background" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.shade">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Padding" Value="6,1"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                      BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}"
+                                      Foreground="{TemplateBinding Foreground}" Content="{TemplateBinding Content}"/>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.shade:pointerover">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.shade.on">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel x:Name="Blocks">
+
+            <!-- ══ Header ══ -->
+            <Border Classes="block" Padding="14,8">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Classes="diamond" Text="◆"/>
+                        <TextBlock Classes="panel-title" Text="HOME" VerticalAlignment="Center"/>
+                        <TextBlock Classes="mono" FontSize="10.5" Text="{Binding ClockText}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                        <Border Classes="statuschip" ToolTip.Tip="EVE Tranquility server status (ESI /status/, every 30 s).">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Ellipse Classes="dot" Classes.up="{Binding IsTranquilityUp}" Classes.down="{Binding !IsTranquilityUp}"/>
+                                <TextBlock FontSize="10.5" Foreground="{StaticResource TextBrightBrush}" Text="{Binding TranquilityText}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="statuschip" IsVisible="{Binding HasServer}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Ellipse Classes="dot" Classes.up="{Binding IsServerConnected}" Classes.down="{Binding !IsServerConnected}"/>
+                                <TextBlock FontSize="10.5" Foreground="{StaticResource TextBrightBrush}" Text="{Binding ServerText}"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ══ Earnings (3.A) ══ -->
+            <Border Classes="block">
+                <Grid x:Name="Earnings" ColumnDefinitions="*,*,*,1.35*" RowDefinitions="Auto,Auto">
+                    <Button Grid.Column="0" Classes="tile" DataContext="{Binding Earnings.Today}" Command="{Binding OpenCommand}"
+                            ToolTip.Tip="Open the runs overview on today">
+                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource EarningsTile}"/>
+                    </Button>
+                    <Button Grid.Column="1" Classes="tile" DataContext="{Binding Earnings.Week}" Command="{Binding OpenCommand}"
+                            ToolTip.Tip="Open the runs overview on this week">
+                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource EarningsTile}"/>
+                    </Button>
+                    <Button Grid.Column="2" Classes="tile" DataContext="{Binding Earnings.Month}" Command="{Binding OpenCommand}"
+                            ToolTip.Tip="Open the runs overview on this month">
+                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource EarningsTile}"/>
+                    </Button>
+                    <Border x:Name="Chart" Grid.Column="3" Padding="14,10" DataContext="{Binding Earnings}"
+                            BorderBrush="{DynamicResource BorderBrush}">
+                        <StackPanel Spacing="6">
+                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Classes="kicker" Text="LAST 30 DAYS"/>
+                                    <TextBlock Classes="sub" Text="{Binding AverageText}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
+                                    <Button Classes="shade" Classes.on="{Binding IsIskShade}" Content="ISK"
+                                            Command="{Binding ShadeByIskCommand}" ToolTip.Tip="Bars by own ISK"/>
+                                    <Button Classes="shade" Classes.on="{Binding IsRunsShade}" Content="RUNS"
+                                            Command="{Binding ShadeByRunsCommand}" ToolTip.Tip="Bars by number of runs"/>
+                                </StackPanel>
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+                                <Grid Grid.Column="0" Height="70" Margin="0,0,6,0" MinWidth="30">
+                                    <TextBlock Classes="mono" FontSize="9.5" VerticalAlignment="Top" HorizontalAlignment="Right"
+                                               Text="{Binding ChartMaxText}"/>
+                                    <TextBlock Classes="mono" FontSize="9.5" VerticalAlignment="Bottom" HorizontalAlignment="Right" Text="0"/>
+                                </Grid>
+                                <Panel Grid.Column="1" Height="70" ClipToBounds="True">
+                                    <ItemsControl ItemsSource="{Binding Days}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <UniformGrid Rows="1"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vh:HomeEarningsDayViewModel">
+                                                <Button Classes="bar" Height="70" Command="{Binding OpenCommand}"
+                                                        ToolTip.Tip="{Binding Tooltip}">
+                                                    <Panel>
+                                                        <Border Background="{StaticResource HatchBrush}" Height="70"
+                                                                IsVisible="{Binding !IsTracked}"/>
+                                                        <Border Classes="barfill" VerticalAlignment="Bottom" Height="{Binding BarHeight}"
+                                                                Background="{DynamicResource AccentBrightBrush}"
+                                                                Opacity="{Binding BarOpacity}"/>
+                                                    </Panel>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Canvas IsHitTestVisible="False" IsVisible="{Binding HasAverage}">
+                                        <Line StartPoint="0,0" EndPoint="4000,0" Stroke="{StaticResource TextBrush}"
+                                              StrokeThickness="1" StrokeDashArray="3,3" Canvas.Bottom="{Binding AverageOffset}"/>
+                                    </Canvas>
+                                </Panel>
+                                <ItemsControl Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Days}" Margin="0,3,0,0">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <UniformGrid Rows="1"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vh:HomeEarningsDayViewModel">
+                                            <TextBlock Classes="mono" FontSize="9" Text="{Binding Label}" ClipToBounds="False"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+
+    <UserControl.Resources>
+        <!-- Days before tracking began: a faint hatch, so an empty stretch reads as "not recorded", not as zero. -->
+        <LinearGradientBrush x:Key="HatchBrush" StartPoint="0,0" EndPoint="6,6" SpreadMethod="Repeat">
+            <GradientStop Offset="0" Color="#00FFFFFF"/>
+            <GradientStop Offset="0.5" Color="#00FFFFFF"/>
+            <GradientStop Offset="0.5" Color="#1AFFFFFF"/>
+            <GradientStop Offset="1" Color="#1AFFFFFF"/>
+        </LinearGradientBrush>
+
+        <DataTemplate x:Key="EarningsTile" x:DataType="vh:HomeEarningsTileViewModel">
+            <StackPanel Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Classes="kicker" Text="{Binding KickerText}"/>
+                    <TextBlock Classes="sub" Text="{Binding RangeText}" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Classes="tileisk" Text="{Binding IskText}"/>
+                    <TextBlock Classes="tileunit" Text="ISK" IsVisible="{Binding HasIsk}"/>
+                </StackPanel>
+                <TextBlock Classes="tilefacts wide" Text="{Binding FactsWithRateText}"/>
+                <TextBlock Classes="tilefacts narrow" Text="{Binding FactsText}"/>
+                <TextBlock Classes="tilefacts narrow" Text="{Binding PerHourText}"/>
+                <TextBlock Classes="tilefacts comparison" Text="{Binding ComparisonText}"
+                           ToolTip.Tip="{Binding ComparisonTooltip}"/>
+                <ctl:IskSourceBar Height="6" Margin="0,4,0,0" Isk="{Binding Sources}"/>
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+</UserControl>

@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.Runs;
+using EveUtils.Client.ViewModels.Home;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
@@ -74,9 +75,9 @@ public sealed class RunOwnShareTests
         Assert.Equal("+47.7M ISK net", RunsActivitySummaryText.NetFor([screenRow]));
         Assert.Equal(47_700_000m, RunsActivitySummaryText.SourcesFor([screenRow]).Total);
 
-        Result<decimal> today = await instance.Services.GetRequiredService<IDispatcher>()
-            .Query(new GetIskTodayQuery(StartedAtUtc.AddHours(-1), [A, B, C]));
-        Assert.Equal(47_700_000m, _Value(today));
+        EarningsPeriodFigures today = EarningsPeriods.For(EarningsPeriodKind.Today,
+            [RunsActivityFacts.From(row, new RunRowFacts(null))], StartedAtUtc.ToLocalTime().AddHours(1), DayOfWeek.Monday, null);
+        Assert.Equal(47_700_000m, today.Net);
     }
 
     /// <summary>Acceptance 1, the other half: FLEET on the detail screen shows every character, this machine's own

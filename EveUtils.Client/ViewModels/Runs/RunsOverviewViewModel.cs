@@ -1784,9 +1784,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private static DateTime _MonthStart(DateTime local) => new(local.Year, local.Month, 1, 0, 0, 0, DateTimeKind.Local);
 
     /// <summary>The month's bounds in UTC, from local midnight on its first day up to (exclusive) local midnight on
-    /// the first day of the next one — the same local-then-convert order <c>HomeDashboardViewModel</c>'s "ISK today"
-    /// boundary already uses for a day, so a run just after local midnight on the 1st never reads as the month
-    /// before it.</summary>
+    /// the first day of the next one — the same local-then-convert order the home's earnings read uses for a day, so a
+    /// run just after local midnight on the 1st never reads as the month before it.</summary>
     private static (DateTime FromUtc, DateTime ToUtcExclusive) _MonthRangeUtc(DateTime monthStartLocal) =>
         (monthStartLocal.ToUniversalTime(), monthStartLocal.AddMonths(1).ToUniversalTime());
 
