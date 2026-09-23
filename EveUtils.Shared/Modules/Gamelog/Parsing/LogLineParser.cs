@@ -140,7 +140,11 @@ public static partial class LogLineParser
         var rep = RemoteRep().Match(body);
         if (rep.Success)
         {
-            var counterparty = rep.Groups["rest"].Value.Split(" - ")[0].Trim();
+            // "rest" is "<counterparty> - <module>"; the counterparty (ship, tickers, fit title) can itself contain
+            // " - ", so anchor on the module at the end instead of splitting at the first separator (ET-321).
+            var rest = rep.Groups["rest"].Value.Trim();
+            var moduleSeparator = rest.LastIndexOf(" - ", StringComparison.Ordinal);
+            var counterparty = moduleSeparator < 0 ? rest : rest[..moduleSeparator];
             return new RemoteRepEvent(
                 timestamp,
                 rep.Groups["dir"].Value == "to",
