@@ -78,6 +78,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private readonly IDisposable? _runChangesSubscription;
     private readonly FleetRunAutoPublisher? _autoPublisher;
     private readonly RunRowFacts _facts;
+    private readonly RunPublisher _publisher;
     private readonly ConcurrentDictionary<long, CharacterFaceViewModel> _faces = new();
     private bool _canPublish;
 
@@ -196,6 +197,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         _fleetFilter = fleetFilter;
         Tabs = [new RunsTabViewModel("Local", null, _PublishDayAsync)];
         _facts = new RunRowFacts(services.GetService<ISdeAccessor>());
+        _publisher = new RunPublisher(dispatcher, dialogs, services);
         _namesById = characters
             .Where(character => character.EsiCharacterId is > 0)
             .GroupBy(character => (long)character.EsiCharacterId!.Value)
@@ -225,18 +227,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         _RefreshFilterTiles();
         _WatchItems(LocalTab);
 
-        // A lane per local character, running or not. Each asks GetRunningRunsQuery (ET-203) which run is running for
-        // ITS character, so two characters running at once are two running lanes — that query has no "exactly one"
-        // rule to hit, unlike the single-run GetRunningRunQuery a run window uses to reopen (ET-130). The band draws
-        // them as a line per running group and an avatar per idle character (ET-290).
-        Lanes = [.. characters
-            .Where(character => character.EsiCharacterId is > 0)
-            .Select(character => new RunningLaneViewModel(character,
-                _FaceOf(character.EsiCharacterId!.Value, character.Name), _ActOnLaneAsync))];
-        IdleLanes = [.. Lanes];
-        LanesEmptyText = Lanes.Count == 0
-            ? "No character is linked yet, so there is no one to start a run for."
-            : null;
+        Running = new RunningBandViewModel(dispatcher, dialogs, services, characters, _FaceOf);
 
         // One subscription for every way a run can change (ET-222). The feed hands the change over on the UI thread
         // and folds a burst of payouts into one batch, so all that is left here is what to read again.
@@ -275,17 +266,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     private RunsTabViewModel LocalTab => Tabs[0];
 
-    /// <summary>Every local character's place in RUNNING, running or not.</summary>
-    public ObservableCollection<RunningLaneViewModel> Lanes { get; }
-
-    /// <summary>A line per running group this machine's characters are on (<c>GroupCode ?? RunId</c>), earliest
-    /// start first.</summary>
-    public ObservableCollection<RunningGroupViewModel> RunningGroups { get; } = [];
-
-    /// <summary>The characters with nothing running — an avatar each, one click from a start fixed on them.</summary>
-    public ObservableCollection<RunningLaneViewModel> IdleLanes { get; }
-
-    [ObservableProperty] private bool _hasRunning;
+    /// <summary>RUNNING (ET-290), the band the home shows too (ET-324).</summary>
+    public RunningBandViewModel Running { get; }
 
     /// <summary>Stopped and never finished — their own band, above the days and outside them (ET-179).</summary>
     public ObservableCollection<UnfinishedRunViewModel> UnfinishedRuns { get; } = [];
@@ -296,8 +278,6 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     public bool ShowUnfinishedBand => HasUnfinishedRuns && IsLocalTabSelected;
 
-    /// <summary>Why the band has nobody in it, when it has not.</summary>
-    public string? LanesEmptyText { get; }
 
     /// <summary>"Runs for 'Woensdag Homefronts'" when opened from a fleet's RUNS button (ET-185), null otherwise —
     /// so the header says what narrowed the list down, rather than the screen quietly showing fewer runs than the
@@ -748,7 +728,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             withAutoSave, changed);
         ScreenRead read = await Task.Run(() => _ReadScreenAsync(request));
 
-        _ShowRunning(read.Running);
+        Running.Show(read.Running);
         _ShowUnfinished(read.Unfinished);
         foreach ((string address, string header) in read.NewServers)
         {
@@ -837,10 +817,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         (bool canPublish, IReadOnlyList<(string Address, string Header)> newServers, IReadOnlyDictionary<string, string> headers) =
             await _ReadServersAsync(request.ServerHeaders);
 
-        Result<IReadOnlyList<RunningRunDto>> running = await _dispatcher.Query(new GetRunningRunsQuery());
-        RunningRunFacts[] runningFacts = [.. (running.IsSuccess ? running.Value ?? [] : []).Select(run => new RunningRunFacts(run,
-            _facts.TypeOf(run.ActivityKind, run.SignatureGroupSnapshot, run.SiteTypeId, run.SiteName).Name,
-            _facts.SystemOf(run.SolarSystemId)?.Name))];
+        IReadOnlyList<RunningRunFacts>? running = await RunningBandViewModel.ReadAsync(_dispatcher, _facts);
+        IReadOnlyList<RunningRunFacts> runningFacts = running ?? [];
 
         if (request.WithAutoSave)
             await _dispatcher.Send(new SaveRunsLeftUnfinishedCommand(DateTime.UtcNow));
@@ -849,7 +827,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         // A bounty or a loot line landing on a run that is still running changes nothing in the list or the strip: a
         // running run has no activity yet. Only RUNNING and UNFINISHED are read for such a batch — a run being saved has
         // left GetRunningRunsQuery by the time its batch arrives, so a save still reads everything (ET-292).
-        if (request.Changed is { IsUnscoped: false } changed && changed.RunIds.Count > 0 && running.IsSuccess
+        if (request.Changed is { IsUnscoped: false } changed && changed.RunIds.Count > 0 && running is not null
             && changed.RunIds.All(runId => runningFacts.Any(run => run.Run.Id == runId))
             && changed.GroupCodes.All(groupCode => runningFacts.Any(run => run.Run.GroupCode == groupCode)))
             return new ScreenRead(runningFacts, unfinished.Value ?? [], newServers, canPublish, null, null, false,
@@ -999,37 +977,6 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         return (servers.Count > 0, added, headers);
     }
 
-    private void _ShowRunning(IReadOnlyList<RunningRunFacts> running)
-    {
-        DateTime nowUtc = DateTime.UtcNow;
-        foreach (RunningLaneViewModel lane in Lanes)
-        {
-            RunningRunFacts? facts = running.FirstOrDefault(run => (long?)lane.Character.EsiCharacterId == run.Run.CharacterId);
-            lane.Attach(facts?.Run, nowUtc, facts?.TypeText ?? string.Empty, facts?.SystemText);
-        }
-
-        // Only groups one of this machine's own characters is on: a running row left behind for a character that is
-        // not local shows nothing (ET-203).
-        Dictionary<string, RunningGroupViewModel> shownGroups = RunningGroups.ToDictionary(group => group.Key);
-        List<RunningGroupViewModel> groups = [];
-        foreach (IGrouping<string, RunningLaneViewModel> group in Lanes
-                     .Where(lane => lane.Run is not null)
-                     .GroupBy(lane => lane.Run!.GroupCode ?? lane.Run.Id.ToString())
-                     .OrderBy(group => group.Min(lane => lane.Run!.StartedAtUtc)))
-        {
-            RunningGroupViewModel line = shownGroups.GetValueOrDefault(group.Key)
-                ?? new RunningGroupViewModel(group.Key, _OpenRunningGroupAsync);
-            line.Show([.. group], nowUtc);
-            groups.Add(line);
-        }
-
-        RunningGroups.ReconcileTo(groups);
-        for (int index = 0; index < groups.Count; index++)
-            groups[index].IsFirst = index == 0;
-        IdleLanes.ReconcileTo([.. Lanes.Where(lane => !lane.IsRunning)]);
-        HasRunning = groups.Count > 0;
-    }
-
     private void _ShowUnfinished(IReadOnlyList<UnfinishedRunDto> unfinished)
     {
         Dictionary<Guid, UnfinishedRunViewModel> shown = UnfinishedRuns.ToDictionary(run => run.RunId);
@@ -1142,258 +1089,40 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         await LoadAsync();
     }
 
-    /// <summary>Publish one activity: pick the target as the fit browser does (one coupled server goes without
-    /// asking), say what travels, then queue and synchronise. Only runs of characters coupled to that server are
-    /// queued — the server refuses a run pushed by anyone but its owner, so a crewmate's run would sit Pending for a
-    /// push that can never be accepted.</summary>
-    private async Task _PublishAsync(ActivityOverviewRowViewModel row)
-    {
-        IClientSessionStore? sessionStore = _services.GetService<IClientSessionStore>();
-        if (sessionStore is null)
-            return;
+    /// <summary>One activity published through the shared flow (ET-324 moved it into <see cref="RunPublisher"/>): read
+    /// back first and report second — a reload after the report would clear the status line that carries it.</summary>
+    private async Task _PublishAsync(ActivityOverviewRowViewModel row) =>
+        await _AfterPublishAsync(await _publisher.PublishOneAsync(row.ActivitySummaryId, row.SiteText));
 
-        IReadOnlyList<string> servers = await Task.Run(() => sessionStore.ListServersAsync());
-        if (servers.Count == 0)
-        {
-            _ReportPublish("Not coupled to any server — couple a character first.", ToastKind.Warning);
-            return;
-        }
-
-        IServerRegistry? registry = _services.GetService<IServerRegistry>();
-        string? targetAddress = servers.Count == 1
-            ? servers[0]
-            : await _SelectServerAsync(servers, registry, $"Publish '{row.SiteText}' to which server?");
-        if (targetAddress is null)
-        {
-            _ReportPublish("Publish cancelled.", ToastKind.Information);
-            return;
-        }
-
-        if (_services.GetService<IRemoteBusConnector>()?.StateFor(targetAddress) != ServerConnectionState.Connected)
-        {
-            _ReportPublish("Not connected to that server.", ToastKind.Warning);
-            return;
-        }
-
-        Guid activityId = row.ActivitySummaryId;
-        Result<ActivityDetailDto> detail = await Task.Run(() => _dispatcher.Query(new GetActivityDetailQuery(activityId)));
-        if (!detail.IsSuccess || detail.Value is null)
-        {
-            _ReportPublish(detail.Messages.Count > 0 ? detail.Messages[0].Text : "The activity could not be read.", ToastKind.Error);
-            return;
-        }
-
-        IReadOnlyList<ClientSessionTokens> coupled = await Task.Run(() => sessionStore.LoadAllAsync(targetAddress));
-        List<ActivityRunDetailDto> ownRuns = [.. detail.Value.Runs
-            .Where(run => coupled.Any(session => session.CharacterId == run.CharacterId))];
-        if (ownRuns.Count == 0)
-        {
-            _ReportPublish("No run in this activity belongs to a character coupled to that server.", ToastKind.Warning);
-            return;
-        }
-
-        string serverName = registry is null ? targetAddress : await registry.DisplayNameAsync(targetAddress);
-        if (!await _dialogs.ConfirmAsync($"Publish to {serverName}?", _WhatTravels(ownRuns.Count, serverName), "Publish"))
-        {
-            _ReportPublish("Publish cancelled.", ToastKind.Information);
-            return;
-        }
-
-        Result? refused = await Task.Run(async () =>
-        {
-            foreach (ActivityRunDetailDto run in ownRuns)
-            {
-                Result queued = await _dispatcher.Send(new QueueRunForServerSyncCommand(run.RunId, targetAddress));
-                if (!queued.IsSuccess)
-                    return queued;
-            }
-
-            return (Result?)null;
-        });
-        if (refused is not null)
-        {
-            _ReportPublish(refused.Messages.Count > 0 ? refused.Messages[0].Text : "The run could not be queued.", ToastKind.Error);
-            return;
-        }
-
-        (bool accepted, string message) =
-            await Task.Run(() => _SynchronizeAsync(targetAddress, [.. ownRuns.Select(run => run.CharacterId)]));
-
-        // Read back first and report second: the runs changed either way — queued, or queued and accepted — and a
-        // reload after the report would clear the status line that carries the outcome.
-        await LoadAsync();
-        if (accepted)
-            _ReportPublish($"Published to {serverName}.", ToastKind.Success, "Activity published");
-        else
-            // The runs stay Pending on purpose: they are still meant for this server, so the next publish retries
-            // them rather than the pilot having to notice they never arrived.
-            _ReportPublish($"Publish rejected: {message}", ToastKind.Error, "Publish rejected");
-    }
-
-    /// <summary>Publish every local activity among <paramref name="rows"/> in one go (RO-6): the day header's "n
-    /// local" and the range line's PUBLISH n LOCAL both funnel through here — the same confirmation, queueing and
-    /// per-character synchronise <see cref="_PublishAsync"/> does for one activity, batched so a day of 28 is one
-    /// dialog and one sync per character, never 28.</summary>
+    /// <summary>Every local activity among <paramref name="rows"/> in one go (RO-6): the day header's "n local" and the
+    /// range line's PUBLISH n LOCAL both funnel through here.</summary>
     private async Task _PublishManyAsync(IReadOnlyList<ActivityOverviewRowViewModel> rows)
     {
         if (IsPublishingMany)
             return;
 
-        List<ActivityOverviewRowViewModel> localRows = [.. rows.Where(row => row.IsLocal)];
-        if (localRows.Count == 0)
+        Guid[] localIds = [.. rows.Where(row => row.IsLocal).Select(row => row.ActivitySummaryId)];
+        if (localIds.Length == 0)
             return;
 
-        IClientSessionStore? sessionStore = _services.GetService<IClientSessionStore>();
-        if (sessionStore is null)
-            return;
-
-        IReadOnlyList<string> servers = await Task.Run(() => sessionStore.ListServersAsync());
-        if (servers.Count == 0)
-        {
-            _ReportPublish("Not coupled to any server — couple a character first.", ToastKind.Warning);
-            return;
-        }
-
-        IServerRegistry? registry = _services.GetService<IServerRegistry>();
-        string? targetAddress = servers.Count == 1
-            ? servers[0]
-            : await _SelectServerAsync(servers, registry, $"Publish {localRows.Count} activities to which server?");
-        if (targetAddress is null)
-        {
-            _ReportPublish("Publish cancelled.", ToastKind.Information);
-            return;
-        }
-
-        if (_services.GetService<IRemoteBusConnector>()?.StateFor(targetAddress) != ServerConnectionState.Connected)
-        {
-            _ReportPublish("Not connected to that server.", ToastKind.Warning);
-            return;
-        }
-
-        IsPublishingMany = true;
-        try
-        {
-            Guid[] summaryIds = [.. localRows.Select(row => row.ActivitySummaryId)];
-            Result<IReadOnlyList<ActivityRunForPublishDto>> read =
-                await Task.Run(() => _dispatcher.Query(new GetActivityRunsForPublishQuery(summaryIds)));
-            if (!read.IsSuccess || read.Value is null)
-            {
-                _ReportPublish(read.Messages.Count > 0 ? read.Messages[0].Text : "The activities could not be read.", ToastKind.Error);
-                return;
-            }
-
-            IReadOnlyList<ClientSessionTokens> coupled = await Task.Run(() => sessionStore.LoadAllAsync(targetAddress));
-            List<ActivityRunForPublishDto> ownRuns = [.. read.Value
-                .Where(run => coupled.Any(session => session.CharacterId == run.CharacterId))];
-            if (ownRuns.Count == 0)
-            {
-                _ReportPublish("No run in these activities belongs to a character coupled to that server.", ToastKind.Warning);
-                return;
-            }
-
-            int publishedActivities = ownRuns.Select(run => run.ActivitySummaryId).Distinct().Count();
-            int skippedActivities = summaryIds.Length - publishedActivities;
-
-            string serverName = registry is null ? targetAddress : await registry.DisplayNameAsync(targetAddress);
-            if (!await _dialogs.ConfirmAsync($"Publish {summaryIds.Length} activities to {serverName}?",
-                    _WhatTravels(ownRuns.Count, serverName), "Publish"))
-            {
-                _ReportPublish("Publish cancelled.", ToastKind.Information);
-                return;
-            }
-
-            Result? refused = await Task.Run(async () =>
-            {
-                foreach (ActivityRunForPublishDto run in ownRuns)
-                {
-                    Result queued = await _dispatcher.Send(new QueueRunForServerSyncCommand(run.RunId, targetAddress));
-                    if (!queued.IsSuccess)
-                        return queued;
-                }
-
-                return (Result?)null;
-            });
-            if (refused is not null)
-            {
-                _ReportPublish(refused.Messages.Count > 0 ? refused.Messages[0].Text : "A run could not be queued.", ToastKind.Error);
-                return;
-            }
-
-            (bool accepted, string message) = await Task.Run(
-                () => _SynchronizeAsync(targetAddress, [.. ownRuns.Select(run => run.CharacterId).Distinct()]));
-
-            // Read back first and report second, same as the single-activity publish above: a reload after the
-            // report would clear the status line that carries the outcome.
-            await LoadAsync();
-            if (accepted)
-            {
-                string outcome = skippedActivities > 0
-                    ? $"Published {publishedActivities} of {summaryIds.Length} to {serverName} · {skippedActivities} "
-                      + $"had no run of a character coupled to {serverName}"
-                    : $"Published {publishedActivities} to {serverName}.";
-                _ReportPublish(outcome, ToastKind.Success, "Activities published");
-            }
-            else
-            {
-                // Same as the single-activity publish: the runs stay Pending, meant for the next attempt.
-                _ReportPublish($"Publish rejected: {message}", ToastKind.Error, "Publish rejected");
-            }
-        }
-        finally
-        {
-            IsPublishingMany = false;
-        }
+        await _AfterPublishAsync(await _publisher.PublishManyAsync(localIds, isBusy => IsPublishingMany = isBusy));
     }
 
-    /// <summary>One synchronisation per owning character: the server attributes a push to the session it came in on,
-    /// so two of this machine's pilots in the same activity — or the same day — are two pushes, not one. Stops at
-    /// the first refusal — what the server said about it is worth more than a second attempt's message.</summary>
-    private async Task<(bool Accepted, string Message)> _SynchronizeAsync(string targetAddress, IReadOnlyList<long> characterIds)
+    private async Task _AfterPublishAsync(RunPublishOutcome? outcome)
     {
-        using IServiceScope scope = _services.CreateScope();
-        RunSynchronizationService synchronization = scope.ServiceProvider.GetRequiredService<RunSynchronizationService>();
-        foreach (long characterId in characterIds.Distinct())
-        {
-            (bool accepted, string message) = await synchronization.SynchronizeAsync(targetAddress, characterId);
-            if (!accepted)
-                return (false, message);
-        }
+        if (outcome is null)
+            return;
 
-        return (true, string.Empty);
+        if (outcome.RunsChanged)
+            await LoadAsync();
+        StatusMessage = outcome.Message;
+        _services.GetService<IToastService>()?.Show(outcome.Title, outcome.Message, outcome.Kind);
     }
 
     /// <summary>RETRY on a row whose automatic publish failed (ET-245). No confirmation, unlike PUBLISH: the setting that
     /// published it without asking is the pilot's answer already, and the row reports the outcome itself.</summary>
     private Task _RetryPublishAsync(ActivityOverviewRowViewModel row) =>
         row.GroupCode is { } groupCode && _autoPublisher is { } publisher ? publisher.RetryAsync(groupCode) : Task.CompletedTask;
-
-    private async Task<string?> _SelectServerAsync(IReadOnlyList<string> servers, IServerRegistry? registry, string prompt)
-    {
-        var options = new List<ServerPickOption>();
-        foreach (string address in servers)
-            options.Add(new ServerPickOption(address, registry is null ? address : await registry.DisplayNameAsync(address)));
-        return await _dialogs.SelectServerAsync(prompt, options);
-    }
-
-    /// <summary>
-    /// What the pilot is about to hand over, named rather than summarised as "this run will be shared". A run is not
-    /// a fit: a fit is a list of modules, a run is what you earned, what you flew and where you were. Someone who
-    /// presses publish has to know they are telling a server operator their location.
-    /// </summary>
-    private static string _WhatTravels(int runCount, string serverName) =>
-        $"{runCount} of your runs go to {serverName}. Three things travel with them.\n\n"
-        + "What you earned — every loot line with its item, quantity and price, and every bounty payout.\n"
-        + "The fit you flew — by name.\n"
-        + "Where you were — the solar system, and the signature if the run recorded one.\n\n"
-        + "The operator of that server can read all of it. Other pilots see it only if they flew this activity with you.";
-
-    /// <summary>Both sinks, one message: the screen's own status line for the reader who is looking at it, and a toast
-    /// for the one who moved on. Two different texts for one outcome is how a rejection goes unnoticed.</summary>
-    private void _ReportPublish(string message, ToastKind kind, string title = "Publish to server")
-    {
-        StatusMessage = message;
-        _services.GetService<IToastService>()?.Show(title, message, kind);
-    }
 
     // ── Picking in the strip, and the range line's ◀ ✕ ▶ (ET-292) ─────────────────────────────────────────────────
 
@@ -1793,10 +1522,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private void _OnClockTick(object? sender, EventArgs e)
     {
         DateTime nowUtc = DateTime.UtcNow;
-        foreach (RunningLaneViewModel lane in Lanes)
-            lane.Tick(nowUtc);
-        foreach (RunningGroupViewModel group in RunningGroups)
-            group.Tick(nowUtc);
+        Running.Tick(nowUtc);
     }
 
     private string _NameOf(long characterId) => _characterNames.NameOf(characterId);
@@ -1858,64 +1584,6 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// A character's avatar in RUNNING, or their running line's OPEN. Idle, it is the one-click start (Jithran,
-    /// ET-290): the manual start screen with exactly this character in it and no picker. Type and site are chosen
-    /// there — the type comes preset from that screen's own memory — because a run needs both, and one started on a
-    /// guessed site gets the wrong name. This screen never starts a run itself.
-    /// </summary>
-    private async Task _ActOnLaneAsync(RunningLaneViewModel lane)
-    {
-        if (lane.Run is { } run)
-        {
-            _OpenRunWindow(run, lane.CharacterText);
-            return;
-        }
-
-        if (_services.GetService<ISdeAccessor>() is not { } sde)
-            return;
-
-        await _dialogs.ShowManualRunStartAsync(new ManualRunStartViewModel(_dispatcher, sde, _dialogs,
-            kind => new ActivityWindowViewModel(kind, _services), [lane.Character],
-            preselectedCharacter: lane.Character, toasts: _services.GetService<IToastService>(),
-            fleetParticipation: _services.GetService<IFleetParticipation>(),
-            localPresence: _services.GetService<ILocalCharacterPresence>(), isCharacterFixed: true));
-    }
-
-    private Task _OpenRunningGroupAsync(RunningGroupViewModel group)
-    {
-        if (group.Lanes.FirstOrDefault(lane => lane.Run is not null) is { Run: { } run } first)
-            _OpenRunWindow(run, first.CharacterText);
-        return Task.CompletedTask;
-    }
-
-    /// <summary>The run window adopts the stored running run itself, so it only has to be opened; it is also the one
-    /// place that owns STOP and SAVE. Named first (ET-221): with two groups running, a window left to find "the one run
-    /// running" would find neither.</summary>
-    private void _OpenRunWindow(RunningRunDto run, string characterName)
-    {
-        var window = new ActivityWindowViewModel(run.ActivityKind, _services);
-        window.UseCharacter(checked((int)run.CharacterId), characterName);
-        _dialogs.ShowActivityWindow(window);
-    }
-
-    /// <summary>START RUN ▾: the general start, the same as Tools → Start run — every character offered (ET-221), none
-    /// preselected, so the screen's own default applies: the fleet, or the team last picked (ET-270).</summary>
-    [RelayCommand]
-    private async Task OpenRunStartAsync()
-    {
-        if (_services.GetService<ISdeAccessor>() is not { } sde)
-            return;
-
-        ICharacterRegistry registry = _services.GetRequiredService<ICharacterRegistry>();
-        IReadOnlyList<Character> characters = await Task.Run(() => registry.GetAllAsync());
-        await _dialogs.ShowManualRunStartAsync(new ManualRunStartViewModel(_dispatcher, sde, _dialogs,
-            kind => new ActivityWindowViewModel(kind, _services), characters,
-            toasts: _services.GetService<IToastService>(),
-            fleetParticipation: _services.GetService<IFleetParticipation>(),
-            localPresence: _services.GetService<ILocalCharacterPresence>()));
-    }
-
     public void Dispose()
     {
         _runChangesSubscription?.Dispose();
@@ -1937,8 +1605,6 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         IReadOnlyDictionary<string, string> ServerHeaders,
         bool WithAutoSave,
         RunChangeBatch? Changed);
-
-    private sealed record RunningRunFacts(RunningRunDto Run, string TypeText, string? SystemText);
 
     private sealed record ScreenRead(
         IReadOnlyList<RunningRunFacts> Running,

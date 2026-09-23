@@ -1,0 +1,71 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:ctl="using:EveUtils.Client.Controls"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             x:Class="EveUtils.Client.Views.Runs.RunningBand"
+             x:DataType="vr:RunningBandViewModel">
+
+    <!-- RUNNING (ET-290): a line per running group — the faces on it, who, the site, its type and system, and one clock
+         from the group's earliest stored start — then one line with every local character that has nothing running as
+         an avatar (a click opens the start screen fixed on that character) and START RUN ▾ for the general start. The
+         runs overview and the home (ET-324) both show this band. Styles: RunRowStyles.axaml. -->
+    <StackPanel>
+        <ItemsControl x:Name="RunningList" ItemsSource="{Binding RunningGroups}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:RunningGroupViewModel">
+                    <Grid Height="34" ColumnDefinitions="66,64,110,*,74,64" ColumnSpacing="10">
+                        <TextBlock Grid.Column="0" Classes="label" Text="RUNNING" VerticalAlignment="Center"
+                                   IsVisible="{Binding IsFirst}"/>
+                        <ctl:HexStack Grid.Column="1" Size="22" Overlap="7" HorizontalAlignment="Left"
+                                      VerticalAlignment="Center" Faces="{Binding Faces}"
+                                      ToolTip.Tip="{Binding WhoTooltip}"/>
+                        <TextBlock Grid.Column="2" Classes="runwho" Text="{Binding WhoText}"
+                                   ToolTip.Tip="{Binding WhoTooltip}"/>
+                        <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                            <TextBlock Classes="runsite" Text="{Binding SiteText}"/>
+                            <TextBlock Classes="rowsub" Text="{Binding KindText}"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="4" Classes="runclock" Text="{Binding ClockText}"/>
+                        <Button Grid.Column="5" Classes="rowaction" VerticalAlignment="Center" Content="OPEN"
+                                Command="{Binding OpenCommand}" ToolTip.Tip="Open the run window"/>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Grid MinHeight="28" ColumnDefinitions="66,*,96" ColumnSpacing="10">
+            <TextBlock Grid.Column="0" Classes="label" Text="RUNNING" VerticalAlignment="Center"
+                       IsVisible="{Binding !HasRunning}"/>
+            <DockPanel Grid.Column="1">
+                <TextBlock DockPanel.Dock="Left" Classes="runidle" Margin="0,0,10,0" Text="{Binding IdleText}"
+                           IsVisible="{Binding !HasRunning}"/>
+                <ItemsControl x:Name="IdleAvatars" ItemsSource="{Binding IdleLanes}" VerticalAlignment="Center">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vr:RunningLaneViewModel">
+                            <Button Classes="avatar" Command="{Binding ActCommand}"
+                                    ToolTip.Tip="{Binding StartTooltip}">
+                                <ctl:HexPortrait Size="22" Source="{Binding Face.Portrait}"
+                                                 Initial="{Binding Face.Initial}"/>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </DockPanel>
+            <Button Grid.Column="2" Classes="rowaction" VerticalAlignment="Center" HorizontalAlignment="Right"
+                    Command="{Binding OpenRunStartCommand}" ToolTip.Tip="Start a run for one or more characters">
+                <StackPanel Orientation="Horizontal" Spacing="3">
+                    <TextBlock Text="START RUN" VerticalAlignment="Center"/>
+                    <mi:MaterialIcon Classes="icon-sm" Kind="MenuDown"/>
+                </StackPanel>
+            </Button>
+        </Grid>
+        <TextBlock x:Name="LanesEmpty" Classes="hint" Margin="0,0,0,4" TextWrapping="Wrap"
+                   IsVisible="{Binding LanesEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding LanesEmptyText}"/>
+    </StackPanel>
+</UserControl>

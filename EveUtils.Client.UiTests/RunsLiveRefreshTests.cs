@@ -62,7 +62,7 @@ public sealed class RunsLiveRefreshTests
         await ActivityWindowHarness.WaitUntil(() => overview.UnfinishedRuns.Count == 1); // read off the UI thread (ET-290)
 
         Assert.Equal(runId, Assert.Single(overview.UnfinishedRuns).RunId);
-        Assert.All(overview.Lanes, lane => Assert.False(lane.IsRunning));
+        Assert.All(overview.Running.Lanes, lane => Assert.False(lane.IsRunning));
     }
 
     /// <summary>Table row 2: a run saved while the overview sits open leaves UNFINISHED and lands under its day. Red
