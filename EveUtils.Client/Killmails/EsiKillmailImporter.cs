@@ -161,14 +161,9 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
         return KillmailImportResult.Ok(stored);
     }
 
-    // ET-340: a provisional row parsed from clipboard text carries no killmail id/hash, so it is matched against a
-    // real mail on time (to the second) + victim + ship instead. The victim's name is resolved locally only, never
-    // a fresh ESI call from this method: the own-character registry first (a loss), then the ET-336 entity-name
-    // cache (a kill, where the victim is some other pilot) — that cache is only ever filled by a KILLMAILS overview
-    // read (KillmailNames.HydrateAsync), not by this importer, so a victim nobody has read yet stays unresolved
-    // here. ponytail: when neither source knows the name, the provisional row is left standing rather than chasing
-    // ESI for it — the ticket's own "Komt de echte mail nooit" ceiling already accepts a lingering provisional row;
-    // upgrade path is a KillmailNames-driven resolve if this turns out to matter in practice.
+    // ET-340: matches a provisional row on time/ship/victim. Victim name resolves locally only — character
+    // registry, then the ET-336 name cache — never a fresh ESI call.
+    // ponytail: unresolved name leaves the row standing (ticket's own accepted ceiling).
     private async Task _ReplaceProvisionalAsync(int characterId, IReadOnlyList<LocalKillmail> killmails, CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();

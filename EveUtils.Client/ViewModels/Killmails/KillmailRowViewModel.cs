@@ -52,10 +52,8 @@ public sealed partial class KillmailRowViewModel : ObservableObject
         IskText = Isk is { } signed ? IskFormat.Compact(signed) : "no price";
     }
 
-    /// <summary>ET-340: a killmail parsed from pasted clipboard text, not yet confirmed by the real ESI mail —
-    /// shown marked "FROM CLIPBOARD · WAITING FOR ESI", never linked to a run and never counted in a day's or the
-    /// overview's kill/loss counts or ISK totals (all of those already read only real rows via <see cref="IsLoss"/>
-    /// and <see cref="Isk"/>, both left at their default/null here).</summary>
+    /// <summary>ET-340: a killmail parsed from pasted clipboard text, not yet confirmed by the real ESI mail.
+    /// Never linked to a run, never counted in kill/loss counts or ISK totals — both left null/default here.</summary>
     public KillmailRowViewModel(ProvisionalKillmail provisional, string shipName, TimeZoneInfo timeZone)
     {
         _openDetail = _ => Task.CompletedTask; // nothing to open yet — RawText has no detail screen (ET-340)
@@ -70,11 +68,8 @@ public sealed partial class KillmailRowViewModel : ObservableObject
         ShipName = shipName;
         SystemName = string.Empty;
         IsAbyssal = false;
-        // ponytail: ProvisionalKillmail stores only the victim's name, not who this own character actually is on
-        // the mail (victim or attacker) or the killer's name — so a provisional row for the pilot's own loss shows
-        // their own name here rather than the attacker who killed them. Upgrade path is storing an IsLoss flag +
-        // final-blow name if this reads confusingly in practice; the real mail replaces the row with the correct
-        // counterparty within one feed cycle regardless.
+        // ponytail: no killer name stored, so a loss row shows the victim's own name here.
+        // Upgrade path: store IsLoss + final-blow name if this reads confusingly.
         CounterpartyName = provisional.VictimName;
         Isk = null;
 

@@ -125,11 +125,8 @@ public static class KillmailTextParser
                             case "Faction": attackerFaction = _NullIfNoneOrUnknown(attackerLine.Value); break;
                             case "Ship": attackerShip = _NullIfNoneOrUnknown(attackerLine.Value); break;
                             case "Weapon": attackerWeapon = _NullIfNoneOrUnknown(attackerLine.Value); break;
-                            // ponytail: an attacker block only lands here, on its own "Damage Done:" line — the
-                            // in-game "Copy" button always emits a complete block per attacker, so a paste truncated
-                            // mid-block (the last attacker cut off before this line) silently drops that attacker;
-                            // upgrade path is flushing whatever fields were seen so far once EOF is confirmed, if a
-                            // truncated paste turns out to happen in practice.
+                            // ponytail: a block truncated before "Damage Done:" silently drops that attacker.
+                            // Upgrade path: flush pending fields at EOF if a truncated paste turns out to happen.
                             case "Damage Done":
                                 if (attackerName is not null)
                                 {
