@@ -1297,6 +1297,10 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   European Summer Time) that shifted a fleet mate's run by the reader's own time zone offset, and threw off
   the whole activity's shared duration along with it. Both directions of the sync now always read that time
   as UTC.
+- **Confirmed: pasting a starting and ending cargo hold already counts only what actually changed between
+  them** — an item present in both holds in the same amount was never loot, and two stacks of the same item
+  picked up during the run were already added together before being weighed against the starting hold.
+  Regression tests, including a realistic pasted inventory listing, now lock this in.
 
 ## v0.2.0-beta — 2026-07-06
 
