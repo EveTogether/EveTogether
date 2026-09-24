@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Imaging;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Runs;
@@ -37,7 +38,57 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public sealed class KillmailDetailTests
 {
+    [Fact]
+    public async Task AttackerImages_PlayerUsesPortrait_NpcFallsBackToCorporationLogo()
+    {
+        var images = new _RecordingImages();
+        var portraits = new _RecordingPortraits();
+        var player = new KillmailDetailAttackerRowViewModel("Pilot", "", "Garmur", null, 1, 50,
+            false, false, false, false, 42, 123, 456);
+        var npc = new KillmailDetailAttackerRowViewModel("Burner Sentinel", "", "Sentinel", null, 1, 50,
+            false, false, false, true, null, 789, 987);
+
+        await player.LoadImageAsync(images, portraits);
+        await npc.LoadImageAsync(images, portraits);
+
+        Assert.Equal([42], portraits.PortraitIds);
+        Assert.Equal([789], images.TypeIds);
+        Assert.Equal([987], portraits.CorporationIds);
+    }
+
     private const int Pilot = 90000001;
+
+    private sealed class _RecordingImages : ITypeImageProvider
+    {
+        public List<int> TypeIds { get; } = [];
+        public Task<bool> AreImagesEnabledAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public Task<Avalonia.Media.Imaging.Bitmap?> GetImageAsync(int typeId, TypeImageKind kind, int size,
+            CancellationToken cancellationToken = default)
+        {
+            Assert.Equal(TypeImageKind.Render, kind);
+            TypeIds.Add(typeId);
+            return Task.FromResult<Avalonia.Media.Imaging.Bitmap?>(null);
+        }
+    }
+
+    private sealed class _RecordingPortraits : ICharacterPortraitProvider
+    {
+        public List<int> PortraitIds { get; } = [];
+        public List<int> CorporationIds { get; } = [];
+        public Task<Avalonia.Media.Imaging.Bitmap?> GetPortraitAsync(int characterId, int size,
+            CancellationToken cancellationToken = default)
+        {
+            PortraitIds.Add(characterId);
+            return Task.FromResult<Avalonia.Media.Imaging.Bitmap?>(null);
+        }
+
+        public Task<Avalonia.Media.Imaging.Bitmap?> GetCorporationLogoAsync(int corporationId, int size,
+            CancellationToken cancellationToken = default)
+        {
+            CorporationIds.Add(corporationId);
+            return Task.FromResult<Avalonia.Media.Imaging.Bitmap?>(null);
+        }
+    }
     private const int System1 = 30000142; // Jita
     private const int Gila = 20125;
     private const int ModuleTypeId = 1_900_000_001;

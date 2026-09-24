@@ -2,10 +2,12 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Avalonia.Media.Imaging;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Killmails;
+using EveUtils.Client.Imaging;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Identity;
@@ -23,6 +25,7 @@ using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Sde.Enums;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
 namespace EveUtils.Client.ViewModels.Killmails;
@@ -41,6 +44,7 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
     private readonly IDialogService _dialogs;
     private readonly IServiceProvider _services;
     private readonly ISdeAccessor _sde;
+    private readonly ILogger<KillmailDetailViewModel>? _logger;
     private readonly int _characterId;
     private readonly int _killmailId;
 
@@ -51,6 +55,7 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
         _dialogs = dialogs;
         _services = services;
         _sde = services.GetRequiredService<ISdeAccessor>();
+        _logger = services.GetService<ILogger<KillmailDetailViewModel>>();
         _characterId = characterId;
         _killmailId = killmailId;
         ModuleId = $"killmail-{characterId}-{killmailId}";
@@ -62,6 +67,7 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
     [ObservableProperty] private string? _statusMessage;
 
     [ObservableProperty] private string _shipName = string.Empty;
+    [ObservableProperty] private Bitmap? _shipImage;
     [ObservableProperty] private string _kindGlyph = "▼";
     [ObservableProperty] private bool _isLoss;
     [ObservableProperty] private string _kindText = string.Empty;
@@ -130,6 +136,36 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
         _detail = detail;
         HashSet<long> ownCharacterIds = [.. ownCharacterNames.Keys.Select(id => (long)id)];
         _Apply(detail, names, ownCharacterIds);
+        _ = _LoadImagesAsync();
+    }
+
+    private async Task _LoadImagesAsync()
+    {
+        try
+        {
+            ITypeImageProvider? images = _services.GetService<ITypeImageProvider>();
+            if (images is null || !await images.AreImagesEnabledAsync())
+            {
+                return;
+            }
+
+            if (_detail is { } detail)
+            {
+                ShipImage = await images.GetImageAsync(detail.VictimShipTypeId, TypeImageKind.Render, 128);
+            }
+
+            ICharacterPortraitProvider? portraits = _services.GetService<ICharacterPortraitProvider>();
+            if (portraits is not null)
+            {
+                await Task.WhenAll(Attackers.Select(attacker => attacker.LoadImageAsync(images, portraits)));
+            }
+
+            await Task.WhenAll(FitGroups.SelectMany(group => group.Rows).Select(row => row.LoadIconAsync(images)));
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Killmail {KillmailId} images could not be loaded.", _killmailId);
+        }
     }
 
     private void _Apply(KillmailDetailDto detail, KillmailNames names, IReadOnlySet<long> ownCharacterIds)
@@ -312,7 +348,8 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
                 _AttackerName(attacker, names), _AttackerSubText(attacker, names),
                 attacker.ShipTypeId is { } shipTypeId ? _sde.GetType(shipTypeId)?.Name ?? $"type {shipTypeId}" : "unknown ship",
                 weapon, attacker.DamageDone, totalDamage > 0 ? attacker.DamageDone * 100.0 / totalDamage : 0,
-                attacker.FinalBlow, attacker.TopDamage, ownCharacterIds.Contains(attacker.CharacterId ?? 0), isNpc));
+                attacker.FinalBlow, attacker.TopDamage, ownCharacterIds.Contains(attacker.CharacterId ?? 0), isNpc,
+                attacker.CharacterId, attacker.ShipTypeId, attacker.CorporationId));
         }
     }
 

@@ -12,4 +12,6 @@ namespace EveUtils.Client.Imaging;
 public interface ICharacterPortraitProvider
 {
     Task<Bitmap?> GetPortraitAsync(int characterId, int size, CancellationToken cancellationToken = default);
+
+    Task<Bitmap?> GetCorporationLogoAsync(int corporationId, int size, CancellationToken cancellationToken = default);
 }

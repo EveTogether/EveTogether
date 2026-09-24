@@ -13,9 +13,12 @@
     <Border Classes="itemrow detailrow" Classes.top="{Binding IsTopValue}">
         <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
             <Border Classes="icontile">
-                <TextBlock Text="{Binding Initial}" FontSize="10" FontWeight="SemiBold"
-                           Foreground="{DynamicResource AccentBrightBrush}"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <Panel>
+                    <TextBlock Text="{Binding Initial}" FontSize="10" FontWeight="SemiBold"
+                               Foreground="{DynamicResource AccentBrightBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasIcon}"/>
+                    <Image Source="{Binding Icon}" IsVisible="{Binding HasIcon}"/>
+                </Panel>
             </Border>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
                         VerticalAlignment="Center" ClipToBounds="True">
