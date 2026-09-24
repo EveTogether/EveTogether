@@ -744,7 +744,9 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
     {
         using var connection = Open();
         if (connection is null)
+        {
             return null;
+        }
         using var command = connection.CreateCommand();
         command.CommandText = $"SELECT nameEn FROM {table} WHERE {idColumn} = $id;";
         command.Parameters.AddWithValue("$id", id);

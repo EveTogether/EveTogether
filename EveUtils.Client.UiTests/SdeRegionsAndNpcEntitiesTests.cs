@@ -43,7 +43,9 @@ public sealed class SdeRegionsAndNpcEntitiesTests : IDisposable
             {
                 using var entry = new StreamWriter(zip.CreateEntry(name).Open());
                 foreach (var line in lines)
+                {
                     entry.WriteLine(line);
+                }
             }
 
         var dbPath = Path.Combine(_dir, "sde.db");
@@ -57,10 +59,9 @@ public sealed class SdeRegionsAndNpcEntitiesTests : IDisposable
     [Fact]
     public void GetSolarSystem_ResolvesTheRegion_ThroughRegionId()
     {
-        var system = Sde.GetSolarSystem(30000001);
+        var system = Assert.IsType<SdeSolarSystem>(Sde.GetSolarSystem(30000001));
 
-        Assert.NotNull(system);
-        Assert.Equal("Tanoo", system!.Name);
+        Assert.Equal("Tanoo", system.Name);
         Assert.Equal(0.858, system.SecurityStatus);
         Assert.Equal("Derelik", system.RegionName);
     }
@@ -83,7 +84,9 @@ public sealed class SdeRegionsAndNpcEntitiesTests : IDisposable
         {
             SqliteConnection.ClearAllPools();
             if (Directory.Exists(_dir))
+            {
                 Directory.Delete(_dir, recursive: true);
+            }
         }
         catch
         {

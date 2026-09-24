@@ -312,7 +312,9 @@ internal sealed partial class TableWriters
     private void CollectFaction(JsonElement e)
     {
         if (NullableEnName(e, "name") is not string name || name.Length == 0)
+        {
             return;
+        }
         _factionNames[Key(e)] = name;
         _faction.Parameters["$factionId"].Value = Key(e);
         _faction.Parameters["$nameEn"].Value = name;
