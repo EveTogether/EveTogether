@@ -1,4 +1,7 @@
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Imaging;
+using Avalonia.Media.Imaging;
+using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Shared.Modules.Killmails.Dtos;
 
 namespace EveUtils.Client.ViewModels.Killmails;
@@ -6,11 +9,12 @@ namespace EveUtils.Client.ViewModels.Killmails;
 /// <summary>One FIT-section item line on the killmail detail screen (ET-333) — the loot-line look
 /// (icon, name, quantity, value), plus a DESTROYED/DROPPED badge. A stack that is partly destroyed and partly
 /// dropped is already two <see cref="KillmailDetailItemLineDto"/> lines by the time it reaches this row.</summary>
-public sealed class KillmailDetailItemRowViewModel
+public sealed partial class KillmailDetailItemRowViewModel : ObservableObject
 {
     public KillmailDetailItemRowViewModel(KillmailDetailItemLineDto line, string name, string? metaHint, bool isTopValue)
     {
         Name = name;
+        TypeId = line.TypeId;
         Initial = name.Length > 0 ? name[..1].ToUpperInvariant() : "?";
         MetaHint = metaHint;
         IsDestroyed = line.IsDestroyed;
@@ -24,6 +28,17 @@ public sealed class KillmailDetailItemRowViewModel
     public string Name { get; }
 
     public string Initial { get; }
+
+    public int TypeId { get; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasIcon))]
+    private Bitmap? _icon;
+
+    public bool HasIcon => Icon is not null;
+
+    public async Task LoadIconAsync(ITypeImageProvider images) =>
+        Icon = await images.GetImageAsync(TypeId, TypeImageKind.Icon, 32);
 
     /// <summary>"loaded" for a charge sitting in a slot, "cargo" for an item in the cargo hold, null otherwise.</summary>
     public string? MetaHint { get; }

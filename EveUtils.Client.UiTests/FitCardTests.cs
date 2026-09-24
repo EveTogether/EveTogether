@@ -133,6 +133,9 @@ public class FitCardTests
             // The real provider answers null for a character id of 0 and when images are off; it never throws.
             return Task.FromResult<Bitmap?>(null);
         }
+
+        public Task<Bitmap?> GetCorporationLogoAsync(int corporationId, int size,
+            CancellationToken cancellationToken = default) => Task.FromResult<Bitmap?>(null);
     }
 
     /// <summary>

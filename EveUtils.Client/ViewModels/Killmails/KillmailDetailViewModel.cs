@@ -2,10 +2,12 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Avalonia.Media.Imaging;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Killmails;
+using EveUtils.Client.Imaging;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Identity;
@@ -62,6 +64,7 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
     [ObservableProperty] private string? _statusMessage;
 
     [ObservableProperty] private string _shipName = string.Empty;
+    [ObservableProperty] private Bitmap? _shipImage;
     [ObservableProperty] private string _kindGlyph = "▼";
     [ObservableProperty] private bool _isLoss;
     [ObservableProperty] private string _kindText = string.Empty;
@@ -130,6 +133,29 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
         _detail = detail;
         HashSet<long> ownCharacterIds = [.. ownCharacterNames.Keys.Select(id => (long)id)];
         _Apply(detail, names, ownCharacterIds);
+        _ = _LoadImagesAsync();
+    }
+
+    private async Task _LoadImagesAsync()
+    {
+        ITypeImageProvider? images = _services.GetService<ITypeImageProvider>();
+        if (images is null || !await images.AreImagesEnabledAsync())
+        {
+            return;
+        }
+
+        if (_detail is { } detail)
+        {
+            ShipImage = await images.GetImageAsync(detail.VictimShipTypeId, TypeImageKind.Render, 128);
+        }
+
+        ICharacterPortraitProvider? portraits = _services.GetService<ICharacterPortraitProvider>();
+        if (portraits is not null)
+        {
+            await Task.WhenAll(Attackers.Select(attacker => attacker.LoadImageAsync(images, portraits)));
+        }
+
+        await Task.WhenAll(FitGroups.SelectMany(group => group.Rows).Select(row => row.LoadIconAsync(images)));
     }
 
     private void _Apply(KillmailDetailDto detail, KillmailNames names, IReadOnlySet<long> ownCharacterIds)
@@ -312,7 +338,8 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
                 _AttackerName(attacker, names), _AttackerSubText(attacker, names),
                 attacker.ShipTypeId is { } shipTypeId ? _sde.GetType(shipTypeId)?.Name ?? $"type {shipTypeId}" : "unknown ship",
                 weapon, attacker.DamageDone, totalDamage > 0 ? attacker.DamageDone * 100.0 / totalDamage : 0,
-                attacker.FinalBlow, attacker.TopDamage, ownCharacterIds.Contains(attacker.CharacterId ?? 0), isNpc));
+                attacker.FinalBlow, attacker.TopDamage, ownCharacterIds.Contains(attacker.CharacterId ?? 0), isNpc,
+                attacker.CharacterId, attacker.ShipTypeId, attacker.CorporationId));
         }
     }
 

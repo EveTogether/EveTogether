@@ -26,6 +26,9 @@ public class FleetMemberRowPortraitTests
             LastCharacterId = characterId;
             return Task.FromResult(result);
         }
+
+        public Task<Bitmap?> GetCorporationLogoAsync(int corporationId, int size,
+            CancellationToken cancellationToken = default) => Task.FromResult<Bitmap?>(null);
     }
 
     private static FleetMemberRowViewModel Row(int characterId) => new(

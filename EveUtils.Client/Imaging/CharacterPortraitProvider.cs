@@ -32,11 +32,17 @@ public sealed class CharacterPortraitProvider(IHttpClientFactory httpClientFacto
         return true; // default on
     }
 
-    public async Task<Bitmap?> GetPortraitAsync(int characterId, int size, CancellationToken cancellationToken = default)
-    {
-        if (characterId <= 0) return null;
+    public Task<Bitmap?> GetPortraitAsync(int characterId, int size, CancellationToken cancellationToken = default) =>
+        _GetImageAsync(characterId, size, "characters", "portrait", cancellationToken);
 
-        var key = $"{characterId}_{size}";
+    public Task<Bitmap?> GetCorporationLogoAsync(int corporationId, int size, CancellationToken cancellationToken = default) =>
+        _GetImageAsync(corporationId, size, "corporations", "logo", cancellationToken);
+
+    private async Task<Bitmap?> _GetImageAsync(int id, int size, string category, string asset, CancellationToken cancellationToken)
+    {
+        if (id <= 0) return null;
+
+        var key = category == "characters" ? $"{id}_{size}" : $"corporation_{id}_{size}";
         if (_cache.TryGetValue(key, out var cached))
             return cached;
 
@@ -50,7 +56,7 @@ public sealed class CharacterPortraitProvider(IHttpClientFactory httpClientFacto
                 return _cache.GetOrAdd(key, _ => new Bitmap(file));
 
             var client = httpClientFactory.CreateClient(TypeImageProvider.HttpClientName);
-            var bytes = await client.GetByteArrayAsync($"characters/{characterId}/portrait?size={size}", cancellationToken);
+            var bytes = await client.GetByteArrayAsync($"{category}/{id}/{asset}?size={size}", cancellationToken);
 
             Directory.CreateDirectory(_cacheDirectory);
             await File.WriteAllBytesAsync(file, bytes, cancellationToken);

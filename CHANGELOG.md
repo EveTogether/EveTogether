@@ -17,6 +17,7 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Fixed: killmail details now show their images.** The victim's ship, attacker portraits or ships, and fit item icons appear when images are enabled; an unlinked run message appears only once.
 - **Changed: compositions update live in every open window.** Creating, editing or deleting a composition now refreshes
   the COMPOSITIONS list straight away, for your local library and for a server's shared one — including changes other
   pilots make. An open composition editor quietly picks up changes made elsewhere as long as you have not edited

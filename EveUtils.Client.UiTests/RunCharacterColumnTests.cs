@@ -44,6 +44,9 @@ public class RunCharacterColumnTests
                 : null;
             return Task.FromResult(render);
         }
+
+        public Task<Bitmap?> GetCorporationLogoAsync(int corporationId, int size,
+            CancellationToken cancellationToken = default) => Task.FromResult<Bitmap?>(null);
     }
 
     // ── AC-1 — three states, three pictures ─────────────────────────────────────────────────────────

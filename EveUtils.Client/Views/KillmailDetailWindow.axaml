@@ -19,7 +19,9 @@
         <Border DockPanel.Dock="Top" Padding="14,12,14,14" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
             <StackPanel Spacing="10">
                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
-                    <Border Grid.Column="0" Width="64" Height="64" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}"/>
+                    <Border Grid.Column="0" Width="64" Height="64" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}">
+                        <Image Source="{Binding ShipImage}" Stretch="UniformToFill"/>
+                    </Border>
                     <StackPanel Grid.Column="1" Spacing="2">
                         <TextBlock Classes="panel-title" FontSize="13" Text="{Binding ShipName}"/>
                         <StackPanel Orientation="Horizontal" Spacing="6">
@@ -98,7 +100,6 @@
                                 </DataTemplate>
                             </ContentControl.ContentTemplate>
                         </ContentControl>
-                        <TextBlock Classes="hint" Margin="0" IsVisible="{Binding !HasLinkedRun}" Text="{Binding LinkedRunSummaryText}"/>
                     </StackPanel>
                 </Border>
 
