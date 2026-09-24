@@ -6,6 +6,8 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Killmails;
 using EveUtils.Shared.Modules.Killmails.Commands;
 using EveUtils.Shared.Modules.Killmails.Entities;
+using EveUtils.Shared.Modules.Killmails.Enums;
+using EveUtils.Shared.Modules.Killmails.Events;
 using EveUtils.Shared.Modules.Killmails.Repositories;
 using EveUtils.Shared.Modules.Market.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
@@ -199,6 +201,41 @@ public sealed class KillmailRunLinkTests
 
         Assert.Equal(runId, (await _StoredAsync(instance, 1)).RunId);
         Assert.Equal(before, await _WireAsync(instance, runId));
+    }
+
+    /// <summary>ET-382. Red if the automatic link stays silent: an open killmail screen would keep showing the loss as
+    /// not linked. The second pass changes nothing and so says nothing.</summary>
+    [Fact]
+    public async Task Link_PublishesKillmailsChanged_OnlyWhenALossChanged()
+    {
+        using TestClientInstance instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await _SaveRunAsync(dispatcher, ActivityKind.Site, KSpace, StartedAtUtc);
+        await _AddAsync(instance, _Loss(1, StartedAtUtc.AddMinutes(5), KSpace, Rifter));
+        List<KillmailsChangedEvent> heard = [];
+        instance.Services.GetRequiredService<IEventBus>().Subscribe<KillmailsChangedEvent>(published => heard.Add(published));
+
+        await dispatcher.Send(new LinkKillmailsToRunsCommand(Pilot), Ct);
+        await dispatcher.Send(new LinkKillmailsToRunsCommand(Pilot), Ct);
+
+        KillmailsChangedEvent change = Assert.Single(heard);
+        Assert.Equal((Pilot, KillmailsChangeKind.RunLinkChanged), (change.Data.CharacterId, change.Data.Kind));
+    }
+
+    /// <summary>ET-382. Red if a manual link or unlink stays silent to the screens that did not make it.</summary>
+    [Fact]
+    public async Task SetLink_PublishesKillmailsChanged()
+    {
+        using TestClientInstance instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        Guid runId = await _SaveRunAsync(dispatcher, ActivityKind.Site, KSpace, StartedAtUtc);
+        await _AddAsync(instance, _Loss(1, StartedAtUtc.AddMinutes(5), KSpace, Rifter));
+        List<KillmailsChangedEvent> heard = [];
+        instance.Services.GetRequiredService<IEventBus>().Subscribe<KillmailsChangedEvent>(published => heard.Add(published));
+
+        await dispatcher.Send(new SetKillmailRunLinkCommand(Pilot, 1, runId), Ct);
+
+        Assert.Equal(Pilot, Assert.Single(heard).Data.CharacterId);
     }
 
     private static LinkableRun _Run(ActivityKind kind, int? fitHull) =>

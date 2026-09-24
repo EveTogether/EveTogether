@@ -103,7 +103,8 @@ handler ──(write ok)──► <Module>ChangedEvent (Local) ──► ChangeF
 ```
 
 - **The signal** is `<Module>ChangedEvent` — the id of what changed plus a kind enum (`RunsChangedEvent`,
-  `FleetChangedEvent`, `CompositionChangedEvent`). One per module or sub-module, not one per command: a screen
+  `FleetChangedEvent`, `CompositionChangedEvent`, `FittingsChangedEvent`, `KillmailsChangedEvent`; Messaging raises
+  `MessageEnqueuedEvent` and `MessageRespondedEvent`, Ships its `ShipAddedEvent`). One per module or sub-module, not one per command: a screen
   subscribes once and every new command reaches it without a new pairing.
 - **Local only from the handler.** The same handler runs on the client (local fleets, the local library) and on the
   server, and only the host knows who else must hear it. So each host has a **relay subscriber** on the signal:
@@ -125,7 +126,8 @@ handler ──(write ok)──► <Module>ChangedEvent (Local) ──► ChangeF
 - **Enforced by `CommandSignalCoverageTests`.** A reflection half fails for any command in `Shared` that has neither a
   scenario proving it signals (`RunsChangedSignalCoverageTests` holds the Runs ones), nor a reason on the exemption
   list, nor a ticket on the known-gap list; a behaviour half runs each scenario against a real store and bus. The
-  known-gap list is a ratchet: `KnownGapCount` only goes down.
+  known-gap list is a ratchet: `KnownGapCount` only goes down, and is now zero. Settings, ApiKeys, Sync, the gamelog
+  hit rows, `ShareFitting` and `PushFittingToEsi` are on the exemption list, each with the reason.
 
 **Rejected:** a *dispatcher behaviour* that publishes after every command — it knows neither the id nor the audience,
 signals falsely on idempotent no-ops and duplicates on nested dispatch. An *EF `SaveChanges` interceptor* —
@@ -134,10 +136,9 @@ writes too, and risks echo.
 
 **Where the code does not follow it yet** (tracked under epic ET-379):
 
-
-- Fittings, Messaging, Settings, ApiKeys and the remaining modules: a signal or a reasoned exemption (ET-382).
-- Writes outside the dispatcher — `DataAdminService`, `FleetCleanupRunner`, `ClientFleetService.AddLocalCharacterAsync`
-  — are invisible to the test (ET-383).
+- Writes outside the dispatcher — `DataAdminService`, `FleetCleanupRunner`, `ClientFleetService.AddLocalCharacterAsync`,
+  `EsiKillmailImporter`, the fit deletes and downloads in `MainWindowViewModel` — are invisible to the test (ET-383).
+- `MessageRespondedEvent` has no relay yet: the recipient's other connections are not told an invite was answered.
 
 ## Auth — two per-character modes
 

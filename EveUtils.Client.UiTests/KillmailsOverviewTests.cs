@@ -154,6 +154,25 @@ public sealed class KillmailsOverviewTests
         viewModel.Dispose();
     }
 
+    /// <summary>ET-382. Red if a link made by another window (the run window's own LINK LOSS) leaves this screen
+    /// listing the loss as not linked until the pilot reopens it.</summary>
+    [AvaloniaFact]
+    public async Task LossLinkedFromAnotherWindow_LeavesTheNotLinkedList_WithoutReopening()
+    {
+        using TestClientInstance instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        Guid runId = await _SaveRunAsync(dispatcher);
+        await _AddAsync(instance, _Loss(2, linkedRunId: null));
+        KillmailsOverviewViewModel viewModel = await _LoadAsync(instance, hasScope: true);
+        viewModel.Filters.Single(tile => tile.Key == KillmailShowFilter.NotLinked).SelectCommand.Execute(null);
+        Assert.Equal([2], _VisibleIds(viewModel));
+
+        await dispatcher.Send(new SetKillmailRunLinkCommand(Pilot, 2, runId), Ct);
+
+        Assert.True(await _WaitForAsync(() => !_VisibleIds(viewModel).Any()));
+        viewModel.Dispose();
+    }
+
     private sealed class RoutingEsiClient : IEsiClient
     {
         public Dictionary<string, object?> Responses { get; } = new();

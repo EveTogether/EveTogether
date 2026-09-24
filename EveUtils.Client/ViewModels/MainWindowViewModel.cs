@@ -460,6 +460,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         bus.Subscribe<CombatLoggedEvent>(OnCombat);
         bus.Subscribe<ShipAddedEvent>(OnShipAdded);
         bus.Subscribe<FitSharedEvent>(OnFitShared);
+        services.GetRequiredService<FittingsChangeFeed>().Subscribe(_ => LoadFittingsAsync());
         // fleet invites now arrive as messages in the Inbox (single channel) — no separate popup.
         bus.Subscribe<FleetInviteRespondedEvent>(OnFleetInviteResponded); // inviter sees the outcome
 

@@ -68,6 +68,7 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
     private readonly TimeProvider _clock;
     private readonly ICharacterRegistry? _registry;
     private readonly EsiKillmailImporter? _importer;
+    private readonly IDisposable? _changeSubscription;
     private readonly KillmailShowFilterTileViewModel _allFilter;
     private readonly KillmailShowFilterTileViewModel _killsFilter;
     private readonly KillmailShowFilterTileViewModel _lossesFilter;
@@ -125,6 +126,8 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
         {
             _importer.KillmailsImported += _OnKillmailsImported;
         }
+
+        _changeSubscription = services.GetService<KillmailsChangeFeed>()?.Subscribe(_ => _ReadAsync());
     }
 
     /// <summary>Releases the <see cref="ICharacterRegistry.RegistryChanged"/> and
@@ -141,6 +144,8 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
         {
             _importer.KillmailsImported -= _OnKillmailsImported;
         }
+
+        _changeSubscription?.Dispose();
     }
 
     // A scope granted or lost while this screen stands open (GRANT ACCESS's whole point, ET-363) — may fire from a

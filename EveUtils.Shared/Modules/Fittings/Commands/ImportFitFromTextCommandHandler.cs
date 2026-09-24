@@ -3,6 +3,8 @@ using System.Text.Json;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fittings.Entities;
+using EveUtils.Shared.Modules.Fittings.Enums;
+using EveUtils.Shared.Modules.Fittings.Events;
 using EveUtils.Shared.Modules.Fittings.Repositories;
 using EveUtils.Shared.Modules.Fittings.Services;
 using EveUtils.Shared.Modules.Fittings.Services.Parsers;
@@ -11,7 +13,7 @@ namespace EveUtils.Shared.Modules.Fittings.Commands;
 
 // Local-only, no character/scope: parsing + storing a pasted fit needs neither ESI nor a permission.
 internal sealed class ImportFitFromTextCommandHandler(
-    IFitTextImporter importer, IEveWorkbenchFitClient eveWorkbench, IFittingRepository repository)
+    IFitTextImporter importer, IEveWorkbenchFitClient eveWorkbench, IFittingRepository repository, IEventBus eventBus)
     : ICommandHandler<ImportFitFromTextCommand, Result<string>>
 {
     // Text imports aren't tied to a character — they live in an owner-agnostic local library. ESI-imported
@@ -70,6 +72,7 @@ internal sealed class ImportFitFromTextCommandHandler(
             ContentHash  = contentHash,
             ImportedAt   = DateTimeOffset.UtcNow
         }, cancellationToken);
+        await eventBus.PublishAsync(new FittingsChangedEvent(FittingsChangeKind.Imported, 1), EventTarget.Local, cancellationToken);
 
         return Result<string>.Success(fit.Name, messages.ToArray());
     }

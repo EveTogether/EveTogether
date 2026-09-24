@@ -3,11 +3,13 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Messaging.Dtos;
 using EveUtils.Shared.Modules.Messaging.Entities;
+using EveUtils.Shared.Modules.Messaging.Events;
 using EveUtils.Shared.Modules.Messaging.Repositories;
 
 namespace EveUtils.Shared.Modules.Messaging.Commands;
 
-internal sealed class RespondToMessageCommandHandler(IMessageRepository repository, IEnumerable<IMessageResponder> responders)
+internal sealed class RespondToMessageCommandHandler(
+    IMessageRepository repository, IEnumerable<IMessageResponder> responders, IEventBus eventBus)
     : ICommandHandler<RespondToMessageCommand, Result<MessageResponsePayload>>
 {
     public async Task<Result<MessageResponsePayload>> Handle(RespondToMessageCommand command, CancellationToken cancellationToken = default)
@@ -40,7 +42,10 @@ internal sealed class RespondToMessageCommandHandler(IMessageRepository reposito
             message.Status = MessageStatus.Responded;
             await repository.UpdateAsync(message, cancellationToken);
 
-            return Result<MessageResponsePayload>.Success(new MessageResponsePayload(message.Id, message.Kind, command.Accept));
+            var payload = new MessageResponsePayload(message.Id, message.Kind, command.Accept);
+            await eventBus.PublishAsync(new MessageRespondedEvent(payload), EventTarget.Local, cancellationToken);
+
+            return Result<MessageResponsePayload>.Success(payload);
         }
         catch (Exception ex)
         {

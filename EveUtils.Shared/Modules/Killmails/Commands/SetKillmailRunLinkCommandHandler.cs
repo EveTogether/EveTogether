@@ -3,6 +3,8 @@ using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Killmails.Entities;
+using EveUtils.Shared.Modules.Killmails.Enums;
+using EveUtils.Shared.Modules.Killmails.Events;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +12,8 @@ using Microsoft.EntityFrameworkCore;
 namespace EveUtils.Shared.Modules.Killmails.Commands;
 
 [ClientOnly]
-internal sealed class SetKillmailRunLinkCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IDispatcher dispatcher)
+internal sealed class SetKillmailRunLinkCommandHandler(
+    IDbContextFactory<ClientDbContext> contextFactory, IDispatcher dispatcher, IEventBus eventBus)
     : ICommandHandler<SetKillmailRunLinkCommand, Result>
 {
     public async Task<Result> Handle(SetKillmailRunLinkCommand command, CancellationToken cancellationToken = default)
@@ -52,6 +55,9 @@ internal sealed class SetKillmailRunLinkCommandHandler(IDbContextFactory<ClientD
         {
             await dispatcher.Send(new RebuildActivitySummariesCommand(affected), cancellationToken);
         }
+
+        await eventBus.PublishAsync(
+            new KillmailsChangedEvent(command.CharacterId, KillmailsChangeKind.RunLinkChanged), EventTarget.Local, cancellationToken);
 
         return Result.Success();
     }

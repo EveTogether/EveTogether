@@ -2,13 +2,15 @@ using System.Text.Json;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fittings.Entities;
+using EveUtils.Shared.Modules.Fittings.Enums;
+using EveUtils.Shared.Modules.Fittings.Events;
 using EveUtils.Shared.Modules.Fittings.Repositories;
 
 namespace EveUtils.Shared.Modules.Fittings.Commands;
 
 // No [RequiresPermission] — import is a local ESI call gated only by the ESI scope check.
 internal sealed class ImportFittingsFromEsiCommandHandler(
-    IFittingRepository repository) : ICommandHandler<ImportFittingsFromEsiCommand, Result<int>>
+    IFittingRepository repository, IEventBus eventBus) : ICommandHandler<ImportFittingsFromEsiCommand, Result<int>>
 {
     public async Task<Result<int>> Handle(
         ImportFittingsFromEsiCommand command,
@@ -52,6 +54,9 @@ internal sealed class ImportFittingsFromEsiCommandHandler(
             }, cancellationToken);
             imported++;
         }
+
+        if (imported > 0)
+            await eventBus.PublishAsync(new FittingsChangedEvent(FittingsChangeKind.Imported, imported), EventTarget.Local, cancellationToken);
 
         return Result<int>.Success(imported, messages.ToArray());
     }
