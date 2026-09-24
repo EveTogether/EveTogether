@@ -116,7 +116,7 @@ public class FleetRosterSkillBadgeTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-roster-skill-badges.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-roster-skill-badges.png");
         window.Close();
     }
 }

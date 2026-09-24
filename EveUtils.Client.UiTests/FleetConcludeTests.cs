@@ -138,7 +138,7 @@ public class FleetConcludeTests
         formingWindow.Show();
         var formingFrame = formingWindow.CaptureRenderedFrame();
         Assert.NotNull(formingFrame);
-        formingFrame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-conclude-forming.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(formingFrame, "eveutils-conclude-forming.png");
         formingWindow.Close();
 
         // Concluded: the header shows the "Concluded" label and neither action button.
@@ -149,7 +149,7 @@ public class FleetConcludeTests
         concludedWindow.Show();
         var concludedFrame = concludedWindow.CaptureRenderedFrame();
         Assert.NotNull(concludedFrame);
-        concludedFrame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-conclude-concluded.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(concludedFrame, "eveutils-conclude-concluded.png");
         concludedWindow.Close();
     }
 }

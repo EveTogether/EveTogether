@@ -360,8 +360,8 @@ public class FitDetailTests
         var stable = SampleStats();
         var depleting = stable with { CapacitorStable = false, CapacitorDepletesInSeconds = 393 };
 
-        var stableLine = await CapStateLine(fit, stable, System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-cap-stable.png"));
-        var depletingLine = await CapStateLine(fit, depleting, System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-cap-depleting.png"));
+        var stableLine = await CapStateLine(fit, stable, "eveutils-cap-stable.png");
+        var depletingLine = await CapStateLine(fit, depleting, "eveutils-cap-depleting.png");
 
         Assert.StartsWith("Stable", stableLine.Text);
         Assert.StartsWith("Depletes in", depletingLine.Text);
@@ -373,7 +373,7 @@ public class FitDetailTests
     private sealed record CapStateLineRead(string? Text, Color Colour);
 
     // Read while the window is still open: closing it unapplies the style, and the DynamicResource accent falls back.
-    private static async Task<CapStateLineRead> CapStateLine(EsiFitting fit, FitStats stats, string screenshot)
+    private static async Task<CapStateLineRead> CapStateLine(EsiFitting fit, FitStats stats, string fileName)
     {
         var vm = new FitDetailWindowViewModel(fit, FallbackNameResolver.Instance,
             new StubStatsProvider(_ => stats), sde: null, data: null);
@@ -381,7 +381,7 @@ public class FitDetailTests
 
         var window = new FitDetailWindow(vm) { Width = 1080, Height = 680 };
         window.Show();
-        window.CaptureRenderedFrame()!.Save(screenshot, new PngBitmapEncoderOptions());
+        TestCapture.Save(window.CaptureRenderedFrame(), fileName);
         var line = window.GetVisualDescendants().OfType<TextBlock>().Single(block => block.Classes.Contains("capstate"));
         var read = new CapStateLineRead(line.Text, Assert.IsType<SolidColorBrush>(line.Foreground).Color);
         window.Close();
@@ -636,12 +636,12 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-skills-required.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-skills-required.png");
 
         vm.MatchInGameRate = true;   // 1:1-with-in-game comparison rate (~25 SP/min generic baseline)
         var inGameFrame = window.CaptureRenderedFrame();
         Assert.NotNull(inGameFrame);
-        inGameFrame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-skills-required-ingame.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(inGameFrame, "eveutils-skills-required-ingame.png");
         window.Close();
     }
 
@@ -662,7 +662,7 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-weather-selector.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-weather-selector.png");
         window.Close();
     }
 
@@ -678,7 +678,7 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-fit-detail-metadata.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-fit-detail-metadata.png");
         window.Close();
     }
 
@@ -1146,7 +1146,7 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-storage-panel.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-storage-panel.png");
         window.Close();
     }
 
@@ -1272,7 +1272,7 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-fit-detail.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-fit-detail.png");
     }
 
     [AvaloniaFact]
@@ -1301,6 +1301,6 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-fit-detail-structure.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-fit-detail-structure.png");
     }
 }

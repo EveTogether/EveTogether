@@ -17,6 +17,6 @@ public class FitExportWindowTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-fit-export.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-fit-export.png");
     }
 }

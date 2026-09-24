@@ -60,7 +60,7 @@ public class DpsOverlayTests
         var frame = window.CaptureRenderedFrame();
 
         Assert.NotNull(frame);
-        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-dps-overlay-bounty-location.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-dps-overlay-bounty-location.png");
         window.Close();
     }
 
@@ -82,7 +82,7 @@ public class DpsOverlayTests
 
         Assert.NotNull(after);
         Assert.Equal(20, tracker.Dealt);
-        after!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-dps-overlay-live.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(after, "eveutils-dps-overlay-live.png");
         window.Close();
     }
 
@@ -184,7 +184,7 @@ public class DpsOverlayTests
         // still at 667, which on screen read as two different figures.
         Assert.Equal((long)outLine.Values[^1], tracker.Dealt);
         Assert.Equal(Math.Round(outLine.Values[^1] / tracker.HitPointsScale * 200) / 200, tracker.OutFraction);
-        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-dps-overlay-ema.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-dps-overlay-ema.png");
         window.Close();
     }
 }

@@ -178,7 +178,7 @@ public class FleetMemberFitTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-roster-assigned-fit.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-roster-assigned-fit.png");
         window.Close();
     }
 }
