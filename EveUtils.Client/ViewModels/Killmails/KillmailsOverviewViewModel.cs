@@ -12,6 +12,7 @@ using EveUtils.Client.Fleet;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Killmails;
+using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
@@ -148,6 +149,43 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
 
     [RelayCommand]
     private Task RefreshAsync() => _ReadAsync();
+
+    /// <summary>PASTE LINK (ET-338): reads an ESI killmail link or an in-game <c>killReport:</c> link off the
+    /// clipboard and imports it directly, bypassing the 5-minute cache on the character feed. The clipboard watch
+    /// (<see cref="EveUtils.Client.Clipboard.ClipboardWatchService"/>) is opt-in, so this button is the route that
+    /// works for a pilot who never turned it on.</summary>
+    [RelayCommand]
+    private async Task PasteLinkAsync()
+    {
+        IDialogService? dialogs = _services.GetService<IDialogService>();
+        string? text = dialogs is null ? null : await dialogs.GetClipboardTextAsync();
+        if (string.IsNullOrWhiteSpace(text) || !KillmailLink.TryParse(text, out int killmailId, out string hash))
+        {
+            _services.GetService<IToastService>()?.Show("No killmail link on the clipboard",
+                "Copy an ESI killmail link or an in-game killmail chat link, then paste again.", ToastKind.Error);
+            return;
+        }
+
+        IsBusy = true;
+        KillmailImportResult result;
+        try
+        {
+            result = await _services.GetRequiredService<EsiKillmailImporter>().ImportOneAsync(killmailId, hash);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        if (result.Status != KillmailImportStatus.Imported)
+        {
+            _services.GetService<IToastService>()?.Show($"Killmail {killmailId} not imported", result.Message, ToastKind.Error);
+            return;
+        }
+
+        _services.GetService<IToastService>()?.Show($"Killmail {killmailId} imported", null, ToastKind.Success);
+        await _RefreshCharactersAndReadAsync();
+    }
 
     private async Task _RefreshCharactersAndReadAsync()
     {

@@ -27,6 +27,10 @@ release notes, not this file.
   ship, pilot or system; totals show kills, losses, ISK destroyed, ISK lost and efficiency. Mails are grouped per day,
   newest first, with the linked run shown on a loss and a NOT LINKED chip when more than one run could match. A
   character that has not shared its killmails yet shows GRANT ACCESS instead of an empty list.
+- **Added: a PASTE LINK button on the KILLMAILS window.** Paste an ESI killmail link or an in-game killmail chat
+  link and it imports right away, instead of waiting up to 5 minutes for the regular feed. It is stored for every
+  one of your own characters on the mail, victim or attacker; a mail with none of your characters on it is refused
+  with a message instead of being saved under the wrong one.
 - **Added: a lost ship is linked to the run you lost it in.** When a loss comes in, EVE Together looks for the one run
   of that character that was going at the time, in the same system (any abyssal run for a loss in the abyss) and with
   the same ship as the run's fit, and links the two; a pod lost within a minute follows its ship. When more than one

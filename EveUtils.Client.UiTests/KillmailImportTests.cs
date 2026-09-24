@@ -6,10 +6,14 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using EveUtils.Client.Esi.Testing;
 using EveUtils.Client.Killmails;
+using EveUtils.Shared.Data;
+using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Esi.Http;
+using EveUtils.Shared.Modules.Killmails;
 using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Killmails.Repositories;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -191,10 +195,145 @@ public sealed class KillmailImportTests : IDisposable
         Assert.Single(stub.Captured, request => new Uri(request.Uri).PathAndQuery == Page1);
     }
 
+    // ET-338 AC1+2: an ESI killmail link or an in-game killReport: chat link, in any of the shapes the game or a
+    // pasted chat message can carry, found anywhere in the pasted text rather than requiring the whole input to
+    // be the link.
+    [Theory]
+    [InlineData("https://esi.evetech.net/killmails/138560925/2305db84acc094d6ecfeda59ffcb3b5f70b9eb3f",
+        "2305db84acc094d6ecfeda59ffcb3b5f70b9eb3f")]
+    [InlineData("https://esi.evetech.net/latest/killmails/138560925/2305db84acc094d6ecfeda59ffcb3b5f70b9eb3f",
+        "2305db84acc094d6ecfeda59ffcb3b5f70b9eb3f")]
+    [InlineData("https://esi.evetech.net/v1/killmails/138560925/2305db84acc094d6ecfeda59ffcb3b5f70b9eb3f/",
+        "2305db84acc094d6ecfeda59ffcb3b5f70b9eb3f")]
+    [InlineData("https://esi.evetech.net/killmails/138560925/2305db84acc094d6ecfeda59ffcb3b5f70b9eb3f?datasource=tranquility",
+        "2305db84acc094d6ecfeda59ffcb3b5f70b9eb3f")]
+    [InlineData("https://esi.evetech.net/killmails/138560925/2305DB84ACC094D6ECFEDA59FFCB3B5F70B9EB3F",
+        "2305DB84ACC094D6ECFEDA59FFCB3B5F70B9EB3F")]
+    [InlineData("Kill link: https://esi.evetech.net/killmails/138560925/2305db84acc094d6ecfeda59ffcb3b5f70b9eb3f (nice one)",
+        "2305db84acc094d6ecfeda59ffcb3b5f70b9eb3f")]
+    [InlineData("killReport:138560925:2305db84acc094d6ecfeda59ffcb3b5f70b9eb3f", "2305db84acc094d6ecfeda59ffcb3b5f70b9eb3f")]
+    [InlineData("<url=killReport:138560925:2305db84acc094d6ecfeda59ffcb3b5f70b9eb3f>Kill: Jithran (Cormorant Navy Issue)</url>",
+        "2305db84acc094d6ecfeda59ffcb3b5f70b9eb3f")]
+    public void KillmailLink_TryParse_RecognizesEsiAndChatLinks(string text, string expectedHash)
+    {
+        Assert.True(KillmailLink.TryParse(text, out int killmailId, out string hash));
+        Assert.Equal(138560925, killmailId);
+        Assert.Equal(expectedHash, hash);
+    }
+
+    // ET-338 AC3 (+ AC5's parser half): a foreign host with the same path shape, a zKillboard link (no hash at
+    // all) and free text are never read as a killmail link, so no importer ever sees them.
+    [Theory]
+    [InlineData("https://example.com/killmails/138560925/2305db84acc094d6ecfeda59ffcb3b5f70b9eb3f")]
+    [InlineData("https://zkillboard.com/kill/138560925/")]
+    [InlineData("Kill: Jithran (Cormorant Navy Issue)")]
+    [InlineData("just some free text pasted by accident")]
+    public void KillmailLink_TryParse_RejectsUnrecognizedInput(string text) =>
+        Assert.False(KillmailLink.TryParse(text, out _, out _));
+
+    // ET-338 AC4: a pasted link is stored for every own character on the mail, victim and attacker alike, with one
+    // GET and no character feed call.
+    [Fact]
+    public async Task ImportOneAsync_StoresARowForEveryOwnCharacterOnTheMail()
+    {
+        const int VictimCharacterId = 88;
+        await _instance.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character("Attacker Pilot", CharacterId), TestContext.Current.CancellationToken);
+        await _instance.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character("Victim Pilot", VictimCharacterId), TestContext.Current.CancellationToken);
+        _routes["/killmails/1/hash1/"] = () => Json(200, $$"""
+            {"killmail_id":1,"killmail_time":"2026-09-20T12:00:00Z","solar_system_id":30000142,
+             "victim":{"character_id":{{VictimCharacterId}},"ship_type_id":587,"damage_taken":6000,"items":[]},
+             "attackers":[{"character_id":{{CharacterId}},"damage_done":6000,"final_blow":true}]}
+            """);
+        var (client, _, stub) = _Pipeline(EsiAuthorization.Authorized("token"));
+
+        var result = await new EsiKillmailImporter(client, Repository, Scopes)
+            .ImportOneAsync(1, "hash1", TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, result.ImportedCount);
+        Assert.Single(stub.Captured, request => new Uri(request.Uri).PathAndQuery == "/killmails/1/hash1/");
+        var attackerRow = Assert.Single(await Repository.GetForCharacterAsync(CharacterId, TestContext.Current.CancellationToken));
+        Assert.False(attackerRow.IsLoss);
+        var victimRow = Assert.Single(await Repository.GetForCharacterAsync(VictimCharacterId, TestContext.Current.CancellationToken));
+        Assert.True(victimRow.IsLoss);
+    }
+
+    // ET-338 AC5 (importer half): neither the victim nor an attacker is one of the pilot's own characters — refused
+    // with a readable message, nothing stored, no scope call.
+    [Fact]
+    public async Task ImportOneAsync_WithoutAnOwnCharacter_RefusesAndStoresNothing()
+    {
+        _routes["/killmails/1/hash1/"] = () => Json(200, _Killmail(1)); // victim 99, attacker 77 — neither registered
+        var (client, _, _) = _Pipeline(EsiAuthorization.Authorized("token"));
+
+        var result = await new EsiKillmailImporter(client, Repository, Scopes)
+            .ImportOneAsync(1, "hash1", TestContext.Current.CancellationToken);
+
+        Assert.Equal(KillmailImportStatus.NoOwnCharacter, result.Status);
+        Assert.Equal("None of your characters is on this killmail.", result.Message);
+        Assert.Empty(await Repository.GetForCharacterAsync(99, TestContext.Current.CancellationToken));
+        Assert.Empty(await Repository.GetForCharacterAsync(CharacterId, TestContext.Current.CancellationToken));
+    }
+
+    // ET-338 AC6: a mail already stored via the pasted link, with a manual run link set on it, stays exactly one
+    // row and keeps that link when the feed (ImportAsync) later discovers the same mail.
+    [Fact]
+    public async Task ImportOneAsync_AndImportAsync_NeverDuplicateAndKeepAnExistingLink()
+    {
+        await _instance.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character("Test Pilot", CharacterId), TestContext.Current.CancellationToken);
+        _routes["/killmails/1/hash1/"] = () => Json(200, """
+            {"killmail_id":1,"killmail_time":"2026-09-20T12:00:00Z","solar_system_id":30000142,
+             "victim":{"character_id":77,"ship_type_id":587,"damage_taken":1,"items":[]},
+             "attackers":[{"character_id":88,"damage_done":1,"final_blow":true}]}
+            """);
+        var (client, _, _) = _Pipeline(EsiAuthorization.Authorized("token"));
+        var importer = new EsiKillmailImporter(client, Repository, Scopes);
+        await importer.ImportOneAsync(1, "hash1", TestContext.Current.CancellationToken);
+
+        // LinkSource=Manual alone (no run — that would need a real Run row to satisfy the foreign key) is enough
+        // to prove the point: AddMissingAsync never touches a row it already knows, so a re-import through the
+        // feed can never reset what _ToEntity always assigns a fresh row (LinkSource=None).
+        await using (ClientDbContext db = await _instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+                         .CreateDbContextAsync(TestContext.Current.CancellationToken))
+        {
+            LocalKillmail stored = await db.Set<LocalKillmail>().SingleAsync(
+                killmail => killmail.CharacterId == CharacterId && killmail.KillmailId == 1, TestContext.Current.CancellationToken);
+            stored.LinkSource = KillmailLinkSource.Manual;
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        _routes[Page1] = () => _RecentPage(1, 1);
+        await importer.ImportAsync(CharacterId, TestContext.Current.CancellationToken);
+
+        var afterFeed = Assert.Single(await Repository.GetForCharacterAsync(CharacterId, TestContext.Current.CancellationToken));
+        Assert.Equal(KillmailLinkSource.Manual, afterFeed.LinkSource);
+    }
+
+    // ET-338 AC7: an ESI error (a wrong hash, a time-out) reports a readable failure and stores nothing half-filled.
+    [Fact]
+    public async Task ImportOneAsync_OnEsiFailure_ReportsAndStoresNothing()
+    {
+        _routes["/killmails/1/wronghash/"] = () => Json(404, "{\"error\":\"Killmail not found\"}");
+        var (client, _, stub) = _Pipeline(EsiAuthorization.Authorized("token"));
+
+        var result = await new EsiKillmailImporter(client, Repository, Scopes)
+            .ImportOneAsync(1, "wronghash", TestContext.Current.CancellationToken);
+
+        Assert.Equal(KillmailImportStatus.Failed, result.Status);
+        Assert.Equal(1, stub.Calls);
+        Assert.Empty(await Repository.GetForCharacterAsync(CharacterId, TestContext.Current.CancellationToken));
+    }
+
     public void Dispose()
     {
         _instance.Dispose();
-        Directory.Delete(_cacheDirectory, recursive: true);
+        // Never created for a test that only exercises KillmailLink.TryParse and touches no pipeline at all.
+        if (Directory.Exists(_cacheDirectory))
+        {
+            Directory.Delete(_cacheDirectory, recursive: true);
+        }
     }
 
     private (IEsiClient Client, FileEsiCacheStore Store, StubHttpMessageHandler Stub) _Pipeline(EsiAuthorization authorization)

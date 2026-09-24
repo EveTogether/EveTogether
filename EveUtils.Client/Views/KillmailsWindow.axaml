@@ -118,7 +118,7 @@
         <DockPanel>
             <!-- ══ Header ══ -->
             <Border DockPanel.Dock="Top" Padding="14,12" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
-                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" ColumnSpacing="8">
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
                     <TextBlock Grid.Column="0" Classes="panel-title" FontSize="13" Text="KILLMAILS"/>
                     <Border Grid.Column="1" Classes="chip dim">
                         <TextBlock Text="Local · last 90 days (ESI)"/>
@@ -126,7 +126,8 @@
                     <TextBlock Grid.Column="3" Classes="hint" Margin="0" VerticalAlignment="Center"
                                IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
                                Text="{Binding StatusMessage}"/>
-                    <Button Grid.Column="4" Content="REFRESH" Command="{Binding RefreshCommand}" IsEnabled="{Binding !IsBusy}"/>
+                    <Button Grid.Column="4" Content="PASTE LINK" Command="{Binding PasteLinkCommand}" IsEnabled="{Binding !IsBusy}"/>
+                    <Button Grid.Column="5" Content="REFRESH" Command="{Binding RefreshCommand}" IsEnabled="{Binding !IsBusy}"/>
                 </Grid>
             </Border>
 
