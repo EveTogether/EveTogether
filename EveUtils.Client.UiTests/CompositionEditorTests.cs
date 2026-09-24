@@ -214,7 +214,7 @@ public class CompositionEditorTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fit-picker.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-fit-picker.png");
         window.Close();
     }
 
@@ -235,7 +235,7 @@ public class CompositionEditorTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-composition-editor.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-composition-editor.png");
         window.Close();
     }
 
@@ -298,7 +298,7 @@ public class CompositionEditorTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-composition-readonly.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-composition-readonly.png");
         window.Close();
     }
 }

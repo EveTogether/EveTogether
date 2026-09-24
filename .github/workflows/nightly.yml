@@ -109,6 +109,13 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      # windows-latest boots in UTC, where a wire-timezone bug is invisible: shifting a value by a zero offset
+      # is a no-op, so the tests written to catch that class of bug (ET-366) would pass even with the bug back.
+      # A fixed non-UTC zone makes the runner behave like the developer machines these tests were written on.
+      - name: Set a non-UTC timezone
+        shell: pwsh
+        run: tzutil /s "W. Europe Standard Time"
+
       - name: Run UI and server tests
         shell: pwsh
         run: |

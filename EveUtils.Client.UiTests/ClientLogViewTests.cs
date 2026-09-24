@@ -47,7 +47,7 @@ public class ClientLogViewTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-client-logs.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-client-logs.png");
         window.Close();
 
         // Clear empties the store + the list, flipping the empty state.

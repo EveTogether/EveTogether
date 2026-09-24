@@ -57,7 +57,7 @@ public class FleetShareDialogTests
         var frame = window.CaptureRenderedFrame();
 
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-share.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-share.png");
     }
 
     private static MetricShareSnapshot Empty() => new(new Dictionary<string, string>());

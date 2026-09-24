@@ -231,7 +231,7 @@ public class FleetsMemberTreeTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fleets-speed-stats.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-fleets-speed-stats.png");
         window.Close();
     }
 
@@ -257,7 +257,7 @@ public class FleetsMemberTreeTests
         // Member leaves render inline under their fleet in the single unified overview (no more tabs to select).
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fleets-member-tree.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        TestCapture.Save(frame, "eveutils-fleets-member-tree.png");
         window.Close();
     }
 }
