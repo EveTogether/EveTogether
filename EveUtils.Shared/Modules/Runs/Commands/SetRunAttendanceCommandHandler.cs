@@ -15,11 +15,9 @@ internal sealed class SetRunAttendanceCommandHandler(
     IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher)
     : ICommandHandler<SetRunAttendanceCommand, Result<int>>
 {
-    // Serializes every attendance write app-wide (ET-287, ET-375): a run's own HOMEFRONT section and a second
-    // window on the same run (a detail screen, another client instance in these tests) each read off the UI thread
-    // now and can genuinely call this at the same instant. Two SaveChangesAsync calls racing the same Sqlite file
-    // used to be vanishingly rare with those reads effectively synchronous; now they collide often enough to throw
-    // "database is locked" instead of leaving the StandingSetAtUtc check above to settle who wins.
+    // Serializes every attendance write app-wide (ET-287, ET-375): two windows on the same run now genuinely call
+    // this at the same instant and can collide on the Sqlite file ("database is locked") instead of leaving the
+    // StandingSetAtUtc check below to settle who wins — see PR for the full race.
     private static readonly SemaphoreSlim _writeGate = new(1, 1);
 
     public async Task<Result<int>> Handle(SetRunAttendanceCommand command, CancellationToken cancellationToken = default)
