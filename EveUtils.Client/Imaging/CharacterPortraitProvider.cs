@@ -40,7 +40,10 @@ public sealed class CharacterPortraitProvider(IHttpClientFactory httpClientFacto
 
     private async Task<Bitmap?> _GetImageAsync(int id, int size, string category, string asset, CancellationToken cancellationToken)
     {
-        if (id <= 0) return null;
+        if (id <= 0)
+        {
+            return null;
+        }
 
         var key = category == "characters" ? $"{id}_{size}" : $"corporation_{id}_{size}";
         if (_cache.TryGetValue(key, out var cached))

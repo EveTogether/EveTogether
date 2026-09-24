@@ -25,6 +25,7 @@ using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Sde.Enums;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
 namespace EveUtils.Client.ViewModels.Killmails;
@@ -43,6 +44,7 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
     private readonly IDialogService _dialogs;
     private readonly IServiceProvider _services;
     private readonly ISdeAccessor _sde;
+    private readonly ILogger<KillmailDetailViewModel>? _logger;
     private readonly int _characterId;
     private readonly int _killmailId;
 
@@ -53,6 +55,7 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
         _dialogs = dialogs;
         _services = services;
         _sde = services.GetRequiredService<ISdeAccessor>();
+        _logger = services.GetService<ILogger<KillmailDetailViewModel>>();
         _characterId = characterId;
         _killmailId = killmailId;
         ModuleId = $"killmail-{characterId}-{killmailId}";
@@ -138,24 +141,31 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
 
     private async Task _LoadImagesAsync()
     {
-        ITypeImageProvider? images = _services.GetService<ITypeImageProvider>();
-        if (images is null || !await images.AreImagesEnabledAsync())
+        try
         {
-            return;
-        }
+            ITypeImageProvider? images = _services.GetService<ITypeImageProvider>();
+            if (images is null || !await images.AreImagesEnabledAsync())
+            {
+                return;
+            }
 
-        if (_detail is { } detail)
+            if (_detail is { } detail)
+            {
+                ShipImage = await images.GetImageAsync(detail.VictimShipTypeId, TypeImageKind.Render, 128);
+            }
+
+            ICharacterPortraitProvider? portraits = _services.GetService<ICharacterPortraitProvider>();
+            if (portraits is not null)
+            {
+                await Task.WhenAll(Attackers.Select(attacker => attacker.LoadImageAsync(images, portraits)));
+            }
+
+            await Task.WhenAll(FitGroups.SelectMany(group => group.Rows).Select(row => row.LoadIconAsync(images)));
+        }
+        catch (Exception ex)
         {
-            ShipImage = await images.GetImageAsync(detail.VictimShipTypeId, TypeImageKind.Render, 128);
+            _logger?.LogError(ex, "Killmail {KillmailId} images could not be loaded.", _killmailId);
         }
-
-        ICharacterPortraitProvider? portraits = _services.GetService<ICharacterPortraitProvider>();
-        if (portraits is not null)
-        {
-            await Task.WhenAll(Attackers.Select(attacker => attacker.LoadImageAsync(images, portraits)));
-        }
-
-        await Task.WhenAll(FitGroups.SelectMany(group => group.Rows).Select(row => row.LoadIconAsync(images)));
     }
 
     private void _Apply(KillmailDetailDto detail, KillmailNames names, IReadOnlySet<long> ownCharacterIds)
