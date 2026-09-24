@@ -1276,9 +1276,11 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             // Only when the channel was actually touched (ET-339) — a Save triggered by an unrelated setting must
             // never freeze the derived default into a choice nobody made.
             if (result.ChannelChoiceMade)
+            {
                 await dispatcher.Send(new SetSettingCommand(
                     UpdateChannelSettingKey,
                     result.IncludeNightlyBuilds ? nameof(EveUtils.Client.Updates.UpdateChannel.Nightly) : nameof(EveUtils.Client.Updates.UpdateChannel.Stable)));
+            }
             await dispatcher.Send(new SetSettingCommand(
                 EveUtils.Client.Runs.FleetRunWindowPresenter.AutoOpenSettingKey, result.OpenFleetRunWindowImmediately ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(
@@ -2337,7 +2339,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private async Task<EveUtils.Client.Updates.UpdateChannel> ResolveUpdateChannelAsync()
     {
         if (_services is null)
+        {
             return EveUtils.Client.Updates.UpdateChannel.Stable;
+        }
 
         using var scope = _services.CreateScope();
         var settings = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Query(new GetSettingsQuery());

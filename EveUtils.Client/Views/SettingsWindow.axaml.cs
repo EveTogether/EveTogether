@@ -47,7 +47,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private CheckBox _openFleetRunWindowBox = null!;
     private CheckBox? _autoPublishFleetRunsBox;
     private CheckBox _checkUpdatesOnStartupBox = null!, _watchClipboardBox = null!;
-    private CheckBox _includeNightlyBuildsBox = null!;
+    private CheckBox? _includeNightlyBuildsBox;
 
     // Set once the initial value has been applied, so reacting to that initial set does not itself count as the
     // operator choosing a channel (ET-339) — only a later Checked/Unchecked does.
@@ -115,7 +115,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _openFitDetailAfterImportBox = this.FindControl<CheckBox>("OpenFitDetailAfterImportBox")!;
         _openFleetRunWindowBox = this.FindControl<CheckBox>("OpenFleetRunWindowBox")!;
         _checkUpdatesOnStartupBox = this.FindControl<CheckBox>("CheckUpdatesOnStartupBox")!;
-        _includeNightlyBuildsBox = this.FindControl<CheckBox>("IncludeNightlyBuildsBox")!;
+        _includeNightlyBuildsBox = this.FindControl<CheckBox>("IncludeNightlyBuildsBox");
         _watchClipboardBox = this.FindControl<CheckBox>("WatchClipboardBox")!;
         _autoStartMissionsBox = this.FindControl<CheckBox>("AutoStartMissionsBox")!;
         _autoStartSitesBox = this.FindControl<CheckBox>("AutoStartSitesBox")!;
@@ -170,8 +170,11 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
 
         // Set before wiring the handler below, so applying the resolved default does not itself mark the
         // channel as touched (ET-339) — only an actual click on this box does.
-        _includeNightlyBuildsBox.IsChecked = includeNightlyBuilds;
-        _includeNightlyBuildsBox.IsCheckedChanged += (_, _) => _channelTouched = true;
+        if (_includeNightlyBuildsBox is not null)
+        {
+            _includeNightlyBuildsBox.IsChecked = includeNightlyBuilds;
+            _includeNightlyBuildsBox.IsCheckedChanged += (_, _) => _channelTouched = true;
+        }
 
         _autoStartMissionsBox.IsChecked = autoStartMissions;
         _autoStartSitesBox.IsChecked = autoStartSites;
@@ -537,7 +540,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         var autoStartMissions = _autoStartMissionsBox.IsChecked ?? true;
         var autoStartSites = _autoStartSitesBox.IsChecked ?? true;
         var weekStartsOn = _weekStartsOnBox.SelectedIndex == 1 ? DayOfWeek.Sunday : DayOfWeek.Monday;
-        var includeNightlyBuilds = _includeNightlyBuildsBox.IsChecked ?? false;
+        var includeNightlyBuilds = _includeNightlyBuildsBox?.IsChecked ?? false;
         return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, _channelTouched);
     }
 }

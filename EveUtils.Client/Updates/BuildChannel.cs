@@ -15,7 +15,9 @@ public static class BuildChannel
 
         var build = text.IndexOf('+');
         if (build >= 0)
+        {
             text = text[..build];
+        }
 
         var dash = text.IndexOf('-');
 
