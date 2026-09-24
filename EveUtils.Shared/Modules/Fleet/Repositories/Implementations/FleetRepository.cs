@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Repositories;
@@ -63,17 +64,29 @@ internal sealed class FleetRepository(IDbContextFactory<SharedDbContext> context
             .ToListAsync(cancellationToken);
     }
 
+    // A concluded fleet is finished — it cannot be joined, so it is never offered in discovery (2026-06-04).
+    private static readonly Expression<Func<FleetEntity, bool>> OpenForDiscovery =
+        f => f.Visibility == FleetVisibility.Public
+             && f.State == FleetState.Active
+             && f.Activation != FleetActivation.Concluded;
+
     public async Task<IReadOnlyList<FleetEntity>> ListOpenAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        // A concluded fleet is finished — it cannot be joined, so it is never offered in discovery (2026-06-04).
         return await db.Set<FleetEntity>()
-            .Where(f => f.Visibility == FleetVisibility.Public
-                        && f.State == FleetState.Active
-                        && f.Activation != FleetActivation.Concluded)
+            .Where(OpenForDiscovery)
             .OrderByDescending(f => f.Id)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<bool> IsOpenAsync(long fleetId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Set<FleetEntity>()
+            .Where(f => f.Id == fleetId)
+            .Where(OpenForDiscovery)
+            .AnyAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<FleetEntity>> ListByStateAsync(FleetState state, CancellationToken cancellationToken = default)

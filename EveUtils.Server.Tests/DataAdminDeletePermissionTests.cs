@@ -34,7 +34,7 @@ public sealed class DataAdminDeletePermissionTests
         using var factory = new SqliteServerDbContextFactory();
         var ids = await _SeedAsync(factory, ct);
         var service = new DataAdminService(
-            factory, new SharedFitRepository(factory), new ServerAuthRepository(factory), new FleetCompositionRepository(factory), new NoDispatcher());
+            factory, new SharedFitRepository(factory), new ServerAuthRepository(factory), new FleetCompositionRepository(factory), new NoDispatcher(), UnusedReleaser.Create(factory));
         var viewer = _Principal(PanelPermissions.DataView);
 
         List<Result> results =
@@ -67,7 +67,7 @@ public sealed class DataAdminDeletePermissionTests
         using var factory = new SqliteServerDbContextFactory();
         var ids = await _SeedAsync(factory, ct);
         var service = new DataAdminService(
-            factory, new SharedFitRepository(factory), new ServerAuthRepository(factory), new FleetCompositionRepository(factory), new NoDispatcher());
+            factory, new SharedFitRepository(factory), new ServerAuthRepository(factory), new FleetCompositionRepository(factory), new NoDispatcher(), UnusedReleaser.Create(factory));
 
         var result = await service.DeleteSessionAsync(_Principal(PanelPermissions.DataDelete), ids.SessionId, ct);
 

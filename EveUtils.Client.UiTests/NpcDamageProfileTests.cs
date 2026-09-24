@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using EveUtils.Client.Composition;
 using EveUtils.Shared.Modules.Sde.Storage;
 using Xunit;
 
@@ -15,8 +16,7 @@ namespace EveUtils.Client.UiTests;
 public sealed class NpcDamageProfileTests
 {
     private static readonly string SdePath =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "EveUtils", "sde", "sde.sqlite");
+        Path.Combine(ClientDataLocation.DefaultRoot, "sde", "sde.sqlite");
 
     private static SqliteSdeAccessor? TryOpen()
     {

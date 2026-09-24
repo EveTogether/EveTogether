@@ -83,8 +83,8 @@ internal static class ServerDataDirectory
     // Anchored to the per-user data folder, like the client's ClientServices.DataDirectory(). Not the working
     // directory: `dotnet run` and Rider start the server from different ones, which is what anchoring to the
     // binary originally fixed (d3cfa5f) — and not the build output either, which is what ET-94 is about.
-    // A sibling of the client's "EveUtils" rather than a folder inside it: the client's subfolders are its
-    // EVEUTILS_INSTANCE namespace, so an instance could otherwise be pointed at the server's data.
+    // A sibling of the client's "EveTogetherData" rather than a folder inside it: the client's subfolders are its
+    // EVETOGETHER_INSTANCE namespace, so an instance could otherwise be pointed at the server's data.
     private static string _DefaultDirectory()
     {
         var localApplicationData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);

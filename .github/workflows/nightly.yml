@@ -1,0 +1,432 @@
+name: Nightly
+
+# A testable build of main (ET-339), published to one rolling pre-release tagged 'nightly' that is overwritten
+# each time. Opting in to nightlies is a choice about which channel you follow (Settings → General → "Also check
+# for nightly builds"), so this is deliberately a *pre-release*: the stable channel never sees it.
+#
+# It does not run on every push. It runs at night, and only when something actually changed since the last one —
+# a nightly that is byte-for-byte yesterday's is noise — or whenever you fire it by hand from the Actions tab.
+#
+# The internal package version is 0.0.0-nightly.<run>; the visible build identity is
+# nightly-<UTC date>.<commit hash>.<run>. Neither is tied to a stable release tag.
+on:
+  schedule:
+    # 03:17 UTC — deliberately not Cockpit's 02:43, so the two projects' nightlies never queue for the same
+    # runner capacity at once.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  CONFIGURATION: Release
+  PROJECT_PATH: EveUtils.Client/EveUtils.Client.csproj
+  APP_NAME: EveTogether
+  ICON_PNG: EveUtils.Client/Assets/eve-together-badge.png
+  ICON_ICO: EveUtils.Client/Assets/eve-together.ico
+  VPK_VERSION: '1.2.0'
+
+jobs:
+  # Nothing new on main since the last nightly means there is nothing to build. A manual run always builds:
+  # firing it by hand is itself the statement that you want this commit built.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
+      previous: ${{ steps.decide.outputs.previous }}
+      display: ${{ steps.decide.outputs.display }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The commit the nightly tag points at — not the release's targetCommitish, which reports the branch
+          # ("main") and would never equal a sha, quietly making this check always say "yes, build". Captured
+          # here, before the manual short-circuit below, so the release job can list the commits since it as
+          # this nightly's changelog on a scheduled and a hand-fired run alike.
+          # A failed call (no 'nightly' tag yet, e.g. the very first nightly) must read as "nobody published
+          # one" — gh api writes its error body to stdout even on a 404, so `2>/dev/null || echo ""` alone still
+          # lets that JSON through; the || below discards it on the exit code instead of trusting stdout.
+          published=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/nightly" -q .object.sha 2>/dev/null) || published=""
+          echo "previous=$published" >> "$GITHUB_OUTPUT"
+          head=$(git rev-parse HEAD)
+          echo "display=nightly-$(date -u +%Y%m%d).$(git rev-parse --short=7 HEAD).${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual run — building this commit."
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$published" = "$head" ]; then
+            echo "main is unchanged since the last nightly ($head) — nothing to build."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "main moved since the last nightly (was '$published', now '$head')."
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  tests:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Run UI and server tests
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          dotnet test EveUtils.Client.UiTests/EveUtils.Client.UiTests.csproj -c Release --logger "trx;LogFileName=ui.trx" --results-directory TestResults
+          $uiExit = $LASTEXITCODE
+          dotnet test EveUtils.Server.Tests/EveUtils.Server.Tests.csproj -c Release --logger "trx;LogFileName=server.trx" --results-directory TestResults
+          $serverExit = $LASTEXITCODE
+
+          "## Nightly test results" >> $env:GITHUB_STEP_SUMMARY
+          $failedTests = @(Get-ChildItem TestResults -Filter '*.trx' -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+            ([xml](Get-Content -Raw -LiteralPath $_.FullName)).SelectNodes("//*[local-name()='UnitTestResult' and @outcome='Failed']") |
+              ForEach-Object { "- $($_.GetAttribute('testName'))" }
+          })
+          if ($failedTests.Count -gt 0) {
+            "### Failed tests" >> $env:GITHUB_STEP_SUMMARY
+            $failedTests >> $env:GITHUB_STEP_SUMMARY
+          }
+          if ($uiExit -ne 0 -or $serverExit -ne 0) {
+            if ($failedTests.Count -eq 0) {
+              "A test process failed before writing named results." >> $env:GITHUB_STEP_SUMMARY
+            }
+            exit 1
+          }
+          "UI and server tests passed." >> $env:GITHUB_STEP_SUMMARY
+
+  build-windows:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: windows-latest
+    env:
+      RUNTIME_ID: win-x64
+      OUTPUT_DIR: publish/win-x64
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Set package version and build identity
+        shell: bash
+        run: |
+          echo "VERSION=0.0.0-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "${{ needs.changes.outputs.display }}" > nightly-build.md
+
+      - name: Publish (self-contained)
+        run: >
+          dotnet publish ${{ env.PROJECT_PATH }}
+          -c ${{ env.CONFIGURATION }}
+          -r ${{ env.RUNTIME_ID }}
+          --self-contained true
+          -p:DebugType=none
+          -p:Version=${{ env.VERSION }}
+          -p:InformationalVersion=${{ env.VERSION }}+${{ needs.changes.outputs.display }}
+          -p:IncludeSourceRevisionInInformationalVersion=false
+          -o ${{ env.OUTPUT_DIR }}
+
+      - name: Rename app host
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:OUTPUT_DIR 'EveUtils.Client.exe'
+          if (Test-Path $exe) { Rename-Item $exe "$env:APP_NAME.exe" }
+
+      - name: Install vpk
+        shell: bash
+        run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
+
+      - name: Pack the Velopack release
+        shell: bash
+        run: >
+          vpk pack
+          --packId ${{ env.APP_NAME }}
+          --packTitle "EVE Together"
+          --packVersion "${{ env.VERSION }}"
+          --packDir ${{ env.OUTPUT_DIR }}
+          --mainExe ${{ env.APP_NAME }}.exe
+          --icon ${{ env.ICON_ICO }}
+          --releaseNotes nightly-build.md
+          --channel ${{ env.RUNTIME_ID }}-nightly
+          --outputDir artifacts-velopack
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nightly-windows
+          path: artifacts-velopack/*
+
+  build-linux:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    env:
+      RUNTIME_ID: linux-x64
+      OUTPUT_DIR: publish/linux-x64
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Set package version and build identity
+        run: |
+          echo "VERSION=0.0.0-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "${{ needs.changes.outputs.display }}" > nightly-build.md
+
+      - name: Publish (self-contained)
+        run: >
+          dotnet publish ${{ env.PROJECT_PATH }}
+          -c ${{ env.CONFIGURATION }}
+          -r ${{ env.RUNTIME_ID }}
+          --self-contained true
+          -p:DebugType=none
+          -p:Version=${{ env.VERSION }}
+          -p:InformationalVersion=${{ env.VERSION }}+${{ needs.changes.outputs.display }}
+          -p:IncludeSourceRevisionInInformationalVersion=false
+          -o ${{ env.OUTPUT_DIR }}
+
+      - name: Rename app host
+        run: |
+          if [ -f "$OUTPUT_DIR/EveUtils.Client" ]; then
+            mv "$OUTPUT_DIR/EveUtils.Client" "$OUTPUT_DIR/$APP_NAME"
+          fi
+          chmod +x "$OUTPUT_DIR/$APP_NAME"
+
+      - name: Install vpk
+        run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
+
+      - name: Pack the Velopack release
+        run: >
+          vpk pack
+          --packId ${{ env.APP_NAME }}
+          --packTitle "EVE Together"
+          --packVersion "${{ env.VERSION }}"
+          --packDir ${{ env.OUTPUT_DIR }}
+          --mainExe ${{ env.APP_NAME }}
+          --icon ${{ env.ICON_PNG }}
+          --releaseNotes nightly-build.md
+          --channel ${{ env.RUNTIME_ID }}-nightly
+          --categories "Utility;Game"
+          --outputDir artifacts-velopack
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nightly-linux
+          path: artifacts-velopack/*
+
+  build-macos:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        rid: [osx-arm64, osx-x64]
+    env:
+      RUNTIME_ID: ${{ matrix.rid }}
+      OUTPUT_DIR: publish/${{ matrix.rid }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Set package version and build identity
+        run: |
+          echo "VERSION=0.0.0-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "${{ needs.changes.outputs.display }}" > nightly-build.md
+
+      - name: Publish (self-contained)
+        run: >
+          dotnet publish ${{ env.PROJECT_PATH }}
+          -c ${{ env.CONFIGURATION }}
+          -r ${{ env.RUNTIME_ID }}
+          --self-contained true
+          -p:DebugType=none
+          -p:Version=${{ env.VERSION }}
+          -p:InformationalVersion=${{ env.VERSION }}+${{ needs.changes.outputs.display }}
+          -p:IncludeSourceRevisionInInformationalVersion=false
+          -o ${{ env.OUTPUT_DIR }}
+
+      - name: Rename app host
+        run: |
+          if [ -f "$OUTPUT_DIR/EveUtils.Client" ]; then
+            mv "$OUTPUT_DIR/EveUtils.Client" "$OUTPUT_DIR/$APP_NAME"
+          fi
+          chmod +x "$OUTPUT_DIR/$APP_NAME"
+
+      - name: Build the macOS icon
+        run: |
+          ICONSET=icon.iconset
+          mkdir -p "$ICONSET"
+          gen() { sips -z "$1" "$1" "$ICON_PNG" --out "$ICONSET/$2" >/dev/null 2>&1 || true; }
+          gen 16 icon_16x16.png
+          gen 32 icon_16x16@2x.png
+          gen 32 icon_32x32.png
+          gen 64 icon_32x32@2x.png
+          gen 128 icon_128x128.png
+          gen 256 icon_128x128@2x.png
+          gen 256 icon_256x256.png
+          gen 512 icon_256x256@2x.png
+          gen 512 icon_512x512.png
+          gen 1024 icon_512x512@2x.png
+          iconutil -c icns "$ICONSET" -o eve-together.icns
+
+      - name: Install vpk
+        run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
+
+      - name: Pack the Velopack release
+        run: >
+          vpk pack
+          --packId ${{ env.APP_NAME }}
+          --packTitle "EVE Together"
+          --packVersion "${{ env.VERSION }}"
+          --packDir ${{ env.OUTPUT_DIR }}
+          --mainExe ${{ env.APP_NAME }}
+          --icon eve-together.icns
+          --releaseNotes nightly-build.md
+          --channel ${{ env.RUNTIME_ID }}-nightly
+          --outputDir artifacts-velopack
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nightly-macos-${{ matrix.rid }}
+          path: artifacts-velopack/*
+
+  # One rolling release, after every platform has built. All four RIDs or none — a nightly missing a platform's
+  # feed would leave that platform silently offered nothing, forever, the same failure release.yml's own
+  # "Check the update feed is complete" step guards against for a real release.
+  release:
+    needs: [changes, build-windows, build-linux, build-macos]
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Full history so the changelog can walk from the previous nightly's commit to this one.
+          fetch-depth: 0
+
+      # Scoped to the nightly-* uploads (build-windows/linux/macos) — an unfiltered download also picks up
+      # whatever else the run's artifact pool holds, such as docker/build-push-action's own build-record
+      # upload from the sibling publish-server-image job, and dist/* would then attach it to the release.
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          pattern: nightly-*
+          merge-multiple: true
+
+      # The changelog is the commits since the previous nightly — the question a rolling pre-release actually
+      # raises: what landed in tonight's build. Falls back to the most recent commits when there is no previous
+      # nightly to walk from (the very first nightly, or a pruned/rewritten history).
+      - name: Compose the release notes
+        env:
+          # Routed through env: and read back quoted ("$PREVIOUS") rather than interpolated into the script
+          # text directly — a job output is untrusted content as far as this step is concerned, and pasting it
+          # into bash source lets whatever it contains (a stray quote, a space) break the script's parsing.
+          PREVIOUS: ${{ needs.changes.outputs.previous }}
+        run: |
+          previous="$PREVIOUS"
+          {
+            echo "Rolling build of \`main\`, replaced whenever main moves. Not a release: things here are expected to break."
+            echo
+            echo "Build: \`${{ needs.changes.outputs.display }}\`"
+            echo
+            echo "Installed an earlier nightly such as 0.2.1-nightly.4? Download this nightly's installer for your platform and install it once manually. The internal package version is lower, so older nightlies cannot update themselves. Your data stays outside the installation folder; later nightlies update normally."
+            echo
+            echo "### Changes since the previous nightly"
+            echo
+            if [ -n "$previous" ] && git cat-file -e "${previous}^{commit}" 2>/dev/null; then
+              git log --format='- %s' "${previous}..HEAD"
+            else
+              echo "_No previous nightly in history — the most recent commits:_"
+              echo
+              git log --format='- %s' -n 20
+            fi
+          } > nightly-notes.md
+
+      # Delete and recreate rather than update: an existing release keeps its old tag, so 'nightly' would keep
+      # pointing at the commit before last while the page claimed the new one. The tag is what the next run's
+      # "did anything change?" check reads, so a tag that never moves means a nightly that rebuilds identical
+      # bytes every night.
+      - name: Publish the rolling nightly
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
+
+          gh release create nightly \
+            --target "${GITHUB_SHA}" \
+            --prerelease \
+            --title "${{ needs.changes.outputs.display }}" \
+            --notes-file nightly-notes.md \
+            dist/*
+
+  # Mirrors release.yml's publish-server-image job (same Dockerfile, same registry/login/platform), on the same
+  # changes-poort as the client builds above. Two tags, both unambiguously nightly: the rolling 'nightly' tag
+  # (mirrors the client's own rolling GitHub-release tag) and an immutable build-identity tag. Never 'latest'
+  # and never a stable version tag, so a nightly image can never be
+  # mistaken for, or accidentally pulled as, a stable one.
+  publish-server-image:
+    name: Publish nightly server image to GHCR
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image tags
+        id: tags
+        shell: bash
+        run: |
+          IMAGE=ghcr.io/evetogether/eve-together-server
+          echo "tags=$IMAGE:nightly,$IMAGE:${{ needs.changes.outputs.display }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push server image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}

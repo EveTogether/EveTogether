@@ -113,8 +113,6 @@ Server admin UI (Blazor): **Dashboard** (permission toggles + shared fits), **Lo
 | Type | Path | Function |
 |------|------|----------|
 | `GET` | `/` · `/status` | role + provider + health |
-| `GET`/`POST` | `/ships` | Ships — `GetShipsQuery` / `AddShipCommand` (failure = `400` + messages) |
-| `GET` | `/sync-logs` | Sync (server-only) |
 | `GET` | `/api/server/scopes` | required/optional ESI scopes from the scope registry |
 | `GET` | `/auth/eve/callback` | EVE SSO server-redirect callback (Mode B) |
 | `GET` | `/stream/dps` · SignalR `/hubs/dps` | live DPS stream |

@@ -1497,6 +1497,32 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.ToTable("CoupledServer");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Transport.PendingServerRevoke", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AccessToken")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Address");
+
+                    b.ToTable("PendingServerRevoke");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Fleet.Composition.FleetCompositionEntry", b =>
                 {
                     b.HasOne("EveUtils.Shared.Modules.Fleet.Composition.FleetCompositionRole", null)

@@ -35,6 +35,7 @@ using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Client.Pairing;
 using EveUtils.Client.Theming;
+using EveUtils.Client.Characters;
 using EveUtils.Client.Transport;
 using EveUtils.Client.Updates;
 using EveUtils.Shared.Transport;
@@ -95,6 +96,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private readonly ServerFitShareClient? _fitShare;
     private readonly IFitExportActions? _fitExportActions;
     private readonly ServerCouplingService? _coupling;
+    private readonly CharacterRemovalService? _removal;
+    private ActivityWindowViewModel? _activityWindow;
     private readonly IServerRegistry? _serverRegistry;
     private readonly FleetClient? _fleetClient;
     private readonly Random _random = new();
@@ -106,7 +109,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private CancellationTokenSource? _feedCts;
     private CancellationTokenSource? _signInCts;
     private readonly DpsRenderDriver? _renderDriver;
-    private string _localCharacter = "Pilot-" + (Environment.GetEnvironmentVariable("EVEUTILS_INSTANCE") ?? "Local");
+    private string _localCharacter = "Pilot-" + (Composition.ClientDataLocation.InstanceName() ?? "Local");
 
     // ── Ctrl+Shift+T: reopen last closed tab (ET-209) ────────────────────────────────────────────
     // Scoped to the no-argument, single-instance rail modules: reopening one is exactly re-running the same
@@ -423,6 +426,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _fitShare = services.GetRequiredService<ServerFitShareClient>();
         _fitExportActions = services.GetRequiredService<IFitExportActions>();
         _coupling = services.GetRequiredService<ServerCouplingService>();
+        _removal = services.GetRequiredService<CharacterRemovalService>();
+        _dialogs.ActivityWindowChanged += window => _activityWindow = window;
         _serverRegistry = services.GetRequiredService<IServerRegistry>();
         _fleetClient = services.GetRequiredService<FleetClient>();
         Inbox = services.GetRequiredService<InboxViewModel>(); // subscribes to MessageDeliveredEvent on the bus
@@ -1171,6 +1176,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         bool localApiEnabled;
         int localApiPort;
         bool checkUpdatesOnStartup;
+        bool includeNightlyBuilds;
         bool openFleetRunWindow;
         bool autoPublishFleetRuns;
         bool autoStartMissions;
@@ -1190,6 +1196,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             localApiPort = int.TryParse(settings.FirstOrDefault(s => s.Key == LocalApi.LocalApiServer.PortSettingKey)?.Value, out var lp)
                 ? lp : LocalApi.LocalApiServer.DefaultPort;
             checkUpdatesOnStartup = settings.FirstOrDefault(s => s.Key == CheckUpdatesOnStartupSettingKey)?.Value != "false"; // default on
+            includeNightlyBuilds = EveUtils.Client.Updates.ChannelChoice.Resolve(
+                settings.FirstOrDefault(s => s.Key == UpdateChannelSettingKey)?.Value,
+                EveUtils.Shared.App.AppInfo.Version) == EveUtils.Client.Updates.UpdateChannel.Nightly;
             openFleetRunWindow = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Runs.FleetRunWindowPresenter.AutoOpenSettingKey)?.Value == "true"; // default off: a toast is offered instead
             autoPublishFleetRuns = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Runs.FleetRunAutoPublisher.EnabledSettingKey)?.Value != "false"; // default on
             autoStartMissions = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Clipboard.ClipboardMissionOffer.AutoStartSettingKey)?.Value != "false"; // default on
@@ -1204,7 +1213,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
             localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow,
             autoPublishFleetRuns, shares.IsShared(MetricKind.Loot), shares.IsShared(MetricKind.MiningYield), autoStartMissions, autoStartSites,
-            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault());
+            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>());
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,
@@ -1222,7 +1231,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             characterInfo,
             _services?.GetService<IUpdateService>(),
             _services?.GetService<IUpdateSupportProbe>(),
-            ShowUpdateOfferAsync));
+            ShowUpdateOfferAsync,
+            await ResolveUpdateChannelAsync()));
     }
 
     /// <summary>Persist + apply the settings chosen in the settings module (invoked on Save; Cancel/close never calls
@@ -1268,6 +1278,14 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 LocalApi.LocalApiServer.PortSettingKey, result.LocalApiPort.ToString()));
             await dispatcher.Send(new SetSettingCommand(
                 CheckUpdatesOnStartupSettingKey, result.CheckUpdatesOnStartup ? "true" : "false"));
+            // Only when the channel was actually touched (ET-339) — a Save triggered by an unrelated setting must
+            // never freeze the derived default into a choice nobody made.
+            if (result.ChannelChoiceMade)
+            {
+                await dispatcher.Send(new SetSettingCommand(
+                    UpdateChannelSettingKey,
+                    result.IncludeNightlyBuilds ? nameof(EveUtils.Client.Updates.UpdateChannel.Nightly) : nameof(EveUtils.Client.Updates.UpdateChannel.Stable)));
+            }
             await dispatcher.Send(new SetSettingCommand(
                 EveUtils.Client.Runs.FleetRunWindowPresenter.AutoOpenSettingKey, result.OpenFleetRunWindowImmediately ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(
@@ -1602,6 +1620,73 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         ActivityStatus = $"Decoupled from {link.DisplayName}.";
         await RefreshCharactersAsync();
         await RefreshFittingsTabsAsync();
+    }
+
+    /// <summary>What stands in the way of removing a character: an active fleet it commands, or a run still on the
+    /// clock (ET-345).</summary>
+    public async Task<CharacterRemovalCheck?> CheckCharacterRemovalAsync(int characterId) =>
+        _removal is null ? null : await _removal.CheckAsync(characterId);
+
+    /// <summary>
+    /// Removes a character from this PC (ET-345). Asks again what stands in the way, because the confirmation can have
+    /// stood open while a run started; a fleet that became active meanwhile refuses the removal (false). An open run is
+    /// stopped the usual way first — through the activity window when that is the one showing it.
+    /// </summary>
+    public async Task<bool> RemoveCharacterAsync(int characterId, string name, bool deleteRunsAndFittings)
+    {
+        if (_removal is null || _services is null)
+            return false;
+
+        var check = await _removal.CheckAsync(characterId);
+        if (check.IsBlocked)
+            return false;
+
+        await _StopOpenRunsAsync(check.OpenRunIds);
+
+        HashSet<CharacterDataKind> dataToErase = deleteRunsAndFittings
+            ? [CharacterDataKind.Cache, CharacterDataKind.History]
+            : [CharacterDataKind.Cache];
+        var unreachable = await _removal.RemoveAsync(characterId, name, dataToErase);
+
+        _observedCharacters.Remove(name);
+        if (_trackersByCharacter.TryGetValue(name, out var tracker))
+            _dialogs?.CloseDpsOverlay(tracker);
+
+        ActivityStatus = unreachable.Count == 0
+            ? $"Removed {name}."
+            : $"Removed {name}. {string.Join(", ", await _ServerNamesAsync(unreachable))} could not be reached; " +
+              "the decouple is sent there as soon as it can be.";
+        await RefreshCharactersAsync();
+        await RefreshFittingsTabsAsync();
+        return true;
+    }
+
+    private async Task _StopOpenRunsAsync(IReadOnlyList<Guid> runIds)
+    {
+        if (_services is null || runIds.Count == 0)
+            return;
+
+        var now = DateTime.UtcNow;
+        using var scope = _services.CreateScope();
+        var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
+        foreach (var runId in runIds)
+        {
+            if (_activityWindow is { RunState: ActivityRunState.Running } window && window.RunId == runId)
+                window.StopRun(now);
+            else
+                await dispatcher.Send(new SetRunStoppedCommand(runId, now));
+        }
+    }
+
+    private async Task<IReadOnlyList<string>> _ServerNamesAsync(IReadOnlyList<string> addresses)
+    {
+        if (_serverRegistry is null)
+            return addresses;
+
+        List<string> names = [];
+        foreach (var address in addresses)
+            names.Add(await _serverRegistry.DisplayNameAsync(address));
+        return names;
     }
 
     // ── Fittings ──────────────────────────────────────────────────────────────────────────────────
@@ -2317,8 +2402,26 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         }
     }
 
-    // ── Application updates (ET-32) ─────────────────────────────────────────────────────────────────
+    // ── Application updates (ET-32, ET-339) ─────────────────────────────────────────────────────────
     private const string CheckUpdatesOnStartupSettingKey = "updates.check-on-startup";   // default on
+    private const string UpdateChannelSettingKey = "updates.channel";   // "Stable"/"Nightly"; absent = follow the running build
+
+    // Read fresh every time rather than cached, so a channel switch takes effect on the very next check without a
+    // restart (ET-339) — the same reason IsStartupUpdateCheckEnabledAsync reads straight from the store.
+    private async Task<EveUtils.Client.Updates.UpdateChannel> ResolveUpdateChannelAsync()
+    {
+        if (_services is null)
+        {
+            return EveUtils.Client.Updates.UpdateChannel.Stable;
+        }
+
+        using var scope = _services.CreateScope();
+        var settings = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Query(new GetSettingsQuery());
+
+        return EveUtils.Client.Updates.ChannelChoice.Resolve(
+            settings.FirstOrDefault(s => s.Key == UpdateChannelSettingKey)?.Value,
+            EveUtils.Shared.App.AppInfo.Version);
+    }
 
     /// <summary>
     /// The restart banner: a package is downloaded and waiting, and stays waiting until it is applied.
@@ -2351,7 +2454,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     {
         if (_services is null || !await IsStartupUpdateCheckEnabledAsync()) return;
 
-        var check = await _services.GetRequiredService<IUpdateService>().CheckAsync();
+        var check = await _services.GetRequiredService<IUpdateService>().CheckAsync(await ResolveUpdateChannelAsync());
 
         if (UpdateNotice.StartupStatus(check, InstalledVersion) is { } status)
             ActivityStatus = status;
@@ -2375,7 +2478,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private void OfferUpdate(AppRelease release) =>
         _services?.GetService<IToastService>()?.Show(
             "Update available",
-            $"EVE Together v{release.Version} is ready to download. You're on {InstalledVersion}.",
+            $"EVE Together {release.DisplayVersion} is ready to download. You're on {InstalledVersion}.",
             ToastKind.Information,
             [
                 new ToastAction("Later", () => { }),
@@ -2398,17 +2501,17 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         if (_services is null) return;
 
         ActivityStatus =
-            $"Downloading v{release.Version}… the app stays usable, you'll be asked to restart when it's ready.";
+            $"Downloading {release.DisplayVersion}… the app stays usable, you'll be asked to restart when it's ready.";
 
-        var download = await _services.GetRequiredService<IUpdateService>().DownloadAsync();
+        var download = await _services.GetRequiredService<IUpdateService>().DownloadAsync(await ResolveUpdateChannelAsync());
         if (!download.IsSuccess)
         {
             ActivityStatus = UpdateNotice.Reason(download);
             return;
         }
 
-        ActivityStatus = $"Update v{release.Version} downloaded — restart to finish updating.";
-        UpdateReadyMessage = $"v{release.Version} is ready. Restart to finish updating.";
+        ActivityStatus = $"Update {release.DisplayVersion} downloaded — restart to finish updating.";
+        UpdateReadyMessage = $"{release.DisplayVersion} is ready. Restart to finish updating.";
         IsUpdateReady = true;
     }
 
@@ -2424,7 +2527,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     [RelayCommand]
     private void DismissUpdateReady() => IsUpdateReady = false;
 
-    private static string InstalledVersion => $"v{EveUtils.Shared.App.AppInfo.Version}";
+    private static string InstalledVersion => EveUtils.Shared.App.AppInfo.DisplayVersion;
 
     /// <summary>
     /// On startup, if a newer (or missing) SDE build is available, ask the user once and — on accept — run the

@@ -35,7 +35,7 @@ public class VelopackUpdateServiceTests : IDisposable
     public async Task CheckAsync_WithoutAnInstalledCopy_ReportsNotInstalled()
     {
         Result<AppRelease?> result = await VelopackUpdateService.CheckAsync(
-            new Feed(), locator: null, TimeSpan.FromSeconds(5), NullLogger.Instance, CancellationToken.None);
+            UpdateChannel.Stable, new Feed(), locator: null, TimeSpan.FromSeconds(5), NullLogger.Instance, CancellationToken.None);
 
         Assert.False(result.IsSuccess);
         Assert.Null(result.Value);
@@ -85,7 +85,7 @@ public class VelopackUpdateServiceTests : IDisposable
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => VelopackUpdateService.CheckAsync(
-            new Feed { Hangs = true }, _Locator(), TimeSpan.FromSeconds(30), NullLogger.Instance, cancellation.Token));
+            UpdateChannel.Stable, new Feed { Hangs = true }, _Locator(), TimeSpan.FromSeconds(30), NullLogger.Instance, cancellation.Token));
     }
 
     /// <summary>
@@ -98,6 +98,7 @@ public class VelopackUpdateServiceTests : IDisposable
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new VelopackUpdateService(NullLogger<VelopackUpdateService>.Instance).DownloadAsync(
+                UpdateChannel.Stable,
                 new Feed(_Package("0.9.0")) { DownloadHangs = true },
                 _Locator(),
                 TimeSpan.FromSeconds(30),
@@ -125,17 +126,47 @@ public class VelopackUpdateServiceTests : IDisposable
         Assert.Null(result.Value);
     }
 
-    /// <summary>
-    /// The channel that reaches the feed is what keeps a Windows install away from the macOS package in the same release.
-    /// </summary>
     [Fact]
-    public async Task CheckAsync_AsksTheFeed_ForThisBuildsPlatformAndArchitecture()
+    public async Task CheckAsync_WhenNightlyVersionDrops_OffersTheNewBuild()
+    {
+        Result<AppRelease?> result = await VelopackUpdateService.CheckAsync(
+            UpdateChannel.Nightly,
+            new Feed(_Package("0.0.0-nightly.5")),
+            new TestVelopackLocator(PackageId, "0.2.1-nightly.4", _packages),
+            TimeSpan.FromSeconds(5),
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Value);
+    }
+
+    [Fact]
+    public async Task CheckAsync_WithANightlyOffer_UsesItsBuildIdentityAndRollingReleasePage()
+    {
+        Result<AppRelease?> result = await _CheckAsync(
+            new Feed(_Package("0.0.0-nightly.6", "nightly-20260924.a1b2c3d.6")),
+            UpdateChannel.Nightly);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("nightly-20260924.a1b2c3d.6", result.Value?.Version);
+        Assert.Equal("https://github.com/EveTogether/EveTogether/releases/tag/nightly", result.Value?.Url);
+    }
+
+    /// <summary>
+    /// The channel that reaches the feed is what keeps a Windows install away from the macOS package in the same
+    /// release, and a stable install away from a nightly asset (ET-339).
+    /// </summary>
+    [Theory]
+    [InlineData(UpdateChannel.Stable)]
+    [InlineData(UpdateChannel.Nightly)]
+    public async Task CheckAsync_AsksTheFeed_ForThisBuildsPlatformArchitectureAndChannel(UpdateChannel channel)
     {
         var feed = new Feed();
 
-        await _CheckAsync(feed);
+        await _CheckAsync(feed, channel);
 
-        Assert.Equal(UpdateChannelName.Current, feed.AskedFor);
+        Assert.Equal(UpdateChannelName.For(channel), feed.AskedFor);
     }
 
     /// <summary>
@@ -147,15 +178,17 @@ public class VelopackUpdateServiceTests : IDisposable
     public void AccessToken_IsNone_WhichIsWhatKeepsDraftReleasesOut() =>
         Assert.Null(VelopackUpdateService.AccessToken);
 
-    [Fact]
-    public void Feed_IsTheProjectsGitHubReleases() =>
-        Assert.IsType<GithubSource>(VelopackUpdateService.Feed());
+    [Theory]
+    [InlineData(UpdateChannel.Stable)]
+    [InlineData(UpdateChannel.Nightly)]
+    public void Feed_IsTheProjectsGitHubReleases(UpdateChannel channel) =>
+        Assert.IsType<GithubSource>(VelopackUpdateService.Feed(channel));
 
     [Fact]
     public async Task DownloadAsync_WithoutAnInstalledCopy_ReportsNotInstalled()
     {
         Result result = await new VelopackUpdateService(NullLogger<VelopackUpdateService>.Instance).DownloadAsync(
-            new Feed(), locator: null, TimeSpan.FromSeconds(5), NullLogger.Instance, CancellationToken.None);
+            UpdateChannel.Stable, new Feed(), locator: null, TimeSpan.FromSeconds(5), NullLogger.Instance, CancellationToken.None);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(MessageCodes.UpdateNotInstalled, result.Messages.Single().Code);
@@ -168,7 +201,7 @@ public class VelopackUpdateServiceTests : IDisposable
     public async Task DownloadAsync_WithNothingNewerToFetch_Fails()
     {
         Result result = await new VelopackUpdateService(NullLogger<VelopackUpdateService>.Instance).DownloadAsync(
-            new Feed(_Package("0.1.0")), _Locator(), TimeSpan.FromSeconds(5), NullLogger.Instance, CancellationToken.None);
+            UpdateChannel.Stable, new Feed(_Package("0.1.0")), _Locator(), TimeSpan.FromSeconds(5), NullLogger.Instance, CancellationToken.None);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(MessageCodes.NotFound, result.Messages.Single().Code);
@@ -181,9 +214,9 @@ public class VelopackUpdateServiceTests : IDisposable
     public void ApplyDownloadedUpdateAndRestart_BeforeAnyDownload_IsANoOp() =>
         new VelopackUpdateService(NullLogger<VelopackUpdateService>.Instance).ApplyDownloadedUpdateAndRestart();
 
-    private Task<Result<AppRelease?>> _CheckAsync(Feed feed, TimeSpan? patience = null) =>
+    private Task<Result<AppRelease?>> _CheckAsync(Feed feed, UpdateChannel channel = UpdateChannel.Stable, TimeSpan? patience = null) =>
         VelopackUpdateService.CheckAsync(
-            feed, _Locator(), patience ?? TimeSpan.FromSeconds(5), NullLogger.Instance, CancellationToken.None);
+            channel, feed, _Locator(), patience ?? TimeSpan.FromSeconds(5), NullLogger.Instance, CancellationToken.None);
 
     private IVelopackLocator _Locator() => new TestVelopackLocator(PackageId, "0.2.0", _packages);
 

@@ -5,6 +5,7 @@ public static class EsiEndpoints
 {
     public const string Authorize = "https://login.eveonline.com/v2/oauth/authorize";
     public const string Token = "https://login.eveonline.com/v2/oauth/token";
+    public const string Revoke = "https://login.eveonline.com/v2/oauth/revoke";
     public const string Metadata = "https://login.eveonline.com/.well-known/oauth-authorization-server";
 
     // Compatibility-date model: the base URL is version-less and the pinned

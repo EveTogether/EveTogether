@@ -10,6 +10,7 @@ using EveUtils.Client.Esi;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.Platform;
+using EveUtils.Shared.Identity;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.ViewModels;
@@ -43,6 +44,7 @@ public partial class MetricsWindowViewModel : ViewModelBase, IDisposable
     private readonly DispatcherTimer _timer;
     private readonly ILocalCharacterPresence? _presence;
     private readonly IDisposable? _presenceSubscription;
+    private readonly ICharacterRegistry? _registry;
     private int _tick;
 
     public ObservableCollection<MetricsCharacterOption> Available { get; } = [];
@@ -69,6 +71,10 @@ public partial class MetricsWindowViewModel : ViewModelBase, IDisposable
             if (option.IsSelected)
                 AddRow(option);
         }
+
+        _registry = services.GetService<ICharacterRegistry>();
+        if (_registry is not null)
+            _registry.RegistryChanged += OnRegistryChanged;
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
         _timer.Tick += (_, _) => Tick();
@@ -106,6 +112,27 @@ public partial class MetricsWindowViewModel : ViewModelBase, IDisposable
         var row = Rows.FirstOrDefault(r => string.Equals(r.Character, option.Name, StringComparison.OrdinalIgnoreCase));
         if (row is not null)
             Rows.Remove(row);
+    }
+
+    private void OnRegistryChanged() => Dispatcher.UIThread.Post(() => _ = DropRemovedCharactersAsync());
+
+    // A character removed from this PC (ET-345) leaves the window rather than going on as a row that reads nothing.
+    // Local-only names (id 0) never were in the registry, so they are left alone.
+    private async Task DropRemovedCharactersAsync()
+    {
+        if (_registry is null)
+            return;
+
+        var registered = (await _registry.GetAllAsync())
+            .Select(character => character.EsiCharacterId ?? 0)
+            .ToHashSet();
+        foreach (var option in Available.Where(option => option.CharacterId > 0 && !registered.Contains(option.CharacterId)).ToList())
+        {
+            option.PropertyChanged -= OnOptionChanged;
+            RemoveRow(option);
+            Available.Remove(option);
+        }
+        RefreshSnapshots();
     }
 
     private void ApplyPresence()
@@ -157,6 +184,8 @@ public partial class MetricsWindowViewModel : ViewModelBase, IDisposable
     {
         _timer.Stop();
         _presenceSubscription?.Dispose();
+        if (_registry is not null)
+            _registry.RegistryChanged -= OnRegistryChanged;
         foreach (var option in Available)
             option.PropertyChanged -= OnOptionChanged;
     }

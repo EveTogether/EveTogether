@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
+using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Settings.Repositories;
 
 namespace EveUtils.Client.Imaging;
@@ -16,8 +17,10 @@ namespace EveUtils.Client.Imaging;
 /// Reuses the shared <c>evetech-images</c> HttpClient registered for <see cref="TypeImageProvider"/>.
 /// </summary>
 public sealed class CharacterPortraitProvider(IHttpClientFactory httpClientFactory, ISettingRepository settings, string dataDirectory)
-    : ICharacterPortraitProvider
+    : ICharacterPortraitProvider, ICharacterDataEraser
 {
+    public CharacterDataKind Kind => CharacterDataKind.Cache;
+
     private readonly string _cacheDirectory = Path.Combine(dataDirectory, "character-portraits");
     private readonly ConcurrentDictionary<string, Bitmap> _cache = new();
 
@@ -61,5 +64,32 @@ public sealed class CharacterPortraitProvider(IHttpClientFactory httpClientFacto
         {
             return null;
         }
+    }
+
+    public Task EraseAsync(int characterId, string characterName, CancellationToken cancellationToken = default)
+    {
+        var prefix = $"{characterId}_";
+        foreach (var key in _cache.Keys.Where(key => key.StartsWith(prefix, StringComparison.Ordinal)))
+            _cache.TryRemove(key, out _);
+
+        if (!Directory.Exists(_cacheDirectory))
+            return Task.CompletedTask;
+
+        // Best effort, like the token store: a render that stays behind is a public image, fetched again on demand.
+        foreach (var file in Directory.EnumerateFiles(_cacheDirectory, prefix + "*.png"))
+        {
+            try
+            {
+                File.Delete(file);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+
+        return Task.CompletedTask;
     }
 }

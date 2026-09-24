@@ -4,8 +4,8 @@ namespace EveUtils.Shared.Modules.Dogma;
 
 /// <summary>
 /// Where a fit's skill levels come from: every skill at a uniform planning level (1-5), or a character's actual levels.
-/// The character path is fed by an ESI skill import (esi-skills.read_skills.v1). Either way the engine only asks
-/// <see cref="LevelFor"/> and <see cref="InjectsAllSkills"/>.
+/// The character path is fed by an ESI skill import (esi-skills.read_skills.v1). Either way the engine injects
+/// <see cref="SkillTypeIdsToInject"/>, each at <see cref="LevelFor"/>.
 /// </summary>
 public sealed record SkillSource
 {
@@ -27,13 +27,16 @@ public sealed record SkillSource
     /// <summary>A character's actual skill levels (ESI snapshot + queue); skills absent from the map default to 0.</summary>
     public static SkillSource From(IReadOnlyDictionary<int, int> levels) => new(levels, 5);
 
-    /// <summary>True for an "all skills" baseline, where every skill from the SDE is injected at <see cref="LevelFor"/>;
-    /// false for a character snapshot, which injects only its trained skills.</summary>
+    /// <summary>True for an "all skills" baseline at one uniform level; false for a character snapshot.</summary>
     public bool InjectsAllSkills => _levels is null;
 
-    /// <summary>The explicit skill type ids to inject (a character snapshot's trained skills); empty for an all-skills
-    /// baseline, which instead injects every skill from the SDE.</summary>
-    public IReadOnlyCollection<int> ExplicitSkillTypeIds => _levels?.Keys.ToArray() ?? [];
+    /// <summary>
+    /// Every SDE skill, plus any skill a character snapshot holds that the SDE list lacks. A snapshot's untrained skill
+    /// is injected too, at level 0: a hull bonus is stored on the ship as its per-level value and only scaled by the
+    /// skill's own PreMul-by-skillLevel effect, so without the skill item the ship would count it as level I.
+    /// </summary>
+    public IEnumerable<int> SkillTypeIdsToInject(IReadOnlyList<int> sdeSkillTypeIds) =>
+        sdeSkillTypeIds.Union(_levels?.Keys ?? []);
 
     public int LevelFor(int skillTypeId) =>
         _levels is null ? _allLevel

@@ -199,7 +199,7 @@ A change is done only when **all** of these hold:
 - **Error paths and edge cases** are covered, not just the happy path.
 - **No secrets in the diff.**
 - No anti-slop signals (§ below).
-- Qodana-clean where Qodana runs (no new findings versus the baseline).
+- Qodana-clean where Qodana runs (no new findings).
 
 "Works on my screen" is not Done. "Build green" ≠ "works" ≠ "production-ready".
 

@@ -1,3 +1,4 @@
+using EveUtils.Server.Auth;
 using EveUtils.Server.Esi;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Modules.Esi;
@@ -5,6 +6,7 @@ using EveUtils.Shared.Modules.ServerAuth.Entities;
 using EveUtils.Shared.Modules.ServerAuth.Repositories;
 using EveUtils.Shared.Modules.ServerAuth.Repositories.Implementations;
 using EveUtils.Shared.Modules.ServerAuth.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -96,12 +98,24 @@ public sealed class ServerTokenRefreshServiceTests
                     LastRefreshedAt = time.GetUtcNow() - TimeSpan.FromMinutes(16)
                 });
                 await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+                var character = await db.Set<SyncedCharacter>().SingleAsync(TestContext.Current.CancellationToken);
+                db.Set<ServerSession>().Add(new ServerSession
+                {
+                    SyncedCharacterId = character.Id,
+                    AccessTokenHash = "access",
+                    RefreshTokenHash = "refresh"
+                });
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             }
 
             var repository = new ServerAuthRepository(factory);
             var services = new ServiceCollection()
                 .AddSingleton<IServerAuthRepository>(repository)
                 .AddSingleton<ITokenProtector, EmptyTokenProtector>()
+                .AddSingleton<IEsiTokenRevoker, NoRevoker>()
+                .AddSingleton(new EsiOptions { ClientSecret = "secret" })
+                .AddLogging()
+                .AddSingleton<SyncedCharacterReleaser>()
                 .BuildServiceProvider();
             var authClient = new FailingEsiAuthClient(exception);
             var logger = new CapturingLogger();
@@ -149,6 +163,12 @@ public sealed class ServerTokenRefreshServiceTests
             RefreshCalls++;
             return Task.FromException<EsiTokenSet>(exception);
         }
+    }
+
+    private sealed class NoRevoker : IEsiTokenRevoker
+    {
+        public Task RevokeRefreshTokenAsync(string refreshToken, string clientId, string? clientSecret = null, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class UnusedJwtValidator : IEsiJwtValidator

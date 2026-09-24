@@ -33,6 +33,7 @@ public sealed class ClientDbContext(DbContextOptions<ClientDbContext> options) :
         modelBuilder.ApplyConfiguration(new LocalCharacterConfiguration()); // client-local character registry
         modelBuilder.ApplyConfiguration(new CoupledServerConfiguration());      // client-local coupled servers + trust
         modelBuilder.ApplyConfiguration(new ClientServerSessionConfiguration()); // client-local server sessions
+        modelBuilder.ApplyConfiguration(new PendingServerRevokeConfiguration()); // client-local decouples the server has yet to hear about
         modelBuilder.ApplyConfiguration(new ClientInboxMessageConfiguration());  // client-local message inbox
         modelBuilder.ApplyConfiguration(new CachedExternalCharacterConfiguration()); // client-local external-character cache
     }

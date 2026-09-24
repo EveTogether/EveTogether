@@ -39,6 +39,10 @@ public interface IFleetRepository
     /// <summary>Active, publicly listable fleets on this server.</summary>
     Task<IReadOnlyList<FleetEntity>> ListOpenAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>True if the fleet is one <see cref="ListOpenAsync"/> would list — the same predicate, so "what a
+    /// non-member can discover" has one definition.</summary>
+    Task<bool> IsOpenAsync(long fleetId, CancellationToken cancellationToken = default);
+
     // --- Persistence + cleanup. The background sweep lists fleets by state, bumps a fleet's
     // activity timestamp on a member event, and hard-deletes a long-archived fleet (its wings/squads/
     // members/invites cascade via FK). ---

@@ -11,7 +11,9 @@ namespace EveUtils.Client.Dialogs;
 /// baseline for every fleet; a per-fleet override can still change them per fleet, and a shared fleet run its own
 /// loot, bounty and mining (ET-242, ET-234). Null = cancelled. <see cref="ReimportSde"/> is set when the user pressed
 /// "Re-download &amp; re-import" in the SDE section — the caller saves the other settings and then runs a forced SDE
-/// import (fallback/debug).
+/// import (fallback/debug). <see cref="IncludeNightlyBuilds"/> is only persisted as a choice when
+/// <see cref="ChannelChoiceMade"/> is set (ET-339) — touching an unrelated setting must never freeze a channel
+/// nobody actually picked.
 /// </summary>
 public sealed record SettingsResult(
     string GamelogDirectory, bool ShareLocation, bool ShareBounty, bool ShareCombat, bool LoadTypeImages,
@@ -25,4 +27,6 @@ public sealed record SettingsResult(
     bool ShareMining = false,
     bool AutoStartMissions = true,
     bool AutoStartSites = true,
-    DayOfWeek WeekStartsOn = DayOfWeek.Monday);
+    DayOfWeek WeekStartsOn = DayOfWeek.Monday,
+    bool IncludeNightlyBuilds = false,
+    bool ChannelChoiceMade = false);

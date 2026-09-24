@@ -219,22 +219,20 @@ public sealed class SdeSiteCatalogTests : IDisposable
     }
 
     [Fact]
-    public void SchemaVersion_IsNine_AndAStoreFromThePreviousVersionReadsAsUnavailable()
+    public void SchemaVersion_IsTen_AndAStoreFromThePreviousVersionReadsAsUnavailable()
     {
-        Assert.Equal(9, SdeSchema.SchemaVersion);
+        Assert.Equal(10, SdeSchema.SchemaVersion);
 
-        // A store left behind by the v8 build (ET-335's predecessor) has no regionId/Region/NpcCorporation/Faction
-        // shape. The accessor must refuse it outright so SdeImporter.CheckForUpdateAsync sees a null local version
-        // and offers the rebuild — this is the test that goes red if the version bump itself is forgotten.
+        // A v9 store lacks Type.description. Refusing it lets the importer rebuild before any type query runs.
         Directory.CreateDirectory(_dir);
-        var dbPath = Path.Combine(_dir, "v8.db");
+        var dbPath = Path.Combine(_dir, "v9.db");
         using (var connection = new SqliteConnection($"Data Source={dbPath};Pooling=False"))
         {
             connection.Open();
             using var command = connection.CreateCommand();
             command.CommandText =
                 "CREATE TABLE Meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;" +
-                $"INSERT INTO Meta VALUES ('{SdeSchema.MetaSchemaVersion}', '8'), ('{SdeSchema.MetaBuildNumber}', '3539543');";
+                $"INSERT INTO Meta VALUES ('{SdeSchema.MetaSchemaVersion}', '9'), ('{SdeSchema.MetaBuildNumber}', '3539543');";
             command.ExecuteNonQuery();
         }
 

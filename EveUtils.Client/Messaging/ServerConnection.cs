@@ -199,6 +199,7 @@ public sealed class ServerConnection
                 using var call = client.Attach(headers, cancellationToken: cancellationToken);
                 _call = call;
                 SetState(ServerConnectionState.Connected);
+                _ = _services.GetRequiredService<PendingServerRevokeFlusher>().FlushAsync(_serverAddress, cancellationToken);
 
                 // The backoff resets on the first message off the wire, not here: attaching only means the socket
                 // and the stream object exist. A server presenting a certificate the pin refuses got this far every

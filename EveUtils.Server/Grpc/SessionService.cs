@@ -9,7 +9,7 @@ namespace EveUtils.Server.Grpc;
 /// presence for the admin panel. Both validate the server-issued session token (not the EVE
 /// token).
 /// </summary>
-public sealed class SessionService(ServerSessionService sessions) : Session.SessionBase
+public sealed class SessionService(ServerSessionService sessions, SyncedCharacterReleaser releaser) : Session.SessionBase
 {
     public override async Task<SessionReply> Refresh(RefreshRequest request, ServerCallContext context)
     {
@@ -62,10 +62,11 @@ public sealed class SessionService(ServerSessionService sessions) : Session.Sess
     public override async Task<RevokeReply> Revoke(RevokeRequest request, ServerCallContext context)
     {
         var revoked = await sessions.RevokeAsync(request.SessionToken, context.CancellationToken);
-        return new RevokeReply
-        {
-            Ok = revoked,
-            Message = revoked ? "ok" : "No matching session."
-        };
+        if (revoked is null)
+            return new RevokeReply { Ok = false, Message = "No matching session." };
+
+        // Not the call's token: a client that gave up waiting must not leave the character deleted but its token un-revoked.
+        await releaser.ReleaseIfWithoutSessionAsync(revoked.SyncedCharacterId, CancellationToken.None);
+        return new RevokeReply { Ok = true, Message = "ok" };
     }
 }

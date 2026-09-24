@@ -1,3 +1,4 @@
+using System.Globalization;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 
 namespace EveUtils.Client.Fleet;
@@ -93,6 +94,16 @@ public sealed class MetricShareSnapshot(
     public static string OverrideKeyFor(long fleetId, int characterId, MetricKind kind) =>
         $"fleet.{fleetId}.{characterId}.share." +
         (kind == MetricKind.Location ? "location" : IsCombat(kind) ? "combat" : kind.ToString().ToLowerInvariant());
+
+    /// <summary>Whether <paramref name="key"/> is one of <see cref="OverrideKeyFor"/>'s keys for this character, in any
+    /// fleet — what removing the character deletes (ET-345).</summary>
+    public static bool IsOverrideKeyOf(string key, int characterId)
+    {
+        string[] parts = key.Split('.');
+        return parts is ["fleet", var fleetId, var owner, "share", _]
+               && long.TryParse(fleetId, NumberStyles.None, CultureInfo.InvariantCulture, out _)
+               && owner == characterId.ToString(CultureInfo.InvariantCulture);
+    }
 
     /// <summary>The per-run key for loot or bounty (ET-242), one for every own character on the run: the run window's
     /// toggle is the run's, not a character's. Absent = the fleet's override, then shared.</summary>

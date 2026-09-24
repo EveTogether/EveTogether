@@ -6,7 +6,6 @@ using EveUtils.Server.Backup;
 using EveUtils.Server.Checks;
 using EveUtils.Server.Components;
 using EveUtils.Shared.Modules.Fittings.Repositories;
-using EveUtils.Server.Contracts;
 using EveUtils.Server.Data;
 using EveUtils.Server.Esi;
 using EveUtils.Server.Fittings;
@@ -41,8 +40,6 @@ using EveUtils.Shared.Modules.ServerAuth;
 using EveUtils.Shared.Modules.ServerAuth.Entities;
 using EveUtils.Shared.Modules.ServerAuth.Repositories;
 using EveUtils.Shared.Modules.ServerAuth.Services;
-using EveUtils.Shared.Modules.Ships.Commands;
-using EveUtils.Shared.Modules.Ships.Queries;
 using EveUtils.Shared.Modules.Sync.Commands;
 using EveUtils.Shared.Modules.Sync.Queries;
 using EveUtils.Shared.Runtime;
@@ -191,6 +188,7 @@ builder.Services.AddWireEvents();
 builder.Services.AddSingleton<ConnectedClients>();
 builder.Services.AddHostedService<EventBusKeepaliveService>(); // liveness ping → clients detect a vanished server (tunnel half-open), ghosts get evicted
 builder.Services.AddScoped<FleetBroadcastResolver>();       // Live broadcast set = roster members ∩ presence
+builder.Services.AddScoped<FleetChangeAnnouncer>();        // lifecycle push: public fleet → every connected client, else roster
 builder.Services.AddScoped<FleetCleanupRunner>();           // one cleanup sweep (archive/hard-delete)
 builder.Services.AddScoped<FleetAutoStopRunner>();          // one auto-stop sweep (emptied/gone-quiet fleet → standing by)
 builder.Services.AddHostedService<FleetCleanupService>();   // periodic fleet pass: auto-stop, then cleanup
@@ -515,7 +513,7 @@ using (var scope = app.Services.CreateScope())
         var protector = scope.ServiceProvider.GetRequiredService<ITokenProtector>();
         // Two synthetic characters + sessions so two client instances can connect at once for the fleet
         // two-client scenarios (invite round-trip, member graphs) without a live EVE SSO. The "-2" token is the
-        // second instance's bearer (EVEUTILS_INSTANCE=B + --dev-couple <token> ...).
+        // second instance's bearer (EVETOGETHER_INSTANCE=B + --dev-couple <token> ...).
         var devCharacters = new[]
         {
             (Token: devToken, Name: "DevTester", Id: 91000000),
@@ -645,22 +643,6 @@ app.MapGet("/status", () => Results.Ok(new
     provider,
     message = "EVE Together server"
 }));
-
-// Shared module (Ships)
-app.MapGet("/ships", (IDispatcher dispatcher, CancellationToken ct) =>
-    dispatcher.Query(new GetShipsQuery(), ct));
-
-app.MapPost("/ships", async (CreateShipRequest request, IDispatcher dispatcher, CancellationToken ct) =>
-{
-    var result = await dispatcher.Send(new AddShipCommand(request.Name, request.Class, request.Mass), ct);
-    return result.IsSuccess
-        ? Results.Created($"/ships/{result.Value}", new { id = result.Value })
-        : Results.BadRequest(result.Messages);
-});
-
-// Server-only module (Sync)
-app.MapGet("/sync-logs", (IDispatcher dispatcher, CancellationToken ct) =>
-    dispatcher.Query(new GetSyncLogsQuery(), ct));
 
 // Mode B SSO callback: EVE redirects the browser here (the server has its own ESI app + callback).
 // The server completes the token exchange itself; the client just polls ClaimPairing.

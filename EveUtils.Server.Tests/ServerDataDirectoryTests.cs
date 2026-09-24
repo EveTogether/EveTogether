@@ -66,7 +66,7 @@ public class ServerDataDirectoryTests : IDisposable
     public void Resolve_Default_IsNotInsideTheClientsInstanceNamespace()
     {
         var clientRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EveUtils");
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EveTogetherData");
 
         var location = ServerDataDirectory.Resolve(null, null);
 
