@@ -47,6 +47,11 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private CheckBox _openFleetRunWindowBox = null!;
     private CheckBox? _autoPublishFleetRunsBox;
     private CheckBox _checkUpdatesOnStartupBox = null!, _watchClipboardBox = null!;
+    private CheckBox _includeNightlyBuildsBox = null!;
+
+    // Set once the initial value has been applied, so reacting to that initial set does not itself count as the
+    // operator choosing a channel (ET-339) — only a later Checked/Unchecked does.
+    private bool _channelTouched;
     private CheckBox _autoStartMissionsBox = null!, _autoStartSitesBox = null!;
     private TextBlock _clipboardConsumersBlock = null!, _clipboardUnsupportedBlock = null!;
     private ComboBox _toastPositionBox = null!;
@@ -94,7 +99,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     }
 
     public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null,
-        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday) : this()
+        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false) : this()
     {
         _detectedDefault = detectedDefault;
         _localApi = localApiServer;
@@ -110,6 +115,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _openFitDetailAfterImportBox = this.FindControl<CheckBox>("OpenFitDetailAfterImportBox")!;
         _openFleetRunWindowBox = this.FindControl<CheckBox>("OpenFleetRunWindowBox")!;
         _checkUpdatesOnStartupBox = this.FindControl<CheckBox>("CheckUpdatesOnStartupBox")!;
+        _includeNightlyBuildsBox = this.FindControl<CheckBox>("IncludeNightlyBuildsBox")!;
         _watchClipboardBox = this.FindControl<CheckBox>("WatchClipboardBox")!;
         _autoStartMissionsBox = this.FindControl<CheckBox>("AutoStartMissionsBox")!;
         _autoStartSitesBox = this.FindControl<CheckBox>("AutoStartSitesBox")!;
@@ -161,6 +167,12 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         if (_autoPublishFleetRunsBox is not null)
             _autoPublishFleetRunsBox.IsChecked = autoPublishFleetRuns;
         _checkUpdatesOnStartupBox.IsChecked = checkUpdatesOnStartup;
+
+        // Set before wiring the handler below, so applying the resolved default does not itself mark the
+        // channel as touched (ET-339) — only an actual click on this box does.
+        _includeNightlyBuildsBox.IsChecked = includeNightlyBuilds;
+        _includeNightlyBuildsBox.IsCheckedChanged += (_, _) => _channelTouched = true;
+
         _autoStartMissionsBox.IsChecked = autoStartMissions;
         _autoStartSitesBox.IsChecked = autoStartSites;
         this.FindControl<TextBlock>("SdeVersionBlock")!.Text = sdeVersionLabel;
@@ -525,6 +537,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         var autoStartMissions = _autoStartMissionsBox.IsChecked ?? true;
         var autoStartSites = _autoStartSitesBox.IsChecked ?? true;
         var weekStartsOn = _weekStartsOnBox.SelectedIndex == 1 ? DayOfWeek.Sunday : DayOfWeek.Monday;
-        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn);
+        var includeNightlyBuilds = _includeNightlyBuildsBox.IsChecked ?? false;
+        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, _channelTouched);
     }
 }

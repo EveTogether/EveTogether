@@ -79,6 +79,9 @@
                         <CheckBox x:Name="CheckUpdatesOnStartupBox" Content="Check for updates on startup"/>
                         <TextBlock Text="Runs in the background right after the window opens and never delays startup. You can always check manually from About. Turning this off does not stop you from updating — it only stops the check."
                                    FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                        <CheckBox x:Name="IncludeNightlyBuildsBox" Content="Also check for nightly builds" Margin="0,6,0,0"/>
+                        <TextBlock Text="A nightly is a rolling build of the latest commits, replaced every night — expect things to break. Nightly builds are ahead of the next stable release, so switching back to stable does not undo one: you stay on it until a newer stable version is published."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
                     </StackPanel>
 
                     <StackPanel Spacing="3">

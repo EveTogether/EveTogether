@@ -11,6 +11,10 @@ server as a Docker image to `ghcr.io/evetogether/eve-together-server` — tagged
 (always the newest build) and with the release version (`:X.Y.Z`). The notes for a release are
 taken from the matching `## vX.Y.Z` section below.
 
+A separate nightly pipeline (`.github/workflows/nightly.yml`) publishes a rolling pre-release
+build of `main` on its own schedule, replacing itself each time; its own commit list is its
+release notes, not this file.
+
 ## [Unreleased]
 
 - **Changed: the local EVE database now also carries regions, NPC corporations and factions.** No visible change
@@ -21,6 +25,12 @@ taken from the matching `## vX.Y.Z` section below.
   default; characters that are already signed in need to sign in again to grant it. Every 5 minutes it picks up new kills and
   losses of the last 90 days and keeps them on your computer, also after they drop out of that window. This is the
   groundwork for linking a lost ship to its run and for a kills overview.
+- **Added: an opt-in nightly build, and a setting to follow it.** Settings → General now has an "Also check for
+  nightly builds" toggle next to the update check. Leave it off and you stay on stable, tagged releases — the
+  default for everyone. Turn it on and the app starts looking for nightlies too: a rolling, replaced-every-night
+  build of the latest commits, published automatically whenever something on `main` actually changed. Nightlies
+  are ahead of the next stable release, so switching back to stable doesn't undo one — you stay on it until a
+  newer stable version ships.
 - **Added: rewrite what a run cost you by hand.** A saved activity's CONSUMABLES block has a REWRITE CONSUMABLES BY
   HAND button for each of your characters, the same box you already use to rewrite loot. Set the filament to 0 when a
   fleetmate's was used, or add the ammo, drones, boosters and nanite paste you went through. Every line is valued at
