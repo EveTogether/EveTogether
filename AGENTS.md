@@ -112,6 +112,26 @@ Rules:
 - Host differences go through **`IRuntimeContext { ExecutionHost Host }`** (`ExecutionHost.Client | Server`),
   registered by each host at startup. **No `#if`** for host branching.
 
+### Every state-changing command publishes a signal
+
+- A command handler that changes state publishes **one module signal** (`<Module>ChangedEvent`, e.g.
+  `RunsChangedEvent`, `FleetChangedEvent`) on `EventTarget.Local`, **after** the write succeeded, carrying the id of
+  what changed and the kind of change (an enum). No signal for a failure or an idempotent no-op.
+- The handler publishes **Local only**. What crosses the wire, and to whom, is decided per host by a **relay
+  subscriber** on that signal — never by the handler and never by hand at a gRPC method or service edge.
+- **Echo rule:** the server relays to the acting client too; a client does not publish for a change it made through a
+  server — it hears it back like everyone else. Client-only paths (the local library, local fleets) publish through
+  their own handler.
+- **Subscribers do no work inline and never throw.** `InProcessEventBus` awaits every subscriber inside the command,
+  after the commit: slow work holds the command up, and an exception reports a failure for a saved change. A client
+  screen listens through `ChangeFeed<TEvent>` (batched, UI thread, one reload at a time), not on the bus.
+- **Enforced by `CommandSignalCoverageTests`:** every command in `Shared` has a scenario proving it signals, a reason
+  on the exemption list, or an entry on the known-gap list citing its ticket. The known-gap list only shrinks — a new
+  command never goes on it.
+
+Background and the rejected alternatives (a dispatcher behaviour, an EF interceptor) are in
+[`docs/architecture.md`](docs/architecture.md#change-signals).
+
 ### Do NOT introduce these dependencies
 
 This codebase deliberately uses **its own thin layers**. Adding the libraries below is the single

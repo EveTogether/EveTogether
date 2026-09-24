@@ -90,6 +90,58 @@ register automatically through the shared marker-scan.
   flags `Local`/`Remote`/`Both`. **Remote** goes through `IRemoteEventTransport` →
   `GrpcRemoteEventTransport` (client) ↔ `EventBusStream.Attach` bidi stream (server). Auth-gated.
 
+## Change signals
+
+Every state-changing command handler publishes **one module signal** once its write succeeded — the rule is in
+[`AGENTS.md`](../AGENTS.md) §4. It exists because the alternative, announcing by hand at whatever edge a change
+passes, kept missing edges: five bugs on one day (ET-10, ET-11, ET-20, ET-360, ET-378) were each a change nobody
+heard about. Runs had it right since ET-222; ET-379 makes it the rule for every module.
+
+```
+handler ──(write ok)──► <Module>ChangedEvent (Local) ──► ChangeFeed<TEvent> ──► screens (UI thread, batched)
+                                                    └──► relay subscriber (per host) ──► wire, to its audience
+```
+
+- **The signal** is `<Module>ChangedEvent` — the id of what changed plus a kind enum (`RunsChangedEvent`,
+  `FleetChangedEvent`, `CompositionChangedEvent`). One per module or sub-module, not one per command: a screen
+  subscribes once and every new command reaches it without a new pairing.
+- **Local only from the handler.** The same handler runs on the client (local fleets, the local library) and on the
+  server, and only the host knows who else must hear it. So each host has a **relay subscriber** on the signal:
+  - *server* — a relay (e.g. `FleetChangeAnnouncer`) subscribes and pushes the change over the bus stream to its
+    audience (roster, or every connected character for a listed fleet);
+  - *client* — `ServerConnection` republishes a server-sourced event on the local bus, stamped with its server, so
+    a screen hears a server change and a local one through the same signal.
+- **Echo rule.** The server relays to the acting client as well; a client does not publish for a change it made
+  through a server, it hears it back like everyone else. One source per change: no double reload, no "did I already
+  publish this" bookkeeping, and the client never announces a change the server then refused.
+- **Subscribers never work inline and never throw.** `InProcessEventBus` awaits each subscriber inside the
+  publishing command, after the commit — a slow subscriber holds the command up, a throwing one turns a saved change
+  into a reported failure. Client screens therefore listen through `ChangeFeed<TEvent>`
+  (`EveUtils.Client/Messaging/`): the bus callback only records the change; a 250 ms window folds a burst into one
+  batch, delivered on the UI thread, one reload at a time per screen. `RunChangeFeed` is the Runs module's feed on top
+  of it.
+- **Enforced by `CommandSignalCoverageTests`.** A reflection half fails for any command in `Shared` that has neither a
+  scenario proving it signals (`RunsChangedSignalCoverageTests` holds the Runs ones), nor a reason on the exemption
+  list, nor a ticket on the known-gap list; a behaviour half runs each scenario against a real store and bus. The
+  known-gap list is a ratchet: `KnownGapCount` only goes down.
+
+**Rejected:** a *dispatcher behaviour* that publishes after every command — it knows neither the id nor the audience,
+signals falsely on idempotent no-ops and duplicates on nested dispatch. An *EF `SaveChanges` interceptor* —
+`ExecuteUpdate`/`ExecuteDelete` bypass the change tracker, it sees rows rather than meaning, fires on high-frequency
+writes too, and risks echo.
+
+**Where the code does not follow it yet** (tracked under epic ET-379):
+
+- Fleet structure, roster and invite commands and all composition commands publish nothing; the server announces
+  them by hand in `FleetsGrpcService`, the client through `CompositionChangePublisher` and
+  `FleetRosterWatch.Announce` (ET-381).
+- Compositions break the echo rule both ways: the server leaves the acting character out of `composition.changed`
+  (`FleetsGrpcService.AnnounceCompositionChangedAsync`), and the client publishes for a change it made on a server
+  (ET-381).
+- Fittings, Messaging, Settings, ApiKeys and the remaining modules: a signal or a reasoned exemption (ET-382).
+- Writes outside the dispatcher — `DataAdminService`, `FleetCleanupRunner`, `ClientFleetService.AddLocalCharacterAsync`
+  — are invisible to the test (ET-383).
+
 ## Auth — two per-character modes
 
 - **Mode A (local)** 🏠 — the client does the EVE SSO itself; the token stays **client-side, encrypted**.

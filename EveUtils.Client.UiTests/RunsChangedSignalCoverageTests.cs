@@ -19,11 +19,10 @@ namespace EveUtils.Client.UiTests;
 /// <see cref="RunsChangedEvent"/>, so a command that changes a run and forgets to publish it leaves every one of them
 /// stale — the exact gap ET-189, ET-203 and ET-220 each had to close by hand for one command at a time.
 ///
-/// Two halves. The first finds every command the Runs module handles, by reflection, and fails for one that has
-/// neither a scenario below nor an entry on the exemption list: writing a new command means deciding here which it
-/// is. The second runs each scenario against a real store and the real bus and fails when the command did not
-/// publish the signal for the run it changed. So a new command cannot slip past unseen, and one with a scenario
-/// cannot forget to signal.
+/// Every run command either has a scenario below or a reason on <see cref="CommandSignalCoverageTests"/>'s exemption
+/// list — that test's reflection half enforces it for every module, counting these scenarios as proof. Each scenario
+/// here runs against a real store and the real bus and fails when the command did not publish the signal for the run
+/// it changed.
 /// </summary>
 public sealed class RunsChangedSignalCoverageTests
 {
@@ -32,41 +31,11 @@ public sealed class RunsChangedSignalCoverageTests
     private const string ServerAddress = "https://server.invalid";
     private static readonly DateTime StartedAtUtc = new(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
 
-    /// <summary>Commands in the Runs module that change nothing a screen shows about a run, each with the reason. Empty
-    /// today: every run command there changes something the runs screen, the dashboard or the detail screen reads.
-    /// An entry here is a claim a reviewer has to agree with, not a way to make this test pass.</summary>
-    private static readonly IReadOnlyDictionary<Type, string> Exempt = new Dictionary<Type, string>
-    {
-        // ET-254: writes Run.LastAliveAtUtc, a field no screen shows at all — it exists only for
-        // StopRunsLeftRunningCommandHandler to read back at the next startup. Publishing RunsChangedEvent for it
-        // would mean every screen showing runs redrawing once a minute, for every open run window, for a change
-        // none of them can display.
-        [typeof(TouchRunAliveCommand)] = "writes a field (LastAliveAtUtc) that exists only for the next startup's "
-            + "sweep to read, never shown on any screen — a signal for it would be a redraw nobody can see the point of",
-        // ET-245: writes RunGroupOrigin.ServerAddress, which no screen shows — only FleetRunAutoPublisher reads it, to
-        // know where a fleet run goes. It never touches a run, and the publisher itself sends it from inside its own
-        // handling of RunsChangedEvent, so a signal here would only hand that handler its own write back.
-        [typeof(RecordRunGroupServerCommand)] = "writes which server a group's fleet lives on, read by the automatic "
-            + "publisher alone and shown nowhere; it changes no run",
-        // ET-228, widened to every archetype by ET-275: its only effect is matching a run's SiteName against the
-        // SDE's own site catalogue, and this harness's TestClientInstance.Create() below carries no SDE catalogue at
-        // all — every scenario shares one instance with no per-scenario override, so there is no fixture strong
-        // enough to make this command do anything here. It does change what a screen shows (TYPE) and does publish
-        // RunsChangedEvent through the RebuildActivitySummariesCommand it delegates to once repaired — proven
-        // directly, against a FakeSdeAccessor seeded with the site it must find, in
-        // RepairSiteTypeIdsCommandHandlerTests instead.
-        [typeof(RepairSiteTypeIdsCommand)] = "needs the SDE's own site catalogue to do anything, which this shared "
-            + "harness has no way to seed per scenario; its signal is proven in RepairSiteTypeIdsCommandHandlerTests "
-            + "against a FakeSdeAccessor instead",
-        // ET-271: only ever writes a line a character's own gamelog file carries, which this shared harness has no
-        // directory for; it publishes per run it added to, and HomefrontMoneyScenarioTests.S11 drives it end to end.
-        [typeof(ImportRunBountyCommand)] = "needs a character's own gamelog file on disk to add anything, which this "
-            + "shared harness has no directory for; proven end to end in HomefrontMoneyScenarioTests.S11",
-        [typeof(ImportMissingGroupBountyCommand)] = "writes no run of its own: it only picks the runs and hands them to "
-            + "ImportRunBountyCommand, whose own writes are the ones that signal"
-    };
+    /// <summary>The run commands a scenario here proves to signal.</summary>
+    internal static IEnumerable<Type> ProvenCommands => Scenarios.Keys;
 
-    /// <summary>For every other command: real state to run it against, and the run (or group) it has to name.</summary>
+    /// <summary>For every run command not exempt: real state to run it against, and the run (or group) it has to
+    /// name.</summary>
     private static readonly IReadOnlyDictionary<Type, Arrange> Scenarios = new Dictionary<Type, Arrange>
     {
         [typeof(StartRunCommand)] = (dispatcher, cancellationToken) => Task.FromResult(new Act(
@@ -279,26 +248,7 @@ public sealed class RunsChangedSignalCoverageTests
         return names;
     }
 
-    /// <summary>The reflection half. Counter-proof, measured: a <c>ProbeRunCommand</c> and handler dropped into
-    /// <c>Modules/Runs/Commands</c> with no entry here turns this red, naming it.</summary>
-    [Fact]
-    public void EveryRunCommand_HasAScenarioProvingItSignals_OrAReasonItNeedNot()
-    {
-        Type[] commands = _RunCommands();
-        Assert.NotEmpty(commands);
-
-        Type[] unaccounted = [.. commands.Where(command => !Scenarios.ContainsKey(command) && !Exempt.ContainsKey(command))];
-        Assert.True(unaccounted.Length == 0,
-            "These run commands have no scenario proving they publish RunsChangedEvent, and no reason on the exemption "
-            + $"list why they need not: {string.Join(", ", unaccounted.Select(command => command.Name))}. Add a scenario "
-            + "to RunsChangedSignalCoverageTests — and have the handler publish the signal once its write is done.");
-
-        Assert.DoesNotContain(Scenarios.Keys.Concat(Exempt.Keys), listed => !commands.Contains(listed));
-        Assert.Empty(Scenarios.Keys.Intersect(Exempt.Keys));
-        Assert.All(Exempt, exemption => Assert.False(string.IsNullOrWhiteSpace(exemption.Value)));
-    }
-
-    /// <summary>The behaviour half. Counter-proof, measured: take the publish back out of
+    /// <summary> Counter-proof, measured: take the publish back out of
     /// <c>AddRunBountyEntryCommandHandler</c> — the handler that published nothing before ET-222 — and its case goes
     /// red with no signal at all.</summary>
     [AvaloniaTheory]
@@ -386,19 +336,6 @@ public sealed class RunsChangedSignalCoverageTests
         }),
         SentAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
     };
-
-    private static Type[] _RunCommands() =>
-    [
-        .. typeof(StartRunCommand).Assembly.GetTypes()
-            .Where(type => type is { IsClass: true, IsAbstract: false }
-                           && type.Namespace?.StartsWith("EveUtils.Shared.Modules.Runs", StringComparison.Ordinal) == true)
-            .SelectMany(type => type.GetInterfaces())
-            .Where(contract => contract.IsGenericType
-                               && (contract.GetGenericTypeDefinition() == typeof(ICommandHandler<,>)
-                                   || contract.GetGenericTypeDefinition() == typeof(ICommandHandler<>)))
-            .Select(contract => contract.GetGenericArguments()[0])
-            .Distinct()
-    ];
 
     private static StartRunCommand _Start(string? groupCode = null) =>
         new(Pilot, ActivityKind.Site, StartedAtUtc, 1234, "Homefront", 30000142, groupCode);

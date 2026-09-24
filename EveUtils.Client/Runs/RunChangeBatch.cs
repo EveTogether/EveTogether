@@ -25,6 +25,14 @@ public sealed class RunChangeBatch
     public bool Concerns(IEnumerable<Guid> runIds, string? groupCode) =>
         IsUnscoped || groupCode is not null && _groupCodes.Contains(groupCode) || runIds.Any(_runIds.Contains);
 
+    internal static RunChangeBatch Of(IEnumerable<RunsChangedEvent> changes)
+    {
+        var batch = new RunChangeBatch();
+        foreach (RunsChangedEvent change in changes)
+            batch.Add(change.Data);
+        return batch;
+    }
+
     internal void Add(RunsChangedEventData change)
     {
         if (change.RunId is { } runId)
