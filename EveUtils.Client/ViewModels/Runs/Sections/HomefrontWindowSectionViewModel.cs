@@ -91,6 +91,8 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     private volatile bool _isStoredStale = true;
     private bool _isReadingStored;
     private DateTime? _changedSinceUtc;
+    // The last tick's own write, so BeforeSaveAsync can await it (ET-375) — OnIsInSiteChanged cannot await directly.
+    private Task? _pendingHandChange;
     private DateTime? _sentAtUtc;
     private DateTime _lastSetAtUtc;
     private readonly SemaphoreSlim _writeGate = new(1, 1);
@@ -210,33 +212,30 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         Outcome = outcome;
         OutcomeIsFromGameLog = false;
         _isOutcomeSetByHand = true;
-        // Awaited (ET-287, ET-375): the write used to be fire-and-forget, which was effectively synchronous while
-        // Microsoft.Data.Sqlite's "async" API did its work inline — a reader right after this call always saw the
-        // pick already stored. Once ET-287 moved the write onto a real background thread, that was no longer true:
-        // the run's own automatic default write (Completed, from a fresh run or the "pale shadow" gamelog line)
-        // could still land after this one, with a later clock-based SetAtUtc, and silently win. Awaiting here makes
-        // "a click goes over whatever stands" true again.
+        // Awaited (ET-287, ET-375): fire-and-forget let the run's own automatic write land after this one and
+        // silently win once the write genuinely moved off the UI thread — see PR for the full race. Awaiting
+        // makes "a click goes over whatever stands" true again.
         await _NoteChangeByHandAsync();
     }
 
     [RelayCommand(CanExecute = nameof(_CanIncreaseWave))]
-    private void IncreaseWave() => _SetWaveCount(CompletedWaveCount + 1);
+    private Task IncreaseWaveAsync() => _SetWaveCountAsync(CompletedWaveCount + 1);
 
     private bool _CanIncreaseWave() => CompletedWaveCount < AllAarWaves;
 
     [RelayCommand(CanExecute = nameof(_CanDecreaseWave))]
-    private void DecreaseWave() => _SetWaveCount(CompletedWaveCount - 1);
+    private Task DecreaseWaveAsync() => _SetWaveCountAsync(CompletedWaveCount - 1);
 
     private bool _CanDecreaseWave() => CompletedWaveCount > 0;
 
-    private void _SetWaveCount(int count)
+    private async Task _SetWaveCountAsync(int count)
     {
         if (!CanDecide || count is < 0 or > AllAarWaves)
             return;
 
         CompletedWaveCount = count;
         _isOutcomeSetByHand = true;
-        _ = _NoteChangeByHandAsync();
+        await _NoteChangeByHandAsync();
     }
 
     /// <summary>A click is stored the moment it is made (I1, SetRunAttendanceCommand): never held here until a bundle
@@ -251,11 +250,9 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         _handChangeCount++;
         _isChangedByHand = true;
         _changedSinceUtc ??= _nowUtc;
-        // _WriteUnderGateAsync silently drops any write, forced included, until _own is loaded and _stored has been
-        // read once (ET-287, ET-375). Both used to finish inline by the time a real click could ever happen; no
-        // longer guaranteed off the UI thread, so a forced write reads them itself here — straight off the store,
-        // not through _LoadOwnAsync/_ReadStoredIfDueAsync's own "already running, skip" guards, which a tick's own
-        // unawaited attempt may still be holding without this call having any way to wait on that one instead.
+        // _WriteUnderGateAsync drops any write, forced included, until _own/_stored are loaded (ET-287, ET-375).
+        // Read directly here rather than through _LoadOwnAsync/_ReadStoredIfDueAsync's own "already running, skip"
+        // guards, which a tick's unawaited attempt may still be holding (see PR for the full race).
         if (!_isOwnLoaded)
         {
             _own = await Task.Run(() => AttendanceRoster.OwnCharacterIdsAsync(Context.Services));
@@ -275,7 +272,9 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
                 _stored = read.Value;
                 _storedReadAtUtc = _nowUtc;
                 if (_stored is { } stored && stored.SetAtUtc > _lastSetAtUtc)
+                {
                     _lastSetAtUtc = stored.SetAtUtc;
+                }
             }
         }
         _Rebuild(_nowUtc);
@@ -334,6 +333,12 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     /// without waiting out the bundle window — SAVE commits the rows and adds up the total straight after this.</summary>
     public override async Task BeforeSaveAsync()
     {
+        // A tick's own write (ET-375) is not awaited where it is made — OnIsInSiteChanged is a property setter, not
+        // an async command — so SAVE, the point that must never commit ahead of it, awaits it here instead.
+        if (_pendingHandChange is { } pending)
+        {
+            await pending;
+        }
         DateTime nowUtc = DateTime.UtcNow;
         await _LoadOwnAsync();
         if (_storedReadAtUtc is null)
@@ -371,20 +376,20 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     }
 
     [RelayCommand]
-    private void IncreaseNotOnRoster() => _SetNotOnRoster(NotOnRosterCount + 1);
+    private Task IncreaseNotOnRosterAsync() => _SetNotOnRosterAsync(NotOnRosterCount + 1);
 
     [RelayCommand(CanExecute = nameof(CanDecreaseNotOnRoster))]
-    private void DecreaseNotOnRoster() => _SetNotOnRoster(NotOnRosterCount - 1);
+    private Task DecreaseNotOnRosterAsync() => _SetNotOnRosterAsync(NotOnRosterCount - 1);
 
     private bool CanDecreaseNotOnRoster() => NotOnRosterCount > 0;
 
-    private void _SetNotOnRoster(int count)
+    private async Task _SetNotOnRosterAsync(int count)
     {
         if (!CanDecide || count < 0)
             return;
 
         NotOnRosterCount = count;
-        _ = _NoteChangeByHandAsync();
+        await _NoteChangeByHandAsync();
     }
 
     // ── Who decides ─────────────────────────────────────────────────────────────────────────────────
@@ -743,7 +748,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         else
             _overrides[row.CharacterId] = row.IsInSite;
 
-        _ = _NoteChangeByHandAsync();
+        _pendingHandChange = _NoteChangeByHandAsync();
     }
 
     /// <summary>A figure typed over the table's on a Local row (ET-271) — written onto that character's own run, and

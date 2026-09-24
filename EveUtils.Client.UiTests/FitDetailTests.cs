@@ -596,14 +596,9 @@ public class FitDetailTests
     [Fact]
     public async Task SkillGap_Estimate_UnaffectedByImplantTypeIds_SinceEsiAttributesAreAlreadyEffective()
     {
-        // ET-349 fixed a double count: ESI's /characters/{id}/attributes/ already folds attribute-implant bonuses
-        // into the reported values, so CharacterAttributeResolver.Resolve() now returns those ESI attributes
-        // unchanged instead of adding the SDE implant bonus a second time. FakeAttributesRepo below stands in for
-        // that ESI read and reports the same Perception 20 / Willpower 20 regardless of implantTypeIds, exactly
-        // like a real ESI response would once the implant is already reflected in the attribute values themselves
-        // — so an implant type id list passed separately can no longer change the training-rate estimate.
-        // rate = Perception(20) + Willpower(20)/2 = 30 SP/min either way; 210.7k SP / 30 SP/min ≈ 7025 min ≈ 4d 21h,
-        // identical for both calls.
+        // ET-349: ESI attributes already include implant bonuses, so Resolve() no longer adds them again — the
+        // implant list below can no longer change the rate. rate = Perception(20) + Willpower(20)/2 = 30 SP/min
+        // either way; 210.7k SP / 30 SP/min ≈ 4d 21h, identical for both calls (see PR for the full derivation).
         var withoutImplant = await SkillGapEstimateAsync([]);
         var withImplant = await SkillGapEstimateAsync([30000]);
 
