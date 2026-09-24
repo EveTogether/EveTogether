@@ -858,6 +858,16 @@
             </StackPanel>
         </Border>
 
+        <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding NotConnectedNotices}"
+                      IsVisible="{Binding HasNotConnectedNotices}" Margin="12,6,12,0">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                    <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="10.5"
+                               Foreground="{DynamicResource WarnBrush}"/>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
         <!-- ══ The column header ══ -->
         <Border DockPanel.Dock="Top" Classes="gridhead">
             <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
