@@ -5,12 +5,8 @@ using Xunit;
 
 namespace EveUtils.Client.UiTests;
 
-/// <summary>
-/// Integration test for the NPC e-war/EHP/signature/speed accessor (ET-367 AC1) against the real SDE store. Skipped
-/// automatically when the store is not available (developer machine without an imported SDE, or CI). The ten rows
-/// are the ET-342 research's cross-check set (build 3542233); three of them (Entangler/Spearfisher/Obfuscator) also
-/// pin the exact range the ticket quotes (10 km web / 9 km scramble / 15 km dampener).
-/// </summary>
+/// <summary>Cross-checks NPC e-war against the real SDE when available, including three exact ranges from ET-342.
+/// The test returns without asserting when no SDE store is installed.</summary>
 public sealed class NpcEwarProfileTests
 {
     private static readonly string SdePath =
@@ -19,7 +15,9 @@ public sealed class NpcEwarProfileTests
     private static SqliteSdeAccessor? TryOpen()
     {
         if (!File.Exists(SdePath))
+        {
             return null;
+        }
         var sde = new SqliteSdeAccessor(SdePath);
         return sde.IsAvailable ? sde : null;
     }
@@ -41,7 +39,10 @@ public sealed class NpcEwarProfileTests
         double? trackingDisrupt, double? guidanceDisrupt, double? targetPainter, double? remoteArmorRepairer, double? vorton)
     {
         var sde = TryOpen();
-        if (sde is null) return; // skip — no SDE
+        if (sde is null)
+        {
+            return; // skip — no SDE
+        }
 
         var profile = sde.GetNpcEwarProfile(typeId);
         Assert.True(profile is not null, $"{label}: expected a non-null profile for typeId {typeId}");

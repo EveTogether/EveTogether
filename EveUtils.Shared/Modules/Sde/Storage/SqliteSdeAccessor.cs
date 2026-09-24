@@ -545,10 +545,7 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
         return (em + th + kin + exp) <= 0 ? null : normalised;
     }
 
-    // NPC behavior effect ids (dgmEffects.name) and their behavior*Range attribute ids, verified against the live
-    // SDE (ET-367, build 3542233): a sample type carrying each effect was queried for every "%Range%" attribute it
-    // also carries, so the pairing below is measured, not guessed. TD and GD were disambiguated against types that
-    // carry only one of the two, since a dual-disruptor type carries both range attributes at once.
+    // Effect/range pairs verified against SDE build 3542233; single-disruptor types disambiguate TD and GD.
     private const int ScrambleEffect = 6745, ScrambleRangeAttr = 2507;                     // behaviorWarpScramble / behaviorWarpScrambleRange
     private const int NeutralizerEffect = 6756, NeutralizerRangeAttr = 2520;                // npcBehaviorEnergyNeutralizer / behaviorEnergyNeutralizerRange
     private const int WebifierEffect = 6743, WebifierRangeAttr = 2500;                      // npcBehaviorWebifier / behaviorWebifierRange
@@ -559,17 +556,15 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
     private const int RemoteArmorRepairerEffect = 6741, RemoteArmorRepairerRangeAttr = 2492;// npcBehaviorRemoteArmorRepairer / behaviorRemoteArmorRepairRange
     private const int ChainLightningEffect = 8088, ChainLightningRangeAttr = 3036;          // EntityChainLightning (vorton) / VortonArcRange
 
-    /// <summary>Builds an <see cref="NpcEwarProfile"/> for a category-11 type: presence of each behavior effect in
-    /// <c>TypeDogmaEffect</c> gates its <c>behavior*Range</c> attribute (present-but-rangeless never happens on the
-    /// live SDE for these nine effects, but the gate still protects against a future effect without one). EHP reuses
-    /// <see cref="DamageProfile.WeightedEhp"/> under <see cref="DamageProfile.Uniform"/> — the same formula the
-    /// fit-simulator uses for a player ship (<c>DerivedStatsCalculator.LayerEhp</c>) — with a missing resonance
-    /// attribute read as 1.0 (no resist data recorded), not 0.0 (which would misread as full immunity).</summary>
+    /// <summary>Reads category-11 NPC e-war and defenses. Effect presence gates each range;
+    /// missing resonance attributes mean no recorded resistance.</summary>
     public NpcEwarProfile? GetNpcEwarProfile(int typeId)
     {
         using var connection = Open();
         if (connection is null)
+        {
             return null;
+        }
 
         using (var categoryCommand = connection.CreateCommand())
         {
@@ -582,7 +577,9 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
                 """;
             categoryCommand.Parameters.AddWithValue("$id", typeId);
             if (categoryCommand.ExecuteScalar() is null)
+            {
                 return null;
+            }
         }
 
         var effectIds = new HashSet<int>();
@@ -599,7 +596,9 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
             effectCommand.Parameters.AddWithValue("$id", typeId);
             using var reader = effectCommand.ExecuteReader();
             while (reader.Read())
+            {
                 effectIds.Add(reader.GetInt32(0));
+            }
         }
 
         var attributes = new Dictionary<int, double>();
@@ -624,7 +623,9 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
             attributeCommand.Parameters.AddWithValue("$id", typeId);
             using var reader = attributeCommand.ExecuteReader();
             while (reader.Read())
+            {
                 attributes[reader.GetInt32(0)] = reader.GetDouble(1);
+            }
         }
 
         double? RangeOf(int effectId, int rangeAttributeId) =>
