@@ -9,5 +9,9 @@ public partial class CompositionsWindow : ChromedWindow
 {
     public CompositionsWindow() => AvaloniaXamlLoader.Load(this);
 
-    public CompositionsWindow(CompositionsViewModel viewModel) : this() => DataContext = viewModel;
+    public CompositionsWindow(CompositionsViewModel viewModel) : this()
+    {
+        DataContext = viewModel;
+        Closed += (_, _) => viewModel.Dispose();
+    }
 }

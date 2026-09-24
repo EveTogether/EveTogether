@@ -17,6 +17,11 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Changed: compositions update live in every open window.** Creating, editing or deleting a composition now refreshes
+  the COMPOSITIONS list straight away, for your local library and for a server's shared one — including changes other
+  pilots make. An open composition editor quietly picks up changes made elsewhere as long as you have not edited
+  anything yet; if you have, your edits are never overwritten and the editor offers RELOAD instead, and a composition
+  deleted elsewhere says so and can no longer be saved.
 - **Added: opening a killmail shows its full detail.** Double-click a row in KILLMAILS, or press OPEN KILLMAIL on a
   linked loss, to see the victim, the fit split into what was destroyed and what dropped, every attacker with their
   ship, weapon, damage and share, and the total value at today's prices. OPEN FIT reconstructs the fit as it was flown

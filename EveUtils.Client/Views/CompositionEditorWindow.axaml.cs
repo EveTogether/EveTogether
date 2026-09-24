@@ -21,6 +21,7 @@ public partial class CompositionEditorWindow : ChromedWindow, IHostableModuleWin
     public CompositionEditorWindow(CompositionEditorViewModel viewModel) : this()
     {
         DataContext = viewModel;
+        Closed += (_, _) => viewModel.Dispose();
         viewModel.CloseRequested += _ =>
         {
             if (CloseRequested is not null) CloseRequested();   // docked → dismiss the hosted tab

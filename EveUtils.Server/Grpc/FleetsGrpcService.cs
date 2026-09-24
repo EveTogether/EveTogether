@@ -689,6 +689,8 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new CreateFleetCompositionCommand(
             request.Name, NullIfEmpty(request.Description), request.IsClientOnly, character), context.CancellationToken);
+        if (result.IsSuccess && !request.IsClientOnly)
+            await AnnounceCompositionChangedAsync(result.Value, CompositionChangeKind.Created, character, context.CancellationToken);
         return ToCreateReply(result);
     }
 
@@ -698,6 +700,8 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new EditFleetCompositionCommand(
             request.CompositionId, request.Name, NullIfEmpty(request.Description), character), context.CancellationToken);
+        if (result.IsSuccess)
+            await AnnounceCompositionChangedAsync(request.CompositionId, CompositionChangeKind.Edited, character, context.CancellationToken);
         return ToActionReply(result, "Saved.");
     }
 
@@ -706,6 +710,8 @@ public sealed class FleetsGrpcService(
         var character = await AuthenticateAsync(context);
 
         var result = await dispatcher.Send(new DeleteFleetCompositionCommand(request.CompositionId, character), context.CancellationToken);
+        if (result.IsSuccess)
+            await AnnounceCompositionChangedAsync(request.CompositionId, CompositionChangeKind.Deleted, character, context.CancellationToken);
         return ToActionReply(result, "Deleted.");
     }
 
@@ -770,6 +776,8 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new AddFleetCompositionRoleCommand(
             request.CompositionId, request.RoleName, request.HasGroupMinCount ? request.GroupMinCount : null, character), context.CancellationToken);
+        if (result.IsSuccess)
+            await AnnounceCompositionChangedAsync(request.CompositionId, CompositionChangeKind.Edited, character, context.CancellationToken);
         return ToCreateReply(result);
     }
 
@@ -779,6 +787,9 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new EditFleetCompositionRoleCommand(
             request.RoleId, request.RoleName, request.HasGroupMinCount ? request.GroupMinCount : null, character), context.CancellationToken);
+        if (result.IsSuccess)
+            await AnnounceCompositionChangedAsync(
+                await CompositionOfRoleAsync(request.RoleId, context.CancellationToken), CompositionChangeKind.Edited, character, context.CancellationToken);
         return ToActionReply(result, "Saved.");
     }
 
@@ -786,7 +797,10 @@ public sealed class FleetsGrpcService(
     {
         var character = await AuthenticateAsync(context);
 
+        var compositionId = await CompositionOfRoleAsync(request.RoleId, context.CancellationToken);
         var result = await dispatcher.Send(new RemoveFleetCompositionRoleCommand(request.RoleId, character), context.CancellationToken);
+        if (result.IsSuccess)
+            await AnnounceCompositionChangedAsync(compositionId, CompositionChangeKind.Edited, character, context.CancellationToken);
         return ToActionReply(result, "Removed.");
     }
 
@@ -796,6 +810,8 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new ReorderFleetCompositionRolesCommand(
             request.CompositionId, request.OrderedRoleIds.ToList(), character), context.CancellationToken);
+        if (result.IsSuccess)
+            await AnnounceCompositionChangedAsync(request.CompositionId, CompositionChangeKind.Edited, character, context.CancellationToken);
         return ToActionReply(result, "Reordered.");
     }
 
@@ -805,6 +821,9 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new AddFleetCompositionEntryCommand(
             request.RoleId, FromFitDto(request.Fit), request.HasEntryMinCount ? request.EntryMinCount : null, character), context.CancellationToken);
+        if (result.IsSuccess)
+            await AnnounceCompositionChangedAsync(
+                await CompositionOfRoleAsync(request.RoleId, context.CancellationToken), CompositionChangeKind.Edited, character, context.CancellationToken);
         return ToCreateReply(result);
     }
 
@@ -814,6 +833,9 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new EditFleetCompositionEntryCommand(
             request.EntryId, request.HasEntryMinCount ? request.EntryMinCount : null, character), context.CancellationToken);
+        if (result.IsSuccess)
+            await AnnounceCompositionChangedAsync(
+                await CompositionOfEntryAsync(request.EntryId, context.CancellationToken), CompositionChangeKind.Edited, character, context.CancellationToken);
         return ToActionReply(result, "Saved.");
     }
 
@@ -821,7 +843,10 @@ public sealed class FleetsGrpcService(
     {
         var character = await AuthenticateAsync(context);
 
+        var compositionId = await CompositionOfEntryAsync(request.EntryId, context.CancellationToken);
         var result = await dispatcher.Send(new RemoveFleetCompositionEntryCommand(request.EntryId, character), context.CancellationToken);
+        if (result.IsSuccess)
+            await AnnounceCompositionChangedAsync(compositionId, CompositionChangeKind.Edited, character, context.CancellationToken);
         return ToActionReply(result, "Removed.");
     }
 
@@ -831,6 +856,9 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new ReorderFleetCompositionEntriesCommand(
             request.RoleId, request.OrderedEntryIds.ToList(), character), context.CancellationToken);
+        if (result.IsSuccess)
+            await AnnounceCompositionChangedAsync(
+                await CompositionOfRoleAsync(request.RoleId, context.CancellationToken), CompositionChangeKind.Edited, character, context.CancellationToken);
         return ToActionReply(result, "Reordered.");
     }
 
@@ -922,6 +950,27 @@ public sealed class FleetsGrpcService(
         var members = await fleets.ListMembersAsync(fleetId, cancellationToken);
         var envelope = WireEnvelopeFactory.ToEnvelope(new FleetChangedEvent(new FleetChangePayload(fleetId, kind)));
         await connectedClients.SendToCharactersAsync(members.Select(m => m.CharacterId), envelope, cancellationToken);
+    }
+
+    /// <summary>Tells every other connected character that a shared composition changed. The shared library is one
+    /// server-wide list that every connected character sees (<c>ListAllFleetCompositions</c>), so that is the audience;
+    /// the acting character's own client already published the change locally and is left out.</summary>
+    private Task AnnounceCompositionChangedAsync(
+        long compositionId, CompositionChangeKind kind, int actingCharacter, CancellationToken cancellationToken)
+    {
+        var envelope = WireEnvelopeFactory.ToEnvelope(new CompositionChangedEvent(
+            new CompositionChangePayload(compositionId, kind, IsClientOnly: false)));
+        var audience = connectedClients.ConnectedCharacters().Select(c => c.CharacterId).Where(id => id != actingCharacter);
+        return connectedClients.SendToCharactersAsync(audience, envelope, cancellationToken);
+    }
+
+    private async Task<long> CompositionOfRoleAsync(long roleId, CancellationToken cancellationToken) =>
+        (await compositions.GetRoleAsync(roleId, cancellationToken))?.CompositionId ?? CompositionChangePayload.UnknownCompositionId;
+
+    private async Task<long> CompositionOfEntryAsync(long entryId, CancellationToken cancellationToken)
+    {
+        var entry = await compositions.GetEntryAsync(entryId, cancellationToken);
+        return entry is null ? CompositionChangePayload.UnknownCompositionId : await CompositionOfRoleAsync(entry.RoleId, cancellationToken);
     }
 
     private async Task AnnounceLifecycleAsync(

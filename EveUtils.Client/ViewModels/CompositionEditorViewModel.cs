@@ -4,12 +4,16 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Events;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.ViewModels;
@@ -20,17 +24,22 @@ namespace EveUtils.Client.ViewModels;
 /// an optional per-fit minimum. Edits are tentative — the editor works on a mutable copy of the composition graph and,
 /// on save, diffs against the loaded snapshot and replays the minimal set of granular commands through
 /// <see cref="IFleetCompositionClient"/> (cancel discards). New roles/entries have no id until they are saved.
+///
+/// The composition can change under an open editor (another window, another client). With nothing edited yet the
+/// editor quietly reloads; with unsaved edits it never overwrites them and offers a reload instead.
 /// </summary>
-public sealed partial class CompositionEditorViewModel : ObservableObject
+public sealed partial class CompositionEditorViewModel : ObservableObject, IDisposable
 {
     private readonly IServiceProvider _services;
     private readonly IFleetCompositionClient _client;
     private readonly IDialogService _dialogs;
     private readonly ISdeNameResolver _resolver;
     private readonly ITypeImageProvider? _images;
-    private readonly FleetCompositionDetail? _snapshot;
     private readonly long? _compositionId;
     private readonly Guid _newCompositionId = Guid.NewGuid();
+    private readonly IDisposable? _changeSubscription;
+    private FleetCompositionDetail? _snapshot;
+    private bool _isSaving;
 
     private CompositionEditorViewModel(IServiceProvider services, IFleetCompositionClient client, FleetCompositionDetail? snapshot,
         bool isReadOnly = false)
@@ -40,26 +49,20 @@ public sealed partial class CompositionEditorViewModel : ObservableObject
         _dialogs = services.GetRequiredService<IDialogService>();
         _resolver = FitNameResolverFactory.For(services);
         _images = services.GetRequiredService<ITypeImageProvider>();
-        _snapshot = snapshot;
         _compositionId = snapshot?.Composition.Id;
         IsReadOnly = isReadOnly;
 
         if (snapshot is not null)
-        {
-            _name = snapshot.Composition.Name;
-            _description = snapshot.Composition.Description ?? "";
-            foreach (var role in snapshot.Roles)
-            {
-                var roleVm = new EditorRoleViewModel(role.Id, role.RoleName, role.GroupMinCount);
-                foreach (var entry in role.Entries)
-                    roleVm.Add(_NewEntry(entry.Id, entry.Fit, entry.EntryMinCount));
-                _Track(roleVm);
-            }
-        }
+            _Load(snapshot);
 
         Roles.CollectionChanged += _OnRolesChanged;
         _Recompute();
+
+        if (_compositionId is not null)
+            _changeSubscription = services.GetService<IEventBus>()?.Subscribe<CompositionChangedEvent>(_OnCompositionChanged);
     }
+
+    public void Dispose() => _changeSubscription?.Dispose();
 
     /// <summary>A blank editor that creates a new composition through <paramref name="client"/> on save.</summary>
     public static CompositionEditorViewModel ForNew(IServiceProvider services, IFleetCompositionClient client) =>
@@ -87,6 +90,7 @@ public sealed partial class CompositionEditorViewModel : ObservableObject
     /// <summary>Read-only view (someone else's composition) — the edit affordances and save are hidden.</summary>
     public bool IsReadOnly { get; }
     public bool IsEditable => !IsReadOnly;
+    public bool IsSaveAvailable => IsEditable && !IsDeletedElsewhere;
 
     public string Title => IsReadOnly ? "View composition" : IsNew ? "New composition" : "Edit composition";
     public string CancelButtonLabel => IsReadOnly ? "CLOSE" : "CANCEL";
@@ -94,6 +98,13 @@ public sealed partial class CompositionEditorViewModel : ObservableObject
     [ObservableProperty] private string _name = "";
     [ObservableProperty] private string _description = "";
     [ObservableProperty] private string _status = "";
+
+    /// <summary>The composition changed elsewhere while this editor holds unsaved edits — <see cref="ReloadCommand"/> takes the new version.</summary>
+    [ObservableProperty] private bool _hasRemoteChange;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSaveAvailable))]
+    private bool _isDeletedElsewhere;
 
     [ObservableProperty] private int _roleCount;
     [ObservableProperty] private int _fitCount;
@@ -157,9 +168,27 @@ public sealed partial class CompositionEditorViewModel : ObservableObject
     private void Cancel() => CloseRequested?.Invoke(false);
 
     [RelayCommand]
+    private async Task Reload()
+    {
+        if (_compositionId is not { } compositionId)
+            return;
+
+        var detail = await _client.GetAsync(compositionId);
+        if (detail is null)
+        {
+            Status = "Couldn't reload this composition.";
+            return;
+        }
+
+        _Load(detail);
+        HasRemoteChange = false;
+        Status = "";
+    }
+
+    [RelayCommand]
     private async Task Save()
     {
-        if (IsReadOnly)
+        if (IsReadOnly || IsDeletedElsewhere)
             return;
 
         var name = Name.Trim();
@@ -178,10 +207,105 @@ public sealed partial class CompositionEditorViewModel : ObservableObject
             return;
 
         var description = _NullIfBlank(Description);
-        if (!await _PersistAsync(name, description))
-            return;
+        _isSaving = true;
+        try
+        {
+            if (!await _PersistAsync(name, description))
+                return;
+        }
+        finally
+        {
+            _isSaving = false;
+        }
 
         CloseRequested?.Invoke(true);
+    }
+
+    private void _Load(FleetCompositionDetail detail)
+    {
+        _snapshot = detail;
+        Name = detail.Composition.Name;
+        Description = detail.Composition.Description ?? "";
+
+        foreach (var role in Roles.ToList())
+            _Untrack(role);
+        foreach (var role in detail.Roles)
+        {
+            var roleVm = new EditorRoleViewModel(role.Id, role.RoleName, role.GroupMinCount);
+            foreach (var entry in role.Entries)
+                roleVm.Add(_NewEntry(entry.Id, entry.Fit, entry.EntryMinCount));
+            _Track(roleVm);
+        }
+    }
+
+    // Our own save publishes for every command it replays; those are not news to this editor.
+    private void _OnCompositionChanged(CompositionChangedEvent change)
+    {
+        if (_isSaving
+            || _compositionId is not { } compositionId
+            || !change.Data.Concerns(compositionId)
+            || change.Data.IsClientOnly == _client.SharesFitsToServer)
+            return;
+
+        Dispatcher.UIThread.Post(() => _ = _HandleRemoteChangeAsync(change.Data.Kind));
+    }
+
+    private async Task _HandleRemoteChangeAsync(CompositionChangeKind kind)
+    {
+        if (_compositionId is not { } compositionId)
+            return;
+
+        if (kind is CompositionChangeKind.Deleted)
+        {
+            IsDeletedElsewhere = true;
+            HasRemoteChange = false;
+            Status = "Deleted elsewhere — this composition no longer exists.";
+            return;
+        }
+
+        if (_HasUnsavedChanges())
+        {
+            HasRemoteChange = true;
+            Status = "Changed elsewhere — reload";
+            return;
+        }
+
+        var detail = await _client.GetAsync(compositionId);
+        // Edits may have started while the read was in flight; they win over a silent reload.
+        if (detail is null || _HasUnsavedChanges())
+            return;
+
+        _Load(detail);
+    }
+
+    private bool _HasUnsavedChanges()
+    {
+        if (_snapshot is null)
+            return false;
+
+        if (Name.Trim() != _snapshot.Composition.Name || _NullIfBlank(Description) != _snapshot.Composition.Description)
+            return true;
+        if (Roles.Count != _snapshot.Roles.Count)
+            return true;
+
+        foreach (var role in Roles)
+        {
+            var snapRole = _snapshot.Roles.FirstOrDefault(r => r.Id == role.Id);
+            if (snapRole is null
+                || role.RoleName.Trim() != snapRole.RoleName
+                || role.GroupMinCount != snapRole.GroupMinCount
+                || role.Entries.Count != snapRole.Entries.Count)
+                return true;
+
+            foreach (var entry in role.Entries)
+            {
+                var snapEntry = snapRole.Entries.FirstOrDefault(e => e.Id == entry.Id);
+                if (snapEntry is null || entry.EntryMinCount != snapEntry.EntryMinCount)
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Opsec/privacy gate: saving onto a server-backed library sends a full self-contained copy of
