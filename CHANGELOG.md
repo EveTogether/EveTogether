@@ -17,6 +17,10 @@ taken from the matching `## vX.Y.Z` section below.
   yet — this is groundwork for the upcoming kill/loss overview, so a killmail's system, region and NPC attacker
   resolve from your own machine instead of another lookup to CCP's servers. Because the database format changed,
   it downloads fresh (about 100 MB) the next time you start the app, the same as after every earlier update to it.
+- **Added: EVE Together reads your kills and losses.** Signing in now also asks for access to your killmails, ticked by
+  default; characters that are already signed in need to sign in again to grant it. Every 5 minutes it picks up new kills and
+  losses of the last 90 days and keeps them on your computer, also after they drop out of that window. This is the
+  groundwork for linking a lost ship to its run and for a kills overview.
 - **Added: rewrite what a run cost you by hand.** A saved activity's CONSUMABLES block has a REWRITE CONSUMABLES BY
   HAND button for each of your characters, the same box you already use to rewrite loot. Set the filament to 0 when a
   fleetmate's was used, or add the ammo, drones, boosters and nanite paste you went through. Every line is valued at
