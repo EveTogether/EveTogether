@@ -76,6 +76,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.build == 'true'
     runs-on: windows-latest
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
