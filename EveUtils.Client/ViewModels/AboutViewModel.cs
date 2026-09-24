@@ -79,7 +79,7 @@ public sealed partial class AboutViewModel : ViewModelBase
         Func<AppRelease, Task>? onInstallRequested = null,
         UpdateChannel channel = UpdateChannel.Stable)
     {
-        Version = $"v{AppInfo.Version}";
+        Version = AppInfo.DisplayVersion;
         _updates = updates;
         _onInstallRequested = onInstallRequested;
         _channel = channel;
@@ -155,9 +155,9 @@ public sealed partial class AboutViewModel : ViewModelBase
 
         switch (UpdateNotice.Classify(check))
         {
-            case UpdateNoticeKind.Available:
-                UpdateHeadline = $"EVE Together v{check.Value!.Version} is available.";
-                UpdateDetail = $"You're on {Version}. The download is {UpdateDownloadSize.Format(check.Value.SizeBytes)}.";
+            case UpdateNoticeKind.Available when check.Value is { } release:
+                UpdateHeadline = $"EVE Together {release.DisplayVersion} is available.";
+                UpdateDetail = $"You're on {Version}. The download is {UpdateDownloadSize.Format(release.SizeBytes)}.";
                 CanInstallUpdate = _onInstallRequested is not null;
                 CheckForUpdatesLabel = "Check again";
                 break;
