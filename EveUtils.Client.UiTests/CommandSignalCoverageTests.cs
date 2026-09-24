@@ -4,6 +4,9 @@ using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.ApiKeys.Commands;
 using EveUtils.Shared.Modules.Fittings.Commands;
+using EveUtils.Shared.Modules.Fittings.Dtos;
+using EveUtils.Shared.Modules.Fittings.Enums;
+using EveUtils.Shared.Modules.Fittings.Events;
 using EveUtils.Shared.Modules.Fleet.Commands;
 using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Commands;
@@ -18,6 +21,7 @@ using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Ships.Commands;
+using EveUtils.Shared.Modules.Ships.Events;
 using EveUtils.Shared.Modules.Sync.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -48,7 +52,9 @@ public sealed class CommandSignalCoverageTests
     {
         ["Runs"] = typeof(RunsChangedEvent),
         ["Fleet"] = typeof(FleetChangedEvent),
-        ["Fleet.Composition"] = typeof(CompositionChangedEvent)
+        ["Fleet.Composition"] = typeof(CompositionChangedEvent),
+        ["Fittings"] = typeof(FittingsChangedEvent),
+        ["Ships"] = typeof(ShipAddedEvent)
     };
 
     /// <summary>Commands that change nothing anyone has to hear about, each with the reason. An entry here is a claim a
@@ -82,27 +88,68 @@ public sealed class CommandSignalCoverageTests
         // ET-381: asking members to come over changes no fleet — no roster, no seat, no invite. It only enqueues a
         // message per member, which is the Messaging module's to signal (ET-382); the answer runs SwitchToFleetCommand.
         [typeof(RequestFleetSwitchCommand)] = "changes no fleet state: it only enqueues a message per member, which "
-            + "Messaging signals; the member's answer runs SwitchToFleetCommand, which signals the move"
+            + "Messaging signals; the member's answer runs SwitchToFleetCommand, which signals the move",
+        // ET-382: the control panel's key list reloads after every action it dispatches itself, and only one admin
+        // session writes keys. Nothing else shows or caches them: ApiKeyAuthenticationHandler reads the repository on
+        // every request, so a revoked key is dead at its next call whether anyone was told or not.
+        [typeof(CreateApiKeyCommand)] = "the only screen showing keys is the control panel's list, which reloads after "
+            + "each of its own actions; no other component holds a copy that a signal would have to refresh",
+        [typeof(RevokeApiKeyCommand)] = "the only screen showing keys is the control panel's list, which reloads after "
+            + "each of its own actions; authentication reads the store per request, so nothing holds a stale copy",
+        [typeof(DeleteApiKeyCommand)] = "the only screen showing keys is the control panel's list, which reloads after "
+            + "each of its own actions; authentication reads the store per request, so nothing holds a stale copy",
+        [typeof(SetApiKeyScopesCommand)] = "no caller exists and the control panel's list shows no scopes; "
+            + "authentication reads the store per request",
+        // ET-382: a key-value store whose every key has one component that writes and reads it (window placement, the
+        // theme, a clipboard toggle). No key has a second writer for a signal to keep in line, and window placement
+        // writes on every move, which a signal would turn into a redraw per pixel.
+        [typeof(SetSettingCommand)] = "each key is written and read by the one component that owns it, and window "
+            + "placement writes on every move; no key has a second writer or a screen showing it live",
+        [typeof(DeleteSettingCommand)] = "each key is written and read by the one component that owns it; no key has a "
+            + "second writer or a screen showing it live",
+        // ET-382: the server's boot log; GetSyncLogsQuery is only read by the same startup code to decide whether to
+        // write the first line, and no screen lists it.
+        [typeof(AddSyncLogCommand)] = "an append-only boot log that no screen lists; its only reader is the startup "
+            + "code that decides whether to write the first line",
+        // ET-382: one row per damage hit while a gamelog is being followed. The screens follow the live
+        // CombatLoggedEvent stream, not this table (only ClientSmoke reads it back), and a signal per hit would be the
+        // per-hit redraw ET-254 already ruled out for runs.
+        [typeof(RecordCombatCommand)] = "writes one row per damage hit, which no screen reads back: the meters follow the "
+            + "live CombatLoggedEvent stream, and a signal per hit would redraw everything on every shot",
+        // ET-382: pushes a fit to ESI and reads the local library only. The library is unchanged afterwards, so there
+        // is nothing to hear; what changes is on the character's side of ESI.
+        [typeof(PushFittingToEsiCommand)] = "writes to ESI only and leaves the local library untouched",
+        // ET-382: publishes FitSharedEvent (Both) itself and writes nothing here: the server stores the shared fit and
+        // re-routes that event, which is the signal the fit lists of every client listen to.
+        [typeof(ShareFittingCommand)] = "writes nothing locally; it publishes FitSharedEvent, which the server stores and "
+            + "re-routes to every client's fit list",
+        // ET-382: a pasted fit needs the SDE to resolve, which the shared harness carries none of; proven with a stub
+        // importer in FittingsChangedSignalTests, and through the screen in FittingsChangedLiveRefreshTests.
+        [typeof(ImportFitFromTextCommand)] = "needs the SDE to resolve a pasted fit, which the shared harness has none of; "
+            + "proven with a stub importer in FittingsChangedSignalTests",
+        // ET-382: the queue is server-only (the handler is a no-op on the client harness). It raises
+        // MessageEnqueuedEvent, which the server's live delivery subscribes to; proven in MessageEnqueueLiveTriggerTests.
+        [typeof(EnqueueMessageCommand)] = "does nothing on the client and on the server raises MessageEnqueuedEvent, its "
+            + "signal, proven in MessageEnqueueLiveTriggerTests",
+        // ET-382: answers a queued message, which lives in the server database the client harness has no store for. It
+        // raises MessageRespondedEvent after the responder and the status update; proven in MessageRespondedSignalTests.
+        [typeof(RespondToMessageCommand)] = "needs a queued message in the server database, which the client harness has "
+            + "no store for; proven in MessageRespondedSignalTests",
+        // ET-382: both need a stored loss, which only the importer's repository can seed, and a run to link it to. They
+        // raise KillmailsChangedEvent; proven in KillmailRunLinkTests, through the open screen in KillmailsOverviewTests.
+        [typeof(LinkKillmailsToRunsCommand)] = "needs a stored loss and a run to link it to, which the shared harness "
+            + "seeds through the importer's repository; proven in KillmailRunLinkTests",
+        [typeof(SetKillmailRunLinkCommand)] = "needs a stored loss to link, which the shared harness seeds through the "
+            + "importer's repository; proven in KillmailRunLinkTests and, through the open screen, KillmailsOverviewTests"
     };
 
     /// <summary>Commands measured by ET-379 to publish no signal, each against the ticket that closes it. This list
     /// only ever shrinks: a new command gets a scenario or an exemption, never a place here.</summary>
-    private static readonly IReadOnlyList<(string Ticket, Type[] Commands)> KnownGaps =
-    [
-
-        ("ET-382", [
-            typeof(CreateApiKeyCommand), typeof(DeleteApiKeyCommand), typeof(RevokeApiKeyCommand),
-            typeof(SetApiKeyScopesCommand), typeof(ImportFitFromTextCommand), typeof(ImportFittingsFromEsiCommand),
-            typeof(PushFittingToEsiCommand), typeof(ShareFittingCommand), typeof(RecordCombatCommand),
-            typeof(LinkKillmailsToRunsCommand), typeof(SetKillmailRunLinkCommand), typeof(EnqueueMessageCommand),
-            typeof(RespondToMessageCommand), typeof(DeleteSettingCommand), typeof(SetSettingCommand),
-            typeof(AddShipCommand), typeof(AddSyncLogCommand)
-        ])
-    ];
+    private static readonly IReadOnlyList<(string Ticket, Type[] Commands)> KnownGaps = [];
 
     /// <summary>The size of <see cref="KnownGaps"/>. Closing a gap means taking it off the list and lowering this with
     /// it; raising it is the one change to this file a reviewer should refuse.</summary>
-    private const int KnownGapCount = 17;
+    private const int KnownGapCount = 0;
 
     /// <summary>For every command outside Runs that signals: real state to run it against, and what its signal must
     /// name.</summary>
@@ -416,7 +463,16 @@ public sealed class CommandSignalCoverageTests
             (long compositionId, long roleId, long entryId) = await _EntryAsync(dispatcher, cancellationToken);
             return new Act(() => dispatcher.Send(new ReorderFleetCompositionEntriesCommand(roleId, [entryId], Owner), cancellationToken),
                 _NamesComposition(compositionId));
-        }
+        },
+
+        [typeof(ImportFittingsFromEsiCommand)] = (dispatcher, cancellationToken) =>
+            Task.FromResult(new Act(async () => await dispatcher.Send(
+                    new ImportFittingsFromEsiCommand(Owner, [new EsiFitting(1, "Guardian", "", 11987, [])]), cancellationToken),
+                published => published is FittingsChangedEvent { Data: { Kind: FittingsChangeKind.Imported, Count: 1 } })),
+
+        [typeof(AddShipCommand)] = (dispatcher, cancellationToken) =>
+            Task.FromResult(new Act(async () => await dispatcher.Send(new AddShipCommand("Guardian", "Cruiser", 11_000_000m), cancellationToken),
+                published => published is ShipAddedEvent { Data.Name: "Guardian" }))
     };
 
     public static TheoryData<string> CommandsWithAScenario()

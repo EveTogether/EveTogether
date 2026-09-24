@@ -4,6 +4,8 @@ using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fittings.Repositories;
 using EveUtils.Shared.Modules.Killmails.Entities;
+using EveUtils.Shared.Modules.Killmails.Enums;
+using EveUtils.Shared.Modules.Killmails.Events;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +14,7 @@ namespace EveUtils.Shared.Modules.Killmails.Commands;
 
 [ClientOnly]
 internal sealed class LinkKillmailsToRunsCommandHandler(
-    IDbContextFactory<ClientDbContext> contextFactory, IFittingRepository fittings, IDispatcher dispatcher)
+    IDbContextFactory<ClientDbContext> contextFactory, IFittingRepository fittings, IDispatcher dispatcher, IEventBus eventBus)
     : ICommandHandler<LinkKillmailsToRunsCommand, Result<int>>
 {
     private static readonly TimeSpan RetryWindow = TimeSpan.FromDays(1);
@@ -50,12 +52,15 @@ internal sealed class LinkKillmailsToRunsCommandHandler(
 
         DateTime nowUtc = DateTime.UtcNow;
         List<Guid> linkedRunIds = [];
+        bool isChanged = false;
         foreach (LocalKillmail loss in open)
         {
             KillmailRunMatch match = KillmailRunLinker.Match(loss, runs,
                 [.. nearby.Where(killmail => killmail.RunId is not null)], nowUtc);
+            KillmailLinkSource source = match.RunId is null ? KillmailLinkSource.None : KillmailLinkSource.Auto;
+            isChanged |= loss.RunId != match.RunId || loss.LinkSource != source;
             loss.RunId = match.RunId;
-            loss.LinkSource = match.RunId is null ? KillmailLinkSource.None : KillmailLinkSource.Auto;
+            loss.LinkSource = source;
             if (match.RunId is { } runId)
             {
                 linkedRunIds.Add(runId);
@@ -67,6 +72,10 @@ internal sealed class LinkKillmailsToRunsCommandHandler(
         {
             await dispatcher.Send(new RebuildActivitySummariesCommand(runId), cancellationToken);
         }
+
+        if (isChanged)
+            await eventBus.PublishAsync(
+                new KillmailsChangedEvent(command.CharacterId, KillmailsChangeKind.RunLinkChanged), EventTarget.Local, cancellationToken);
 
         return Result<int>.Success(linkedRunIds.Count);
     }

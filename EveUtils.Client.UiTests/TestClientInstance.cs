@@ -1,5 +1,7 @@
 using EveUtils.Client.Composition;
+using EveUtils.Client.Fittings;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Killmails;
 using EveUtils.Client.Runs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Messaging;
@@ -59,6 +61,10 @@ public sealed class TestClientInstance : IDisposable
                 provider.GetRequiredService<ILogger<RunChangeFeed>>(), TimeSpan.Zero));
             collection.AddSingleton(provider => new CompositionChangeFeed(provider.GetRequiredService<IEventBus>(),
                 provider.GetRequiredService<ILogger<CompositionChangeFeed>>(), TimeSpan.Zero));
+            collection.AddSingleton(provider => new FittingsChangeFeed(provider.GetRequiredService<IEventBus>(),
+                provider.GetRequiredService<ILogger<FittingsChangeFeed>>(), TimeSpan.Zero));
+            collection.AddSingleton(provider => new KillmailsChangeFeed(provider.GetRequiredService<IEventBus>(),
+                provider.GetRequiredService<ILogger<KillmailsChangeFeed>>(), TimeSpan.Zero));
             configure?.Invoke(collection);
         });
 
